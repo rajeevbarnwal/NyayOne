@@ -1,0 +1,68 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+ENV/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+.next/
+coverage/
+
+# Capacitor native build artifacts
+frontend/ios/App/build/
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/build/
+
+# Runtime data
+logs/
+*.log
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/vectorstore/*
+!storage/vectorstore/.gitkeep
+
+# Local data, keep samples tracked
+/data/raw/*
+!/data/raw/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+
+# ML / vector artifacts
+*.faiss
+*.index
+*.sqlite3
+*.db
+*.parquet
+*.pkl
+*.joblib
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

@@ -1,0 +1,10 @@
+[project]
+name = "legalsaathi-backend"
+version = "0.1.0"
+description = "Backend API for LegalSaathi"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
