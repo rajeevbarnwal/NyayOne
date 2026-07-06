@@ -12,9 +12,16 @@ class Settings(BaseSettings):
     # CORS: frontend dev server runs on 1030 (LegalSaathi local dev port range 1030-1049)
     cors_origins: list[str] = ["http://localhost:1030", "http://127.0.0.1:1030"]
 
+    # --- Database (Postgres + pgvector; host port 1032 -> container 5432) ---
+    # Default targets the local docker-compose Postgres. Override via DATABASE_URL.
+    database_url: str = "postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi"
+    # Optional separate URL used by the test suite; when unset, tests use SQLite in-memory.
+    test_database_url: str | None = None
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_echo: bool = False
+
     # --- Config-ready placeholders (declared here, not wired in the foundation tickets) ---
-    # Persistence (Postgres reserved on host port 1032)
-    database_url: str | None = None
     # Cache / queue broker. Valkey is the default (BSD-licensed, Redis-compatible); host port 1033
     valkey_url: str | None = None
     # Object storage: S3-compatible abstraction. Local default SeaweedFS S3 API on host port 1035

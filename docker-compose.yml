@@ -2,6 +2,22 @@
 # Reserved: frontend 1030, backend 1031, Postgres 1032, Valkey 1033,
 # SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037.
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: legalsaathi
+      POSTGRES_PASSWORD: legalsaathi
+      POSTGRES_DB: legalsaathi
+    ports:
+      - "1032:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legalsaathi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -14,6 +30,9 @@ services:
       - ./backend:/app
       - ./storage:/workspace/storage
       - ./data:/workspace/data
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -26,3 +45,6 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+volumes:
+  pgdata:

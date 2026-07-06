@@ -1,0 +1,123 @@
+/* ===========================================================================
+   LegalSaathi design tokens — Option J v3.2 "Chambers Intelligence Studio".
+   Extracted verbatim from the approved v3.2 prototype.
+   Light (Clean Chambers) is the default under :root; Chambers Dark under
+   [data-theme="dark"]. Themes are pure token swaps — components read variables
+   only, never hard-coded colors.
+   Semantics: --ok/--warn/--risk/--info are status-only; --accent is the primary
+   chambers green. (Moot's reserved violet arrives with the Moot module.)
+=========================================================================== */
+
+:root,
+:root[data-theme='light'] {
+  /* Surfaces */
+  --bg: #f4f1ea;
+  --surface: #fdfcf9;
+  --elevated: #ffffff;
+  --panel: #faf7f0;
+  --line: #e5dfd4;
+  --line2: #d6cec0;
+  /* Text */
+  --text: #17130d;
+  --text2: #4a443b;
+  --text3: #726b5e;
+  --faint: #a49c8d;
+  /* Left rail */
+  --rail: #1a1611;
+  --rail-text: #c7bfb0;
+  --rail-dim: #8a8172;
+  --rail-line: #332c22;
+  --rail-active: #262019;
+  --railw: 76px;
+  /* Accent (chambers green) */
+  --accent: #1f4a37;
+  --accent2: #2c6249;
+  --accent-tint: #e9f0ec;
+  --on-accent: #ffffff;
+  /* Semantic status (never color-only in UI; pair with icon/text) */
+  --ok: #1f6a49;
+  --warn: #8a6512;
+  --risk: #8a2b2b;
+  --info: #2f4b63;
+  --ok-bg: #e9f0ec;
+  --warn-bg: #f7f0df;
+  --risk-bg: #f7ecec;
+  --info-bg: #eef1f4;
+  /* Bottom nav (mobile) */
+  --bnav-bg: #ffffff;
+  --bnav-ink: #5c554a;
+  --bnav-on: #1f4a37;
+  --bnav-line: #e5dfd4;
+  /* Effects */
+  --shadow: 0 10px 30px -18px rgba(0, 0, 0, .28);
+  --focus: #1f4a37;
+
+  /* --- Non-color scales (shared across themes) --- */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem;
+  --fs-3xl: 2.25rem;
+  --fs-display: clamp(2rem, 5vw, 3rem);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --tap-min: 44px;
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--focus) 45%, transparent);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #14100a;
+  --surface: #1d1810;
+  --elevated: #241e15;
+  --panel: #1a150e;
+  --line: #332b20;
+  --line2: #463c2c;
+  --text: #f1eadb;
+  --text2: #c6bba4;
+  --text3: #988d78;
+  --faint: #6f6656;
+  --rail: #0e0b06;
+  --rail-text: #cabfab;
+  --rail-dim: #8a8172;
+  --rail-line: #2a2318;
+  --rail-active: #241d13;
+  --accent: #6cb493;
+  --accent2: #83c7a8;
+  --accent-tint: #1a2a22;
+  --on-accent: #0c1710;
+  --ok: #79c0a0;
+  --warn: #dbb264;
+  --risk: #e0917f;
+  --info: #93b3cc;
+  --ok-bg: #182620;
+  --warn-bg: #2a2414;
+  --risk-bg: #2a1a16;
+  --info-bg: #15222b;
+  --bnav-bg: #0e0b06;
+  --bnav-ink: #cabfab;
+  --bnav-on: #ffffff;
+  --bnav-line: #2a2318;
+  --shadow: 0 12px 34px -18px rgba(0, 0, 0, .6);
+  --focus: #6cb493;
+
+  color-scheme: dark;
+}

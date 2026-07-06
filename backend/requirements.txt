@@ -3,3 +3,7 @@ uvicorn[standard]
 pydantic-settings
 python-multipart
 httpx
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg[binary]>=3.1
+pgvector>=0.2.5

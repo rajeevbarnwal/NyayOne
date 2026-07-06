@@ -1,0 +1,303 @@
+{
+  "sprint_id": 36,
+  "expected_keys": [
+    "SAATHI-335",
+    "SAATHI-342",
+    "SAATHI-356",
+    "SAATHI-357",
+    "SAATHI-358",
+    "SAATHI-359",
+    "SAATHI-360",
+    "SAATHI-361",
+    "SAATHI-362",
+    "SAATHI-363",
+    "SAATHI-364",
+    "SAATHI-365"
+  ],
+  "keys_in_sprint1_via_jql": [
+    "SAATHI-335",
+    "SAATHI-342",
+    "SAATHI-356",
+    "SAATHI-357",
+    "SAATHI-358",
+    "SAATHI-359",
+    "SAATHI-360",
+    "SAATHI-361",
+    "SAATHI-362",
+    "SAATHI-363",
+    "SAATHI-364",
+    "SAATHI-365"
+  ],
+  "missing_from_sprint1_via_jql": [],
+  "all_expected_in_sprint1": true,
+  "issues": [
+    {
+      "key": "SAATHI-335",
+      "summary": "Provision PostgreSQL, pgvector, SQLAlchemy 2.x, and Alembic migration baseline",
+      "status": "Testing",
+      "parent": "SAATHI-332",
+      "labels": [
+        "TDD-v0.2",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1w 3d",
+        "remainingEstimate": "1w 3d",
+        "originalEstimateSeconds": 230400,
+        "remainingEstimateSeconds": 230400
+      }
+    },
+    {
+      "key": "SAATHI-342",
+      "summary": "Implement Option J v3.2 design tokens, bundled fonts, and runtime dark/light themes",
+      "status": "Testing",
+      "parent": "SAATHI-333",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1w",
+        "remainingEstimate": "1w",
+        "originalEstimateSeconds": 144000,
+        "remainingEstimateSeconds": 144000
+      }
+    },
+    {
+      "key": "SAATHI-356",
+      "summary": "[Tech PF-02] Postgres pgvector runtime and 1030-series DB config",
+      "status": "Testing",
+      "parent": "SAATHI-335",
+      "labels": [
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d 4h",
+        "remainingEstimate": "1d 4h",
+        "originalEstimateSeconds": 43200,
+        "remainingEstimateSeconds": 43200
+      }
+    },
+    {
+      "key": "SAATHI-357",
+      "summary": "[Tech PF-02] SQLAlchemy 2.x engine, session, and base model conventions",
+      "status": "Testing",
+      "parent": "SAATHI-335",
+      "labels": [
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "2d",
+        "remainingEstimate": "2d",
+        "originalEstimateSeconds": 57600,
+        "remainingEstimateSeconds": 57600
+      }
+    },
+    {
+      "key": "SAATHI-358",
+      "summary": "[Tech PF-02] Alembic baseline, pgvector extension migration, and migration workflow",
+      "status": "Testing",
+      "parent": "SAATHI-335",
+      "labels": [
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "2d",
+        "remainingEstimate": "2d",
+        "originalEstimateSeconds": 57600,
+        "remainingEstimateSeconds": 57600
+      }
+    },
+    {
+      "key": "SAATHI-359",
+      "summary": "[Tech PF-02] Database test fixtures and repository smoke tests",
+      "status": "Testing",
+      "parent": "SAATHI-335",
+      "labels": [
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d 4h",
+        "remainingEstimate": "1d 4h",
+        "originalEstimateSeconds": 43200,
+        "remainingEstimateSeconds": 43200
+      }
+    },
+    {
+      "key": "SAATHI-360",
+      "summary": "[Tech PF-02] DB developer documentation and verification checklist",
+      "status": "Testing",
+      "parent": "SAATHI-335",
+      "labels": [
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-pf",
+        "tdd-tdd-pf-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d",
+        "remainingEstimate": "1d",
+        "originalEstimateSeconds": 28800,
+        "remainingEstimateSeconds": 28800
+      }
+    },
+    {
+      "key": "SAATHI-361",
+      "summary": "[Tech FE-02] Extract Option J v3.2 design tokens into app CSS variables",
+      "status": "Testing",
+      "parent": "SAATHI-342",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d 2h",
+        "remainingEstimate": "1d 2h",
+        "originalEstimateSeconds": 36000,
+        "remainingEstimateSeconds": 36000
+      }
+    },
+    {
+      "key": "SAATHI-362",
+      "summary": "[Tech FE-02] Runtime dark-light theme provider with ls-theme persistence",
+      "status": "Testing",
+      "parent": "SAATHI-342",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d 2h",
+        "remainingEstimate": "1d 2h",
+        "originalEstimateSeconds": 36000,
+        "remainingEstimateSeconds": 36000
+      }
+    },
+    {
+      "key": "SAATHI-363",
+      "summary": "[Tech FE-02] Offline bundled fonts and typography scale",
+      "status": "Testing",
+      "parent": "SAATHI-342",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "6h",
+        "remainingEstimate": "6h",
+        "originalEstimateSeconds": 21600,
+        "remainingEstimateSeconds": 21600
+      }
+    },
+    {
+      "key": "SAATHI-364",
+      "summary": "[Tech FE-02] Focus, touch-target, and semantic status token primitives",
+      "status": "Testing",
+      "parent": "SAATHI-342",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "1d",
+        "remainingEstimate": "1d",
+        "originalEstimateSeconds": 28800,
+        "remainingEstimateSeconds": 28800
+      }
+    },
+    {
+      "key": "SAATHI-365",
+      "summary": "[Tech FE-02] Token verification route and theme QA evidence",
+      "status": "Testing",
+      "parent": "SAATHI-342",
+      "labels": [
+        "Student-Module",
+        "TDD-v0.2",
+        "implementation-subtask",
+        "moscow-must",
+        "release-r1",
+        "tdd-fe",
+        "tdd-tdd-fe-02",
+        "tech-foundation"
+      ],
+      "in_sprint1_via_jql": true,
+      "timetracking": {
+        "originalEstimate": "6h",
+        "remainingEstimate": "6h",
+        "originalEstimateSeconds": 21600,
+        "remainingEstimateSeconds": 21600
+      }
+    }
+  ]
+}

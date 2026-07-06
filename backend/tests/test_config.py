@@ -9,10 +9,16 @@ def test_settings_defaults_load() -> None:
     assert not any("5173" in origin for origin in settings.cors_origins)
 
 
-def test_config_ready_placeholders_present_and_unset() -> None:
+def test_database_url_defaults_to_local_postgres_on_1032() -> None:
     fresh = Settings()
-    # These are declared for later wiring but must be unset in the foundation stage.
-    assert fresh.database_url is None
+    # DB is now provisioned: default points at the local Postgres (host port 1032).
+    assert fresh.database_url.startswith("postgresql+psycopg://")
+    assert ":1032/" in fresh.database_url
+
+
+def test_config_ready_placeholders_still_unset() -> None:
+    fresh = Settings()
+    # These remain declared-but-unset until their own tickets wire them.
     assert fresh.valkey_url is None
     assert fresh.storage_endpoint_url is None
     assert fresh.llm_gateway_url is None

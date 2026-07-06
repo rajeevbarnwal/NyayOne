@@ -1,0 +1,11 @@
+/* ===========================================================================
+   Self-hosted fonts — NO external/runtime requests (no Google Fonts links).
+   Option J v3.2 typography: Hanken Grotesk (UI/body), Newsreader (serif
+   reading surfaces), JetBrains Mono (metadata/mono).
+
+   Font binaries will be served locally from /public/fonts once approved OFL
+   assets are committed (see public/fonts/README.md). Do not declare @font-face
+   URLs until the binaries exist; otherwise browsers request missing local files
+   and log decode/404 errors. The token font stacks currently fall back cleanly
+   to system UI, Georgia, and SF Mono equivalents with zero external requests.
+=========================================================================== */

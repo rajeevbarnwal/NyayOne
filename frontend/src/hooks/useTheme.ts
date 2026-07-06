@@ -2,31 +2,48 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type ThemeMode = 'light' | 'dark';
 
-const STORAGE_KEY = 'ls-theme';
+export const THEME_STORAGE_KEY = 'ls-theme';
 
-function readInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') return 'light';
-  const stored = window.localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
+/** Pure: resolve the initial theme from stored value then system preference. */
+export function resolveInitialTheme(
+  stored: string | null,
+  prefersDark: boolean
+): ThemeMode {
   if (stored === 'light' || stored === 'dark') return stored;
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
   return prefersDark ? 'dark' : 'light';
 }
 
+/** Pure: the opposite theme. */
+export function nextTheme(mode: ThemeMode): ThemeMode {
+  return mode === 'dark' ? 'light' : 'dark';
+}
+
+function readInitialTheme(): ThemeMode {
+  if (typeof window === 'undefined') return 'light';
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  return resolveInitialTheme(stored, prefersDark);
+}
+
 /**
- * Foundation dark/light theme hook. Persists to localStorage["ls-theme"] and
- * applies `data-theme` on <html> so design tokens can switch via CSS variables.
+ * Runtime dark/light theme. Persists to localStorage["ls-theme"] and applies
+ * `data-theme` on <html> so the token CSS switches with no reload. Respects the
+ * OS preference on first load (when nothing is stored).
  */
 export function useTheme() {
-  const [theme, setTheme] = useState<ThemeMode>(readInitialTheme);
+  const [theme, setThemeState] = useState<ThemeMode>(readInitialTheme);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    window.localStorage.setItem(STORAGE_KEY, theme);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      /* storage unavailable — theme still applies for the session */
+    }
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  }, []);
+  const setTheme = useCallback((mode: ThemeMode) => setThemeState(mode), []);
+  const toggleTheme = useCallback(() => setThemeState((prev) => nextTheme(prev)), []);
 
   return { theme, setTheme, toggleTheme };
 }

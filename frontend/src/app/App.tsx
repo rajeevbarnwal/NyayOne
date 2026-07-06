@@ -8,6 +8,8 @@ import { useTheme } from '../hooks/useTheme';
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; real per-screen modules replace this in later tickets.
 const ScreenPlaceholder = lazy(() => import('../features/ScreenPlaceholder'));
+// Internal token/theme verification route (not part of the S-01..S-99 registry).
+const TokenShowcase = lazy(() => import('../features/TokenShowcase'));
 
 function AppShell() {
   const { theme, toggleTheme } = useTheme();
@@ -30,6 +32,7 @@ function AppShell() {
         <Suspense fallback={<div className="route-loading">Loading…</div>}>
           <Routes>
             <Route path="/" element={<Navigate to={screenRoutes[0].path} replace />} />
+            <Route path="/__tokens" element={<TokenShowcase theme={theme} toggleTheme={toggleTheme} />} />
             {screenRoutes.map((r) => (
               <Route key={r.id} path={r.path} element={<ScreenPlaceholder id={r.id} />} />
             ))}
