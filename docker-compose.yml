@@ -1,3 +1,6 @@
+# LegalSaathi local dev — standardized on host port range 1030-1049.
+# Reserved: frontend 1030, backend 1031, Postgres 1032, Valkey 1033,
+# SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037.
 services:
   backend:
     build:
@@ -6,7 +9,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "1031:1031"
     volumes:
       - ./backend:/app
       - ./storage:/workspace/storage
@@ -17,7 +20,7 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
     ports:
-      - "5173:5173"
+      - "1030:1030"
     volumes:
       - ./frontend:/app
       - /app/node_modules

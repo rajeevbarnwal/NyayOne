@@ -1,11 +1,42 @@
-:root {
-  color: #172026;
-  background: #f7faf9;
+/* ---------------------------------------------------------------------------
+   Foundation design tokens (dark/light).
+   Full Option J v3.2 token set lands with the design-system ticket (SAATHI-342).
+   Themes switch via [data-theme] set by the useTheme hook.
+--------------------------------------------------------------------------- */
+:root,
+:root[data-theme='light'] {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --border: #e6e3d9;
+  --text: #0f1e3d;
+  --text-muted: #5a6478;
+  --primary: #6d5ef6;      /* generic primary action */
+  --accent-urgency: #b0791f; /* time-urgency / Up Next / deadlines */
+  --moot: #7c3aed;         /* Moot Court only */
+  --positive: #1e7a4b;
+  --negative: #c0384b;
+  color: var(--text);
+  background: var(--bg);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e1116;
+  --surface: #151a22;
+  --border: #2a313c;
+  --text: #f2f5f9;
+  --text-muted: #a9b4c0;
+  --primary: #6d5ef6;
+  --accent-urgency: #e8b04b;
+  --moot: #a78bfa;
+  --positive: #2fbf71;
+  --negative: #f0556b;
+  color: var(--text);
+  background: var(--bg);
 }
 
 * {
@@ -27,18 +58,53 @@ select {
 
 .app-shell {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.brand-accent {
+  color: var(--accent-urgency);
+}
+
+.theme-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-content {
+  flex: 1;
   display: grid;
   place-items: center;
   padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
 }
 
-.welcome-panel {
+.screen-placeholder {
   width: min(100%, 720px);
 }
 
 .eyebrow {
   margin: 0 0 12px;
-  color: #0f766e;
+  color: var(--primary);
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -50,9 +116,14 @@ h1 {
   line-height: 1.05;
 }
 
-.welcome-panel p:last-child {
+.screen-placeholder p:last-child {
   max-width: 52ch;
-  color: #46545d;
+  color: var(--text-muted);
   font-size: 1.05rem;
   line-height: 1.6;
+}
+
+.route-loading {
+  color: var(--text-muted);
+  padding: 24px;
 }

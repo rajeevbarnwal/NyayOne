@@ -23,6 +23,7 @@
     "@capacitor/ios": "latest",
     "@capacitor/keyboard": "latest",
     "@capacitor/status-bar": "latest",
+    "@tanstack/react-query": "latest",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
     "react": "latest",
