@@ -484,6 +484,78 @@
   font-size: var(--fs-xs);
   color: var(--text3);
 }
+
+/* --- Module screens (feed/list/tracker) — single-column stack --- */
+.st-stack {
+  width: 100%;
+  max-width: 920px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.st-search {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--text);
+}
+.st-tabsrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.st-metatag {
+  font: 600 var(--fs-xs) var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.st-item--dim {
+  opacity: 0.62;
+}
+.st-price {
+  font-family: var(--font-mono);
+  color: var(--text2);
+}
+
+/* 4-step application stepper (shape + label, never colour-only) */
+.st-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-2) 0;
+  flex-wrap: wrap;
+}
+.st-steps__node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text3);
+}
+.st-steps__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--line2);
+  background: var(--surface);
+}
+.st-steps__node--done .st-steps__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.st-steps__node--now .st-steps__dot {
+  background: var(--warn);
+  border-color: var(--warn);
+}
+.st-steps__sep {
+  width: 14px;
+  height: 1px;
+  background: var(--line2);
+}
 .st-eyebrow {
   color: var(--accent);
   font: 700 var(--fs-xs) var(--font-mono);

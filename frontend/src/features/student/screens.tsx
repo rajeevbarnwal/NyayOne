@@ -22,6 +22,24 @@ import {
 } from './profile/ProfileScreens';
 import { Dashboard } from './dashboard/Dashboard';
 import { NotificationsSettings, PrivacySettings } from './settings/SettingsScreens';
+import {
+  InternshipBrowse,
+  InternshipDetail,
+  InternshipApply,
+  InternshipConfirm,
+  InternshipTracker,
+  InternshipSaved,
+  InternshipEmpty,
+} from './internships/InternshipScreens';
+import {
+  CommunityFeed,
+  CommunityPost,
+  CommunityCreate,
+  CommunityReport,
+  CommunityModerated,
+} from './community/CommunityScreens';
+import { ExamOverview, ExamSyllabus } from './exam/ExamScreens';
+import { ClinicalLog, ClinicalAdd } from './clinical/ClinicalScreens';
 
 /** Props every student screen may receive from the shell (theme is shell-owned). */
 export interface StudentScreenProps {
@@ -54,6 +72,26 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-17': ProfileView,
   'S-18': NotificationsSettings,
   'S-19': PrivacySettings,
+  // S4 internships (SAATHI-60/61)
+  'S-20': InternshipBrowse,
+  'S-21': InternshipDetail,
+  'S-22': InternshipApply,
+  'S-23': InternshipConfirm,
+  'S-24': InternshipTracker,
+  'S-25': InternshipSaved,
+  'S-26': InternshipEmpty,
+  // S10 community (SAATHI-74)
+  'S-50': CommunityFeed,
+  'S-51': CommunityPost,
+  'S-52': CommunityCreate,
+  'S-53': CommunityReport,
+  'S-54': CommunityModerated,
+  // S11 exam prep (SAATHI-147)
+  'S-55': ExamOverview,
+  'S-60': ExamSyllabus,
+  // S12 clinical hours (SAATHI-173)
+  'S-61': ClinicalLog,
+  'S-62': ClinicalAdd,
 };
 
 export const IMPLEMENTED_SCREEN_IDS = Object.keys(studentScreens);
