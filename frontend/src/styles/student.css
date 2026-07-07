@@ -119,13 +119,41 @@
   color: var(--text3);
 }
 
-/* OTP digit group */
+/* OTP digit group — spaced mono cells echoing the entered code (v3.2 density). */
 .st-otp {
   display: flex;
   gap: var(--space-2);
-  letter-spacing: 0.4em;
+  margin: 0 0 var(--space-4);
   font-family: var(--font-mono);
   font-size: var(--fs-xl);
+}
+.st-otp span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  color: var(--text);
+}
+
+/* Onboarding progress dots (product-facing, not reviewer chrome). */
+.st-dots {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.st-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line2);
+}
+.st-dot--on {
+  background: var(--accent);
+  width: 22px;
+  border-radius: var(--radius-pill);
 }
 
 /* Consent checkbox row: full row clickable, >=44x44 native target,

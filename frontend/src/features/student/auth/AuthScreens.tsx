@@ -7,6 +7,7 @@ import {
   verify,
   secondsUntilResend,
   secondsUntilExpiry,
+  maskDestination,
   type OtpChannel,
 } from '../lib/otp';
 import { startOtp, getFlow, setChallenge, setMinor, STUB_OTP_CODE } from '../lib/authFlow';
@@ -44,7 +45,19 @@ export function Onboarding() {
   const [i, setI] = useState(0);
   const last = i === ONBOARDING.length - 1;
   return (
-    <AuthCard screenId="S-02" kicker={`Welcome · ${i + 1} of ${ONBOARDING.length}`} title={ONBOARDING[i].t} sub={ONBOARDING[i].b}>
+    <AuthCard
+      screenId="S-02"
+      kicker={`Welcome · ${i + 1} of ${ONBOARDING.length}`}
+      title={ONBOARDING[i].t}
+      sub={ONBOARDING[i].b}
+      meta={
+        <div className="st-dots" role="presentation">
+          {ONBOARDING.map((_, k) => (
+            <span key={k} className={`st-dot${k === i ? ' st-dot--on' : ''}`} aria-hidden />
+          ))}
+        </div>
+      }
+    >
       <div className="st-actions st-actions--split">
         <button type="button" className="btn tap" onClick={() => nav('/s-03')}>
           Skip
@@ -133,7 +146,13 @@ export function LanguageSelect() {
   const nav = useNavigate();
   const [lang, setLang] = useState(LANGUAGES[0]);
   return (
-    <AuthCard screenId="S-04" kicker="Preferences" title="Choose your language" sub="You can change this later in Settings.">
+    <AuthCard
+      screenId="S-04"
+      kicker="Preferences"
+      title="Choose your language"
+      meta={<StatusBadge status="info" label="Language" />}
+      sub="You can change this later in Settings."
+    >
       <div className="st-chips" role="radiogroup" aria-label="Preferred language">
         {LANGUAGES.map((l) => (
           <button
@@ -202,6 +221,7 @@ export function Register() {
       screenId="S-05"
       kicker="Student module · S1"
       title="Register as student"
+      meta={<StatusBadge status="info" label="New account" />}
       sub="Create your account with a few details. Verification follows."
     >
       <TextField id="reg-name" label="Full name" value={name} onChange={setName} error={errors.name} autoComplete="name" />
@@ -311,6 +331,16 @@ export function OtpVerify() {
         />
       }
     >
+      {flow.destination && (
+        <p className="st-card__sub">
+          Code sent to <strong>{maskDestination(flow.destination)}</strong>
+        </p>
+      )}
+      <div className="st-otp" aria-hidden>
+        {Array.from({ length: 6 }).map((_, k) => (
+          <span key={k}>{code[k] ?? '•'}</span>
+        ))}
+      </div>
       <TextField
         id="otp-code"
         label="OTP"
