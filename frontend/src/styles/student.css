@@ -18,12 +18,12 @@
   padding: var(--space-4) 0;
 }
 .st-card {
-  width: min(100%, 460px);
+  width: min(100%, 440px);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: var(--space-6);
+  padding: var(--space-5);
 }
 .st-card__kicker {
   margin: 0 0 var(--space-2);
@@ -32,14 +32,31 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+/* v3.2: step/success card titles are Newsreader ~26px; brand screens ~30px. */
 .st-card__title {
   margin: 0 0 var(--space-2);
   font-family: var(--font-serif);
-  font-size: var(--fs-2xl);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.st-card--brand .st-card__title {
+  font-size: 1.875rem;
+  font-weight: 700;
 }
 .st-card__sub {
   margin: 0 0 var(--space-4);
   color: var(--text3);
+  font-size: var(--fs-sm);
+}
+/* Product-facing metadata / state chip row under a card kicker or title. */
+.st-metarow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
 }
 
 /* --- Tabs (Login / Register) --- */
@@ -230,20 +247,43 @@
   font-weight: 600;
 }
 
+/* Section/page title — v3.2 chambers dashboards use Newsreader ~28px, weight 500. */
+.st-h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
 /* --- Dashboard --- */
 .st-dash {
   width: 100%;
+  max-width: 1120px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
+}
+.st-dash__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 .st-dash__head h1 {
   margin: 0;
-  font-size: var(--fs-3xl);
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 .st-dash__head .st-muted {
   color: var(--text3);
   font-family: var(--font-serif);
+  font-weight: 400;
 }
 .st-grid {
   display: grid;
@@ -339,12 +379,24 @@
 }
 
 /* --- Settings rows / toggles --- */
+/* v3.2: tighter two-column panels on desktop; single-column card rhythm on mobile. */
 .st-set {
   width: 100%;
-  max-width: 640px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+  max-width: 920px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-content: start;
+}
+.st-set > .st-set__head,
+.st-set > .st-actions,
+.st-set > .st-dpdp {
+  grid-column: 1 / -1;
+}
+@media (min-width: 768px) {
+  .st-set {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .st-setrow {
   display: flex;
@@ -353,6 +405,9 @@
   gap: var(--space-3);
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--line);
+}
+.st-setrow:last-child {
+  border-bottom: none;
 }
 .st-setrow__label {
   font-weight: 600;

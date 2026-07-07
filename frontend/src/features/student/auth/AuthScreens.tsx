@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen } from '../components';
-import { RestrictedState, PendingVerificationState, LoadingState } from '../../../components/ui/primitives';
+import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
 import {
   isValidOtpFormat,
   verify,
@@ -19,7 +19,7 @@ import { isReviewerMode } from '../../../components/shell/TraceabilityBanner';
 export function Splash() {
   const nav = useNavigate();
   return (
-    <AuthCard screenId="S-01" kicker="Student module · S1" title="LegalSaathi">
+    <AuthCard screenId="S-01" kicker="Student module · S1" title="LegalSaathi" brand>
       <LoadingState label="Checking your session…" />
       <div className="st-actions">
         <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-03')}>
@@ -83,7 +83,7 @@ export function AuthGate() {
   }
 
   return (
-    <AuthCard screenId="S-03" kicker="Student module · S1" title="LegalSaathi">
+    <AuthCard screenId="S-03" kicker="Student module · S1" title="LegalSaathi" brand>
       <div className="st-tabs" role="tablist" aria-label="Login or register">
         <button role="tab" aria-selected={tab === 'login'} className="st-tab" onClick={() => setTab('login')}>
           Login
@@ -300,7 +300,17 @@ export function OtpVerify() {
       : `Enter the 6-digit code · expires in ${expiresIn}s · ${attemptsLeft} attempts left`;
 
   return (
-    <AuthCard screenId="S-06" kicker="OTP verification · S1" title="Verify your number">
+    <AuthCard
+      screenId="S-06"
+      kicker="OTP verification · S1"
+      title="Verify your number"
+      meta={
+        <StatusBadge
+          status={status === 'incorrect' ? 'risk' : 'info'}
+          label={status === 'incorrect' ? 'Incorrect code' : 'Awaiting code'}
+        />
+      }
+    >
       <TextField
         id="otp-code"
         label="OTP"
@@ -332,7 +342,7 @@ export function OtpVerify() {
 export function OtpExpired() {
   const nav = useNavigate();
   return (
-    <AuthCard screenId="S-07" kicker="OTP · S1" title="OTP expired">
+    <AuthCard screenId="S-07" kicker="OTP · S1" title="OTP expired" meta={<StatusBadge status="warn" label="Expired" />}>
       <div className="ui-banner ui-banner--warn" role="status">
         <span className="ui-banner__mark" aria-hidden>
           !
@@ -361,7 +371,7 @@ export function OtpExpired() {
 export function Lockout() {
   const nav = useNavigate();
   return (
-    <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked">
+    <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked" meta={<StatusBadge status="risk" label="Locked" />}>
       <RestrictedState reason="Too many incorrect attempts. Login is locked for 15 minutes." />
       <div className="st-actions">
         <button type="button" className="btn tap" onClick={() => nav('/s-15')}>
@@ -384,6 +394,7 @@ export function EmailVerify() {
       screenId="S-15"
       kicker="Verification"
       title="Institutional email · NLU verification"
+      meta={<StatusBadge status="warn" label="Verification pending" />}
       sub="Confirm from your NLU inbox to unlock verified-student features. Manual review if the domain is unrecognised."
     >
       <TextField id="inst-email" label="Institutional email" value={email} onChange={setEmail} type="email" inputMode="email" />
@@ -422,6 +433,9 @@ export function RestrictedDashboard() {
       <div className="st-card">
         <p className="st-card__kicker">Restricted access</p>
         <h1 className="st-card__title">Restricted</h1>
+        <div className="st-metarow">
+          <StatusBadge status="risk" label="Restricted" />
+        </div>
         <RestrictedState reason={restriction} />
         <div className="st-actions st-actions--split">
           <button type="button" className="btn tap" onClick={() => nav('/s-14')}>

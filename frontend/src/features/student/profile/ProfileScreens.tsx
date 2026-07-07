@@ -262,12 +262,14 @@ export function ProfileView() {
   ];
   return (
     <StudentScreen screenId="S-17" className="st-set">
-      <div>
+      <div className="st-set__head">
         <p className="st-eyebrow">Profile · S3</p>
-        <h1 style={{ margin: '4px 0' }}>Your profile</h1>
-        <span className="st-badge">
-          <span aria-hidden>✓</span> {TIER_LABELS[tier]}
-        </span>
+        <h1 className="st-h1">Your profile</h1>
+        <div className="st-metarow">
+          <span className="st-badge">
+            <span aria-hidden>✓</span> {TIER_LABELS[tier]}
+          </span>
+        </div>
       </div>
       <div className="st-panel">
         {rows.map(([k, v]) => (

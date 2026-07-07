@@ -33,9 +33,9 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
   const [prefs, setPrefs] = useState(DEFAULT_NOTIFICATION_PREFS);
   return (
     <StudentScreen screenId="S-18" className="st-set">
-      <div>
+      <div className="st-set__head">
         <p className="st-eyebrow">Settings · S3</p>
-        <h1 style={{ margin: '4px 0' }}>Notifications &amp; appearance</h1>
+        <h1 className="st-h1">Notifications &amp; appearance</h1>
       </div>
 
       <section className="st-panel">
@@ -127,9 +127,9 @@ export function PrivacySettings() {
 
   return (
     <StudentScreen screenId="S-19" className="st-set">
-      <div>
+      <div className="st-set__head">
         <p className="st-eyebrow">Settings &amp; Privacy · S3</p>
-        <h1 style={{ margin: '4px 0' }}>Privacy &amp; data (DPDP)</h1>
+        <h1 className="st-h1">Privacy &amp; data (DPDP)</h1>
       </div>
 
       <section className="st-panel">

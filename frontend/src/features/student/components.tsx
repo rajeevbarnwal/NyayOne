@@ -30,19 +30,26 @@ export function AuthCard({
   kicker,
   title,
   sub,
+  meta,
+  brand,
   children,
 }: {
   screenId: string;
   kicker?: string;
   title: string;
   sub?: string;
+  /** Product-facing metadata / state chips shown under the kicker (e.g. status pill). */
+  meta?: ReactNode;
+  /** Brand-lockup screens (S-01/S-03) use a larger title. */
+  brand?: boolean;
   children: ReactNode;
 }) {
   return (
     <StudentScreen screenId={screenId} className="st-authwrap">
-      <div className="st-card">
+      <div className={`st-card ${brand ? 'st-card--brand' : ''}`.trim()}>
         {kicker && <p className="st-card__kicker">{kicker}</p>}
         <h1 className="st-card__title">{title}</h1>
+        {meta && <div className="st-metarow">{meta}</div>}
         {sub && <p className="st-card__sub">{sub}</p>}
         {children}
       </div>
