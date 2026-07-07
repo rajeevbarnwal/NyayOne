@@ -1,0 +1,349 @@
+/* ===========================================================================
+   Student module screens (SAATHI-52/53/55/57/58 · S-01→S-19).
+   All colours come from Option J tokens — no hard-coded colours, theme-safe.
+   Actionable controls inherit .btn/.tap (>=44px) from global.css.
+=========================================================================== */
+
+.st-screen {
+  width: 100%;
+  max-width: min(960px, 100%);
+  min-width: 0;
+}
+
+/* --- Centered auth/onboarding card --- */
+.st-authwrap {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4) 0;
+}
+.st-card {
+  width: min(100%, 460px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--space-6);
+}
+.st-card__kicker {
+  margin: 0 0 var(--space-2);
+  color: var(--accent);
+  font: 700 var(--fs-xs) var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.st-card__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--fs-2xl);
+}
+.st-card__sub {
+  margin: 0 0 var(--space-4);
+  color: var(--text3);
+}
+
+/* --- Tabs (Login / Register) --- */
+.st-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.st-tab {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-weight: 600;
+}
+.st-tab[aria-selected='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* --- Forms --- */
+.st-field {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+.st-field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text2);
+}
+.st-field__opt {
+  color: var(--text3);
+  font-weight: 500;
+}
+.st-input,
+.st-select {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-md);
+  background: var(--elevated);
+  color: var(--text);
+}
+.st-input[aria-invalid='true'] {
+  border-color: var(--risk);
+}
+.st-field__help {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text3);
+}
+
+/* OTP digit group */
+.st-otp {
+  display: flex;
+  gap: var(--space-2);
+  letter-spacing: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+}
+
+.st-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.st-actions--split {
+  justify-content: space-between;
+}
+
+/* --- Stepper / progress --- */
+.st-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+.st-progress__bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--motion-base) var(--ease);
+}
+
+/* --- Chips (interests) --- */
+.st-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.st-chip {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text2);
+  cursor: pointer;
+}
+.st-chip[aria-pressed='true'] {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- Tier / success badge --- */
+.st-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+  font-weight: 600;
+}
+
+/* --- Dashboard --- */
+.st-dash {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.st-dash__head h1 {
+  margin: 0;
+  font-size: var(--fs-3xl);
+}
+.st-dash__head .st-muted {
+  color: var(--text3);
+  font-family: var(--font-serif);
+}
+.st-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.st-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  min-width: 0;
+}
+.st-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.st-panel__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+}
+.st-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.st-week__day {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  min-height: 64px;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.st-week__dow {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text2);
+}
+.st-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.st-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.st-item > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.st-item__meta {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  font-family: var(--font-mono);
+}
+.st-ring {
+  font-family: var(--font-serif);
+  font-size: var(--fs-3xl);
+  color: var(--accent);
+}
+.st-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-top: var(--space-3);
+}
+.st-kpi__n {
+  font-family: var(--font-serif);
+  font-size: var(--fs-2xl);
+  color: var(--text);
+}
+.st-kpi__l {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+}
+
+/* --- Settings rows / toggles --- */
+.st-set {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.st-setrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.st-setrow__label {
+  font-weight: 600;
+}
+.st-setrow__sub {
+  font-size: var(--fs-sm);
+  color: var(--text3);
+}
+.st-toggle {
+  min-width: 64px;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--text2);
+  cursor: pointer;
+  font-weight: 600;
+}
+.st-toggle[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.st-seg {
+  display: inline-flex;
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.st-seg__btn {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  color: var(--text2);
+  border: none;
+  cursor: pointer;
+}
+.st-seg__btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.st-dpdp {
+  margin-top: var(--space-4);
+  font-size: var(--fs-xs);
+  color: var(--text3);
+}
+.st-eyebrow {
+  color: var(--accent);
+  font: 700 var(--fs-xs) var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
