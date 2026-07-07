@@ -174,18 +174,22 @@ export function Checkbox({
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
+  // The whole row is a >=44x44 clickable label. The native checkbox stays a real
+  // <input> (semantics + keyboard preserved) stretched over a 44x44 hit area; a
+  // compact visual box shows the state and carries the focus ring.
   return (
-    <label className="st-field" htmlFor={id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 20, height: 20, marginTop: 2, flex: 'none' }}
-      />
-      <span className="st-setrow__sub" style={{ color: 'var(--text2)' }}>
-        {label}
+    <label className="st-check" htmlFor={id}>
+      <span className="st-check__control">
+        <input
+          id={id}
+          className="st-check__input"
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="st-check__box" aria-hidden />
       </span>
+      <span className="st-check__text">{label}</span>
     </label>
   );
 }

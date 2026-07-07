@@ -111,6 +111,66 @@
   font-size: var(--fs-xl);
 }
 
+/* Consent checkbox row: full row clickable, >=44x44 native target,
+   compact visual box, visible focus ring (S-05). */
+.st-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+}
+.st-check__control {
+  position: relative;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  display: grid;
+  place-items: center;
+}
+.st-check__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.st-check__box {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  background: var(--elevated);
+  display: grid;
+  place-items: center;
+}
+.st-check__box::after {
+  content: '✓';
+  font: 700 14px var(--font-mono);
+  color: var(--on-accent);
+  opacity: 0;
+}
+.st-check__input:checked + .st-check__box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.st-check__input:checked + .st-check__box::after {
+  opacity: 1;
+}
+.st-check__input:focus-visible + .st-check__box {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.st-check__text {
+  min-width: 0;
+  color: var(--text2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
 .st-actions {
   display: flex;
   flex-wrap: wrap;
