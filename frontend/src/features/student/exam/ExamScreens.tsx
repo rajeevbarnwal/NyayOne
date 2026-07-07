@@ -48,6 +48,10 @@ export function ExamOverview() {
           <button role="tab" aria-selected={false} className="st-tab">Analytics</button>
         </div>
 
+        <div className="st-metarow">
+          <SourceVersionPill source={sourcePillText(syllabusFor(active).meta.version)} />
+        </div>
+
         <GuardrailNotice>{TRACK_NOTE_ENROLLED}</GuardrailNotice>
 
         <div className="st-grid">
