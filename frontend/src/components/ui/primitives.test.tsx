@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as UI from './primitives';
-import { bottomNavItems, railItems } from '../shell/navItems';
+import { bottomNavItems, railItems, splitBottomNav } from '../shell/navItems';
 
 describe('UI primitives (SAATHI-345)', () => {
   it('exports all 12 required primitives as components', () => {
@@ -23,5 +23,16 @@ describe('shell nav config (SAATHI-343)', () => {
   it('rail routes all target canonical S-xx screens', () => {
     expect(railItems.length).toBeGreaterThan(5);
     for (const it of railItems) expect(it.to).toMatch(/^\/s-\d{2}$/);
+  });
+
+  it('splitBottomNav renders every configured item — none dropped (SAATHI-374)', () => {
+    const { left, right } = splitBottomNav();
+    // Every bottom-nav item appears exactly once across left+right.
+    expect(left.length + right.length).toBe(bottomNavItems.length);
+    const renderedIds = [...left, ...right].map((i) => i.id).sort();
+    const configuredIds = bottomNavItems.map((i) => i.id).sort();
+    expect(renderedIds).toEqual(configuredIds);
+    // Profile (the previously-dropped index 4) must be present.
+    expect(renderedIds).toContain('profile');
   });
 });

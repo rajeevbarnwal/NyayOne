@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { bottomNavItems, railItems } from './navItems';
+import { railItems, splitBottomNav } from './navItems';
 import type { ThemeMode } from '../../hooks/useTheme';
 
 /**
@@ -59,9 +59,10 @@ export function AppShell({
 
         <main className="ls-content" id="main-content">{children}</main>
 
-        {/* Mobile bottom nav with central Ask spine */}
+        {/* Mobile bottom nav with central Ask spine. splitBottomNav renders every
+            configured item (3 left, 2 right) so none is dropped. */}
         <nav className="ls-bnav" aria-label="Primary mobile">
-          {bottomNavItems.slice(0, 2).map((it) => (
+          {splitBottomNav().left.map((it) => (
             <NavLink key={it.id} to={it.to} className="ls-bnav__item">
               <span className="ls-bnav__glyph" aria-hidden>{it.glyph}</span>
               <span className="ls-bnav__label">{it.label}</span>
@@ -70,7 +71,7 @@ export function AppShell({
           <button type="button" className="ls-bnav__ask" aria-label="Ask LegalSaathi">
             <span aria-hidden>⌕</span>
           </button>
-          {bottomNavItems.slice(2, 4).map((it) => (
+          {splitBottomNav().right.map((it) => (
             <NavLink key={it.id} to={it.to} className="ls-bnav__item">
               <span className="ls-bnav__glyph" aria-hidden>{it.glyph}</span>
               <span className="ls-bnav__label">{it.label}</span>

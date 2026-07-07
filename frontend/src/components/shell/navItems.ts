@@ -33,3 +33,13 @@ export const bottomNavItems: NavItem[] = [
   { id: 'tutors', label: 'Tutors', to: '/s-31', glyph: '◈' },
   { id: 'profile', label: 'Profile', to: '/s-14', glyph: '◐' },
 ];
+
+/**
+ * Split the bottom-nav items around the central Ask action WITHOUT dropping any
+ * item. Left gets the first half, right gets the remainder — so every configured
+ * item always renders. (Guards the SAATHI-374 regression where index 4 was lost.)
+ */
+export function splitBottomNav(items: NavItem[] = bottomNavItems): { left: NavItem[]; right: NavItem[] } {
+  const mid = Math.ceil(items.length / 2);
+  return { left: items.slice(0, mid), right: items.slice(mid) };
+}
