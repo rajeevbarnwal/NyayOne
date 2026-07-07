@@ -8,7 +8,10 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
+    "test:run": "vitest --run",
+    "qa": "node scripts/browser-qa.mjs",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",
@@ -32,10 +35,14 @@
   },
   "devDependencies": {
     "@capacitor/cli": "latest",
+    "@eslint/js": "^10.0.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
+    "globals": "^17.7.0",
+    "playwright": "latest",
     "typescript": "latest",
+    "typescript-eslint": "^8.63.0",
     "vite": "latest",
     "vitest": "latest"
   }

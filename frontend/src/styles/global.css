@@ -284,3 +284,16 @@ button, input, textarea, select {
 
 .ui-srcpill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--panel); border: 1px solid var(--line); color: var(--text2); font: 500 var(--fs-xs) var(--font-mono); }
 .ui-srcpill__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* Reviewer/dev traceability banner (SAATHI-344) — hidden in production. */
+.ls-trace {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: var(--space-4); padding: 6px 10px;
+  border: 1px dashed var(--line2); border-radius: var(--radius-sm);
+  background: var(--panel); font: 500 var(--fs-xs) var(--font-mono); color: var(--text3);
+}
+.ls-trace__id { font-weight: 700; color: var(--accent); }
+.ls-trace__seg { color: var(--text2); }
+.ls-trace__pill { padding: 2px 8px; border-radius: var(--radius-pill); background: var(--info-bg); color: var(--info); }
+.ls-trace__pill--persona { background: var(--ok-bg); color: var(--ok); }
+.ls-trace__src { margin-left: auto; opacity: 0.7; }

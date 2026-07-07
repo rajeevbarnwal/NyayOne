@@ -1,0 +1,15 @@
+{
+  "app.name": "LegalSaathi",
+  "nav.home": "Home",
+  "nav.research": "Research",
+  "nav.internships": "Internships",
+  "nav.tutors": "Tutors",
+  "nav.profile": "Profile",
+  "action.ask": "Ask a question or search…",
+  "state.loading": "Loading…",
+  "state.empty": "Nothing here yet",
+  "state.error": "Something went wrong",
+  "guardrail.notAdvice": "Study & research assistance only, not legal advice.",
+  "privacy.minimisation": "We collect only what is needed and follow DPDP data-minimisation.",
+  "greeting.namaste": "Namaste, {name}"
+}

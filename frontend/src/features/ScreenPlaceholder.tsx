@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { TraceabilityBanner } from '../components/shell/TraceabilityBanner';
 
 interface ScreenPlaceholderProps {
   /** Canonical v3.2 screen ID (S-01 … S-99) supplied by the route registry. */
@@ -8,12 +9,14 @@ interface ScreenPlaceholderProps {
 /**
  * Foundation placeholder for a canonical screen ID (S-01 … S-99).
  * Real screens are implemented per release tranche in later tickets.
+ * The reviewer/dev traceability banner surfaces the screen's PRD mapping.
  */
 export default function ScreenPlaceholder({ id }: ScreenPlaceholderProps) {
   const params = useParams();
   const screenId = id ?? params.screenId ?? 'S-??';
   return (
     <section className="screen-placeholder">
+      <TraceabilityBanner screenId={screenId} />
       <p className="eyebrow">LegalSaathi · Student</p>
       <h1>{screenId.toUpperCase()}</h1>
       <p>Foundation placeholder. This screen will be implemented in a later release tranche.</p>

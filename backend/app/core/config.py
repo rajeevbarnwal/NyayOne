@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
     db_echo: bool = False
 
+    # --- Worker / broker (Valkey-preferred; host port 1033) ---
+    # Broker URL for the worker; Valkey is the default (BSD, Redis-compatible).
+    # No Redis-specific product assumptions. Not connected in the foundation stage.
+    worker_broker_url: str = "valkey://localhost:1033/0"
+    worker_max_attempts: int = 3
+    worker_base_delay_s: float = 0.5
+    worker_backoff_factor: float = 2.0
+
     # --- Config-ready placeholders (declared here, not wired in the foundation tickets) ---
     # Cache / queue broker. Valkey is the default (BSD-licensed, Redis-compatible); host port 1033
     valkey_url: str | None = None
