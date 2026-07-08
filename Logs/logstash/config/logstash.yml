@@ -1,0 +1,6 @@
+http.host: "0.0.0.0"
+http.port: 9600
+log.level: info
+pipeline.ecs_compatibility: disabled
+pipeline.workers: 1
+path.data: /workspace/Logs/logstash/state

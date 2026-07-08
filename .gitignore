@@ -41,6 +41,22 @@ frontend/android/build/
 # Runtime data
 logs/
 *.log
+!Logs/
+!Logs/README.md
+!Logs/app/
+Logs/app/*.jsonl
+!Logs/app/.gitkeep
+!Logs/logstash/
+!Logs/logstash/config/
+!Logs/logstash/config/logstash.yml
+!Logs/logstash/pipeline/
+!Logs/logstash/pipeline/logstash.conf
+!Logs/logstash/state/
+!Logs/processed/
+Logs/processed/*.jsonl
+!Logs/processed/.gitkeep
+Logs/logstash/state/*
+!Logs/logstash/state/.gitkeep
 storage/uploads/*
 !storage/uploads/.gitkeep
 storage/vectorstore/*

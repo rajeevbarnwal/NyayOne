@@ -1,0 +1,33 @@
+{
+  "scope": "Logstash local observability baseline",
+  "implemented": [
+    "Backend JSONL file sink via LOG_FILE_PATH while preserving stdout JSON logs.",
+    "Logstash config/pipeline under Logs/logstash.",
+    "Docker Compose logstash service on host port 1038.",
+    "Generated JSONL/state files ignored by git.",
+    "Runbook in Logs/README.md."
+  ],
+  "files": [
+    ".gitignore",
+    ".env.example",
+    "docker-compose.yml",
+    "backend/app/core/config.py",
+    "backend/app/core/logging.py",
+    "backend/app/main.py",
+    "backend/tests/test_config.py",
+    "backend/tests/test_logging.py",
+    "Logs/README.md",
+    "Logs/logstash/config/logstash.yml",
+    "Logs/logstash/pipeline/logstash.conf"
+  ],
+  "validation": {
+    "backend_pytest": "35 passed",
+    "compose_yaml_parse": "pass: logstash service, 1038:9600, backend LOG_FILE_PATH",
+    "docker_runtime": "not run in this shell because docker command is unavailable"
+  },
+  "known_limitations": [
+    "Captures backend application/request logs; browser console collection is intentionally deferred.",
+    "Full Logstash runtime validation requires Docker or a local Logstash binary.",
+    "Production observability should later choose OpenTelemetry/Loki/ELK target explicitly."
+  ]
+}

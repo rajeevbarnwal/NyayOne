@@ -22,6 +22,7 @@ def test_config_ready_placeholders_still_unset() -> None:
     assert fresh.valkey_url is None
     assert fresh.storage_endpoint_url is None
     assert fresh.llm_gateway_url is None
+    assert fresh.log_file_path is None
 
 
 def test_has_secret_helper() -> None:

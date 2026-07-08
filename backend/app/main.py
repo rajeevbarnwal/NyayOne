@@ -9,7 +9,7 @@ from app.core.middleware import RequestIDMiddleware
 
 
 def create_app() -> FastAPI:
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_file_path)
     logger = get_logger("legalsaathi.app")
 
     app = FastAPI(title=settings.app_name, version=settings.app_version)

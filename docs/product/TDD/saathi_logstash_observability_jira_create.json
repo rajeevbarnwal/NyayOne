@@ -1,0 +1,51 @@
+{
+  "parent": "SAATHI-398",
+  "subtasks": [
+    "SAATHI-399",
+    "SAATHI-400",
+    "SAATHI-401",
+    "SAATHI-402"
+  ],
+  "sprint_id": 36,
+  "transitions": {
+    "SAATHI-398": [
+      "moved-To Do-to-In Progress",
+      "moved-In Progress-to-Testing"
+    ],
+    "SAATHI-399": [
+      "moved-To Do-to-In Progress",
+      "moved-In Progress-to-Testing"
+    ],
+    "SAATHI-400": [
+      "moved-To Do-to-In Progress",
+      "moved-In Progress-to-Testing"
+    ],
+    "SAATHI-401": [
+      "moved-To Do-to-In Progress",
+      "moved-In Progress-to-Testing"
+    ],
+    "SAATHI-402": [
+      "moved-To Do-to-In Progress",
+      "moved-In Progress-to-Testing"
+    ]
+  },
+  "attachments": [
+    {
+      "id": "10926",
+      "filename": "saathi_logstash_observability_qa_report.json"
+    },
+    {
+      "id": "10927",
+      "filename": "README.md"
+    },
+    {
+      "id": "10928",
+      "filename": "logstash.yml"
+    },
+    {
+      "id": "10929",
+      "filename": "logstash.conf"
+    }
+  ],
+  "qa_report": "/Users/rajeevbarnwal/Desktop/Codes/LegalSaathi/docs/product/TDD/saathi_logstash_observability_qa_report.json"
+}

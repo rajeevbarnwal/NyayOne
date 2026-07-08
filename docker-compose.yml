@@ -1,6 +1,7 @@
 # LegalSaathi local dev — standardized on host port range 1030-1049.
 # Reserved: frontend 1030, backend 1031, Postgres 1032, Valkey 1033,
-# SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037.
+# SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037,
+# Logstash monitoring API 1038.
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -24,12 +25,15 @@ services:
       dockerfile: docker/backend.Dockerfile
     env_file:
       - .env
+    environment:
+      LOG_FILE_PATH: /workspace/Logs/app/backend.jsonl
     ports:
       - "1031:1031"
     volumes:
       - ./backend:/app
       - ./storage:/workspace/storage
       - ./data:/workspace/data
+      - ./Logs:/workspace/Logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +49,17 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  logstash:
+    image: ${LOGSTASH_IMAGE:-docker.elastic.co/logstash/logstash:8.15.3}
+    ports:
+      - "1038:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+    volumes:
+      - ./Logs:/workspace/Logs
+      - ./Logs/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./Logs/logstash/pipeline:/usr/share/logstash/pipeline:ro
 
 volumes:
   pgdata:

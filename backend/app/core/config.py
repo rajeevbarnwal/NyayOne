@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_env: str = "development"
     log_level: str = "INFO"
+    # Optional JSONL file sink used by Logstash/Filebeat-style collectors.
+    # Keep stdout JSON logging enabled; this adds a second local file handler.
+    log_file_path: str | None = None
 
     # CORS: frontend dev server runs on 1030 (LegalSaathi local dev port range 1030-1049)
     cors_origins: list[str] = ["http://localhost:1030", "http://127.0.0.1:1030"]
