@@ -8,11 +8,16 @@ import {
   hoursByCategory,
   progressPct,
   statusChip,
+  verificationSteps,
+  exportSummary,
+  canExport,
   CATEGORY_LABELS,
   CATEGORY_OPTIONS,
   TARGET_HOURS,
   COMPLIANCE_NOTE,
   EVIDENCE_PRIVACY,
+  NON_OFFICIAL_TRANSCRIPT_WARNING,
+  EXPORT_AUDIT_NOTE,
   SAMPLE_ENTRIES,
   type ClinicalCategory,
   type LogDraftInput,
@@ -147,6 +152,128 @@ export function ClinicalAdd() {
         <PrivacyNotice>Evidence is shared only with the faculty verifier you choose; drafts stay on your device until synced.</PrivacyNotice>
         <DpdpFootnote>{EVIDENCE_PRIVACY}</DpdpFootnote>
       </div>
+    </StudentScreen>
+  );
+}
+
+function Workflow({ status }: { status: 'submitted' | 'verified' }) {
+  const steps = verificationSteps(status);
+  return (
+    <ol className="st-list" aria-label="Verification workflow">
+      {steps.map((s) => (
+        <li className="st-item" key={s.label}>
+          <div>
+            <div>{s.label}</div>
+            <div className="st-item__meta">{s.detail}</div>
+          </div>
+          <StatusBadge
+            status={s.state === 'done' ? 'ok' : s.state === 'now' ? 'warn' : 'info'}
+            label={s.state === 'done' ? 'Done' : s.state === 'now' ? 'In review' : 'Pending'}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-63 — Verification pending                                                 */
+/* -------------------------------------------------------------------------- */
+export function ClinicalPending() {
+  const nav = useNavigate();
+  return (
+    <StudentScreen screenId="S-63" className="st-authwrap">
+      <div className="st-card">
+        <p className="st-card__kicker">Clinical hours · S12</p>
+        <h1 className="st-card__title">Verification workflow · pending</h1>
+        <div className="st-metarow">
+          <StatusBadge status="warn" label="Awaiting verifier" />
+        </div>
+        <Workflow status="submitted" />
+        <GuardrailNotice>We record and organise hours; your institution’s approval controls compliance.</GuardrailNotice>
+        <div className="st-actions st-actions--split">
+          <button type="button" className="btn tap" onClick={() => nav('/s-61')}>Back to log</button>
+          <button type="button" className="btn tap" onClick={() => nav('/s-64')}>View verified</button>
+        </div>
+        <DpdpFootnote>{EVIDENCE_PRIVACY}</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-64 — Verified & counted                                                   */
+/* -------------------------------------------------------------------------- */
+export function ClinicalVerified() {
+  const nav = useNavigate();
+  return (
+    <StudentScreen screenId="S-64" className="st-authwrap">
+      <div className="st-card">
+        <p className="st-card__kicker">Entry verified &amp; counted</p>
+        <h1 className="st-card__title">DLSA legal-aid camp</h1>
+        <div className="st-metarow">
+          <StatusBadge status="ok" label="Verified" />
+        </div>
+        <p className="st-card__sub">by faculty · 2 Jul · +6 hrs</p>
+        <Workflow status="verified" />
+        <div className="st-actions st-actions--split">
+          <button type="button" className="btn tap" onClick={() => nav('/s-61')}>Back to log</button>
+          <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-65')}>Export hours</button>
+        </div>
+        <DpdpFootnote>{EVIDENCE_PRIVACY}</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-65 — Export & requirement progress                                        */
+/* -------------------------------------------------------------------------- */
+export function ClinicalExport() {
+  const nav = useNavigate();
+  const s = exportSummary(SAMPLE_ENTRIES);
+  const [includeEvidence, setIncludeEvidence] = useState(false);
+  const [reauthed, setReauthed] = useState(false);
+  const ready = canExport({ includesEvidence: includeEvidence, reauthenticated: reauthed });
+  return (
+    <StudentScreen screenId="S-65" className="st-set">
+      <div className="st-set__head">
+        <p className="st-eyebrow">Clinical hours · S12</p>
+        <h1 className="st-h1">Export</h1>
+      </div>
+      <section className="st-panel">
+        <h2 className="st-panel__title">Export log</h2>
+        <p className="st-item__meta">
+          {s.totalHours} / {s.target} hrs · {s.entries} entries · {s.verifiedEntries} verified ({s.verifiedHours} hrs).
+        </p>
+        <div className="st-progress" role="progressbar" aria-valuenow={s.progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Requirement progress">
+          <div className="st-progress__bar" style={{ width: `${s.progressPct}%` }} />
+        </div>
+        <div className="st-setrow">
+          <div>
+            <div className="st-setrow__label">Include evidence files</div>
+            <div className="st-setrow__sub">Requires re-authentication.</div>
+          </div>
+          <button type="button" className="st-toggle" aria-pressed={includeEvidence} onClick={() => setIncludeEvidence((v) => !v)}>
+            {includeEvidence ? 'On' : 'Off'}
+          </button>
+        </div>
+        {includeEvidence && (
+          <button type="button" className="st-toggle" aria-pressed={reauthed} onClick={() => setReauthed((v) => !v)} style={{ marginBottom: 'var(--space-3)' }}>
+            {reauthed ? 'Re-authenticated' : 'Re-authenticate'}
+          </button>
+        )}
+        <div className="st-actions">
+          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready}>PDF report</button>
+          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready}>CSV</button>
+          <button type="button" className="btn btn--primary tap" disabled={!ready} aria-disabled={!ready}>Send to institution</button>
+        </div>
+      </section>
+      <div className="st-actions">
+        <button type="button" className="btn tap" onClick={() => nav('/s-61')}>Back to log</button>
+      </div>
+      <p className="st-dpdp" role="note">{NON_OFFICIAL_TRANSCRIPT_WARNING}</p>
+      <DpdpFootnote>{EXPORT_AUDIT_NOTE}</DpdpFootnote>
     </StudentScreen>
   );
 }

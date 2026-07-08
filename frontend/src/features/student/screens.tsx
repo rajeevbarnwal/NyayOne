@@ -38,8 +38,8 @@ import {
   CommunityReport,
   CommunityModerated,
 } from './community/CommunityScreens';
-import { ExamOverview, ExamSyllabus } from './exam/ExamScreens';
-import { ClinicalLog, ClinicalAdd } from './clinical/ClinicalScreens';
+import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
+import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
 
 /** Props every student screen may receive from the shell (theme is shell-owned). */
 export interface StudentScreenProps {
@@ -86,12 +86,19 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-52': CommunityCreate,
   'S-53': CommunityReport,
   'S-54': CommunityModerated,
-  // S11 exam prep (SAATHI-147)
+  // S11 exam prep (SAATHI-147 + S11.2/3/5: SAATHI-152/157/167)
   'S-55': ExamOverview,
+  'S-56': ExamMock,
+  'S-57': ExamResult,
+  'S-58': ExamReview,
+  'S-59': ExamAnalytics,
   'S-60': ExamSyllabus,
-  // S12 clinical hours (SAATHI-173)
+  // S12 clinical hours (SAATHI-173 + S12.2/3: SAATHI-178/183)
   'S-61': ClinicalLog,
   'S-62': ClinicalAdd,
+  'S-63': ClinicalPending,
+  'S-64': ClinicalVerified,
+  'S-65': ClinicalExport,
 };
 
 export const IMPLEMENTED_SCREEN_IDS = Object.keys(studentScreens);

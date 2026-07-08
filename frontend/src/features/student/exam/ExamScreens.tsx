@@ -6,10 +6,21 @@ import {
   orderTracks,
   syllabusFor,
   sourcePillText,
+  evaluateAnswers,
+  revisionQueue,
   SAMPLE_ITEMS_LABEL,
   SAMPLE_LAW_LABEL,
+  SAMPLE_SCORING_LABEL,
+  EXPLANATION_SAMPLE_LABEL,
+  VERIFY_CITATION_LABEL,
+  SAMPLE_COHORT_LABEL,
   ESTIMATED_PERCENTILE_LABEL,
+  ANALYTICS_DISCLAIMER,
   TRACK_NOTE_ENROLLED,
+  SAMPLE_MOCK,
+  SAMPLE_RESULT,
+  ANALYTICS_SECTIONS,
+  MOCK_TOTAL,
   type ExamTrack,
 } from '../lib/exam';
 
@@ -135,6 +146,182 @@ export function ExamSyllabus() {
           <button type="button" className="btn tap" onClick={() => nav('/s-55')}>Back to Exam Hub</button>
         </div>
         <DpdpFootnote>Content is source-versioned and sample/illustrative — no official exam claim without a verified source</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-56 — Timed mock runner                                                    */
+/* -------------------------------------------------------------------------- */
+export function ExamMock() {
+  const nav = useNavigate();
+  const q = SAMPLE_MOCK[0];
+  const [answers, setAnswers] = useState<Record<string, number>>({ [q.id]: q.correctIndex });
+  const answered = Object.keys(answers).length;
+  const pct = Math.round((24 / MOCK_TOTAL) * 100);
+  return (
+    <StudentScreen screenId="S-56">
+      <div className="st-stack">
+        <Head title="Timed mock · in progress" sub="24 of 100" />
+        <div className="st-grid">
+          <section className="st-panel">
+            <div className="st-panel__head">
+              <h2 className="st-panel__title">Question 24 of {MOCK_TOTAL}</h2>
+              <span className="st-metatag">28:14 · {SAMPLE_ITEMS_LABEL}</span>
+            </div>
+            <p style={{ fontFamily: 'var(--font-serif)' }}>{q.prompt}</p>
+            <div className="st-actions" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              {q.options.map((o, i) => (
+                <button key={o} type="button" className="btn tap" aria-pressed={answers[q.id] === i} style={{ justifyContent: 'flex-start' }} onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}>
+                  {String.fromCharCode(65 + i)} · {o}
+                </button>
+              ))}
+            </div>
+            <div className="st-actions st-actions--split">
+              <button type="button" className="btn tap">Previous</button>
+              <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-57')}>Finish &amp; submit</button>
+            </div>
+          </section>
+          <section className="st-panel">
+            <h2 className="st-panel__title">Progress</h2>
+            <div className="st-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Mock progress">
+              <div className="st-progress__bar" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="st-item__meta">{answered} answered · 3 flagged · {MOCK_TOTAL - 24} remaining</p>
+          </section>
+        </div>
+        <DpdpFootnote>Sample items · not a real paper · source-versioned</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-57 — Mock result                                                          */
+/* -------------------------------------------------------------------------- */
+export function ExamResult() {
+  const nav = useNavigate();
+  const r = SAMPLE_RESULT;
+  return (
+    <StudentScreen screenId="S-57">
+      <div className="st-stack">
+        <Head title="Mock result" />
+        <div className="st-grid">
+          <section className="st-panel">
+            <div className="st-panel__head">
+              <h2 className="st-panel__title">Mock result</h2>
+              <span className="st-metatag">{SAMPLE_SCORING_LABEL}</span>
+            </div>
+            <div>
+              <span className="st-ring">{r.score}</span> <span className="st-item__meta">/ {r.total}</span>
+            </div>
+            <div className="st-metarow">
+              <StatusBadge status="ok" label={`Percentile ${r.estimatedPercentile}`} />
+            </div>
+            <p className="st-item__meta">{ESTIMATED_PERCENTILE_LABEL}.</p>
+            <div className="st-actions">
+              <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-58')}>Review questions</button>
+            </div>
+          </section>
+          <section className="st-panel">
+            <h2 className="st-panel__title">Section split</h2>
+            <ul className="st-list">
+              {r.sections.map((s) => (
+                <li className="st-item" key={s.section}>
+                  <div>{s.section}</div>
+                  <StatusBadge status={s.weak ? 'warn' : 'ok'} label={`${s.accuracyPct}%`} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+        <DpdpFootnote>{ANALYTICS_DISCLAIMER}</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-58 — Question review                                                      */
+/* -------------------------------------------------------------------------- */
+export function ExamReview() {
+  const nav = useNavigate();
+  // Demo: first answer wrong, second correct.
+  const responses: Record<string, number> = { q12: 0, q13: 1 };
+  const correct = evaluateAnswers(responses);
+  return (
+    <StudentScreen screenId="S-58">
+      <div className="st-stack">
+        <Head title="Question review" sub={`${correct} of ${SAMPLE_MOCK.length} correct`} />
+        {SAMPLE_MOCK.map((q) => {
+          const right = responses[q.id] === q.correctIndex;
+          const label = q.explanationKind === 'citation' ? VERIFY_CITATION_LABEL : EXPLANATION_SAMPLE_LABEL;
+          return (
+            <section className="st-panel" key={q.id}>
+              <div className="st-panel__head">
+                <h2 className="st-panel__title">{q.id.toUpperCase()} · {q.section}</h2>
+                <span className="st-metatag">{label}</span>
+              </div>
+              <div className="st-metarow">
+                {right ? (
+                  <StatusBadge status="ok" label="Correct" />
+                ) : (
+                  <>
+                    <StatusBadge status="risk" label="Your answer wrong" />
+                    <StatusBadge status="ok" label={`Correct: ${String.fromCharCode(65 + q.correctIndex)}`} />
+                  </>
+                )}
+              </div>
+              <p style={{ fontFamily: 'var(--font-serif)' }}>{q.explanation}</p>
+            </section>
+          );
+        })}
+        <div className="st-actions">
+          <button type="button" className="btn tap" onClick={() => nav('/s-59')}>View analytics</button>
+        </div>
+        <DpdpFootnote>Explanations are sample/illustrative — verify every citation against the official source</DpdpFootnote>
+      </div>
+    </StudentScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* S-59 — Analytics                                                            */
+/* -------------------------------------------------------------------------- */
+export function ExamAnalytics() {
+  const nav = useNavigate();
+  const revise = revisionQueue(ANALYTICS_SECTIONS);
+  return (
+    <StudentScreen screenId="S-59">
+      <div className="st-stack">
+        <Head title="Analytics" sub="educational feedback only" />
+        <div className="st-grid">
+          <section className="st-panel">
+            <h2 className="st-panel__title">Accuracy by section</h2>
+            <ul className="st-list">
+              {ANALYTICS_SECTIONS.map((s) => (
+                <li className="st-item" key={s.section}>
+                  <div>{s.section}</div>
+                  <StatusBadge status={s.weak ? 'warn' : 'ok'} label={`${s.accuracyPct}%`} />
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="st-panel">
+            <div className="st-panel__head">
+              <h2 className="st-panel__title">Trend</h2>
+              <span className="st-metatag">{SAMPLE_COHORT_LABEL}</span>
+            </div>
+            <div className="st-ring">+6.2</div>
+            <p className="st-item__meta">percentile, last 6 mocks</p>
+            <p className="st-item__meta" style={{ marginTop: 'var(--space-3)' }}>Revise next: {revise.slice(0, 2).join(', ')}</p>
+          </section>
+        </div>
+        <div className="st-actions">
+          <button type="button" className="btn tap" onClick={() => nav('/s-55')}>Back to Exam Hub</button>
+        </div>
+        <DpdpFootnote>{ANALYTICS_DISCLAIMER}</DpdpFootnote>
       </div>
     </StudentScreen>
   );

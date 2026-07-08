@@ -99,6 +99,71 @@ export const COMPLIANCE_NOTE =
   'LegalSaathi records and organises your training hours and evidence. Your institution’s approval controls compliance — we do not certify that requirements are met.';
 export const EVIDENCE_PRIVACY = 'Evidence shared only with the faculty verifier you choose';
 
+/* -------------------------------------------------------------------------- */
+/* Evidence verification workflow + export (S12.2 / S12.3)                      */
+/* -------------------------------------------------------------------------- */
+
+export type StepState = 'done' | 'now' | 'todo';
+export interface WorkflowStep {
+  readonly label: string;
+  readonly detail: string;
+  readonly state: StepState;
+}
+
+/** 3-step verification workflow derived from the entry's status. */
+export function verificationSteps(status: VerificationStatus): WorkflowStep[] {
+  const loggedDone = true; // evidence attached before entering the workflow
+  const verified = status === 'verified';
+  const rejected = status === 'rejected' || status === 'needs_info';
+  return [
+    { label: 'Logged & evidence attached', detail: 'by you', state: 'done' },
+    {
+      label: rejected ? 'Faculty review — needs info' : 'Faculty review',
+      detail: verified ? 'reviewed' : 'awaiting verifier',
+      state: verified ? 'done' : loggedDone ? 'now' : 'todo',
+    },
+    {
+      label: 'Verified & counted',
+      detail: 'institution confirms compliance',
+      state: verified ? 'done' : 'todo',
+    },
+  ];
+}
+
+export interface ExportSummary {
+  readonly totalHours: number;
+  readonly target: number;
+  readonly entries: number;
+  readonly verifiedEntries: number;
+  readonly verifiedHours: number;
+  readonly progressPct: number;
+}
+
+export function exportSummary(entries: readonly LogEntry[], target = TARGET_HOURS): ExportSummary {
+  const verified = entries.filter((e) => e.status === 'verified');
+  const total = totalHours(entries);
+  return {
+    totalHours: total,
+    target,
+    entries: entries.length,
+    verifiedEntries: verified.length,
+    verifiedHours: totalHours(verified),
+    progressPct: Math.min(100, Math.round((total / target) * 100)),
+  };
+}
+
+export type ExportFormat = 'pdf' | 'csv' | 'institution';
+
+/** Whether an export can proceed. Re-auth is required when evidence is included. */
+export function canExport(g: { includesEvidence: boolean; reauthenticated: boolean }): boolean {
+  return g.includesEvidence ? g.reauthenticated : true;
+}
+
+/** Mandatory export copy (PRD S12.3): this is NOT an official transcript. */
+export const NON_OFFICIAL_TRANSCRIPT_WARNING =
+  'This export is a self-maintained record, not an official transcript. Verified/unverified split, source and generated timestamp are included; your institution’s ruleset governs compliance.';
+export const EXPORT_AUDIT_NOTE = 'Every export is audited; sensitive evidence requires re-authentication.';
+
 export const SAMPLE_ENTRIES: readonly LogEntry[] = [
   { id: 'l1', date: '28 Jun', hours: 6, activity: 'DLSA legal-aid camp — Anekal taluk', category: 'legal_aid', verifier: 'prof@nls.ac.in', evidenceName: 'camp-letter.pdf', status: 'submitted' },
   { id: 'l2', date: '21 Jun', hours: 4, activity: 'City Civil Court — observation', category: 'court', verifier: 'prof@nls.ac.in', evidenceName: 'cause-list photo', status: 'verified' },
