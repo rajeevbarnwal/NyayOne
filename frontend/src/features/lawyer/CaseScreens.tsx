@@ -20,6 +20,16 @@ import {
   DOC_STATE_LABELS, checklistProgress, SAMPLE_CHECKLIST, OCR_MACHINE_LABEL, DPDP_ACCESS_NOTICE,
   type DocState,
 } from './lib/documents';
+import {
+  validateMatterFacts, addVersion, latestVersion, approveVersion, canExportForFiling,
+  aiContentAwaitingApproval, createStubDraftingAssistant, DRAFT_TEMPLATES, SAMPLE_MATTER_FACTS,
+  AI_DRAFT_LABEL, type DraftVersion, type ApprovalRecord, type MatterFacts,
+} from './lib/drafting';
+import {
+  openReview, addComment, requestChanges, clientApprove, revokeReview, reviewAccessible,
+  checklistClientApproved, sendReviewLink, CLIENT_APPROVAL_NOTE, REVIEW_STATUS_LABELS,
+  type ReviewSession,
+} from './lib/clientReview';
 
 /** Lightweight lawyer-module screen scaffold (Core has no v3.2 design yet). */
 function CaseScreen({ eyebrow, title, sub, children, className }: { eyebrow: string; title: string; sub?: string; children: React.ReactNode; className?: string }) {
@@ -319,6 +329,203 @@ export function CaseDocuments() {
         <button type="button" className="btn tap" onClick={() => nav('/case/intake')}>Back to intake</button>
       </div>
       <DpdpFootnote>OCR is assistive only — confirm tags before legal reliance; links expire and carry no PII</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* E06 (SAATHI-16) — Draft plaint/petition with review controls                */
+/* -------------------------------------------------------------------------- */
+export function CaseDraft() {
+  const nav = useNavigate();
+  const assistant = useMemo(() => createStubDraftingAssistant(), []);
+  const [facts, setFacts] = useState<MatterFacts>(SAMPLE_MATTER_FACTS);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [template, setTemplate] = useState(DRAFT_TEMPLATES[0]);
+  const [history, setHistory] = useState<DraftVersion[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [editBody, setEditBody] = useState('');
+  const setF = (k: keyof MatterFacts) => (v: string) => setFacts((s) => ({ ...s, [k]: v }));
+  const latest = latestVersion(history);
+
+  function generate() {
+    const e = validateMatterFacts(facts);
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    const gen = assistant.generate(facts, template);
+    setHistory((h) => addVersion(h, { authorId: 'assoc:1', createdAt: new Date().toISOString(), changeNote: 'AI-assisted draft', body: gen.body, aiGenerated: true, citations: gen.citations }));
+  }
+  function saveEdit() {
+    if (!editBody.trim()) return;
+    setHistory((h) => addVersion(h, { authorId: 'lawyer:rao', createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
+    setEditBody('');
+  }
+  function approve() {
+    if (latest) setApprovals((a) => approveVersion(a, latest.id, 'lawyer:rao', new Date().toISOString()));
+  }
+
+  const exportable = canExportForFiling(history, approvals);
+  const awaitingApproval = aiContentAwaitingApproval(history, approvals);
+
+  return (
+    <CaseScreen eyebrow="Drafting · E06" title="Draft plaint / petition">
+      <section className="st-panel">
+        <h2 className="st-panel__title">Matter facts</h2>
+        <SelectField id="dr-tpl" label="Template" value={template} onChange={setTemplate} options={DRAFT_TEMPLATES} />
+        <TextField id="dr-parties" label="Parties" value={facts.parties} onChange={setF('parties')} error={errors.parties} />
+        <TextField id="dr-reliefs" label="Reliefs sought" value={facts.reliefs} onChange={setF('reliefs')} error={errors.reliefs} />
+        <TextField id="dr-juris" label="Court / jurisdiction" value={facts.jurisdiction} onChange={setF('jurisdiction')} error={errors.jurisdiction} />
+        <TextField id="dr-sections" label="Provisions / sections" value={facts.sections} onChange={setF('sections')} />
+        <TextField id="dr-issues" label="Issues" value={facts.issues} onChange={setF('issues')} />
+        <TextField id="dr-lim" label="Limitation note" value={facts.limitationNote} onChange={setF('limitationNote')} />
+        <div className="st-actions">
+          <button type="button" className="btn btn--primary tap" onClick={generate}>Generate AI-assisted draft</button>
+        </div>
+      </section>
+
+      {latest && (
+        <section className="st-panel" aria-label="Current draft">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Draft v{latest.versionNo}</h2>
+            <StatusBadge status={latest.aiGenerated ? chip('warn') : chip('info')} label={latest.aiGenerated ? 'AI-generated' : 'Manual'} />
+          </div>
+          {latest.aiGenerated && <GuardrailNotice>{AI_DRAFT_LABEL}</GuardrailNotice>}
+          <pre className="st-pre" aria-label="Draft body">{latest.body}</pre>
+          {latest.citations.length > 0 && (
+            <ul className="st-list" aria-label="Source citations">
+              {latest.citations.map((c) => (
+                <li className="st-item" key={c.n}>
+                  <div>[{c.n}] {c.title} · {c.ref}</div>
+                  <span className="st-metatag">{c.sourceVersion}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className="st-field" htmlFor="dr-edit">
+            <span className="st-field__label">Revise draft</span>
+            <textarea id="dr-edit" className="st-input" rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} />
+          </label>
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" onClick={saveEdit} disabled={!editBody.trim()} aria-disabled={!editBody.trim()}>Save revision</button>
+            <button type="button" className="btn tap" onClick={approve}>Lawyer approve v{latest.versionNo}</button>
+          </div>
+          {awaitingApproval && <ValidationState message="AI-generated content cannot be exported for filing until a lawyer approves it." />}
+        </section>
+      )}
+
+      <section className="st-panel">
+        <div className="st-panel__head">
+          <h2 className="st-panel__title">Version history</h2>
+          <span className="st-metatag">{history.length} version(s)</span>
+        </div>
+        {history.length === 0
+          ? <EmptyState title="No versions yet" hint="Generate or write a draft to start the append-only history." />
+          : (
+            <ul className="st-list">
+              {history.map((v) => (
+                <li className="st-item" key={v.id}>
+                  <div>v{v.versionNo} · {v.changeNote}<div className="st-item__meta">{v.authorId}</div></div>
+                  <StatusBadge status={approvals.some((a) => a.versionId === v.id) ? chip('ok') : chip('info')} label={approvals.some((a) => a.versionId === v.id) ? 'Approved' : 'Draft'} />
+                </li>
+              ))}
+            </ul>
+          )}
+        <div className="st-actions st-actions--split">
+          <button type="button" className="btn tap" disabled={!exportable} aria-disabled={!exportable} title={exportable ? undefined : 'Requires lawyer approval of the latest version'}>Export for filing</button>
+          <button type="button" className="btn btn--primary tap" disabled={!exportable} aria-disabled={!exportable} onClick={() => nav('/case/review')}>Send for client review</button>
+        </div>
+      </section>
+      <DpdpFootnote>Every version and comment is preserved; AI output is a draft, never final filing content, until a verified lawyer approves it</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* E07 (SAATHI-18) — Send draft for client review                              */
+/* -------------------------------------------------------------------------- */
+const SEED_APPROVED_VERSION = 'v1-approved';
+export function CaseReview() {
+  // Seeded with a lawyer-approved draft version handed off from E06.
+  const approvals = useMemo<ApprovalRecord[]>(() => approveVersion([], SEED_APPROVED_VERSION, 'lawyer:rao', new Date().toISOString()), []);
+  const [session, setSession] = useState<ReviewSession | null>(null);
+  const [latestVersionId, setLatestVersionId] = useState(SEED_APPROVED_VERSION);
+  const [optIn, setOptIn] = useState(false);
+  const [comment, setComment] = useState('');
+
+  const notify = sendReviewLink({ channel: 'whatsapp', optedIn: optIn, loggedAt: optIn ? new Date().toISOString() : null });
+
+  function open() {
+    const now = Date.now();
+    setSession(openReview(SEED_APPROVED_VERSION, approvals, `tok-${now}`, now, new Date().toISOString()));
+  }
+  function comm(kind: 'comment' | 'changes') {
+    if (!session || !comment.trim()) return;
+    const now = Date.now();
+    const iso = new Date().toISOString();
+    setSession(kind === 'comment' ? addComment(session, latestVersionId, comment, now, iso) : requestChanges(session, latestVersionId, comment, now, iso));
+    setComment('');
+  }
+  function approveClient() { if (session) setSession(clientApprove(session, latestVersionId, Date.now(), new Date().toISOString())); }
+  function revoke() { if (session) setSession(revokeReview(session, Date.now())); }
+  function bumpVersion() { setLatestVersionId('v2-newer'); } // simulate a newer draft → stale guard
+
+  const accessible = session ? reviewAccessible(session, Date.now()) : false;
+  const stale = session ? session.draftVersionId !== latestVersionId : false;
+
+  return (
+    <CaseScreen eyebrow="Client review · E07" title="Send draft for client review" sub={`Bound to approved draft ${SEED_APPROVED_VERSION}`}>
+      <section className="st-panel">
+        <div className="st-setrow">
+          <div>
+            <div className="st-setrow__label">Client channel opt-in</div>
+            <div className="st-setrow__sub">The review link is only sent when channel consent is logged.</div>
+          </div>
+          <button type="button" className="st-toggle" aria-pressed={optIn} onClick={() => setOptIn((v) => !v)}>{optIn ? 'On' : 'Off'}</button>
+        </div>
+        <div className="st-actions st-actions--split">
+          <button type="button" className="btn btn--primary tap" onClick={open}>Create secure review link</button>
+          <StatusBadge status={notify === 'sent' ? chip('ok') : chip('info')} label={notify === 'sent' ? 'Link notification queued' : 'Held — no consent'} />
+        </div>
+      </section>
+
+      {session ? (
+        <section className="st-panel" aria-label="Review session">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Review session</h2>
+            <StatusBadge status={session.status === 'approved' ? chip('ok') : session.status === 'revoked' || session.status === 'expired' ? chip('risk') : chip('info')} label={REVIEW_STATUS_LABELS[session.status]} />
+          </div>
+          <p className="st-item__meta">Link {session.link.url} · bound to {session.draftVersionId} · {accessible ? 'active' : 'not accessible'}</p>
+          {stale && <ValidationState message="A newer draft version exists — this review is stale. Comments and approval will not transfer to the new version." />}
+          <label className="st-field" htmlFor="rv-comment">
+            <span className="st-field__label">Client feedback</span>
+            <textarea id="rv-comment" className="st-input" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
+          </label>
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" onClick={() => comm('comment')} disabled={!comment.trim()} aria-disabled={!comment.trim()}>Add comment</button>
+            <button type="button" className="btn tap" onClick={() => comm('changes')} disabled={!comment.trim()} aria-disabled={!comment.trim()}>Request changes</button>
+            <button type="button" className="btn tap" onClick={approveClient}>Client approve</button>
+          </div>
+          {session.comments.length > 0 && (
+            <ul className="st-list" aria-label="Comments">
+              {session.comments.map((c) => (
+                <li className="st-item" key={c.id}><div>{c.body}</div><span className="st-metatag">{c.author} · {c.draftVersionId}</span></li>
+              ))}
+            </ul>
+          )}
+          {checklistClientApproved(session) && (
+            <div className="ui-banner ui-banner--warn" role="status">
+              <span className="ui-banner__mark" aria-hidden>✓</span><span>{CLIENT_APPROVAL_NOTE}</span>
+            </div>
+          )}
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" onClick={bumpVersion}>Simulate newer draft (stale test)</button>
+            <button type="button" className="btn tap" onClick={revoke}>Revoke link</button>
+          </div>
+        </section>
+      ) : (
+        <section className="st-panel"><EmptyState title="No review session" hint="Create a secure link to send the approved draft for client review." /></section>
+      )}
+      <DpdpFootnote>Client approval records a product acknowledgement only — it is not filing authorisation; links expire, are revocable, and carry no PII</DpdpFootnote>
     </CaseScreen>
   );
 }

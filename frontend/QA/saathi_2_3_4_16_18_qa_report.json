@@ -1,0 +1,79 @@
+{
+  "suite": "saathi_2_3_4_16_18",
+  "widths": [
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "parts": [
+    {
+      "routes": [
+        "/auth/lawyer",
+        "/auth/student",
+        "/auth/security"
+      ],
+      "checks": 30,
+      "failures": 0,
+      "failMsgs": []
+    },
+    {
+      "routes": [
+        "/case/draft",
+        "/case/review"
+      ],
+      "checks": 20,
+      "failures": 0,
+      "failMsgs": []
+    }
+  ],
+  "keyboardFocusRoutesReached": 5,
+  "keyboardFocusFail": 0,
+  "timestamp": "2026-07-10T19:27:32.897Z",
+  "totalChecks": 50,
+  "totalFailures": 0,
+  "batch": "Auth-first + Core pre-filing",
+  "stories": {
+    "SAATHI-2": "P0.1 Lawyer auth & BCI verification",
+    "SAATHI-3": "P0.2 Student institutional verification",
+    "SAATHI-4": "P0.3 Session/device/account security",
+    "SAATHI-16": "E06 Draft plaint/petition",
+    "SAATHI-18": "E07 Send draft for client review"
+  },
+  "routes": [
+    "/auth/lawyer",
+    "/auth/student",
+    "/auth/security",
+    "/case/draft",
+    "/case/review"
+  ],
+  "validation": {
+    "typecheck": "pass (tsc --noEmit exit 0)",
+    "lint": "pass (eslint exit 0, 0 warnings)",
+    "unit_logic": "30/30 assertions pass across 5 new suites (lawyerVerify, studentVerify, session, drafting, clientReview) via vitest-shim+esbuild; vitest runner bus-errors in sandbox",
+    "backend_tests": "35 passed (pytest) \u2014 no regressions",
+    "production_build": "tsc pass; vite build bus-errors in sandbox \u2192 esbuild bundle of app entry succeeds (exit 0) as alternate",
+    "browser_qa": "50 responsive checks (5 routes x 5 widths x light+dark), 0 overflow, 0 sub-44px, 0 console errors, theme correct; 5/5 routes reach a control on Tab"
+  },
+  "env_notes": "Vitest and vite build/dev bus-error in this sandbox (known). Logic verified via node type-stripping/esbuild; browser QA run against an esbuild static bundle served over a local SPA server with headless Chromium.",
+  "screenshots": [
+    "saathi_2_3_4_16_18_lawyer_mobile_light.png",
+    "saathi_2_3_4_16_18_student_mobile_dark.png",
+    "saathi_2_3_4_16_18_security_desktop_light.png",
+    "saathi_2_3_4_16_18_draft_desktop_light.png",
+    "saathi_2_3_4_16_18_review_mobile_light.png"
+  ],
+  "guardrails_verified": [
+    "P0.1 enrolment-status-only; no outcome/success claims; AI/automation cannot clear verification (human authorised override + reason only); BCI profile display disabled by default (LCR-002)",
+    "P0.2 institutional-email preferred; college-ID -> manual_review; conservative minor default (restricted until guardian consent); DPDP minimisation",
+    "P0.3 no raw tokens/OTPs/passwords stored or logged (non-reversible fingerprint); rate-limit lockout; re-auth for sensitive actions; every security event audited; biometric is capability boundary",
+    "E06 append-only versions; AI content labelled+cited; export-for-filing blocked until lawyer approves latest version (re-blocks after edits)",
+    "E07 review bound to immutable draft-version id; expiring/revocable no-PII links; stale-version protection; client approval != filing approval; consent-gated notify"
+  ],
+  "screenshot_parity_note": "No approved v3.2 design exists for Phase-0 auth or the Core module, so side-by-side visual-parity claims are intentionally NOT made. Screens reuse the locked design tokens and primitives; screenshots are functional evidence only."
+}
