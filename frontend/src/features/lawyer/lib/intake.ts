@@ -45,10 +45,49 @@ export function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/** Company/entity suffix noise removed before fuzzy matching (only when at
+ *  least one meaningful token remains, so a name is never emptied out). */
+const COMPANY_SUFFIX_NOISE = new Set([
+  'pvt', 'private', 'ltd', 'limited', 'llp', 'llc', 'inc', 'co', 'corp',
+  'corporation', 'company', 'and', 'the', 'm', 's', // "M/s" -> m, s after normalise
+]);
+
+/**
+ * Tokenise a party name for fuzzy matching. Beyond case/space/punct folding
+ * this canonicalises the common legal-party variations that should be treated
+ * as the same party:
+ *  - initials with or without spacing/dots: "R. K. Traders" ~ "RK Traders"
+ *    (consecutive single-character tokens are merged into one initials token);
+ *  - company/entity suffix noise ("Pvt Ltd", "& Co", "M/s") is dropped when it
+ *    is safe to do so (a meaningful token still remains).
+ */
+export function nameTokens(name: string): string[] {
+  const raw = normaliseName(name).split(' ').filter(Boolean);
+  // Merge runs of single-character tokens (initials) into one token so that
+  // "r k traders" and "rk traders" produce the same initials token "rk".
+  const merged: string[] = [];
+  let initials = '';
+  for (const tok of raw) {
+    if (tok.length === 1) {
+      initials += tok;
+    } else {
+      if (initials) {
+        merged.push(initials);
+        initials = '';
+      }
+      merged.push(tok);
+    }
+  }
+  if (initials) merged.push(initials);
+  // Drop suffix noise, but never reduce the name to nothing.
+  const meaningful = merged.filter((t) => !COMPANY_SUFFIX_NOISE.has(t));
+  return meaningful.length > 0 ? meaningful : merged;
+}
+
 /** Token-set similarity in [0,1] — a light fuzzy match (no external deps). */
 export function nameSimilarity(a: string, b: string): number {
-  const ta = new Set(normaliseName(a).split(' ').filter(Boolean));
-  const tb = new Set(normaliseName(b).split(' ').filter(Boolean));
+  const ta = new Set(nameTokens(a));
+  const tb = new Set(nameTokens(b));
   if (ta.size === 0 || tb.size === 0) return 0;
   let inter = 0;
   for (const t of ta) if (tb.has(t)) inter += 1;

@@ -28,6 +28,24 @@ describe('intake + conflict check (SAATHI-6 / E01)', () => {
     expect(nameSimilarity('R. K. Traders', 'RK Traders')).toBeGreaterThan(0.5);
   });
 
+  it('matches common legal-party name variations (initials, punctuation, suffix noise)', () => {
+    // Initials with/without spaces and dots.
+    expect(nameSimilarity('R. K. Traders', 'RK Traders')).toBeGreaterThan(0.5);
+    expect(nameSimilarity('R K Traders', 'R.K. Traders')).toBeGreaterThan(0.5);
+    // Case + spacing differences.
+    expect(nameSimilarity('acme  textiles', 'ACME Textiles')).toBeGreaterThan(0.5);
+    // Company suffix noise dropped where safe.
+    expect(nameSimilarity('Sunrise Builders Pvt Ltd', 'Sunrise Builders')).toBeGreaterThan(0.5);
+    expect(nameSimilarity('M/s Sunrise Builders & Co', 'Sunrise Builders')).toBeGreaterThan(0.5);
+    // Distinct parties still stay below threshold (no over-matching).
+    expect(nameSimilarity('A K Traders', 'B K Traders')).toBeLessThan(0.5);
+    expect(nameSimilarity('Meera Nair', 'Reema Nair')).toBeLessThan(0.5);
+    // A conflicting variant is surfaced by the register check.
+    const d = { ...EMPTY_INTAKE, clientName: 'RK Traders' };
+    const m = checkConflicts(d, SAMPLE_REGISTER);
+    expect(m.some((x) => x.against === 'R. K. Traders')).toBe(true);
+  });
+
   it('blocks by default and only clears via authorised override with reason', () => {
     const m = checkConflicts({ ...EMPTY_INTAKE, clientName: 'Meera Nair' }, SAMPLE_REGISTER);
     const blocked = decideConflict(m, '2026-07-08', 'adv.rao');
