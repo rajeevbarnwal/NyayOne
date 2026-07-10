@@ -7,6 +7,7 @@ import { AuthProvider } from './authContext';
 import { AppShell } from '../components/shell/AppShell';
 import { useTheme } from '../hooks/useTheme';
 import { studentScreens } from '../features/student/screens';
+import { lawyerRoutes } from '../features/lawyer/screens';
 
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; implemented S-01..S-19 screens (student module) render
@@ -32,6 +33,10 @@ function ShellRoutes() {
                 element={Screen ? <Screen theme={theme} toggleTheme={toggleTheme} /> : <ScreenPlaceholder id={r.id} />}
               />
             );
+          })}
+          {lawyerRoutes.map((r) => {
+            const Case = r.Component;
+            return <Route key={r.path} path={r.path} element={<Case />} />;
           })}
           <Route path="*" element={<div className="route-loading">Not found</div>} />
         </Routes>
