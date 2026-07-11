@@ -163,6 +163,23 @@ export function fingerprint(secret: string): string {
   return `fp_${h.toString(16)}`;
 }
 
+// --- Derived UI states (P0.3 remediation) ------------------------------------
+
+/** Active session that is within `withinMs` of expiry → show an expiry warning. */
+export function expiryWarning(s: Session, now: number, withinMs = 5 * 60 * 1000): boolean {
+  return isSessionActive(s, now) && s.expiresAt - now <= withinMs;
+}
+
+/** A login from a device not already known is "unusual" (→ notify via adapter). */
+export function isUnusualLogin(deviceId: string, known: readonly DeviceRecord[]): boolean {
+  return !known.some((d) => d.deviceId === deviceId && !d.revoked);
+}
+
+/** Sign every non-current device out (logout-from-all-devices). */
+export function revokeAllOtherDevices(devices: readonly DeviceRecord[]): DeviceRecord[] {
+  return devices.map((d) => (d.current ? d : { ...d, revoked: true }));
+}
+
 // --- Security audit -----------------------------------------------------------
 
 export type SecurityEventType =

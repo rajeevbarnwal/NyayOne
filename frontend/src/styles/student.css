@@ -584,3 +584,47 @@ textarea.st-input {
   word-break: break-word;
   max-width: 100%;
 }
+
+/* ===========================================================================
+   Verification Workbench (Option B v3) — Phase-0 auth (P0.1/P0.2) + security.
+   3-panel on desktop: rail | action | ledger. Degrades to a single column
+   below 1024px, with the rail as step chips on top and the ledger behind a
+   toggle. Token-driven; 44px targets; wraps to avoid horizontal overflow.
+   =========================================================================== */
+.wb { display: grid; grid-template-columns: 232px minmax(0, 1fr) 300px; gap: var(--space-4); align-items: start; }
+.wb__panel { border: 1px solid var(--line2); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); min-width: 0; }
+.wb__rail { position: sticky; top: var(--space-3); }
+.wb__brand { font: 700 var(--fs-md) var(--font-sans, inherit); color: var(--text); margin: 0 0 var(--space-1); }
+.wb__role { font: 600 var(--fs-xs) var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: var(--space-3); }
+.wb__steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wb__step { display: flex; align-items: center; gap: var(--space-2); padding: 10px var(--space-2); border-radius: var(--radius-md); color: var(--text3); font-size: var(--fs-sm); }
+.wb__step[data-state='done'] { color: var(--text2); }
+.wb__step[data-state='active'] { color: var(--text); background: var(--accent-tint); font-weight: 600; }
+.wb__step__dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line2); flex: 0 0 auto; }
+.wb__step[data-state='done'] .wb__step__dot { background: var(--ok); border-color: var(--ok); }
+.wb__step[data-state='active'] .wb__step__dot { background: var(--accent); border-color: var(--accent); }
+.wb__ledgerhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
+.wb__ledgertitle { font: 700 var(--fs-xs) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.wb__req { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wb__req li { display: flex; gap: var(--space-2); align-items: baseline; font-size: var(--fs-sm); color: var(--text2); }
+.wb__req li[data-done='true'] { color: var(--text); }
+.wb__req__mark { font: 700 var(--fs-xs) var(--font-mono); color: var(--ok); width: 1.1em; }
+.wb__ledger__entry { border-top: 1px solid var(--line); padding: 8px 0; font-size: var(--fs-sm); }
+.wb__ledger__entry:first-of-type { border-top: 0; }
+.wb__ledger__meta { font: 400 var(--fs-xs) var(--font-mono); color: var(--text3); }
+.wb__toggle { display: none; }
+@media (max-width: 1023px) {
+  .wb { grid-template-columns: minmax(0, 1fr); }
+  .wb__rail { position: static; }
+  .wb__steps { flex-direction: row; flex-wrap: wrap; gap: var(--space-1); }
+  .wb__step { padding: 8px 10px; }
+  .wb__ledger { display: none; }
+  .wb--ledger-open .wb__ledger { display: block; }
+  .wb__toggle { display: inline-flex; align-items: center; justify-content: center; min-height: var(--tap-min); min-width: var(--tap-min); }
+}
+
+/* Visually-hidden but screen-reader accessible (accessible state announcements). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

@@ -1,0 +1,24 @@
+{
+  "suite": "auth_core_interactions",
+  "pass": 15,
+  "fail": 0,
+  "log": [
+    "PASS P0.1 reaches OTP entry",
+    "PASS P0.1 invalid OTP shown",
+    "PASS P0.1 lockout after attempts",
+    "PASS P0.1 snapshot persisted",
+    "PASS P0.1 snapshot has no OTP code",
+    "PASS P0.1 OTP phase survives refresh",
+    "PASS P0.2 consent step reached",
+    "PASS P0.2 minor guardian gate shown",
+    "PASS E06 created a version id",
+    "DBG e6id=v1-2026-07-11T08:15:54.536Z sub=Bound to approved draft v1-2026-07-11T08:15:54.536Z",
+    "PASS E07 shows same approved version id (no seed)",
+    "PASS E07 not using old seed",
+    "PASS E07 link has no PII (@)",
+    "PASS E07 client approval recorded (not filing approval)",
+    "PASS E07 becomes stale on newer version",
+    "PASS E07 comment stays bound to original version"
+  ],
+  "timestamp": "2026-07-11T08:15:55.698Z"
+}

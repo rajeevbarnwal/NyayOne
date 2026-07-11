@@ -1,294 +1,511 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TextField, SelectField, Checkbox, DpdpFootnote } from '../student/components';
+import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
+import { Workbench, type WorkbenchStep, type Requirement, type LedgerEntry } from './Workbench';
 import {
-  StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState,
-} from '../../components/ui/primitives';
+  createChallenge, verify as otpVerify, resend as otpResend, isLocked, secondsUntilExpiry, secondsUntilResend,
+  maskDestination, type OtpChallenge,
+} from '../student/lib/otp';
+import { STUB_OTP_CODE } from '../student/lib/authFlow';
 import {
-  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck,
-  recordManualOverride, canAccessLawyerFeatures, lawyerGateReason,
-  LAWYER_VERIFICATION_STATUS_LABELS, STATE_BAR_COUNCILS, ENROLMENT_STATUS_ONLY_NOTICE,
-  BCI_PROFILE_DISPLAY_ENABLED, type LawyerProfile, type VerificationRecord,
+  nextPhase, redactChallenge, AUTH_PHASE_LABELS, type AuthPhase, type AuthRole, type AuthSnapshot,
+} from './lib/authLifecycle';
+import { saveAuthSnapshot, loadAuthSnapshot, clearAuthSnapshot } from './lib/authPersistence';
+import {
+  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck, recordManualOverride,
+  canAccessLawyerFeatures, lawyerGateReason, LAWYER_VERIFICATION_STATUS_LABELS, STATE_BAR_COUNCILS,
+  ENROLMENT_STATUS_ONLY_NOTICE, BCI_PROFILE_DISPLAY_ENABLED, type LawyerProfile, type VerificationRecord,
 } from './lib/lawyerVerify';
 import {
   validateStudentVerify, EMPTY_STUDENT_VERIFY, decideStudentVerification, minorContextFromDob,
-  proFeaturesUnlocked, studentGateReason,
-  STUDENT_VERIFICATION_STATUS_LABELS, VERIFY_METHOD_LABELS, DPDP_MINIMISATION_NOTICE,
-  type VerifyMethod, type StudentVerifyInput, type StudentVerificationRecord,
+  proFeaturesUnlocked, studentGateReason, STUDENT_VERIFICATION_STATUS_LABELS, VERIFY_METHOD_LABELS,
+  DPDP_MINIMISATION_NOTICE, type VerifyMethod, type StudentVerifyInput, type StudentVerificationRecord,
 } from './lib/studentVerify';
+import { guardianConsentSatisfied, type GuardianConsent } from '../student/lib/consent';
 import {
-  DEFAULT_SESSION_POLICY, issueSession, requiresReauth, markReauthenticated,
-  FRESH_ATTEMPTS, isLockedOut, registerFailure, registerSuccess, revokeDevice,
-  securityEvent, biometricCapability, SECURITY_EVENT_LABELS,
-  type DeviceRecord, type SecurityAuditEvent, type Session,
+  DEFAULT_SESSION_POLICY, issueSession, refreshSession, revokeSession, requiresReauth, markReauthenticated,
+  revokeDevice, revokeAllOtherDevices, expiryWarning, isUnusualLogin, FRESH_ATTEMPTS, isLockedOut, registerFailure,
+  registerSuccess, securityEvent, biometricCapability, SECURITY_EVENT_LABELS, type DeviceRecord, type SecurityAuditEvent, type Session,
 } from './lib/session';
 
-/** Auth-module screen scaffold (Phase 0 has no v3.2 design; reuses student CSS). */
-function AuthScreen({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub?: string; children: React.ReactNode }) {
+const chip = (k: 'ok' | 'warn' | 'risk' | 'info') => k;
+const nowISO = () => new Date().toISOString();
+const statusChip = (s: string) => (s === 'verified' ? chip('ok') : s === 'rejected' ? chip('risk') : s === 'manual_review' ? chip('warn') : chip('info'));
+
+/** Compute rail step states from an ordered list + the active step key. */
+function stepStates(order: readonly { key: string; label: string }[], activeIdx: number): WorkbenchStep[] {
+  return order.map((s, i) => ({ key: s.key, label: s.label, state: i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'todo' }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* P0.1 (SAATHI-2) — Lawyer authentication & BCI verification (full lifecycle) */
+/* -------------------------------------------------------------------------- */
+const LAWYER_STEPS = [
+  { key: 'register', label: 'Register' },
+  { key: 'otp', label: 'Verify OTP' },
+  { key: 'consent', label: 'DPDP consent' },
+  { key: 'bci', label: 'Bar Council' },
+  { key: 'result', label: 'Verification' },
+];
+const phaseToLawyerStep: Record<AuthPhase, number> = {
+  entry: 0, register: 0, otp_sent: 1, otp_entry: 1, consent: 2, details: 3, pending: 4, manual_review: 4, rejected: 4, verified: 4,
+};
+
+export function LawyerVerify() {
+  return <AuthWorkbench role="lawyer" />;
+}
+export function StudentVerify() {
+  return <AuthWorkbench role="student" />;
+}
+
+/** Shared workbench-driven lifecycle for both roles (branches on role). */
+function AuthWorkbench({ role }: { role: AuthRole }) {
+  const isLawyer = role === 'lawyer';
+  const restored = useMemo(() => loadAuthSnapshot(role), [role]);
+  const [phase, setPhase] = useState<AuthPhase>(restored?.phase ?? 'register');
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(
+    restored?.challenge ? { ...restored.challenge, code: STUB_OTP_CODE } : null,
+  );
+  const [otpInput, setOtpInput] = useState('');
+  const [otpMsg, setOtpMsg] = useState<string | null>(null);
+  const [destMasked, setDestMasked] = useState<string | null>(restored?.destinationMasked ?? null);
+  const [consent, setConsent] = useState(false);
+  const [consentAt, setConsentAt] = useState<string | null>(restored?.consentAt ?? null);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const now = Date.now();
+
+  // Lawyer verification
+  const [profile, setProfile] = useState<LawyerProfile>(EMPTY_LAWYER_PROFILE);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [rec, setRec] = useState<VerificationRecord | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const enrolSrc = useMemo(() => createStubEnrolmentSource(), []);
+
+  // Student verification
+  const [sv, setSv] = useState<StudentVerifyInput>(EMPTY_STUDENT_VERIFY);
+  const [dob, setDob] = useState('');
+  const [srec, setSrec] = useState<StudentVerificationRecord | null>(null);
+  const [guardian, setGuardian] = useState<GuardianConsent | null>(null);
+
+  const minorCtx = useMemo(() => (dob ? minorContextFromDob(dob, nowISO(), guardian) : { isMinor: false, guardianConsent: guardian }), [dob, guardian]);
+
+  // Persist a redacted snapshot whenever lifecycle state changes.
+  useEffect(() => {
+    const snap: AuthSnapshot = {
+      role, phase, destinationMasked: destMasked,
+      challenge: challenge ? redactChallenge(challenge) : null,
+      consentAt, updatedAt: Date.now(),
+    };
+    saveAuthSnapshot(snap);
+  }, [role, phase, destMasked, challenge, consentAt]);
+
+  const pushLedger = (label: string) => setLedger((l) => [...l, { label, meta: new Date().toLocaleTimeString('en-IN') }]);
+  const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
+
+  function sendOtp() {
+    if (!mobile.trim()) { setErrors({ mobile: 'Enter your mobile number.' }); return; }
+    setErrors({});
+    const ch = createChallenge(STUB_OTP_CODE, Date.now());
+    setChallenge(ch);
+    setDestMasked(maskDestination({ channel: 'sms', ref: mobile }));
+    setOtpMsg(null);
+    pushLedger('OTP dispatched');
+    setPhase('otp_entry');
+  }
+  function submitOtp() {
+    if (!challenge) return;
+    const r = otpVerify(challenge, otpInput, Date.now());
+    setChallenge(r.challenge);
+    if (r.status === 'verified') { setOtpMsg(null); pushLedger('OTP verified'); setPhase('consent'); return; }
+    if (r.status === 'locked') setOtpMsg('Too many attempts — locked. Resend after the cooldown.');
+    else if (r.status === 'expired') setOtpMsg('Code expired. Resend a new code.');
+    else setOtpMsg(`Incorrect code. ${r.challenge.attemptsLeft} attempt(s) left.`);
+  }
+  function resendOtp() {
+    if (!challenge) return;
+    setChallenge(otpResend(challenge, STUB_OTP_CODE, Date.now()));
+    setOtpMsg(null); setOtpInput('');
+    pushLedger('OTP resent');
+  }
+  function giveConsent() {
+    if (!consent) return;
+    setConsentAt(nowISO());
+    pushLedger('DPDP consent recorded');
+    setPhase('details');
+  }
+  function runLawyerCheck() {
+    const e = validateLawyerProfile(profile);
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    const r = runEnrolmentCheck(profile, enrolSrc, nowISO());
+    setRec(r);
+    pushLedger(`Enrolment check: ${r.status}`);
+    setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
+  }
+  function lawyerOverride() {
+    if (!rec) return;
+    const r = recordManualOverride(rec, { authorised: true, reason: overrideReason, reviewer: 'admin:compliance' }, nowISO());
+    setRec(r);
+    if (r.status === 'verified') { pushLedger('Authorised override recorded'); setPhase('verified'); }
+  }
+  function runStudentCheck() {
+    const e = validateStudentVerify(sv);
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    const r = decideStudentVerification(sv, nowISO());
+    setSrec(r);
+    pushLedger(`Student check: ${r.status}`);
+    setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
+  }
+  function acceptGuardian() {
+    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'verified', withdrawn: false });
+    pushLedger('Guardian consent verified');
+  }
+  function rejectGuardian() {
+    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'rejected', withdrawn: false });
+    pushLedger('Guardian consent rejected');
+  }
+  function resetFlow() {
+    clearAuthSnapshot(role);
+    setPhase('register'); setChallenge(null); setOtpInput(''); setOtpMsg(null); setDestMasked(null);
+    setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setGuardian(null); setLedger([]);
+    setProfile(EMPTY_LAWYER_PROFILE); setSv(EMPTY_STUDENT_VERIFY); setDob('');
+  }
+
+  // --- derived ---
+  const steps = isLawyer
+    ? stepStates(LAWYER_STEPS, phaseToLawyerStep[phase])
+    : stepStates([
+        { key: 'register', label: 'Register' }, { key: 'otp', label: 'Verify OTP' }, { key: 'consent', label: 'DPDP consent' },
+        { key: 'verify', label: 'Student proof' }, { key: 'result', label: 'Access' },
+      ], phaseToLawyerStep[phase]);
+
+  const requirements: Requirement[] = isLawyer
+    ? [
+        { label: 'Mobile OTP verified', done: ['consent', 'details', 'pending', 'manual_review', 'rejected', 'verified'].includes(phase) },
+        { label: 'DPDP consent recorded', done: !!consentAt },
+        { label: 'Bar Council enrolment submitted', done: !!rec },
+        { label: 'Enrolment status verified', done: canAccessLawyerFeatures(rec) },
+      ]
+    : [
+        { label: 'Mobile OTP verified', done: ['consent', 'details', 'pending', 'manual_review', 'rejected', 'verified'].includes(phase) },
+        { label: 'DPDP consent recorded', done: !!consentAt },
+        { label: 'Student status verified', done: srec?.status === 'verified' },
+        { label: 'Guardian consent (if minor)', done: !minorCtx.isMinor || guardianConsentSatisfied(guardian) },
+      ];
+
+  const policy = (
+    <PrivacyNotice>
+      {isLawyer
+        ? <>Enrolment-status verification only — no competence, endorsement or outcome claims. Profile display is {BCI_PROFILE_DISPLAY_ENABLED ? 'enabled' : 'disabled by default pending legal review (LCR-002)'}. Data processed within India.</>
+        : <>{DPDP_MINIMISATION_NOTICE} Minor accounts stay restricted until guardian consent is verified.</>}
+    </PrivacyNotice>
+  );
+
   return (
-    <section className="st-screen st-stack">
+    <section className="st-screen st-stack" data-screen={isLawyer ? 'P0.1' : 'P0.2'}>
       <div className="st-set__head">
-        <p className="st-eyebrow">{eyebrow}</p>
-        <h1 className="st-h1">{title}</h1>
-        {sub && <p className="st-metatag" style={{ marginTop: 4 }}>{sub}</p>}
+        <p className="st-eyebrow">Authentication · {isLawyer ? 'P0.1' : 'P0.2'}</p>
+        <h1 className="st-h1">{isLawyer ? 'Lawyer verification' : 'Student verification'}</h1>
+        <p className="st-metatag" style={{ marginTop: 4 }}>State: {AUTH_PHASE_LABELS[phase]}</p>
       </div>
-      {children}
+      <Workbench
+        brand="LegalSaathi"
+        role={isLawyer ? 'Advocate verification' : 'Student verification'}
+        steps={steps}
+        requirements={requirements}
+        ledger={ledger}
+        policy={policy}
+      >
+        {/* REGISTER */}
+        {phase === 'register' && (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Register</h2>
+            <TextField id="reg-name" label="Full name" value={name} onChange={setName} autoComplete="name" />
+            <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} inputMode="tel" autoComplete="tel" help="We send a one-time code by SMS." />
+            {!isLawyer && (
+              <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
+            )}
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={sendOtp}>Send OTP</button></div>
+          </div>
+        )}
+
+        {/* OTP ENTRY (covers sent / entry / invalid / expired / lockout) */}
+        {(phase === 'otp_sent' || phase === 'otp_entry') && challenge && (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Verify OTP</h2>
+            <p className="st-item__meta">Code sent to {destMasked}. {isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`}</p>
+            <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" help="Demo stub code: 429016. A wrong code shows the invalid/lockout states." />
+            {otpMsg && <ValidationState message={otpMsg} />}
+            {isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
+            <div className="st-actions st-actions--split">
+              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={isLocked(challenge, now)} aria-disabled={isLocked(challenge, now)}>Verify</button>
+              <button type="button" className="btn tap" onClick={resendOtp} disabled={secondsUntilResend(challenge, now) > 0} aria-disabled={secondsUntilResend(challenge, now) > 0}>
+                {secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* CONSENT (explicit affirmative, recorded) */}
+        {phase === 'consent' && (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Data-protection consent</h2>
+            <PrivacyNotice>We process your data under the DPDP Act, 2023, only to verify your {isLawyer ? 'enrolment' : 'student'} status. Data is processed within India.</PrivacyNotice>
+            <Checkbox id="dpdp" checked={consent} onChange={setConsent} label={<>I have read and accept the Privacy Notice and consent to processing for verification.</>} />
+            {!consent && <ValidationState message="Affirmative consent is required before we process your details." />}
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={giveConsent} disabled={!consent} aria-disabled={!consent}>Record consent &amp; continue</button></div>
+          </div>
+        )}
+
+        {/* DETAILS — lawyer BCI */}
+        {phase === 'details' && isLawyer && (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Bar Council enrolment</h2>
+            <TextField id="lw-name" label="Full name (as enrolled)" value={profile.fullName} onChange={(v) => setProfile((s) => ({ ...s, fullName: v }))} error={errors.fullName} />
+            <TextField id="lw-enrol" label="Enrolment number" value={profile.enrolmentNumber} onChange={(v) => setProfile((s) => ({ ...s, enrolmentNumber: v }))} error={errors.enrolmentNumber} help="Format STATE/NUMBER/YEAR, e.g. D/1234/2015." />
+            <SelectField id="lw-council" label="State Bar Council" value={profile.stateBarCouncil} onChange={(v) => setProfile((s) => ({ ...s, stateBarCouncil: v }))} options={STATE_BAR_COUNCILS} error={errors.stateBarCouncil} />
+            <GuardrailNotice>{ENROLMENT_STATUS_ONLY_NOTICE}</GuardrailNotice>
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={runLawyerCheck}>Submit for verification</button></div>
+          </div>
+        )}
+
+        {/* DETAILS — student proof */}
+        {phase === 'details' && !isLawyer && (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Student proof</h2>
+            <div className="st-chips" role="group" aria-label="Verification method" style={{ marginBottom: 'var(--space-3)' }}>
+              {(['institutional_email', 'college_id'] as VerifyMethod[]).map((m) => (
+                <button key={m} type="button" className="st-chip" aria-pressed={sv.method === m} onClick={() => setSv((s) => ({ ...s, method: m }))}>{VERIFY_METHOD_LABELS[m]}</button>
+              ))}
+            </div>
+            {sv.method === 'institutional_email'
+              ? <TextField id="sv-email" label="Institutional email" value={sv.institutionalEmail} onChange={(v) => setSv((s) => ({ ...s, institutionalEmail: v }))} error={errors.institutionalEmail} type="email" inputMode="email" help="A .ac.in / .edu address verifies automatically." />
+              : <TextField id="sv-id" label="College ID reference" value={sv.idDocumentRef} onChange={(v) => setSv((s) => ({ ...s, idDocumentRef: v }))} error={errors.idDocumentRef} help="Stored as an access-controlled reference (never in a URL); routed to manual review." />}
+            <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" optional="age gate" help="Under-18 accounts require guardian consent." />
+            {minorCtx.isMinor && (
+              <div className="ui-banner ui-banner--warn" role="status">
+                <span className="ui-banner__mark" aria-hidden>!</span>
+                <span>Minor detected — guardian consent required.&nbsp;</span>
+                <button type="button" className="btn tap" onClick={acceptGuardian}>Guardian accepts</button>
+                <button type="button" className="btn tap" onClick={rejectGuardian}>Guardian declines</button>
+              </div>
+            )}
+            <PrivacyNotice>{DPDP_MINIMISATION_NOTICE}</PrivacyNotice>
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={runStudentCheck}>Submit for verification</button></div>
+          </div>
+        )}
+
+        {/* RESULT STATES */}
+        {['pending', 'manual_review', 'rejected', 'verified'].includes(phase) && (
+          <div className="st-stack">
+            <div className="st-panel__head">
+              <h2 className="st-panel__title">Verification</h2>
+              <StatusBadge status={statusChip(phase)} label={isLawyer && rec ? LAWYER_VERIFICATION_STATUS_LABELS[rec.status] : !isLawyer && srec ? STUDENT_VERIFICATION_STATUS_LABELS[srec.status] : AUTH_PHASE_LABELS[phase]} />
+            </div>
+
+            {isLawyer ? <LawyerResult phase={phase} rec={rec} unlocked={canAccessLawyerFeatures(rec)} gate={lawyerGateReason(rec)}
+              overrideReason={overrideReason} setOverrideReason={setOverrideReason} onOverride={lawyerOverride} onRetry={() => go('retry')} />
+              : <StudentResult phase={phase} srec={srec} minor={minorCtx.isMinor} guardianOk={guardianConsentSatisfied(guardian)}
+                pro={proFeaturesUnlocked({ verification: srec, minor: minorCtx })}
+                gate={studentGateReason({ verification: srec, minor: minorCtx })} onRetry={() => go('retry')} />}
+
+            <div className="st-actions"><button type="button" className="btn tap" onClick={resetFlow}>Start over</button></div>
+          </div>
+        )}
+      </Workbench>
+      <DpdpFootnote>OTP flow state persists across refresh without storing the code; verification status, checker, timestamp and any override reason are audited</DpdpFootnote>
     </section>
   );
 }
 
-const chip = (k: 'ok' | 'warn' | 'risk' | 'info') => k;
-const statusChip = (s: string) => (s === 'verified' ? chip('ok') : s === 'rejected' ? chip('risk') : s === 'manual_review' ? chip('warn') : chip('info'));
-
-/* -------------------------------------------------------------------------- */
-/* P0.1 (SAATHI-2) — Lawyer authentication & BCI verification                  */
-/* -------------------------------------------------------------------------- */
-export function LawyerVerify() {
-  const [p, setP] = useState<LawyerProfile>(EMPTY_LAWYER_PROFILE);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [consent, setConsent] = useState(false);
-  const [rec, setRec] = useState<VerificationRecord | null>(null);
-  const [reason, setReason] = useState('');
-  const source = useMemo(() => createStubEnrolmentSource(), []);
-  const set = (k: keyof LawyerProfile) => (v: string) => setP((s) => ({ ...s, [k]: v }));
-
-  function runCheck() {
-    const e = validateLawyerProfile(p);
-    setErrors(e);
-    if (Object.keys(e).length || !consent) return;
-    setRec(runEnrolmentCheck(p, source, new Date().toISOString()));
-  }
-  function override() {
-    if (!rec) return;
-    setRec(recordManualOverride(rec, { authorised: true, reason, reviewer: 'admin:compliance' }, new Date().toISOString()));
-  }
-
-  const unlocked = canAccessLawyerFeatures(rec);
-  const gate = lawyerGateReason(rec);
-
+function LawyerResult({ phase, rec, unlocked, gate, overrideReason, setOverrideReason, onOverride, onRetry }: {
+  phase: AuthPhase; rec: VerificationRecord | null; unlocked: boolean; gate: string | null;
+  overrideReason: string; setOverrideReason: (v: string) => void; onOverride: () => void; onRetry: () => void;
+}) {
   return (
-    <AuthScreen eyebrow="Authentication · P0.1" title="Lawyer verification" sub="Bar Council enrolment verification">
-      <section className="st-panel">
-        <h2 className="st-panel__title">Enrolment details</h2>
-        <TextField id="lw-name" label="Full name (as enrolled)" value={p.fullName} onChange={set('fullName')} error={errors.fullName} autoComplete="name" />
-        <TextField id="lw-enrol" label="Enrolment number" value={p.enrolmentNumber} onChange={set('enrolmentNumber')} error={errors.enrolmentNumber} help="Format: STATE/NUMBER/YEAR, e.g. D/1234/2015." />
-        <SelectField id="lw-council" label="State Bar Council" value={p.stateBarCouncil} onChange={set('stateBarCouncil')} options={STATE_BAR_COUNCILS} error={errors.stateBarCouncil} />
-        <Checkbox id="lw-consent" checked={consent} onChange={setConsent} label={<>I accept the Terms and Privacy Policy.</>} />
-        {!consent && Object.keys(errors).length === 0 && rec === null && <ValidationState message="Accept the Terms and Privacy Policy to verify." />}
-        <div className="st-actions">
-          <button type="button" className="btn btn--primary tap" onClick={runCheck} disabled={!consent} aria-disabled={!consent}>Run verification</button>
-        </div>
-        <GuardrailNotice>{ENROLMENT_STATUS_ONLY_NOTICE}</GuardrailNotice>
-      </section>
-
-      {rec && (
-        <section className="st-panel" aria-label="Verification result">
-          <div className="st-panel__head">
-            <h2 className="st-panel__title">Verification</h2>
-            <StatusBadge status={statusChip(rec.status)} label={LAWYER_VERIFICATION_STATUS_LABELS[rec.status]} />
-          </div>
-          <p className="st-item__meta">Checked by {rec.checker}{rec.overrideReason ? ` · override: ${rec.overrideReason}` : ''}</p>
-          {!unlocked && (rec.status === 'rejected' || rec.status === 'manual_review') && (
-            <>
-              <TextField id="lw-ovr" label="Authorised reviewer override reason" value={reason} onChange={setReason} help="Recorded to the immutable audit log. Human reviewers only — automation cannot clear a verification." />
-              <div className="st-actions">
-                <button type="button" className="btn tap" disabled={!reason.trim()} aria-disabled={!reason.trim()} onClick={override}>Record authorised override</button>
-              </div>
-            </>
-          )}
-        </section>
+    <>
+      {rec && <p className="st-item__meta">Checked by {rec.checker}{rec.overrideReason ? ` · override: ${rec.overrideReason}` : ''}</p>}
+      {phase === 'manual_review' && <p>Your enrolment is in manual review by our compliance team. Lawyer features unlock once a reviewer confirms it.</p>}
+      {phase === 'rejected' && (
+        <>
+          <p>We could not verify this enrolment. You can re-check the number, or an authorised reviewer can record a manual override.</p>
+          <div className="st-actions"><button type="button" className="btn tap" onClick={onRetry}>Re-check enrolment</button></div>
+          <TextField id="lw-ovr" label="Authorised reviewer override reason" value={overrideReason} onChange={setOverrideReason} help="Human reviewers only — automation can never clear a verification. Recorded to the immutable audit log." />
+          <div className="st-actions"><button type="button" className="btn tap" disabled={!overrideReason.trim()} aria-disabled={!overrideReason.trim()} onClick={onOverride}>Record authorised override</button></div>
+        </>
       )}
-
-      <section className="st-panel" aria-label="Lawyer dashboard">
-        <h2 className="st-panel__title">Lawyer dashboard</h2>
-        {unlocked
-          ? <EmptyState title="Verified — lawyer features unlocked" hint="Case initiation, drafting and billing are now available." />
-          : <RestrictedState reason={gate ?? 'Verification required.'} />}
+      <section className="st-panel" aria-label="Lawyer workspace" style={{ marginTop: 'var(--space-3)' }}>
+        <h3 className="st-panel__title">Lawyer workspace</h3>
+        {unlocked ? <EmptyState title="Verified — lawyer features unlocked" hint="Case initiation, drafting and billing are available." /> : <RestrictedState reason={gate ?? 'Verification required.'} />}
       </section>
+    </>
+  );
+}
 
-      <PrivacyNotice>Profile display of enrolment details is {BCI_PROFILE_DISPLAY_ENABLED ? 'enabled' : 'disabled by default pending legal review (LCR-002)'}.</PrivacyNotice>
-      <DpdpFootnote>Verification status, checker, timestamp and any override reason are written to an immutable audit log</DpdpFootnote>
-    </AuthScreen>
+function StudentResult({ phase, srec, minor, guardianOk, pro, gate, onRetry }: {
+  phase: AuthPhase; srec: StudentVerificationRecord | null; minor: boolean; guardianOk: boolean; pro: boolean; gate: string | null; onRetry: () => void;
+}) {
+  return (
+    <>
+      {srec && <p className="st-item__meta">Method: {srec.method} · checked by {srec.checker}</p>}
+      {phase === 'manual_review' && <p>Your college ID is in manual review over a secure, access-controlled channel. Free access continues while you wait.</p>}
+      {phase === 'rejected' && (
+        <>
+          <p>We could not verify your student status. Try your institutional email, or re-upload a clearer college ID.</p>
+          <div className="st-actions"><button type="button" className="btn tap" onClick={onRetry}>Try again</button></div>
+        </>
+      )}
+      {minor && !guardianOk && <StatusBadge status={chip('warn')} label="Minor — guardian consent pending" />}
+      <section className="st-panel" aria-label="Student access" style={{ marginTop: 'var(--space-3)' }}>
+        <h3 className="st-panel__title">Student access</h3>
+        {pro ? <EmptyState title="Verified — Student Pro unlocked" hint="Student features and pricing are available." /> : <RestrictedState reason={gate ?? 'Verification required.'} />}
+      </section>
+    </>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* P0.2 (SAATHI-3) — Student authentication & institutional verification       */
-/* -------------------------------------------------------------------------- */
-export function StudentVerify() {
-  const [v, setV] = useState<StudentVerifyInput>(EMPTY_STUDENT_VERIFY);
-  const [dob, setDob] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [rec, setRec] = useState<StudentVerificationRecord | null>(null);
-  const set = (k: keyof StudentVerifyInput) => (val: string) => setV((s) => ({ ...s, [k]: val }));
-  const now = new Date().toISOString();
-  const minorCtx = useMemo(() => (dob ? minorContextFromDob(dob, now) : { isMinor: false, guardianConsent: null }), [dob, now]);
-
-  function verify() {
-    const e = validateStudentVerify(v);
-    setErrors(e);
-    if (Object.keys(e).length) return;
-    setRec(decideStudentVerification(v, now));
-  }
-  const state = { verification: rec, minor: minorCtx };
-  const pro = proFeaturesUnlocked(state);
-  const gate = studentGateReason(state);
-
-  return (
-    <AuthScreen eyebrow="Authentication · P0.2" title="Student verification" sub="Institutional email or college ID">
-      <section className="st-panel">
-        <span className="st-field__label" id="sv-method">Verification method</span>
-        <div className="st-chips" role="group" aria-labelledby="sv-method" style={{ marginBottom: 'var(--space-3)' }}>
-          {(['institutional_email', 'college_id'] as VerifyMethod[]).map((m) => (
-            <button key={m} type="button" className="st-chip" aria-pressed={v.method === m} onClick={() => setV((s) => ({ ...s, method: m }))}>
-              {VERIFY_METHOD_LABELS[m]}
-            </button>
-          ))}
-        </div>
-        {v.method === 'institutional_email' ? (
-          <TextField id="sv-email" label="Institutional email" value={v.institutionalEmail} onChange={set('institutionalEmail')} error={errors.institutionalEmail} type="email" inputMode="email" help="A .ac.in / .edu address auto-verifies." />
-        ) : (
-          <>
-            <TextField id="sv-college" label="College / university" value={v.collegeName} onChange={set('collegeName')} error={errors.collegeName} />
-            <TextField id="sv-id" label="College ID reference" value={v.idDocumentRef} onChange={set('idDocumentRef')} error={errors.idDocumentRef} help="Uploaded securely; routed to manual review. We store an access-controlled reference, not the file in the URL." />
-          </>
-        )}
-        <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" optional="for age-gate" help="Under-18 accounts require guardian consent before full activation." />
-        <div className="st-actions">
-          <button type="button" className="btn btn--primary tap" onClick={verify}>Verify student status</button>
-        </div>
-        <PrivacyNotice>{DPDP_MINIMISATION_NOTICE}</PrivacyNotice>
-      </section>
-
-      {(rec || dob) && (
-        <section className="st-panel" aria-label="Account state">
-          <div className="st-panel__head">
-            <h2 className="st-panel__title">Account state</h2>
-            {rec && <StatusBadge status={statusChip(rec.status)} label={STUDENT_VERIFICATION_STATUS_LABELS[rec.status]} />}
-          </div>
-          {minorCtx.isMinor && <StatusBadge status={chip('warn')} label="Minor — guardian consent required" />}
-          {pro
-            ? <EmptyState title="Verified — Student Pro unlocked" hint="Student features and pricing are now available." />
-            : <RestrictedState reason={gate ?? 'Verification required.'} />}
-          {rec?.status === 'manual_review' && (
-            <p className="st-item__meta">Your college ID is queued for manual review; it is shown to reviewers over a secure, access-controlled channel.</p>
-          )}
-        </section>
-      )}
-      <DpdpFootnote>DPDP notice/consent is logged before processing; minor rules stay conservative pending counsel</DpdpFootnote>
-    </AuthScreen>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* P0.3 (SAATHI-4) — Session, device & account security                        */
+/* P0.3 (SAATHI-4) — Session, device & account security (full workflows)       */
 /* -------------------------------------------------------------------------- */
 const SAMPLE_DEVICES: DeviceRecord[] = [
   { deviceId: 'd1', label: 'This device · Chrome', lastSeen: Date.now(), current: true, revoked: false },
   { deviceId: 'd2', label: 'Pixel 8 · App', lastSeen: Date.now() - 86_400_000, current: false, revoked: false },
 ];
 
+type SecurityView = 'overview' | 'reset';
+
 export function AccountSecurity() {
   const [session, setSession] = useState<Session>(() => issueSession('u1', 'd1', Date.now() - DEFAULT_SESSION_POLICY.reauthWithinMs - 1000));
   const [devices, setDevices] = useState<DeviceRecord[]>(SAMPLE_DEVICES);
   const [attempts, setAttempts] = useState(FRESH_ATTEMPTS);
+  const [resetAttempts, setResetAttempts] = useState(FRESH_ATTEMPTS);
   const [events, setEvents] = useState<SecurityAuditEvent[]>([]);
   const [reauthOpen, setReauthOpen] = useState(false);
+  const [view, setView] = useState<SecurityView>('overview');
+  const [resetChallenge, setResetChallenge] = useState<OtpChallenge | null>(null);
+  const [resetInput, setResetInput] = useState('');
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const now = Date.now();
-  const bio = biometricCapability(false); // web shell → unavailable
-
-  const record = (e: SecurityAuditEvent) => setEvents((prev) => [e, ...prev].slice(0, 6));
+  const bio = biometricCapability(false);
+  const record = (e: SecurityAuditEvent) => setEvents((p) => [e, ...p].slice(0, 8));
 
   function failLogin() {
-    const next = registerFailure(attempts, now);
-    setAttempts(next);
+    const next = registerFailure(attempts, now); setAttempts(next);
     record(securityEvent('login_failed', 'u1', 'd1', now));
     if (isLockedOut(next, now)) record(securityEvent('lockout', 'u1', 'd1', now));
   }
   function succeedLogin() {
-    setAttempts(registerSuccess());
-    setSession(issueSession('u1', 'd1', now));
-    record(securityEvent('login', 'u1', 'd1', now));
+    setAttempts(registerSuccess()); setSession(issueSession('u1', 'd1', now)); record(securityEvent('login', 'u1', 'd1', now));
+    if (isUnusualLogin('d-new', devices)) record(securityEvent('login', 'u1', 'd-new', now)); // unusual-login notice (adapter)
   }
-  function attemptSensitive() {
-    if (requiresReauth(session, now)) { setReauthOpen(true); return; }
-    record(securityEvent('password_reset', 'u1', 'd1', now));
+  function doRefresh(ok: boolean) {
+    if (ok) { const r = refreshSession(session, now); if (r) { setSession(r); setRefreshMsg('Session refreshed.'); record(securityEvent('session_refresh', 'u1', 'd1', now)); } }
+    else { setSession(revokeSession(session)); setRefreshMsg('Refresh failed — please sign in again.'); }
   }
-  function confirmReauth() {
-    setSession((s) => markReauthenticated(s, Date.now()));
-    setReauthOpen(false);
-    record(securityEvent('reauth', 'u1', 'd1', Date.now()));
-    record(securityEvent('password_reset', 'u1', 'd1', Date.now()));
-  }
-  function revoke(id: string) {
-    setDevices((d) => revokeDevice(d, id));
-    record(securityEvent('device_revoked', 'u1', id, now));
+  function logoutCurrent() { setSession(revokeSession(session)); record(securityEvent('logout', 'u1', 'd1', now)); }
+  function logoutAll() { setDevices((d) => revokeAllOtherDevices(d)); setSession(revokeSession(session)); record(securityEvent('logout', 'u1', 'all', now)); }
+  function revoke(id: string) { setDevices((d) => revokeDevice(d, id)); record(securityEvent('device_revoked', 'u1', id, now)); }
+  function attemptSensitive() { if (requiresReauth(session, now)) { setReauthOpen(true); return; } record(securityEvent('password_reset', 'u1', 'd1', now)); }
+  function confirmReauth() { setSession((s) => markReauthenticated(s, Date.now())); setReauthOpen(false); record(securityEvent('reauth', 'u1', 'd1', Date.now())); }
+  function startReset() { setResetChallenge(createChallenge(STUB_OTP_CODE, Date.now())); setResetInput(''); setResetMsg(null); setView('reset'); }
+  function submitReset() {
+    if (!resetChallenge) return;
+    if (isLockedOut(resetAttempts, now)) { setResetMsg('Locked — too many attempts.'); return; }
+    const r = otpVerify(resetChallenge, resetInput, Date.now()); setResetChallenge(r.challenge);
+    if (r.status === 'verified') { setResetMsg('Recovery successful — set a new password.'); record(securityEvent('password_reset', 'u1', 'd1', now)); }
+    else if (r.status === 'expired') setResetMsg('Reset code expired.');
+    else { const na = registerFailure(resetAttempts, now); setResetAttempts(na); setResetMsg(isLockedOut(na, now) ? 'Locked — too many attempts.' : 'Invalid reset code.'); }
   }
 
-  const locked = isLockedOut(attempts, now);
+  const active = session.revoked ? false : now < session.expiresAt;
+  const warn = expiryWarning(session, now);
+  const steps: WorkbenchStep[] = [
+    { key: 'session', label: 'Session', state: view === 'overview' ? 'active' : 'done' },
+    { key: 'devices', label: 'Devices', state: 'todo' },
+    { key: 'recovery', label: 'Recovery', state: view === 'reset' ? 'active' : 'todo' },
+  ];
+  const requirements: Requirement[] = [
+    { label: 'Active session', done: active },
+    { label: 'Re-auth for sensitive actions', done: !requiresReauth(session, now) },
+    { label: 'Rate-limit protection', done: true },
+  ];
+  const ledger: LedgerEntry[] = events.map((e) => ({ label: SECURITY_EVENT_LABELS[e.type], meta: `${e.deviceId} · ${new Date(e.timestamp).toLocaleTimeString('en-IN')}` }));
 
   return (
-    <AuthScreen eyebrow="Authentication · P0.3" title="Session & account security" sub="Sessions, devices, recovery">
-      <section className="st-panel">
-        <div className="st-panel__head">
-          <h2 className="st-panel__title">Sign-in protection</h2>
-          <StatusBadge status={locked ? chip('risk') : chip('ok')} label={locked ? 'Locked' : `${attempts.failures} failed`} />
-        </div>
-        <p className="st-item__meta">Rate limiting locks the account after {DEFAULT_SESSION_POLICY.maxFailedAttempts} failed attempts to resist brute force.</p>
-        <div className="st-actions st-actions--split">
-          <button type="button" className="btn tap" onClick={failLogin} disabled={locked} aria-disabled={locked}>Simulate failed sign-in</button>
-          <button type="button" className="btn tap" onClick={succeedLogin}>Successful sign-in</button>
-        </div>
-      </section>
+    <section className="st-screen st-stack" data-screen="P0.3">
+      <div className="st-set__head">
+        <p className="st-eyebrow">Authentication · P0.3</p>
+        <h1 className="st-h1">Session &amp; account security</h1>
+      </div>
+      <Workbench brand="LegalSaathi" role="Security console" steps={steps} requirements={requirements} ledger={ledger}
+        policy={<PrivacyNotice>Sessions and device records are server-authoritative and audited. No raw passwords, OTPs or tokens are stored or logged. Notifications go through adapters only.</PrivacyNotice>}>
+        {view === 'overview' ? (
+          <div className="st-stack">
+            <section className="st-panel">
+              <div className="st-panel__head"><h2 className="st-panel__title">Active session</h2>
+                <StatusBadge status={active ? (warn ? chip('warn') : chip('ok')) : chip('risk')} label={active ? (warn ? 'Expiring soon' : 'Active') : 'Signed out'} /></div>
+              {warn && active && <ValidationState message="Your session expires soon. Refresh to stay signed in." />}
+              {refreshMsg && <p className="st-item__meta">{refreshMsg}</p>}
+              <div className="st-actions st-actions--split">
+                <button type="button" className="btn tap" onClick={() => doRefresh(true)}>Refresh session</button>
+                <button type="button" className="btn tap" onClick={() => doRefresh(false)}>Simulate refresh failure</button>
+                <button type="button" className="btn tap" onClick={logoutCurrent}>Log out</button>
+                <button type="button" className="btn tap" onClick={logoutAll}>Log out all devices</button>
+              </div>
+            </section>
 
-      <section className="st-panel">
-        <h2 className="st-panel__title">Sensitive action</h2>
-        <p className="st-item__meta">Sensitive actions require recent authentication (re-auth within {Math.round(DEFAULT_SESSION_POLICY.reauthWithinMs / 60000)} min).</p>
-        <div className="st-actions">
-          <button type="button" className="btn tap" onClick={attemptSensitive}>Change password</button>
-        </div>
-        {reauthOpen && (
-          <div className="ui-banner ui-banner--warn" role="status">
-            <span className="ui-banner__mark" aria-hidden>!</span>
-            <span>Re-authentication required.&nbsp;</span>
-            <button type="button" className="btn tap" onClick={confirmReauth}>Re-authenticate</button>
+            <section className="st-panel">
+              <h2 className="st-panel__title">Sign-in protection</h2>
+              <p className="st-item__meta">Locks after {DEFAULT_SESSION_POLICY.maxFailedAttempts} failed attempts. {isLockedOut(attempts, now) ? 'Currently locked.' : `${attempts.failures} failed.`}</p>
+              <div className="st-actions st-actions--split">
+                <button type="button" className="btn tap" onClick={failLogin} disabled={isLockedOut(attempts, now)} aria-disabled={isLockedOut(attempts, now)}>Simulate failed sign-in</button>
+                <button type="button" className="btn tap" onClick={succeedLogin}>Successful sign-in</button>
+              </div>
+            </section>
+
+            <section className="st-panel">
+              <h2 className="st-panel__title">Sensitive action</h2>
+              <p className="st-item__meta">Requires re-auth within {Math.round(DEFAULT_SESSION_POLICY.reauthWithinMs / 60000)} min.</p>
+              <div className="st-actions"><button type="button" className="btn tap" onClick={attemptSensitive}>Change password</button></div>
+              {reauthOpen && (
+                <div className="ui-banner ui-banner--warn" role="status"><span className="ui-banner__mark" aria-hidden>!</span><span>Re-authentication required.&nbsp;</span>
+                  <button type="button" className="btn tap" onClick={confirmReauth}>Re-authenticate</button></div>
+              )}
+              <p className="st-field__help">Biometric / native re-auth: {bio === 'available' ? 'available' : 'unavailable in this shell'}.</p>
+            </section>
+
+            <section className="st-panel">
+              <h2 className="st-panel__title">Devices</h2>
+              <ul className="st-list">
+                {devices.map((d) => (
+                  <li className="st-item" key={d.deviceId}>
+                    <div><div>{d.label}</div><div className="st-item__meta">{d.current ? 'Current session' : 'Other device'}</div></div>
+                    {d.revoked ? <StatusBadge status={chip('info')} label="Signed out" /> : <button type="button" className="btn tap" onClick={() => revoke(d.deviceId)}>Sign out</button>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <div className="st-actions"><button type="button" className="btn tap" onClick={startReset}>Forgot password / reset</button></div>
+          </div>
+        ) : (
+          <div className="st-stack">
+            <h2 className="st-panel__title">Password reset</h2>
+            <p className="st-item__meta">{resetChallenge ? (isLockedOut(resetAttempts, now) ? 'Locked.' : `Code expires in ${secondsUntilExpiry(resetChallenge, now)}s.`) : ''}</p>
+            <TextField id="reset-otp" label="Reset code" value={resetInput} onChange={setResetInput} inputMode="numeric" />
+            {resetMsg && <ValidationState message={resetMsg} />}
+            <div className="st-actions st-actions--split">
+              <button type="button" className="btn btn--primary tap" onClick={submitReset} disabled={isLockedOut(resetAttempts, now)} aria-disabled={isLockedOut(resetAttempts, now)}>Verify reset code</button>
+              <button type="button" className="btn tap" onClick={() => setView('overview')}>Back to session</button>
+            </div>
           </div>
         )}
-        <p className="st-field__help">Biometric / native re-auth: {bio === 'available' ? 'available' : 'unavailable in this shell'}.</p>
-      </section>
-
-      <section className="st-panel">
-        <h2 className="st-panel__title">Devices</h2>
-        <ul className="st-list">
-          {devices.map((d) => (
-            <li className="st-item" key={d.deviceId}>
-              <div>
-                <div>{d.label}</div>
-                <div className="st-item__meta">{d.current ? 'Current session' : 'Other device'}</div>
-              </div>
-              {d.revoked
-                ? <StatusBadge status={chip('info')} label="Signed out" />
-                : <button type="button" className="btn tap" onClick={() => revoke(d.deviceId)}>Sign out</button>}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="st-panel" aria-label="Security activity">
-        <h2 className="st-panel__title">Recent security activity</h2>
-        {events.length === 0
-          ? <EmptyState title="No recent events" hint="Sign-in, reset and device changes appear here." />
-          : (
-            <ul className="st-list">
-              {events.map((e, i) => (
-                <li className="st-item" key={i}>
-                  <div>{SECURITY_EVENT_LABELS[e.type]}</div>
-                  <span className="st-item__meta">{new Date(e.timestamp).toLocaleTimeString('en-IN')}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-      </section>
-      <DpdpFootnote>Security events are audited; no raw tokens, OTPs or passwords are stored or logged</DpdpFootnote>
-    </AuthScreen>
+      </Workbench>
+      <DpdpFootnote>Login, failure, reset, refresh, logout, revocation, re-auth and lockout are audited; recovery uses rate-limited OTP</DpdpFootnote>
+    </section>
   );
 }

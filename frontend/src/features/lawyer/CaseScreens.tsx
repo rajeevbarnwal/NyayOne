@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TextField, SelectField, DpdpFootnote } from '../student/components';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, EmptyState, ValidationState } from '../../components/ui/primitives';
@@ -21,15 +21,16 @@ import {
   type DocState,
 } from './lib/documents';
 import {
-  validateMatterFacts, addVersion, latestVersion, approveVersion, canExportForFiling,
-  aiContentAwaitingApproval, createStubDraftingAssistant, DRAFT_TEMPLATES, SAMPLE_MATTER_FACTS,
-  AI_DRAFT_LABEL, type DraftVersion, type ApprovalRecord, type MatterFacts,
+  validateMatterFacts, createStubDraftingAssistant, DRAFT_TEMPLATES, SAMPLE_MATTER_FACTS,
+  AI_DRAFT_LABEL, type MatterFacts, type DraftVersion,
 } from './lib/drafting';
 import {
-  openReview, addComment, requestChanges, clientApprove, revokeReview, reviewAccessible,
+  addComment, requestChanges, clientApprove, revokeReview, reviewAccessible,
   checklistClientApproved, sendReviewLink, CLIENT_APPROVAL_NOTE, REVIEW_STATUS_LABELS,
   type ReviewSession,
 } from './lib/clientReview';
+import { DraftWorkspaceService, workspaceIdFor } from './lib/draftWorkspace';
+import { ReviewWorkspaceService } from './lib/reviewWorkspace';
 
 /** Lightweight lawyer-module screen scaffold (Core has no v3.2 design yet). */
 function CaseScreen({ eyebrow, title, sub, children, className }: { eyebrow: string; title: string; sub?: string; children: React.ReactNode; className?: string }) {
@@ -336,39 +337,50 @@ export function CaseDocuments() {
 /* -------------------------------------------------------------------------- */
 /* E06 (SAATHI-16) — Draft plaint/petition with review controls                */
 /* -------------------------------------------------------------------------- */
+const DRAFT_CASE_ID = 'LS-CASE-2026-014';
 export function CaseDraft() {
   const nav = useNavigate();
   const assistant = useMemo(() => createStubDraftingAssistant(), []);
+  const svc = useMemo(() => new DraftWorkspaceService(), []);
+  const wsId = workspaceIdFor(DRAFT_CASE_ID);
+  const [ws, setWs] = useState(() => svc.create(DRAFT_CASE_ID, 'Acme Textiles v. Sunrise Builders'));
   const [facts, setFacts] = useState<MatterFacts>(SAMPLE_MATTER_FACTS);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [template, setTemplate] = useState(DRAFT_TEMPLATES[0]);
-  const [history, setHistory] = useState<DraftVersion[]>([]);
-  const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
   const [editBody, setEditBody] = useState('');
   const setF = (k: keyof MatterFacts) => (v: string) => setFacts((s) => ({ ...s, [k]: v }));
-  const latest = latestVersion(history);
+
+  // Restore persisted workspace on mount (survives refresh/reload).
+  useEffect(() => { setWs(svc.create(DRAFT_CASE_ID, 'Acme Textiles v. Sunrise Builders')); }, [svc]);
+
+  const versions: DraftVersion[] = ws.versions;
+  const latest = versions.length ? versions[versions.length - 1] : null;
+  const isApproved = (id: string) => ws.approvals.some((a) => a.versionId === id);
+  const exportable = svc.canExport(wsId);
+  const awaitingApproval = !!latest && latest.aiGenerated && !isApproved(latest.id);
 
   function generate() {
     const e = validateMatterFacts(facts);
     setErrors(e);
     if (Object.keys(e).length) return;
     const gen = assistant.generate(facts, template);
-    setHistory((h) => addVersion(h, { authorId: 'assoc:1', createdAt: new Date().toISOString(), changeNote: 'AI-assisted draft', body: gen.body, aiGenerated: true, citations: gen.citations }));
+    setWs(svc.addVersion(wsId, { authorId: 'assoc:1', createdAt: new Date().toISOString(), changeNote: 'AI-assisted draft', body: gen.body, aiGenerated: true, citations: gen.citations }));
   }
   function saveEdit() {
     if (!editBody.trim()) return;
-    setHistory((h) => addVersion(h, { authorId: 'lawyer:rao', createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
+    setWs(svc.addVersion(wsId, { authorId: 'lawyer:rao', createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
     setEditBody('');
   }
   function approve() {
-    if (latest) setApprovals((a) => approveVersion(a, latest.id, 'lawyer:rao', new Date().toISOString()));
+    if (latest) setWs(svc.approve(wsId, latest.id, 'lawyer:rao', new Date().toISOString()));
+  }
+  function sendForReview() {
+    svc.setCurrent(wsId); // hand the actual workspace to E07 (no seed)
+    nav('/case/review');
   }
 
-  const exportable = canExportForFiling(history, approvals);
-  const awaitingApproval = aiContentAwaitingApproval(history, approvals);
-
   return (
-    <CaseScreen eyebrow="Drafting · E06" title="Draft plaint / petition">
+    <CaseScreen eyebrow="Drafting · E06" title="Draft plaint / petition" sub={`Workspace ${wsId}`}>
       <section className="st-panel">
         <h2 className="st-panel__title">Matter facts</h2>
         <SelectField id="dr-tpl" label="Template" value={template} onChange={setTemplate} options={DRAFT_TEMPLATES} />
@@ -416,26 +428,26 @@ export function CaseDraft() {
       <section className="st-panel">
         <div className="st-panel__head">
           <h2 className="st-panel__title">Version history</h2>
-          <span className="st-metatag">{history.length} version(s)</span>
+          <span className="st-metatag">{versions.length} version(s)</span>
         </div>
-        {history.length === 0
+        {versions.length === 0
           ? <EmptyState title="No versions yet" hint="Generate or write a draft to start the append-only history." />
           : (
             <ul className="st-list">
-              {history.map((v) => (
+              {versions.map((v) => (
                 <li className="st-item" key={v.id}>
-                  <div>v{v.versionNo} · {v.changeNote}<div className="st-item__meta">{v.authorId}</div></div>
-                  <StatusBadge status={approvals.some((a) => a.versionId === v.id) ? chip('ok') : chip('info')} label={approvals.some((a) => a.versionId === v.id) ? 'Approved' : 'Draft'} />
+                  <div>v{v.versionNo} · {v.changeNote}<div className="st-item__meta">{v.authorId} · {v.id}</div></div>
+                  <StatusBadge status={isApproved(v.id) ? chip('ok') : chip('info')} label={isApproved(v.id) ? 'Approved' : 'Draft'} />
                 </li>
               ))}
             </ul>
           )}
         <div className="st-actions st-actions--split">
           <button type="button" className="btn tap" disabled={!exportable} aria-disabled={!exportable} title={exportable ? undefined : 'Requires lawyer approval of the latest version'}>Export for filing</button>
-          <button type="button" className="btn btn--primary tap" disabled={!exportable} aria-disabled={!exportable} onClick={() => nav('/case/review')}>Send for client review</button>
+          <button type="button" className="btn btn--primary tap" disabled={!exportable} aria-disabled={!exportable} onClick={sendForReview}>Send for client review</button>
         </div>
       </section>
-      <DpdpFootnote>Every version and comment is preserved; AI output is a draft, never final filing content, until a verified lawyer approves it</DpdpFootnote>
+      <DpdpFootnote>Versions persist across refresh; every version and comment is preserved; AI output is a draft, never filing-ready, until a verified lawyer approves the latest version</DpdpFootnote>
     </CaseScreen>
   );
 }
@@ -443,37 +455,66 @@ export function CaseDraft() {
 /* -------------------------------------------------------------------------- */
 /* E07 (SAATHI-18) — Send draft for client review                              */
 /* -------------------------------------------------------------------------- */
-const SEED_APPROVED_VERSION = 'v1-approved';
 export function CaseReview() {
-  // Seeded with a lawyer-approved draft version handed off from E06.
-  const approvals = useMemo<ApprovalRecord[]>(() => approveVersion([], SEED_APPROVED_VERSION, 'lawyer:rao', new Date().toISOString()), []);
-  const [session, setSession] = useState<ReviewSession | null>(null);
-  const [latestVersionId, setLatestVersionId] = useState(SEED_APPROVED_VERSION);
+  const nav = useNavigate();
+  const reviews = useMemo(() => new ReviewWorkspaceService(), []);
+  const drafts = useMemo(() => new DraftWorkspaceService(), []);
+  const [ctx, setCtx] = useState(() => reviews.resolve());
   const [optIn, setOptIn] = useState(false);
   const [comment, setComment] = useState('');
 
+  // Resolve the current review context from the persisted workspace on mount
+  // (retains the session/version binding across refresh; no seed version).
+  useEffect(() => { setCtx(reviews.resolve()); }, [reviews]);
+  const reload = () => setCtx(reviews.resolve());
+
   const notify = sendReviewLink({ channel: 'whatsapp', optedIn: optIn, loggedAt: optIn ? new Date().toISOString() : null });
 
-  function open() {
+  // E07 refuses to open when no lawyer-approved version exists.
+  if (!ctx) {
+    return (
+      <CaseScreen eyebrow="Client review · E07" title="Send draft for client review">
+        <section className="st-panel">
+          <EmptyState title="No approved draft to review"
+            hint="Approve a draft version in the drafting workspace first, then send it for client review." />
+          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/draft')}>Go to drafting</button></div>
+        </section>
+        <DpdpFootnote>A review can only open for a lawyer-approved draft version</DpdpFootnote>
+      </CaseScreen>
+    );
+  }
+
+  const session = ctx.session;
+  const stale = ctx.stale;
+
+  function openLink() {
     const now = Date.now();
-    setSession(openReview(SEED_APPROVED_VERSION, approvals, `tok-${now}`, now, new Date().toISOString()));
+    reviews.open(ctx!.workspaceId, `tok-${now}`, now, new Date().toISOString());
+    reload();
+  }
+  function mutate(fn: (s: ReviewSession) => ReviewSession) {
+    if (!session) return;
+    reviews.update(ctx!.workspaceId, fn(session));
+    reload();
   }
   function comm(kind: 'comment' | 'changes') {
-    if (!session || !comment.trim()) return;
-    const now = Date.now();
-    const iso = new Date().toISOString();
-    setSession(kind === 'comment' ? addComment(session, latestVersionId, comment, now, iso) : requestChanges(session, latestVersionId, comment, now, iso));
+    if (!comment.trim()) return;
+    const now = Date.now(); const iso = new Date().toISOString();
+    mutate((s) => (kind === 'comment' ? addComment(s, ctx!.latestVersionId, comment, now, iso) : requestChanges(s, ctx!.latestVersionId, comment, now, iso)));
     setComment('');
   }
-  function approveClient() { if (session) setSession(clientApprove(session, latestVersionId, Date.now(), new Date().toISOString())); }
-  function revoke() { if (session) setSession(revokeReview(session, Date.now())); }
-  function bumpVersion() { setLatestVersionId('v2-newer'); } // simulate a newer draft → stale guard
+  function approveClient() { mutate((s) => clientApprove(s, ctx!.latestVersionId, Date.now(), new Date().toISOString())); }
+  function revoke() { mutate((s) => revokeReview(s, Date.now())); }
+  // Create a newer draft version to exercise the stale-version guard.
+  function bumpVersion() {
+    drafts.addVersion(ctx!.workspaceId, { authorId: 'assoc:1', createdAt: new Date().toISOString(), changeNote: 'Post-review revision', body: 'Revised draft body', aiGenerated: false });
+    reload();
+  }
 
   const accessible = session ? reviewAccessible(session, Date.now()) : false;
-  const stale = session ? session.draftVersionId !== latestVersionId : false;
 
   return (
-    <CaseScreen eyebrow="Client review · E07" title="Send draft for client review" sub={`Bound to approved draft ${SEED_APPROVED_VERSION}`}>
+    <CaseScreen eyebrow="Client review · E07" title="Send draft for client review" sub={`Bound to approved draft ${ctx.approvedVersionId}`}>
       <section className="st-panel">
         <div className="st-setrow">
           <div>
@@ -483,7 +524,7 @@ export function CaseReview() {
           <button type="button" className="st-toggle" aria-pressed={optIn} onClick={() => setOptIn((v) => !v)}>{optIn ? 'On' : 'Off'}</button>
         </div>
         <div className="st-actions st-actions--split">
-          <button type="button" className="btn btn--primary tap" onClick={open}>Create secure review link</button>
+          <button type="button" className="btn btn--primary tap" onClick={openLink}>Create secure review link</button>
           <StatusBadge status={notify === 'sent' ? chip('ok') : chip('info')} label={notify === 'sent' ? 'Link notification queued' : 'Held — no consent'} />
         </div>
       </section>
@@ -495,7 +536,7 @@ export function CaseReview() {
             <StatusBadge status={session.status === 'approved' ? chip('ok') : session.status === 'revoked' || session.status === 'expired' ? chip('risk') : chip('info')} label={REVIEW_STATUS_LABELS[session.status]} />
           </div>
           <p className="st-item__meta">Link {session.link.url} · bound to {session.draftVersionId} · {accessible ? 'active' : 'not accessible'}</p>
-          {stale && <ValidationState message="A newer draft version exists — this review is stale. Comments and approval will not transfer to the new version." />}
+          {stale && <ValidationState message="A newer draft version exists — this review is stale. Comments and approval stay on the original version and will not transfer." />}
           <label className="st-field" htmlFor="rv-comment">
             <span className="st-field__label">Client feedback</span>
             <textarea id="rv-comment" className="st-input" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
@@ -518,7 +559,7 @@ export function CaseReview() {
             </div>
           )}
           <div className="st-actions st-actions--split">
-            <button type="button" className="btn tap" onClick={bumpVersion}>Simulate newer draft (stale test)</button>
+            <button type="button" className="btn tap" onClick={bumpVersion}>Create newer draft version (stale test)</button>
             <button type="button" className="btn tap" onClick={revoke}>Revoke link</button>
           </div>
         </section>

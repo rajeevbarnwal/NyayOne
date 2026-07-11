@@ -1,0 +1,77 @@
+{
+  "suite": "SAATHI-2/3/4/16/18 independent-QA remediation",
+  "baseline_commit": "61c3361",
+  "validation": {
+    "typecheck": "pass (tsc --noEmit exit 0)",
+    "lint": "pass (eslint exit 0, 0 warnings)",
+    "unit_logic": "51/51 assertions pass across 10 suites via esbuild+vitest-shim (native vitest bus-errors in sandbox)",
+    "backend_pytest": "35 passed",
+    "production_build": "tsc pass; native vite build bus-errors \u2192 esbuild app bundle exit 0 (alternate)"
+  },
+  "browser_qa": {
+    "responsive_checks": 50,
+    "responsive_failures": 0,
+    "widths": [
+      390,
+      430,
+      768,
+      1024,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "routes": [
+      "/auth/lawyer",
+      "/auth/student",
+      "/auth/security",
+      "/case/draft",
+      "/case/review"
+    ],
+    "interaction_assertions": 15,
+    "interaction_failures": 0,
+    "interaction_log": [
+      "PASS P0.1 reaches OTP entry",
+      "PASS P0.1 invalid OTP shown",
+      "PASS P0.1 lockout after attempts",
+      "PASS P0.1 snapshot persisted",
+      "PASS P0.1 snapshot has no OTP code",
+      "PASS P0.1 OTP phase survives refresh",
+      "PASS P0.2 consent step reached",
+      "PASS P0.2 minor guardian gate shown",
+      "PASS E06 created a version id",
+      "DBG e6id=v1-2026-07-11T08:15:54.536Z sub=Bound to approved draft v1-2026-07-11T08:15:54.536Z",
+      "PASS E07 shows same approved version id (no seed)",
+      "PASS E07 not using old seed",
+      "PASS E07 link has no PII (@)",
+      "PASS E07 client approval recorded (not filing approval)",
+      "PASS E07 becomes stale on newer version",
+      "PASS E07 comment stays bound to original version"
+    ]
+  },
+  "screenshots": [
+    "dev_P0_1_bci_desktop.png",
+    "dev_P0_1_otp_mobile.png",
+    "dev_P0_1_register_desktop.png",
+    "dev_P0_1_register_mobile.png",
+    "dev_P0_2_minor_mobile_dark.png",
+    "dev_P0_2_register_mobile_dark.png",
+    "proto_optionB_desktop.png",
+    "proto_optionB_mobile.png"
+  ],
+  "prototype_comparison": {
+    "reference": "docs/product/Manus/P0_Authentication_Option_B_v3.html (Verification Workbench)",
+    "developed_matches": "3-panel workbench rebuilt in React: left step rail + role/state, center action panel, right requirements checklist + timestamped verification ledger/audit + policy note; responsive degradation < 1024px; ls-theme light/dark; 44px controls.",
+    "screenshots_desktop_mobile": [
+      "proto_optionB_desktop.png",
+      "proto_optionB_mobile.png",
+      "dev_P0_1_register_desktop.png",
+      "dev_P0_1_register_mobile.png",
+      "dev_P0_1_bci_desktop.png",
+      "dev_P0_2_register_mobile_dark.png"
+    ],
+    "note": "Rebuilt in the existing architecture, not copied HTML. Prototype reviewer-panel state toggling is not scripted; representative states captured by driving the real app."
+  },
+  "timestamp": "2026-07-11T08:15:55.698Z"
+}
