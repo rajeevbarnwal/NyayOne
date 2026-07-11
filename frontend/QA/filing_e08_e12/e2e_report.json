@@ -1,0 +1,22 @@
+{
+  "suite": "filing_e08_e12_e2e",
+  "pass": 14,
+  "fail": 0,
+  "log": [
+    "PASS E09 blocked before E08 lock",
+    "PASS E08 bundle from approved draft",
+    "PASS E08 locked with hash",
+    "PASS E08 proceed enabled",
+    "PASS E09 milestone 25%",
+    "PASS E09 invoice approved",
+    "PASS E10 diary bound to filing",
+    "PASS E10 manual-recorded label",
+    "PASS E11 fee paid after server-verify + receipt",
+    "PASS E12 manual not court-verified",
+    "PASS E12 tracking active",
+    "PASS E12 tracking persists across refresh",
+    "PASS E08 lock persists across navigation",
+    "PASS no console/page errors"
+  ],
+  "timestamp": "2026-07-11T11:29:35.516Z"
+}

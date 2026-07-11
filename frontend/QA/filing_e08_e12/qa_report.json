@@ -1,0 +1,71 @@
+{
+  "suite": "SAATHI-20/22/24/26/28 Core Filing E08\u2013E12",
+  "routes": [
+    "/case/finalize",
+    "/case/filing",
+    "/case/diary",
+    "/case/fees",
+    "/case/tracking"
+  ],
+  "validation": {
+    "typecheck": "pass (tsc --noEmit exit 0)",
+    "lint": "pass (eslint exit 0, 0 warnings)",
+    "native_vitest": "bus-error (exit 135) \u2014 sandbox limitation, recorded; not counted as pass",
+    "alternate_logic": "filingWorkflow 18/18; full lawyer+auth suites 84/84; student regression 37/37 \u2014 via esbuild+vitest-shim",
+    "backend_pytest": "35 passed",
+    "native_vite_build": "bus-error (exit 135) \u2014 recorded; esbuild app bundle exit 0 used as alternate"
+  },
+  "browser_qa": {
+    "responsive_checks": 50,
+    "responsive_failures": 0,
+    "widths": [
+      390,
+      430,
+      768,
+      1024,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "keyboard_focus": "5/5",
+    "e2e_assertions": 14,
+    "e2e_failures": 0,
+    "e2e_log": [
+      "PASS E09 blocked before E08 lock",
+      "PASS E08 bundle from approved draft",
+      "PASS E08 locked with hash",
+      "PASS E08 proceed enabled",
+      "PASS E09 milestone 25%",
+      "PASS E09 invoice approved",
+      "PASS E10 diary bound to filing",
+      "PASS E10 manual-recorded label",
+      "PASS E11 fee paid after server-verify + receipt",
+      "PASS E12 manual not court-verified",
+      "PASS E12 tracking active",
+      "PASS E12 tracking persists across refresh",
+      "PASS E08 lock persists across navigation",
+      "PASS no console/page errors"
+    ],
+    "note": "50 responsive checks (overflow/44px/console/theme) 0 failures. A single first-Tab focus miss on /case/diary during the combined run was a hydration-timing artifact; re-verified 5/5 focus with a settle."
+  },
+  "screenshots": [
+    "dev_E08_finalize_locked_desktop.png",
+    "dev_E08_finalize_mobile.png",
+    "dev_E09_filing_recorded_desktop.png",
+    "dev_E10_diary_desktop.png",
+    "dev_E11_fees_desktop.png",
+    "dev_E12_tracking_desktop.png"
+  ],
+  "guardrails": [
+    "E08 human-only lock; immutable locked bundle (id+hash); edit\u2192new unlocked version; filing gated on complete+locked; internal lock \u2260 court acceptance; AI non-binding",
+    "E09 user-entered filing (no AI); Case Filed 25% only after valid filing; invoice draft until lawyer/billing approval; recording \u2260 court acceptance/registration",
+    "E10 diary bound to real filing; append-only change history (old preserved); manual-recorded label; no official-validation claim without authorised source; consent+lawyer-approved notify",
+    "E11 typed ledger (court/process/professional/reimbursement/tax/refund/adjustment; court\u2260process); receipt-gated + server-authoritative + idempotent paid; manual verification; advance allocation prevents double/negative; GST disabled pending LCR-007/008",
+    "E12 identifier validation before tracking; manual not court-verified; source+freshness shown; eCourts polling disabled by default (LCR-009), local stub, no captcha/access bypass; consent-gated alerts"
+  ],
+  "workflow": "E06/E07 approved version \u2192 E08 locked bundle \u2192 E09 filing \u2192 E10 diary \u2192 E11 fees \u2192 E12 CNR/tracking; each stage loads the real persisted output of the prior stage; no hard-coded workflow fixtures; state persists across refresh (verified).",
+  "env_notes": "Native Vitest and vite build bus-error in this sandbox (recorded, exit 135). Logic verified via esbuild+vitest-shim; browser QA against an esbuild static bundle + headless Chromium.",
+  "timestamp": "2026-07-11T11:29:35.516Z"
+}

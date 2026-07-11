@@ -31,6 +31,14 @@ import {
 } from './lib/clientReview';
 import { DraftWorkspaceService, workspaceIdFor } from './lib/draftWorkspace';
 import { ReviewWorkspaceService } from './lib/reviewWorkspace';
+import {
+  FilingWorkflowService, latestBundle, canProceedToFiling, checklistComplete,
+  CHECKLIST_KEYS, CHECKLIST_LABELS, FILING_MODES, FEE_CATEGORIES, FEE_CATEGORY_LABELS,
+  cnrFormatValid, trackingStale, INTERNAL_LOCK_NOTICE, AI_NON_BINDING_NOTICE,
+  FILING_NOT_ACCEPTANCE_NOTICE, DIARY_MANUAL_LABEL, GST_REVIEW_NOTICE as FEE_GST_REVIEW_NOTICE, CNR_MANUAL_NOTICE,
+  type FilingWorkflow, type ChecklistKey, type FilingMode,
+  type FeeCategory, type DiarySource, type IdentifierSourceType,
+} from './lib/filingWorkflow';
 
 /** Lightweight lawyer-module screen scaffold (Core has no v3.2 design yet). */
 function CaseScreen({ eyebrow, title, sub, children, className }: { eyebrow: string; title: string; sub?: string; children: React.ReactNode; className?: string }) {
@@ -567,6 +575,312 @@ export function CaseReview() {
         <section className="st-panel"><EmptyState title="No review session" hint="Create a secure link to send the approved draft for client review." /></section>
       )}
       <DpdpFootnote>Client approval records a product acknowledgement only — it is not filing authorisation; links expire, are revocable, and carry no PII</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* ========================================================================== */
+/* Core Filing workflow E08–E12 (SAATHI-20/22/24/26/28)                        */
+/* ========================================================================== */
+const nowISO = () => new Date().toISOString();
+
+function PrereqGate({ title, eyebrow, hint, to, label }: { title: string; eyebrow: string; hint: string; to: string; label: string }) {
+  const nav = useNavigate();
+  return (
+    <CaseScreen eyebrow={eyebrow} title={title}>
+      <section className="st-panel">
+        <EmptyState title="Previous stage not complete" hint={hint} />
+        <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav(to)}>{label}</button></div>
+      </section>
+    </CaseScreen>
+  );
+}
+
+/* E08 (SAATHI-20) — Vet & lock final filing version ------------------------- */
+export function CaseFinalize() {
+  const nav = useNavigate();
+  const svc = useMemo(() => new FilingWorkflowService(), []);
+  const wsId = svc.currentWorkspaceId();
+  const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.initBundle(wsId, nowISO()) ?? svc.get(wsId) : null));
+  useEffect(() => { if (wsId) setFw(svc.initBundle(wsId, nowISO()) ?? svc.get(wsId)); }, [svc, wsId]);
+
+  if (!wsId || !fw || !latestBundle(fw)) {
+    return <PrereqGate eyebrow="Finalize · E08" title="Vet & lock final filing version" hint="Approve a draft in the drafting workspace (E06/E07) first — the locked bundle is built from the real approved version." to="/case/draft" label="Go to drafting" />;
+  }
+  const b = latestBundle(fw)!;
+  const complete = checklistComplete(b);
+  const proceed = canProceedToFiling(fw);
+
+  return (
+    <CaseScreen eyebrow="Finalize · E08" title="Vet & lock final filing version" sub={`Bundle v${b.versionNo} · from approved draft ${b.sourceDraftVersionId}`}>
+      <section className="st-panel">
+        <div className="st-panel__head">
+          <h2 className="st-panel__title">Vetting checklist</h2>
+          <StatusBadge status={b.locked ? chip('ok') : complete ? chip('warn') : chip('info')} label={b.locked ? 'Locked' : complete ? 'Ready to lock' : 'In progress'} />
+        </div>
+        <div className="st-chips" role="group" aria-label="Filing checklist" style={{ marginBottom: 'var(--space-3)' }}>
+          {CHECKLIST_KEYS.map((k) => (
+            <button key={k} type="button" className="st-chip tap" aria-pressed={b.checklist[k]} disabled={b.locked} aria-disabled={b.locked}
+              onClick={() => setFw(svc.setChecklist(wsId, k as ChecklistKey, !b.checklist[k], nowISO()))}>
+              {b.checklist[k] ? '✓ ' : ''}{CHECKLIST_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <GuardrailNotice>{AI_NON_BINDING_NOTICE} {INTERNAL_LOCK_NOTICE}</GuardrailNotice>
+        {b.locked ? (
+          <>
+            <p className="st-item__meta">Locked by {b.lockedBy} · hash {b.hash}</p>
+            <div className="st-actions st-actions--split">
+              <button type="button" className="btn tap" onClick={() => setFw(svc.editAfterLock(wsId, nowISO()))}>Edit (creates new version)</button>
+              <button type="button" className="btn btn--primary tap" disabled={!proceed} aria-disabled={!proceed} onClick={() => nav('/case/filing')}>Proceed to filing</button>
+            </div>
+          </>
+        ) : (
+          <>
+            {!complete && <ValidationState message="Complete every checklist item before locking the bundle." />}
+            <div className="st-actions">
+              <button type="button" className="btn btn--primary tap" disabled={!complete} aria-disabled={!complete} onClick={() => setFw(svc.lockBundle(wsId, 'lawyer:rao', nowISO()))}>Approve &amp; lock final version</button>
+            </div>
+          </>
+        )}
+      </section>
+      <section className="st-panel">
+        <h2 className="st-panel__title">Bundle versions</h2>
+        <ul className="st-list">
+          {fw.bundles.map((v) => (
+            <li className="st-item" key={v.id}>
+              <div>v{v.versionNo}<div className="st-item__meta">{v.id}{v.hash ? ` · ${v.hash}` : ''}</div></div>
+              <StatusBadge status={v.locked ? chip('ok') : chip('info')} label={v.locked ? 'Locked' : 'Draft'} />
+            </li>
+          ))}
+        </ul>
+      </section>
+      <DpdpFootnote>Locking is internal finalisation only — it is not court acceptance; every version, hash and lock action is audited</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* E09 (SAATHI-22) — Record court filing ------------------------------------- */
+export function CaseFiling() {
+  const nav = useNavigate();
+  const svc = useMemo(() => new FilingWorkflowService(), []);
+  const wsId = svc.currentWorkspaceId();
+  const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
+  const [f, setF] = useState({ court: '', benchLocation: '', filedAt: '', mode: 'e-filing' as FilingMode, filedBy: '', notes: '', proofRef: '' });
+  useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
+  const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+
+  if (!wsId || !fw || !canProceedToFiling(fw)) {
+    return <PrereqGate eyebrow="Filing · E09" title="Record court filing" hint="A locked, checklist-complete filing bundle (E08) is required before recording a court filing." to="/case/finalize" label="Go to finalize" />;
+  }
+  const filing = fw.filing;
+  function record() {
+    if (!f.court.trim() || !f.filedAt.trim() || !f.proofRef.trim()) return;
+    const next = svc.recordFiling(wsId!, { court: f.court, benchLocation: f.benchLocation, filedAt: f.filedAt, mode: f.mode, filedBy: f.filedBy || 'clerk', notes: f.notes, proofRef: f.proofRef }, nowISO());
+    if (next) setFw(next);
+  }
+  return (
+    <CaseScreen eyebrow="Filing · E09" title="Record court filing">
+      {!filing ? (
+        <section className="st-panel">
+          <h2 className="st-panel__title">Filing details</h2>
+          <TextField id="fl-court" label="Court" value={f.court} onChange={set('court')} help="User-entered; the product does not invent court-specific rules." />
+          <TextField id="fl-bench" label="Bench / location" value={f.benchLocation} onChange={set('benchLocation')} optional="if applicable" />
+          <TextField id="fl-date" label="Filing date/time" value={f.filedAt} onChange={set('filedAt')} type="datetime-local" />
+          <SelectField id="fl-mode" label="Filing mode" value={f.mode} onChange={(v) => setF((s) => ({ ...s, mode: v as FilingMode }))} options={FILING_MODES as unknown as string[]} />
+          <TextField id="fl-by" label="Filed by" value={f.filedBy} onChange={set('filedBy')} />
+          <TextField id="fl-proof" label="Filing proof / acknowledgement reference" value={f.proofRef} onChange={set('proofRef')} help="Stored as a secure reference; no PII in the URL." />
+          <TextField id="fl-notes" label="Notes" value={f.notes} onChange={set('notes')} />
+          <GuardrailNotice>{FILING_NOT_ACCEPTANCE_NOTICE}</GuardrailNotice>
+          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={record}>Record filing</button></div>
+        </section>
+      ) : (
+        <section className="st-panel" aria-label="Filing record">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Filed · {filing.court}</h2>
+            <StatusBadge status={chip('ok')} label="Stage complete" />
+          </div>
+          <p className="st-item__meta">{filing.mode} · {filing.filedAt} · proof {filing.proofRef}</p>
+          <StatusBadge status={chip('warn')} label={`Milestone: Case Filed ${filing.milestonePct}%`} />
+          <div className="st-actions st-actions--split">
+            <StatusBadge status={filing.invoiceStatus === 'approved' ? chip('ok') : chip('info')} label={`Invoice ${filing.invoiceStatus}`} />
+            {filing.invoiceStatus === 'draft' && <button type="button" className="btn tap" onClick={() => setFw(svc.approveFilingInvoice(wsId!, 'billing', nowISO()))}>Approve invoice</button>}
+          </div>
+          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/diary')}>Proceed to diary number</button></div>
+        </section>
+      )}
+      <DpdpFootnote>Filing details are user-entered, never AI-inferred; recording a filing does not assert court acceptance or registration; the milestone invoice needs lawyer/billing approval</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* E10 (SAATHI-24) — Capture diary number ------------------------------------ */
+export function CaseDiary() {
+  const nav = useNavigate();
+  const svc = useMemo(() => new FilingWorkflowService(), []);
+  const wsId = svc.currentWorkspaceId();
+  const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
+  const [d, setD] = useState({ number: '', court: '', year: '', source: 'manual' as DiarySource, receivedDate: '', acknowledgementRef: '' });
+  const [correction, setCorrection] = useState({ number: '', reason: '' });
+  useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
+  const set = (k: keyof typeof d) => (v: string) => setD((s) => ({ ...s, [k]: v }));
+
+  if (!wsId || !fw || !fw.filing) {
+    return <PrereqGate eyebrow="Diary · E10" title="Capture diary number" hint="A recorded court filing (E09) is required before capturing the diary number." to="/case/filing" label="Go to filing" />;
+  }
+  const diary = fw.diary;
+  function capture() {
+    if (!d.number.trim() || !d.court.trim()) return;
+    const next = svc.captureDiary(wsId!, { number: d.number, court: d.court, year: d.year, source: d.source, receivedDate: d.receivedDate, acknowledgementRef: d.acknowledgementRef }, nowISO());
+    if (next) setFw(next);
+  }
+  return (
+    <CaseScreen eyebrow="Diary · E10" title="Capture diary number">
+      {!diary ? (
+        <section className="st-panel">
+          <h2 className="st-panel__title">Diary / filing number</h2>
+          <TextField id="dy-num" label="Diary number" value={d.number} onChange={set('number')} help="Manually entered or from an authorised source. Validated only where a court rule is configured." />
+          <TextField id="dy-court" label="Court" value={d.court} onChange={set('court')} />
+          <TextField id="dy-year" label="Year" value={d.year} onChange={set('year')} inputMode="numeric" />
+          <SelectField id="dy-src" label="Source" value={d.source} onChange={(v) => setD((s) => ({ ...s, source: v as DiarySource }))} options={['manual', 'authorised_source']} />
+          <TextField id="dy-recv" label="Received date" value={d.receivedDate} onChange={set('receivedDate')} type="date" />
+          <TextField id="dy-ack" label="Acknowledgement reference" value={d.acknowledgementRef} onChange={set('acknowledgementRef')} />
+          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={capture}>Capture diary number</button></div>
+        </section>
+      ) : (
+        <section className="st-panel" aria-label="Diary record">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Diary {diary.number}</h2>
+            <StatusBadge status={diary.officiallyValidated ? chip('ok') : chip('warn')} label={diary.officiallyValidated ? 'Authorised source' : 'Manually recorded'} />
+          </div>
+          <p className="st-item__meta">{diary.court} · {diary.year} · bound to filing {diary.boundFilingId}</p>
+          {!diary.officiallyValidated && <PrivacyNotice>{DIARY_MANUAL_LABEL}</PrivacyNotice>}
+          <label className="st-field" htmlFor="dy-correct"><span className="st-field__label">Correct diary number</span>
+            <input id="dy-correct" className="st-input" value={correction.number} onChange={(e) => setCorrection((s) => ({ ...s, number: e.target.value }))} /></label>
+          <TextField id="dy-reason" label="Correction reason" value={correction.reason} onChange={(v) => setCorrection((s) => ({ ...s, reason: v }))} />
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" disabled={!correction.number.trim() || !correction.reason.trim()} aria-disabled={!correction.number.trim() || !correction.reason.trim()}
+              onClick={() => { setFw(svc.correctDiary(wsId!, correction.number, correction.reason, 'lawyer', nowISO())); setCorrection({ number: '', reason: '' }); }}>Record correction</button>
+            <button type="button" className="btn btn--primary tap" onClick={() => nav('/case/fees')}>Proceed to fees</button>
+          </div>
+          {diary.history.length > 0 && (
+            <ul className="st-list" aria-label="Change history">
+              {diary.history.map((h, i) => (<li className="st-item" key={i}><div>{h.old} → {h.newValue}<div className="st-item__meta">{h.reason} · {h.by}</div></div></li>))}
+            </ul>
+          )}
+        </section>
+      )}
+      <DpdpFootnote>Change history is append-only (old value preserved); no "officially validated" claim without an authorised source</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* E11 (SAATHI-26) — Court & process fee ------------------------------------- */
+export function CaseFees() {
+  const nav = useNavigate();
+  const svc = useMemo(() => new FilingWorkflowService(), []);
+  const wsId = svc.currentWorkspaceId();
+  const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
+  const [line, setLine] = useState({ category: 'court_fee' as FeeCategory, amount: '', receiptRef: '' });
+  useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
+
+  if (!wsId || !fw || !fw.filing) {
+    return <PrereqGate eyebrow="Fees · E11" title="Court & process fee" hint="A recorded court filing (E09) is required before recording fees." to="/case/filing" label="Go to filing" />;
+  }
+  const fees = fw.fees;
+  function add() {
+    const amt = Number(line.amount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    const id = `L${fees.lines.length + 1}`;
+    setFw(svc.addFee(wsId!, { id, category: line.category, amount: amt, payer: 'client', payee: 'court', date: nowISO(), mode: 'online', receiptRef: line.receiptRef.trim() || null }, nowISO()));
+    setLine({ category: 'court_fee', amount: '', receiptRef: '' });
+  }
+  const stChip = (s: string) => (s === 'paid' ? chip('ok') : s === 'manual_review' ? chip('warn') : chip('info'));
+  return (
+    <CaseScreen eyebrow="Fees · E11" title="Court & process fee" sub={`Advance balance ₹${fees.advanceBalance.toLocaleString('en-IN')}`}>
+      <section className="st-panel">
+        <h2 className="st-panel__title">Add fee line</h2>
+        <SelectField id="fee-cat" label="Fee category" value={line.category} onChange={(v) => setLine((s) => ({ ...s, category: v as FeeCategory }))} options={FEE_CATEGORIES as unknown as string[]} help="Court fee and process fee are tracked as distinct categories." />
+        <TextField id="fee-amt" label="Amount (₹)" value={line.amount} onChange={(v) => setLine((s) => ({ ...s, amount: v }))} inputMode="numeric" />
+        <TextField id="fee-rc" label="Receipt / proof reference" value={line.receiptRef} onChange={(v) => setLine((s) => ({ ...s, receiptRef: v }))} help="A line becomes paid only with a receipt + server-verified payment." />
+        <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={add}>Add line</button></div>
+        <GuardrailNotice>{FEE_GST_REVIEW_NOTICE}</GuardrailNotice>
+      </section>
+      <section className="st-panel">
+        <div className="st-panel__head"><h2 className="st-panel__title">Fee ledger</h2><StatusBadge status={fees.statement === 'paid' ? chip('ok') : chip('info')} label={`Statement: ${fees.statement}`} /></div>
+        {fees.lines.length === 0 ? <EmptyState title="No fee lines yet" /> : (
+          <ul className="st-list">
+            {fees.lines.map((l) => (
+              <li className="st-item" key={l.id}>
+                <div>{FEE_CATEGORY_LABELS[l.category]} · ₹{l.amount.toLocaleString('en-IN')}<div className="st-item__meta">{l.receiptRef ? `receipt ${l.receiptRef}` : 'no receipt'} · allocated ₹{l.allocations.reduce((s, a) => s + a.amount, 0)}</div></div>
+                <div className="st-actions">
+                  <StatusBadge status={stChip(l.status)} label={l.status.replace('_', ' ')} />
+                  {l.status !== 'paid' && <button type="button" className="btn tap" onClick={() => setFw(svc.payFee(wsId!, { lineId: l.id, providerRef: `evt-${Date.now()}`, serverVerified: true, receiptRef: l.receiptRef ?? undefined }, nowISO()))}>Server-verify</button>}
+                  {l.status !== 'paid' && <button type="button" className="btn tap" onClick={() => setFw(svc.allocate(wsId!, l.id, Math.min(l.amount, fees.advanceBalance), nowISO()))}>Allocate advance</button>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/tracking')}>Proceed to CNR &amp; tracking</button></div>
+      </section>
+      <DpdpFootnote>Paid status is server-authoritative + receipt-gated and idempotent; court vs process fee stay distinct; GST/reimbursement pending CA review</DpdpFootnote>
+    </CaseScreen>
+  );
+}
+
+/* E12 (SAATHI-28) — CNR & tracking ------------------------------------------ */
+export function CaseTracking() {
+  const svc = useMemo(() => new FilingWorkflowService(), []);
+  const wsId = svc.currentWorkspaceId();
+  const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
+  const [c, setC] = useState({ cnr: '', caseNumber: '', source: '', sourceType: 'manual' as IdentifierSourceType });
+  const [consent, setConsent] = useState(false);
+  useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
+  const set = (k: keyof typeof c) => (v: string) => setC((s) => ({ ...s, [k]: v }));
+
+  if (!wsId || !fw || (!fw.filing && !fw.diary)) {
+    return <PrereqGate eyebrow="Tracking · E12" title="CNR & tracking" hint="Filing (E09) or diary (E10) identifiers are required before capturing the CNR." to="/case/diary" label="Go to diary" />;
+  }
+  const tr = fw.tracking;
+  function capture() {
+    if (!c.cnr.trim()) return;
+    const next = svc.captureCnr(wsId!, { cnr: c.cnr, caseNumber: c.caseNumber, source: c.source || 'manual entry', sourceType: c.sourceType }, nowISO());
+    if (next) setFw(next);
+  }
+  const stale = tr ? trackingStale(tr, Date.now()) : false;
+  return (
+    <CaseScreen eyebrow="Tracking · E12" title="CNR & tracking activation">
+      {!tr ? (
+        <section className="st-panel">
+          <h2 className="st-panel__title">Capture CNR / case number</h2>
+          <TextField id="tr-cnr" label="CNR" value={c.cnr} onChange={set('cnr')} help="Format-checked without assuming one universal court format." />
+          <TextField id="tr-case" label="Case number" value={c.caseNumber} onChange={set('caseNumber')} optional="if generated" />
+          <TextField id="tr-src" label="Source" value={c.source} onChange={set('source')} />
+          <SelectField id="tr-srctype" label="Source type" value={c.sourceType} onChange={(v) => setC((s) => ({ ...s, sourceType: v as IdentifierSourceType }))} options={['manual', 'authorised']} />
+          {c.cnr.trim() !== '' && !cnrFormatValid(c.cnr) && <ValidationState message="CNR format not recognised — you can still record it manually; tracking stays disabled until confirmed." />}
+          <GuardrailNotice>{CNR_MANUAL_NOTICE}</GuardrailNotice>
+          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={capture}>Capture CNR</button></div>
+        </section>
+      ) : (
+        <section className="st-panel" aria-label="Tracking">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">{tr.cnr}</h2>
+            <StatusBadge status={tr.courtVerified ? chip('ok') : chip('warn')} label={tr.courtVerified ? 'Authorised source' : 'Manual — not court-verified'} />
+          </div>
+          <p className="st-item__meta">source: {tr.source} · captured {tr.capturedAt}{tr.checkedAt ? ` · checked ${tr.checkedAt}` : ' · never checked'}{stale ? ' · stale' : ''}</p>
+          <div className="st-setrow">
+            <div><div className="st-setrow__label">Hearing/case-update alerts</div><div className="st-setrow__sub">Consent-gated; court polling is disabled pending TOS/legal review (LCR-009).</div></div>
+            <button type="button" className="st-toggle" aria-pressed={consent} onClick={() => setConsent((v) => !v)}>{consent ? 'On' : 'Off'}</button>
+          </div>
+          {!tr.validated && <ValidationState message="Identifier not validated — tracking cannot be activated until it is confirmed." />}
+          <div className="st-actions st-actions--split">
+            <StatusBadge status={tr.trackingEnabled ? chip('ok') : chip('info')} label={tr.trackingEnabled ? 'Tracking active' : 'Tracking disabled'} />
+            <button type="button" className="btn btn--primary tap" disabled={!tr.validated || tr.trackingEnabled} aria-disabled={!tr.validated || tr.trackingEnabled} onClick={() => setFw(svc.activateTracking(wsId!, consent, nowISO()))}>Activate tracking</button>
+          </div>
+        </section>
+      )}
+      <DpdpFootnote>Manual entries are never presented as court-verified; eCourts polling is disabled by default (LCR-009), local stub only — no captcha/access bypass</DpdpFootnote>
     </CaseScreen>
   );
 }

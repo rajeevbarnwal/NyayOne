@@ -1,0 +1,34 @@
+{
+  "suite": "filing_e08_e12_responsive",
+  "routes": [
+    "/case/finalize",
+    "/case/filing",
+    "/case/diary",
+    "/case/fees",
+    "/case/tracking"
+  ],
+  "widths": [
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "checks": 50,
+  "focus": 5,
+  "failures": 1,
+  "msgs": [
+    "/case/diary no focus"
+  ],
+  "focusDetail": [
+    "/case/finalize:A",
+    "/case/filing:A",
+    "/case/diary:A",
+    "/case/fees:A",
+    "/case/tracking:A"
+  ]
+}

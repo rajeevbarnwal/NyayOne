@@ -1,5 +1,8 @@
 import type { ComponentType } from 'react';
-import { CaseIntake, CaseRetainer, CaseWorkspace, CaseAdvance, CaseDocuments, CaseDraft, CaseReview } from './CaseScreens';
+import {
+  CaseIntake, CaseRetainer, CaseWorkspace, CaseAdvance, CaseDocuments, CaseDraft, CaseReview,
+  CaseFinalize, CaseFiling, CaseDiary, CaseFees, CaseTracking,
+} from './CaseScreens';
 
 /**
  * Lawyer / Core civil-litigation routes (Phase 1–2). These sit outside the
@@ -20,4 +23,9 @@ export const lawyerRoutes: readonly CaseRoute[] = [
   { path: '/case/documents', jira: 'SAATHI-14', Component: CaseDocuments },
   { path: '/case/draft', jira: 'SAATHI-16', Component: CaseDraft },
   { path: '/case/review', jira: 'SAATHI-18', Component: CaseReview },
+  { path: '/case/finalize', jira: 'SAATHI-20', Component: CaseFinalize },
+  { path: '/case/filing', jira: 'SAATHI-22', Component: CaseFiling },
+  { path: '/case/diary', jira: 'SAATHI-24', Component: CaseDiary },
+  { path: '/case/fees', jira: 'SAATHI-26', Component: CaseFees },
+  { path: '/case/tracking', jira: 'SAATHI-28', Component: CaseTracking },
 ];
