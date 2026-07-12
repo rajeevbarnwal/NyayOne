@@ -1,29 +1,38 @@
 {
   "issue": "SAATHI-285 / service SAATHI-287",
-  "title": "Aggregate Cross-Module Calendar Events — normalized event contract (service/domain)",
+  "title": "Aggregate Cross-Module Calendar Events — normalized event contract (service/domain) — REMEDIATION",
   "layer": "service/domain (frontend TS module features/student/lib/calendar.ts)",
   "tested_branch": "main",
   "tested_commit": "PENDING_COMMIT",
+  "remediates_qa": "Independent Senior QA FAIL (commit 4866763): TC-285-05 partial, TC-285-06 no ownership auth, TC-285-07 identifier leak in title, invalid endsAt silently replaced / end-before-start accepted.",
   "files": ["frontend/src/features/student/lib/calendar.ts", "frontend/src/features/student/lib/calendar.test.ts"],
   "validation": {
-    "typecheck": "pass (tsc --noEmit exit 0, whole project)",
+    "typecheck": "pass (npm run typecheck / tsc --noEmit exit 0)",
     "lint": "pass (eslint exit 0, 0 warnings on changed files)",
-    "native_vitest": "bus-error exit 135 (sandbox limitation, recorded; not counted as pass)",
-    "alternate_runner": "node --experimental-strip-types + vitest-shim resolve hook (documented fallback)",
-    "unit_tests": "14/14 pass"
+    "native_vitest": "npm run test:run → Bus error (core dumped), exit 135 — sandbox limitation, recorded; native works in the independent-QA environment",
+    "native_build": "npm run build → tsc ok then vite Bus error (core dumped), exit 135 — recorded",
+    "alternate_runner": "node --experimental-strip-types + vitest resolve-hook shim (documented fallback, only after native failure)",
+    "unit_tests": "23/23 pass (was 14; +9 adversarial remediation tests)"
   },
-  "test_case_mapping": [
-    {"tc": "TC-285-01", "tests": ["aggregates >=2 source adapters and sorts chronologically", "stable secondary sort by id when starts_at ties"], "result": "PASS"},
-    {"tc": "TC-285-02", "tests": ["filters by source and date; CalendarService persists across reload", "filters are user-scoped (no cross-user bleed)"], "result": "PASS"},
-    {"tc": "TC-285-03", "tests": ["dedupes repeated source records but keeps distinct events"], "result": "PASS"},
-    {"tc": "TC-285-04", "tests": ["timezone boundary — same instant is a different local day across zones"], "result": "PASS"},
-    {"tc": "TC-285-05", "tests": ["partial-source failure isolates the bad source; healthy ones survive", "empty sources aggregate to empty non-throwing result"], "result": "PASS"},
-    {"tc": "TC-285-06", "tests": ["deep link resolves valid event and returns null for missing/unauthorized"], "result": "PASS"},
-    {"tc": "TC-285-07", "tests": ["previews carry no restricted keys and no external/private URLs", "clinical event title excludes verifier/evidence identifiers"], "result": "PASS"},
-    {"tc": "TC-285-08", "tests": ["Playwright 5-width light/dark screen QA"], "result": "NOT_RUN — FE subtask SAATHI-286 (screen) not implemented this pass; belongs to FE/QA subtasks"}
+  "fixes": [
+    "normalizeEvent: reject invalid startsAt/endsAt/updatedAt with typed CalendarError; explicit invalid endsAt is NEVER silently replaced.",
+    "IANA timezone validated via Intl (invalid_timezone).",
+    "endsAt earlier than startsAt rejected (end_before_start).",
+    "TC-285-05: explicit CalendarViewStatus loading/empty/success/partial/error + SourceLoader/runLoaders/deriveStatus/retryFailed (retry only failed sources, healthy results preserved as same objects).",
+    "TC-285-06: resolveDeepLink now ownership-aware — CalendarEvent.ownerId; personal/restricted resolve only for owner; public resolvable by anyone; typed DeepLinkResult {ok|not_found|forbidden}.",
+    "TC-285-07: redactRestricted() strips emails/phones/URLs/evidence IDs from titles at normalization; previews cannot leak identifiers even embedded in title; legitimate titles preserved."
   ],
-  "security_privacy": "In-app-only deep links enforced (external/https URLs rejected with typed CalendarError); previews expose only non-restricted fields; no notes/evidence URLs/identities in normalized previews.",
-  "concurrency_idempotency": "Read model is pure + deterministic (dedupe by stable id, stable sort); filters user-scoped and persisted idempotently.",
-  "status_decision": "Service subtask SAATHI-287 own criteria (TC-285-01..07) PASS at domain layer → eligible for Testing. Parent SAATHI-285 remains In Progress (FE SAATHI-286 + QA SAATHI-288 + TC-285-08 Playwright outstanding).",
-  "notes": "No live integrations; local fixtures used for source datetimes. No secrets/debug UI."
+  "test_case_mapping": [
+    {"tc": "TC-285-01", "result": "PASS"},
+    {"tc": "TC-285-02", "result": "PASS (user-scoped filters persist across reload)"},
+    {"tc": "TC-285-03", "result": "PASS"},
+    {"tc": "TC-285-04", "result": "PASS (Intl tz boundary)"},
+    {"tc": "TC-285-05", "result": "PASS (loading→partial→success via retry-only-failed; error when all fail; healthy object preserved)"},
+    {"tc": "TC-285-06", "result": "PASS (owner ok; missing→not_found; cross-user→forbidden; public→ok)"},
+    {"tc": "TC-285-07", "result": "PASS (identifier-bearing title redacted; legit titles preserved)"},
+    {"tc": "TC-285-08", "result": "N/A here — Playwright belongs to FE sub-task SAATHI-286; not claimed"}
+  ],
+  "regression_added": ["invalid endsAt rejected", "end-before-start rejected", "invalid timezone rejected", "cross-user deep link forbidden", "identifier title redaction + legit-title preserved", "loading/partial/retry/error state transitions"],
+  "preserved": "dedupe by source_type+source_id, deterministic sort, tz boundary, persisted user-scoped filters unchanged.",
+  "notes": "No live integrations; no secrets/debug UI. Do NOT claim Playwright/visual parity for S-90/S-91 (foundation placeholders)."
 }

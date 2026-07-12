@@ -85,7 +85,10 @@ export type ReportErrorCode =
   | 'confirm_required'
   | 'evidence_type'
   | 'evidence_size'
-  | 'already_submitted';
+  | 'already_submitted'
+  | 'not_mutable'
+  | 'duplicate_id'
+  | 'not_publishable';
 export class ReportError extends Error {
   readonly code: ReportErrorCode;
   constructor(code: ReportErrorCode, message?: string) {
@@ -148,7 +151,24 @@ export interface ModerationReportView {
   readonly evidence: readonly EvidenceMeta[];
 }
 
-export function toPublicView(r: ReportRecord): PublicReportView {
+/**
+ * Statuses whose metadata may be exposed publicly. An APPROVED moderation state
+ * is owned by SAATHI-274 and does not exist yet, so this is intentionally empty:
+ * draft and moderation_pending reports must never be published.
+ */
+export const PUBLISHABLE_STATUSES: readonly ReportStatus[] = [];
+export function isPublishable(r: ReportRecord): boolean {
+  return PUBLISHABLE_STATUSES.includes(r.status);
+}
+
+/**
+ * Publication gate (TC-269 remediation): returns null for any report that is not
+ * in an approved-publishable state. No unmoderated report metadata is ever
+ * exposed. When SAATHI-274 introduces an approved state, add it to
+ * PUBLISHABLE_STATUSES — nothing else here changes.
+ */
+export function toPublicView(r: ReportRecord): PublicReportView | null {
+  if (!isPublishable(r)) return null;
   return {
     id: r.id,
     category: r.category,
@@ -204,9 +224,11 @@ export class ReportService {
     return { ...s, audit: [...s.audit, { type, reportId, at }] };
   }
 
-  /** Create a new draft at the safest privacy default (TC-269-03). */
+  /** Create a new draft at the safest privacy default (TC-269-03). Rejects a
+   *  duplicate id so an existing (incl. submitted) report is never overwritten. */
   createDraft(id: string, at: string, input: DraftInput = {}): ReportRecord {
     const s = this.load();
+    if (s.reports[id]) throw new ReportError('duplicate_id');
     const rec: ReportRecord = {
       id,
       authorId: this.userId,
@@ -229,8 +251,7 @@ export class ReportService {
   /** Save/resume a draft without submitting (TC-269-01). Owner-only (TC-269-07). */
   saveDraft(id: string, patch: DraftInput & { consent?: boolean }, at: string): ReportRecord {
     const s = this.load();
-    const rec = this.owned(s, id);
-    if (rec.status !== 'draft') throw new ReportError('already_submitted');
+    const rec = this.requireDraft(s, id);
     const updated: ReportRecord = {
       ...rec,
       category: patch.category ?? rec.category,
@@ -247,7 +268,7 @@ export class ReportService {
   /** Changing exposure away from the safest default requires explicit confirm (TC-269-03). */
   setPrivacy(id: string, mode: PrivacyMode, confirm: boolean, at: string): ReportRecord {
     const s = this.load();
-    const rec = this.owned(s, id);
+    const rec = this.requireDraft(s, id);
     if (mode !== SAFEST_PRIVACY && !confirm) throw new ReportError('confirm_required');
     const updated = { ...rec, privacyMode: mode, updatedAt: at };
     const next = this.audit({ ...s, reports: { ...s.reports, [id]: updated } }, 'privacy_changed', id, at);
@@ -258,7 +279,7 @@ export class ReportService {
   /** Attach evidence metadata; rejects bad type/size and preserves state (TC-269-05). */
   addEvidence(id: string, meta: EvidenceMeta, at: string): ReportRecord {
     const s = this.load();
-    const rec = this.owned(s, id);
+    const rec = this.requireDraft(s, id);
     validateEvidence(meta); // throws before any mutation
     const updated = { ...rec, evidence: [...rec.evidence, meta], updatedAt: at };
     const next = this.audit({ ...s, reports: { ...s.reports, [id]: updated } }, 'evidence_added', id, at);
@@ -300,6 +321,13 @@ export class ReportService {
     const rec = s.reports[id];
     if (!rec) throw new ReportError('not_found');
     if (rec.authorId !== this.userId) throw new ReportError('forbidden');
+    return rec;
+  }
+
+  /** Centralized draft-only mutation guard: owner + status===draft, else not_mutable. */
+  private requireDraft(s: ReportStoreShape, id: string): ReportRecord {
+    const rec = this.owned(s, id);
+    if (rec.status !== 'draft') throw new ReportError('not_mutable');
     return rec;
   }
 }

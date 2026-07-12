@@ -4,8 +4,9 @@ import {
   aggregate, runAdapter, normalizeEvent, sortEvents, filterEvents,
   localDateKey, localTime, toPreview, previewLeaksRestricted, resolveDeepLink,
   eventId, CalendarError, CalendarService, defaultFilters, sampleSourceResults,
+  runLoaders, retryFailed, deriveStatus,
   SAMPLE_INTERNSHIP_EVENTS, SAMPLE_EXAM_EVENTS, SAMPLE_CLINICAL_EVENTS,
-  type RawSourceRecord,
+  type RawSourceRecord, type SourceLoader,
 } from './calendar';
 
 const raw = (id: string, startsAt: string, url = '/x'): RawSourceRecord => ({ sourceId: id, title: `t-${id}`, startsAt, sourceUrl: url });
@@ -85,11 +86,28 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     expect(agg.okSources).toEqual(['exam']);
   });
 
-  it('TC-285-06: deep link resolves a valid event and returns null for missing/unauthorized', () => {
-    const { events } = aggregate(sampleSourceResults());
-    expect(resolveDeepLink(events, 'internship:cam-deadline')?.title).toBe('CAM application deadline');
-    expect(resolveDeepLink(events, 'internship:does-not-exist')).toBeNull();
-    expect(resolveDeepLink(events, 'exam:cam-deadline')).toBeNull(); // wrong source namespace
+  it('TC-285-06: ownership-aware deep link — owner ok, missing→not_found, cross-user→forbidden, public→ok', () => {
+    const { events } = aggregate(sampleSourceResults('stu-1'));
+    const ok = resolveDeepLink(events, 'internship:cam-deadline', 'stu-1');
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.event.title).toBe('CAM application deadline');
+    const miss = resolveDeepLink(events, 'internship:does-not-exist', 'stu-1');
+    expect(miss.ok).toBe(false);
+    if (!miss.ok) expect(miss.reason).toBe('not_found');
+    // TRUE cross-user: stu-2 knows the id but does not own this personal event
+    const cross = resolveDeepLink(events, 'internship:cam-deadline', 'stu-2');
+    expect(cross.ok).toBe(false);
+    if (!cross.ok) expect(cross.reason).toBe('forbidden');
+    // public event resolves for any requester
+    const pub = resolveDeepLink(events, 'community:ama-constitution', 'stu-2');
+    expect(pub.ok).toBe(true);
+  });
+
+  it('TC-285-06: wrong source namespace is not found (kept as a separate check)', () => {
+    const { events } = aggregate(sampleSourceResults('stu-1'));
+    const r = resolveDeepLink(events, 'exam:cam-deadline', 'stu-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('not_found');
   });
 
   it('TC-285-07: previews carry no restricted keys and no external/private URLs', () => {
@@ -124,5 +142,79 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     expect(e.id).toBe('internship:cam-deadline');
     expect(e.endsAt).toBe(e.startsAt); // no endsAt provided → equals start
     expect(e.timezone).toBe('Asia/Kolkata');
+  });
+
+  // --- remediation: strict validation (independent QA defect) ---------------
+  it('remediation: invalid endsAt is rejected, NOT silently replaced', () => {
+    let code = '';
+    try { normalizeEvent('exam', { sourceId: 'x', title: 't', startsAt: '2026-07-19T04:30:00Z', endsAt: 'not-a-date', sourceUrl: '/x' }); }
+    catch (e) { code = (e as CalendarError).code; }
+    expect(code).toBe('invalid_datetime');
+  });
+
+  it('remediation: end-before-start is rejected', () => {
+    let code = '';
+    try { normalizeEvent('exam', { sourceId: 'x', title: 't', startsAt: '2026-07-19T06:30:00Z', endsAt: '2026-07-19T04:30:00Z', sourceUrl: '/x' }); }
+    catch (e) { code = (e as CalendarError).code; }
+    expect(code).toBe('end_before_start');
+  });
+
+  it('remediation: invalid IANA timezone is rejected', () => {
+    let code = '';
+    try { normalizeEvent('exam', { sourceId: 'x', title: 't', startsAt: '2026-07-19T04:30:00Z', timezone: 'Mars/Phobos', sourceUrl: '/x' }); }
+    catch (e) { code = (e as CalendarError).code; }
+    expect(code).toBe('invalid_timezone');
+  });
+
+  it('remediation: invalid updatedAt is rejected (no silent fallback)', () => {
+    expect(() => normalizeEvent('exam', { sourceId: 'x', title: 't', startsAt: '2026-07-19T04:30:00Z', updatedAt: 'nope', sourceUrl: '/x' }))
+      .toThrowError(CalendarError);
+  });
+
+  it('remediation TC-285-07: identifier-bearing title is redacted before any preview', () => {
+    const e = normalizeEvent('clinical', { sourceId: 'x', title: 'Call verifier ravi@example.com re ev-99177 +91 98765 43210', startsAt: '2026-07-19T04:30:00Z', sourceUrl: '/clinical/log' }, 'stu-1');
+    expect(e.title).not.toMatch(/@|ravi@example|ev-99177/);
+    expect(e.title).toContain('[redacted]');
+    expect(/@/.test(toPreview(e).title)).toBe(false);
+    // legitimate non-sensitive titles are preserved verbatim
+    expect(normalizeEvent('exam', { sourceId: 'm', title: 'CLAT mock test 3', startsAt: '2026-07-19T04:30:00Z', sourceUrl: '/exam/mock' }).title).toBe('CLAT mock test 3');
+  });
+
+  // --- remediation TC-285-05: explicit state + retry-only-failed ------------
+  it('remediation TC-285-05: loading→partial→success by retrying only failed sources', () => {
+    let down = true;
+    const loaders: SourceLoader[] = [
+      { sourceType: 'exam', load: () => SAMPLE_EXAM_EVENTS },
+      { sourceType: 'internship', load: () => { if (down) throw new Error('source down'); return SAMPLE_INTERNSHIP_EVENTS; } },
+    ];
+    expect(deriveStatus([], { loading: true })).toBe('loading');
+    const first = runLoaders(loaders);
+    expect(deriveStatus(first)).toBe('partial');
+    const firstAgg = aggregate(first);
+    expect(firstAgg.failedSources).toEqual(['internship']);
+    expect(firstAgg.events.length).toBe(SAMPLE_EXAM_EVENTS.length); // healthy survived
+    down = false;
+    const retried = retryFailed(first, loaders);
+    expect(deriveStatus(retried)).toBe('success');
+    const retriedAgg = aggregate(retried);
+    expect(retriedAgg.failedSources).toEqual([]);
+    expect(retriedAgg.events.length).toBe(SAMPLE_EXAM_EVENTS.length + SAMPLE_INTERNSHIP_EVENTS.length);
+  });
+
+  it('remediation TC-285-05: retry preserves the healthy source result object (not re-run)', () => {
+    const loaders: SourceLoader[] = [
+      { sourceType: 'exam', load: () => SAMPLE_EXAM_EVENTS },
+      { sourceType: 'internship', load: () => { throw new Error('down'); } },
+    ];
+    const first = runLoaders(loaders);
+    const examBefore = first.find((r) => r.sourceType === 'exam');
+    const retried = retryFailed(first, loaders);
+    expect(retried.find((r) => r.sourceType === 'exam')).toBe(examBefore); // same object
+    expect(deriveStatus(retried)).toBe('partial'); // internship still failing
+  });
+
+  it('remediation TC-285-05: all sources failing derives error state', () => {
+    const loaders: SourceLoader[] = [{ sourceType: 'exam', load: () => { throw new Error('x'); } }];
+    expect(deriveStatus(runLoaders(loaders))).toBe('error');
   });
 });

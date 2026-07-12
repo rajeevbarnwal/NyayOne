@@ -53,7 +53,8 @@ export interface CalendarEvent {
   readonly id: string; // stable derived id: `${sourceType}:${sourceId}`
   readonly sourceType: CalendarSourceType;
   readonly sourceId: string;
-  readonly title: string;
+  readonly ownerId: string; // student who owns this event (authorization)
+  readonly title: string; // already redacted of restricted identifiers
   readonly startsAt: string; // ISO-8601 instant (UTC, `Z`)
   readonly endsAt: string; // ISO-8601 instant (UTC, `Z`)
   readonly timezone: string; // IANA tz for display, e.g. 'Asia/Kolkata'
@@ -77,6 +78,7 @@ export interface CalendarEventPreview {
 /** Raw record an adapter receives (kept minimal + typed). */
 export interface RawSourceRecord {
   readonly sourceId: string;
+  readonly ownerId?: string; // defaults to the adapter's owner
   readonly title: string;
   readonly startsAt: string;
   readonly endsAt?: string;
@@ -100,7 +102,13 @@ const RESTRICTED_KEY_RE = /(note|notes|evidence|verifier|email|phone|identity|au
 
 // --- typed errors -----------------------------------------------------------
 
-export type CalendarErrorCode = 'invalid_datetime' | 'invalid_url' | 'not_found';
+export type CalendarErrorCode =
+  | 'invalid_datetime'
+  | 'invalid_timezone'
+  | 'end_before_start'
+  | 'invalid_url'
+  | 'not_found'
+  | 'forbidden';
 export class CalendarError extends Error {
   readonly code: CalendarErrorCode;
   constructor(code: CalendarErrorCode, message?: string) {
@@ -108,6 +116,35 @@ export class CalendarError extends Error {
     this.name = 'CalendarError';
     this.code = code;
   }
+}
+
+/** Validate an IANA timezone via Intl; throws on anything Intl rejects. */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- privacy redaction (TC-285-07) ------------------------------------------
+// Redact identifier-bearing substrings that must never appear in previews, even
+// when embedded in a title. Conservative patterns preserve legitimate titles
+// (e.g. "CLAT mock test 3", "Vidhi interview").
+const REDACTION_PATTERNS: readonly RegExp[] = [
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, // email
+  /\bhttps?:\/\/\S+/gi, // external URL
+  /\b(?:\+?\d[\d ()-]{8,}\d)\b/g, // phone-like (>=10 digits w/ separators)
+  /\bev(?:idence)?[-_:#]?[A-Za-z0-9]{4,}\b/gi, // evidence identifiers
+];
+export function containsRestricted(text: string): boolean {
+  return REDACTION_PATTERNS.some((re) => { re.lastIndex = 0; return re.test(text); });
+}
+export function redactRestricted(text: string): string {
+  let out = text;
+  for (const re of REDACTION_PATTERNS) { re.lastIndex = 0; out = out.replace(re, '[redacted]'); }
+  return out;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -121,27 +158,57 @@ function isIso(s: string): boolean {
   return Number.isFinite(t);
 }
 
-/** Normalize a raw source record into the stable contract. Throws typed errors. */
-export function normalizeEvent(sourceType: CalendarSourceType, raw: RawSourceRecord): CalendarEvent {
+/**
+ * Normalize a raw source record into the stable contract. Throws typed errors.
+ * Strict validation (TC-285 remediation): invalid startsAt/endsAt/updatedAt are
+ * rejected (an explicitly-supplied invalid endsAt is NEVER silently replaced),
+ * the IANA timezone is validated, endsAt earlier than startsAt is rejected, and
+ * the title is redacted of restricted identifiers before it can reach a preview.
+ */
+export function normalizeEvent(
+  sourceType: CalendarSourceType,
+  raw: RawSourceRecord,
+  ownerId = 'self',
+): CalendarEvent {
   if (!isIso(raw.startsAt)) throw new CalendarError('invalid_datetime', `bad startsAt for ${raw.sourceId}`);
   const startsAt = new Date(raw.startsAt).toISOString();
-  const endsAt = raw.endsAt && isIso(raw.endsAt) ? new Date(raw.endsAt).toISOString() : startsAt;
+
+  // endsAt: default to startsAt only when NOT supplied; a supplied bad value fails.
+  let endsAt = startsAt;
+  if (raw.endsAt !== undefined) {
+    if (!isIso(raw.endsAt)) throw new CalendarError('invalid_datetime', `bad endsAt for ${raw.sourceId}`);
+    endsAt = new Date(raw.endsAt).toISOString();
+    if (Date.parse(endsAt) < Date.parse(startsAt)) {
+      throw new CalendarError('end_before_start', `endsAt precedes startsAt for ${raw.sourceId}`);
+    }
+  }
+
+  if (raw.updatedAt !== undefined && !isIso(raw.updatedAt)) {
+    throw new CalendarError('invalid_datetime', `bad updatedAt for ${raw.sourceId}`);
+  }
+  const updatedAt = raw.updatedAt !== undefined ? new Date(raw.updatedAt).toISOString() : startsAt;
+
+  const timezone = raw.timezone ?? DEFAULT_TZ;
+  if (!isValidTimezone(timezone)) throw new CalendarError('invalid_timezone', `bad timezone for ${raw.sourceId}`);
+
   // Deep links must be in-app; never an external or private URL (TC-285-07).
   if (!raw.sourceUrl.startsWith('/') || /^https?:/i.test(raw.sourceUrl)) {
     throw new CalendarError('invalid_url', `source_url must be in-app for ${raw.sourceId}`);
   }
+
   return {
     id: eventId(sourceType, raw.sourceId),
     sourceType,
     sourceId: raw.sourceId,
-    title: raw.title,
+    ownerId: raw.ownerId ?? ownerId,
+    title: redactRestricted(raw.title), // TC-285-07: redact even if embedded in title
     startsAt,
     endsAt,
-    timezone: raw.timezone ?? DEFAULT_TZ,
+    timezone,
     status: raw.status ?? 'scheduled',
     privacyClassification: raw.privacyClassification ?? 'personal',
     sourceUrl: raw.sourceUrl,
-    updatedAt: raw.updatedAt && isIso(raw.updatedAt) ? new Date(raw.updatedAt).toISOString() : startsAt,
+    updatedAt,
   };
 }
 
@@ -149,9 +216,10 @@ export function normalizeEvent(sourceType: CalendarSourceType, raw: RawSourceRec
 export function runAdapter(
   sourceType: CalendarSourceType,
   load: () => readonly RawSourceRecord[],
+  ownerId = 'self',
 ): SourceResult {
   try {
-    const events = load().map((r) => normalizeEvent(sourceType, r));
+    const events = load().map((r) => normalizeEvent(sourceType, r, ownerId));
     return { sourceType, ok: true, events };
   } catch (e) {
     return { sourceType, ok: false, events: [], error: e instanceof Error ? e.message : 'adapter_failed' };
@@ -197,6 +265,50 @@ export function aggregate(results: readonly SourceResult[]): AggregateResult {
     all.push(...r.events);
   }
   return { events: sortEvents(dedupeEvents(all)), failedSources: failed, okSources: ok };
+}
+
+// --- explicit view-state + retry contract (TC-285-05) -----------------------
+
+export type CalendarViewStatus = 'loading' | 'empty' | 'success' | 'partial' | 'error';
+
+/** A named source loader; the unit of aggregation, failure and retry. */
+export interface SourceLoader {
+  readonly sourceType: CalendarSourceType;
+  readonly load: () => readonly RawSourceRecord[];
+  readonly ownerId?: string;
+}
+
+export function runLoaders(loaders: readonly SourceLoader[]): SourceResult[] {
+  return loaders.map((l) => runAdapter(l.sourceType, l.load, l.ownerId ?? 'self'));
+}
+
+/** Derive the explicit view status from source results (loading is caller-driven). */
+export function deriveStatus(
+  results: readonly SourceResult[],
+  opts: { loading?: boolean } = {},
+): CalendarViewStatus {
+  if (opts.loading) return 'loading';
+  if (results.length === 0) return 'empty';
+  const failed = results.filter((r) => !r.ok).length;
+  if (failed === results.length) return 'error';
+  if (failed > 0) return 'partial';
+  return results.some((r) => r.events.length > 0) ? 'success' : 'empty';
+}
+
+/**
+ * Retry ONLY the failed sources, preserving already-healthy results/events
+ * (TC-285-05). Healthy sources are never re-run and their events never dropped.
+ */
+export function retryFailed(
+  prev: readonly SourceResult[],
+  loaders: readonly SourceLoader[],
+): SourceResult[] {
+  const byType = new Map(loaders.map((l) => [l.sourceType, l] as const));
+  return prev.map((r) => {
+    if (r.ok) return r;
+    const l = byType.get(r.sourceType);
+    return l ? runAdapter(l.sourceType, l.load, l.ownerId ?? 'self') : r;
+  });
 }
 
 // --- timezone-aware date boundary (TC-285-04) -------------------------------
@@ -269,11 +381,28 @@ export function previewLeaksRestricted(p: CalendarEventPreview): boolean {
   return Object.keys(p).some((k) => RESTRICTED_KEY_RE.test(k));
 }
 
-// --- deep link (TC-285-06) --------------------------------------------------
+// --- deep link (TC-285-06, ownership-aware) ---------------------------------
 
-/** Resolve a deep link within the user's own event set; missing → null (safe). */
-export function resolveDeepLink(events: readonly CalendarEvent[], id: string): CalendarEvent | null {
-  return events.find((e) => e.id === id) ?? null;
+export type DeepLinkResult =
+  | { readonly ok: true; readonly event: CalendarEvent }
+  | { readonly ok: false; readonly reason: 'not_found' | 'forbidden' };
+
+/**
+ * Resolve a deep link with ownership authorization. Knowing an id is NOT enough:
+ * personal/restricted events resolve only for their owner; public events resolve
+ * for anyone. Missing → not_found; someone else's private record → forbidden.
+ */
+export function resolveDeepLink(
+  events: readonly CalendarEvent[],
+  id: string,
+  requesterId: string,
+): DeepLinkResult {
+  const e = events.find((x) => x.id === id);
+  if (!e) return { ok: false, reason: 'not_found' };
+  if (e.privacyClassification !== 'public' && e.ownerId !== requesterId) {
+    return { ok: false, reason: 'forbidden' };
+  }
+  return { ok: true, event: e };
 }
 
 // --- persistence (user-scoped filters; TC-285-02 refresh persistence) -------
@@ -328,14 +457,19 @@ export const SAMPLE_COMMUNITY_EVENTS: readonly RawSourceRecord[] = [
   { sourceId: 'ama-constitution', title: 'Community AMA: Constitutional law', startsAt: '2026-07-21T13:00:00Z', endsAt: '2026-07-21T14:00:00Z', status: 'tentative', privacyClassification: 'public', sourceUrl: '/community/events', updatedAt: '2026-07-07T04:00:00Z' },
 ];
 
-/** Build the default set of source results from bundled fixtures. */
-export function sampleSourceResults(): SourceResult[] {
+/** Named loaders for the bundled fixtures (owner defaults to the given student). */
+export function sampleLoaders(ownerId = 'self'): SourceLoader[] {
   return [
-    runAdapter('internship', () => SAMPLE_INTERNSHIP_EVENTS),
-    runAdapter('exam', () => SAMPLE_EXAM_EVENTS),
-    runAdapter('clinical', () => SAMPLE_CLINICAL_EVENTS),
-    runAdapter('community', () => SAMPLE_COMMUNITY_EVENTS),
+    { sourceType: 'internship', load: () => SAMPLE_INTERNSHIP_EVENTS, ownerId },
+    { sourceType: 'exam', load: () => SAMPLE_EXAM_EVENTS, ownerId },
+    { sourceType: 'clinical', load: () => SAMPLE_CLINICAL_EVENTS, ownerId },
+    { sourceType: 'community', load: () => SAMPLE_COMMUNITY_EVENTS, ownerId },
   ];
+}
+
+/** Build the default set of source results from bundled fixtures. */
+export function sampleSourceResults(ownerId = 'self'): SourceResult[] {
+  return runLoaders(sampleLoaders(ownerId));
 }
 
 export const CALENDAR_SOURCE_NOTE =

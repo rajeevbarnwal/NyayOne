@@ -80,11 +80,8 @@ describe('SAATHI-269/271 internship report contract', () => {
     svc.createDraft('r1', 't0');
     svc.saveDraft('r1', { category: 'harassment', narrative: 'sensitive detail', consent: true }, 't1');
     const rec = svc.submit('r1', 't2');
-    // public view: no author, no narrative
-    const pub = toPublicView(rec);
-    expect(Object.keys(pub)).not.toContain('authorId');
-    expect(Object.keys(pub)).not.toContain('narrative');
-    expect(JSON.stringify(pub)).not.toContain('stu-1');
+    // publication gate: a moderation_pending report has NO public view at all
+    expect(toPublicView(rec)).toBeNull();
     // moderation view while anonymous: authorId null
     expect(toModerationView(rec).authorId).toBeNull();
     // audit carries no identity or narrative
@@ -101,7 +98,7 @@ describe('SAATHI-269/271 internship report contract', () => {
     svc.saveDraft('r1', { category: 'unpaid', narrative: 'n', consent: true }, 't2');
     const rec = svc.submit('r1', 't3');
     expect(toModerationView(rec).authorId).toBe('stu-1');
-    expect(JSON.stringify(toPublicView(rec))).not.toContain('stu-1');
+    expect(toPublicView(rec)).toBeNull(); // attributed is still not publishable pre-moderation
   });
 
   it('TC-269-07: cross-user access to drafts/reports is refused', () => {
@@ -121,5 +118,64 @@ describe('SAATHI-269/271 internship report contract', () => {
     svc.saveDraft('r1', { category: 'unsafe', narrative: 'n', consent: true }, 't1');
     svc.submit('r1', 't2');
     expect(() => svc.saveDraft('r1', { narrative: 'edit' }, 't3')).toThrowError(ReportError);
+  });
+
+  // --- remediation regressions (independent QA defects) ---------------------
+  function submitted(store: InMemoryKvStore, user = 'stu-1') {
+    const svc = new ReportService(user, store);
+    svc.createDraft('r1', 't0');
+    svc.saveDraft('r1', { category: 'unsafe', narrative: 'orig', consent: true }, 't1');
+    svc.submit('r1', 't2');
+    return svc;
+  }
+
+  it('remediation: setPrivacy after submission is rejected (not_mutable)', () => {
+    const svc = submitted(new InMemoryKvStore());
+    let code = '';
+    try { svc.setPrivacy('r1', 'attributed', true, 't3'); } catch (e) { code = (e as ReportError).code; }
+    expect(code).toBe('not_mutable');
+  });
+
+  it('remediation: addEvidence after submission is rejected (not_mutable)', () => {
+    const svc = submitted(new InMemoryKvStore());
+    let code = '';
+    try { svc.addEvidence('r1', ev(), 't3'); } catch (e) { code = (e as ReportError).code; }
+    expect(code).toBe('not_mutable');
+  });
+
+  it('remediation: duplicate createDraft cannot overwrite an existing (submitted) report', () => {
+    const svc = submitted(new InMemoryKvStore());
+    const before = svc.get('r1');
+    const auditBefore = svc.auditLog().length;
+    let code = '';
+    try { svc.createDraft('r1', 't9', { narrative: 'overwrite attempt' }); } catch (e) { code = (e as ReportError).code; }
+    expect(code).toBe('duplicate_id');
+    expect(svc.get('r1')).toEqual(before); // original preserved
+    expect(svc.get('r1')!.narrative).toBe('orig');
+    expect(svc.get('r1')!.status).toBe('moderation_pending');
+    expect(svc.auditLog().length).toBe(auditBefore); // audit history unchanged
+  });
+
+  it('remediation: moderation_pending and draft cannot produce a public view', () => {
+    const store = new InMemoryKvStore();
+    const svc = submitted(store);
+    expect(toPublicView(svc.get('r1')!)).toBeNull();
+    svc.createDraft('r2', 't0');
+    expect(toPublicView(svc.get('r2')!)).toBeNull();
+  });
+
+  it('remediation: original report + audit remain unchanged after every rejected mutation', () => {
+    const svc = submitted(new InMemoryKvStore());
+    const snap = svc.get('r1');
+    const auditLen = svc.auditLog().length;
+    const rejected = [
+      () => svc.setPrivacy('r1', 'attributed', true, 't3'),
+      () => svc.addEvidence('r1', ev(), 't3'),
+      () => svc.saveDraft('r1', { narrative: 'x' }, 't3'),
+      () => svc.createDraft('r1', 't3'),
+    ];
+    for (const fn of rejected) { try { fn(); } catch { /* expected rejection */ } }
+    expect(svc.get('r1')).toEqual(snap);
+    expect(svc.auditLog().length).toBe(auditLen);
   });
 });
