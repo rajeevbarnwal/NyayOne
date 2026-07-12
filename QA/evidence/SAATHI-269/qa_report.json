@@ -1,0 +1,29 @@
+{
+  "issue": "SAATHI-269 / service SAATHI-271",
+  "title": "Private/Anonymous Internship Experience Report — report/consent/privacy/evidence/audit contract (service/domain)",
+  "layer": "service/domain (frontend TS module features/student/lib/report.ts)",
+  "tested_branch": "main",
+  "tested_commit": "PENDING_COMMIT",
+  "files": ["frontend/src/features/student/lib/report.ts", "frontend/src/features/student/lib/report.test.ts"],
+  "validation": {
+    "typecheck": "pass (tsc --noEmit exit 0, whole project)",
+    "lint": "pass (eslint exit 0, 0 warnings on changed files)",
+    "native_vitest": "bus-error exit 135 (sandbox limitation, recorded)",
+    "alternate_runner": "node --experimental-strip-types + vitest-shim resolve hook (documented fallback)",
+    "unit_tests": "10/10 pass"
+  },
+  "test_case_mapping": [
+    {"tc": "TC-269-01", "tests": ["save and resume a valid draft without submitting"], "result": "PASS"},
+    {"tc": "TC-269-02", "tests": ["submission requires category, narrative and consent"], "result": "PASS"},
+    {"tc": "TC-269-03", "tests": ["safest privacy default is anonymous; leaving it needs explicit confirm"], "result": "PASS"},
+    {"tc": "TC-269-04", "tests": ["submit once → moderation_pending; repeat submit is idempotent"], "result": "PASS"},
+    {"tc": "TC-269-05", "tests": ["rejects invalid/oversized evidence and preserves form state", "validateEvidence typed errors by code"], "result": "PASS"},
+    {"tc": "TC-269-06", "tests": ["anonymous reports never expose author identity in views or audit", "attributed mode reveals author only to moderation view, never public"], "result": "PASS"},
+    {"tc": "TC-269-07", "tests": ["cross-user access to drafts/reports is refused"], "result": "PASS"},
+    {"tc": "TC-269-08", "tests": ["Playwright form validation/draft/success/error responsive gates"], "result": "NOT_RUN — FE subtask SAATHI-270 (screen) not implemented this pass"}
+  ],
+  "security_privacy": "Safest default anonymous; exposure change gated by explicit confirm; anonymous author identity absent from public view, moderation view and audit log (asserted no 'stu-1' / narrative leakage); evidence is metadata-only, contents never stored/logged; unsupported type/oversize rejected with typed ReportError.",
+  "concurrency_idempotency": "submit() idempotent (repeat submit is a no-op with exactly one 'submitted' audit event); submitted reports are immutable to draft edits.",
+  "status_decision": "Service subtask SAATHI-271 own criteria (TC-269-01..07) PASS at domain layer → eligible for Testing. Parent SAATHI-269 remains In Progress (FE SAATHI-270 + QA SAATHI-272 + TC-269-08 Playwright outstanding). Moderation (SAATHI-274) can now consume this contract's toModerationView + moderation_pending state.",
+  "notes": "No live integrations; no secrets/debug UI; audit carries no identity/narrative/evidence content."
+}

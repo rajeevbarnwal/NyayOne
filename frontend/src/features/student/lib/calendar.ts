@@ -1,0 +1,342 @@
+/**
+ * S19.1 — Cross-module calendar aggregation (SAATHI-285 / service SAATHI-287).
+ *
+ * One stable normalized calendar-event contract that every R1 source module is
+ * adapted into (internships, exam-prep, clinical-hours, community, tutoring,
+ * moot, reminders). The read model is user-scoped and deterministic:
+ *   - dedupe by stable (source_type + source_id),
+ *   - sort by starts_at then a stable secondary key (id),
+ *   - partial-source failures never block healthy sources,
+ *   - previews expose ONLY non-restricted fields (never notes, evidence URLs,
+ *     verifier identities or other private identifiers).
+ *
+ * Timezone handling is explicit and DST-safe via Intl (no hand-rolled offsets).
+ * No live external integrations — sources are local adapters over in-app data
+ * plus stable fixtures for modules that do not yet emit datetimes.
+ *
+ * TCs: TC-285-01 aggregate+sort · 02 filter+persist · 03 dedupe · 04 timezone
+ * boundary · 05 loading/empty/partial-error · 06 deep link · 07 no restricted
+ * leakage in previews.
+ */
+import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+
+// --- contract ---------------------------------------------------------------
+
+export type CalendarSourceType =
+  | 'internship'
+  | 'exam'
+  | 'clinical'
+  | 'community'
+  | 'tutoring'
+  | 'moot'
+  | 'reminder';
+
+export const CALENDAR_SOURCE_TYPES: readonly CalendarSourceType[] = [
+  'internship', 'exam', 'clinical', 'community', 'tutoring', 'moot', 'reminder',
+];
+
+export const SOURCE_LABELS: Record<CalendarSourceType, string> = {
+  internship: 'Internships',
+  exam: 'Exam prep',
+  clinical: 'Clinical hours',
+  community: 'Community',
+  tutoring: 'Tutoring',
+  moot: 'Moot',
+  reminder: 'Reminders',
+};
+
+export type CalendarEventStatus = 'scheduled' | 'deadline' | 'tentative' | 'done';
+export type PrivacyClassification = 'public' | 'personal' | 'restricted';
+
+/** The single normalized event contract consumed by S19.1/2/3. */
+export interface CalendarEvent {
+  readonly id: string; // stable derived id: `${sourceType}:${sourceId}`
+  readonly sourceType: CalendarSourceType;
+  readonly sourceId: string;
+  readonly title: string;
+  readonly startsAt: string; // ISO-8601 instant (UTC, `Z`)
+  readonly endsAt: string; // ISO-8601 instant (UTC, `Z`)
+  readonly timezone: string; // IANA tz for display, e.g. 'Asia/Kolkata'
+  readonly status: CalendarEventStatus;
+  readonly privacyClassification: PrivacyClassification;
+  readonly sourceUrl: string; // in-app deep link only (starts with '/')
+  readonly updatedAt: string; // ISO-8601 instant
+}
+
+/** Only these fields may ever be shown in a preview/list cell. */
+export interface CalendarEventPreview {
+  readonly id: string;
+  readonly sourceType: CalendarSourceType;
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly timezone: string;
+  readonly status: CalendarEventStatus;
+}
+
+/** Raw record an adapter receives (kept minimal + typed). */
+export interface RawSourceRecord {
+  readonly sourceId: string;
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt?: string;
+  readonly timezone?: string;
+  readonly status?: CalendarEventStatus;
+  readonly privacyClassification?: PrivacyClassification;
+  readonly sourceUrl: string;
+  readonly updatedAt?: string;
+}
+
+/** Result of running one source adapter — supports partial failure (TC-285-05). */
+export interface SourceResult {
+  readonly sourceType: CalendarSourceType;
+  readonly ok: boolean;
+  readonly events: readonly CalendarEvent[];
+  readonly error?: string;
+}
+
+export const DEFAULT_TZ = 'Asia/Kolkata';
+const RESTRICTED_KEY_RE = /(note|notes|evidence|verifier|email|phone|identity|author|private|url)/i;
+
+// --- typed errors -----------------------------------------------------------
+
+export type CalendarErrorCode = 'invalid_datetime' | 'invalid_url' | 'not_found';
+export class CalendarError extends Error {
+  readonly code: CalendarErrorCode;
+  constructor(code: CalendarErrorCode, message?: string) {
+    super(message ?? code);
+    this.name = 'CalendarError';
+    this.code = code;
+  }
+}
+
+// --- helpers ----------------------------------------------------------------
+
+export function eventId(sourceType: CalendarSourceType, sourceId: string): string {
+  return `${sourceType}:${sourceId}`;
+}
+
+function isIso(s: string): boolean {
+  const t = Date.parse(s);
+  return Number.isFinite(t);
+}
+
+/** Normalize a raw source record into the stable contract. Throws typed errors. */
+export function normalizeEvent(sourceType: CalendarSourceType, raw: RawSourceRecord): CalendarEvent {
+  if (!isIso(raw.startsAt)) throw new CalendarError('invalid_datetime', `bad startsAt for ${raw.sourceId}`);
+  const startsAt = new Date(raw.startsAt).toISOString();
+  const endsAt = raw.endsAt && isIso(raw.endsAt) ? new Date(raw.endsAt).toISOString() : startsAt;
+  // Deep links must be in-app; never an external or private URL (TC-285-07).
+  if (!raw.sourceUrl.startsWith('/') || /^https?:/i.test(raw.sourceUrl)) {
+    throw new CalendarError('invalid_url', `source_url must be in-app for ${raw.sourceId}`);
+  }
+  return {
+    id: eventId(sourceType, raw.sourceId),
+    sourceType,
+    sourceId: raw.sourceId,
+    title: raw.title,
+    startsAt,
+    endsAt,
+    timezone: raw.timezone ?? DEFAULT_TZ,
+    status: raw.status ?? 'scheduled',
+    privacyClassification: raw.privacyClassification ?? 'personal',
+    sourceUrl: raw.sourceUrl,
+    updatedAt: raw.updatedAt && isIso(raw.updatedAt) ? new Date(raw.updatedAt).toISOString() : startsAt,
+  };
+}
+
+/** A generic adapter: normalize a source's raw records, isolating failures. */
+export function runAdapter(
+  sourceType: CalendarSourceType,
+  load: () => readonly RawSourceRecord[],
+): SourceResult {
+  try {
+    const events = load().map((r) => normalizeEvent(sourceType, r));
+    return { sourceType, ok: true, events };
+  } catch (e) {
+    return { sourceType, ok: false, events: [], error: e instanceof Error ? e.message : 'adapter_failed' };
+  }
+}
+
+/** Dedupe by stable id, keeping the first occurrence (TC-285-03). */
+export function dedupeEvents(events: readonly CalendarEvent[]): CalendarEvent[] {
+  const seen = new Set<string>();
+  const out: CalendarEvent[] = [];
+  for (const e of events) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    out.push(e);
+  }
+  return out;
+}
+
+/** Deterministic chronological sort; stable secondary key = id (TC-285-01). */
+export function sortEvents(events: readonly CalendarEvent[]): CalendarEvent[] {
+  return [...events].sort((a, b) => {
+    const ta = Date.parse(a.startsAt);
+    const tb = Date.parse(b.startsAt);
+    if (ta !== tb) return ta - tb;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+export interface AggregateResult {
+  readonly events: CalendarEvent[];
+  readonly failedSources: readonly CalendarSourceType[];
+  readonly okSources: readonly CalendarSourceType[];
+}
+
+/** Merge source results: dedupe + sort, and surface partial failures. */
+export function aggregate(results: readonly SourceResult[]): AggregateResult {
+  const all: CalendarEvent[] = [];
+  const failed: CalendarSourceType[] = [];
+  const ok: CalendarSourceType[] = [];
+  for (const r of results) {
+    if (r.ok) ok.push(r.sourceType);
+    else failed.push(r.sourceType);
+    all.push(...r.events);
+  }
+  return { events: sortEvents(dedupeEvents(all)), failedSources: failed, okSources: ok };
+}
+
+// --- timezone-aware date boundary (TC-285-04) -------------------------------
+
+/** Local calendar day (yyyy-mm-dd) of an instant in a given IANA timezone. */
+export function localDateKey(iso: string, timezone: string): string {
+  const d = new Date(iso);
+  // en-CA yields yyyy-mm-dd; timeZone applies the correct wall-clock day.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/** Local wall-clock HH:mm of an instant in a timezone (24h). */
+export function localTime(iso: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+// --- filters ----------------------------------------------------------------
+
+export interface CalendarFilters {
+  readonly sources: readonly CalendarSourceType[]; // empty = all
+  readonly from: string | null; // yyyy-mm-dd inclusive (local)
+  readonly to: string | null; // yyyy-mm-dd inclusive (local)
+  readonly timezone: string;
+}
+
+export function defaultFilters(): CalendarFilters {
+  return { sources: [], from: null, to: null, timezone: DEFAULT_TZ };
+}
+
+export function filterEvents(events: readonly CalendarEvent[], f: CalendarFilters): CalendarEvent[] {
+  const set = new Set(f.sources);
+  return events.filter((e) => {
+    if (set.size > 0 && !set.has(e.sourceType)) return false;
+    if (f.from || f.to) {
+      const day = localDateKey(e.startsAt, f.timezone);
+      if (f.from && day < f.from) return false;
+      if (f.to && day > f.to) return false;
+    }
+    return true;
+  });
+}
+
+// --- privacy-safe preview (TC-285-07) ---------------------------------------
+
+/** Reduce an event to the ONLY fields allowed in list/preview surfaces. */
+export function toPreview(e: CalendarEvent): CalendarEventPreview {
+  return {
+    id: e.id,
+    sourceType: e.sourceType,
+    title: e.title,
+    startsAt: e.startsAt,
+    endsAt: e.endsAt,
+    timezone: e.timezone,
+    status: e.status,
+  };
+}
+
+/** Guard used by tests + adapters: a preview must carry no restricted keys. */
+export function previewLeaksRestricted(p: CalendarEventPreview): boolean {
+  return Object.keys(p).some((k) => RESTRICTED_KEY_RE.test(k));
+}
+
+// --- deep link (TC-285-06) --------------------------------------------------
+
+/** Resolve a deep link within the user's own event set; missing → null (safe). */
+export function resolveDeepLink(events: readonly CalendarEvent[], id: string): CalendarEvent | null {
+  return events.find((e) => e.id === id) ?? null;
+}
+
+// --- persistence (user-scoped filters; TC-285-02 refresh persistence) -------
+
+const filtersKey = (userId: string) => `ls-cal-filters-${userId}`;
+
+export class CalendarService {
+  private store: KvStore;
+  private userId: string;
+
+  constructor(userId: string, store: KvStore = defaultKvStore()) {
+    this.userId = userId;
+    this.store = store;
+  }
+
+  getFilters(): CalendarFilters {
+    return this.store.get<CalendarFilters>(filtersKey(this.userId)) ?? defaultFilters();
+  }
+
+  setFilters(f: CalendarFilters): CalendarFilters {
+    this.store.set(filtersKey(this.userId), f);
+    return f;
+  }
+
+  /** Aggregate + apply persisted filters in one call (screen entry point). */
+  view(results: readonly SourceResult[]): { agg: AggregateResult; filtered: CalendarEvent[]; filters: CalendarFilters } {
+    const agg = aggregate(results);
+    const filters = this.getFilters();
+    return { agg, filtered: filterEvents(agg.events, filters), filters };
+  }
+}
+
+// --- stable local fixtures (no live integrations) ---------------------------
+// Deterministic sample sources so the screen + tests have real ISO datetimes.
+// NOTE: titles carry no private identifiers; source_url is always in-app.
+
+export const SAMPLE_INTERNSHIP_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'cam-deadline', title: 'CAM application deadline', startsAt: '2026-07-20T18:30:00Z', status: 'deadline', privacyClassification: 'personal', sourceUrl: '/internships/cam', updatedAt: '2026-07-10T04:00:00Z' },
+  { sourceId: 'vidhi-interview', title: 'Vidhi interview', startsAt: '2026-07-22T05:30:00Z', endsAt: '2026-07-22T06:30:00Z', status: 'scheduled', sourceUrl: '/internships/vidhi', updatedAt: '2026-07-11T04:00:00Z' },
+];
+
+export const SAMPLE_EXAM_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'clat-mock-3', title: 'CLAT mock test 3', startsAt: '2026-07-19T04:30:00Z', endsAt: '2026-07-19T06:30:00Z', status: 'scheduled', sourceUrl: '/exam/mock', updatedAt: '2026-07-09T04:00:00Z' },
+];
+
+export const SAMPLE_CLINICAL_EVENTS: readonly RawSourceRecord[] = [
+  // title deliberately excludes verifier email / evidence (restricted).
+  { sourceId: 'legal-aid-camp', title: 'Legal-aid camp (clinical hours)', startsAt: '2026-07-20T03:30:00Z', endsAt: '2026-07-20T09:30:00Z', status: 'scheduled', sourceUrl: '/clinical/log', updatedAt: '2026-07-08T04:00:00Z' },
+];
+
+export const SAMPLE_COMMUNITY_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'ama-constitution', title: 'Community AMA: Constitutional law', startsAt: '2026-07-21T13:00:00Z', endsAt: '2026-07-21T14:00:00Z', status: 'tentative', privacyClassification: 'public', sourceUrl: '/community/events', updatedAt: '2026-07-07T04:00:00Z' },
+];
+
+/** Build the default set of source results from bundled fixtures. */
+export function sampleSourceResults(): SourceResult[] {
+  return [
+    runAdapter('internship', () => SAMPLE_INTERNSHIP_EVENTS),
+    runAdapter('exam', () => SAMPLE_EXAM_EVENTS),
+    runAdapter('clinical', () => SAMPLE_CLINICAL_EVENTS),
+    runAdapter('community', () => SAMPLE_COMMUNITY_EVENTS),
+  ];
+}
+
+export const CALENDAR_SOURCE_NOTE =
+  'Aggregated from your LegalSaathi activity. Times shown in your selected timezone; external calendar sync is not enabled.';

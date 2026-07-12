@@ -1,0 +1,29 @@
+{
+  "issue": "SAATHI-285 / service SAATHI-287",
+  "title": "Aggregate Cross-Module Calendar Events — normalized event contract (service/domain)",
+  "layer": "service/domain (frontend TS module features/student/lib/calendar.ts)",
+  "tested_branch": "main",
+  "tested_commit": "PENDING_COMMIT",
+  "files": ["frontend/src/features/student/lib/calendar.ts", "frontend/src/features/student/lib/calendar.test.ts"],
+  "validation": {
+    "typecheck": "pass (tsc --noEmit exit 0, whole project)",
+    "lint": "pass (eslint exit 0, 0 warnings on changed files)",
+    "native_vitest": "bus-error exit 135 (sandbox limitation, recorded; not counted as pass)",
+    "alternate_runner": "node --experimental-strip-types + vitest-shim resolve hook (documented fallback)",
+    "unit_tests": "14/14 pass"
+  },
+  "test_case_mapping": [
+    {"tc": "TC-285-01", "tests": ["aggregates >=2 source adapters and sorts chronologically", "stable secondary sort by id when starts_at ties"], "result": "PASS"},
+    {"tc": "TC-285-02", "tests": ["filters by source and date; CalendarService persists across reload", "filters are user-scoped (no cross-user bleed)"], "result": "PASS"},
+    {"tc": "TC-285-03", "tests": ["dedupes repeated source records but keeps distinct events"], "result": "PASS"},
+    {"tc": "TC-285-04", "tests": ["timezone boundary — same instant is a different local day across zones"], "result": "PASS"},
+    {"tc": "TC-285-05", "tests": ["partial-source failure isolates the bad source; healthy ones survive", "empty sources aggregate to empty non-throwing result"], "result": "PASS"},
+    {"tc": "TC-285-06", "tests": ["deep link resolves valid event and returns null for missing/unauthorized"], "result": "PASS"},
+    {"tc": "TC-285-07", "tests": ["previews carry no restricted keys and no external/private URLs", "clinical event title excludes verifier/evidence identifiers"], "result": "PASS"},
+    {"tc": "TC-285-08", "tests": ["Playwright 5-width light/dark screen QA"], "result": "NOT_RUN — FE subtask SAATHI-286 (screen) not implemented this pass; belongs to FE/QA subtasks"}
+  ],
+  "security_privacy": "In-app-only deep links enforced (external/https URLs rejected with typed CalendarError); previews expose only non-restricted fields; no notes/evidence URLs/identities in normalized previews.",
+  "concurrency_idempotency": "Read model is pure + deterministic (dedupe by stable id, stable sort); filters user-scoped and persisted idempotently.",
+  "status_decision": "Service subtask SAATHI-287 own criteria (TC-285-01..07) PASS at domain layer → eligible for Testing. Parent SAATHI-285 remains In Progress (FE SAATHI-286 + QA SAATHI-288 + TC-285-08 Playwright outstanding).",
+  "notes": "No live integrations; local fixtures used for source datetimes. No secrets/debug UI."
+}
