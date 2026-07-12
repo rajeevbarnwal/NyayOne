@@ -1,0 +1,70 @@
+{
+  "suite": "Core Filing E08-E12 proposed canonical prototypes",
+  "version": "v1",
+  "status": "PROPOSED - not approved; pending Product/Design sign-off",
+  "design_system": "Option J v3.2 Chambers Intelligence Studio",
+  "implementation_commit": "10124f3",
+  "themes": ["light", "dark"],
+  "breakpoints": [390, 430, 768, 1024, 1440],
+  "stories": [
+    {
+      "id": "E08", "jira": "SAATHI-20", "route": "/case/finalize",
+      "title": "Vet & lock final filing version", "file": "screens/e08_finalize.html",
+      "states": [
+        {"id": "E08-S1", "name": "Missing approved-draft prerequisite (blocked)"},
+        {"id": "E08-S2", "name": "Loading approved bundle"},
+        {"id": "E08-S3", "name": "Vetting checklist incomplete (lock disabled + validation)"},
+        {"id": "E08-S4", "name": "Ready to lock"},
+        {"id": "E08-S5", "name": "Locked / read-only bundle (hash + audit)"},
+        {"id": "E08-S6", "name": "Edit after lock -> new version + version/hash history"},
+        {"id": "E08-S8", "name": "Error (hash/persist failure) with retry"}
+      ]
+    },
+    {
+      "id": "E09", "jira": "SAATHI-22", "route": "/case/filing",
+      "title": "Record court filing", "file": "screens/e09_filing.html",
+      "states": [
+        {"id": "E09-S1", "name": "Missing locked bundle (E08) - blocked"},
+        {"id": "E09-S2", "name": "Filing form (court/date/mode/proof/notes)"},
+        {"id": "E09-S3", "name": "Recorded filing + Case Filed 25% milestone + invoice draft"},
+        {"id": "E09-S4", "name": "Milestone invoice approved"},
+        {"id": "E09-S5", "name": "Validation - required proof missing"}
+      ]
+    },
+    {
+      "id": "E10", "jira": "SAATHI-24", "route": "/case/diary",
+      "title": "Capture diary number", "file": "screens/e10_diary.html",
+      "states": [
+        {"id": "E10-S1", "name": "Missing recorded filing (E09) - blocked"},
+        {"id": "E10-S2", "name": "Diary capture - manual vs authorised source"},
+        {"id": "E10-S3", "name": "Manually-recorded result + append-only correction history"},
+        {"id": "E10-S4", "name": "Authorised-source result (validated label)"},
+        {"id": "E10-S5", "name": "Client status notification - consent + lawyer approval"}
+      ]
+    },
+    {
+      "id": "E11", "jira": "SAATHI-26", "route": "/case/fees",
+      "title": "Court & process fee", "file": "screens/e11_fees.html",
+      "states": [
+        {"id": "E11-S1", "name": "Missing recorded filing (E09) - blocked"},
+        {"id": "E11-S2", "name": "Add fee line + GST/SAC disabled pending review (LCR-007/008)"},
+        {"id": "E11-S3", "name": "Typed ledger - court fee != process fee; paid/pending/manual-review"},
+        {"id": "E11-S4", "name": "Receipt-required validation (cannot mark paid)"},
+        {"id": "E11-S5", "name": "Advance allocation (no double / negative balance)"},
+        {"id": "E11-S6", "name": "Refund / adjustment / reversal lines"}
+      ]
+    },
+    {
+      "id": "E12", "jira": "SAATHI-28", "route": "/case/tracking",
+      "title": "CNR & activate tracking", "file": "screens/e12_tracking.html",
+      "states": [
+        {"id": "E12-S1", "name": "Missing filing/diary identifiers - blocked"},
+        {"id": "E12-S2", "name": "Capture CNR / case number - manual vs authorised source"},
+        {"id": "E12-S3", "name": "Invalid identifier format (recordable; tracking off)"},
+        {"id": "E12-S4", "name": "Manual capture - source + freshness; tracking disabled; eCourts TOS-off (LCR-009)"},
+        {"id": "E12-S5", "name": "Tracking active (authorised, validated, consent on)"},
+        {"id": "E12-S6", "name": "Stale source (freshness warning + manual fallback)"}
+      ]
+    }
+  ]
+}

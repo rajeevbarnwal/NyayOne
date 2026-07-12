@@ -1,0 +1,1264 @@
+{
+  "suite": "Core Filing E08-E12 prototype QA",
+  "tool": "Playwright headless Chromium",
+  "widths": [
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "checks": [
+    {
+      "name": "E08@390/light render",
+      "ok": true
+    },
+    {
+      "name": "E08@390/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@390/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@390/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@390/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@390/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark render",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@390/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light render",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@430/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark render",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@430/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light render",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@768/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark render",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@768/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light render",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark render",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@1024/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light render",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E08 keyboard-focus",
+      "ok": true
+    },
+    {
+      "name": "E08 state-switch(theme)",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark render",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E08@1440/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light render",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@390/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark render",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@390/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light render",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@430/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark render",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@430/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light render",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@768/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark render",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@768/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light render",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark render",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@1024/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light render",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E09 keyboard-focus",
+      "ok": true
+    },
+    {
+      "name": "E09 state-switch(theme)",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark render",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E09@1440/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light render",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@390/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark render",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@390/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light render",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@430/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark render",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@430/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light render",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@768/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark render",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@768/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light render",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark render",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@1024/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light render",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E10 keyboard-focus",
+      "ok": true
+    },
+    {
+      "name": "E10 state-switch(theme)",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark render",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E10@1440/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light render",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@390/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark render",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@390/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light render",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@430/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark render",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@430/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light render",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@768/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark render",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@768/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light render",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark render",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@1024/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light render",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E11 keyboard-focus",
+      "ok": true
+    },
+    {
+      "name": "E11 state-switch(theme)",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark render",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E11@1440/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light render",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@390/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark render",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@390/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light render",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@430/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark render",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@430/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light render",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@768/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark render",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@768/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light render",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark render",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@1024/dark no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light render",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/light no-js-errors",
+      "ok": true
+    },
+    {
+      "name": "E12 keyboard-focus",
+      "ok": true
+    },
+    {
+      "name": "E12 state-switch(theme)",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark render",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark theme-persist",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark no-overflow",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark 44px-targets",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark labels-aria",
+      "ok": true
+    },
+    {
+      "name": "E12@1440/dark no-js-errors",
+      "ok": true
+    }
+  ],
+  "failures": [],
+  "summary": {
+    "total": 310,
+    "passed": 310,
+    "failed": 0
+  },
+  "netNote": "External font fetch (fonts.googleapis.com) unavailable in offline QA sandbox; system-font fallback used. Not a prototype defect."
+}

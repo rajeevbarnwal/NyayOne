@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Core Filing E08–E12 — proposed canonical prototypes (v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="chambers.css" />
+<script>(function(){try{var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  .cover{max-width:1200px;margin:0 auto;padding:var(--space-6) var(--space-5) var(--space-8)}
+  .cover h1{font-family:var(--font-serif);font-size:var(--fs-3xl);font-weight:600;margin:0 0 var(--space-2)}
+  .cover__eyebrow{color:var(--accent);font:700 var(--fs-xs) var(--font-mono);letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px}
+  .cover__bar{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;justify-content:space-between;margin-bottom:var(--space-4)}
+  .approval{border:1px solid var(--warn);background:var(--warn-bg);color:var(--warn);border-radius:var(--radius-md);padding:12px 16px;margin:var(--space-4) 0;font-size:var(--fs-sm)}
+  .approval strong{color:var(--warn)}
+  table.map{width:100%;border-collapse:collapse;margin:var(--space-4) 0;font-size:var(--fs-sm)}
+  table.map th,table.map td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.map th{font:700 var(--fs-xs) var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+  table.map code{font-family:var(--font-mono);color:var(--accent)}
+  .story{margin:var(--space-6) 0;border-top:1px solid var(--line);padding-top:var(--space-5)}
+  .story__h{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-3);margin-bottom:6px}
+  .story__h h2{font-family:var(--font-serif);font-size:var(--fs-2xl);font-weight:600;margin:0}
+  .story__h .open{margin-left:auto;font-size:var(--fs-sm)}
+  .story__states{color:var(--text3);font-size:var(--fs-sm);margin:0 0 var(--space-4)}
+  .frames{display:flex;flex-wrap:wrap;gap:var(--space-5);align-items:flex-start}
+  .frame{border:1px solid var(--line2);border-radius:var(--radius-md);background:var(--surface);overflow:hidden}
+  .frame__cap{font:600 var(--fs-xs) var(--font-mono);color:var(--text3);padding:6px 10px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.06em}
+  .frame__view{overflow:hidden}
+  .frame__view iframe{border:0;display:block}
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="cover__bar">
+    <div>
+      <p class="cover__eyebrow">LegalSaathi · Core Filing · Option J v3.2 “Chambers”</p>
+      <h1>E08–E12 proposed canonical prototypes</h1>
+    </div>
+    <button type="button" class="theme-toggle" id="themeBtn">Dark</button>
+  </div>
+
+  <div class="approval" role="note">
+    <strong>Status: PROPOSED — not approved.</strong> These reference screens are submitted for Product/Design approval.
+    Functional QA has passed; the visual-regression gate remains <strong>blocked</strong> until this reference is explicitly approved.
+    Approve, reject, or request changes on the linked Jira stories (SAATHI-20/22/24/26/28).
+  </div>
+
+  <p style="color:var(--text2);max-width:70ch">
+    Direction: <b>Clean Chambers</b> (light default) with the Chambers-green accent; dark is a pure token swap.
+    Tokens and component classes are lifted verbatim from the shipped app so these references match the build.
+    Each screen file stacks every canonical state and is fully responsive — resize or use the device frames below
+    (desktop 1440 · tablet 768 · mobile 390). Theme choice persists to <code>ls-theme</code> like the app.
+  </p>
+
+  <h3 style="font-family:var(--font-serif)">Route → prototype map</h3>
+  <table class="map">
+    <thead><tr><th>Story</th><th>Route</th><th>Jira</th><th>Prototype file</th><th>States</th></tr></thead>
+    <tbody>
+      <tr><td>E08 Vet &amp; lock final filing version</td><td><code>/case/finalize</code></td><td>SAATHI-20</td><td><a href="screens/e08_finalize.html">screens/e08_finalize.html</a></td><td>8</td></tr>
+      <tr><td>E09 Record court filing</td><td><code>/case/filing</code></td><td>SAATHI-22</td><td><a href="screens/e09_filing.html">screens/e09_filing.html</a></td><td>5</td></tr>
+      <tr><td>E10 Capture diary number</td><td><code>/case/diary</code></td><td>SAATHI-24</td><td><a href="screens/e10_diary.html">screens/e10_diary.html</a></td><td>5</td></tr>
+      <tr><td>E11 Court &amp; process fee</td><td><code>/case/fees</code></td><td>SAATHI-26</td><td><a href="screens/e11_fees.html">screens/e11_fees.html</a></td><td>6</td></tr>
+      <tr><td>E12 CNR &amp; tracking</td><td><code>/case/tracking</code></td><td>SAATHI-28</td><td><a href="screens/e12_tracking.html">screens/e12_tracking.html</a></td><td>6</td></tr>
+    </tbody>
+  </table>
+  <p style="color:var(--text3);font-size:var(--fs-sm)">Full inventory, design rationale, accessibility checklist and the acceptance-criteria traceability matrix are in <a href="README.md">README.md</a> · machine-readable in <a href="state_inventory.json">state_inventory.json</a> and <a href="traceability_matrix.json">traceability_matrix.json</a>.</p>
+
+  <div id="stories"></div>
+</div>
+
+<script>
+  var STORIES = [
+    { id:'E08', title:'Vet & lock final filing version', file:'screens/e08_finalize.html', states:'S1 prereq · S2 loading · S3 incomplete · S4 ready · S5 locked · S6 edit→new version + history · S8 error' },
+    { id:'E09', title:'Record court filing', file:'screens/e09_filing.html', states:'S1 prereq · S2 filing form + proof · S3 recorded + 25% milestone + invoice draft · S4 invoice approved · S5 validation' },
+    { id:'E10', title:'Capture diary number', file:'screens/e10_diary.html', states:'S1 prereq · S2 capture · S3 manual + append-only history · S4 authorised source · S5 notification consent' },
+    { id:'E11', title:'Court & process fee', file:'screens/e11_fees.html', states:'S1 prereq · S2 add line + GST-pending · S3 typed ledger (court≠process; paid/pending/manual) · S4 receipt-required · S5 advance allocation · S6 refund/adjustment/reversal' },
+    { id:'E12', title:'CNR & activate tracking', file:'screens/e12_tracking.html', states:'S1 prereq · S2 capture · S3 invalid identifier · S4 manual: source+freshness, tracking off, eCourts TOS-off · S5 tracking active · S6 stale source' }
+  ];
+  var DEVICES = [
+    { cap:'Mobile · 390', w:390, h:760, scale:0.62 },
+    { cap:'Tablet · 768', w:768, h:760, scale:0.42 },
+    { cap:'Desktop · 1440', w:1440, h:900, scale:0.34 }
+  ];
+  var iframes = [];
+  function currentTheme(){ return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
+  var host = document.getElementById('stories');
+  STORIES.forEach(function(s){
+    var wrap = document.createElement('section'); wrap.className = 'story';
+    var head = '<div class="story__h"><h2>'+s.id+' · '+s.title+'</h2><span class="open"><a href="'+s.file+'">Open full screen ↗</a></span></div>';
+    head += '<p class="story__states">'+s.states+'</p>';
+    var frames = '<div class="frames">';
+    DEVICES.forEach(function(d){
+      var vw = Math.round(d.w*d.scale), vh = Math.round(d.h*d.scale);
+      frames += '<figure class="frame" style="margin:0"><figcaption class="frame__cap">'+d.cap+'</figcaption>'
+        + '<div class="frame__view" style="width:'+vw+'px;height:'+vh+'px">'
+        + '<iframe data-src="'+s.file+'" loading="lazy" title="'+s.id+' '+d.cap+'" '
+        + 'style="width:'+d.w+'px;height:'+d.h+'px;transform:scale('+d.scale+');transform-origin:top left"></iframe>'
+        + '</div></figure>';
+    });
+    frames += '</div>';
+    wrap.innerHTML = head + frames;
+    host.appendChild(wrap);
+  });
+  // Lazy-assign src so all frames register load handlers that sync theme.
+  Array.prototype.forEach.call(document.querySelectorAll('iframe[data-src]'), function(f){
+    f.addEventListener('load', function(){ try{ f.contentWindow.postMessage({ lsTheme: currentTheme() }, '*'); }catch(e){} });
+    f.src = f.getAttribute('data-src');
+    iframes.push(f);
+  });
+  // Local theme toggle + broadcast to every embedded screen.
+  var btn = document.getElementById('themeBtn');
+  function label(){ var dark = currentTheme()==='dark'; btn.textContent = dark?'Light':'Dark'; btn.setAttribute('aria-label','Switch to '+(dark?'light':'dark')+' theme'); }
+  label();
+  btn.addEventListener('click', function(){
+    var next = currentTheme()==='dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem('ls-theme', next); }catch(e){}
+    label();
+    iframes.forEach(function(f){ try{ f.contentWindow.postMessage({ lsTheme: next }, '*'); }catch(e){} });
+  });
+</script>
+</body>
+</html>

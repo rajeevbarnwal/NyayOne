@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>E11 · Court &amp; process fee — LegalSaathi (proposed)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../chambers.css" />
+<script>(function(){try{var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body>
+<div class="ls-shell">
+  <nav class="ls-rail" aria-label="Primary">
+    <div class="ls-rail__brand"><span class="ls-rail__mark" aria-hidden>LS</span><span class="ls-rail__word">Legal<span style="color:var(--accent2)">Saathi</span></span></div>
+    <ul class="ls-rail__list">
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>▤</span><span>Cases</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>✎</span><span>Drafting</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>⇧</span><span>Finalize</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>⤴</span><span>Filing</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>№</span><span>Diary</span></a></li>
+      <li><a class="ls-rail__link active" href="#" aria-current="page"><span class="ls-rail__glyph" aria-hidden>₹</span><span>Fees</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>◎</span><span>Tracking</span></a></li>
+    </ul>
+  </nav>
+  <div class="ls-main">
+    <header class="ls-topbar">
+      <button type="button" class="ls-ask" aria-label="Ask LegalSaathi"><span class="ls-ask__glyph" aria-hidden>⌕</span><span class="ls-ask__text">Ask a question or search…</span></button>
+      <div class="ls-topbar__actions"><button type="button" class="theme-toggle" id="themeBtn">Dark</button></div>
+    </header>
+    <main class="ls-content" id="main-content">
+      <div class="proto-note"><b>PROPOSED reference — not approved.</b> Route <b>/case/fees</b> · SAATHI-26 (E11). Canonical states for Product/Design review. Toggle theme; resize to 1440 / 768 / 390.</div>
+
+      <!-- S1: missing filing prerequisite -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S1</span><span class="proto-state__name">Missing recorded filing (E09) — blocked</span><span class="proto-state__ac">AC: fees require a recorded court filing</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1></div>
+        <section class="st-panel">
+          <div class="ui-state" role="status"><p class="ui-state__eyebrow">Empty</p><p class="ui-state__title">Previous stage not complete</p><div class="ui-state__body">A recorded court filing (E09) is required before recording fees.</div></div>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap">Go to filing</button></div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S2: add fee line + GST/SAC disabled-pending-review -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S2</span><span class="proto-state__name">Add fee line + GST/SAC disabled pending review</span><span class="proto-state__ac">AC: typed line items; GST classification held for CA review</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1><p class="st-metatag" style="margin-top:4px">Advance balance ₹25,000</p></div>
+        <section class="st-panel">
+          <h2 class="st-panel__title">Add fee line</h2>
+          <label class="st-field" for="fee-cat"><span class="st-field__label">Fee category</span><select id="fee-cat" class="st-select"><option>court_fee</option><option>process_fee</option><option>professional_fee</option><option>reimbursement</option><option>tax</option><option>refund</option><option>adjustment</option></select><span class="st-field__help">Court fee and process fee are tracked as distinct categories.</span></label>
+          <label class="st-field" for="fee-amt"><span class="st-field__label">Amount (₹)</span><input id="fee-amt" class="st-input" inputmode="numeric" value="8500" /></label>
+          <label class="st-field" for="fee-rc"><span class="st-field__label">Receipt / proof reference</span><input id="fee-rc" class="st-input" value="RCPT-CF-5521" /><span class="st-field__help">A line becomes paid only with a receipt + server-verified payment.</span></label>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap">Add line</button></div>
+          <div class="ui-notice ui-notice--warn" role="note"><strong>Study &amp; research assistance only, not legal advice.</strong> GST/SAC and reimbursement classification are pending CA review (LCR-007/008) and disabled by default.</div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S3: typed ledger — court fee (paid), process fee (pending), professional (manual_review) -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S3</span><span class="proto-state__name">Typed ledger — court fee ≠ process fee · paid / pending / manual-review</span><span class="proto-state__ac">AC: ledger distinguishes categories; receipt linked; statuses</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1><p class="st-metatag" style="margin-top:4px">Advance balance ₹16,500</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Fee ledger</h2><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>Statement: partial</span></div>
+          <ul class="st-list">
+            <li class="st-item"><div>Court fee · ₹8,500<div class="st-item__meta">receipt RCPT-CF-5521 · allocated ₹8,500</div></div><div class="st-actions"><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>paid</span></div></li>
+            <li class="st-item"><div>Process fee · ₹2,000<div class="st-item__meta">receipt RCPT-PF-5522 · allocated ₹0</div></div><div class="st-actions"><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>pending</span><button type="button" class="btn tap">Server-verify</button><button type="button" class="btn tap">Allocate advance</button></div></li>
+            <li class="st-item"><div>Professional fee · ₹15,000<div class="st-item__meta">receipt RCPT-PROF-5523 · allocated ₹0</div></div><div class="st-actions"><span class="status status--warn"><span class="ui-badge__mark" aria-hidden>!</span>manual review</span><button type="button" class="btn tap">Server-verify</button></div></li>
+          </ul>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap">Proceed to CNR &amp; tracking</button></div>
+        </section>
+        <p class="st-dpdp" role="note">Paid status is server-authoritative + receipt-gated and idempotent; court vs process fee stay distinct; GST/reimbursement pending CA review · DPDP Act, 2023.</p>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S4: receipt-required validation -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S4</span><span class="proto-state__name">Receipt-required validation (cannot mark paid)</span><span class="proto-state__ac">AC: payment proof/receipt required for paid status</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1><p class="st-metatag" style="margin-top:4px">Advance balance ₹16,500</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Fee ledger</h2><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>Statement: partial</span></div>
+          <ul class="st-list">
+            <li class="st-item"><div>Process fee · ₹2,000<div class="st-item__meta">no receipt · allocated ₹0</div></div><div class="st-actions"><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>pending</span><button type="button" class="btn tap" disabled aria-disabled="true">Server-verify</button></div></li>
+          </ul>
+          <p class="ui-validation" role="alert"><span class="ui-validation__mark" aria-hidden>!</span> Attach a receipt/proof reference before this line can be server-verified as paid.</p>
+        </section>
+        <p class="st-dpdp" role="note">Paid status is server-authoritative + receipt-gated and idempotent; court vs process fee stay distinct; GST/reimbursement pending CA review · DPDP Act, 2023.</p>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S5: advance allocation -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S5</span><span class="proto-state__name">Advance allocation (no double / negative balance)</span><span class="proto-state__ac">AC: fee offset against advance or requested from client</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1><p class="st-metatag" style="margin-top:4px">Advance balance ₹14,500</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Fee ledger</h2><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>Statement: paid</span></div>
+          <ul class="st-list">
+            <li class="st-item"><div>Process fee · ₹2,000<div class="st-item__meta">receipt RCPT-PF-5522 · allocated ₹2,000 from advance</div></div><div class="st-actions"><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>paid</span></div></li>
+          </ul>
+          <div class="ui-notice ui-notice--info" role="note"><strong>Privacy.</strong> Allocation reduces the advance balance once; re-allocation of an already-allocated amount is rejected and the balance can never go negative.</div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S6: reversal / refund / adjustment -->
+      <div class="proto-state__tag"><span class="proto-state__id">E11-S6</span><span class="proto-state__name">Refund / adjustment / reversal lines</span><span class="proto-state__ac">AC: refund + adjustment categories; client statement reflects refunded</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Fees · E11</p><h1 class="st-h1">Court &amp; process fee</h1><p class="st-metatag" style="margin-top:4px">Advance balance ₹14,500</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Fee ledger</h2><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>Statement: adjusted</span></div>
+          <ul class="st-list">
+            <li class="st-item"><div>Refund · −₹1,500<div class="st-item__meta">receipt REF-3391 · excess court fee returned</div></div><div class="st-actions"><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>refunded</span></div></li>
+            <li class="st-item"><div>Adjustment · −₹500<div class="st-item__meta">reason: process-fee reconciliation · lawyer</div></div><div class="st-actions"><span class="status status--warn"><span class="ui-badge__mark" aria-hidden>!</span>adjustment</span></div></li>
+            <li class="st-item st-item--dim"><div>Court fee · ₹8,500<div class="st-item__meta">receipt RCPT-CF-5521 · reversed (superseded)</div></div><div class="st-actions"><span class="status status--risk"><span class="ui-badge__mark" aria-hidden>✕</span>reversed</span></div></li>
+          </ul>
+        </section>
+        <p class="st-dpdp" role="note">Refunds, adjustments and reversals are recorded as typed ledger lines with their own audit trail; original entries are never overwritten · DPDP Act, 2023.</p>
+      </section>
+    </main>
+    <nav class="ls-bnav" aria-label="Primary mobile">
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>▤</span><span class="ls-bnav__label">Cases</span></a>
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>⤴</span><span class="ls-bnav__label">Filing</span></a>
+      <button type="button" class="ls-bnav__ask" aria-label="Ask LegalSaathi"><span aria-hidden>⌕</span></button>
+      <a class="ls-bnav__item active" href="#"><span class="ls-bnav__glyph" aria-hidden>₹</span><span class="ls-bnav__label">Fees</span></a>
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>◎</span><span class="ls-bnav__label">Tracking</span></a>
+    </nav>
+  </div>
+</div>
+<script src="../shell.js"></script>
+</body>
+</html>

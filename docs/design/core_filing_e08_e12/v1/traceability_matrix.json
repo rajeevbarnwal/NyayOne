@@ -1,0 +1,41 @@
+{
+  "suite": "Core Filing E08-E12 acceptance-criteria -> prototype-state traceability",
+  "version": "v1",
+  "status": "PROPOSED - not approved",
+  "source_of_acceptance_criteria": "Jira story descriptions synced from LegalSaathi_PRD_v0.3/v0.4.2",
+  "entries": [
+    {"jira": "SAATHI-20", "story": "E08", "ac": "Vetting checklist includes draft, annexures, fee readiness, and client approval", "states": ["E08-S3", "E08-S4"]},
+    {"jira": "SAATHI-20", "story": "E08", "ac": "Final bundle is stored with hash and version ID", "states": ["E08-S5", "E08-S6"]},
+    {"jira": "SAATHI-20", "story": "E08", "ac": "Case advances only after checklist completion", "states": ["E08-S1", "E08-S3", "E08-S5"]},
+    {"jira": "SAATHI-20", "story": "E08", "ac": "Locked version cannot be edited; any change creates a new version", "states": ["E08-S5", "E08-S6"]},
+    {"jira": "SAATHI-20", "story": "E08", "ac": "AI suggestions remain non-binding (compliance)", "states": ["E08-S3", "E08-S4", "E08-S5"]},
+
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Filing entry captures court, date, mode, proof, and notes", "states": ["E09-S2"]},
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Timeline shows File in Court stage complete", "states": ["E09-S3"]},
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Milestone engine checks Case Filed 25% trigger", "states": ["E09-S3", "E09-S4"]},
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Case Filed milestone invoice requires lawyer/billing approval", "states": ["E09-S3", "E09-S4"]},
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Filing proof upload required where available", "states": ["E09-S2", "E09-S5"]},
+    {"jira": "SAATHI-22", "story": "E09", "ac": "Recording a filing does not assert court acceptance (compliance)", "states": ["E09-S2", "E09-S3", "E09-S4"]},
+
+    {"jira": "SAATHI-24", "story": "E10", "ac": "Diary number appears in case header and timeline", "states": ["E10-S3", "E10-S4"]},
+    {"jira": "SAATHI-24", "story": "E10", "ac": "User can attach court receipt or acknowledgement", "states": ["E10-S2"]},
+    {"jira": "SAATHI-24", "story": "E10", "ac": "Change history preserves old and new values", "states": ["E10-S3"]},
+    {"jira": "SAATHI-24", "story": "E10", "ac": "Value validated only where court/source rule configured", "states": ["E10-S2"]},
+    {"jira": "SAATHI-24", "story": "E10", "ac": "Client notification is lawyer-approved", "states": ["E10-S5"]},
+    {"jira": "SAATHI-24", "story": "E10", "ac": "No official-validation claim without authorised source (compliance)", "states": ["E10-S3", "E10-S4"]},
+
+    {"jira": "SAATHI-26", "story": "E11", "ac": "Ledger distinguishes professional fee, court/process fee, reimbursement, and tax fields", "states": ["E11-S2", "E11-S3"]},
+    {"jira": "SAATHI-26", "story": "E11", "ac": "Receipt upload is linked to the fee line item", "states": ["E11-S3", "E11-S4"]},
+    {"jira": "SAATHI-26", "story": "E11", "ac": "Client statement reflects paid/pending/refunded status", "states": ["E11-S3", "E11-S5", "E11-S6"]},
+    {"jira": "SAATHI-26", "story": "E11", "ac": "Payment proof/receipt required for paid status", "states": ["E11-S3", "E11-S4"]},
+    {"jira": "SAATHI-26", "story": "E11", "ac": "Fee can be offset against advance or requested from client", "states": ["E11-S5"]},
+    {"jira": "SAATHI-26", "story": "E11", "ac": "GST/SAC and reimbursement classification require finance review (LCR-007/008)", "states": ["E11-S2"]},
+
+    {"jira": "SAATHI-28", "story": "E12", "ac": "Case header displays case number/CNR with source and last updated timestamp", "states": ["E12-S4", "E12-S5"]},
+    {"jira": "SAATHI-28", "story": "E12", "ac": "Court-data polling is enabled only after identifier validation", "states": ["E12-S4", "E12-S5"]},
+    {"jira": "SAATHI-28", "story": "E12", "ac": "Errors show fallback/manual update route", "states": ["E12-S3", "E12-S6"]},
+    {"jira": "SAATHI-28", "story": "E12", "ac": "CNR user-entered or fetched only through permitted sources", "states": ["E12-S2"]},
+    {"jira": "SAATHI-28", "story": "E12", "ac": "Data freshness and source are visible", "states": ["E12-S4", "E12-S5", "E12-S6"]},
+    {"jira": "SAATHI-28", "story": "E12", "ac": "eCourts integration must comply with TOS + legal review; no captcha/access bypass (LCR-009)", "states": ["E12-S2", "E12-S4"]}
+  ]
+}

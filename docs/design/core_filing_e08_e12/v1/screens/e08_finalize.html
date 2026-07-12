@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>E08 · Vet &amp; lock final filing version — LegalSaathi (proposed)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../chambers.css" />
+<script>(function(){try{var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body>
+<div class="ls-shell">
+  <nav class="ls-rail" aria-label="Primary">
+    <div class="ls-rail__brand"><span class="ls-rail__mark" aria-hidden>LS</span><span class="ls-rail__word">Legal<span style="color:var(--accent2)">Saathi</span></span></div>
+    <ul class="ls-rail__list">
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>▤</span><span>Cases</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>✎</span><span>Drafting</span></a></li>
+      <li><a class="ls-rail__link active" href="#" aria-current="page"><span class="ls-rail__glyph" aria-hidden>⇧</span><span>Finalize</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>⤴</span><span>Filing</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>№</span><span>Diary</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>₹</span><span>Fees</span></a></li>
+      <li><a class="ls-rail__link" href="#"><span class="ls-rail__glyph" aria-hidden>◎</span><span>Tracking</span></a></li>
+    </ul>
+  </nav>
+  <div class="ls-main">
+    <header class="ls-topbar">
+      <button type="button" class="ls-ask" aria-label="Ask LegalSaathi"><span class="ls-ask__glyph" aria-hidden>⌕</span><span class="ls-ask__text">Ask a question or search…</span></button>
+      <div class="ls-topbar__actions"><button type="button" class="theme-toggle" id="themeBtn">Dark</button></div>
+    </header>
+    <main class="ls-content" id="main-content">
+      <div class="proto-note"><b>PROPOSED reference — not approved.</b> Route <b>/case/finalize</b> · SAATHI-20 (E08). Canonical states for Product/Design review. Toggle theme; resize to 1440 / 768 / 390.</div>
+
+      <!-- S1: missing approved-draft prerequisite -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S1</span><span class="proto-state__name">Missing approved-draft prerequisite (blocked)</span><span class="proto-state__ac">AC: case advances only after prior stage</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1></div>
+        <section class="st-panel">
+          <div class="ui-state" role="status"><p class="ui-state__eyebrow">Empty</p><p class="ui-state__title">Previous stage not complete</p><div class="ui-state__body">Approve a draft in the drafting workspace (E06/E07) first — the locked bundle is built from the real approved version.</div></div>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap">Go to drafting</button></div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S2: loading -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S2</span><span class="proto-state__name">Loading approved bundle</span><span class="proto-state__ac">general state coverage</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1></div>
+        <div class="ui-state" role="status" aria-live="polite" aria-busy="true"><span class="ui-spinner" aria-hidden></span> <span>Loading approved draft…</span></div>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S3: checklist in-progress (incomplete + validation) -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S3</span><span class="proto-state__name">Vetting checklist incomplete (cannot lock)</span><span class="proto-state__ac">AC: checklist must be complete before filing</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1><p class="st-metatag" style="margin-top:4px">Bundle v1 · from approved draft dv_5f2a</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Vetting checklist</h2><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>In progress</span></div>
+          <div class="st-chips" role="group" aria-label="Filing checklist" style="margin-bottom:var(--space-3)">
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Pleading / petition</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Annexures attached</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Pagination</button>
+            <button type="button" class="st-chip tap" aria-pressed="false">Signatures</button>
+            <button type="button" class="st-chip tap" aria-pressed="false">Affidavits</button>
+            <button type="button" class="st-chip tap" aria-pressed="false">Vakalatnama / authorisation</button>
+            <button type="button" class="st-chip tap" aria-pressed="false">Required metadata</button>
+          </div>
+          <div class="ui-notice ui-notice--warn" role="note"><strong>Study &amp; research assistance only, not legal advice.</strong> AI vetting suggestions are non-binding; the vetting decision is the lawyer’s. Locking finalises the bundle internally. It is not court acceptance or registration.</div>
+          <p class="ui-validation" role="alert"><span class="ui-validation__mark" aria-hidden>!</span> Complete every checklist item before locking the bundle.</p>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap" disabled aria-disabled="true">Approve &amp; lock final version</button></div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S4: ready to lock -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S4</span><span class="proto-state__name">Ready to lock (all checklist items complete)</span><span class="proto-state__ac">AC: human approval action</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1><p class="st-metatag" style="margin-top:4px">Bundle v1 · from approved draft dv_5f2a</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Vetting checklist</h2><span class="status status--warn"><span class="ui-badge__mark" aria-hidden>!</span>Ready to lock</span></div>
+          <div class="st-chips" role="group" aria-label="Filing checklist" style="margin-bottom:var(--space-3)">
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Pleading / petition</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Annexures attached</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Pagination</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Signatures</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Affidavits</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Vakalatnama / authorisation</button>
+            <button type="button" class="st-chip tap" aria-pressed="true">✓ Required metadata</button>
+          </div>
+          <div class="ui-notice ui-notice--warn" role="note"><strong>Study &amp; research assistance only, not legal advice.</strong> AI vetting suggestions are non-binding; the vetting decision is the lawyer’s. Locking finalises the bundle internally. It is not court acceptance or registration.</div>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap">Approve &amp; lock final version</button></div>
+        </section>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S5: locked / read-only bundle -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S5</span><span class="proto-state__name">Locked / read-only bundle (hash + audit)</span><span class="proto-state__ac">AC: bundle stored with hash + version ID; locked cannot be edited</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1><p class="st-metatag" style="margin-top:4px">Bundle v1 · from approved draft dv_5f2a</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Vetting checklist</h2><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>Locked</span></div>
+          <div class="st-chips" role="group" aria-label="Filing checklist" style="margin-bottom:var(--space-3)">
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Pleading / petition</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Annexures attached</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Pagination</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Signatures</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Affidavits</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Vakalatnama / authorisation</button>
+            <button type="button" class="st-chip tap" aria-pressed="true" disabled aria-disabled="true">✓ Required metadata</button>
+          </div>
+          <div class="ui-notice ui-notice--warn" role="note"><strong>Study &amp; research assistance only, not legal advice.</strong> AI vetting suggestions are non-binding; the vetting decision is the lawyer’s. Locking finalises the bundle internally. It is not court acceptance or registration.</div>
+          <p class="st-item__meta">Locked by lawyer:rao · hash sha_1a4f9c2e</p>
+          <div class="st-actions st-actions--split">
+            <button type="button" class="btn tap">Edit (creates new version)</button>
+            <button type="button" class="btn btn--primary tap">Proceed to filing</button>
+          </div>
+        </section>
+        <p class="st-dpdp" role="note">Locking is internal finalisation only — it is not court acceptance; every version, hash and lock action is audited · DPDP Act, 2023.</p>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S6 + S7: edit-after-lock creates a new version + version/hash history -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S6</span><span class="proto-state__name">Edit after lock → new version + version/hash history</span><span class="proto-state__ac">AC: any change creates a new version</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1><p class="st-metatag" style="margin-top:4px">Bundle v2 · from approved draft dv_5f2a</p></div>
+        <section class="st-panel">
+          <div class="st-panel__head"><h2 class="st-panel__title">Vetting checklist</h2><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>In progress</span></div>
+          <div class="ui-notice ui-notice--warn" role="note"><strong>Study &amp; research assistance only, not legal advice.</strong> A new unlocked version (v2) was created from the locked v1 — the locked v1 is preserved unchanged. Re-complete the checklist to lock v2.</div>
+          <div class="st-actions"><button type="button" class="btn btn--primary tap" disabled aria-disabled="true">Approve &amp; lock final version</button></div>
+        </section>
+        <section class="st-panel">
+          <h2 class="st-panel__title">Bundle versions</h2>
+          <ul class="st-list">
+            <li class="st-item"><div>v2<div class="st-item__meta">fb_9d20 · unlocked</div></div><span class="status status--info"><span class="ui-badge__mark" aria-hidden>i</span>Draft</span></li>
+            <li class="st-item"><div>v1<div class="st-item__meta">fb_31c7 · sha_1a4f9c2e</div></div><span class="status status--ok"><span class="ui-badge__mark" aria-hidden>✓</span>Locked</span></li>
+          </ul>
+        </section>
+        <p class="st-dpdp" role="note">Locking is internal finalisation only — it is not court acceptance; every version, hash and lock action is audited · DPDP Act, 2023.</p>
+      </section>
+      <hr class="proto-divider" />
+
+      <!-- S8: error -->
+      <div class="proto-state__tag"><span class="proto-state__id">E08-S8</span><span class="proto-state__name">Error (hash/persist failure) with retry</span><span class="proto-state__ac">general state coverage</span></div>
+      <section class="st-screen st-stack">
+        <div class="st-set__head"><p class="st-eyebrow">Finalize · E08</p><h1 class="st-h1">Vet &amp; lock final filing version</h1></div>
+        <div class="ui-state" role="alert"><p class="ui-state__eyebrow">Error</p><p class="ui-state__title">Could not save the locked bundle</p><div class="ui-state__body">Your checklist is intact. Nothing was locked. Try again — no partial lock is written.</div><div class="ui-state__action"><button type="button" class="btn tap">Retry</button></div></div>
+      </section>
+    </main>
+    <nav class="ls-bnav" aria-label="Primary mobile">
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>▤</span><span class="ls-bnav__label">Cases</span></a>
+      <a class="ls-bnav__item active" href="#"><span class="ls-bnav__glyph" aria-hidden>⇧</span><span class="ls-bnav__label">Finalize</span></a>
+      <button type="button" class="ls-bnav__ask" aria-label="Ask LegalSaathi"><span aria-hidden>⌕</span></button>
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>№</span><span class="ls-bnav__label">Diary</span></a>
+      <a class="ls-bnav__item" href="#"><span class="ls-bnav__glyph" aria-hidden>◎</span><span class="ls-bnav__label">Tracking</span></a>
+    </nav>
+  </div>
+</div>
+<script src="../shell.js"></script>
+</body>
+</html>
