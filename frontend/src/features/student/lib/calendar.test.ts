@@ -4,9 +4,10 @@ import {
   aggregate, runAdapter, normalizeEvent, sortEvents, filterEvents,
   localDateKey, localTime, toPreview, previewLeaksRestricted, resolveDeepLink,
   eventId, CalendarError, CalendarService, defaultFilters, sampleSourceResults,
-  runLoaders, retryFailed, deriveStatus,
+  runLoaders, retryFailed, deriveStatus, calendarLoaders,
+  validateDateRange, validatePersonalEvent, PersonalEventError, zonedToUtcIso, SOURCE_ROUTE,
   SAMPLE_INTERNSHIP_EVENTS, SAMPLE_EXAM_EVENTS, SAMPLE_CLINICAL_EVENTS,
-  type RawSourceRecord, type SourceLoader,
+  type RawSourceRecord, type SourceLoader, type PersonalEventInput,
 } from './calendar';
 
 const raw = (id: string, startsAt: string, url = '/x'): RawSourceRecord => ({ sourceId: id, title: `t-${id}`, startsAt, sourceUrl: url });
@@ -216,5 +217,67 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
   it('remediation TC-285-05: all sources failing derives error state', () => {
     const loaders: SourceLoader[] = [{ sourceType: 'exam', load: () => { throw new Error('x'); } }];
     expect(deriveStatus(runLoaders(loaders))).toBe('error');
+  });
+
+  // --- SAATHI-286 remediation ------------------------------------------------
+  it('SOURCE_ROUTE maps every source type to a canonical /s-NN route and normalizes', () => {
+    for (const s of ['internship', 'exam', 'clinical', 'community', 'tutoring', 'moot', 'reminder'] as const) {
+      expect(/^\/s-\d{2}$/.test(SOURCE_ROUTE[s])).toBe(true);
+      // a fixture using the route normalizes without throwing (in-app URL accepted)
+      const e = normalizeEvent(s, { sourceId: 'x', title: 't', startsAt: '2026-07-19T04:30:00Z', sourceUrl: SOURCE_ROUTE[s] });
+      expect(e.sourceUrl).toBe(SOURCE_ROUTE[s]);
+    }
+  });
+
+  it('validateDateRange: open ranges ok; from>to → from_after_to; malformed → invalid_date', () => {
+    expect(validateDateRange(null, null)).toBeNull();
+    expect(validateDateRange('2026-07-20', null)).toBeNull();
+    expect(validateDateRange('2026-07-21', '2026-07-20')).toBe('from_after_to');
+    expect(validateDateRange('20-07-2026', null)).toBe('invalid_date');
+  });
+
+  it('zonedToUtcIso: wall time in a tz round-trips to the same local day/time', () => {
+    const iso = zonedToUtcIso('2026-07-20', '09:30', 'Asia/Kolkata');
+    expect(localDateKey(iso, 'Asia/Kolkata')).toBe('2026-07-20');
+    expect(localTime(iso, 'Asia/Kolkata')).toBe('09:30');
+    // and lands on the previous UTC day (IST = UTC+5:30)
+    expect(localDateKey(iso, 'UTC')).toBe('2026-07-20');
+    expect(localTime(iso, 'UTC')).toBe('04:00');
+  });
+
+  it('validatePersonalEvent: typed errors for each invalid field', () => {
+    const base: PersonalEventInput = { title: 'Study', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' };
+    const code = (i: PersonalEventInput) => { try { validatePersonalEvent(i); return 'ok'; } catch (e) { return (e as PersonalEventError).code; } };
+    expect(code(base)).toBe('ok');
+    expect(code({ ...base, title: '  ' })).toBe('title_required');
+    expect(code({ ...base, date: '2026/07/20' })).toBe('invalid_date');
+    expect(code({ ...base, time: '9am' })).toBe('invalid_time');
+    expect(code({ ...base, timezone: 'Mars/Phobos' })).toBe('invalid_timezone');
+  });
+
+  it('addPersonalEvent: persists through the service, appears via calendarLoaders, survives reload', () => {
+    const store = new InMemoryKvStore();
+    const svc = new CalendarService('stu-1', store);
+    svc.addPersonalEvent({ title: 'Revise contracts', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, '2026-07-12T00:00:00Z');
+    // aggregate via the full loader set for a FRESH service over the same store (reload)
+    const reloaded = new CalendarService('stu-1', store);
+    const { events } = aggregate(runLoaders(calendarLoaders(reloaded, 'stu-1')));
+    const mine = events.filter((e) => e.sourceType === 'reminder' && e.title === 'Revise contracts');
+    expect(mine.length).toBe(1);
+    expect(mine[0].ownerId).toBe('stu-1');
+    expect(localTime(mine[0].startsAt, 'Asia/Kolkata')).toBe('09:30');
+  });
+
+  it('addPersonalEvent: invalid input throws and persists nothing', () => {
+    const store = new InMemoryKvStore();
+    const svc = new CalendarService('stu-1', store);
+    expect(() => svc.addPersonalEvent({ title: '', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, 't0')).toThrowError(PersonalEventError);
+    expect(svc.listPersonalRaw().length).toBe(0);
+  });
+
+  it('personal events are user-scoped (not visible to another student)', () => {
+    const store = new InMemoryKvStore();
+    new CalendarService('stu-1', store).addPersonalEvent({ title: 'Mine', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'UTC' }, '2026-07-12T00:00:00Z');
+    expect(new CalendarService('stu-2', store).listPersonalRaw().length).toBe(0);
   });
 });
