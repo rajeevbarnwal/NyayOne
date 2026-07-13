@@ -32,6 +32,21 @@ function markerDotStyle(cat: MarkerCat): CSSProperties {
   return { background: 'var(--text2)', clipPath: 'polygon(50% 0,100% 100%,0 100%)' };
 }
 
+/** Shared v3.2 six-tab calendar feature navigation (same on S-90 and S-91). */
+function CalSubnav({ active }: { active: 'month' | 'add' }) {
+  const nav = useNavigate();
+  return (
+    <div className="subnav" role="tablist" aria-label="Calendar views">
+      <button className={active === 'month' ? 'on' : ''} aria-selected={active === 'month'} onClick={() => nav('/s-90')} data-testid="cal-tab-month">Month</button>
+      <button className={active === 'add' ? 'on' : ''} aria-selected={active === 'add'} onClick={() => nav('/s-91')} data-testid="cal-add">Add event</button>
+      <button onClick={() => nav('/s-91')}>Event</button>
+      <button onClick={() => nav('/s-92')}>Conflict</button>
+      <button onClick={() => nav('/s-93')}>Reminders</button>
+      <button onClick={() => nav('/s-94')}>Export</button>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* S-90 — Unified calendar (month grid) — v3.2 structural parity               */
 /* -------------------------------------------------------------------------- */
@@ -93,14 +108,7 @@ export function CalendarMonth() {
         <h1 className="lede">Unified Calendar <span className="m">· S19</span></h1>
         <p className="stand">A platform primitive — every module writes here.</p>
 
-        <div className="subnav" role="tablist" aria-label="Calendar views">
-          <button className="on" aria-selected="true" data-testid="cal-tab-month">Month</button>
-          <button onClick={() => nav('/s-91')} data-testid="cal-add">Add event</button>
-          <button onClick={() => nav('/s-91')}>Event</button>
-          <button onClick={() => nav('/s-92')}>Conflict</button>
-          <button onClick={() => nav('/s-93')}>Reminders</button>
-          <button onClick={() => nav('/s-94')}>Export</button>
-        </div>
+        <CalSubnav active="month" />
 
         {showFilters && (
           <section className="card filters" id="cal-filters" aria-label="Filters">
@@ -266,7 +274,9 @@ export function CalendarAdd() {
   return (
     <StudentScreen screenId="S-91">
       <div className="calv">
-        <h1 className="lede">Add event</h1>
+        <h1 className="lede">Add event <span className="m">· S19</span></h1>
+        <p className="stand ident">Add a personal event to your unified calendar.</p>
+        <CalSubnav active="add" />
         <div className="cardw">
           <div className="card">
             <div className="ph"><span className="t">New event</span></div>

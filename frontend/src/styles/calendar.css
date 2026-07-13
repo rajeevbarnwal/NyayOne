@@ -63,10 +63,15 @@
 .calv .btn.solid { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .calv .btn.block { width: 100%; }
 .calv .dpdp { font-family: var(--font-mono); font-size: 9px; color: var(--faint); line-height: 1.65; letter-spacing: .02em; }
-.calv .cardw { max-width: 560px; }
+.calv .cardw { max-width: 468px; } /* v3.2 Add-Event card width (bbox 15→483) */
 .calv .filters { margin-bottom: 16px; }
+.calv .ident { margin: 0 0 14px; }
 
 @media (max-width: 768px) {
   .calv .two-b { grid-template-columns: 1fr; }
-  .calv .cal .cell { min-height: 66px; }
+  /* Full-bleed the month grid to reclaim the content padding so a 7-column grid
+     still yields ≥44px-wide event markers at 390/430 without horizontal overflow. */
+  .calv .cal { margin-inline: calc(var(--space-5) * -1); border-radius: 0; gap: 1px; }
+  .calv .cal .cell { min-height: 72px; padding: 5px 3px; }
+  .calv button.ev { min-width: 44px; }
 }
