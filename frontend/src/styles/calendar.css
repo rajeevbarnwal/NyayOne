@@ -1,0 +1,68 @@
+/* ===========================================================================
+   S19.1 calendar screens (S-90/S-91) — structural styles mirrored VERBATIM from
+   the approved Option J v3.2 prototype (docs/design/v3.2/…Full Prototype v3.2.html),
+   scoped under `.calv` so nothing here can regress other screens. Colours are
+   token-only (light/dark safe). SAATHI-286 visual remediation.
+=========================================================================== */
+.calv { width: 100%; max-width: 1320px; margin: 0 auto; }
+.calv .lede { font-family: var(--font-serif); font-size: 28px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 4px; color: var(--text); }
+.calv .lede .m { color: var(--text3); }
+.calv .stand { font-size: 14.5px; color: var(--text2); max-width: 680px; line-height: 1.5; margin: 0; }
+
+.calv .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.calv .subnav button { border: 1px solid var(--line2); background: var(--surface); color: var(--text2); font-size: 11.5px; font-weight: 600; padding: 0 14px; min-height: 44px; border-radius: 10px; white-space: nowrap; cursor: pointer; }
+.calv .subnav button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.calv .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.calv .legend span { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text2); font-weight: 600; }
+.calv .legend .d { width: 8px; height: 8px; flex: none; }
+
+.calv .two-b { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+.calv .col { display: flex; flex-direction: column; gap: 16px; }
+
+.calv .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+.calv .cal .hd { background: var(--panel); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); text-align: center; padding: 8px 0; font-weight: 600; }
+.calv .cal .cell { background: var(--surface); min-height: 88px; padding: 6px 7px; display: flex; flex-direction: column; gap: 3px; }
+.calv .cal .cell.dim { background: var(--panel); }
+.calv .cal .cell .dn { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
+.calv .cal .cell.today .dn { color: var(--on-accent); background: var(--accent); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
+
+.calv .ev { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 5px; display: flex; align-items: center; gap: 5px; line-height: 1.1; border: 1px solid transparent; width: 100%; cursor: pointer; text-align: left; }
+.calv .ev .d { width: 6px; height: 6px; flex: none; }
+.calv .ev.exam { background: var(--info-bg); color: var(--info); } .calv .ev.exam .d { background: var(--info); border-radius: 50%; }
+.calv .ev.moot { background: var(--accent-tint); color: var(--accent); } .calv .ev.moot .d { background: var(--accent); transform: rotate(45deg); }
+.calv .ev.intern { background: var(--warn-bg); color: var(--warn); } .calv .ev.intern .d { background: var(--warn); }
+.calv .ev.draft { background: var(--panel); color: var(--text2); } .calv .ev.draft .d { background: var(--text2); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+.calv .card { background: var(--surface); border: 1px solid var(--line); border-radius: 15px; padding: 18px 20px; }
+.calv .card.tint { background: var(--accent-tint); border-color: transparent; }
+.calv .ph { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
+.calv .ph .t { font-family: var(--font-mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; font-weight: 600; color: var(--text); }
+.calv .ph .a { font-size: 11px; color: var(--text3); }
+.calv .rem { display: flex; gap: 11px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.calv .rem:last-child { border-bottom: 0; }
+.calv .rem__t { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.calv .rem__m { font-size: 10.5px; color: var(--text3); }
+
+.calv .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.calv .lbl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--text3); font-weight: 600; display: block; }
+.calv .field { border: 1px solid var(--line2); border-radius: 9px; padding: 10px 12px; font-size: 13px; background: var(--surface); color: var(--text); min-height: 44px; width: 100%; display: flex; align-items: center; gap: 8px; }
+.calv .field:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.calv .field[aria-invalid='true'] { border-color: var(--risk); }
+
+.calv .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; border-radius: 20px; padding: 0 12px; border: 1px solid var(--line2); color: var(--text2); white-space: nowrap; background: var(--surface); min-height: 44px; cursor: pointer; }
+.calv .chip .g { width: 8px; height: 8px; flex: none; background: var(--faint); border-radius: 1px; }
+.calv .chip[aria-pressed='true'] { color: var(--info); border-color: color-mix(in srgb, var(--info) 40%, transparent); background: var(--info-bg); }
+.calv .chip[aria-pressed='true'] .g { background: var(--info); border-radius: 2px; }
+
+.calv .btn { font-size: 12.5px; font-weight: 600; border: 1px solid var(--line2); background: var(--surface); color: var(--text); padding: 0 16px; min-height: 44px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; cursor: pointer; }
+.calv .btn.solid { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.calv .btn.block { width: 100%; }
+.calv .dpdp { font-family: var(--font-mono); font-size: 9px; color: var(--faint); line-height: 1.65; letter-spacing: .02em; }
+.calv .cardw { max-width: 560px; }
+.calv .filters { margin-bottom: 16px; }
+
+@media (max-width: 768px) {
+  .calv .two-b { grid-template-columns: 1fr; }
+  .calv .cal .cell { min-height: 66px; }
+}
