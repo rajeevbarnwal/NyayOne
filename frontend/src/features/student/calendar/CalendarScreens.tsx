@@ -96,7 +96,10 @@ export function CalendarMonth() {
         <div className="subnav" role="tablist" aria-label="Calendar views">
           <button className="on" aria-selected="true" data-testid="cal-tab-month">Month</button>
           <button onClick={() => nav('/s-91')} data-testid="cal-add">Add event</button>
-          <button aria-expanded={showFilters} aria-controls="cal-filters" onClick={() => setShowFilters((v) => !v)} data-testid="cal-filters-toggle">Filters</button>
+          <button onClick={() => nav('/s-91')}>Event</button>
+          <button onClick={() => nav('/s-92')}>Conflict</button>
+          <button onClick={() => nav('/s-93')}>Reminders</button>
+          <button onClick={() => nav('/s-94')}>Export</button>
         </div>
 
         {showFilters && (
@@ -144,7 +147,13 @@ export function CalendarMonth() {
         {agg && status !== 'loading' && status !== 'error' && (
           <div className="two-b">
             <div>
-              <div className="ph"><span className="t">{monthLabel}</span><span className="a" data-testid="cal-count">{visible.length} events</span></div>
+              <div className="ph">
+                <span className="t">{monthLabel}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <span className="a" data-testid="cal-count">{visible.length} events</span>
+                  <button type="button" className="chip" aria-expanded={showFilters} aria-controls="cal-filters" onClick={() => setShowFilters((v) => !v)} data-testid="cal-filters-toggle"><span className="g" />Filter</button>
+                </span>
+              </div>
               <div className="cal" role="grid" aria-label={`Calendar ${monthLabel}`}>
                 {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
                 {Array.from({ length: lead }, (_, i) => <div className="cell dim" key={`lead-${i}`} aria-hidden="true"><span className="dn" /></div>)}

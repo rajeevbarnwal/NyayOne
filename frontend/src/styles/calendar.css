@@ -4,7 +4,8 @@
    scoped under `.calv` so nothing here can regress other screens. Colours are
    token-only (light/dark safe). SAATHI-286 visual remediation.
 =========================================================================== */
-.calv { width: 100%; max-width: 1320px; margin: 0 auto; }
+.calv { width: 100%; max-width: 1320px; margin: 0 auto; min-width: 0; overflow-wrap: anywhere; }
+.calv * { min-width: 0; }
 .calv .lede { font-family: var(--font-serif); font-size: 28px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 4px; color: var(--text); }
 .calv .lede .m { color: var(--text3); }
 .calv .stand { font-size: 14.5px; color: var(--text2); max-width: 680px; line-height: 1.5; margin: 0; }
@@ -20,14 +21,17 @@
 .calv .two-b { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
 .calv .col { display: flex; flex-direction: column; gap: 16px; }
 
-.calv .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+.calv .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; max-width: 100%; }
 .calv .cal .hd { background: var(--panel); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); text-align: center; padding: 8px 0; font-weight: 600; }
 .calv .cal .cell { background: var(--surface); min-height: 88px; padding: 6px 7px; display: flex; flex-direction: column; gap: 3px; }
 .calv .cal .cell.dim { background: var(--panel); }
 .calv .cal .cell .dn { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
 .calv .cal .cell.today .dn { color: var(--on-accent); background: var(--accent); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
 
-.calv .ev { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 5px; display: flex; align-items: center; gap: 5px; line-height: 1.1; border: 1px solid transparent; width: 100%; cursor: pointer; text-align: left; }
+.calv .ev { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 5px; display: flex; align-items: center; gap: 5px; line-height: 1.1; border: 1px solid transparent; width: 100%; max-width: 100%; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Accessible ≥44px hit area for interactive event markers (buttons) without
+   bloating the visual pill: the button is 44px min, its coloured content stays compact. */
+.calv button.ev { min-height: 44px; }
 .calv .ev .d { width: 6px; height: 6px; flex: none; }
 .calv .ev.exam { background: var(--info-bg); color: var(--info); } .calv .ev.exam .d { background: var(--info); border-radius: 50%; }
 .calv .ev.moot { background: var(--accent-tint); color: var(--accent); } .calv .ev.moot .d { background: var(--accent); transform: rotate(45deg); }
