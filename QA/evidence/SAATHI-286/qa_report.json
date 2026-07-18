@@ -4,7 +4,7 @@
   "layer": "frontend (features/student/calendar/CalendarScreens.tsx) + contract (features/student/lib/calendar.ts)",
   "tested_branch": "main",
   "tested_commit": "PENDING_COMMIT",
-  "status_decision": "SAATHI-286 remains In Progress. It is NOT moved to Testing: its assigned criteria include TC-285-08 (Playwright 5 widths x light/dark) and the v2 DoD requires native build + native Vitest, all of which cannot execute in this sandbox (recorded below). Independent Codex QA must run them.",
+  "status_decision": "SAATHI-286 remains In Progress. It is NOT moved to Testing: its assigned criteria include TC-285-08 (Playwright 5 widths x light/dark) and the v2 DoD requires native build + native Vitest, all of which cannot execute in this sandbox (recorded below). Independent QA must run them.",
   "mandatory_fixes": {
     "1_registry_test": "features/student/screens.test.ts updated to include S-90/S-91 in the exact-match expected set (assertions strengthened, not weakened).",
     "2_date_filters": "S-90 From/To date inputs (labelled, aria-invalid/aria-describedby), Clear button, user-scoped persistence via CalendarService.setFilters; validateDateRange(from,to) → from_after_to/invalid_date; invalid range shows message and falls back to all-dates without dropping events.",

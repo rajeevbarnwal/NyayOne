@@ -782,7 +782,7 @@ describe('service mutations require a verified authorised actor', () => {
 
 // ---------------------------------------------------------------------------
 // Round-4 (moved) — independent QA edge cases now permanent
-// source: QA_Claude_E08_E12_cd44a3d_2026-07-19/qa_cd44_security_regression.test.ts
+// source: independent QA regression pack for cd44a3d (19 July 2026)
 // ---------------------------------------------------------------------------
 describe('Independent QA security regression (moved from cd44a3d QA pack)', () => {
   function readyForFiling() {
