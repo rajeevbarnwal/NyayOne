@@ -3,6 +3,7 @@ import {
   CaseIntake, CaseRetainer, CaseWorkspace, CaseAdvance, CaseDocuments, CaseDraft, CaseReview,
   CaseFinalize, CaseFiling, CaseDiary, CaseFees, CaseTracking,
 } from './CaseScreens';
+import type { FilingAction } from './lib/filingWorkflow';
 
 /**
  * Lawyer / Core civil-litigation routes (Phase 1–2). These sit outside the
@@ -15,6 +16,12 @@ export interface CaseRoute {
   readonly Component: ComponentType;
   /** When true, the route is wrapped in the verified-lawyer LawyerGuard. */
   readonly guarded?: boolean;
+  /**
+   * Least-privilege stage actions (E08–E12). The verified actor must hold at
+   * least one to enter; each mutation still enforces its own action. Routes
+   * without this (E01–E07) require only verified workspace membership.
+   */
+  readonly stage?: readonly FilingAction[];
 }
 
 // The ENTIRE lawyer module requires a verified-lawyer session. Every /case/*
@@ -29,9 +36,9 @@ export const lawyerRoutes: readonly CaseRoute[] = [
   { path: '/case/documents', jira: 'SAATHI-14', Component: CaseDocuments, guarded: true },
   { path: '/case/draft', jira: 'SAATHI-16', Component: CaseDraft, guarded: true },
   { path: '/case/review', jira: 'SAATHI-18', Component: CaseReview, guarded: true },
-  { path: '/case/finalize', jira: 'SAATHI-20', Component: CaseFinalize, guarded: true },
-  { path: '/case/filing', jira: 'SAATHI-22', Component: CaseFiling, guarded: true },
-  { path: '/case/diary', jira: 'SAATHI-24', Component: CaseDiary, guarded: true },
-  { path: '/case/fees', jira: 'SAATHI-26', Component: CaseFees, guarded: true },
-  { path: '/case/tracking', jira: 'SAATHI-28', Component: CaseTracking, guarded: true },
+  { path: '/case/finalize', jira: 'SAATHI-20', Component: CaseFinalize, guarded: true, stage: ['checklist', 'lock', 'edit_after_lock', 'notify_config'] },
+  { path: '/case/filing', jira: 'SAATHI-22', Component: CaseFiling, guarded: true, stage: ['filing_record', 'filing_proof', 'invoice_approve', 'filing_correct'] },
+  { path: '/case/diary', jira: 'SAATHI-24', Component: CaseDiary, guarded: true, stage: ['diary_capture', 'diary_ack', 'diary_correct', 'diary_notify'] },
+  { path: '/case/fees', jira: 'SAATHI-26', Component: CaseFees, guarded: true, stage: ['fee_add', 'fee_pay', 'fee_allocate', 'fee_receipt'] },
+  { path: '/case/tracking', jira: 'SAATHI-28', Component: CaseTracking, guarded: true, stage: ['cnr_capture', 'tracking_activate', 'identifier_fetch', 'identifier_manual'] },
 ];

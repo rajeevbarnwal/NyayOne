@@ -619,7 +619,7 @@ export class FilingWorkflowService {
     return this.save(this.log({ ...fw, bundles: [bundle] }, auditEvent('bundle_created', 'system', now, bundle.id)));
   }
 
-  setChecklist(workspaceId: string, key: ChecklistKey, value: boolean, now: string, actor?: FilingActor): FilingWorkflow {
+  setChecklist(workspaceId: string, key: ChecklistKey, value: boolean, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'checklist')) return this.refuse(fw, 'checklist', actor, now);
     const b = latestBundle(fw);
@@ -630,7 +630,7 @@ export class FilingWorkflowService {
   }
 
   /** Configure notification channels (WhatsApp off unless the lawyer opts in). */
-  configureNotifications(workspaceId: string, cfg: Partial<NotificationConfig>, now: string, actor?: FilingActor): FilingWorkflow {
+  configureNotifications(workspaceId: string, cfg: Partial<NotificationConfig>, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'notify_config')) return this.refuse(fw, 'notify_config', actor, now);
     const notifyConfig: NotificationConfig = { ...(fw.notifyConfig ?? DEFAULT_NOTIFICATION_CONFIG), ...cfg };
@@ -685,7 +685,7 @@ export class FilingWorkflowService {
   }
 
   /** Editing after lock creates a NEW unlocked version (append-only). */
-  editAfterLock(workspaceId: string, now: string, actor?: FilingActor): FilingWorkflow {
+  editAfterLock(workspaceId: string, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'edit_after_lock')) return this.refuse(fw, 'edit_after_lock', actor, now);
     const b = latestBundle(fw);
@@ -704,7 +704,7 @@ export class FilingWorkflowService {
    * (returns null). `filedBy` is a user-entered business field and is NEVER used
    * as the audit authority — the audit actor is the authenticated session actor.
    */
-  recordFiling(workspaceId: string, input: Omit<FilingEvent, 'id' | 'bundleId' | 'proof' | 'corrections' | 'milestoneReached' | 'milestonePct' | 'invoiceStatus'>, now: string, actor?: FilingActor): FilingWorkflow | null {
+  recordFiling(workspaceId: string, input: Omit<FilingEvent, 'id' | 'bundleId' | 'proof' | 'corrections' | 'milestoneReached' | 'milestonePct' | 'invoiceStatus'>, now: string, actor: FilingActor | undefined): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw) return null;
     if (!authorize(actor, 'filing_record')) { this.refuse(fw, 'filing_record', actor, now); return null; }
@@ -725,7 +725,7 @@ export class FilingWorkflowService {
    * on failure appends an audit failure and returns the reason without mutating
    * the filing. Requires an existing filing event.
    */
-  attachFilingProof(workspaceId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachFilingProof(workspaceId: string, input: UploadInput, now: string, actor: FilingActor | undefined): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'filing_proof')) return { fw: this.refuse(fw, 'filing_proof', actor, now), validation: { ok: false, reason: 'missing' } };
     if (!fw.filing) return { fw, validation: { ok: false, reason: 'missing' } };
@@ -737,13 +737,13 @@ export class FilingWorkflowService {
     const filing: FilingEvent = { ...fw.filing, proof, proofRef: proof.ref };
     return { fw: this.save(this.log({ ...fw, filing }, auditEvent('proof_uploaded', describeActor(actor), now, proof.ref))), validation };
   }
-  approveFilingInvoice(workspaceId: string, now: string, actor?: FilingActor): FilingWorkflow {
+  approveFilingInvoice(workspaceId: string, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'invoice_approve')) return this.refuse(fw, 'invoice_approve', actor, now);
     if (!fw.filing) return fw;
     return this.save(this.log({ ...fw, filing: { ...fw.filing, invoiceStatus: 'approved' } }, auditEvent('invoice_approved', describeActor(actor), now)));
   }
-  correctFiling(workspaceId: string, field: string, newValue: string, now: string, actor?: FilingActor): FilingWorkflow {
+  correctFiling(workspaceId: string, field: string, newValue: string, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'filing_correct')) return this.refuse(fw, 'filing_correct', actor, now);
     if (!fw.filing) return fw;
@@ -753,7 +753,7 @@ export class FilingWorkflowService {
   }
 
   /** E10: capture the diary number; requires an E09 filing; binds to it. */
-  captureDiary(workspaceId: string, input: Omit<DiaryRecord, 'boundFilingId' | 'acknowledgement' | 'officiallyValidated' | 'history'>, now: string, actor?: FilingActor): FilingWorkflow | null {
+  captureDiary(workspaceId: string, input: Omit<DiaryRecord, 'boundFilingId' | 'acknowledgement' | 'officiallyValidated' | 'history'>, now: string, actor: FilingActor | undefined): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw) return null;
     if (!authorize(actor, 'diary_capture')) { this.refuse(fw, 'diary_capture', actor, now); return null; }
@@ -773,7 +773,7 @@ export class FilingWorkflowService {
    * Does not alter the official-validation flag (manual capture stays
    * "not officially validated"). Requires an existing diary record.
    */
-  attachDiaryAcknowledgement(workspaceId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachDiaryAcknowledgement(workspaceId: string, input: UploadInput, now: string, actor: FilingActor | undefined): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'diary_ack')) return { fw: this.refuse(fw, 'diary_ack', actor, now), validation: { ok: false, reason: 'missing' } };
     if (!fw.diary) return { fw, validation: { ok: false, reason: 'missing' } };
@@ -819,7 +819,7 @@ export class FilingWorkflowService {
     return (fw.notifications ?? []).some((n) => n.kind === 'diary_client_status');
   }
   /** Correction appends to history (old value preserved), never overwrites it. */
-  correctDiary(workspaceId: string, newNumber: string, reason: string, now: string, actor?: FilingActor): FilingWorkflow {
+  correctDiary(workspaceId: string, newNumber: string, reason: string, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'diary_correct')) return this.refuse(fw, 'diary_correct', actor, now);
     if (!fw.diary) return fw;
@@ -829,12 +829,12 @@ export class FilingWorkflowService {
   }
 
   /** E11: fee ledger operations (persisted). */
-  addFee(workspaceId: string, line: Omit<FeeLine, 'status' | 'allocations' | 'receipt'>, now: string, actor?: FilingActor): FilingWorkflow {
+  addFee(workspaceId: string, line: Omit<FeeLine, 'status' | 'allocations' | 'receipt'>, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'fee_add')) return this.refuse(fw, 'fee_add', actor, now);
     return this.save(this.log({ ...fw, fees: addFeeLine(fw.fees, line) }, auditEvent('fee_added', describeActor(actor), now, `${line.category}:${line.id}`)));
   }
-  payFee(workspaceId: string, ev: FeePaymentEvent, now: string, actor?: FilingActor): FilingWorkflow {
+  payFee(workspaceId: string, ev: FeePaymentEvent, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'fee_pay')) return this.refuse(fw, 'fee_pay', actor, now);
     const { ledger, deduped } = applyFeePayment(fw.fees, ev);
@@ -843,7 +843,7 @@ export class FilingWorkflowService {
     const type: FilingAuditType = line?.status === 'paid' ? 'fee_paid' : 'fee_manual_review';
     return this.save(this.log({ ...fw, fees: ledger }, auditEvent(type, describeActor(actor), now, ev.lineId)));
   }
-  allocate(workspaceId: string, lineId: string, amount: number, now: string, actor?: FilingActor): FilingWorkflow {
+  allocate(workspaceId: string, lineId: string, amount: number, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'fee_allocate')) return this.refuse(fw, 'fee_allocate', actor, now);
     const fees = allocateAdvance(fw.fees, lineId, amount);
@@ -856,7 +856,7 @@ export class FilingWorkflowService {
    * the line's receiptRef. Does NOT itself mark the line paid — paid status
    * remains server-verification + receipt gated and idempotent via payFee.
    */
-  attachFeeReceipt(workspaceId: string, lineId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachFeeReceipt(workspaceId: string, lineId: string, input: UploadInput, now: string, actor: FilingActor | undefined): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'fee_receipt')) return { fw: this.refuse(fw, 'fee_receipt', actor, now), validation: { ok: false, reason: 'missing' } };
     const target = fw.fees.lines.find((l) => l.id === lineId);
@@ -876,7 +876,7 @@ export class FilingWorkflowService {
   }
 
   /** E12: capture CNR; requires E09/E10 identifiers; tracking stays off until validated. */
-  captureCnr(workspaceId: string, input: { cnr: string; caseNumber: string; source: string; sourceType: IdentifierSourceType }, now: string, actor?: FilingActor): FilingWorkflow | null {
+  captureCnr(workspaceId: string, input: { cnr: string; caseNumber: string; source: string; sourceType: IdentifierSourceType }, now: string, actor: FilingActor | undefined): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw) return null;
     if (!authorize(actor, 'cnr_capture')) { this.refuse(fw, 'cnr_capture', actor, now); return null; }
@@ -893,7 +893,7 @@ export class FilingWorkflowService {
     return this.save(next);
   }
   /** Activate tracking only after validation; alerts require consent; polling stays off. */
-  activateTracking(workspaceId: string, alertsConsent: boolean, now: string, actor?: FilingActor): FilingWorkflow {
+  activateTracking(workspaceId: string, alertsConsent: boolean, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'tracking_activate')) return this.refuse(fw, 'tracking_activate', actor, now);
     if (!fw.tracking || !fw.tracking.validated) return fw;
@@ -907,7 +907,7 @@ export class FilingWorkflowService {
    * that directs the lawyer to the manual-entry fallback. It never enables
    * scraping/polling.
    */
-  attemptIdentifierFetch(workspaceId: string, now: string, actor?: FilingActor): { fw: FilingWorkflow; result: IdentifierFetchResult } {
+  attemptIdentifierFetch(workspaceId: string, now: string, actor: FilingActor | undefined): { fw: FilingWorkflow; result: IdentifierFetchResult } {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'identifier_fetch')) return { fw: this.refuse(fw, 'identifier_fetch', actor, now), result: IDENTIFIER_FETCH_DISABLED };
     const result = attemptAutomatedIdentifierFetch();
@@ -919,7 +919,7 @@ export class FilingWorkflowService {
    * keeps court-verified false (manual is not court-verified) and appends audit
    * history. Requires an existing tracking record (from captureCnr).
    */
-  manualUpdateIdentifier(workspaceId: string, input: { cnr: string; caseNumber: string; source?: string }, now: string, actor?: FilingActor): FilingWorkflow {
+  manualUpdateIdentifier(workspaceId: string, input: { cnr: string; caseNumber: string; source?: string }, now: string, actor: FilingActor | undefined): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!authorize(actor, 'identifier_manual')) return this.refuse(fw, 'identifier_manual', actor, now);
     if (!fw.tracking) return fw;

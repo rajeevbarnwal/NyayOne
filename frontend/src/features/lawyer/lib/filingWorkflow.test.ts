@@ -95,7 +95,7 @@ describe('E08 vet & lock final filing bundle (SAATHI-20)', () => {
     // hash is deterministic
     expect(bundleHash(locked)).toBe(locked.hash);
     // edit after lock → new v2 unlocked, filing re-blocked
-    fw = filing.editAfterLock(id, t(3));
+    fw = filing.editAfterLock(id, t(3), LAWYER);
     expect(latestBundle(fw)!.versionNo).toBe(2);
     expect(latestBundle(fw)!.locked).toBe(false);
     expect(canProceedToFiling(fw)).toBe(false);
@@ -348,7 +348,7 @@ describe('E08 finalize authorisation, failure audit & notification stub (SAATHI-
     expect(def.notifications.some((n) => n.channel === 'whatsapp')).toBe(false);
 
     const s2 = ready();
-    s2.filing.configureNotifications(s2.id, { whatsappEnabled: true }, t(2));
+    s2.filing.configureNotifications(s2.id, { whatsappEnabled: true }, t(2), LAWYER);
     const cfg = s2.filing.lockBundle(s2.id, LAWYER, t(2));
     expect(cfg.notifications.some((n) => n.channel === 'whatsapp')).toBe(true);
     expect(cfg.notifications.find((n) => n.channel === 'whatsapp')!.dispatched).toBe(false); // stub only, nothing transmitted
@@ -363,7 +363,7 @@ describe('E08 finalize authorisation, failure audit & notification stub (SAATHI-
     expect(latestBundle(fw)!.locked).toBe(true);
     expect(fw.notifications.length).toBe(1);
     expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('unauthorised_actor'))).toBe(true);
-    const v2 = filing2.editAfterLock(id, t(3));
+    const v2 = filing2.editAfterLock(id, t(3), LAWYER);
     expect(latestBundle(v2)!.versionNo).toBe(2);
     expect(canProceedToFiling(v2)).toBe(false);
   });
@@ -736,7 +736,7 @@ describe('service mutations require a verified authorised actor', () => {
     const s = setup();
     s.filing.initBundle(s.id, t(1));
     // missing actor cannot tick the checklist
-    let fw = s.filing.setChecklist(s.id, 'pleading', true, t(2)); // no actor
+    let fw = s.filing.setChecklist(s.id, 'pleading', true, t(2), undefined); // missing actor explicitly
     expect(latestBundle(fw)!.checklist.pleading).toBe(false);
     expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('checklist_refused'))).toBe(true);
     // client cannot tick either
@@ -753,7 +753,7 @@ describe('service mutations require a verified authorised actor', () => {
     // recordFiling without actor → null (QA regression parity)
     const s2 = setup();
     s2.filing.initBundle(s2.id, t(1)); completeAllChecklist(s2.filing, s2.id); s2.filing.lockBundle(s2.id, LAWYER, t(2));
-    expect(s2.filing.recordFiling(s2.id, { court: 'C', benchLocation: '', filedAt: t(3), mode: 'e-filing', filedBy: 'lawyer:self-asserted', notes: '', proofRef: '' }, t(3))).toBeNull();
+    expect(s2.filing.recordFiling(s2.id, { court: 'C', benchLocation: '', filedAt: t(3), mode: 'e-filing', filedBy: 'lawyer:self-asserted', notes: '', proofRef: '' }, t(3), undefined)).toBeNull();
     // invoice approval: only billing/lawyer; a clerk is refused
     const before = s.filing.get(s.id)!.filing!.invoiceStatus;
     const fw = s.filing.approveFilingInvoice(s.id, t(5), CLERK);
@@ -771,10 +771,10 @@ describe('service mutations require a verified authorised actor', () => {
   });
   it('D4: E12 capture/activate/manual refuse a missing actor', () => {
     const s = locked();
-    expect(s.filing.captureCnr(s.id, { cnr: 'KABC010001232026', caseNumber: 'X', source: 'manual', sourceType: 'manual' }, t(5))).toBeNull();
+    expect(s.filing.captureCnr(s.id, { cnr: 'KABC010001232026', caseNumber: 'X', source: 'manual', sourceType: 'manual' }, t(5), undefined)).toBeNull();
     // authorised capture, then a missing actor cannot activate
     s.filing.captureCnr(s.id, { cnr: 'KABC010001232026', caseNumber: 'X', source: 'manual', sourceType: 'manual' }, t(5), LAWYER);
-    const fw = s.filing.activateTracking(s.id, true, t(6));
+    const fw = s.filing.activateTracking(s.id, true, t(6), undefined);
     expect(fw.tracking!.trackingEnabled).toBe(false);
     expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('tracking_activate_refused'))).toBe(true);
   });
@@ -800,7 +800,7 @@ describe('Independent QA security regression (moved from cd44a3d QA pack)', () =
     const result = filing.recordFiling(id, {
       court: 'City Civil', benchLocation: '', filedAt: t(5), mode: 'e-filing',
       filedBy: 'lawyer:self-asserted', notes: '', proofRef: '',
-    }, t(5));
+    }, t(5), undefined);
     expect(result).toBeNull();
   });
   it('QA3: does not double-count advance plus later full receipt payment', () => {

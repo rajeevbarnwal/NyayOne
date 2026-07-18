@@ -39,7 +39,7 @@ function ShellRoutes() {
           {lawyerRoutes.map((r) => {
             const Case = r.Component;
             const element = r.guarded ? (
-              <LawyerGuard><Case /></LawyerGuard>
+              <LawyerGuard stage={r.stage}><Case /></LawyerGuard>
             ) : (
               <Case />
             );

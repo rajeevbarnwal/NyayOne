@@ -106,6 +106,12 @@ export interface AuthSnapshot {
    * is never a masked contact, name or BCI number.
    */
   readonly subjectId?: string | null;
+  /**
+   * Verified legal-workspace authorisation claim (functional role: lawyer /
+   * senior_advocate / firm_partner / associate / clerk / billing_admin). Distinct
+   * from the identity `role`; absent → treated as base 'lawyer' once verified.
+   */
+  readonly filingRole?: string | null;
   readonly updatedAt: number;
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/authContext';
-import { lawyerActorFromAuth } from './lib/caseAuth';
+import { filingActorFromAuth } from './lib/caseAuth';
 import type { FilingActor } from './lib/filingWorkflow';
 import { TextField, SelectField, DpdpFootnote } from '../student/components';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, EmptyState, ValidationState } from '../../components/ui/primitives';
@@ -111,7 +111,7 @@ function focusField(id: string) {
 /* -------------------------------------------------------------------------- */
 export function CaseIntake() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const [d, setD] = useState<IntakeDraft>(EMPTY_INTAKE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ConflictResult | null>(null);
@@ -399,7 +399,7 @@ export function CaseDocuments() {
 const DRAFT_CASE_ID = 'LS-CASE-2026-014';
 export function CaseDraft() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const assistant = useMemo(() => createStubDraftingAssistant(), []);
   const svc = useMemo(() => new DraftWorkspaceService(), []);
   const wsId = workspaceIdFor(DRAFT_CASE_ID);
@@ -651,7 +651,7 @@ function PrereqGate({ title, eyebrow, hint, to, label }: { title: string; eyebro
 /* E08 (SAATHI-20) — Vet & lock final filing version ------------------------- */
 export function CaseFinalize() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.initBundle(wsId, nowISO()) ?? svc.get(wsId) : null));
@@ -716,7 +716,7 @@ export function CaseFinalize() {
 /* E09 (SAATHI-22) — Record court filing ------------------------------------- */
 export function CaseFiling() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
@@ -802,7 +802,7 @@ export function CaseFiling() {
 /* E10 (SAATHI-24) — Capture diary number ------------------------------------ */
 export function CaseDiary() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
@@ -904,7 +904,7 @@ export function CaseDiary() {
 /* E11 (SAATHI-26) — Court & process fee ------------------------------------- */
 export function CaseFees() {
   const nav = useNavigate();
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
@@ -992,7 +992,7 @@ export function CaseFees() {
 
 /* E12 (SAATHI-28) — CNR & tracking ------------------------------------------ */
 export function CaseTracking() {
-  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));

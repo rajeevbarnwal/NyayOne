@@ -10,7 +10,12 @@ import { loadAuthSnapshot, clearAuthSnapshot, subscribeAuthChange } from '../fea
  * boundary note. S21 rule: lawyer features stay locked until P0.1 verification
  * passes.
  */
-export type Role = 'student' | 'tutor' | 'lawyer' | 'admin' | 'moderator';
+// Identity-lifecycle roles (P0.1/P0.2). The legal-workspace functional roles
+// (senior_advocate / firm_partner / associate / clerk / billing_admin) are
+// authorisation claims within a verified lawyer workspace — see `filingRole`.
+export type Role =
+  | 'student' | 'tutor' | 'lawyer' | 'admin' | 'moderator'
+  | 'senior_advocate' | 'firm_partner' | 'associate' | 'clerk' | 'billing_admin';
 export type VerificationStatus = 'draft' | 'submitted' | 'needs_info' | 'verified' | 'rejected';
 
 export interface AuthState {
@@ -19,6 +24,14 @@ export interface AuthState {
   roles: Role[];
   studentVerification: VerificationStatus;
   lawyerVerification: VerificationStatus;
+  /**
+   * Verified legal-workspace authorisation claim — the functional role a member
+   * holds inside a verified lawyer workspace (lawyer / senior_advocate /
+   * firm_partner / associate / clerk / billing_admin). Modelled SEPARATELY from
+   * the P0.1 identity role; null when there is no verified workspace claim. The
+   * downstream actor id is always the opaque `userId` (subject), never this role.
+   */
+  filingRole: string | null;
   isMinor: boolean;
 }
 
@@ -28,6 +41,7 @@ export const ANONYMOUS_AUTH: AuthState = {
   roles: [],
   studentVerification: 'draft',
   lawyerVerification: 'draft',
+  filingRole: null,
   isMinor: false,
 };
 
@@ -100,6 +114,11 @@ export function deriveAuthState(store: KvStore = defaultKvStore(), now: number =
     roles: ['lawyer'],
     studentVerification: 'draft',
     lawyerVerification,
+    // The verified workspace authorisation claim: an explicit filingRole from the
+    // snapshot, else the base verified 'lawyer'. Only populated once verified with
+    // a valid opaque subject; unknown values are rejected downstream (never
+    // silently upgraded). Absent while unverified.
+    filingRole: lawyerVerification === 'verified' && subjectOk ? (snap.filingRole ?? 'lawyer') : null,
     isMinor: false,
   };
 }

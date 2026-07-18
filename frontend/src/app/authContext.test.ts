@@ -19,6 +19,7 @@ const student: AuthState = {
   roles: ['student'],
   studentVerification: 'verified',
   lawyerVerification: 'draft',
+  filingRole: null,
   isMinor: false,
 };
 
