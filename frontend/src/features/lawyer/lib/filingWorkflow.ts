@@ -113,7 +113,7 @@ export function describeActor(actor: FilingActor): string {
 // is never queued for dispatch unless the lawyer has explicitly configured it;
 // by default a suppressed record is written instead.
 export type NotificationChannel = 'internal_task' | 'whatsapp';
-export type NotificationKind = 'bundle_locked';
+export type NotificationKind = 'bundle_locked' | 'diary_client_status';
 export interface NotificationStub {
   readonly id: string;
   readonly channel: NotificationChannel;
@@ -382,8 +382,13 @@ export interface ClientStatementLine {
 export interface ClientStatement {
   readonly lines: readonly ClientStatementLine[];
   readonly totalsByCategory: Record<FeeCategory, number>;
+  /** Gross billed across non-refund/adjustment lines. */
   readonly totalBilled: number;
+  /** Receipt-gated amount actually marked paid. */
   readonly totalPaid: number;
+  /** Advance applied to billed lines (reduces the client's pending shortfall). */
+  readonly advanceApplied: number;
+  /** Remaining shortfall the client must still pay: billed − paid − advance applied. */
   readonly totalPending: number;
   readonly totalRefunded: number;
   readonly advanceBalance: number;
@@ -392,20 +397,33 @@ export function statementLineStatus(line: FeeLine): StatementLineStatus {
   if (line.category === 'refund' || line.category === 'adjustment') return 'refunded';
   return line.status === 'paid' ? 'paid' : 'pending';
 }
+/**
+ * SAATHI-26/442/444 fix: pending must account for advance allocated to a line.
+ * For each billed (non-refund/adjustment) line:
+ *   - paid line → contributes its amount to paid, 0 to pending;
+ *   - pending line → contributes max(0, amount − allocatedFromAdvance) to pending.
+ * Refund/adjustment lines are reported separately and excluded from billed/pending.
+ */
 export function buildClientStatement(ledger: FeeLedger): ClientStatement {
   const totalsByCategory = FEE_CATEGORIES.reduce(
     (acc, c) => ({ ...acc, [c]: 0 }),
     {} as Record<FeeCategory, number>,
   );
-  let totalBilled = 0, totalPaid = 0, totalPending = 0, totalRefunded = 0;
+  let totalBilled = 0, totalPaid = 0, totalPending = 0, totalRefunded = 0, advanceApplied = 0;
   const lines = ledger.lines.map((l): ClientStatementLine => {
     const status = statementLineStatus(l);
+    const allocated = l.allocations.reduce((s, a) => s + a.amount, 0);
     totalsByCategory[l.category] += l.amount;
-    if (status === 'refunded') totalRefunded += l.amount;
-    else {
+    if (status === 'refunded') {
+      totalRefunded += l.amount;
+    } else {
       totalBilled += l.amount;
-      if (status === 'paid') totalPaid += l.amount;
-      else totalPending += l.amount;
+      advanceApplied += allocated;
+      if (status === 'paid') {
+        totalPaid += l.amount;
+      } else {
+        totalPending += Math.max(0, l.amount - allocated); // advance reduces the shortfall
+      }
     }
     return {
       id: l.id,
@@ -414,10 +432,10 @@ export function buildClientStatement(ledger: FeeLedger): ClientStatement {
       amount: l.amount,
       status,
       receiptPresent: !!l.receipt || !!l.receiptRef,
-      allocatedFromAdvance: l.allocations.reduce((s, a) => s + a.amount, 0),
+      allocatedFromAdvance: allocated,
     };
   });
-  return { lines, totalsByCategory, totalBilled, totalPaid, totalPending, totalRefunded, advanceBalance: ledger.advanceBalance };
+  return { lines, totalsByCategory, totalBilled, totalPaid, advanceApplied, totalPending, totalRefunded, advanceBalance: ledger.advanceBalance };
 }
 
 // --- E12: CNR + tracking ------------------------------------------------------
@@ -539,20 +557,20 @@ export class FilingWorkflowService {
     return this.save(this.log({ ...fw, bundles: [bundle] }, auditEvent('bundle_created', 'lawyer', now, bundle.id)));
   }
 
-  setChecklist(workspaceId: string, key: ChecklistKey, value: boolean, now: string): FilingWorkflow {
+  setChecklist(workspaceId: string, key: ChecklistKey, value: boolean, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     const b = latestBundle(fw);
     if (!b || b.locked) return fw; // locked bundle is read-only
     const updated: FilingBundle = { ...b, checklist: { ...b.checklist, [key]: value } };
     const bundles = [...fw.bundles.slice(0, -1), updated];
-    return this.save(this.log({ ...fw, bundles }, auditEvent('checklist_update', 'lawyer', now, `${key}=${value}`)));
+    return this.save(this.log({ ...fw, bundles }, auditEvent('checklist_update', this.who(actor, 'lawyer'), now, `${key}=${value}`)));
   }
 
   /** Configure notification channels (WhatsApp off unless the lawyer opts in). */
-  configureNotifications(workspaceId: string, cfg: Partial<NotificationConfig>, now: string): FilingWorkflow {
+  configureNotifications(workspaceId: string, cfg: Partial<NotificationConfig>, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     const notifyConfig: NotificationConfig = { ...(fw.notifyConfig ?? DEFAULT_NOTIFICATION_CONFIG), ...cfg };
-    return this.save(this.log({ ...fw, notifyConfig }, auditEvent('comm_approved', 'lawyer', now, `whatsapp=${notifyConfig.whatsappEnabled}`)));
+    return this.save(this.log({ ...fw, notifyConfig }, auditEvent('comm_approved', this.who(actor, 'lawyer'), now, `whatsapp=${notifyConfig.whatsappEnabled}`)));
   }
 
   /**
@@ -607,7 +625,7 @@ export class FilingWorkflowService {
   }
 
   /** Editing after lock creates a NEW unlocked version (append-only). */
-  editAfterLock(workspaceId: string, now: string): FilingWorkflow {
+  editAfterLock(workspaceId: string, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     const b = latestBundle(fw);
     if (!b || !b.locked) return fw;
@@ -615,12 +633,12 @@ export class FilingWorkflowService {
       ...b, id: `FB-${workspaceId}-${b.versionNo + 1}`, versionNo: b.versionNo + 1,
       locked: false, lockedBy: null, lockedAt: null, hash: null, createdAt: now,
     };
-    const logged = this.log(fw, auditEvent('edit_attempt_locked', 'lawyer', now, b.id));
-    return this.save(this.log({ ...logged, bundles: [...logged.bundles, next] }, auditEvent('new_version', 'lawyer', now, next.id)));
+    const logged = this.log(fw, auditEvent('edit_attempt_locked', this.who(actor, 'lawyer'), now, b.id));
+    return this.save(this.log({ ...logged, bundles: [...logged.bundles, next] }, auditEvent('new_version', this.who(actor, 'lawyer'), now, next.id)));
   }
 
   /** E09: record a filing event; requires a locked, complete bundle. */
-  recordFiling(workspaceId: string, input: Omit<FilingEvent, 'id' | 'bundleId' | 'proof' | 'corrections' | 'milestoneReached' | 'milestonePct' | 'invoiceStatus'>, now: string): FilingWorkflow | null {
+  recordFiling(workspaceId: string, input: Omit<FilingEvent, 'id' | 'bundleId' | 'proof' | 'corrections' | 'milestoneReached' | 'milestonePct' | 'invoiceStatus'>, now: string, actor?: FilingActor): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw || !canProceedToFiling(fw)) return null; // prerequisite: E08 locked + complete
     const bundle = latestBundle(fw)!;
@@ -628,7 +646,7 @@ export class FilingWorkflowService {
       ...input, id: `FE-${workspaceId}`, bundleId: bundle.id, proof: null, corrections: [],
       milestoneReached: true, milestonePct: MILESTONE_CASE_FILED_PCT, invoiceStatus: 'draft',
     };
-    let next = this.log({ ...fw, filing }, auditEvent('filing_recorded', input.filedBy, now, filing.id), { stage: 'E09', label: 'Filed in court', at: now });
+    let next = this.log({ ...fw, filing }, auditEvent('filing_recorded', this.who(actor, input.filedBy), now, filing.id), { stage: 'E09', label: 'Filed in court', at: now });
     next = this.log(next, auditEvent('milestone_reached', 'system', now, `Case Filed ${MILESTONE_CASE_FILED_PCT}%`));
     next = this.log(next, auditEvent('invoice_draft', 'system', now));
     return this.save(next);
@@ -639,16 +657,16 @@ export class FilingWorkflowService {
    * on failure appends an audit failure and returns the reason without mutating
    * the filing. Requires an existing filing event.
    */
-  attachFilingProof(workspaceId: string, input: UploadInput, now: string): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachFilingProof(workspaceId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     if (!fw.filing) return { fw, validation: { ok: false, reason: 'missing' } };
     const validation = validateUpload(input);
     if (!validation.ok) {
-      return { fw: this.save(this.log(fw, auditEvent('failure', 'lawyer', now, `proof_upload_rejected:${validation.reason}`))), validation };
+      return { fw: this.save(this.log(fw, auditEvent('failure', this.who(actor, 'lawyer'), now, `proof_upload_rejected:${validation.reason}`))), validation };
     }
     const proof = makeUploadMeta(input, now, `${fw.filing.id}-proof`);
     const filing: FilingEvent = { ...fw.filing, proof, proofRef: proof.ref };
-    return { fw: this.save(this.log({ ...fw, filing }, auditEvent('proof_uploaded', 'lawyer', now, proof.ref))), validation };
+    return { fw: this.save(this.log({ ...fw, filing }, auditEvent('proof_uploaded', this.who(actor, 'lawyer'), now, proof.ref))), validation };
   }
   approveFilingInvoice(workspaceId: string, approver: string, now: string): FilingWorkflow {
     const fw = this.require(workspaceId);
@@ -664,7 +682,7 @@ export class FilingWorkflowService {
   }
 
   /** E10: capture the diary number; requires an E09 filing; binds to it. */
-  captureDiary(workspaceId: string, input: Omit<DiaryRecord, 'boundFilingId' | 'acknowledgement' | 'officiallyValidated' | 'history'>, now: string): FilingWorkflow | null {
+  captureDiary(workspaceId: string, input: Omit<DiaryRecord, 'boundFilingId' | 'acknowledgement' | 'officiallyValidated' | 'history'>, now: string, actor?: FilingActor): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw || !fw.filing) return null; // prerequisite: E09 filing exists
     if (!diaryFormatValid(input.court, input.number)) return null;
@@ -674,7 +692,7 @@ export class FilingWorkflowService {
       officiallyValidated: input.source === 'authorised_source',
       history: [],
     };
-    return this.save(this.log({ ...fw, diary }, auditEvent('diary_captured', 'lawyer', now, diary.number), { stage: 'E10', label: `Diary number ${diary.number}`, at: now }));
+    return this.save(this.log({ ...fw, diary }, auditEvent('diary_captured', this.who(actor, 'lawyer'), now, diary.number), { stage: 'E10', label: `Diary number ${diary.number}`, at: now }));
   }
   /**
    * E10: attach a REAL uploaded acknowledgement document to the diary record.
@@ -682,16 +700,50 @@ export class FilingWorkflowService {
    * Does not alter the official-validation flag (manual capture stays
    * "not officially validated"). Requires an existing diary record.
    */
-  attachDiaryAcknowledgement(workspaceId: string, input: UploadInput, now: string): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachDiaryAcknowledgement(workspaceId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     if (!fw.diary) return { fw, validation: { ok: false, reason: 'missing' } };
     const validation = validateUpload(input);
     if (!validation.ok) {
-      return { fw: this.save(this.log(fw, auditEvent('failure', 'lawyer', now, `ack_upload_rejected:${validation.reason}`))), validation };
+      return { fw: this.save(this.log(fw, auditEvent('failure', this.who(actor, 'lawyer'), now, `ack_upload_rejected:${validation.reason}`))), validation };
     }
     const acknowledgement = makeUploadMeta(input, now, `${fw.diary.number}-ack`);
     const diary: DiaryRecord = { ...fw.diary, acknowledgement, acknowledgementRef: acknowledgement.ref };
-    return { fw: this.save(this.log({ ...fw, diary }, auditEvent('ack_uploaded', 'lawyer', now, acknowledgement.ref))), validation };
+    return { fw: this.save(this.log({ ...fw, diary }, auditEvent('ack_uploaded', this.who(actor, 'lawyer'), now, acknowledgement.ref))), validation };
+  }
+  /**
+   * E10 (SAATHI-24/439/441): optional client status update, gated on explicit
+   * lawyer approval.
+   *  - Default (never called) → no notification is queued (suppressed).
+   *  - Only a finalize-capable lawyer actor may approve; anyone else is refused
+   *    with a `failure` audit and NOTHING is queued.
+   *  - On approval, a single privacy-safe internal-task stub is queued (no PII in
+   *    the id/target) with `comm_approved` + `notification_queued` audit.
+   *  - Idempotent: repeated approval does not duplicate the queued item.
+   * Requires a valid diary record.
+   */
+  approveDiaryClientStatus(workspaceId: string, actor: FilingActor | string, now: string): FilingWorkflow {
+    const fw = this.require(workspaceId);
+    const a = parseActor(actor);
+    if (!fw.diary) {
+      return this.save(this.log(fw, auditEvent('failure', describeActor(a), now, 'diary_notify_refused:no_diary')));
+    }
+    if (!canFinalize(a)) {
+      return this.save(this.log(fw, auditEvent('failure', describeActor(a), now, 'diary_notify_refused:unauthorised_actor')));
+    }
+    const already = (fw.notifications ?? []).some((n) => n.kind === 'diary_client_status');
+    if (already) return fw; // idempotent: no duplicate queue item
+    const stub: NotificationStub = {
+      id: `NT-${fw.workspaceId}-diary-${(fw.notifications?.length ?? 0) + 1}`,
+      channel: 'internal_task', kind: 'diary_client_status', to: 'client_channel', queuedAt: now, dispatched: false,
+    };
+    let next = this.log({ ...fw, notifications: [...(fw.notifications ?? []), stub] }, auditEvent('comm_approved', describeActor(a), now, 'diary_client_status'));
+    next = this.log(next, auditEvent('notification_queued', describeActor(a), now, 'internal_task:diary_client_status'));
+    return this.save(next);
+  }
+  /** Whether a client-status notification has been approved + queued (UI helper). */
+  diaryClientStatusQueued(fw: FilingWorkflow): boolean {
+    return (fw.notifications ?? []).some((n) => n.kind === 'diary_client_status');
   }
   /** Correction appends to history (old value preserved), never overwrites it. */
   correctDiary(workspaceId: string, newNumber: string, reason: string, by: string, now: string): FilingWorkflow {
@@ -703,23 +755,23 @@ export class FilingWorkflowService {
   }
 
   /** E11: fee ledger operations (persisted). */
-  addFee(workspaceId: string, line: Omit<FeeLine, 'status' | 'allocations' | 'receipt'>, now: string): FilingWorkflow {
+  addFee(workspaceId: string, line: Omit<FeeLine, 'status' | 'allocations' | 'receipt'>, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
-    return this.save(this.log({ ...fw, fees: addFeeLine(fw.fees, line) }, auditEvent('fee_added', 'billing', now, `${line.category}:${line.id}`)));
+    return this.save(this.log({ ...fw, fees: addFeeLine(fw.fees, line) }, auditEvent('fee_added', this.who(actor, 'billing'), now, `${line.category}:${line.id}`)));
   }
-  payFee(workspaceId: string, ev: FeePaymentEvent, now: string): FilingWorkflow {
+  payFee(workspaceId: string, ev: FeePaymentEvent, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     const { ledger, deduped } = applyFeePayment(fw.fees, ev);
     if (deduped) return fw;
     const line = ledger.lines.find((l) => l.id === ev.lineId);
     const type: FilingAuditType = line?.status === 'paid' ? 'fee_paid' : 'fee_manual_review';
-    return this.save(this.log({ ...fw, fees: ledger }, auditEvent(type, 'billing', now, ev.lineId)));
+    return this.save(this.log({ ...fw, fees: ledger }, auditEvent(type, this.who(actor, 'billing'), now, ev.lineId)));
   }
-  allocate(workspaceId: string, lineId: string, amount: number, now: string): FilingWorkflow {
+  allocate(workspaceId: string, lineId: string, amount: number, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     const fees = allocateAdvance(fw.fees, lineId, amount);
     if (fees === fw.fees) return fw;
-    return this.save(this.log({ ...fw, fees }, auditEvent('advance_allocated', 'billing', now, `${lineId}:${amount}`)));
+    return this.save(this.log({ ...fw, fees }, auditEvent('advance_allocated', this.who(actor, 'billing'), now, `${lineId}:${amount}`)));
   }
   /**
    * E11: attach a REAL uploaded receipt to a specific fee line. Validates
@@ -727,17 +779,17 @@ export class FilingWorkflowService {
    * the line's receiptRef. Does NOT itself mark the line paid — paid status
    * remains server-verification + receipt gated and idempotent via payFee.
    */
-  attachFeeReceipt(workspaceId: string, lineId: string, input: UploadInput, now: string): { fw: FilingWorkflow; validation: UploadValidation } {
+  attachFeeReceipt(workspaceId: string, lineId: string, input: UploadInput, now: string, actor?: FilingActor): { fw: FilingWorkflow; validation: UploadValidation } {
     const fw = this.require(workspaceId);
     const target = fw.fees.lines.find((l) => l.id === lineId);
     if (!target) return { fw, validation: { ok: false, reason: 'missing' } };
     const validation = validateUpload(input);
     if (!validation.ok) {
-      return { fw: this.save(this.log(fw, auditEvent('failure', 'billing', now, `receipt_upload_rejected:${lineId}:${validation.reason}`))), validation };
+      return { fw: this.save(this.log(fw, auditEvent('failure', this.who(actor, 'billing'), now, `receipt_upload_rejected:${lineId}:${validation.reason}`))), validation };
     }
     const receipt = makeUploadMeta(input, now, `${lineId}-receipt`);
     const lines = fw.fees.lines.map((l) => (l.id === lineId ? { ...l, receipt, receiptRef: receipt.ref } : l));
-    return { fw: this.save(this.log({ ...fw, fees: { ...fw.fees, lines } }, auditEvent('receipt_uploaded', 'billing', now, `${lineId}:${receipt.ref}`))), validation };
+    return { fw: this.save(this.log({ ...fw, fees: { ...fw.fees, lines } }, auditEvent('receipt_uploaded', this.who(actor, 'billing'), now, `${lineId}:${receipt.ref}`))), validation };
   }
   /** E11: derive the complete client statement (every line + totals) for display. */
   clientStatement(workspaceId: string): ClientStatement | null {
@@ -746,7 +798,7 @@ export class FilingWorkflowService {
   }
 
   /** E12: capture CNR; requires E09/E10 identifiers; tracking stays off until validated. */
-  captureCnr(workspaceId: string, input: { cnr: string; caseNumber: string; source: string; sourceType: IdentifierSourceType }, now: string): FilingWorkflow | null {
+  captureCnr(workspaceId: string, input: { cnr: string; caseNumber: string; source: string; sourceType: IdentifierSourceType }, now: string, actor?: FilingActor): FilingWorkflow | null {
     const fw = this.get(workspaceId);
     if (!fw || (!fw.filing && !fw.diary)) return null; // prerequisite: filing/diary identifiers
     const validated = cnrFormatValid(input.cnr);
@@ -755,17 +807,17 @@ export class FilingWorkflowService {
       capturedAt: now, checkedAt: null, validated, trackingEnabled: false,
       courtVerified: input.sourceType === 'authorised', alertsConsent: false, alertsEnabled: false,
     };
-    let next = this.log({ ...fw, tracking }, auditEvent('cnr_captured', 'lawyer', now, input.cnr));
+    let next = this.log({ ...fw, tracking }, auditEvent('cnr_captured', this.who(actor, 'lawyer'), now, input.cnr));
     if (validated) next = this.log(next, auditEvent('cnr_validated', 'system', now));
-    if (input.sourceType === 'manual') next = this.log(next, auditEvent('manual_fallback', 'lawyer', now));
+    if (input.sourceType === 'manual') next = this.log(next, auditEvent('manual_fallback', this.who(actor, 'lawyer'), now));
     return this.save(next);
   }
   /** Activate tracking only after validation; alerts require consent; polling stays off. */
-  activateTracking(workspaceId: string, alertsConsent: boolean, now: string): FilingWorkflow {
+  activateTracking(workspaceId: string, alertsConsent: boolean, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!fw.tracking || !fw.tracking.validated) return fw;
     const tracking: TrackingState = { ...fw.tracking, trackingEnabled: true, checkedAt: now, alertsConsent, alertsEnabled: alertsConsent && ECOURTS_POLLING_ENABLED ? true : alertsConsent };
-    return this.save(this.log({ ...fw, tracking }, auditEvent('tracking_activated', 'lawyer', now, `alerts=${alertsConsent}`), { stage: 'E12', label: 'Tracking activated', at: now }));
+    return this.save(this.log({ ...fw, tracking }, auditEvent('tracking_activated', this.who(actor, 'lawyer'), now, `alerts=${alertsConsent}`), { stage: 'E12', label: 'Tracking activated', at: now }));
   }
 
   /**
@@ -774,10 +826,10 @@ export class FilingWorkflowService {
    * that directs the lawyer to the manual-entry fallback. It never enables
    * scraping/polling.
    */
-  attemptIdentifierFetch(workspaceId: string, now: string): { fw: FilingWorkflow; result: IdentifierFetchResult } {
+  attemptIdentifierFetch(workspaceId: string, now: string, actor?: FilingActor): { fw: FilingWorkflow; result: IdentifierFetchResult } {
     const fw = this.require(workspaceId);
     const result = attemptAutomatedIdentifierFetch();
-    return { fw: this.save(this.log(fw, auditEvent('identifier_fetch_attempt', 'lawyer', now, result.reason))), result };
+    return { fw: this.save(this.log(fw, auditEvent('identifier_fetch_attempt', this.who(actor, 'lawyer'), now, result.reason))), result };
   }
   /**
    * E12 fallback: manually enter/edit the CNR + case number after a failed or
@@ -785,7 +837,7 @@ export class FilingWorkflowService {
    * keeps court-verified false (manual is not court-verified) and appends audit
    * history. Requires an existing tracking record (from captureCnr).
    */
-  manualUpdateIdentifier(workspaceId: string, input: { cnr: string; caseNumber: string; source?: string }, now: string): FilingWorkflow {
+  manualUpdateIdentifier(workspaceId: string, input: { cnr: string; caseNumber: string; source?: string }, now: string, actor?: FilingActor): FilingWorkflow {
     const fw = this.require(workspaceId);
     if (!fw.tracking) return fw;
     const validated = cnrFormatValid(input.cnr);
@@ -801,10 +853,15 @@ export class FilingWorkflowService {
       // a failed re-entry must not leave stale tracking enabled
       trackingEnabled: fw.tracking.trackingEnabled && validated,
     };
-    let next = this.log({ ...fw, tracking }, auditEvent('identifier_manual_update', 'lawyer', now, input.cnr));
-    next = this.log(next, auditEvent('manual_fallback', 'lawyer', now, validated ? 'valid' : 'invalid'));
+    let next = this.log({ ...fw, tracking }, auditEvent('identifier_manual_update', this.who(actor, 'lawyer'), now, input.cnr));
+    next = this.log(next, auditEvent('manual_fallback', this.who(actor, 'lawyer'), now, validated ? 'valid' : 'invalid'));
     if (validated) next = this.log(next, auditEvent('cnr_validated', 'system', now));
     return this.save(next);
+  }
+
+  /** Audit actor label: the session-bound actor when supplied, else a role fallback. */
+  private who(actor: FilingActor | undefined, fallback: string): string {
+    return actor ? describeActor(actor) : fallback;
   }
 
   private require(workspaceId: string): FilingWorkflow {

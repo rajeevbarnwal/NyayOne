@@ -6,7 +6,7 @@ import {
   CHECKLIST_KEYS, applyFeePayment, applyManualFeeVerification, allocateAdvance, addFeeLine, emptyLedger,
   cnrFormatValid, trackingStale, GST_ENABLED, ECOURTS_POLLING_ENABLED, MILESTONE_CASE_FILED_PCT,
   diaryFormatValid, type FeeLine,
-  parseActor, canFinalize, validateUpload, statementLineStatus,
+  parseActor, canFinalize, validateUpload, statementLineStatus, buildClientStatement,
   attemptAutomatedIdentifierFetch, MAX_UPLOAD_BYTES, type UploadInput,
 } from './filingWorkflow';
 
@@ -530,5 +530,127 @@ describe('E12 identifier fallback actions (SAATHI-28/445/447)', () => {
     const fw2 = new FilingWorkflowService(store, new DraftWorkspaceService(store)).get(id)!;
     expect(fw2.tracking!.trackingEnabled).toBe(true);
     expect(fw2.tracking!.courtVerified).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round-3 Fix 1 — session-bound actor is written to audit (not hard-coded)
+// (SAATHI-20/22/24/26/28)
+// ---------------------------------------------------------------------------
+describe('session actor identity in audit records (Fix 1)', () => {
+  it('C1: successful lock records the passed session actor — never a hard-coded role', () => {
+    const { filing, id } = setup();
+    filing.initBundle(id, t(1));
+    completeAllChecklist(filing, id);
+    const fw = filing.lockBundle(id, { id: 'adv-1', role: 'senior_advocate' }, t(2));
+    expect(latestBundle(fw)!.lockedBy).toBe('senior_advocate:adv-1');
+    const lockAudit = fw.audit.find((e) => e.type === 'locked');
+    expect(lockAudit!.actor).toBe('senior_advocate:adv-1');
+    expect(fw.audit.some((e) => e.actor === 'lawyer:rao')).toBe(false); // no hard-coded actor
+  });
+  it('C2: downstream mutations attribute audit to the session actor when supplied', () => {
+    const { filing, id } = setup();
+    filing.initBundle(id, t(1));
+    completeAllChecklist(filing, id);
+    const actor = { id: 'adv-9', role: 'firm_partner' as const };
+    filing.lockBundle(id, actor, t(2));
+    filing.recordFiling(id, { court: 'City Civil', benchLocation: 'Blr', filedAt: t(3), mode: 'e-filing', filedBy: '', notes: '', proofRef: '' }, t(3), actor);
+    const fw = filing.addFee(id, { id: 'L1', category: 'court_fee', amount: 100, payer: 'client', payee: 'court', date: t(5), mode: 'online', receiptRef: null }, t(5), actor);
+    expect(fw.audit.find((e) => e.type === 'filing_recorded')!.actor).toBe('firm_partner:adv-9');
+    expect(fw.audit.find((e) => e.type === 'fee_added')!.actor).toBe('firm_partner:adv-9');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round-3 Fix 3 — E10 lawyer-approved client-status notification gate
+// (SAATHI-24/439/441)
+// ---------------------------------------------------------------------------
+describe('E10 client-status notification approval gate (SAATHI-24/439/441)', () => {
+  function diaried() {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); completeAllChecklist(s.filing, s.id); s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    s.filing.recordFiling(s.id, { court: 'City Civil', benchLocation: 'Blr', filedAt: t(3), mode: 'e-filing', filedBy: 'clerk', notes: '', proofRef: '' }, t(3));
+    s.filing.captureDiary(s.id, { number: 'D/1/2026', court: 'City Civil', year: '2026', source: 'manual', receivedDate: t(4), acknowledgementRef: '' }, t(4));
+    return s;
+  }
+  it('F3.1: suppressed by default — no client notification is queued', () => {
+    const { filing, id } = diaried();
+    expect(filing.diaryClientStatusQueued(filing.get(id)!)).toBe(false);
+    expect(filing.get(id)!.notifications.some((n) => n.kind === 'diary_client_status')).toBe(false);
+  });
+  it('F3.2: a disallowed actor cannot approve — failure audit, nothing queued', () => {
+    const { filing, id } = diaried();
+    const fw = filing.approveDiaryClientStatus(id, { id: 'c1', role: 'client' }, t(5));
+    expect(fw.notifications.some((n) => n.kind === 'diary_client_status')).toBe(false);
+    expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('diary_notify_refused'))).toBe(true);
+  });
+  it('F3.3: lawyer approval queues one privacy-safe stub and is idempotent', () => {
+    const { filing, id } = diaried();
+    let fw = filing.approveDiaryClientStatus(id, { id: 'rao', role: 'lawyer' }, t(5));
+    expect(fw.notifications.filter((n) => n.kind === 'diary_client_status').length).toBe(1);
+    const stub = fw.notifications.find((n) => n.kind === 'diary_client_status')!;
+    expect(stub.dispatched).toBe(false); // stub only, nothing transmitted
+    expect(stub.id.includes('/')).toBe(false); // no PII/path in the id
+    expect(fw.audit.some((e) => e.type === 'comm_approved' && (e.ref ?? '').includes('diary_client_status'))).toBe(true);
+    // idempotent: repeated approval does not duplicate
+    fw = filing.approveDiaryClientStatus(id, { id: 'rao', role: 'lawyer' }, t(6));
+    expect(fw.notifications.filter((n) => n.kind === 'diary_client_status').length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round-3 Fix 4 — E11 advance allocation + client-statement shortfall math
+// (SAATHI-26/442/444)
+// ---------------------------------------------------------------------------
+describe('E11 advance allocation + shortfall math (SAATHI-26/442/444)', () => {
+  const mk = (id: string, category: FeeLine['category'], amount: number): Omit<FeeLine, 'status' | 'allocations' | 'receipt'> =>
+    ({ id, category, amount, payer: 'client', payee: 'court', date: t(5), mode: 'online', receiptRef: null });
+
+  it('F4.1: exact QA regression — pending shortfall is ₹12,500 (advance applied to the line)', () => {
+    let ledger = emptyLedger(50000);
+    ledger = addFeeLine(ledger, { ...mk('L1', 'court_fee', 1000), receiptRef: 'rcL1' });
+    ledger = addFeeLine(ledger, mk('L2', 'process_fee', 2500));
+    ledger = addFeeLine(ledger, mk('L3', 'professional_fee', 60000));
+    ledger = addFeeLine(ledger, mk('L4', 'refund', 200));
+    ledger = applyManualFeeVerification(ledger, 'L1', true); // court fee paid (receipt + verified)
+    ledger = allocateAdvance(ledger, 'L3', 50000); // advance applied to the professional fee line
+    const st = buildClientStatement(ledger);
+    expect(st.totalBilled).toBe(63500); // 1000 + 2500 + 60000
+    expect(st.totalPaid).toBe(1000);
+    expect(st.advanceApplied).toBe(50000);
+    expect(st.totalPending).toBe(12500); // 2500 + (60000 - 50000)
+    expect(st.totalRefunded).toBe(200);
+  });
+
+  it('F4.2: partial / exact / over allocation edge cases', () => {
+    let ledger = addFeeLine(emptyLedger(5000), mk('L1', 'court_fee', 1000));
+    // partial
+    ledger = allocateAdvance(ledger, 'L1', 400);
+    expect(buildClientStatement(ledger).totalPending).toBe(600);
+    // exact (top up to full)
+    ledger = allocateAdvance(ledger, 'L1', 600);
+    expect(buildClientStatement(ledger).totalPending).toBe(0);
+    // over-allocation refused (would exceed the line's remaining amount)
+    const before = ledger;
+    ledger = allocateAdvance(ledger, 'L1', 100);
+    expect(ledger).toBe(before);
+    // cannot exceed advance balance
+    let l2 = addFeeLine(emptyLedger(300), mk('X', 'court_fee', 100000));
+    const b2 = l2;
+    l2 = allocateAdvance(l2, 'X', 100000);
+    expect(l2).toBe(b2);
+  });
+
+  it('F4.3: multiple lines + refund/adjustment excluded from billed/pending', () => {
+    let ledger = emptyLedger(0);
+    ledger = addFeeLine(ledger, mk('L1', 'court_fee', 500));
+    ledger = addFeeLine(ledger, mk('L2', 'tax', 90));
+    ledger = addFeeLine(ledger, mk('L3', 'adjustment', 40));
+    ledger = addFeeLine(ledger, mk('L4', 'refund', 10));
+    const st = buildClientStatement(ledger);
+    expect(st.totalBilled).toBe(590); // court + tax only
+    expect(st.totalPending).toBe(590);
+    expect(st.totalRefunded).toBe(50); // adjustment + refund
+    expect(st.lines.map((l) => l.status)).toEqual(['pending', 'pending', 'refunded', 'refunded']);
   });
 });

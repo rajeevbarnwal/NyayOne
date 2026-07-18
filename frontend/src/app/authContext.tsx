@@ -1,10 +1,14 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { defaultKvStore, type KvStore } from '../lib/kvStore';
+import { loadAuthSnapshot } from '../features/auth/lib/authPersistence';
 
 /**
  * Frontend auth-context + route-guard scaffolding (SAATHI-337 / SAATHI-368).
- * Mirrors the backend actor-context contract. Real identity is wired to the
- * existing P0.2/P0.1 IdP later; for now a placeholder anonymous context is used.
- * S21 rule: lawyer features stay locked until P0.1 verification passes.
+ * Mirrors the backend actor-context contract. Identity is derived from the
+ * persisted P0.1 lawyer verification snapshot (secret-free); the server remains
+ * authoritative for real authorization — see deriveAuthState for the honest
+ * boundary note. S21 rule: lawyer features stay locked until P0.1 verification
+ * passes.
  */
 export type Role = 'student' | 'tutor' | 'lawyer' | 'admin' | 'moderator';
 export type VerificationStatus = 'draft' | 'submitted' | 'needs_info' | 'verified' | 'rejected';
@@ -47,6 +51,41 @@ export function AuthProvider({ value, children }: { value?: AuthState; children:
 
 export function useAuth(): AuthState {
   return useContext(AuthContext);
+}
+
+/**
+ * Session freshness window mirrored from the P0.3 refresh policy. A persisted
+ * verification snapshot older than this is treated as an expired session and
+ * denied. (The server is authoritative; this is a client-side derived state.)
+ */
+export const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Derive the live AuthState from the persisted, secret-free lawyer verification
+ * snapshot. Anonymous when there is no snapshot or the session has expired.
+ *
+ * SECURITY NOTE (honest boundary): this is CLIENT-SIDE derived state for gating
+ * UI and supplying an actor identity — it is NOT production-grade authorization.
+ * The server must remain authoritative for privilege decisions; the service-layer
+ * role check (see filingWorkflow.canFinalize) is defence in depth, not a backend.
+ */
+export function deriveAuthState(store: KvStore = defaultKvStore(), now: number = Date.now()): AuthState {
+  const snap = loadAuthSnapshot('lawyer', store);
+  if (!snap) return ANONYMOUS_AUTH;
+  if (now - snap.updatedAt > SESSION_MAX_AGE_MS) return ANONYMOUS_AUTH; // expired session
+  const lawyerVerification: VerificationStatus =
+    snap.phase === 'verified' ? 'verified'
+    : snap.phase === 'rejected' ? 'rejected'
+    : snap.phase === 'manual_review' ? 'needs_info'
+    : 'submitted';
+  return {
+    isAuthenticated: true,
+    userId: snap.destinationMasked ?? 'lawyer',
+    roles: ['lawyer'],
+    studentVerification: 'draft',
+    lawyerVerification,
+    isMinor: false,
+  };
 }
 
 export type GuardRule = 'authenticated' | 'student-verified' | 'lawyer-features';
