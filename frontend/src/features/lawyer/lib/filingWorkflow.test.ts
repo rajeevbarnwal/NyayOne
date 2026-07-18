@@ -6,7 +6,11 @@ import {
   CHECKLIST_KEYS, applyFeePayment, applyManualFeeVerification, allocateAdvance, addFeeLine, emptyLedger,
   cnrFormatValid, trackingStale, GST_ENABLED, ECOURTS_POLLING_ENABLED, MILESTONE_CASE_FILED_PCT,
   diaryFormatValid, type FeeLine,
+  parseActor, canFinalize, validateUpload, statementLineStatus,
+  attemptAutomatedIdentifierFetch, MAX_UPLOAD_BYTES, type UploadInput,
 } from './filingWorkflow';
+
+const validPdf: UploadInput = { filename: 'proof.pdf', mime: 'application/pdf', size: 1024, present: true };
 
 const t = (n: number) => `2026-07-11T0${n}:00:00.000Z`;
 const CASE = 'LS-CASE-2026-014';
@@ -156,7 +160,7 @@ describe('E10 diary number (SAATHI-24)', () => {
 });
 
 describe('E11 fee ledger (SAATHI-26)', () => {
-  const line = (id: string, category: FeeLine['category'], amount = 1000): Omit<FeeLine, 'status' | 'allocations'> =>
+  const line = (id: string, category: FeeLine['category'], amount = 1000): Omit<FeeLine, 'status' | 'allocations' | 'receipt'> =>
     ({ id, category, amount, payer: 'client', payee: 'court', date: t(5), mode: 'online', receiptRef: null });
   it('keeps categories distinct and gates paid on a receipt + server verification', () => {
     let ledger = emptyLedger(5000);
@@ -260,5 +264,271 @@ describe('E08→E12 end-to-end chain + persistence (SAATHI-20/22/24/26/28)', () 
     // audit accumulated across every stage
     expect(fw.audit.length).toBeGreaterThan(8);
     expect(fw.timeline.map((e) => e.stage)).toEqual(['E08', 'E09', 'E10', 'E12']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase A remediation — E08 finalize authorisation + audit + notification stub
+// (SAATHI-20 / SAATHI-434 / SAATHI-435)
+// ---------------------------------------------------------------------------
+describe('E08 finalize authorisation, failure audit & notification stub (SAATHI-20/434/435)', () => {
+  function ready() {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1));
+    completeAllChecklist(s.filing, s.id);
+    return s;
+  }
+
+  it('A1: parseActor/canFinalize authorise only lawyer/senior_advocate/firm_partner', () => {
+    expect(canFinalize('lawyer:rao')).toBe(true);
+    expect(canFinalize({ id: 'p1', role: 'senior_advocate' })).toBe(true);
+    expect(canFinalize({ id: 'p2', role: 'firm_partner' })).toBe(true);
+    expect(canFinalize('student:unauthorised')).toBe(false);
+    expect(canFinalize('client:someone')).toBe(false);
+    expect(canFinalize('clerk:desk')).toBe(false);
+    expect(canFinalize('')).toBe(false);
+    expect(canFinalize('   ')).toBe(false);
+    expect(canFinalize(null)).toBe(false);
+    // an un-roled bare string is never trusted as authorised
+    expect(parseActor('totally-unknown').role).toBe('unknown');
+    expect(canFinalize('totally-unknown')).toBe(false);
+  });
+
+  it('A2: authorised lawyer can lock only after all nine dimensions pass', () => {
+    const { filing, id } = ready();
+    // sanity: nine dimensions
+    expect(CHECKLIST_KEYS.length).toBe(9);
+    const fw = filing.lockBundle(id, { id: 'rao', role: 'lawyer' }, t(2));
+    expect(latestBundle(fw)!.locked).toBe(true);
+    expect(latestBundle(fw)!.lockedBy).toBe('lawyer:rao');
+  });
+
+  it('A3: student/client/unknown/empty actors cannot lock (state unchanged + failure audit)', () => {
+    for (const bad of ['student:unauthorised', 'client:x', 'clerk:y', '', 'unroled-string']) {
+      const { filing, id } = ready();
+      const fw = filing.lockBundle(id, bad, t(2));
+      expect(latestBundle(fw)!.locked).toBe(false); // bundle state unchanged
+      expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('unauthorised_actor'))).toBe(true);
+    }
+  });
+
+  it('A4: incomplete authorised attempt appends failure audit without locking', () => {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); // checklist incomplete
+    const fw = s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    expect(latestBundle(fw)!.locked).toBe(false);
+    expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('incomplete_checklist'))).toBe(true);
+  });
+
+  it('A5: successful lock appends the locked audit and queues ONLY the internal notification stub', () => {
+    const { filing, id } = ready();
+    const fw = filing.lockBundle(id, 'lawyer:rao', t(2));
+    expect(fw.audit.some((e) => e.type === 'locked')).toBe(true);
+    expect(fw.notifications.length).toBe(1);
+    expect(fw.notifications[0].channel).toBe('internal_task');
+    expect(fw.notifications[0].kind).toBe('bundle_locked');
+    // no whatsapp queued by default; suppression is audited
+    expect(fw.notifications.some((n) => n.channel === 'whatsapp')).toBe(false);
+    expect(fw.audit.some((e) => e.type === 'notification_suppressed' && (e.ref ?? '').includes('whatsapp'))).toBe(true);
+  });
+
+  it('A6: WhatsApp is suppressed by default and only dispatched after explicit lawyer configuration', () => {
+    const s1 = ready();
+    const def = s1.filing.lockBundle(s1.id, 'lawyer:rao', t(2));
+    expect(def.notifications.some((n) => n.channel === 'whatsapp')).toBe(false);
+
+    const s2 = ready();
+    s2.filing.configureNotifications(s2.id, { whatsappEnabled: true }, t(2));
+    const cfg = s2.filing.lockBundle(s2.id, 'lawyer:rao', t(2));
+    expect(cfg.notifications.some((n) => n.channel === 'whatsapp')).toBe(true);
+    expect(cfg.notifications.find((n) => n.channel === 'whatsapp')!.dispatched).toBe(false); // stub only, nothing transmitted
+  });
+
+  it('A7: refusals/notifications persist across reload; edit-to-v2 re-blocks filing', () => {
+    const { store, filing, id } = ready();
+    filing.lockBundle(id, 'student:unauthorised', t(2)); // refused + audited
+    filing.lockBundle(id, 'lawyer:rao', t(2)); // locked + notification
+    const filing2 = new FilingWorkflowService(store, new DraftWorkspaceService(store));
+    const fw = filing2.get(id)!;
+    expect(latestBundle(fw)!.locked).toBe(true);
+    expect(fw.notifications.length).toBe(1);
+    expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('unauthorised_actor'))).toBe(true);
+    const v2 = filing2.editAfterLock(id, t(3));
+    expect(latestBundle(v2)!.versionNo).toBe(2);
+    expect(canProceedToFiling(v2)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase B — E09 filing-proof upload (SAATHI-22/436/438)
+// ---------------------------------------------------------------------------
+describe('E09 real filing-proof upload (SAATHI-22/436/438)', () => {
+  function filed() {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); completeAllChecklist(s.filing, s.id); s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    s.filing.recordFiling(s.id, { court: 'City Civil', benchLocation: 'Blr', filedAt: t(3), mode: 'e-filing', filedBy: 'clerk', notes: '', proofRef: '' }, t(3));
+    return s;
+  }
+  it('B09.1: validateUpload accepts an allowed PDF and rejects type/size/empty/missing', () => {
+    expect(validateUpload(validPdf).ok).toBe(true);
+    expect(validateUpload({ filename: 'x.exe', mime: 'application/octet-stream', size: 10, present: true })).toEqual({ ok: false, reason: 'type' });
+    expect(validateUpload({ filename: 'big.pdf', mime: 'application/pdf', size: MAX_UPLOAD_BYTES + 1, present: true })).toEqual({ ok: false, reason: 'size' });
+    expect(validateUpload({ filename: 'empty.pdf', mime: 'application/pdf', size: 0, present: true })).toEqual({ ok: false, reason: 'empty' });
+    expect(validateUpload({ filename: '', mime: 'application/pdf', size: 10, present: false })).toEqual({ ok: false, reason: 'missing' });
+    // MIME/extension mismatch is rejected as a type error
+    expect(validateUpload({ filename: 'proof.pdf', mime: 'image/gif', size: 10, present: true })).toEqual({ ok: false, reason: 'type' });
+  });
+  it('B09.2: attach persists safe metadata + opaque ref (no bytes/PII) and audits proof_uploaded', () => {
+    const { filing, id } = filed();
+    const { fw, validation } = filing.attachFilingProof(id, validPdf, t(4));
+    expect(validation.ok).toBe(true);
+    expect(fw.filing!.proof!.ref.startsWith('upload_')).toBe(true);
+    expect(fw.filing!.proof!.filename).toBe('proof.pdf');
+    expect(fw.filing!.proofRef).toBe(fw.filing!.proof!.ref); // reference points at opaque metadata
+    expect(fw.audit.some((e) => e.type === 'proof_uploaded')).toBe(true);
+    // milestone + invoice gate intact
+    expect(fw.filing!.milestoneReached).toBe(true);
+    expect(fw.filing!.invoiceStatus).toBe('draft');
+  });
+  it('B09.3: invalid upload rejected with a reason and no proof stored; persists across reload', () => {
+    const { store, filing, id } = filed();
+    const { fw, validation } = filing.attachFilingProof(id, { filename: 'v.mp4', mime: 'video/mp4', size: 5, present: true }, t(4));
+    expect(validation.ok).toBe(false);
+    expect(fw.filing!.proof).toBeNull();
+    expect(fw.audit.some((e) => e.type === 'failure' && (e.ref ?? '').includes('proof_upload_rejected'))).toBe(true);
+    // reload keeps a successfully-attached proof
+    filing.attachFilingProof(id, validPdf, t(5));
+    const fw2 = new FilingWorkflowService(store, new DraftWorkspaceService(store)).get(id)!;
+    expect(fw2.filing!.proof!.filename).toBe('proof.pdf');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase B — E10 acknowledgement upload (SAATHI-24/439/441)
+// ---------------------------------------------------------------------------
+describe('E10 acknowledgement upload (SAATHI-24/439/441)', () => {
+  function diaried(source: 'manual' | 'authorised_source' = 'manual') {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); completeAllChecklist(s.filing, s.id); s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    s.filing.recordFiling(s.id, { court: 'City Civil', benchLocation: 'Blr', filedAt: t(3), mode: 'e-filing', filedBy: 'clerk', notes: '', proofRef: '' }, t(3));
+    s.filing.captureDiary(s.id, { number: 'D/1/2026', court: 'City Civil', year: '2026', source, receivedDate: t(4), acknowledgementRef: '' }, t(4));
+    return s;
+  }
+  it('B10.1: attaches acknowledgement metadata + ref, keeps manual "not officially validated"', () => {
+    const { filing, id } = diaried('manual');
+    const { fw, validation } = filing.attachDiaryAcknowledgement(id, { filename: 'ack.png', mime: 'image/png', size: 2048, present: true }, t(5));
+    expect(validation.ok).toBe(true);
+    expect(fw.diary!.acknowledgement!.ref.startsWith('upload_')).toBe(true);
+    expect(fw.diary!.acknowledgementRef).toBe(fw.diary!.acknowledgement!.ref);
+    expect(fw.diary!.officiallyValidated).toBe(false); // manual guardrail preserved
+    expect(fw.diary!.boundFilingId).toBe(fw.filing!.id); // binding preserved
+    expect(fw.audit.some((e) => e.type === 'ack_uploaded')).toBe(true);
+  });
+  it('B10.2: rejects an invalid acknowledgement and preserves append-only correction history', () => {
+    const { filing, id } = diaried('authorised_source');
+    filing.attachDiaryAcknowledgement(id, validPdf, t(5));
+    const bad = filing.attachDiaryAcknowledgement(id, { filename: 'a.txt', mime: 'text/plain', size: 3, present: true }, t(6));
+    expect(bad.validation.ok).toBe(false);
+    const fw = filing.correctDiary(id, 'D/2/2026', 'typo', 'lawyer', t(7));
+    expect(fw.diary!.acknowledgement!.filename).toBe('proof.pdf'); // valid one retained
+    expect(fw.diary!.history[0].old).toBe('D/1/2026'); // append-only history intact
+    expect(fw.diary!.officiallyValidated).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase B — E11 receipt upload + client statement (SAATHI-26/442/444)
+// ---------------------------------------------------------------------------
+describe('E11 receipt upload + client statement (SAATHI-26/442/444)', () => {
+  function feed() {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); completeAllChecklist(s.filing, s.id); s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    s.filing.addFee(s.id, { id: 'L1', category: 'court_fee', amount: 1000, payer: 'client', payee: 'court', date: t(5), mode: 'online', receiptRef: null }, t(5));
+    s.filing.addFee(s.id, { id: 'L2', category: 'professional_fee', amount: 5000, payer: 'client', payee: 'firm', date: t(5), mode: 'online', receiptRef: null }, t(5));
+    s.filing.addFee(s.id, { id: 'L3', category: 'refund', amount: 200, payer: 'firm', payee: 'client', date: t(5), mode: 'online', receiptRef: null }, t(5));
+    return s;
+  }
+  it('B11.1: receipt upload stores safe metadata/ref but does NOT itself mark the line paid', () => {
+    const { filing, id } = feed();
+    const { fw, validation } = filing.attachFeeReceipt(id, 'L1', validPdf, t(6));
+    expect(validation.ok).toBe(true);
+    const l1 = fw.fees.lines.find((l) => l.id === 'L1')!;
+    expect(l1.receipt!.ref.startsWith('upload_')).toBe(true);
+    expect(l1.receiptRef).toBe(l1.receipt!.ref);
+    expect(l1.status).toBe('pending'); // still gated on server-verified payment
+    expect(fw.audit.some((e) => e.type === 'receipt_uploaded')).toBe(true);
+  });
+  it('B11.2: paid remains server-verification + receipt gated and idempotent after upload', () => {
+    const { filing, id } = feed();
+    filing.attachFeeReceipt(id, 'L1', validPdf, t(6));
+    let fw = filing.payFee(id, { lineId: 'L1', providerRef: 'p1', serverVerified: false, receiptRef: 'rc' }, t(6));
+    expect(fw.fees.lines.find((l) => l.id === 'L1')!.status).toBe('manual_review'); // unverified
+    fw = filing.payFee(id, { lineId: 'L1', providerRef: 'p2', serverVerified: true, receiptRef: 'rc' }, t(6));
+    expect(fw.fees.lines.find((l) => l.id === 'L1')!.status).toBe('paid');
+    const before = fw.fees.lines.find((l) => l.id === 'L1')!;
+    fw = filing.payFee(id, { lineId: 'L1', providerRef: 'p2', serverVerified: true, receiptRef: 'rc' }, t(6)); // duplicate
+    expect(fw.fees.lines.find((l) => l.id === 'L1')!).toEqual(before);
+  });
+  it('B11.3: client statement lists every line with pending/paid/refunded and distinct categories + totals', () => {
+    const { filing, id } = feed();
+    filing.attachFeeReceipt(id, 'L1', validPdf, t(6));
+    filing.payFee(id, { lineId: 'L1', providerRef: 'p2', serverVerified: true, receiptRef: 'rc' }, t(6));
+    const st = filing.clientStatement(id)!;
+    expect(st.lines.length).toBe(3);
+    expect(st.lines.map((l) => l.status)).toEqual(['paid', 'pending', 'refunded']);
+    expect(st.lines.map((l) => l.category)).toEqual(['court_fee', 'professional_fee', 'refund']);
+    expect(st.totalPaid).toBe(1000);
+    expect(st.totalPending).toBe(5000);
+    expect(st.totalRefunded).toBe(200);
+    expect(st.totalBilled).toBe(6000); // refund excluded from billed
+    expect(statementLineStatus({ id: 'x', category: 'process_fee', amount: 1, payer: '', payee: '', date: '', mode: '', status: 'manual_review', receiptRef: null, receipt: null, allocations: [] })).toBe('pending');
+  });
+  it('B11.4: keeps GST disabled by default (LCR-007/008)', () => {
+    expect(GST_ENABLED).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase B — E12 identifier fallback actions (SAATHI-28/445/447)
+// ---------------------------------------------------------------------------
+describe('E12 identifier fallback actions (SAATHI-28/445/447)', () => {
+  function tracked(cnr: string) {
+    const s = setup();
+    s.filing.initBundle(s.id, t(1)); completeAllChecklist(s.filing, s.id); s.filing.lockBundle(s.id, 'lawyer:rao', t(2));
+    s.filing.recordFiling(s.id, { court: 'City Civil', benchLocation: 'Blr', filedAt: t(3), mode: 'e-filing', filedBy: 'clerk', notes: '', proofRef: '' }, t(3));
+    s.filing.captureCnr(s.id, { cnr, caseNumber: 'OS/1/2026', source: 'manual entry', sourceType: 'manual' }, t(4));
+    return s;
+  }
+  it('B12.1: automated fetch is disabled by default and returns an actionable manual-entry result', () => {
+    expect(attemptAutomatedIdentifierFetch().reason).toBe('polling_disabled');
+    expect(ECOURTS_POLLING_ENABLED).toBe(false);
+    const { filing, id } = tracked('bad');
+    const { fw, result } = filing.attemptIdentifierFetch(id, t(5));
+    expect(result.ok).toBe(false);
+    expect(result.message.length).toBeGreaterThan(0);
+    expect(fw.audit.some((e) => e.type === 'identifier_fetch_attempt')).toBe(true);
+  });
+  it('B12.2: manual update fixes an invalid identifier, stays not-court-verified, and audits the fallback', () => {
+    const { filing, id } = tracked('bad'); // invalid capture
+    expect(filing.get(id)!.tracking!.validated).toBe(false);
+    const fw = filing.manualUpdateIdentifier(id, { cnr: 'KABC010001232026', caseNumber: 'OS/1/2026' }, t(5));
+    expect(fw.tracking!.validated).toBe(true);
+    expect(fw.tracking!.courtVerified).toBe(false); // manual is never court-verified
+    expect(fw.tracking!.sourceType).toBe('manual');
+    expect(fw.audit.some((e) => e.type === 'identifier_manual_update')).toBe(true);
+    expect(fw.audit.some((e) => e.type === 'manual_fallback')).toBe(true);
+  });
+  it('B12.3: validation-gated activation + refresh persistence hold after manual update', () => {
+    const { store, filing, id } = tracked('bad');
+    // invalid → activation refused
+    let fw = filing.activateTracking(id, true, t(5));
+    expect(fw.tracking!.trackingEnabled).toBe(false);
+    // manual fix → now activatable
+    filing.manualUpdateIdentifier(id, { cnr: 'KABC010001232026', caseNumber: 'OS/1/2026' }, t(5));
+    fw = filing.activateTracking(id, true, t(6));
+    expect(fw.tracking!.trackingEnabled).toBe(true);
+    const fw2 = new FilingWorkflowService(store, new DraftWorkspaceService(store)).get(id)!;
+    expect(fw2.tracking!.trackingEnabled).toBe(true);
+    expect(fw2.tracking!.courtVerified).toBe(false);
   });
 });
