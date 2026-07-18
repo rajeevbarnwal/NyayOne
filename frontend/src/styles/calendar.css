@@ -4,6 +4,10 @@
    scoped under `.calv` so nothing here can regress other screens. Colours are
    token-only (light/dark safe). SAATHI-286 visual remediation.
 =========================================================================== */
+/* Calendar screens need the v3.2 content width (1320px). The shared .st-screen
+   caps at 960px; this scoped modifier lifts the cap for calendar screens ONLY,
+   without changing .st-screen globally. */
+.st-screen.calv-screen { max-width: min(1320px, 100%); }
 .calv { width: 100%; max-width: 1320px; margin: 0 auto; min-width: 0; overflow-wrap: anywhere; }
 .calv * { min-width: 0; }
 .calv .lede { font-family: var(--font-serif); font-size: 28px; font-weight: 500; letter-spacing: -.01em; margin: 0 0 4px; color: var(--text); }

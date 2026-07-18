@@ -103,12 +103,12 @@ export function CalendarMonth() {
   const selected = selectedId && agg ? resolveDeepLink(agg.events, selectedId, STUDENT_ID) : null;
 
   return (
-    <StudentScreen screenId="S-90">
+    <StudentScreen screenId="S-90" className="calv-screen">
       <div className="calv">
+        <CalSubnav active="month" />
         <h1 className="lede">Unified Calendar <span className="m">· S19</span></h1>
         <p className="stand">A platform primitive — every module writes here.</p>
 
-        <CalSubnav active="month" />
 
         {showFilters && (
           <section className="card filters" id="cal-filters" aria-label="Filters">
@@ -272,11 +272,11 @@ export function CalendarAdd() {
   }
 
   return (
-    <StudentScreen screenId="S-91">
+    <StudentScreen screenId="S-91" className="calv-screen">
       <div className="calv">
+        <CalSubnav active="add" />
         <h1 className="lede">Add event <span className="m">· S19</span></h1>
         <p className="stand ident">Add a personal event to your unified calendar.</p>
-        <CalSubnav active="add" />
         <div className="cardw">
           <div className="card">
             <div className="ph"><span className="t">New event</span></div>
