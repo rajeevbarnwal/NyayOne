@@ -35,4 +35,11 @@ describe('shell nav config (SAATHI-343)', () => {
     // Profile (the previously-dropped index 4) must be present.
     expect(renderedIds).toContain('profile');
   });
+
+  it('routes Home to the dashboard and Profile to the profile screen', () => {
+    expect(railItems.find((item) => item.id === 'home')?.to).toBe('/s-14');
+    expect(railItems.find((item) => item.id === 'profile')?.to).toBe('/s-17');
+    expect(bottomNavItems.find((item) => item.id === 'home')?.to).toBe('/s-14');
+    expect(bottomNavItems.find((item) => item.id === 'profile')?.to).toBe('/s-17');
+  });
 });

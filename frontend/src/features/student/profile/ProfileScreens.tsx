@@ -158,11 +158,12 @@ export function ProfileResume() {
   const seeded = useMemo(() => seedResumeDraft(), []);
   const step = nextIncompleteStep(seeded);
   const label = step === 1 ? 'personal' : step === 2 ? 'academic' : 'preferences';
+  const firstName = seeded.fullName.trim().split(/\s+/)[0] || 'Student';
   return (
     <StudentScreen screenId="S-13" className="st-authwrap">
       <div className="st-card">
         <p className="st-card__kicker">Resume setup</p>
-        <h1 className="st-card__title">Welcome back, Aditi</h1>
+        <h1 className="st-card__title">Welcome back, {firstName}</h1>
         <p className="st-card__sub">Your profile is partly complete. Pick up from the {label} step.</p>
         <AcademicStep screenId="S-13" />
       </div>
@@ -230,9 +231,11 @@ export function ProfileStep3() {
 /* -------------------------------------------------------------------------- */
 export function ProfileDone() {
   const nav = useNavigate();
-  const tier = profileTier(getProfileDraft());
+  const draft = getProfileDraft();
+  const tier = profileTier(draft);
+  const firstName = draft.fullName.trim().split(/\s+/)[0] || 'Student';
   return (
-    <AuthCard screenId="S-12" kicker="Profile complete" title="You’re all set, Aditi">
+    <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re all set, ${firstName}`}>
       <p className="st-card__sub">Tier badge earned. Your hub is now personalised.</p>
       <span className="st-badge">
         <span aria-hidden>✓</span> {TIER_LABELS[tier === 'verified_student' ? 'verified_student' : 'incomplete']}
@@ -254,11 +257,11 @@ export function ProfileView() {
   const d: ProfileDraft = getProfileDraft();
   const tier = profileTier(d);
   const rows: Array<[string, string]> = [
-    ['Full name', d.fullName || 'Aditi Nair'],
-    ['College', d.college || 'National Law School of India University (NLSIU)'],
-    ['Year of study', d.yearOfStudy || '4th year · B.A. LL.B. (Hons.)'],
-    ['Interests', d.interests.length ? d.interests.join(', ') : 'Constitutional, Arbitration'],
-    ['Career goal', d.careerGoal || 'Litigation & judiciary'],
+    ['Full name', d.fullName || 'Not provided'],
+    ['College', d.college || 'Not provided'],
+    ['Year of study', d.yearOfStudy || 'Not provided'],
+    ['Interests', d.interests.length ? d.interests.join(', ') : 'Not provided'],
+    ['Career goal', d.careerGoal || 'Not provided'],
   ];
   return (
     <StudentScreen screenId="S-17" className="st-set">

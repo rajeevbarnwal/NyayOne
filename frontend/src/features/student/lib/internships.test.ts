@@ -7,6 +7,7 @@ import {
   stipendText,
   newApplicationRef,
   SAMPLE_LISTINGS,
+  validateApplicationPdf,
 } from './internships';
 
 describe('internships browse/filter/save (SAATHI-60)', () => {
@@ -39,5 +40,12 @@ describe('internships application tracker (SAATHI-61)', () => {
     const b = newApplicationRef();
     expect(a).toMatch(/^LS-INT-\d+$/);
     expect(a).not.toBe(b);
+  });
+  it('requires genuine, non-empty PDFs no larger than 5 MB', () => {
+    expect(validateApplicationPdf(null, 'Résumé')).toContain('required');
+    expect(validateApplicationPdf({ name: 'resume.txt', type: 'text/plain', size: 12 }, 'Résumé')).toContain('PDF');
+    expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 0 }, 'Résumé')).toContain('empty');
+    expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 6 * 1024 * 1024 }, 'Résumé')).toContain('5 MB');
+    expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 1024 }, 'Résumé')).toBeNull();
   });
 });

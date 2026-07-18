@@ -34,6 +34,12 @@ describe('profile validation + completeness (SAATHI-55)', () => {
     expect(ENROLMENT_RE.test('KA/1234/2023')).toBe(true);
   });
 
+  it('rejects a future profile date of birth', () => {
+    const d = completeDraft();
+    d.dateOfBirth = '2027-01-01';
+    expect(validateStep(1, d).dateOfBirth).toContain('not in the future');
+  });
+
   it('reports the next incomplete step for resume (S-13)', () => {
     const d = { ...EMPTY_PROFILE, interests: [] };
     expect(nextIncompleteStep(d)).toBe(1);

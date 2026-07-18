@@ -7,6 +7,7 @@ import {
   capabilityAllowed,
   onboardingGate,
   registrationConsentComplete,
+  isValidDateOfBirth,
   type GuardianConsent,
 } from './consent';
 
@@ -26,6 +27,12 @@ describe('age gate + guardian consent (SAATHI-53/58)', () => {
     expect(computeAge('2010-12-01', '2026-07-07')).toBe(15);
     expect(isMinor('2010-12-01', '2026-07-07')).toBe(true);
     expect(isMinor('2004-03-14', '2026-07-07')).toBe(false);
+  });
+
+  it('rejects future and impossible dates of birth', () => {
+    expect(isValidDateOfBirth('2004-03-14', '2026-07-07T00:00:00.000Z')).toBe(true);
+    expect(isValidDateOfBirth('2027-01-01', '2026-07-07T00:00:00.000Z')).toBe(false);
+    expect(isValidDateOfBirth('2026-02-31', '2026-07-07T00:00:00.000Z')).toBe(false);
   });
 
   it('requires and evaluates guardian consent for minors', () => {

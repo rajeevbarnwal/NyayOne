@@ -4,6 +4,7 @@
  * drive step validation and to resume from the last incomplete step (S-13).
  * Persistence is a stub boundary in this batch (no domain migrations).
  */
+import { isValidDateOfBirth } from './consent';
 
 export type ProfileStep = 1 | 2 | 3;
 
@@ -43,10 +44,12 @@ export const ENROLMENT_RE = /^[A-Za-z]{2}\/\d+\/\d{4}$/;
 
 export type FieldErrors = Record<string, string>;
 
-export function validateStep1(d: ProfileDraft): FieldErrors {
+export function validateStep1(d: ProfileDraft, nowISO = new Date().toISOString()): FieldErrors {
   const e: FieldErrors = {};
   if (!d.fullName.trim()) e.fullName = 'Enter your full name.';
   if (!d.dateOfBirth) e.dateOfBirth = 'Enter your date of birth.';
+  else if (!isValidDateOfBirth(d.dateOfBirth, nowISO))
+    e.dateOfBirth = 'Enter a valid date of birth that is not in the future.';
   if (!d.preferredLanguage) e.preferredLanguage = 'Choose a language.';
   return e;
 }

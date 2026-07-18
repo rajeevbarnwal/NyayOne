@@ -9,6 +9,8 @@ import {
   canSyncTransition,
   CATEGORY_OPTIONS,
   SAMPLE_ENTRIES,
+  buildClinicalExport,
+  recordClinicalExportAudit,
   type LogDraftInput,
 } from './clinical';
 
@@ -38,5 +40,38 @@ describe('clinical log validation + progress (SAATHI-173)', () => {
     expect(statusChip('submitted').label).toBe('Pending faculty');
     expect(canSyncTransition('local_draft', 'queued')).toBe(true);
     expect(canSyncTransition('local_draft', 'synced')).toBe(false);
+  });
+
+  it('builds privacy-safe CSV/PDF payloads and an auditable export event', () => {
+    const generatedAt = '2026-07-18T10:00:00.000Z';
+    const csv = buildClinicalExport(SAMPLE_ENTRIES, 'csv', {
+      includesEvidence: false,
+      reauthenticated: false,
+      generatedAt,
+    });
+    expect(csv.mimeType).toContain('text/csv');
+    expect(csv.content).toContain('date,hours,activity,category,status');
+    expect(csv.content).not.toContain('prof@nls.ac.in');
+    expect(csv.content).not.toContain('camp-letter.pdf');
+
+    const pdf = buildClinicalExport(SAMPLE_ENTRIES, 'pdf', {
+      includesEvidence: true,
+      reauthenticated: true,
+      generatedAt,
+    });
+    expect(pdf.content.startsWith('%PDF-1.4')).toBe(true);
+    expect(pdf.content).toContain('xref');
+    expect(pdf.content.endsWith('%%EOF\n')).toBe(true);
+    expect(pdf.content).not.toContain('prof@nls.ac.in');
+    const audit = recordClinicalExportAudit(pdf);
+    expect(audit).toMatchObject({ action: 'clinical_hours_exported', format: 'pdf', entryCount: 3 });
+  });
+
+  it('blocks evidence exports until re-authentication', () => {
+    expect(() => buildClinicalExport(SAMPLE_ENTRIES, 'csv', {
+      includesEvidence: true,
+      reauthenticated: false,
+      generatedAt: '2026-07-18T10:00:00.000Z',
+    })).toThrow('re_authentication_required');
   });
 });

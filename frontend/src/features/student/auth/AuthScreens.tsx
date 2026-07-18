@@ -10,23 +10,23 @@ import {
   maskDestination,
   type OtpChannel,
 } from '../lib/otp';
-import { startOtp, getFlow, setChallenge, setMinor, STUB_OTP_CODE } from '../lib/authFlow';
-import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
-import { isReviewerMode } from '../../../components/shell/TraceabilityBanner';
+import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
+import { isMinor, isValidDateOfBirth, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
+import { updateProfileDraft } from '../lib/profileStore';
+import { useAuth } from '../../../app/authContext';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
 /* -------------------------------------------------------------------------- */
 export function Splash() {
   const nav = useNavigate();
+  const auth = useAuth();
+  useEffect(() => {
+    nav(auth.isAuthenticated ? '/s-14' : '/s-03', { replace: true });
+  }, [auth.isAuthenticated, nav]);
   return (
     <AuthCard screenId="S-01" kicker="Student module · S1" title="LegalSaathi" brand>
       <LoadingState label="Checking your session…" />
-      <div className="st-actions">
-        <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-03')}>
-          Continue
-        </button>
-      </div>
       <DpdpFootnote>Privacy notice shown before registration · no PII in analytics</DpdpFootnote>
     </AuthCard>
   );
@@ -85,7 +85,7 @@ export function AuthGate() {
 
   function sendOtp() {
     const digits = mobile.replace(/\D/g, '');
-    if (digits.length < 10) {
+    if (digits.length !== 10) {
       setError('Enter a valid 10-digit mobile number.');
       return;
     }
@@ -194,8 +194,9 @@ export function Register() {
     const nowISO = new Date().toISOString();
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Enter your full name.';
-    if (mobile.replace(/\D/g, '').length < 10) e.mobile = 'Enter a valid 10-digit mobile number.';
+    if (mobile.replace(/\D/g, '').length !== 10) e.mobile = 'Enter a valid 10-digit mobile number.';
     if (!dob) e.dob = 'Enter your date of birth to confirm eligibility.';
+    else if (!isValidDateOfBirth(dob, nowISO)) e.dob = 'Enter a valid date of birth that is not in the future.';
     const consent: RegistrationConsent = {
       version: CONSENT_VERSION,
       acceptedTerms: terms,
@@ -209,6 +210,7 @@ export function Register() {
     if (Object.keys(e).length > 0) return;
 
     const minor = isMinor(dob, nowISO);
+    updateProfileDraft({ fullName: name.trim(), dateOfBirth: dob });
     startOtp({ channel: 'sms' as OtpChannel, ref: mobile.replace(/\D/g, '') }, Date.now());
     setMinor(minor, minor); // guardian consent pending until verified server-side
     // Minors continue through OTP but land in a restricted state (S-16) until
@@ -351,9 +353,6 @@ export function OtpVerify() {
         error={status === 'incorrect' ? helper : undefined}
         help={status === 'incorrect' ? undefined : helper}
       />
-      {isReviewerMode() && (
-        <p className="st-field__help">Reviewer stub code: {STUB_OTP_CODE}</p>
-      )}
       <div className="st-actions st-actions--split">
         <button type="button" className="btn tap" disabled={resendIn > 0} onClick={() => nav('/s-07')}>
           {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend OTP'}

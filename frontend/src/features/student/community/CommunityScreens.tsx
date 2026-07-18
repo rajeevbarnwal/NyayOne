@@ -7,6 +7,7 @@ import {
   publicBody,
   looksLikeLegalAdvice,
   validateCompose,
+  validateReply,
   REPORT_REASONS,
   REVIEW_SLA_HOURS,
   SAMPLE_CHANNELS,
@@ -81,6 +82,16 @@ export function CommunityPost() {
   const nav = useNavigate();
   const post = SAMPLE_POSTS[0];
   const [reply, setReply] = useState('');
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replies, setReplies] = useState<string[]>([]);
+
+  function postReply() {
+    const error = validateReply(reply);
+    setReplyError(error);
+    if (error) return;
+    setReplies((current) => [...current, reply.trim()]);
+    setReply('');
+  }
   return (
     <StudentScreen screenId="S-51">
       <div className="st-stack">
@@ -92,6 +103,13 @@ export function CommunityPost() {
           </div>
           <p className="st-metatag">{post.author.toUpperCase()} · {post.replies} REPLIES</p>
           <p>{publicBody(post)}</p>
+          {replies.length > 0 && (
+            <ul className="st-list" aria-label="Posted replies">
+              {replies.map((body, index) => (
+                <li className="st-item" key={`${index}-${body}`}><div><div>You</div><div className="st-item__meta">{body}</div></div></li>
+              ))}
+            </ul>
+          )}
           <div className="st-chips" style={{ marginTop: 'var(--space-2)' }}>
             <StatusBadge status="ok" label="Active" />
           </div>
@@ -101,10 +119,11 @@ export function CommunityPost() {
           <label className="st-field" htmlFor="reply">
             <span className="st-field__label">Add to the discussion</span>
             <textarea id="reply" className="st-input" style={{ minHeight: 90, padding: 'var(--space-3)' }} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Add to the discussion…" />
+            {replyError && <ValidationState message={replyError} />}
           </label>
           <div className="st-actions st-actions--split">
             <button type="button" className="btn tap" onClick={() => nav('/s-53')}>Report this post</button>
-            <button type="button" className="btn btn--primary tap">Post reply</button>
+            <button type="button" className="btn btn--primary tap" onClick={postReply}>Post reply</button>
           </div>
         </section>
       </div>

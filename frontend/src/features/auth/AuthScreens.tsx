@@ -12,7 +12,7 @@ import {
 } from './lib/authLifecycle';
 import { saveAuthSnapshot, loadAuthSnapshot, clearAuthSnapshot } from './lib/authPersistence';
 import {
-  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck, recordManualOverride,
+  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck,
   canAccessLawyerFeatures, lawyerGateReason, LAWYER_VERIFICATION_STATUS_LABELS, STATE_BAR_COUNCILS,
   ENROLMENT_STATUS_ONLY_NOTICE, BCI_PROFILE_DISPLAY_ENABLED, type LawyerProfile, type VerificationRecord,
 } from './lib/lawyerVerify';
@@ -80,7 +80,6 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [profile, setProfile] = useState<LawyerProfile>(EMPTY_LAWYER_PROFILE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rec, setRec] = useState<VerificationRecord | null>(null);
-  const [overrideReason, setOverrideReason] = useState('');
   const enrolSrc = useMemo(() => createStubEnrolmentSource(), []);
 
   // Student verification
@@ -105,7 +104,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
 
   function sendOtp() {
-    if (!mobile.trim()) { setErrors({ mobile: 'Enter your mobile number.' }); return; }
+    if (mobile.replace(/\D/g, '').length !== 10) { setErrors({ mobile: 'Enter a valid 10-digit mobile number.' }); return; }
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
     setChallenge(ch);
@@ -143,12 +142,6 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     setRec(r);
     pushLedger(`Enrolment check: ${r.status}`);
     setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
-  }
-  function lawyerOverride() {
-    if (!rec) return;
-    const r = recordManualOverride(rec, { authorised: true, reason: overrideReason, reviewer: 'admin:compliance' }, nowISO());
-    setRec(r);
-    if (r.status === 'verified') { pushLedger('Authorised override recorded'); setPhase('verified'); }
   }
   function runStudentCheck() {
     const e = validateStudentVerify(sv);
@@ -237,7 +230,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
           <div className="st-stack">
             <h2 className="st-panel__title">Verify OTP</h2>
             <p className="st-item__meta">Code sent to {destMasked}. {isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`}</p>
-            <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" help="Demo stub code: 429016. A wrong code shows the invalid/lockout states." />
+            <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" autoComplete="one-time-code" help="Enter the one-time code sent by SMS. A wrong code shows the invalid/lockout states." />
             {otpMsg && <ValidationState message={otpMsg} />}
             {isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
             <div className="st-actions st-actions--split">
@@ -307,7 +300,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             </div>
 
             {isLawyer ? <LawyerResult phase={phase} rec={rec} unlocked={canAccessLawyerFeatures(rec)} gate={lawyerGateReason(rec)}
-              overrideReason={overrideReason} setOverrideReason={setOverrideReason} onOverride={lawyerOverride} onRetry={() => go('retry')} />
+              onRetry={() => go('retry')} />
               : <StudentResult phase={phase} srec={srec} minor={minorCtx.isMinor} guardianOk={guardianConsentSatisfied(guardian)}
                 pro={proFeaturesUnlocked({ verification: srec, minor: minorCtx })}
                 gate={studentGateReason({ verification: srec, minor: minorCtx })} onRetry={() => go('retry')} />}
@@ -321,9 +314,9 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   );
 }
 
-function LawyerResult({ phase, rec, unlocked, gate, overrideReason, setOverrideReason, onOverride, onRetry }: {
+function LawyerResult({ phase, rec, unlocked, gate, onRetry }: {
   phase: AuthPhase; rec: VerificationRecord | null; unlocked: boolean; gate: string | null;
-  overrideReason: string; setOverrideReason: (v: string) => void; onOverride: () => void; onRetry: () => void;
+  onRetry: () => void;
 }) {
   return (
     <>
@@ -331,10 +324,8 @@ function LawyerResult({ phase, rec, unlocked, gate, overrideReason, setOverrideR
       {phase === 'manual_review' && <p>Your enrolment is in manual review by our compliance team. Lawyer features unlock once a reviewer confirms it.</p>}
       {phase === 'rejected' && (
         <>
-          <p>We could not verify this enrolment. You can re-check the number, or an authorised reviewer can record a manual override.</p>
+          <p>We could not verify this enrolment. Re-check the number or contact the compliance team for an independent review.</p>
           <div className="st-actions"><button type="button" className="btn tap" onClick={onRetry}>Re-check enrolment</button></div>
-          <TextField id="lw-ovr" label="Authorised reviewer override reason" value={overrideReason} onChange={setOverrideReason} help="Human reviewers only — automation can never clear a verification. Recorded to the immutable audit log." />
-          <div className="st-actions"><button type="button" className="btn tap" disabled={!overrideReason.trim()} aria-disabled={!overrideReason.trim()} onClick={onOverride}>Record authorised override</button></div>
         </>
       )}
       <section className="st-panel" aria-label="Lawyer workspace" style={{ marginTop: 'var(--space-3)' }}>
