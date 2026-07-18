@@ -60,7 +60,12 @@ export function auditEvent(type: FilingAuditType, actor: string, at: string, ref
 
 // --- E08: final filing bundle -------------------------------------------------
 
-export const CHECKLIST_KEYS = ['pleading', 'annexures', 'pagination', 'signatures', 'affidavits', 'vakalatnama', 'metadata'] as const;
+// Jira E08 (SAATHI-20/433/434/435): the vetting checklist must include the
+// 'fee readiness' and 'client approval' dimensions alongside document checks.
+// Adding them here flows to emptyChecklist, checklistComplete, bundleHash, the
+// UI chips (CaseScreens maps CHECKLIST_KEYS) and audit, so the final lock cannot
+// complete until every required readiness dimension is satisfied.
+export const CHECKLIST_KEYS = ['pleading', 'annexures', 'pagination', 'signatures', 'affidavits', 'vakalatnama', 'metadata', 'fee_readiness', 'client_approval'] as const;
 export type ChecklistKey = (typeof CHECKLIST_KEYS)[number];
 export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
   pleading: 'Pleading / petition',
@@ -70,6 +75,8 @@ export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
   affidavits: 'Affidavits',
   vakalatnama: 'Vakalatnama / authorisation',
   metadata: 'Required metadata',
+  fee_readiness: 'Fee readiness',
+  client_approval: 'Client approval',
 };
 
 export interface FilingBundle {

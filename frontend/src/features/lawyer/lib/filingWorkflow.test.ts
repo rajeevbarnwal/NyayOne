@@ -54,6 +54,27 @@ describe('E08 vet & lock final filing bundle (SAATHI-20)', () => {
     expect(canProceedToFiling(fw)).toBe(true);
   });
 
+  it('E08 (SAATHI-20/433/434/435): fee-readiness and client-approval are required checklist dimensions', () => {
+    // The two Jira dimensions are part of the canonical checklist contract.
+    expect(CHECKLIST_KEYS).toContain('fee_readiness');
+    expect(CHECKLIST_KEYS).toContain('client_approval');
+    const { filing, id } = setup();
+    filing.initBundle(id, t(1));
+    // Complete every document dimension but leave fee_readiness + client_approval off.
+    for (const k of CHECKLIST_KEYS) {
+      if (k === 'fee_readiness' || k === 'client_approval') continue;
+      filing.setChecklist(id, k, true, t(2));
+    }
+    let fw = filing.lockBundle(id, 'lawyer:rao', t(2));
+    expect(latestBundle(fw)!.locked).toBe(false); // lock refused: readiness dims missing
+    filing.setChecklist(id, 'fee_readiness', true, t(2));
+    fw = filing.lockBundle(id, 'lawyer:rao', t(2));
+    expect(latestBundle(fw)!.locked).toBe(false); // still refused: client_approval missing
+    filing.setChecklist(id, 'client_approval', true, t(2));
+    fw = filing.lockBundle(id, 'lawyer:rao', t(2));
+    expect(latestBundle(fw)!.locked).toBe(true); // all required dimensions satisfied
+  });
+
   it('locked bundle is read-only; editing creates a new unlocked version; hash stable', () => {
     const { filing, id } = setup();
     filing.initBundle(id, t(1));
