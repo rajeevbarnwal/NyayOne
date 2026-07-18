@@ -111,6 +111,7 @@ function focusField(id: string) {
 /* -------------------------------------------------------------------------- */
 export function CaseIntake() {
   const nav = useNavigate();
+  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const [d, setD] = useState<IntakeDraft>(EMPTY_INTAKE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ConflictResult | null>(null);
@@ -122,11 +123,11 @@ export function CaseIntake() {
     setErrors(e);
     if (Object.keys(e).length) return;
     const matches = checkConflicts(d, SAMPLE_REGISTER);
-    setResult(decideConflict(matches, new Date().toISOString(), 'adv.rao'));
+    setResult(decideConflict(matches, new Date().toISOString(), describeActor(actor)));
   }
   function override() {
     if (!result) return;
-    setResult(decideConflict(result.matches, new Date().toISOString(), 'adv.rao', { authorised: true, reason }));
+    setResult(decideConflict(result.matches, new Date().toISOString(), describeActor(actor), { authorised: true, reason }));
   }
 
   return (
@@ -398,6 +399,7 @@ export function CaseDocuments() {
 const DRAFT_CASE_ID = 'LS-CASE-2026-014';
 export function CaseDraft() {
   const nav = useNavigate();
+  const actor = lawyerActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const assistant = useMemo(() => createStubDraftingAssistant(), []);
   const svc = useMemo(() => new DraftWorkspaceService(), []);
   const wsId = workspaceIdFor(DRAFT_CASE_ID);
@@ -426,11 +428,11 @@ export function CaseDraft() {
   }
   function saveEdit() {
     if (!editBody.trim()) return;
-    setWs(svc.addVersion(wsId, { authorId: 'lawyer:rao', createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
+    setWs(svc.addVersion(wsId, { authorId: describeActor(actor), createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
     setEditBody('');
   }
   function approve() {
-    if (latest) setWs(svc.approve(wsId, latest.id, 'lawyer:rao', new Date().toISOString()));
+    if (latest) setWs(svc.approve(wsId, latest.id, describeActor(actor), new Date().toISOString()));
   }
   function sendForReview() {
     svc.setCurrent(wsId); // hand the actual workspace to E07 (no seed)
@@ -787,7 +789,7 @@ export function CaseFiling() {
           <StatusBadge status={chip('warn')} label={`Milestone: Case Filed ${filing.milestonePct}%`} />
           <div className="st-actions st-actions--split">
             <StatusBadge status={filing.invoiceStatus === 'approved' ? chip('ok') : chip('info')} label={`Invoice ${filing.invoiceStatus}`} />
-            {filing.invoiceStatus === 'draft' && <button type="button" className="btn tap" onClick={() => setFw(svc.approveFilingInvoice(wsId!, describeActor(actor), nowISO()))}>Approve invoice</button>}
+            {filing.invoiceStatus === 'draft' && <button type="button" className="btn tap" onClick={() => setFw(svc.approveFilingInvoice(wsId!, nowISO(), actor))}>Approve invoice</button>}
           </div>
           <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/diary')}>Proceed to diary number</button></div>
         </section>
@@ -870,7 +872,7 @@ export function CaseDiary() {
           <TextField id="dy-reason" label="Correction reason" value={correction.reason} onChange={(v) => setCorrection((s) => ({ ...s, reason: v }))} />
           <div className="st-actions st-actions--split">
             <button type="button" className="btn tap" disabled={!correction.number.trim() || !correction.reason.trim()} aria-disabled={!correction.number.trim() || !correction.reason.trim()}
-              onClick={() => { setFw(svc.correctDiary(wsId!, correction.number, correction.reason, describeActor(actor), nowISO())); setCorrection({ number: '', reason: '' }); }}>Record correction</button>
+              onClick={() => { setFw(svc.correctDiary(wsId!, correction.number, correction.reason, nowISO(), actor)); setCorrection({ number: '', reason: '' }); }}>Record correction</button>
             <button type="button" className="btn btn--primary tap" onClick={() => nav('/case/fees')}>Proceed to fees</button>
           </div>
           <div className="st-setrow" style={{ flexDirection: 'column', alignItems: 'stretch' }} aria-label="Client status update">

@@ -30,3 +30,24 @@ describe('lawyerActorFromAuth / lawyerRouteDenial (session → workflow actor)',
     expect(lawyerActorFromAuth(spoof)).toBeNull();
   });
 });
+
+describe('role x /case route guard matrix (E01-E12 all guarded)', () => {
+  const rejectedLawyer: AuthState = { ...base, roles: ['lawyer'], lawyerVerification: 'rejected' };
+  const denied: Record<string, AuthState> = {
+    anonymous: ANONYMOUS_AUTH,
+    student: base,
+    client,
+    unverifiedLawyer,
+    rejectedLawyer,
+  };
+  it('every non-verified persona is denied the lawyer routes (guard reason present)', () => {
+    for (const auth of Object.values(denied)) {
+      expect(lawyerRouteDenial(auth)).toBeTruthy();
+      expect(lawyerActorFromAuth(auth)).toBeNull(); // no workflow actor either
+    }
+  });
+  it('only a verified lawyer is allowed and maps to a finalize-capable actor', () => {
+    expect(lawyerRouteDenial(verifiedLawyer)).toBeNull();
+    expect(lawyerActorFromAuth(verifiedLawyer)).toEqual({ id: 'adv-1', role: 'lawyer' });
+  });
+});

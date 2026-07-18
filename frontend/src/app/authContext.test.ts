@@ -10,7 +10,7 @@ import {
   type AuthState,
 } from './authContext';
 import { InMemoryKvStore } from '../lib/kvStore';
-import { saveAuthSnapshot } from '../features/auth/lib/authPersistence';
+import { saveAuthSnapshot, clearAuthSnapshot } from '../features/auth/lib/authPersistence';
 import type { AuthSnapshot, AuthPhase } from '../features/auth/lib/authLifecycle';
 
 const student: AuthState = {
@@ -57,8 +57,9 @@ describe('frontend auth context', () => {
 });
 
 describe('deriveAuthState from persisted lawyer snapshot', () => {
-  const snap = (phase: AuthPhase, updatedAt: number): AuthSnapshot => ({
-    role: 'lawyer', phase, destinationMasked: '98******10', challenge: null, consentAt: null, updatedAt,
+  const snap = (phase: AuthPhase, updatedAt: number, extra: Partial<AuthSnapshot> = {}): AuthSnapshot => ({
+    role: 'lawyer', phase, destinationMasked: '98******10', challenge: null, consentAt: null,
+    subjectId: 'subj_ab12cd', updatedAt, ...extra,
   });
 
   it('anonymous when there is no snapshot', () => {
@@ -67,12 +68,14 @@ describe('deriveAuthState from persisted lawyer snapshot', () => {
     expect(evaluateGuard(deriveAuthState(store, 1000), 'lawyer-features')).toBeTruthy();
   });
 
-  it('a fresh verified snapshot yields a verified lawyer that passes the guard', () => {
+  it('a fresh verified snapshot with an opaque subjectId yields a verified lawyer', () => {
     const store = new InMemoryKvStore();
     saveAuthSnapshot(snap('verified', 10_000), store);
     const auth = deriveAuthState(store, 10_000);
     expect(auth.isAuthenticated).toBe(true);
     expect(auth.roles).toEqual(['lawyer']);
+    expect(auth.userId).toBe('subj_ab12cd'); // stable opaque subject, not the masked contact
+    expect(auth.userId).not.toBe('98******10');
     expect(canUseLawyerFeatures(auth)).toBe(true);
     expect(evaluateGuard(auth, 'lawyer-features')).toBeNull();
   });
@@ -92,5 +95,43 @@ describe('deriveAuthState from persisted lawyer snapshot', () => {
     const auth = deriveAuthState(store, SESSION_MAX_AGE_MS + 1);
     expect(auth.isAuthenticated).toBe(false);
     expect(evaluateGuard(auth, 'lawyer-features')).toBeTruthy();
+  });
+
+  it('a wrong-role snapshot under the lawyer key is malformed → cleared + denied', () => {
+    const store = new InMemoryKvStore();
+    // a student-role record stored under ls-auth-lawyer must NOT become a lawyer
+    store.set('ls-auth-lawyer', { ...snap('verified', 10_000), role: 'student' });
+    const auth = deriveAuthState(store, 10_000);
+    expect(auth.isAuthenticated).toBe(false);
+    expect(store.get('ls-auth-lawyer')).toBeNull(); // cleared
+  });
+
+  it('a verified snapshot without an opaque subjectId is malformed → cleared + denied', () => {
+    const store = new InMemoryKvStore();
+    saveAuthSnapshot(snap('verified', 10_000, { subjectId: null }), store);
+    expect(deriveAuthState(store, 10_000).isAuthenticated).toBe(false);
+    expect(store.get('ls-auth-lawyer')).toBeNull();
+  });
+
+  it('never fabricates identity from a masked contact / email subjectId', () => {
+    const store = new InMemoryKvStore();
+    saveAuthSnapshot(snap('verified', 10_000, { subjectId: '98******10' }), store);
+    expect(deriveAuthState(store, 10_000).isAuthenticated).toBe(false); // masked contact is not a subject id
+    const store2 = new InMemoryKvStore();
+    saveAuthSnapshot(snap('verified', 10_000, { subjectId: 'user@example.com' }), store2);
+    expect(deriveAuthState(store2, 10_000).isAuthenticated).toBe(false);
+  });
+
+  it('reactive source: verification unlocks and logout/clear immediately re-locks (no reload)', () => {
+    const store = new InMemoryKvStore();
+    // before verification → denied
+    expect(evaluateGuard(deriveAuthState(store, 10_000), 'lawyer-features')).toBeTruthy();
+    // P0.1 completes in-SPA → derive immediately reflects verified (live, no reload)
+    saveAuthSnapshot(snap('verified', 10_000), store);
+    expect(evaluateGuard(deriveAuthState(store, 10_000), 'lawyer-features')).toBeNull();
+    // logout/clear → immediately re-locked
+    clearAuthSnapshot('lawyer', store);
+    expect(deriveAuthState(store, 10_000).isAuthenticated).toBe(false);
+    expect(evaluateGuard(deriveAuthState(store, 10_000), 'lawyer-features')).toBeTruthy();
   });
 });

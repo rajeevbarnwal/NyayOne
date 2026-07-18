@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { defaultKvStore, type KvStore } from '../lib/kvStore';
-import { loadAuthSnapshot } from '../features/auth/lib/authPersistence';
+import { loadAuthSnapshot, clearAuthSnapshot, subscribeAuthChange } from '../features/auth/lib/authPersistence';
 
 /**
  * Frontend auth-context + route-guard scaffolding (SAATHI-337 / SAATHI-368).
@@ -69,10 +69,26 @@ export const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  * The server must remain authoritative for privilege decisions; the service-layer
  * role check (see filingWorkflow.canFinalize) is defence in depth, not a backend.
  */
+/** True when a subject id is a stable opaque value (not a masked contact / email / BCI). */
+export function isOpaqueSubjectId(subjectId: string | null | undefined, maskedContact: string | null | undefined): boolean {
+  const s = (subjectId ?? '').trim();
+  if (!s) return false;
+  if (s === (maskedContact ?? '')) return false; // must not be the masked contact
+  if (s.includes('*') || s.includes('@')) return false; // reject masked contact / email shapes
+  return true;
+}
+
 export function deriveAuthState(store: KvStore = defaultKvStore(), now: number = Date.now()): AuthState {
   const snap = loadAuthSnapshot('lawyer', store);
   if (!snap) return ANONYMOUS_AUTH;
+  // Snapshot integrity: a record under the lawyer key MUST carry the lawyer role.
+  // Storage-key placement is not authorisation — a mismatched role is malformed.
+  if (snap.role !== 'lawyer') { clearAuthSnapshot('lawyer', store); return ANONYMOUS_AUTH; }
   if (now - snap.updatedAt > SESSION_MAX_AGE_MS) return ANONYMOUS_AUTH; // expired session
+  const subjectOk = isOpaqueSubjectId(snap.subjectId, snap.destinationMasked);
+  // A verified session without a stable opaque subject id is malformed — never
+  // fabricate an identity from a masked contact. Clear + deny.
+  if (snap.phase === 'verified' && !subjectOk) { clearAuthSnapshot('lawyer', store); return ANONYMOUS_AUTH; }
   const lawyerVerification: VerificationStatus =
     snap.phase === 'verified' ? 'verified'
     : snap.phase === 'rejected' ? 'rejected'
@@ -80,12 +96,22 @@ export function deriveAuthState(store: KvStore = defaultKvStore(), now: number =
     : 'submitted';
   return {
     isAuthenticated: true,
-    userId: snap.destinationMasked ?? 'lawyer',
+    userId: subjectOk ? snap.subjectId!.trim() : `pending_${snap.phase}`,
     roles: ['lawyer'],
     studentVerification: 'draft',
     lawyerVerification,
     isMinor: false,
   };
+}
+
+/**
+ * Reactive auth state: re-derives immediately on P0.1 snapshot create / update /
+ * clear (in-tab event) and on cross-tab storage changes — no full reload needed.
+ */
+export function useDerivedAuth(): AuthState {
+  const [auth, setAuth] = useState<AuthState>(() => deriveAuthState());
+  useEffect(() => subscribeAuthChange(() => setAuth(deriveAuthState())), []);
+  return auth;
 }
 
 export type GuardRule = 'authenticated' | 'student-verified' | 'lawyer-features';

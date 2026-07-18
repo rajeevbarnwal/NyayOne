@@ -17,14 +17,18 @@ export interface CaseRoute {
   readonly guarded?: boolean;
 }
 
+// The ENTIRE lawyer module requires a verified-lawyer session. Every /case/*
+// route is behind the shared LawyerGuard (E01–E12), so anonymous / student /
+// client / unverified / rejected / expired actors are denied before any case
+// data or mutation control mounts.
 export const lawyerRoutes: readonly CaseRoute[] = [
-  { path: '/case/intake', jira: 'SAATHI-6', Component: CaseIntake },
-  { path: '/case/retainer', jira: 'SAATHI-8', Component: CaseRetainer },
-  { path: '/case/new', jira: 'SAATHI-10', Component: CaseWorkspace },
-  { path: '/case/advance', jira: 'SAATHI-12', Component: CaseAdvance },
-  { path: '/case/documents', jira: 'SAATHI-14', Component: CaseDocuments },
-  { path: '/case/draft', jira: 'SAATHI-16', Component: CaseDraft },
-  { path: '/case/review', jira: 'SAATHI-18', Component: CaseReview },
+  { path: '/case/intake', jira: 'SAATHI-6', Component: CaseIntake, guarded: true },
+  { path: '/case/retainer', jira: 'SAATHI-8', Component: CaseRetainer, guarded: true },
+  { path: '/case/new', jira: 'SAATHI-10', Component: CaseWorkspace, guarded: true },
+  { path: '/case/advance', jira: 'SAATHI-12', Component: CaseAdvance, guarded: true },
+  { path: '/case/documents', jira: 'SAATHI-14', Component: CaseDocuments, guarded: true },
+  { path: '/case/draft', jira: 'SAATHI-16', Component: CaseDraft, guarded: true },
+  { path: '/case/review', jira: 'SAATHI-18', Component: CaseReview, guarded: true },
   { path: '/case/finalize', jira: 'SAATHI-20', Component: CaseFinalize, guarded: true },
   { path: '/case/filing', jira: 'SAATHI-22', Component: CaseFiling, guarded: true },
   { path: '/case/diary', jira: 'SAATHI-24', Component: CaseDiary, guarded: true },

@@ -1,9 +1,9 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
 import { screenRoutes } from './screenRegistry';
-import { AuthProvider, deriveAuthState } from './authContext';
+import { AuthProvider, useDerivedAuth } from './authContext';
 import { AppShell } from '../components/shell/AppShell';
 import { useTheme } from '../hooks/useTheme';
 import { studentScreens } from '../features/student/screens';
@@ -57,10 +57,9 @@ function ShellRoutes() {
 }
 
 export function App() {
-  // Derive the live auth state from the persisted, secret-free lawyer session
-  // snapshot (anonymous when none / expired). Read once at mount; changing
-  // identity requires a re-auth + reload, matching the server-authoritative model.
-  const [auth] = useState(() => deriveAuthState());
+  // Reactive auth: derives the live state from the persisted, secret-free lawyer
+  // session snapshot and updates immediately on P0.1 create/update/clear/expiry.
+  const auth = useDerivedAuth();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider value={auth}>
