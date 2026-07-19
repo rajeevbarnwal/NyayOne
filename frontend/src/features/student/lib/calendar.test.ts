@@ -229,6 +229,19 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     }
   });
 
+  // --- SAATHI-287 remediation (re REQA aac57de: TC-285-06 semantic route) -----
+  it('SOURCE_ROUTE points each source at its canonical semantic screen — not just any /s-NN', () => {
+    // Deep links must resolve to the correct owning workflow, not merely a registered route.
+    expect(SOURCE_ROUTE.tutoring).toBe('/s-31'); // S6 tutor workflow S-31..S-34 (was /s-22)
+    expect(SOURCE_ROUTE.internship).toBe('/s-20');
+    expect(SOURCE_ROUTE.exam).toBe('/s-55');
+    expect(SOURCE_ROUTE.clinical).toBe('/s-61');
+    expect(SOURCE_ROUTE.community).toBe('/s-50');
+    // No source may still point at retired indicative routes.
+    expect(Object.values(SOURCE_ROUTE)).not.toContain('/s-22');
+    expect(Object.values(SOURCE_ROUTE)).not.toContain('/s-94');
+  });
+
   it('validateDateRange: open ranges ok; from>to → from_after_to; malformed → invalid_date', () => {
     expect(validateDateRange(null, null)).toBeNull();
     expect(validateDateRange('2026-07-20', null)).toBeNull();

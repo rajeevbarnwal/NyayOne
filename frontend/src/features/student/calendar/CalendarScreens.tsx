@@ -42,7 +42,7 @@ function CalSubnav({ active }: { active: 'month' | 'add' }) {
       <button onClick={() => nav('/s-91')}>Event</button>
       <button onClick={() => nav('/s-92')}>Conflict</button>
       <button onClick={() => nav('/s-93')}>Reminders</button>
-      <button onClick={() => nav('/s-94')}>Export</button>
+      <button onClick={() => nav('/s-93')} data-testid="cal-export">Export</button>
     </div>
   );
 }

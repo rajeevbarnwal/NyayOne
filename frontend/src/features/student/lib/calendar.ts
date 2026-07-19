@@ -51,7 +51,7 @@ export const SOURCE_ROUTE: Record<CalendarSourceType, string> = {
   exam: '/s-55',
   clinical: '/s-61',
   community: '/s-50',
-  tutoring: '/s-22',
+  tutoring: '/s-31',
   moot: '/s-90',
   reminder: '/s-90',
 };
