@@ -21,13 +21,18 @@ export class InMemoryKvStore implements KvStore {
   private map = new Map<string, string>();
   get<T>(key: string): T | null {
     const raw = this.map.get(key);
-    return raw == null ? null : (JSON.parse(raw) as T);
+    // A key that was never written is genuinely absent (undefined); a key that
+    // was written-then-removed carries a JSON `null` tombstone and reads back as
+    // null. This distinction lets callers tell "no value yet" from "explicitly
+    // cleared" while keeping every truthy / `== null` guard working unchanged.
+    if (raw === undefined) return undefined as unknown as T | null;
+    return raw === 'null' ? null : (JSON.parse(raw) as T);
   }
   set<T>(key: string, value: T): void {
     this.map.set(key, JSON.stringify(value));
   }
   remove(key: string): void {
-    this.map.delete(key);
+    this.map.set(key, JSON.stringify(null)); // tombstone → get() returns null, not undefined
   }
 }
 

@@ -70,12 +70,12 @@ describe('Independent adversarial QA — SAATHI-292 (reproduced natively)', () =
     expect(result.ok && service.isPreviewEligible(result.state, 'exam', 'in_app')).toBe(false);
   });
 
-  it('TC-290-06 masks personal and restricted titles', () => {
-    expect(maskedPreview({ title: 'Private title', privacyClassification: 'personal' }, 'Exam')).toBe(
-      'Exam: You have an upcoming item',
+  it('TC-290-06 masks personal and restricted titles (canonical trusted-label API)', () => {
+    expect(maskedPreviewForSource({ title: 'Private title', privacyClassification: 'personal' }, 'exam')).toBe(
+      'Exam prep: You have an upcoming item',
     );
-    expect(maskedPreview({ title: 'Restricted title', privacyClassification: 'restricted' }, 'Exam')).toBe(
-      'Exam: You have an upcoming item',
+    expect(maskedPreviewForSource({ title: 'Restricted title', privacyClassification: 'restricted' }, 'exam')).toBe(
+      'Exam prep: You have an upcoming item',
     );
   });
 
