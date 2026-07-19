@@ -34,7 +34,9 @@ describe('Independent round-2 boundary QA — SAATHI-292 working-tree candidate'
         { idempotencyKey: idempotencyKey as never },
       );
       expect(result.ok).toBe(false);
-      expect(store.get(`ls-reminder-prefs-${studentId}`)).toBeUndefined();
+      // Per KvStore.get<T>(): T | null, a rejected write leaves the key absent →
+      // reads back as null (corrected from the round-2 suite's `undefined`).
+      expect(store.get(`ls-reminder-prefs-${studentId}`)).toBeNull();
     }
   });
 
