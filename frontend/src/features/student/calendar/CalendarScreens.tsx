@@ -7,7 +7,7 @@ import {
   retryFailed, resolveDeepLink, toPreview, localDateKey, localTime, validateDateRange,
   validatePersonalEvent, PersonalEventError,
   SOURCE_LABELS, CALENDAR_SOURCE_TYPES, CALENDAR_SOURCE_NOTE,
-  TIMEZONE_OPTIONS, PERSONAL_EVENT_TYPES,
+  TIMEZONE_OPTIONS, PERSONAL_EVENT_TYPES, PERSONAL_EVENT_TYPE_LABELS,
   type CalendarFilters, type SourceResult, type CalendarSourceType, type PersonalEventType,
   type CalendarEvent,
 } from '../lib/calendar';
@@ -294,12 +294,13 @@ export function CalendarAdd() {
             <div className="lbl" style={{ margin: '11px 0 7px' }} id="ev-type-label">Type</div>
             <div className="type-chips" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-labelledby="ev-type-label">
               {/* Canonical S-91 manual types per Product decision 12314: Study, Deadline,
-                  Meeting, Reminder, Other. Displayed capitalized via scoped CSS; the
-                  underlying enum values (study/deadline/…) and testids are unchanged. */}
+                  Meeting, Reminder, Other — rendered as REAL text (accessible name),
+                  not CSS-capitalized. Enum values (study/deadline/…) and ev-type-* testids
+                  stay lowercase for the persistence contract. */}
               {PERSONAL_EVENT_TYPES.map((t) => (
                 <button key={t} type="button" className="chip" aria-pressed={form.type === t}
                   data-testid={`ev-type-${t}`} onClick={() => setForm((s) => ({ ...s, type: t }))}>
-                  <span className="g" />{t}
+                  <span className="g" />{PERSONAL_EVENT_TYPE_LABELS[t]}
                 </button>
               ))}
             </div>

@@ -1,0 +1,20 @@
+{
+  "version": "s91-v3.2a",
+  "sourceReference": "LegalSaathi Student Module Option J Full Prototype v3.2.html (original v3.2 preserved byte-for-byte; v3.2a implements the Product decision)",
+  "productDecision": "12314",
+  "fixtureVersion": "s91-v3.2a",
+  "generatedDate": null,
+  "generatedFromCommit": null,
+  "checksums": {},
+  "approvalStatus": "pending",
+  "approvalCommentId": null,
+  "notes": "Baseline PNGs are generated on the native Mac run (scripts/calendar-visual-qa.mjs writes screen-correct S-90/S-91 candidates under tests/visual-out) and MUST receive explicit Product approval before approvalStatus is set to 'approved'. The harness never self-approves: with approvalStatus != 'approved' it exits 3 and does not score any pair as pass.",
+  "pairs": [
+    "S-90_390_light", "S-90_390_dark", "S-90_430_light", "S-90_430_dark",
+    "S-90_768_light", "S-90_768_dark", "S-90_1024_light", "S-90_1024_dark",
+    "S-90_1440_light", "S-90_1440_dark",
+    "S-91_390_light", "S-91_390_dark", "S-91_430_light", "S-91_430_dark",
+    "S-91_768_light", "S-91_768_dark", "S-91_1024_light", "S-91_1024_dark",
+    "S-91_1440_light", "S-91_1440_dark"
+  ]
+}

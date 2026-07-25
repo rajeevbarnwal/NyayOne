@@ -442,6 +442,21 @@ export function validateDateRange(from: string | null, to: string | null): DateR
 export const PERSONAL_EVENT_TYPES = ['study', 'deadline', 'meeting', 'reminder', 'other'] as const;
 export type PersonalEventType = (typeof PERSONAL_EVENT_TYPES)[number];
 
+/**
+ * Canonical human labels for the S-91 manual event types, per Jira Product
+ * decision 12314: Study, Deadline, Meeting, Reminder, Other. These are the real
+ * rendered/accessible names; the enum VALUES above stay lowercase for the
+ * persistence contract. (Exam and Moot are source classifications, not manual
+ * personal-event types, so they are intentionally absent here.)
+ */
+export const PERSONAL_EVENT_TYPE_LABELS: Record<PersonalEventType, string> = {
+  study: 'Study',
+  deadline: 'Deadline',
+  meeting: 'Meeting',
+  reminder: 'Reminder',
+  other: 'Other',
+};
+
 export interface PersonalEventInput {
   readonly title: string;
   readonly date: string; // yyyy-mm-dd (wall date in `timezone`)
