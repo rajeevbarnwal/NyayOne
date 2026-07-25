@@ -292,7 +292,10 @@ export function CalendarAdd() {
                 <input id="ev-time" className="field" type="time" value={form.time} data-testid="ev-time" onChange={(e) => set('time')(e.target.value)} /></div>
             </div>
             <div className="lbl" style={{ margin: '11px 0 7px' }} id="ev-type-label">Type</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-labelledby="ev-type-label">
+            <div className="type-chips" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-labelledby="ev-type-label">
+              {/* Canonical S-91 manual types per Product decision 12314: Study, Deadline,
+                  Meeting, Reminder, Other. Displayed capitalized via scoped CSS; the
+                  underlying enum values (study/deadline/…) and testids are unchanged. */}
               {PERSONAL_EVENT_TYPES.map((t) => (
                 <button key={t} type="button" className="chip" aria-pressed={form.type === t}
                   data-testid={`ev-type-${t}`} onClick={() => setForm((s) => ({ ...s, type: t }))}>

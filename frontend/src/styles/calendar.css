@@ -67,6 +67,11 @@
 .calv .btn.solid { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .calv .btn.block { width: 100%; }
 .calv .dpdp { font-family: var(--font-mono); font-size: 9px; color: var(--faint); line-height: 1.65; letter-spacing: .02em; }
+/* S-91 manual event types render capitalized per Product decision 12314
+   (Study/Deadline/Meeting/Reminder/Other) without changing the enum values,
+   accessible names or testids. Scoped to the Add-Event type group only, so the
+   already proper-cased S-90 source chips are unaffected. */
+.calv .type-chips .chip { text-transform: capitalize; }
 .calv .cardw { max-width: 468px; } /* v3.2 Add-Event card width (bbox 15→483) */
 .calv .filters { margin-bottom: 16px; }
 .calv .ident { margin: 0 0 14px; }
