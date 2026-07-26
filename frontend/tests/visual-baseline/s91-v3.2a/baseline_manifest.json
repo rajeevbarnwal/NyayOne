@@ -1,6 +1,6 @@
 {
   "version": "s91-v3.2a",
-  "sourceReference": "LegalSaathi Student Module Option J Full Prototype v3.2.html (original v3.2 preserved byte-for-byte; v3.2a implements the Product decision)",
+  "sourceReference": "developed calendar S-90/S-91 rendered under Product decision 12314 fixture (original v3.2 prototype preserved separately, byte-for-byte, and NOT used as the v3.2a baseline because its superseded Exam/Moot/Personal/no-Cancel schema cannot render the approved decision)",
   "productDecision": "12314",
   "fixtureVersion": "s91-v3.2a",
   "generatedDate": null,
@@ -8,7 +8,8 @@
   "checksums": {},
   "approvalStatus": "pending",
   "approvalCommentId": null,
-  "notes": "Baseline PNGs are generated on the native Mac run (scripts/calendar-visual-qa.mjs writes screen-correct S-90/S-91 candidates under tests/visual-out) and MUST receive explicit Product approval before approvalStatus is set to 'approved'. The harness never self-approves: with approvalStatus != 'approved' it exits 3 and does not score any pair as pass.",
+  "masks": [],
+  "notes": "Placeholder pending the native Mac run. `MODE=generate node scripts/calendar-visual-qa.mjs` captures the 20 developed feature-region candidates, fills generatedDate/generatedFromCommit and SHA-256 checksums, and keeps approvalStatus 'pending'. A Product Jira comment must approve the concrete candidate pack; only then are approvalStatus='approved' and approvalCommentId set. MODE=verify recomputes every SHA-256 and refuses to run on any missing/extra/changed file — approvalStatus text alone is never trusted. A canonical developed-source baseline needs no visual exclusions (masks: []).",
   "pairs": [
     "S-90_390_light", "S-90_390_dark", "S-90_430_light", "S-90_430_dark",
     "S-90_768_light", "S-90_768_dark", "S-90_1024_light", "S-90_1024_dark",

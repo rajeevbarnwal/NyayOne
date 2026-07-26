@@ -6,9 +6,25 @@
  * Supports the PNGs Playwright emits: 8-bit, non-interlaced, colour type 2 (RGB)
  * or 6 (RGBA). Anything else throws (never a silent wrong result).
  */
-import { inflateSync } from 'node:zlib';
+import { inflateSync, deflateSync } from 'node:zlib';
 
 const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
+
+// --- CRC32 (required for encoded PNGs to be valid for image viewers/browsers) --
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
 
 function paeth(a, b, c) {
   const p = a + b - c;
@@ -105,15 +121,31 @@ export function resizeNearest(img, tw, th) {
  *  - A pixel counts as changed when any channel differs by more than
  *    `channelThreshold` (grayscale units), matching the QA >16 method.
  */
-export function diffPngBuffers(aBuf, bBuf, { channelThreshold = 16, driftTolerance = 0.02 } = {}) {
+export function diffPngBuffers(aBuf, bBuf, { channelThreshold = 16, driftTolerance = 0.02, masks = [] } = {}) {
   const a = decodePng(aBuf);
   const b = decodePng(bBuf);
   const tw = Math.min(a.width, b.width);
   const th = Math.min(a.height, b.height);
   const ra = a.width === tw && a.height === th ? a : resizeNearest(a, tw, th);
   const rb = b.width === tw && b.height === th ? b : resizeNearest(b, tw, th);
+  // Build an excluded-pixel map from the mask rectangles (in target coords). The
+  // masked pixels are removed from BOTH the numerator and denominator — a real
+  // pixel exclusion, not a JSON label.
+  const excluded = new Uint8Array(tw * th);
+  let maskedPixels = 0;
+  for (const m of masks) {
+    const x0 = Math.max(0, Math.floor(m.x));
+    const y0 = Math.max(0, Math.floor(m.y));
+    const x1 = Math.min(tw, Math.floor(m.x + m.w));
+    const y1 = Math.min(th, Math.floor(m.y + m.h));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const idx = y * tw + x;
+      if (!excluded[idx]) { excluded[idx] = 1; maskedPixels++; }
+    }
+  }
   let changed = 0;
   for (let p = 0; p < tw * th; p++) {
+    if (excluded[p]) continue;
     const i = p * 4;
     const d = Math.max(
       Math.abs(ra.data[i] - rb.data[i]),
@@ -123,17 +155,99 @@ export function diffPngBuffers(aBuf, bBuf, { channelThreshold = 16, driftToleran
     );
     if (d > channelThreshold) changed++;
   }
+  const compared = tw * th - maskedPixels;
   const widthDrift = Math.abs(a.width - b.width) / Math.max(a.width, b.width);
   const heightDrift = Math.abs(a.height - b.height) / Math.max(a.height, b.height);
   const drift = Math.max(widthDrift, heightDrift);
   return {
-    percent: (changed / (tw * th)) * 100,
+    percent: compared > 0 ? (changed / compared) * 100 : 0,
     aDims: { width: a.width, height: a.height },
     bDims: { width: b.width, height: b.height },
     target: { width: tw, height: th },
+    masks,
+    maskedPixels,
+    comparedPixels: compared,
     dimensionDrift: drift > driftTolerance,
     driftFraction: Number(drift.toFixed(4)),
     changed,
     total: tw * th,
   };
+}
+
+/** Encode an { width, height, data(RGBA) } image into a valid PNG buffer (colour type 6). */
+export function encodePng({ width, height, data }) {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    raw[y * (stride + 1)] = 0; // filter: none
+    for (let x = 0; x < stride; x++) raw[y * (stride + 1) + 1 + x] = data[y * stride + x];
+  }
+  const chunk = (type, dataBuf) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(dataBuf.length);
+    const typeBuf = Buffer.from(type, 'ascii');
+    const crcBuf = Buffer.alloc(4);
+    crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, dataBuf])));
+    return Buffer.concat([len, typeBuf, dataBuf, crcBuf]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from(SIG),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** Side-by-side composite (developed | baseline) resized to a common height. */
+export function sideBySide(aBuf, bBuf) {
+  const a = decodePng(aBuf);
+  const b = decodePng(bBuf);
+  const h = Math.min(a.height, b.height);
+  const ra = resizeNearest(a, Math.round((a.width * h) / a.height), h);
+  const rb = resizeNearest(b, Math.round((b.width * h) / b.height), h);
+  const w = ra.width + rb.width;
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < ra.width; x++) {
+      const si = (y * ra.width + x) * 4; const di = (y * w + x) * 4;
+      out[di] = ra.data[si]; out[di + 1] = ra.data[si + 1]; out[di + 2] = ra.data[si + 2]; out[di + 3] = ra.data[si + 3];
+    }
+    for (let x = 0; x < rb.width; x++) {
+      const si = (y * rb.width + x) * 4; const di = (y * w + (ra.width + x)) * 4;
+      out[di] = rb.data[si]; out[di + 1] = rb.data[si + 1]; out[di + 2] = rb.data[si + 2]; out[di + 3] = rb.data[si + 3];
+    }
+  }
+  return encodePng({ width: w, height: h, data: out });
+}
+
+/** Diff overlay: grayscale base with changed pixels highlighted red (masked pixels dimmed). */
+export function diffOverlay(aBuf, bBuf, { channelThreshold = 16, masks = [] } = {}) {
+  const a = decodePng(aBuf);
+  const b = decodePng(bBuf);
+  const tw = Math.min(a.width, b.width);
+  const th = Math.min(a.height, b.height);
+  const ra = resizeNearest(a, tw, th);
+  const rb = resizeNearest(b, tw, th);
+  const excluded = new Uint8Array(tw * th);
+  for (const m of masks) {
+    for (let y = Math.max(0, m.y | 0); y < Math.min(th, (m.y + m.h) | 0); y++)
+      for (let x = Math.max(0, m.x | 0); x < Math.min(tw, (m.x + m.w) | 0); x++) excluded[y * tw + x] = 1;
+  }
+  const out = new Uint8Array(tw * th * 4);
+  for (let p = 0; p < tw * th; p++) {
+    const i = p * 4;
+    const gray = Math.round(0.299 * ra.data[i] + 0.587 * ra.data[i + 1] + 0.114 * ra.data[i + 2]);
+    const d = Math.max(
+      Math.abs(ra.data[i] - rb.data[i]), Math.abs(ra.data[i + 1] - rb.data[i + 1]),
+      Math.abs(ra.data[i + 2] - rb.data[i + 2]), Math.abs(ra.data[i + 3] - rb.data[i + 3]),
+    );
+    if (excluded[p]) { out[i] = gray; out[i + 1] = gray; out[i + 2] = 0; out[i + 3] = 120; }
+    else if (d > channelThreshold) { out[i] = 255; out[i + 1] = 0; out[i + 2] = 0; out[i + 3] = 255; }
+    else { out[i] = gray; out[i + 1] = gray; out[i + 2] = gray; out[i + 3] = 255; }
+  }
+  return encodePng({ width: tw, height: th, data: out });
 }
