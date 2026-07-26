@@ -225,10 +225,13 @@ export function InfoTooltip({ label, text }: { label: string; text: string }) {
   const panelRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
 
-  // Collision-aware placement: fixed to the viewport (escapes card/legend
-  // coordinates), horizontally clamped to [16, viewport - width - 16], and
-  // flipped above the trigger when there isn't room below. Recomputed on open,
-  // resize and scroll so it never lands offscreen or over the name inputs/CTA.
+  // Collision-aware placement (fixed to the viewport, so it escapes card/legend
+  // coordinates). We generate above/below candidates, clamp each horizontally to
+  // a 16px margin, and REJECT any candidate whose rectangle intersects the form
+  // inputs or the primary CTA (not just "inside viewport"). On ≤768 we prefer the
+  // above-trigger candidate. If neither side is collision-free we fall back to a
+  // centered, non-blocking placement rather than cover the form. Recomputed on
+  // open, resize and scroll.
   const reposition = useCallback(() => {
     const btn = btnRef.current;
     const panel = panelRef.current;
@@ -236,11 +239,31 @@ export function InfoTooltip({ label, text }: { label: string; text: string }) {
     const b = btn.getBoundingClientRect();
     const pw = panel.offsetWidth || 280;
     const ph = panel.offsetHeight || 96;
-    const margin = 16;
-    const left = Math.max(margin, Math.min(b.left, window.innerWidth - pw - margin));
-    const placeAbove = window.innerHeight - b.bottom < ph + margin;
-    const top = placeAbove ? Math.max(margin, b.top - ph - 8) : b.bottom + 8;
-    setPos({ top, left });
+    const m = 16;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(m, Math.min(b.left, vw - pw - m));
+
+    // Elements the panel must not cover: form fields + primary buttons nearby.
+    const avoid = Array.from(
+      document.querySelectorAll('input, select, .btn, button[type="button"].btn, .btn--primary'),
+    ).filter((el) => el !== btn).map((el) => el.getBoundingClientRect());
+    const intersects = (top: number) => {
+      const r = { left, right: left + pw, top, bottom: top + ph };
+      if (r.top < m || r.bottom > vh - m || r.left < m || r.right > vw - m) return true;
+      return avoid.some((a) => !(r.right <= a.left || r.left >= a.right || r.bottom <= a.top || r.top >= a.bottom));
+    };
+
+    const aboveTop = b.top - ph - 8;
+    const belowTop = b.bottom + 8;
+    const order = vw <= 768 ? [aboveTop, belowTop] : [belowTop, aboveTop];
+    const chosen = order.find((t) => !intersects(t));
+    if (chosen !== undefined) {
+      setPos({ top: chosen, left });
+      return;
+    }
+    // Fallback: centered near the top, horizontally clamped — never over the form.
+    setPos({ top: Math.max(m, Math.min(b.top - ph - 8, m)), left: Math.max(m, Math.min((vw - pw) / 2, vw - pw - m)) });
   }, []);
 
   useLayoutEffect(() => { if (open) reposition(); }, [open, reposition]);
