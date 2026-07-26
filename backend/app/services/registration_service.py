@@ -15,12 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt, keyed_hash, otp_verifier
+from app.db.models.audit import AuditEvent
 from app.models.registration import (
-    StudentAuditEvent,
     Consent,
     GuardianConsent,
     OtpChallenge,
+    StudentProfile,
     StudentRegistration,
+    StudentVerification,
     User,
 )
 from app.schemas.registration import StudentRegisterRequest
@@ -112,13 +114,31 @@ def register_student(
         if minor:
             session.add(GuardianConsent(registration_id=reg.id, status="pending", verified=False))
 
-        # Redacted, non-PII audit snapshot.
+        # Academic profile (SAATHI-421 legacy fields) — encrypted + keyed hash for
+        # the sensitive identifiers; plain college/year for display.
         session.add(
-            StudentAuditEvent(
+            StudentProfile(
+                registration_id=reg.id,
+                college=req.college,
+                year_of_study=req.year_of_study,
+                enrolment_ct=encrypt(req.enrolment_number) if req.enrolment_number else None,
+                enrolment_hash=keyed_hash(req.enrolment_number) if req.enrolment_number else None,
+                institutional_email_ct=encrypt(req.institutional_email) if req.institutional_email else None,
+                institutional_email_hash=keyed_hash(req.institutional_email, lower=True) if req.institutional_email else None,
+                bar_enrolment_ct=encrypt(req.bar_enrolment_number) if req.bar_enrolment_number else None,
+            )
+        )
+        # Pending verification record (institutional email by default).
+        session.add(StudentVerification(registration_id=reg.id, method="institutional_email", status="pending"))
+
+        # Redacted, non-PII audit snapshot on the shared audit_events table.
+        session.add(
+            AuditEvent(
+                actor_role="student",
                 action="student.register",
-                entity="student_registration",
-                entity_id=reg.id,
-                redacted_meta={"status": reg.status, "is_minor": minor},
+                resource_type="student_registration",
+                resource_id=reg.id,
+                after_state={"status": reg.status, "is_minor": minor},
             )
         )
         session.commit()

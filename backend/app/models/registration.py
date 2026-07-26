@@ -12,7 +12,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON, Uuid
+from sqlalchemy.types import Uuid
 
 from app.db.base import TimestampedBase
 
@@ -92,11 +92,5 @@ class GuardianConsent(TimestampedBase):
     verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
-class StudentAuditEvent(TimestampedBase):
-    __tablename__ = "student_audit_events"
-    actor: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    action: Mapped[str] = mapped_column(String(64), nullable=False)
-    entity: Mapped[str] = mapped_column(String(64), nullable=False)
-    entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    # Redacted, non-PII snapshot only.
-    redacted_meta: Mapped[dict | None] = mapped_column(JSON, default=None, nullable=True)
+# Audit rows are written to the shared `audit_events` table
+# (app.db.models.audit.AuditEvent) — no separate registration audit table.

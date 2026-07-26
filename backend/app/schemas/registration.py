@@ -7,7 +7,7 @@ import re
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 MOBILE_RE = re.compile(r"^\d{10}$")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
@@ -34,13 +34,22 @@ class ConsentIn(BaseModel):
 
 
 class StudentRegisterRequest(BaseModel):
+    # Reject unknown fields so submitted data is never silently discarded.
+    model_config = ConfigDict(extra="forbid")
+
     first_name: str
     middle_name: str | None = None
     last_name: str
     mobile: str
     dob: date
-    college: str | None = None
     consent: ConsentIn
+    # Academic profile (SAATHI-421). Optional at registration; persisted to
+    # student_profiles when supplied.
+    college: str | None = None
+    year_of_study: str | None = None
+    enrolment_number: str | None = None
+    institutional_email: str | None = None
+    bar_enrolment_number: str | None = None
 
     @field_validator("first_name")
     @classmethod

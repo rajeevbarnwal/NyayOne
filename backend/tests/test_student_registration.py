@@ -17,7 +17,10 @@ from app.core.crypto import decrypt, keyed_hash, otp_verifier
 from app.db.base import Base
 from app.db.session import get_session
 import app.models  # noqa: F401  (registers tables on Base.metadata)
-from app.models.registration import StudentAuditEvent, GuardianConsent, OtpChallenge, StudentRegistration
+from app.db.models.audit import AuditEvent
+from app.models.registration import (
+    GuardianConsent, OtpChallenge, StudentProfile, StudentRegistration, StudentVerification,
+)
 from app.schemas.registration import StudentRegisterRequest
 from app.services.registration_service import RegistrationError, register_student
 
@@ -115,10 +118,32 @@ def test_no_raw_otp_persisted(db_session: Session):
 
 def test_audit_snapshot_has_no_pii(db_session: Session):
     reg = register_student(db_session, _req())
-    ev = db_session.scalar(select(StudentAuditEvent).where(StudentAuditEvent.entity_id == reg.id))
-    assert ev is not None
-    blob = str(ev.redacted_meta)
+    ev = db_session.scalar(select(AuditEvent).where(AuditEvent.resource_id == reg.id))
+    assert ev is not None and ev.action == "student.register"
+    blob = str(ev.after_state)
     assert "9876543210" not in blob and "Aditi" not in blob and "Nair" not in blob
+
+
+def test_academic_profile_and_verification_persisted(db_session: Session):
+    reg = register_student(db_session, _req(
+        year_of_study="3rd", enrolment_number="KA/1234/2023",
+        institutional_email="aditi@nls.ac.in", bar_enrolment_number="D/1/2020",
+    ))
+    prof = db_session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
+    assert prof is not None
+    assert prof.college == "NLSIU" and prof.year_of_study == "3rd"
+    # Sensitive identifiers stored encrypted + keyed-hash, never plaintext.
+    from app.core.crypto import decrypt, keyed_hash
+    assert prof.enrolment_ct and prof.enrolment_ct != "KA/1234/2023" and decrypt(prof.enrolment_ct) == "KA/1234/2023"
+    assert prof.institutional_email_hash == keyed_hash("aditi@nls.ac.in", lower=True)
+    ver = db_session.scalar(select(StudentVerification).where(StudentVerification.registration_id == reg.id))
+    assert ver is not None and ver.status == "pending"
+
+
+def test_unknown_field_rejected():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        _req(nickname="hacker")
 
 
 # ---- HTTP status codes -----------------------------------------------------
