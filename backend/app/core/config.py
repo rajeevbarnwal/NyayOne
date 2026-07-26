@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     github_repository: str = "rajeevbarnwal/legalsaathi"
     github_repo_url: str = "https://github.com/rajeevbarnwal/legalsaathi"
     github_token: SecretStr | None = None
+    # Registration crypto (SAATHI-366/448): key material for keyed lookup hashes
+    # and Fernet ciphertext of sensitive registration fields. Override in prod.
+    registration_secret: SecretStr = SecretStr("dev-registration-secret-change-me")
 
     jira_base_url: str = "https://legalsaathi.atlassian.net"
     jira_project_key: str = "SAATHI"
