@@ -191,6 +191,7 @@
   background: var(--elevated);
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 .st-check__box::after {
   content: '✓';

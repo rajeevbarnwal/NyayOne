@@ -19,6 +19,17 @@ import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
 import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
 import { updateProfileDraft } from '../lib/profileStore';
 import { useAuth } from '../../../app/authContext';
+import {
+  RegistrationApiError,
+  loadRegistrationSession,
+  registerStudent,
+  resendStudentOtp,
+  saveRegistrationSession,
+  startRecovery,
+  verifyRecovery,
+  verifyStudentOtp,
+  completeRecovery,
+} from '../lib/registrationApi';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
@@ -200,8 +211,9 @@ export function Register() {
   const [privacy, setPrivacy] = useState(false);
   const [lawDecl, setLawDecl] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit() {
+  async function submit() {
     const now = new Date();
     const nowISO = now.toISOString();
     const e: Record<string, string> = {};
@@ -241,11 +253,37 @@ export function Register() {
       fullName: composeDisplayName(parts), // compat: no double spaces when middle absent
       dateOfBirth: dob,
     });
-    startOtp({ channel: 'sms' as OtpChannel, ref: mobile }, Date.now());
-    setMinor(minor, minor); // guardian consent pending until verified server-side
-    // Minors continue through OTP but land in a restricted state (S-16) until
-    // guardian consent is verified. All enforcement is server-side.
-    nav('/s-06');
+    setSubmitting(true);
+    try {
+      const created = await registerStudent({
+        firstName: payload.firstName,
+        middleName: payload.middleName,
+        lastName: payload.lastName,
+        mobile,
+        dob,
+        policyVersion: CONSENT_VERSION,
+      });
+      saveRegistrationSession({
+        registrationId: created.registration_id,
+        destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
+        issuedAt: Date.now(),
+        isMinor: minor,
+        guardianConsentPending: minor,
+      });
+      setMinor(minor, minor);
+      nav('/s-06');
+    } catch (error) {
+      const message = error instanceof RegistrationApiError
+        ? error.code === 'mobile_already_registered'
+          ? 'This mobile number is already registered.'
+          : error.code === 'otp_delivery_unavailable'
+            ? 'OTP delivery is temporarily unavailable. Please try again later.'
+            : 'Registration could not be completed. Please check your details and retry.'
+        : 'Registration service is unavailable. Please try again.';
+      setErrors({ submit: message });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -326,9 +364,12 @@ export function Register() {
           {errors.consent}
         </span>
       )}
+      {errors.submit && (
+        <span className="ui-validation" role="alert">{errors.submit}</span>
+      )}
       <div className="st-actions">
-        <button type="button" className="btn btn--primary tap" onClick={submit}>
-          Create account &amp; send OTP
+        <button type="button" className="btn btn--primary tap" onClick={submit} disabled={submitting}>
+          {submitting ? 'Creating account…' : 'Create account & send OTP'}
         </button>
       </div>
     </AuthCard>
@@ -342,9 +383,12 @@ export function OtpVerify() {
   const nav = useNavigate();
   const [now, setNow] = useState(Date.now());
   const [code, setCode] = useState('');
-  const [status, setStatus] = useState<'idle' | 'incorrect' | 'verified'>('idle');
+  const [status, setStatus] = useState<'idle' | 'incorrect' | 'verified' | 'locked' | 'expired'>('idle');
+  const [attemptsLeftServer, setAttemptsLeftServer] = useState(3);
+  const [busy, setBusy] = useState(false);
   const flow = getFlow();
   const challenge = flow.challenge;
+  const server = loadRegistrationSession();
 
   // Live 1s ticker for the countdowns.
   useEffect(() => {
@@ -352,29 +396,70 @@ export function OtpVerify() {
     return () => clearInterval(t);
   }, []);
 
-  const attemptsLeft = challenge?.attemptsLeft ?? 0;
-  const resendIn = challenge ? secondsUntilResend(challenge, now) : 0;
-  const expiresIn = challenge ? secondsUntilExpiry(challenge, now) : 0;
+  const attemptsLeft = server ? attemptsLeftServer : challenge?.attemptsLeft ?? 0;
+  const elapsed = server ? Math.max(0, Math.floor((now - server.issuedAt) / 1000)) : 0;
+  const resendIn = server ? Math.max(0, 30 - elapsed) : challenge ? secondsUntilResend(challenge, now) : 0;
+  const expiresIn = server ? Math.max(0, 300 - elapsed) : challenge ? secondsUntilExpiry(challenge, now) : 0;
 
-  function onVerify() {
-    if (!challenge) return;
+  async function onVerify() {
+    if (!server && !challenge) return;
     if (!isValidOtpFormat(code)) {
       setStatus('incorrect');
       return;
     }
-    const res = verify(challenge, code, Date.now());
+    if (server) {
+      setBusy(true);
+      try {
+        await verifyStudentOtp(server.registrationId, code);
+        setStatus('verified');
+        nav(server.guardianConsentPending ? '/s-16' : '/s-09');
+      } catch (error) {
+        if (error instanceof RegistrationApiError) {
+          if (typeof error.attemptsLeft === 'number') setAttemptsLeftServer(error.attemptsLeft);
+          if (error.code === 'locked') {
+            setStatus('locked');
+            nav('/s-08');
+          } else if (error.code === 'expired') {
+            setStatus('expired');
+            nav('/s-07');
+          } else {
+            setStatus('incorrect');
+          }
+        } else {
+          setStatus('incorrect');
+        }
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const res = verify(challenge!, code, Date.now());
     setChallenge(res.challenge);
     if (res.status === 'verified') {
       setStatus('verified');
-      // Minors route to the restricted state until guardian consent clears.
       nav(flow.guardianConsentPending ? '/s-16' : '/s-09');
-    } else if (res.status === 'expired') {
-      nav('/s-07');
-    } else if (res.status === 'locked') {
-      nav('/s-08');
-    } else {
-      setStatus('incorrect');
+    } else if (res.status === 'expired') nav('/s-07');
+    else if (res.status === 'locked') nav('/s-08');
+    else setStatus('incorrect');
+  }
+
+  async function onResend() {
+    if (server) {
+      setBusy(true);
+      try {
+        await resendStudentOtp(server.registrationId);
+        saveRegistrationSession({ ...server, issuedAt: Date.now() });
+        setAttemptsLeftServer(3);
+        setCode('');
+        setStatus('idle');
+      } catch {
+        setStatus('incorrect');
+      } finally {
+        setBusy(false);
+      }
+      return;
     }
+    nav('/s-07');
   }
 
   const helper =
@@ -394,16 +479,11 @@ export function OtpVerify() {
         />
       }
     >
-      {flow.destination && (
+      {(server?.destinationMasked || flow.destination) && (
         <p className="st-card__sub">
-          Code sent to <strong>{maskDestination(flow.destination)}</strong>
+          Code sent to <strong>{server?.destinationMasked ?? (flow.destination ? maskDestination(flow.destination) : '')}</strong>
         </p>
       )}
-      <div className="st-otp" aria-hidden>
-        {Array.from({ length: 6 }).map((_, k) => (
-          <span key={k}>{code[k] ?? '•'}</span>
-        ))}
-      </div>
       <TextField
         id="otp-code"
         label="OTP"
@@ -415,11 +495,11 @@ export function OtpVerify() {
         help={status === 'incorrect' ? undefined : helper}
       />
       <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" disabled={resendIn > 0} onClick={() => nav('/s-07')}>
+        <button type="button" className="btn tap" disabled={resendIn > 0 || busy} onClick={onResend}>
           {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend OTP'}
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={onVerify}>
-          Verify &amp; continue
+        <button type="button" className="btn btn--primary tap" onClick={onVerify} disabled={busy}>
+          {busy ? 'Verifying…' : 'Verify & continue'}
         </button>
       </div>
     </AuthCard>
@@ -431,6 +511,22 @@ export function OtpVerify() {
 /* -------------------------------------------------------------------------- */
 export function OtpExpired() {
   const nav = useNavigate();
+  const [message, setMessage] = useState<string | null>(null);
+  async function resend() {
+    const server = loadRegistrationSession();
+    if (server) {
+      try {
+        await resendStudentOtp(server.registrationId);
+        saveRegistrationSession({ ...server, issuedAt: Date.now() });
+        nav('/s-06');
+      } catch {
+        setMessage('A new code could not be sent yet. Please wait and retry.');
+      }
+      return;
+    }
+    startOtp(getFlow().destination ?? { channel: 'sms', ref: '' }, Date.now());
+    nav('/s-06');
+  }
   return (
     <AuthCard screenId="S-07" kicker="OTP · S1" title="OTP expired" meta={<StatusBadge status="warn" label="Expired" />}>
       <div className="ui-banner ui-banner--warn" role="status">
@@ -439,14 +535,12 @@ export function OtpExpired() {
         </span>
         <span>This code has expired for your security. Codes are valid for 5 minutes.</span>
       </div>
+      {message && <span className="ui-validation" role="alert">{message}</span>}
       <div className="st-actions">
         <button
           type="button"
           className="btn btn--primary tap"
-          onClick={() => {
-            startOtp(getFlow().destination ?? { channel: 'sms', ref: '' }, Date.now());
-            nav('/s-06');
-          }}
+          onClick={resend}
         >
           Resend OTP
         </button>
@@ -459,13 +553,36 @@ export function OtpExpired() {
 /* S-08 — Lockout after retries (restricted)                                   */
 /* -------------------------------------------------------------------------- */
 export function Lockout() {
-  const nav = useNavigate();
+  const [mobile, setMobile] = useState('');
+  const [recoveryId, setRecoveryId] = useState('');
+  const [code, setCode] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  async function begin() {
+    try {
+      setRecoveryId(await startRecovery(mobile));
+      setMessage('If an account matches, a recovery code has been sent.');
+    } catch {
+      setMessage('Enter a valid 10-digit mobile number.');
+    }
+  }
+  async function finish() {
+    try {
+      await verifyRecovery(recoveryId, code);
+      await completeRecovery(recoveryId);
+      setMessage('Recovery verified. You may now sign in again.');
+    } catch {
+      setMessage('Recovery could not be verified. Check the code or request a new one.');
+    }
+  }
   return (
     <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked" meta={<StatusBadge status="risk" label="Locked" />}>
       <RestrictedState reason="Too many incorrect attempts. Login is locked for 15 minutes." />
+      <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" />
+      {recoveryId && <TextField id="recovery-code" label="6-digit recovery code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />}
+      {message && <p role="status">{message}</p>}
       <div className="st-actions">
-        <button type="button" className="btn tap" onClick={() => nav('/s-15')}>
-          Reset via email
+        <button type="button" className="btn tap" onClick={recoveryId ? finish : begin}>
+          {recoveryId ? 'Verify recovery code' : 'Start account recovery'}
         </button>
       </div>
     </AuthCard>

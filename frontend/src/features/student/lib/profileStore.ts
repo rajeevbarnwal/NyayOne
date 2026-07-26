@@ -1,8 +1,7 @@
 /**
  * Profile draft persistence for SAATHI-55.
- * Keeps an in-memory copy for SSR/tests and mirrors it to localStorage in the
- * browser so registration data and wizard progress survive route changes and
- * refreshes. This boundary contains no secrets or verification documents.
+ * Keeps PII in memory only. Registration/profile PII must never be mirrored to
+ * localStorage/sessionStorage; the server is the refresh-safe source of truth.
  */
 import { EMPTY_PROFILE, type ProfileDraft } from './profile';
 import { fullNameToParts } from './registration';
@@ -20,36 +19,14 @@ function migrateName(parsed: Partial<ProfileDraft>): Partial<ProfileDraft> {
   return { ...parsed, firstName: parts.firstName, middleName: parts.middleName, lastName: parts.lastName };
 }
 
-function loadDraft(): ProfileDraft {
-  if (typeof window === 'undefined') return { ...EMPTY_PROFILE, interests: [] };
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...EMPTY_PROFILE, interests: [] };
-    const parsed = migrateName(JSON.parse(raw) as Partial<ProfileDraft>);
-    return { ...EMPTY_PROFILE, ...parsed, interests: Array.isArray(parsed.interests) ? parsed.interests : [] };
-  } catch {
-    return { ...EMPTY_PROFILE, interests: [] };
-  }
-}
-
-function persistDraft(value: ProfileDraft): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-  } catch {
-    // Private browsing/quota errors must not break profile setup.
-  }
-}
-
-let draft: ProfileDraft = loadDraft();
+let draft: ProfileDraft = { ...EMPTY_PROFILE, interests: [] };
 
 export function getProfileDraft(): ProfileDraft {
   return draft;
 }
 
 export function updateProfileDraft(patch: Partial<ProfileDraft>): ProfileDraft {
-  draft = { ...draft, ...patch };
-  persistDraft(draft);
+  draft = { ...draft, ...migrateName(patch) };
   return draft;
 }
 
@@ -71,7 +48,6 @@ export function seedResumeDraft(): ProfileDraft {
       college: '',
       interests: [],
     };
-    persistDraft(draft);
   }
   return draft;
 }

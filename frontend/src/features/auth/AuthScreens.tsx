@@ -5,7 +5,6 @@ import {
   isRegistrableDob, DOB_ERROR, todayLocalISO,
   buildStudentRegistrationCommand,
 } from '../student/lib/registration';
-import { defaultKvStore } from '../../lib/kvStore';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
 import { Workbench, type WorkbenchStep, type Requirement, type LedgerEntry } from './Workbench';
 import {
@@ -13,6 +12,15 @@ import {
   maskDestination, type OtpChallenge,
 } from '../student/lib/otp';
 import { STUB_OTP_CODE } from '../student/lib/authFlow';
+import {
+  RegistrationApiError,
+  loadRegistrationSession,
+  registerStudent,
+  resendStudentOtp,
+  saveRegistrationSession,
+  verifyStudentOtp,
+} from '../student/lib/registrationApi';
+import { CONSENT_VERSION } from '../student/lib/consent';
 import {
   nextPhase, redactChallenge, AUTH_PHASE_LABELS, type AuthPhase, type AuthRole, type AuthSnapshot,
 } from './lib/authLifecycle';
@@ -96,6 +104,15 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [dob, setDob] = useState('');
   const [srec, setSrec] = useState<StudentVerificationRecord | null>(null);
   const [guardian, setGuardian] = useState<GuardianConsent | null>(null);
+  const restoredRegistration = useMemo(() => loadRegistrationSession(), []);
+  const [serverRegistrationId, setServerRegistrationId] = useState<string | null>(
+    restoredRegistration?.registrationId ?? null,
+  );
+  const [serverIssuedAt, setServerIssuedAt] = useState(
+    restoredRegistration?.issuedAt ?? Date.now(),
+  );
+  const [serverAttemptsLeft, setServerAttemptsLeft] = useState(3);
+  const [busy, setBusy] = useState(false);
 
   const minorCtx = useMemo(() => (dob ? minorContextFromDob(dob, nowISO(), guardian) : { isMinor: false, guardianConsent: guardian }), [dob, guardian]);
 
@@ -112,7 +129,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const pushLedger = (label: string) => setLedger((l) => [...l, { label, meta: new Date().toLocaleTimeString('en-IN') }]);
   const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
 
-  function sendOtp() {
+  async function sendOtp() {
     if (isLawyer) {
       // Lawyer keeps a single full name; shared exact-10 mobile contract.
       if (!isValidMobile(mobile)) { setErrors({ mobile: MOBILE_ERROR }); return; }
@@ -126,15 +143,50 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         setErrors(e);
         return;
       }
+      if (!dob || !isRegistrableDob(dob)) {
+        setErrors({ dob: !dob ? 'Enter your date of birth to confirm eligibility.' : DOB_ERROR });
+        return;
+      }
+      if (!consent) {
+        setErrors({ consent: 'Accept the Privacy Notice before an OTP is sent.' });
+        return;
+      }
       setName(built.command.fullName);
-      // The validated command is the payload destined for the server-authoritative
-      // registration endpoint (SAATHI-3 backend dependency; Product schema approval
-      // pending — see round-4 blocker). We do NOT persist PII (names, mobile,
-      // college) to browser storage. Only a non-PII progress flag is kept so a
-      // refresh does not silently lose that registration was in flight.
+      setBusy(true);
       try {
-        defaultKvStore().set('ls-student-registration', { registrationPending: true, at: nowISO() });
-      } catch { /* best-effort; must not break registration */ }
+        const created = await registerStudent({
+          firstName: built.command.firstName,
+          middleName: built.command.middleName,
+          lastName: built.command.lastName,
+          mobile,
+          dob,
+          policyVersion: CONSENT_VERSION,
+          college: sv.collegeName || undefined,
+        });
+        const minor = minorContextFromDob(dob, nowISO(), guardian).isMinor;
+        const session = {
+          registrationId: created.registration_id,
+          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
+          issuedAt: Date.now(),
+          isMinor: minor,
+          guardianConsentPending: minor,
+        };
+        saveRegistrationSession(session);
+        setServerRegistrationId(created.registration_id);
+        setServerIssuedAt(session.issuedAt);
+        setDestMasked(session.destinationMasked);
+        setOtpMsg(null);
+        pushLedger('OTP dispatched');
+        setPhase('otp_entry');
+      } catch (error) {
+        const code = error instanceof RegistrationApiError ? error.code : 'unavailable';
+        setErrors({ submit: code === 'mobile_already_registered'
+          ? 'This mobile number is already registered.'
+          : 'Registration or OTP delivery is unavailable. Please retry.' });
+      } finally {
+        setBusy(false);
+      }
+      return;
     }
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
@@ -144,7 +196,26 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     pushLedger('OTP dispatched');
     setPhase('otp_entry');
   }
-  function submitOtp() {
+  async function submitOtp() {
+    if (!isLawyer && serverRegistrationId) {
+      setBusy(true);
+      try {
+        await verifyStudentOtp(serverRegistrationId, otpInput);
+        setOtpMsg(null);
+        pushLedger('OTP verified');
+        setPhase('consent');
+      } catch (error) {
+        if (error instanceof RegistrationApiError) {
+          if (typeof error.attemptsLeft === 'number') setServerAttemptsLeft(error.attemptsLeft);
+          if (error.code === 'locked') setOtpMsg('Too many attempts — locked for 15 minutes.');
+          else if (error.code === 'expired') setOtpMsg('Code expired. Resend a new code.');
+          else setOtpMsg(`Incorrect OTP. ${error.attemptsLeft ?? serverAttemptsLeft} attempt(s) left.`);
+        } else setOtpMsg('OTP verification is unavailable. Please retry.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!challenge) return;
     const r = otpVerify(challenge, otpInput, Date.now());
     setChallenge(r.challenge);
@@ -153,7 +224,23 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     else if (r.status === 'expired') setOtpMsg('Code expired. Resend a new code.');
     else setOtpMsg(`Incorrect OTP. ${r.challenge.attemptsLeft} attempt(s) left.`);
   }
-  function resendOtp() {
+  async function resendOtp() {
+    if (!isLawyer && serverRegistrationId) {
+      setBusy(true);
+      try {
+        await resendStudentOtp(serverRegistrationId);
+        setServerIssuedAt(Date.now());
+        setServerAttemptsLeft(3);
+        setOtpMsg(null);
+        setOtpInput('');
+        pushLedger('OTP resent');
+      } catch {
+        setOtpMsg('A new code cannot be sent yet. Wait for the cooldown and retry.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!challenge) return;
     setChallenge(otpResend(challenge, STUB_OTP_CODE, Date.now()));
     setOtpMsg(null); setOtpInput('');
@@ -200,6 +287,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     setPhase('register'); setChallenge(null); setOtpInput(''); setOtpMsg(null); setDestMasked(null);
     setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setGuardian(null); setLedger([]);
     setProfile(EMPTY_LAWYER_PROFILE); setSv(EMPTY_STUDENT_VERIFY); setDob('');
+    setServerRegistrationId(null); setServerAttemptsLeft(3);
   }
 
   // --- derived ---
@@ -269,24 +357,34 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             )}
             <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} type="text" inputMode="numeric" autoComplete="tel" help="We send a one-time code by SMS." />
             {!isLawyer && (
-              <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
+              <>
+                <TextField id="reg-dob" label="Date of birth" value={dob} onChange={setDob} type="date" max={todayLocalISO()} error={errors.dob} />
+                <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
+                <Checkbox id="reg-consent" checked={consent} onChange={setConsent} label="I accept the Privacy Notice and processing for registration." />
+                {errors.consent && <ValidationState message={errors.consent} />}
+              </>
             )}
-            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={sendOtp}>Send OTP</button></div>
+            {errors.submit && <ValidationState message={errors.submit} />}
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={busy}>{busy ? 'Sending…' : 'Send OTP'}</button></div>
           </div>
         )}
 
         {/* OTP ENTRY (covers sent / entry / invalid / expired / lockout) */}
-        {(phase === 'otp_sent' || phase === 'otp_entry') && challenge && (
+        {(phase === 'otp_sent' || phase === 'otp_entry') && (challenge || serverRegistrationId) && (
           <div className="st-stack">
             <h2 className="st-panel__title">Verify OTP</h2>
-            <p className="st-item__meta">Code sent to {destMasked}. {isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`}</p>
+            <p className="st-item__meta">
+              Code sent to {destMasked}. {challenge
+                ? (isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`)
+                : `Expires in ${Math.max(0, 300 - Math.floor((now - serverIssuedAt) / 1000))}s.`}
+            </p>
             <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" autoComplete="one-time-code" help="Enter the one-time code sent by SMS. A wrong code shows the invalid/lockout states." />
             {otpMsg && <ValidationState message={otpMsg} />}
-            {isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
+            {challenge && isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
             <div className="st-actions st-actions--split">
-              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={isLocked(challenge, now)} aria-disabled={isLocked(challenge, now)}>Verify</button>
-              <button type="button" className="btn tap" onClick={resendOtp} disabled={secondsUntilResend(challenge, now) > 0} aria-disabled={secondsUntilResend(challenge, now) > 0}>
-                {secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
+              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={busy || (!!challenge && isLocked(challenge, now))}>Verify</button>
+              <button type="button" className="btn tap" onClick={resendOtp} disabled={busy || (!!challenge && secondsUntilResend(challenge, now) > 0)}>
+                {challenge && secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
               </button>
             </div>
           </div>

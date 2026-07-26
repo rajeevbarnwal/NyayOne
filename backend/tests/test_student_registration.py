@@ -68,14 +68,22 @@ def test_middle_optional():
 
 
 # ---- service (transactional persistence) ----------------------------------
+def _reg(session: Session, **over):
+    return register_student(session, _req(**over)).registration
+
+
 def test_register_persists_encrypted_and_hashed(db_session: Session):
-    reg = register_student(db_session, _req())
+    reg = _reg(db_session)
     assert isinstance(reg.id, uuid.UUID)
     assert reg.status == "otp_pending"
     # Mobile stored as keyed hash + ciphertext, never plaintext.
     assert reg.mobile_hash == keyed_hash("9876543210")
     assert reg.mobile_ct != "9876543210" and decrypt(reg.mobile_ct) == "9876543210"
     assert decrypt(reg.dob_ct) == "2004-03-14"
+    # DOB now has a keyed lookup hash (SAATHI-366 C1) + version stamp (C2).
+    assert reg.dob_hash == keyed_hash("2004-03-14") and reg.dob_hash != "2004-03-14"
+    assert reg.key_version == "v1"
+    assert reg.mobile_ct.startswith("v1:") and reg.dob_ct.startswith("v1:")
 
 
 def test_missing_consent_rejected(db_session: Session):
@@ -85,29 +93,30 @@ def test_missing_consent_rejected(db_session: Session):
 
 
 def test_mobile_conflict(db_session: Session):
-    register_student(db_session, _req())
+    _reg(db_session)
     with pytest.raises(RegistrationError) as e:
         register_student(db_session, _req())
     assert e.value.status_code == 409
 
 
 def test_idempotent_replay_single_row(db_session: Session):
-    a = register_student(db_session, _req(), idempotency_key="req-1")
+    a = register_student(db_session, _req(), idempotency_key="req-1").registration
     b = register_student(db_session, _req(), idempotency_key="req-1")
-    assert a.id == b.id
+    assert a.id == b.registration.id
+    assert b.delivery is None  # replay never re-delivers
     rows = db_session.scalars(select(StudentRegistration)).all()
     assert len(rows) == 1
 
 
 def test_minor_creates_guardian_gate(db_session: Session):
-    reg = register_student(db_session, _req(dob="2012-01-01"))
+    reg = _reg(db_session, dob="2012-01-01")
     assert reg.is_minor is True
     gc = db_session.scalars(select(GuardianConsent).where(GuardianConsent.registration_id == reg.id)).all()
     assert len(gc) == 1 and gc[0].verified is False
 
 
 def test_no_raw_otp_persisted(db_session: Session):
-    reg = register_student(db_session, _req())
+    reg = _reg(db_session)
     otp = db_session.scalar(select(OtpChallenge).where(OtpChallenge.registration_id == reg.id))
     assert otp is not None
     assert len(otp.verifier_hash) == 64  # HMAC hex, not a 6-digit code
@@ -117,7 +126,7 @@ def test_no_raw_otp_persisted(db_session: Session):
 
 
 def test_audit_snapshot_has_no_pii(db_session: Session):
-    reg = register_student(db_session, _req())
+    reg = _reg(db_session)
     ev = db_session.scalar(select(AuditEvent).where(AuditEvent.resource_id == reg.id))
     assert ev is not None and ev.action == "student.register"
     blob = str(ev.after_state)
@@ -125,10 +134,11 @@ def test_audit_snapshot_has_no_pii(db_session: Session):
 
 
 def test_academic_profile_and_verification_persisted(db_session: Session):
-    reg = register_student(db_session, _req(
+    reg = _reg(
+        db_session,
         year_of_study="3rd", enrolment_number="KA/1234/2023",
         institutional_email="aditi@nls.ac.in", bar_enrolment_number="D/1/2020",
-    ))
+    )
     prof = db_session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
     assert prof is not None
     assert prof.college == "NLSIU" and prof.year_of_study == "3rd"
@@ -136,6 +146,9 @@ def test_academic_profile_and_verification_persisted(db_session: Session):
     from app.core.crypto import decrypt, keyed_hash
     assert prof.enrolment_ct and prof.enrolment_ct != "KA/1234/2023" and decrypt(prof.enrolment_ct) == "KA/1234/2023"
     assert prof.institutional_email_hash == keyed_hash("aditi@nls.ac.in", lower=True)
+    # Optional Bar enrolment now keyed-hashed too (SAATHI-366 C1).
+    assert prof.bar_enrolment_hash == keyed_hash("D/1/2020") and decrypt(prof.bar_enrolment_ct) == "D/1/2020"
+    assert prof.key_version == "v1"
     ver = db_session.scalar(select(StudentVerification).where(StudentVerification.registration_id == reg.id))
     assert ver is not None and ver.status == "pending"
 

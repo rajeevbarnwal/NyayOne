@@ -304,7 +304,9 @@ export function InfoTooltip({ label, text }: { label: string; text: string }) {
         aria-expanded={open}
         aria-controls={panelId}
         aria-describedby={open ? panelId : undefined}
-        onClick={() => setOpen((o) => !o)}
+        // A pointer click is preceded by mouseenter on desktop. Setting open
+        // explicitly avoids the old open-then-toggle-closed race.
+        onClick={() => setOpen(true)}
         onMouseEnter={() => setOpen(true)}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {

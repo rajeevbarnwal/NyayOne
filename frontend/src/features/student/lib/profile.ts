@@ -2,7 +2,9 @@
  * Three-step student profile model, validation, completeness and tier
  * derivation (SAATHI-55 / S2.1). Pure + testable; the client uses this to
  * drive step validation and to resume from the last incomplete step (S-13).
- * Persistence is a stub boundary in this batch (no domain migrations).
+ * Registration and academic PII are persisted through the server API. The
+ * browser model is an in-memory wizard view only and is never written to
+ * localStorage/sessionStorage.
  */
 import { isValidDateOfBirth } from './consent';
 

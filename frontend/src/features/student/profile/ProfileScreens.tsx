@@ -10,6 +10,16 @@ import {
   type ProfileDraft,
 } from '../lib/profile';
 import { getProfileDraft, updateProfileDraft, seedResumeDraft } from '../lib/profileStore';
+import {
+  loadRegistrationSession,
+  saveAcademicProfile,
+} from '../lib/registrationApi';
+import {
+  composeDisplayName,
+  fullNameToParts,
+  nameErrorMessage,
+  validateNameParts,
+} from '../lib/registration';
 
 const LANGUAGES = ['English', 'हिन्दी (Hindi)'];
 const COLLEGES = [
@@ -43,14 +53,29 @@ function Progress({ pct }: { pct: number }) {
 export function ProfileStep1() {
   const nav = useNavigate();
   const d = getProfileDraft();
-  const [fullName, setFullName] = useState(d.fullName);
+  const initialName = d.firstName || d.lastName
+    ? { firstName: d.firstName, middleName: d.middleName, lastName: d.lastName }
+    : fullNameToParts(d.fullName);
+  const [firstName, setFirstName] = useState(initialName.firstName);
+  const [middleName, setMiddleName] = useState(initialName.middleName);
+  const [lastName, setLastName] = useState(initialName.lastName);
   const [preferredLanguage, setLang] = useState(d.preferredLanguage || 'English');
   const [dateOfBirth, setDob] = useState(d.dateOfBirth);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   function next() {
-    const draft = updateProfileDraft({ fullName, preferredLanguage, dateOfBirth });
+    const parts = { firstName, middleName, lastName };
+    const nameErrors = validateNameParts(parts);
+    const draft = updateProfileDraft({
+      ...parts,
+      fullName: composeDisplayName(parts),
+      preferredLanguage,
+      dateOfBirth,
+    });
     const e = validateStep(1, draft);
+    if (nameErrors.firstName) e.firstName = nameErrorMessage('firstName', nameErrors.firstName);
+    if (nameErrors.middleName) e.middleName = nameErrorMessage('middleName', nameErrors.middleName);
+    if (nameErrors.lastName) e.lastName = nameErrorMessage('lastName', nameErrors.lastName);
     setErrors(e);
     if (Object.keys(e).length === 0) nav('/s-10');
   }
@@ -58,7 +83,12 @@ export function ProfileStep1() {
   return (
     <AuthCard screenId="S-09" kicker="Step 1 of 3 · Personal" title="About you">
       <Progress pct={33} />
-      <TextField id="p1-name" label="Full name" value={fullName} onChange={setFullName} error={errors.fullName} autoComplete="name" />
+      <fieldset className="st-namegroup">
+        <legend className="st-namegroup__legend">Legal name</legend>
+        <TextField id="p1-first-name" label="First name" value={firstName} onChange={setFirstName} error={errors.firstName} autoComplete="given-name" />
+        <TextField id="p1-middle-name" label="Middle name" optional="optional" value={middleName} onChange={setMiddleName} error={errors.middleName} autoComplete="additional-name" />
+        <TextField id="p1-last-name" label="Last name" value={lastName} onChange={setLastName} error={errors.lastName} autoComplete="family-name" />
+      </fieldset>
       <SelectField id="p1-lang" label="Preferred language" value={preferredLanguage} onChange={setLang} options={LANGUAGES} error={errors.preferredLanguage} />
       <TextField
         id="p1-dob"
@@ -91,12 +121,34 @@ function AcademicStep({ screenId }: { screenId: string }) {
   const [institutionalEmail, setEmail] = useState(d.institutionalEmail);
   const [barEnrolmentNumber, setBar] = useState(d.barEnrolmentNumber ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
 
-  function save() {
+  async function save() {
     const draft = updateProfileDraft({ college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber });
     const e = validateStep(2, draft);
     setErrors(e);
-    if (Object.keys(e).length === 0) nav('/s-11');
+    if (Object.keys(e).length > 0) return;
+    const registration = loadRegistrationSession();
+    if (!registration) {
+      setErrors({ submit: 'Your registration session expired. Return to registration and verify your mobile again.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveAcademicProfile({
+        registrationId: registration.registrationId,
+        college,
+        yearOfStudy,
+        enrolmentNumber,
+        institutionalEmail,
+        barEnrolmentNumber,
+      });
+      nav('/s-11');
+    } catch {
+      setErrors({ submit: 'Academic details could not be saved. Please retry.' });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -139,10 +191,11 @@ function AcademicStep({ screenId }: { screenId: string }) {
         <button type="button" className="btn tap" onClick={() => nav('/s-09')}>
           Back
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={save}>
-          Save &amp; continue
+        <button type="button" className="btn btn--primary tap" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save & continue'}
         </button>
       </div>
+      {errors.submit && <span className="ui-validation" role="alert">{errors.submit}</span>}
       <DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote>
     </AuthCard>
   );

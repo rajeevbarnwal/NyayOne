@@ -85,3 +85,58 @@ class StudentRegisterRequest(BaseModel):
 class StudentRegisterResponse(BaseModel):
     registration_id: uuid.UUID
     status: str
+
+
+class StudentAcademicProfileRequest(BaseModel):
+    """S-10 academic profile payload; unknown fields are rejected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    registration_id: uuid.UUID
+    college: str
+    year_of_study: str
+    enrolment_number: str
+    institutional_email: str
+    bar_enrolment_number: str | None = None
+
+    @field_validator("college")
+    @classmethod
+    def _college(cls, v: str) -> str:
+        value = v.strip()
+        if not value or len(value) > 160:
+            raise ValueError("College / institution is required and must be 160 characters or fewer.")
+        return value
+
+    @field_validator("year_of_study")
+    @classmethod
+    def _year(cls, v: str) -> str:
+        value = v.strip()
+        if not value or len(value) > 40:
+            raise ValueError("Year of study is required.")
+        return value
+
+    @field_validator("enrolment_number")
+    @classmethod
+    def _enrolment(cls, v: str) -> str:
+        value = v.strip()
+        if not re.fullmatch(r"[A-Za-z]{2}/\d+/\d{4}", value):
+            raise ValueError("College enrolment number must use STATE/ROLL/YEAR.")
+        return value
+
+    @field_validator("institutional_email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        value = v.strip().lower()
+        if len(value) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]{2,}", value):
+            raise ValueError("Enter a valid institutional email.")
+        return value
+
+    @field_validator("bar_enrolment_number")
+    @classmethod
+    def _bar(cls, v: str | None) -> str | None:
+        value = (v or "").strip()
+        if not value:
+            return None
+        if len(value) > 120:
+            raise ValueError("Bar enrolment number must be 120 characters or fewer.")
+        return value

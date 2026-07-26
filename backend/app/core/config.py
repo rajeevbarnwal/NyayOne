@@ -49,10 +49,41 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     # Registration crypto (SAATHI-366/448): key material for keyed lookup hashes
     # and Fernet ciphertext of sensitive registration fields. Override in prod.
+    # In production/staging the app FAILS CLOSED if this is absent or still the
+    # known development default (see app.core.crypto.assert_crypto_ready).
     registration_secret: SecretStr = SecretStr("dev-registration-secret-change-me")
+    # Stable HMAC lookup key. Encryption keys may rotate without invalidating
+    # uniqueness/search hashes already stored in the database.
+    registration_lookup_secret: SecretStr = SecretStr("dev-registration-lookup-change-me")
+    # Active encryption key version stamped onto every ciphertext produced
+    # (`<version>:<token>`); decrypt tries the active key then any prior key.
+    registration_key_version: str = "v1"
+    # Optional PRIOR key material for rotation — old ciphertext stays decryptable
+    # after the active secret is rotated. Format: "<version>:<secret>".
+    registration_prior_keys: list[str] = []
     # OTP delivery must be explicitly enabled + provider-bound in a deployment;
     # otherwise the API fails closed rather than pretending an OTP was sent.
     otp_delivery_enabled: bool = False
+    # Concrete provider to bind when delivery is enabled: "none" (fail closed),
+    # "capturing" (in-memory, dev/test), or "http" (real POST adapter).
+    otp_provider: str = "none"
+    otp_provider_url: str | None = None
+    otp_provider_token: SecretStr | None = None
+    otp_provider_timeout_s: float = 10.0
+
+    # --- DPDP retention / deletion (SAATHI-366 C5) -------------------------
+    # Config-driven retention windows per data category, in days. NO statutory
+    # duration is hard-coded: unset (None) means "retain until explicit erasure"
+    # and the purge job is a no-op for that category. Operators set these to the
+    # value their counsel approves.
+    retention_days_registration_pending: int | None = None
+    retention_days_registration_inactive: int | None = None
+    retention_days_otp_challenge: int | None = None
+    retention_days_recovery_session: int | None = None
+    retention_days_audit_events: int | None = None
+    # Whether the purge job anonymises (keep row, scrub PII/ciphertext) or hard
+    # deletes when a window elapses. "anonymise" is the DPDP-safe default.
+    retention_mode: str = "anonymise"
 
     jira_base_url: str = "https://legalsaathi.atlassian.net"
     jira_project_key: str = "SAATHI"

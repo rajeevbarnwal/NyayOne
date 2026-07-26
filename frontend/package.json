@@ -13,6 +13,7 @@
     "test:run": "vitest --run",
     "qa": "node scripts/browser-qa.mjs",
     "qa:calendar-visual": "node scripts/calendar-visual-qa.mjs",
+    "qa:registration": "node scripts/registration-e2e.mjs",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",

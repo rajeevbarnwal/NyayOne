@@ -14,6 +14,20 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 
 
+@pytest.fixture(autouse=True)
+def _crypto_test_key():
+    """Inject an explicit, non-default test key ring so crypto is deterministic
+    and independent of environment settings (SAATHI-366 C3 — tests may inject
+    explicit test keys). Also exercises the version-stamp path (active = v1)."""
+    from app.core.crypto import KeyRing, override_keyring
+
+    override_keyring(KeyRing(active_version="v1", secrets={"v1": b"unit-test-registration-key-v1"}))
+    try:
+        yield
+    finally:
+        override_keyring(None)
+
+
 @pytest.fixture(scope="session")
 def engine() -> Engine:
     return create_engine(

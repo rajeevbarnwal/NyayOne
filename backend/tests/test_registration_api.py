@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (register tables)
 from app.api.v1 import auth_student as ep
+from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
 from app.db.session import get_session
 from app.models.registration import OtpChallenge, StudentRegistration
@@ -57,9 +58,11 @@ def ctx():
 
     sender = Capturing()
     app = FastAPI()
+    register_exception_handlers(app)
     app.include_router(ep.router, prefix="/api/v1")
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
+    app.dependency_overrides[ep.get_outbox_session_factory] = lambda: SessionLocal
     client = TestClient(app)
     yield client, engine, SessionLocal, sender, app
     Base.metadata.drop_all(engine)
@@ -157,3 +160,54 @@ def test_register_conflict_and_idempotent_replay(ctx):
     assert c.status_code == 409  # mobile conflict
     with _fresh(SessionLocal) as s:
         assert len(s.scalars(select(StudentRegistration)).all()) == 1
+
+
+@pytest.mark.parametrize(
+    ("payload", "field", "forbidden_value"),
+    [
+        ({"mobile": "987654321"}, "mobile", "987654321"),
+        ({"mobile": "98765432101"}, "mobile", "98765432101"),
+        ({"mobile": "987654321012"}, "mobile", "987654321012"),
+        ({"dob": "2030-01-01"}, "dob", "2030-01-01"),
+        ({"first_name": ""}, "first_name", ""),
+        ({"first_name": "Aditi<script>"}, "first_name", "Aditi<script>"),
+        ({"first_name": "A" * 101}, "first_name", "A" * 101),
+    ],
+)
+def test_production_validation_errors_are_typed_without_pii_echo(
+    ctx, payload, field, forbidden_value
+):
+    client, *_ = ctx
+    body = {
+        "first_name": "Aditi",
+        "last_name": "Nair",
+        "mobile": "9876543210",
+        "dob": "2004-03-14",
+        "consent": {"accepted": True},
+        **payload,
+    }
+    response = client.post("/api/v1/auth/student/register", json=body)
+    assert response.status_code == 422
+    result = response.json()
+    assert result["detail"]["code"] == "validation_error"
+    assert result["detail"]["field"] == field
+    serialized = response.text
+    if forbidden_value:
+        assert forbidden_value not in serialized
+    assert "input" not in serialized
+
+
+def test_production_http_errors_preserve_typed_endpoint_contract(ctx):
+    client, *_ = ctx
+    response = client.post(
+        "/api/v1/auth/student/register",
+        json={
+            "first_name": "Aditi",
+            "last_name": "Nair",
+            "mobile": "9876543210",
+            "dob": "2004-03-14",
+            "consent": {"accepted": False},
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "consent_required"
