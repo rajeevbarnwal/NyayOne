@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { TextField, SelectField, Checkbox, DpdpFootnote, InfoTooltip } from '../student/components';
 import {
   isValidMobile, MOBILE_ERROR,
-  validateNameParts, nameErrorMessage, composeDisplayName,
+  isRegistrableDob, DOB_ERROR, todayLocalISO,
+  buildStudentRegistrationCommand, maskMobile,
 } from '../student/lib/registration';
+import { defaultKvStore } from '../../lib/kvStore';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
 import { Workbench, type WorkbenchStep, type Requirement, type LedgerEntry } from './Workbench';
 import {
@@ -111,18 +113,34 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
 
   function sendOtp() {
-    const e: Record<string, string> = {};
-    // Shared exact-10 contract on the raw value (reject <10 AND >10; no strip).
-    if (!isValidMobile(mobile)) e.mobile = MOBILE_ERROR;
-    // Students use the split legal name (First required / Middle optional / Last required).
-    if (!isLawyer) {
-      const ne = validateNameParts({ firstName, middleName, lastName });
-      if (ne.firstName) e.firstName = nameErrorMessage('firstName', ne.firstName);
-      if (ne.middleName) e.middleName = nameErrorMessage('middleName', ne.middleName);
-      if (ne.lastName) e.lastName = nameErrorMessage('lastName', ne.lastName);
+    if (isLawyer) {
+      // Lawyer keeps a single full name; shared exact-10 mobile contract.
+      if (!isValidMobile(mobile)) { setErrors({ mobile: MOBILE_ERROR }); return; }
+    } else {
+      // Student: build the canonical typed registration command (split name +
+      // exact-10 mobile). A rejected validation yields NO command and blocks OTP.
+      const built = buildStudentRegistrationCommand({ firstName, middleName, lastName, mobile, college: sv.collegeName });
+      if (!built.ok) {
+        const e: Record<string, string> = {};
+        for (const [k, v] of Object.entries(built.errors)) if (v) e[k] = v;
+        setErrors(e);
+        return;
+      }
+      setName(built.command.fullName);
+      // Persist a REDACTED registration snapshot to the service boundary: names +
+      // masked mobile only — no raw OTP, no full mobile, no PII in the URL.
+      try {
+        defaultKvStore().set('ls-student-registration', {
+          firstName: built.command.firstName,
+          middleName: built.command.middleName,
+          lastName: built.command.lastName,
+          fullName: built.command.fullName,
+          mobileMasked: maskMobile(built.command.mobile),
+          college: built.command.college ?? null,
+          at: nowISO(),
+        });
+      } catch { /* best-effort persistence; must not break registration */ }
     }
-    if (Object.keys(e).length > 0) { setErrors(e); return; }
-    if (!isLawyer) setName(composeDisplayName({ firstName, middleName, lastName }));
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
     setChallenge(ch);
@@ -138,7 +156,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     if (r.status === 'verified') { setOtpMsg(null); pushLedger('OTP verified'); setPhase('consent'); return; }
     if (r.status === 'locked') setOtpMsg('Too many attempts — locked. Resend after the cooldown.');
     else if (r.status === 'expired') setOtpMsg('Code expired. Resend a new code.');
-    else setOtpMsg(`Incorrect code. ${r.challenge.attemptsLeft} attempt(s) left.`);
+    else setOtpMsg(`Incorrect OTP. ${r.challenge.attemptsLeft} attempt(s) left.`);
   }
   function resendOtp() {
     if (!challenge) return;
@@ -163,6 +181,10 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   }
   function runStudentCheck() {
     const e = validateStudentVerify(sv);
+    // P0.2 age gate: DOB must be a real calendar date and not in the (local)
+    // future — enforced at the domain submit boundary before verification runs.
+    if (!dob) e.dob = 'Enter your date of birth to confirm eligibility.';
+    else if (!isRegistrableDob(dob)) e.dob = DOB_ERROR;
     setErrors(e);
     if (Object.keys(e).length) return;
     const r = decideStudentVerification(sv, nowISO());
@@ -310,7 +332,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             {sv.method === 'institutional_email'
               ? <TextField id="sv-email" label="Institutional email" value={sv.institutionalEmail} onChange={(v) => setSv((s) => ({ ...s, institutionalEmail: v }))} error={errors.institutionalEmail} type="email" inputMode="email" help="A .ac.in / .edu address verifies automatically." />
               : <TextField id="sv-id" label="College ID reference" value={sv.idDocumentRef} onChange={(v) => setSv((s) => ({ ...s, idDocumentRef: v }))} error={errors.idDocumentRef} help="Stored as an access-controlled reference (never in a URL); routed to manual review." />}
-            <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" optional="age gate" help="Under-18 accounts require guardian consent." />
+            <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" max={todayLocalISO()} error={errors.dob} optional="age gate" help="Under-18 accounts require guardian consent." />
             {minorCtx.isMinor && (
               <div className="ui-banner ui-banner--warn" role="status">
                 <span className="ui-banner__mark" aria-hidden>!</span>

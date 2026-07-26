@@ -59,7 +59,9 @@ const NEG = [
   ['mobile-12', { first: 'Aditi', last: 'Nair', mobile: '987654321012', dob: '2004-03-14' }, 'reg-mobile'],
   ['mobile-letters', { first: 'Aditi', last: 'Nair', mobile: '98765abc10', dob: '2004-03-14' }, 'reg-mobile'],
   ['dob-empty', { first: 'Aditi', last: 'Nair', mobile: '9876543210', dob: '' }, 'reg-dob'],
-  ['dob-impossible', { first: 'Aditi', last: 'Nair', mobile: '9876543210', dob: '2026-02-31' }, 'reg-dob'],
+  // NOTE: impossible calendar dates (e.g. 2026-02-31) are covered at the DOMAIN
+  // boundary in registration.test.ts — Chromium's date input rejects a malformed
+  // value before the app sees it, so it is not driven through the browser here.
   ['dob-future-jan', { first: 'Aditi', last: 'Nair', mobile: '9876543210', dob: '2030-01-01' }, 'reg-dob'],
   ['dob-future-dec', { first: 'Aditi', last: 'Nair', mobile: '9876543210', dob: '2030-12-31' }, 'reg-dob'],
   ['first-empty', { first: '', last: 'Nair', mobile: '9876543210', dob: '2004-03-14' }, 'reg-first-name'],

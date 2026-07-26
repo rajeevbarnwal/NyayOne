@@ -6,6 +6,7 @@ import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, todayLocalISO,
   validateNamePart, validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName, fullNameToParts,
+  buildStudentRegistrationCommand, maskMobile,
   NAME_MAX,
 } from './registration';
 
@@ -98,5 +99,30 @@ describe('name → payload + display, and legacy compatibility', () => {
     expect(fullNameToParts('Aditi Rani Kumari Nair')).toEqual({ firstName: 'Aditi', middleName: 'Rani Kumari', lastName: 'Nair' });
     expect(fullNameToParts('Prince')).toEqual({ firstName: 'Prince', middleName: '', lastName: '' });
     expect(fullNameToParts('')).toEqual({ firstName: '', middleName: '', lastName: '' });
+  });
+});
+
+describe('student registration command boundary (P0.2 payload mapping)', () => {
+  it('builds a typed command with middle present', () => {
+    const r = buildStudentRegistrationCommand({ firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', mobile: '9876543210', college: 'NLSIU' });
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.command).toEqual({ firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', fullName: 'Aditi Rani Nair', mobile: '9876543210', college: 'NLSIU' });
+  });
+  it('middle absent → null, no double space, college omitted when empty', () => {
+    const r = buildStudentRegistrationCommand({ firstName: 'Aditi', middleName: '', lastName: 'Nair', mobile: '9876543210' });
+    expect(r.ok && r.command.middleName).toBeNull();
+    expect(r.ok && r.command.fullName).toBe('Aditi Nair');
+    expect(r.ok && 'college' in r.command).toBe(false);
+  });
+  it('rejected validation returns typed errors and NO command', () => {
+    const r = buildStudentRegistrationCommand({ firstName: '', middleName: '', lastName: 'Nair', mobile: '98765' });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.errors.firstName).toBeTruthy();
+    expect(!r.ok && r.errors.mobile).toBe(MOBILE_ERROR);
+    expect(!r.ok && 'command' in r).toBe(false);
+  });
+  it('maskMobile never exposes the full number', () => {
+    expect(maskMobile('9876543210')).toBe('••••••3210');
+    expect(maskMobile('98765')).toBe('');
   });
 });

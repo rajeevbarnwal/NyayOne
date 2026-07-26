@@ -659,4 +659,9 @@ textarea.st-input {
   letter-spacing: normal; text-transform: none; font-weight: 400; white-space: normal;
 }
 .st-info__panel[hidden] { display: none; }
-@media (max-width: 430px) { .st-info__panel { left: auto; right: 0; max-width: 78vw; } }
+/* At narrow widths keep the panel anchored to the button's LEFT and clamp its
+   width to the viewport, so it never extends off the left edge (independent-QA
+   found the previous right:0 rule pushed x negative and off-screen at 390). */
+@media (max-width: 430px) {
+  .st-info__panel { left: 0; right: auto; max-width: calc(100vw - 32px); }
+}

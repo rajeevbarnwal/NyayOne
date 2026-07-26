@@ -379,7 +379,7 @@ export function OtpVerify() {
 
   const helper =
     status === 'incorrect'
-      ? `Incorrect code · ${attemptsLeft} attempts left · ${resendIn > 0 ? `resend in ${resendIn}s` : 'you can resend now'}`
+      ? `Incorrect OTP · ${attemptsLeft} attempts left · ${resendIn > 0 ? `resend in ${resendIn}s` : 'you can resend now'}`
       : `Enter the 6-digit code · expires in ${expiresIn}s · ${attemptsLeft} attempts left`;
 
   return (
@@ -390,7 +390,7 @@ export function OtpVerify() {
       meta={
         <StatusBadge
           status={status === 'incorrect' ? 'risk' : 'info'}
-          label={status === 'incorrect' ? 'Incorrect code' : 'Awaiting code'}
+          label={status === 'incorrect' ? 'Incorrect OTP' : 'Awaiting code'}
         />
       }
     >

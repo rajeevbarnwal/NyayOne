@@ -123,6 +123,56 @@ export function composeDisplayName(p: NameParts): string {
     .trim();
 }
 
+// ---- Student registration command (explicit typed payload boundary) -------
+export interface StudentRegistrationCommand {
+  readonly firstName: string;
+  readonly middleName: string | null;
+  readonly lastName: string;
+  readonly fullName: string;
+  readonly mobile: string;
+  readonly college?: string;
+}
+export type BuildCommandResult =
+  | { ok: true; command: StudentRegistrationCommand }
+  | { ok: false; errors: Partial<Record<NameField | 'mobile', string>> };
+
+/**
+ * Build the canonical student-registration command from raw UI fields. Validates
+ * name parts + mobile; on success returns a typed payload (firstName,
+ * middleName|null, lastName, derived fullName, raw 10-digit mobile, optional
+ * college). A rejected validation returns typed errors and NO command — callers
+ * must not progress OTP or persist on `ok: false`.
+ */
+export function buildStudentRegistrationCommand(input: {
+  firstName: string; middleName: string; lastName: string; mobile: string; college?: string;
+}): BuildCommandResult {
+  const errors: Partial<Record<NameField | 'mobile', string>> = {};
+  const ne = validateNameParts({ firstName: input.firstName, middleName: input.middleName, lastName: input.lastName });
+  if (ne.firstName) errors.firstName = nameErrorMessage('firstName', ne.firstName);
+  if (ne.middleName) errors.middleName = nameErrorMessage('middleName', ne.middleName);
+  if (ne.lastName) errors.lastName = nameErrorMessage('lastName', ne.lastName);
+  if (!isValidMobile(input.mobile)) errors.mobile = MOBILE_ERROR;
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  const parts = { firstName: input.firstName, middleName: input.middleName, lastName: input.lastName };
+  const payload = namePartsToPayload(parts);
+  return {
+    ok: true,
+    command: {
+      firstName: payload.firstName,
+      middleName: payload.middleName,
+      lastName: payload.lastName,
+      fullName: composeDisplayName(parts),
+      mobile: input.mobile,
+      ...(input.college ? { college: input.college } : {}),
+    },
+  };
+}
+
+/** Mask a 10-digit mobile for a persisted/redacted snapshot (no full number stored). */
+export function maskMobile(mobile: string): string {
+  return isValidMobile(mobile) ? `••••••${mobile.slice(6)}` : '';
+}
+
 /** Migrate a legacy record that only has fullName into First/Middle/Last parts. */
 export function fullNameToParts(fullName: string): NameParts {
   const tokens = (fullName ?? '').trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
