@@ -44,7 +44,7 @@ def _is_minor(dob: date, today: date | None = None) -> bool:
 
 def register_student(
     session: Session, req: StudentRegisterRequest, idempotency_key: str | None = None,
-    now: datetime | None = None,
+    now: datetime | None = None, sender=None,
 ) -> StudentRegistration:
     now = now or datetime.now(timezone.utc)
     if not req.consent.accepted:
@@ -98,7 +98,8 @@ def register_student(
         # verifier; the raw code leaves only through an injectable sender).
         from app.services.otp_service import issue_challenge
 
-        issue_challenge(session, reg.id, now)
+        send = (lambda code: sender.send(req.mobile, code)) if sender is not None else None
+        issue_challenge(session, reg.id, now, send=send)
 
         if minor:
             session.add(GuardianConsent(registration_id=reg.id, status="pending", verified=False))

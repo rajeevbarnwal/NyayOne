@@ -162,6 +162,16 @@ def client(engine):
     app = FastAPI()
     app.include_router(auth_student_router, prefix="/api/v1")
     app.dependency_overrides[get_session] = _override
+
+    # OTP delivery must be provided or the API fails closed (503). Inject a
+    # capturing test sender so the happy-path 201 can be exercised.
+    from app.api.v1 import auth_student as _ep
+
+    class _Cap:
+        def send(self, destination: str, code: str) -> None:  # noqa: D401
+            pass
+
+    app.dependency_overrides[_ep.get_otp_sender] = lambda: _Cap()
     yield TestClient(app)
     Base.metadata.drop_all(engine)
 

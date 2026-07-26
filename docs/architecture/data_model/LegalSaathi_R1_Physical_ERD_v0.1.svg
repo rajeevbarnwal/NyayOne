@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 760" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#3b5b8c"/>
+    </marker>
+    <style>
+      .box       { fill:#ffffff; stroke:#3b5b8c; stroke-width:1.5; }
+      .title-bar { fill:#3b5b8c; }
+      .title-bar-alt { fill:#7a6a3a; }
+      .title     { fill:#ffffff; font-size:15px; font-weight:bold; }
+      .col       { fill:#1c2733; font-size:12.5px; }
+      .pk        { fill:#1c2733; font-size:12.5px; font-weight:bold; text-decoration:underline; }
+      .fk        { fill:#245a3a; font-size:12.5px; }
+      .tag       { fill:#8a4a00; font-size:11px; }
+      .rel       { stroke:#3b5b8c; stroke-width:1.6; fill:none; }
+      .relcard   { fill:#3b5b8c; font-size:12px; font-weight:bold; }
+      .note      { fill:#5a6672; font-size:11.5px; }
+      .heading   { fill:#1c2733; font-size:20px; font-weight:bold; }
+      .sub       { fill:#5a6672; font-size:12px; }
+    </style>
+  </defs>
+
+  <text x="30" y="34" class="heading">LegalSaathi &#8212; R1 Physical ERD (v0.1)</text>
+  <text x="30" y="52" class="sub">PostgreSQL 16 + pgvector &#183; UUID PKs &#183; timestamptz &#183; indexed FKs &#183; ON DELETE CASCADE &#183; Source: Alembic migration 0002_registration_schema</text>
+
+  <!-- relationship lines -->
+  <path class="rel" d="M650,182 L650,236" marker-end="url(#arrow)"/>
+  <text x="658" y="200" class="relcard">1</text>
+  <text x="658" y="230" class="relcard">N</text>
+  <path class="rel" d="M500,340 L440,340 L440,116 L380,116" marker-end="url(#arrow)"/>
+  <path class="rel" d="M500,360 L420,360 L420,326 L380,326" marker-end="url(#arrow)"/>
+  <path class="rel" d="M500,380 L410,380 L410,536 L380,536" marker-end="url(#arrow)"/>
+  <path class="rel" d="M800,340 L860,340 L860,116 L940,116" marker-end="url(#arrow)"/>
+  <path class="rel" d="M800,380 L880,380 L880,326 L940,326" marker-end="url(#arrow)"/>
+
+  <!-- users -->
+  <g>
+    <rect class="box" x="500" y="70" width="300" height="112" rx="6"/>
+    <rect class="title-bar" x="500" y="70" width="300" height="26" rx="6"/>
+    <rect class="title-bar" x="500" y="83" width="300" height="13"/>
+    <text x="650" y="88" text-anchor="middle" class="title">users</text>
+    <text x="512" y="116" class="pk">id : uuid</text><text x="770" y="116" class="tag" text-anchor="end">PK</text>
+    <text x="512" y="138" class="col">role : varchar(32)</text>
+    <text x="512" y="160" class="col">status : varchar(32)</text>
+  </g>
+
+  <!-- student_registrations (hub) -->
+  <g>
+    <rect class="box" x="500" y="236" width="300" height="266" rx="6"/>
+    <rect class="title-bar" x="500" y="236" width="300" height="26" rx="6"/>
+    <rect class="title-bar" x="500" y="249" width="300" height="13"/>
+    <text x="650" y="254" text-anchor="middle" class="title">student_registrations</text>
+    <text x="512" y="282" class="pk">id : uuid</text><text x="788" y="282" class="tag" text-anchor="end">PK</text>
+    <text x="512" y="302" class="fk">user_id : uuid</text><text x="788" y="302" class="tag" text-anchor="end">FK ix</text>
+    <text x="512" y="322" class="col">first_name / last_name : varchar(60)</text>
+    <text x="512" y="342" class="col">middle_name : varchar(60)</text>
+    <text x="512" y="362" class="col">mobile_hash : varchar(64)</text><text x="788" y="362" class="tag" text-anchor="end">U ix &#183; hash</text>
+    <text x="512" y="382" class="col">mobile_ct : varchar(512)</text><text x="788" y="382" class="tag" text-anchor="end">ct</text>
+    <text x="512" y="402" class="col">dob_ct : varchar(512)</text><text x="788" y="402" class="tag" text-anchor="end">ct</text>
+    <text x="512" y="422" class="col">institution_ref : varchar(120)</text>
+    <text x="512" y="442" class="col">status : varchar(32) &#183; is_minor : bool</text>
+    <text x="512" y="462" class="col">idempotency_key : varchar(200)</text><text x="788" y="462" class="tag" text-anchor="end">U</text>
+    <text x="512" y="484" class="note">+ created_at / updated_at / deleted_at / metadata_json</text>
+  </g>
+
+  <!-- student_profiles -->
+  <g>
+    <rect class="box" x="60" y="70" width="320" height="132" rx="6"/>
+    <rect class="title-bar" x="60" y="70" width="320" height="26" rx="6"/>
+    <rect class="title-bar" x="60" y="83" width="320" height="13"/>
+    <text x="220" y="88" text-anchor="middle" class="title">student_profiles</text>
+    <text x="72" y="116" class="pk">id : uuid</text><text x="368" y="116" class="tag" text-anchor="end">PK</text>
+    <text x="72" y="136" class="fk">registration_id : uuid</text><text x="368" y="136" class="tag" text-anchor="end">FK U ix</text>
+    <text x="72" y="156" class="col">college &#183; year_of_study</text>
+    <text x="72" y="176" class="col">enrolment_hash ix / enrolment_ct</text>
+    <text x="72" y="196" class="col">inst_email_hash ix / _ct &#183; bar_ct</text>
+  </g>
+
+  <!-- otp_challenges -->
+  <g>
+    <rect class="box" x="60" y="256" width="320" height="152" rx="6"/>
+    <rect class="title-bar" x="60" y="256" width="320" height="26" rx="6"/>
+    <rect class="title-bar" x="60" y="269" width="320" height="13"/>
+    <text x="220" y="274" text-anchor="middle" class="title">otp_challenges</text>
+    <text x="72" y="302" class="pk">id : uuid</text><text x="368" y="302" class="tag" text-anchor="end">PK</text>
+    <text x="72" y="322" class="fk">registration_id : uuid</text><text x="368" y="322" class="tag" text-anchor="end">FK ix</text>
+    <text x="72" y="342" class="col">verifier_hash : varchar(64)</text><text x="368" y="342" class="tag" text-anchor="end">hash</text>
+    <text x="72" y="362" class="col">attempts / max_attempts : int</text>
+    <text x="72" y="382" class="col">expires_at : timestamptz</text>
+    <text x="72" y="402" class="col">consumed_at &#183; locked_until</text>
+  </g>
+
+  <!-- consents -->
+  <g>
+    <rect class="box" x="60" y="466" width="320" height="132" rx="6"/>
+    <rect class="title-bar" x="60" y="466" width="320" height="26" rx="6"/>
+    <rect class="title-bar" x="60" y="479" width="320" height="13"/>
+    <text x="220" y="484" text-anchor="middle" class="title">consents</text>
+    <text x="72" y="512" class="pk">id : uuid</text><text x="368" y="512" class="tag" text-anchor="end">PK</text>
+    <text x="72" y="532" class="fk">registration_id : uuid</text><text x="368" y="532" class="tag" text-anchor="end">FK ix</text>
+    <text x="72" y="552" class="col">purpose : varchar(64)</text>
+    <text x="72" y="572" class="col">accepted : bool &#183; accepted_at</text>
+    <text x="72" y="592" class="col">policy_version : varchar(40)</text>
+  </g>
+
+  <!-- student_verifications -->
+  <g>
+    <rect class="box" x="940" y="70" width="300" height="112" rx="6"/>
+    <rect class="title-bar" x="940" y="70" width="300" height="26" rx="6"/>
+    <rect class="title-bar" x="940" y="83" width="300" height="13"/>
+    <text x="1090" y="88" text-anchor="middle" class="title">student_verifications</text>
+    <text x="952" y="116" class="pk">id : uuid</text><text x="1228" y="116" class="tag" text-anchor="end">PK</text>
+    <text x="952" y="138" class="fk">registration_id : uuid</text><text x="1228" y="138" class="tag" text-anchor="end">FK ix</text>
+    <text x="952" y="160" class="col">method &#183; status : varchar(32)</text>
+  </g>
+
+  <!-- guardian_consents -->
+  <g>
+    <rect class="box" x="940" y="280" width="300" height="112" rx="6"/>
+    <rect class="title-bar" x="940" y="280" width="300" height="26" rx="6"/>
+    <rect class="title-bar" x="940" y="293" width="300" height="13"/>
+    <text x="1090" y="298" text-anchor="middle" class="title">guardian_consents</text>
+    <text x="952" y="326" class="pk">id : uuid</text><text x="1228" y="326" class="tag" text-anchor="end">PK</text>
+    <text x="952" y="348" class="fk">registration_id : uuid</text><text x="1228" y="348" class="tag" text-anchor="end">FK ix</text>
+    <text x="952" y="370" class="col">status : varchar(32) &#183; verified : bool</text>
+  </g>
+
+  <!-- audit_events -->
+  <g>
+    <rect class="box" x="940" y="452" width="300" height="172" rx="6" stroke="#7a6a3a"/>
+    <rect class="title-bar-alt" x="940" y="452" width="300" height="26" rx="6"/>
+    <rect class="title-bar-alt" x="940" y="465" width="300" height="13"/>
+    <text x="1090" y="470" text-anchor="middle" class="title">audit_events</text>
+    <text x="952" y="498" class="pk">id : uuid</text><text x="1228" y="498" class="tag" text-anchor="end">PK</text>
+    <text x="952" y="518" class="col">actor_user_id : uuid</text><text x="1228" y="518" class="tag" text-anchor="end">logical</text>
+    <text x="952" y="538" class="col">actor_role &#183; action &#183; resource_type</text>
+    <text x="952" y="558" class="col">resource_id : uuid</text><text x="1228" y="558" class="tag" text-anchor="end">ix</text>
+    <text x="952" y="578" class="col">before_state / after_state : json</text>
+    <text x="952" y="598" class="col">ip_hash &#183; user_agent_hash &#183; created_at</text>
+    <text x="952" y="618" class="note">append-only (no FK, no updated/deleted_at)</text>
+  </g>
+
+  <!-- legend -->
+  <g>
+    <text x="60" y="650" class="note">Legend:  PK = primary key   FK = foreign key (ON DELETE CASCADE)   U = unique   ix = indexed   hash = keyed lookup hash   ct = Fernet ciphertext</text>
+    <text x="60" y="668" class="note">Sensitive raw values (mobile, DOB, OTP, enrolment, institutional email, bar) are never stored in plaintext. All FKs indexed. All timestamps timestamptz (UTC).</text>
+    <text x="60" y="700" class="sub">Product decision 2026-07-26 (SAATHI-366 / SAATHI-448) &#183; generated by Senior Engineer</text>
+  </g>
+</svg>

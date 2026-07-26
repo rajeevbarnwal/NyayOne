@@ -89,10 +89,13 @@ def test_resend_cooldown_then_supersede(db_session: Session):
 
 def test_recovery_opaque_and_anti_enumeration(db_session: Session):
     reg = _reg(db_session)
-    known = otp_service.start_recovery(db_session, "9876543210", NOW)
-    assert known == str(reg.id)
+    # Opaque + unlinkable: known must NOT return the registration id, and repeats
+    # must differ so known/unknown cannot be distinguished by correlation.
+    k1 = otp_service.start_recovery(db_session, "9876543210", NOW)
+    k2 = otp_service.start_recovery(db_session, "9876543210", NOW)
     unknown = otp_service.start_recovery(db_session, "9999999999", NOW)
-    assert unknown != str(reg.id)  # opaque id, no existence leak
+    assert k1 != str(reg.id) and k1 != reg.id.hex
+    assert len({k1, k2, unknown}) == 3  # all distinct → no inference
     # No registration exists for the unknown mobile.
     from app.core.crypto import keyed_hash
     from app.models.registration import StudentRegistration

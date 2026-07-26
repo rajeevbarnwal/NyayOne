@@ -100,11 +100,17 @@ def verify(session: Session, registration_id: uuid.UUID, code: str, now: datetim
         reg = session.get(StudentRegistration, registration_id)
         if reg is not None and reg.status == "otp_pending":
             reg.status = "otp_verified"
+        session.commit()
         return ch
+    # Persist the failed attempt / lockout ATOMICALLY before signalling the
+    # error — the HTTP layer returns an error status and its request-scoped
+    # session would otherwise roll this back (critical #1).
     ch.attempts += 1
     if ch.attempts >= ch.max_attempts:
         ch.locked_until = now + timedelta(seconds=LOCKOUT_SECONDS)
+        session.commit()
         raise OtpError(423, "locked", attempts_left=0)
+    session.commit()
     raise OtpError(401, "incorrect_otp", attempts_left=ch.max_attempts - ch.attempts)
 
 
@@ -127,12 +133,14 @@ def resend(
 
 
 def start_recovery(session: Session, mobile: str, now: datetime, send: Sender | None = None) -> str:
-    """Anti-enumeration: always return an opaque recovery id; only issue a real
-    challenge when the mobile maps to an existing registration."""
+    """Anti-enumeration (critical #2): ALWAYS return a fresh opaque recovery id
+    that reveals nothing — never the registration UUID. A real challenge is
+    issued only when the mobile maps to an existing registration, but the
+    returned identifier is indistinguishable (fresh random) for known and
+    unknown, and differs on every call so repetition cannot be correlated."""
     reg = session.scalar(
         select(StudentRegistration).where(StudentRegistration.mobile_hash == keyed_hash(mobile))
     )
     if reg is not None:
         issue_challenge(session, reg.id, now, send)
-        return str(reg.id)
-    return str(uuid.uuid4())  # opaque, no existence leak
+    return uuid.uuid4().hex  # opaque, unlinkable, identical shape for known/unknown

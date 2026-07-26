@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Registration crypto (SAATHI-366/448): key material for keyed lookup hashes
     # and Fernet ciphertext of sensitive registration fields. Override in prod.
     registration_secret: SecretStr = SecretStr("dev-registration-secret-change-me")
+    # OTP delivery must be explicitly enabled + provider-bound in a deployment;
+    # otherwise the API fails closed rather than pretending an OTP was sent.
+    otp_delivery_enabled: bool = False
 
     jira_base_url: str = "https://legalsaathi.atlassian.net"
     jira_project_key: str = "SAATHI"
