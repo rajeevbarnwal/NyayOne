@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     # Optional PRIOR key material for rotation — old ciphertext stays decryptable
     # after the active secret is rotated. Format: "<version>:<secret>".
     registration_prior_keys: list[str] = []
+    # --- Wave 1 (SAATHI-63) comparison rules — Product decision 2026-07-27 ---
+    # Backend-authoritative bounds for law-school comparison sets. Config-driven
+    # so Product can retune without a migration (recorded on SAATHI-63).
+    compare_max_schools: int = 4
+    compare_min_schools: int = 2
+
     # OTP delivery must be explicitly enabled + provider-bound in a deployment;
     # otherwise the API fails closed rather than pretending an OTP was sent.
     otp_delivery_enabled: bool = False

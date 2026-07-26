@@ -22,12 +22,27 @@ export interface ScreenRoute {
 
 export const TOTAL_SCREENS = 99;
 
+/**
+ * Feature-state labels for implemented tranches (placeholder label otherwise).
+ * S5 law schools (SAATHI-63): S-27..S-30.
+ */
+const FEATURE_STATE_LABELS: Record<string, string> = {
+  'S-27': 'schools/search',
+  'S-28': 'schools/detail',
+  'S-29': 'schools/compare',
+  'S-30': 'schools/saved-followed',
+};
+
 /** Generates the S-01 … S-99 canonical route registry. */
 export const screenRoutes: ScreenRoute[] = Array.from(
   { length: TOTAL_SCREENS },
   (_, i) => {
     const num = String(i + 1).padStart(2, '0');
     const id = `S-${num}`;
-    return { id, path: `/${id.toLowerCase()}`, label: `${id} (placeholder)` };
+    return {
+      id,
+      path: `/${id.toLowerCase()}`,
+      label: FEATURE_STATE_LABELS[id] ?? `${id} (placeholder)`,
+    };
   }
 );

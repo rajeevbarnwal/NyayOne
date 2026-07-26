@@ -666,3 +666,24 @@ textarea.st-input {
 @media (max-width: 430px) {
   .st-info__panel { left: 0; right: auto; max-width: calc(100vw - 32px); }
 }
+
+/* --- S5 law-school comparison table (S-29) --- */
+.st-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm, 0.9rem);
+}
+.st-table th,
+.st-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+  text-align: left;
+  vertical-align: top;
+}
+.st-table thead th {
+  border-bottom-width: 2px;
+}
+.st-table tbody th {
+  white-space: nowrap;
+  font-weight: 600;
+}

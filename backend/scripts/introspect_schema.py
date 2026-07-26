@@ -20,6 +20,10 @@ EXPECTED_TABLES = {
     "student_verifications",
     "guardian_consents",
     "audit_events",
+    # Wave 1 (SAATHI-58 / SAATHI-63)
+    "user_settings", "privacy_preferences", "data_subject_requests", "export_jobs", "deletion_jobs",
+    "law_schools", "law_school_programmes", "law_school_facts", "law_school_sources",
+    "saved_law_schools", "law_school_follows", "comparison_sets", "comparison_items",
 }
 
 
