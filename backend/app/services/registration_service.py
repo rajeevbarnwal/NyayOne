@@ -7,19 +7,17 @@ logs or the audit snapshot.
 """
 from __future__ import annotations
 
-import secrets
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import encrypt, keyed_hash, otp_verifier
+from app.core.crypto import encrypt, keyed_hash
 from app.db.models.audit import AuditEvent
 from app.models.registration import (
     Consent,
     GuardianConsent,
-    OtpChallenge,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
@@ -27,7 +25,6 @@ from app.models.registration import (
 )
 from app.schemas.registration import StudentRegisterRequest
 
-OTP_TTL_SECONDS = 300
 AGE_OF_MAJORITY = 18
 
 
@@ -46,8 +43,10 @@ def _is_minor(dob: date, today: date | None = None) -> bool:
 
 
 def register_student(
-    session: Session, req: StudentRegisterRequest, idempotency_key: str | None = None
+    session: Session, req: StudentRegisterRequest, idempotency_key: str | None = None,
+    now: datetime | None = None,
 ) -> StudentRegistration:
+    now = now or datetime.now(timezone.utc)
     if not req.consent.accepted:
         raise RegistrationError(422, "consent_required", "consent")
 
@@ -85,7 +84,6 @@ def register_student(
         session.add(reg)
         session.flush()
 
-        now = datetime.now(timezone.utc)
         session.add(
             Consent(
                 registration_id=reg.id,
@@ -96,20 +94,11 @@ def register_student(
             )
         )
 
-        # OTP challenge: generate server-side, persist ONLY a keyed verifier.
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        salt = str(uuid.uuid4())
-        session.add(
-            OtpChallenge(
-                registration_id=reg.id,
-                verifier_hash=otp_verifier(code, salt=salt),
-                attempts=0,
-                max_attempts=3,
-                expires_at=now + timedelta(seconds=OTP_TTL_SECONDS),
-                metadata_json={"salt": salt},
-            )
-        )
-        del code  # raw OTP is never stored, logged or returned
+        # OTP challenge via the shared lifecycle service (persists only a keyed
+        # verifier; the raw code leaves only through an injectable sender).
+        from app.services.otp_service import issue_challenge
+
+        issue_challenge(session, reg.id, now)
 
         if minor:
             session.add(GuardianConsent(registration_id=reg.id, status="pending", verified=False))

@@ -25,7 +25,7 @@ class AuditEvent(Base):
     actor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
     action: Mapped[str] = mapped_column(String(120), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(80), nullable=False)
-    resource_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    resource_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), index=True, nullable=True)
     before_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
