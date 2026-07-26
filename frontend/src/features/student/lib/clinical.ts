@@ -154,6 +154,160 @@ export function exportSummary(entries: readonly LogEntry[], target = TARGET_HOUR
 
 export type ExportFormat = 'pdf' | 'csv' | 'institution';
 
+export interface ClinicalExportOptions {
+  readonly includesEvidence: boolean;
+  readonly reauthenticated: boolean;
+  readonly generatedAt: string;
+}
+
+export interface ClinicalExportPayload {
+  readonly format: ExportFormat;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly content: string;
+  readonly generatedAt: string;
+  readonly includesEvidence: boolean;
+  readonly entryCount: number;
+  readonly source: 'LegalSaathi self-maintained clinical log';
+}
+
+export interface ClinicalExportAuditEvent {
+  readonly eventId: string;
+  readonly action: 'clinical_hours_exported';
+  readonly format: ExportFormat;
+  readonly generatedAt: string;
+  readonly includesEvidence: boolean;
+  readonly entryCount: number;
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportRows(entries: readonly LogEntry[], includeEvidence: boolean) {
+  return entries.map((entry) => ({
+    date: entry.date,
+    hours: entry.hours,
+    activity: entry.activity,
+    category: CATEGORY_LABELS[entry.category],
+    status: statusChip(entry.status).label,
+    ...(includeEvidence ? { evidence: entry.evidenceName ?? '' } : {}),
+    // Verifier identity is deliberately excluded from every export format.
+  }));
+}
+
+function pdfSafe(text: string): string {
+  return text.normalize('NFKD').replace(/[^\x20-\x7E]/g, '-').replace(/([\\()])/g, '\\$1');
+}
+
+/** Small standards-valid single-page PDF generator for the browser prototype. */
+function simplePdf(lines: readonly string[]): string {
+  const commands = ['BT', '/F1 9 Tf', '40 800 Td'];
+  for (const [index, line] of lines.slice(0, 48).entries()) {
+    if (index > 0) commands.push('0 -14 Td');
+    commands.push(`(${pdfSafe(line)}) Tj`);
+  }
+  commands.push('ET');
+  const stream = commands.join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return pdf;
+}
+
+/** Build a privacy-minimised PDF/CSV/institution payload at the service boundary. */
+export function buildClinicalExport(
+  entries: readonly LogEntry[],
+  format: ExportFormat,
+  options: ClinicalExportOptions,
+): ClinicalExportPayload {
+  if (!canExport(options)) throw new Error('re_authentication_required');
+  const rows = exportRows(entries, options.includesEvidence);
+  const stamp = options.generatedAt.slice(0, 10);
+  let content: string;
+  let mimeType: string;
+  let extension: string;
+
+  if (format === 'csv') {
+    const headers = ['date', 'hours', 'activity', 'category', 'status', ...(options.includesEvidence ? ['evidence'] : [])];
+    content = [
+      headers.join(','),
+      ...rows.map((row) => headers.map((key) => csvCell(String(row[key as keyof typeof row] ?? ''))).join(',')),
+    ].join('\n');
+    mimeType = 'text/csv;charset=utf-8';
+    extension = 'csv';
+  } else if (format === 'pdf') {
+    const lines = [
+      'LegalSaathi clinical-hours report',
+      `Generated: ${options.generatedAt}`,
+      NON_OFFICIAL_TRANSCRIPT_WARNING,
+      ...rows.map((row) => `${row.date} | ${row.hours} hrs | ${row.activity} | ${row.category} | ${row.status}${'evidence' in row ? ` | evidence: ${row.evidence}` : ''}`),
+    ];
+    content = simplePdf(lines);
+    mimeType = 'application/pdf';
+    extension = 'pdf';
+  } else {
+    content = JSON.stringify({
+      schema: 'legalsaathi.clinical-export.v1',
+      generatedAt: options.generatedAt,
+      warning: NON_OFFICIAL_TRANSCRIPT_WARNING,
+      summary: exportSummary(entries),
+      rows,
+    }, null, 2);
+    mimeType = 'application/json';
+    extension = 'json';
+  }
+
+  return {
+    format,
+    fileName: `legalsaathi-clinical-hours-${stamp}.${extension}`,
+    mimeType,
+    content,
+    generatedAt: options.generatedAt,
+    includesEvidence: options.includesEvidence,
+    entryCount: entries.length,
+    source: 'LegalSaathi self-maintained clinical log',
+  };
+}
+
+const AUDIT_KEY = 'legalsaathi.clinical.export-audit.v1';
+
+/** Record only export metadata; activity/evidence/verifier PII never enters audit. */
+export function recordClinicalExportAudit(payload: ClinicalExportPayload): ClinicalExportAuditEvent {
+  const event: ClinicalExportAuditEvent = {
+    eventId: `clinical-export-${payload.generatedAt}-${payload.format}`,
+    action: 'clinical_hours_exported',
+    format: payload.format,
+    generatedAt: payload.generatedAt,
+    includesEvidence: payload.includesEvidence,
+    entryCount: payload.entryCount,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = JSON.parse(window.localStorage.getItem(AUDIT_KEY) ?? '[]') as ClinicalExportAuditEvent[];
+      window.localStorage.setItem(AUDIT_KEY, JSON.stringify([...existing, event]));
+    } catch {
+      // Storage denial must not corrupt the export already produced.
+    }
+  }
+  return event;
+}
+
 /** Whether an export can proceed. Re-auth is required when evidence is included. */
 export function canExport(g: { includesEvidence: boolean; reauthenticated: boolean }): boolean {
   return g.includesEvidence ? g.reauthenticated : true;

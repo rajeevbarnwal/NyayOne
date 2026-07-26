@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { TraceabilityBanner } from '../../components/shell/TraceabilityBanner';
 
 /**
@@ -69,6 +69,9 @@ export function TextField({
   placeholder,
   inputMode,
   autoComplete,
+  max,
+  maxLength,
+  labelAddon,
 }: {
   id: string;
   label: string;
@@ -81,6 +84,11 @@ export function TextField({
   placeholder?: string;
   inputMode?: 'text' | 'numeric' | 'tel' | 'email';
   autoComplete?: string;
+  /** Usability constraint for date inputs (YYYY-MM-DD). Domain validator stays authoritative. */
+  max?: string;
+  maxLength?: number;
+  /** Optional adornment rendered beside the label (e.g. an info tooltip). */
+  labelAddon?: ReactNode;
 }) {
   const errId = error ? `${id}-error` : undefined;
   const helpId = help ? `${id}-help` : undefined;
@@ -89,6 +97,7 @@ export function TextField({
       <span className="st-field__label">
         {label}
         {optional && <span className="st-field__opt"> · {optional}</span>}
+        {labelAddon}
       </span>
       <input
         id={id}
@@ -98,6 +107,8 @@ export function TextField({
         placeholder={placeholder}
         inputMode={inputMode}
         autoComplete={autoComplete}
+        max={max}
+        maxLength={maxLength}
         aria-invalid={error ? true : undefined}
         aria-describedby={[errId, helpId].filter(Boolean).join(' ') || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -198,6 +209,123 @@ export function Checkbox({
       </span>
       <span className="st-check__text">{label}</span>
     </label>
+  );
+}
+
+/**
+ * Accessible information control (SAATHI-388 / SAATHI-421). A real 44×44 button
+ * that reveals `text` in a tooltip/popover via keyboard focus, pointer hover and
+ * click; exposes expanded state; dismisses on Escape and focus/pointer exit. The
+ * legal text is available here instead of as static helper text below the form.
+ */
+export function InfoTooltip({ label, text }: { label: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
+  const panelId = useId();
+
+  // Collision-aware placement (fixed to the viewport, so it escapes card/legend
+  // coordinates). We generate above/below candidates, clamp each horizontally to
+  // a 16px margin, and REJECT any candidate whose rectangle intersects the form
+  // inputs or the primary CTA (not just "inside viewport"). On ≤768 we prefer the
+  // above-trigger candidate. If neither side is collision-free we fall back to a
+  // centered, non-blocking placement rather than cover the form. Recomputed on
+  // open, resize and scroll.
+  const reposition = useCallback(() => {
+    const btn = btnRef.current;
+    const panel = panelRef.current;
+    if (!btn || !panel) return;
+    const b = btn.getBoundingClientRect();
+    const pw = panel.offsetWidth || 280;
+    const ph = panel.offsetHeight || 96;
+    const m = 16;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(m, Math.min(b.left, vw - pw - m));
+
+    // Elements the panel must not cover: form fields + primary buttons nearby.
+    const avoid = Array.from(
+      document.querySelectorAll('input, select, .btn, button[type="button"].btn, .btn--primary'),
+    ).filter((el) => el !== btn).map((el) => el.getBoundingClientRect());
+    const intersects = (top: number) => {
+      const r = { left, right: left + pw, top, bottom: top + ph };
+      if (r.top < m || r.bottom > vh - m || r.left < m || r.right > vw - m) return true;
+      return avoid.some((a) => !(r.right <= a.left || r.left >= a.right || r.bottom <= a.top || r.top >= a.bottom));
+    };
+
+    const aboveTop = b.top - ph - 8;
+    const belowTop = b.bottom + 8;
+    const order = vw <= 768 ? [aboveTop, belowTop] : [belowTop, aboveTop];
+    const chosen = order.find((t) => !intersects(t));
+    if (chosen !== undefined) {
+      setPos({ top: chosen, left });
+      return;
+    }
+    // Fallback: centered near the top, horizontally clamped — never over the form.
+    setPos({ top: Math.max(m, Math.min(b.top - ph - 8, m)), left: Math.max(m, Math.min((vw - pw) / 2, vw - pw - m)) });
+  }, []);
+
+  useLayoutEffect(() => { if (open) reposition(); }, [open, reposition]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onMove = () => reposition();
+    window.addEventListener('resize', onMove);
+    window.addEventListener('scroll', onMove, true);
+    return () => {
+      window.removeEventListener('resize', onMove);
+      window.removeEventListener('scroll', onMove, true);
+    };
+  }, [open, reposition]);
+
+  const panelStyle: CSSProperties = {
+    position: 'fixed',
+    top: pos ? pos.top : -9999,
+    left: pos ? pos.left : -9999,
+    right: 'auto',
+    maxWidth: 'min(280px, calc(100vw - 32px))',
+  };
+
+  return (
+    <span
+      className="st-info"
+      style={{ display: 'inline-flex' }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        className="st-info__btn tap"
+        style={{ minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        aria-label={label}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-describedby={open ? panelId : undefined}
+        // A pointer click is preceded by mouseenter on desktop. Setting open
+        // explicitly avoids the old open-then-toggle-closed race.
+        onClick={() => setOpen(true)}
+        onMouseEnter={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
+      >
+        <span aria-hidden>ⓘ</span>
+      </button>
+      <span
+        ref={panelRef}
+        id={panelId}
+        role="tooltip"
+        className={`st-info__panel${open ? ' st-info__panel--open' : ''}`}
+        style={panelStyle}
+        hidden={!open}
+      >
+        {text}
+      </span>
+    </span>
   );
 }
 

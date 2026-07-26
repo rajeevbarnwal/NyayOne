@@ -2,13 +2,21 @@
  * Three-step student profile model, validation, completeness and tier
  * derivation (SAATHI-55 / S2.1). Pure + testable; the client uses this to
  * drive step validation and to resume from the last incomplete step (S-13).
- * Persistence is a stub boundary in this batch (no domain migrations).
+ * Registration and academic PII are persisted through the server API. The
+ * browser model is an in-memory wizard view only and is never written to
+ * localStorage/sessionStorage.
  */
+import { isValidDateOfBirth } from './consent';
 
 export type ProfileStep = 1 | 2 | 3;
 
 export interface ProfileDraft {
   // Step 1 — personal
+  // Split legal name (SAATHI-388/421). fullName is retained as a derived
+  // compatibility display value for existing consumers.
+  firstName: string;
+  middleName: string; // optional value; '' when absent
+  lastName: string;
   fullName: string;
   preferredLanguage: string;
   dateOfBirth: string; // yyyy-mm-dd
@@ -24,6 +32,9 @@ export interface ProfileDraft {
 }
 
 export const EMPTY_PROFILE: ProfileDraft = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
   fullName: '',
   preferredLanguage: 'English',
   dateOfBirth: '',
@@ -43,10 +54,12 @@ export const ENROLMENT_RE = /^[A-Za-z]{2}\/\d+\/\d{4}$/;
 
 export type FieldErrors = Record<string, string>;
 
-export function validateStep1(d: ProfileDraft): FieldErrors {
+export function validateStep1(d: ProfileDraft, nowISO = new Date().toISOString()): FieldErrors {
   const e: FieldErrors = {};
   if (!d.fullName.trim()) e.fullName = 'Enter your full name.';
   if (!d.dateOfBirth) e.dateOfBirth = 'Enter your date of birth.';
+  else if (!isValidDateOfBirth(d.dateOfBirth, nowISO))
+    e.dateOfBirth = 'Enter a valid date of birth that is not in the future.';
   if (!d.preferredLanguage) e.preferredLanguage = 'Choose a language.';
   return e;
 }

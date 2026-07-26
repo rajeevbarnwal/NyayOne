@@ -11,7 +11,7 @@ export interface NavItem {
 }
 
 export const railItems: NavItem[] = [
-  { id: 'home', label: 'Home', to: '/s-13', glyph: '◱' },
+  { id: 'home', label: 'Home', to: '/s-14', glyph: '◱' },
   { id: 'research', label: 'AI Research', to: '/s-36', glyph: '⌕' },
   { id: 'internships', label: 'Internships', to: '/s-20', glyph: '▤' },
   { id: 'tutors', label: 'Find a Tutor', to: '/s-31', glyph: '◈' },
@@ -22,16 +22,16 @@ export const railItems: NavItem[] = [
   { id: 'clinical', label: 'Clinical Hours', to: '/s-61', glyph: '◷' },
   { id: 'calendar', label: 'Calendar', to: '/s-90', glyph: '◲' },
   { id: 'community', label: 'Community', to: '/s-50', glyph: '◌' },
-  { id: 'profile', label: 'Profile', to: '/s-14', glyph: '◐' },
+  { id: 'profile', label: 'Profile', to: '/s-17', glyph: '◐' },
 ];
 
 // Mobile bottom nav: 5 primaries; Ask is the central action.
 export const bottomNavItems: NavItem[] = [
-  { id: 'home', label: 'Home', to: '/s-13', glyph: '◱' },
+  { id: 'home', label: 'Home', to: '/s-14', glyph: '◱' },
   { id: 'research', label: 'Research', to: '/s-36', glyph: '⌕' },
   { id: 'internships', label: 'Internships', to: '/s-20', glyph: '▤' },
   { id: 'tutors', label: 'Tutors', to: '/s-31', glyph: '◈' },
-  { id: 'profile', label: 'Profile', to: '/s-14', glyph: '◐' },
+  { id: 'profile', label: 'Profile', to: '/s-17', glyph: '◐' },
 ];
 
 /**

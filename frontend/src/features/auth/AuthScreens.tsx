@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TextField, SelectField, Checkbox, DpdpFootnote } from '../student/components';
+import { TextField, SelectField, Checkbox, DpdpFootnote, InfoTooltip } from '../student/components';
+import {
+  isValidMobile, MOBILE_ERROR,
+  isRegistrableDob, DOB_ERROR, todayLocalISO,
+  buildStudentRegistrationCommand,
+} from '../student/lib/registration';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
 import { Workbench, type WorkbenchStep, type Requirement, type LedgerEntry } from './Workbench';
 import {
@@ -8,11 +13,20 @@ import {
 } from '../student/lib/otp';
 import { STUB_OTP_CODE } from '../student/lib/authFlow';
 import {
+  RegistrationApiError,
+  loadRegistrationSession,
+  registerStudent,
+  resendStudentOtp,
+  saveRegistrationSession,
+  verifyStudentOtp,
+} from '../student/lib/registrationApi';
+import { CONSENT_VERSION } from '../student/lib/consent';
+import {
   nextPhase, redactChallenge, AUTH_PHASE_LABELS, type AuthPhase, type AuthRole, type AuthSnapshot,
 } from './lib/authLifecycle';
 import { saveAuthSnapshot, loadAuthSnapshot, clearAuthSnapshot } from './lib/authPersistence';
 import {
-  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck, recordManualOverride,
+  validateLawyerProfile, EMPTY_LAWYER_PROFILE, createStubEnrolmentSource, runEnrolmentCheck,
   canAccessLawyerFeatures, lawyerGateReason, LAWYER_VERIFICATION_STATUS_LABELS, STATE_BAR_COUNCILS,
   ENROLMENT_STATUS_ONLY_NOTICE, BCI_PROFILE_DISPLAY_ENABLED, type LawyerProfile, type VerificationRecord,
 } from './lib/lawyerVerify';
@@ -64,6 +78,9 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const restored = useMemo(() => loadAuthSnapshot(role), [role]);
   const [phase, setPhase] = useState<AuthPhase>(restored?.phase ?? 'register');
   const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
   const [challenge, setChallenge] = useState<OtpChallenge | null>(
     restored?.challenge ? { ...restored.challenge, code: STUB_OTP_CODE } : null,
@@ -80,7 +97,6 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [profile, setProfile] = useState<LawyerProfile>(EMPTY_LAWYER_PROFILE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rec, setRec] = useState<VerificationRecord | null>(null);
-  const [overrideReason, setOverrideReason] = useState('');
   const enrolSrc = useMemo(() => createStubEnrolmentSource(), []);
 
   // Student verification
@@ -88,6 +104,15 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [dob, setDob] = useState('');
   const [srec, setSrec] = useState<StudentVerificationRecord | null>(null);
   const [guardian, setGuardian] = useState<GuardianConsent | null>(null);
+  const restoredRegistration = useMemo(() => loadRegistrationSession(), []);
+  const [serverRegistrationId, setServerRegistrationId] = useState<string | null>(
+    restoredRegistration?.registrationId ?? null,
+  );
+  const [serverIssuedAt, setServerIssuedAt] = useState(
+    restoredRegistration?.issuedAt ?? Date.now(),
+  );
+  const [serverAttemptsLeft, setServerAttemptsLeft] = useState(3);
+  const [busy, setBusy] = useState(false);
 
   const minorCtx = useMemo(() => (dob ? minorContextFromDob(dob, nowISO(), guardian) : { isMinor: false, guardianConsent: guardian }), [dob, guardian]);
 
@@ -104,8 +129,65 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const pushLedger = (label: string) => setLedger((l) => [...l, { label, meta: new Date().toLocaleTimeString('en-IN') }]);
   const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
 
-  function sendOtp() {
-    if (!mobile.trim()) { setErrors({ mobile: 'Enter your mobile number.' }); return; }
+  async function sendOtp() {
+    if (isLawyer) {
+      // Lawyer keeps a single full name; shared exact-10 mobile contract.
+      if (!isValidMobile(mobile)) { setErrors({ mobile: MOBILE_ERROR }); return; }
+    } else {
+      // Student: build the canonical typed registration command (split name +
+      // exact-10 mobile). A rejected validation yields NO command and blocks OTP.
+      const built = buildStudentRegistrationCommand({ firstName, middleName, lastName, mobile, college: sv.collegeName });
+      if (!built.ok) {
+        const e: Record<string, string> = {};
+        for (const [k, v] of Object.entries(built.errors)) if (v) e[k] = v;
+        setErrors(e);
+        return;
+      }
+      if (!dob || !isRegistrableDob(dob)) {
+        setErrors({ dob: !dob ? 'Enter your date of birth to confirm eligibility.' : DOB_ERROR });
+        return;
+      }
+      if (!consent) {
+        setErrors({ consent: 'Accept the Privacy Notice before an OTP is sent.' });
+        return;
+      }
+      setName(built.command.fullName);
+      setBusy(true);
+      try {
+        const created = await registerStudent({
+          firstName: built.command.firstName,
+          middleName: built.command.middleName,
+          lastName: built.command.lastName,
+          mobile,
+          dob,
+          policyVersion: CONSENT_VERSION,
+          college: sv.collegeName || undefined,
+        });
+        const minor = minorContextFromDob(dob, nowISO(), guardian).isMinor;
+        const session = {
+          registrationId: created.registration_id,
+          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
+          issuedAt: Date.now(),
+          isMinor: minor,
+          guardianConsentPending: minor,
+        };
+        saveRegistrationSession(session);
+        setServerRegistrationId(created.registration_id);
+        setServerIssuedAt(session.issuedAt);
+        setDestMasked(session.destinationMasked);
+        setOtpMsg(null);
+        pushLedger('OTP dispatched');
+        setPhase('otp_entry');
+      } catch (error) {
+        const code = error instanceof RegistrationApiError ? error.code : 'unavailable';
+        setErrors({ submit: code === 'mobile_already_registered'
+          ? 'This mobile number is already registered.'
+          : 'Registration or OTP delivery is unavailable. Please retry.' });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
     setChallenge(ch);
@@ -114,16 +196,51 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     pushLedger('OTP dispatched');
     setPhase('otp_entry');
   }
-  function submitOtp() {
+  async function submitOtp() {
+    if (!isLawyer && serverRegistrationId) {
+      setBusy(true);
+      try {
+        await verifyStudentOtp(serverRegistrationId, otpInput);
+        setOtpMsg(null);
+        pushLedger('OTP verified');
+        setPhase('consent');
+      } catch (error) {
+        if (error instanceof RegistrationApiError) {
+          if (typeof error.attemptsLeft === 'number') setServerAttemptsLeft(error.attemptsLeft);
+          if (error.code === 'locked') setOtpMsg('Too many attempts — locked for 15 minutes.');
+          else if (error.code === 'expired') setOtpMsg('Code expired. Resend a new code.');
+          else setOtpMsg(`Incorrect OTP. ${error.attemptsLeft ?? serverAttemptsLeft} attempt(s) left.`);
+        } else setOtpMsg('OTP verification is unavailable. Please retry.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!challenge) return;
     const r = otpVerify(challenge, otpInput, Date.now());
     setChallenge(r.challenge);
     if (r.status === 'verified') { setOtpMsg(null); pushLedger('OTP verified'); setPhase('consent'); return; }
     if (r.status === 'locked') setOtpMsg('Too many attempts — locked. Resend after the cooldown.');
     else if (r.status === 'expired') setOtpMsg('Code expired. Resend a new code.');
-    else setOtpMsg(`Incorrect code. ${r.challenge.attemptsLeft} attempt(s) left.`);
+    else setOtpMsg(`Incorrect OTP. ${r.challenge.attemptsLeft} attempt(s) left.`);
   }
-  function resendOtp() {
+  async function resendOtp() {
+    if (!isLawyer && serverRegistrationId) {
+      setBusy(true);
+      try {
+        await resendStudentOtp(serverRegistrationId);
+        setServerIssuedAt(Date.now());
+        setServerAttemptsLeft(3);
+        setOtpMsg(null);
+        setOtpInput('');
+        pushLedger('OTP resent');
+      } catch {
+        setOtpMsg('A new code cannot be sent yet. Wait for the cooldown and retry.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!challenge) return;
     setChallenge(otpResend(challenge, STUB_OTP_CODE, Date.now()));
     setOtpMsg(null); setOtpInput('');
@@ -144,14 +261,12 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     pushLedger(`Enrolment check: ${r.status}`);
     setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
   }
-  function lawyerOverride() {
-    if (!rec) return;
-    const r = recordManualOverride(rec, { authorised: true, reason: overrideReason, reviewer: 'admin:compliance' }, nowISO());
-    setRec(r);
-    if (r.status === 'verified') { pushLedger('Authorised override recorded'); setPhase('verified'); }
-  }
   function runStudentCheck() {
     const e = validateStudentVerify(sv);
+    // P0.2 age gate: DOB must be a real calendar date and not in the (local)
+    // future — enforced at the domain submit boundary before verification runs.
+    if (!dob) e.dob = 'Enter your date of birth to confirm eligibility.';
+    else if (!isRegistrableDob(dob)) e.dob = DOB_ERROR;
     setErrors(e);
     if (Object.keys(e).length) return;
     const r = decideStudentVerification(sv, nowISO());
@@ -172,6 +287,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     setPhase('register'); setChallenge(null); setOtpInput(''); setOtpMsg(null); setDestMasked(null);
     setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setGuardian(null); setLedger([]);
     setProfile(EMPTY_LAWYER_PROFILE); setSv(EMPTY_STUDENT_VERIFY); setDob('');
+    setServerRegistrationId(null); setServerAttemptsLeft(3);
   }
 
   // --- derived ---
@@ -223,27 +339,52 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         {phase === 'register' && (
           <div className="st-stack">
             <h2 className="st-panel__title">Register</h2>
-            <TextField id="reg-name" label="Full name" value={name} onChange={setName} autoComplete="name" />
-            <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} inputMode="tel" autoComplete="tel" help="We send a one-time code by SMS." />
-            {!isLawyer && (
-              <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
+            {isLawyer ? (
+              <TextField id="reg-name" label="Full name" value={name} onChange={setName} autoComplete="name" />
+            ) : (
+              <fieldset className="st-namegroup">
+                <legend className="st-namegroup__legend">
+                  Name
+                  <InfoTooltip
+                    label="Information about name and guardian consent"
+                    text="Under-18 accounts need verified guardian consent before full access · collected under data minimisation · DPDP Act, 2023."
+                  />
+                </legend>
+                <TextField id="reg-first-name" label="First name" value={firstName} onChange={setFirstName} error={errors.firstName} autoComplete="given-name" />
+                <TextField id="reg-middle-name" label="Middle name" optional="optional" value={middleName} onChange={setMiddleName} error={errors.middleName} autoComplete="additional-name" />
+                <TextField id="reg-last-name" label="Last name" value={lastName} onChange={setLastName} error={errors.lastName} autoComplete="family-name" />
+              </fieldset>
             )}
-            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={sendOtp}>Send OTP</button></div>
+            <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} type="text" inputMode="numeric" autoComplete="tel" help="We send a one-time code by SMS." />
+            {!isLawyer && (
+              <>
+                <TextField id="reg-dob" label="Date of birth" value={dob} onChange={setDob} type="date" max={todayLocalISO()} error={errors.dob} />
+                <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
+                <Checkbox id="reg-consent" checked={consent} onChange={setConsent} label="I accept the Privacy Notice and processing for registration." />
+                {errors.consent && <ValidationState message={errors.consent} />}
+              </>
+            )}
+            {errors.submit && <ValidationState message={errors.submit} />}
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={busy}>{busy ? 'Sending…' : 'Send OTP'}</button></div>
           </div>
         )}
 
         {/* OTP ENTRY (covers sent / entry / invalid / expired / lockout) */}
-        {(phase === 'otp_sent' || phase === 'otp_entry') && challenge && (
+        {(phase === 'otp_sent' || phase === 'otp_entry') && (challenge || serverRegistrationId) && (
           <div className="st-stack">
             <h2 className="st-panel__title">Verify OTP</h2>
-            <p className="st-item__meta">Code sent to {destMasked}. {isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`}</p>
-            <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" help="Demo stub code: 429016. A wrong code shows the invalid/lockout states." />
+            <p className="st-item__meta">
+              Code sent to {destMasked}. {challenge
+                ? (isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`)
+                : `Expires in ${Math.max(0, 300 - Math.floor((now - serverIssuedAt) / 1000))}s.`}
+            </p>
+            <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" autoComplete="one-time-code" help="Enter the one-time code sent by SMS. A wrong code shows the invalid/lockout states." />
             {otpMsg && <ValidationState message={otpMsg} />}
-            {isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
+            {challenge && isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
             <div className="st-actions st-actions--split">
-              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={isLocked(challenge, now)} aria-disabled={isLocked(challenge, now)}>Verify</button>
-              <button type="button" className="btn tap" onClick={resendOtp} disabled={secondsUntilResend(challenge, now) > 0} aria-disabled={secondsUntilResend(challenge, now) > 0}>
-                {secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
+              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={busy || (!!challenge && isLocked(challenge, now))}>Verify</button>
+              <button type="button" className="btn tap" onClick={resendOtp} disabled={busy || (!!challenge && secondsUntilResend(challenge, now) > 0)}>
+                {challenge && secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
               </button>
             </div>
           </div>
@@ -284,7 +425,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             {sv.method === 'institutional_email'
               ? <TextField id="sv-email" label="Institutional email" value={sv.institutionalEmail} onChange={(v) => setSv((s) => ({ ...s, institutionalEmail: v }))} error={errors.institutionalEmail} type="email" inputMode="email" help="A .ac.in / .edu address verifies automatically." />
               : <TextField id="sv-id" label="College ID reference" value={sv.idDocumentRef} onChange={(v) => setSv((s) => ({ ...s, idDocumentRef: v }))} error={errors.idDocumentRef} help="Stored as an access-controlled reference (never in a URL); routed to manual review." />}
-            <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" optional="age gate" help="Under-18 accounts require guardian consent." />
+            <TextField id="sv-dob" label="Date of birth" value={dob} onChange={setDob} type="date" max={todayLocalISO()} error={errors.dob} optional="age gate" help="Under-18 accounts require guardian consent." />
             {minorCtx.isMinor && (
               <div className="ui-banner ui-banner--warn" role="status">
                 <span className="ui-banner__mark" aria-hidden>!</span>
@@ -307,7 +448,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             </div>
 
             {isLawyer ? <LawyerResult phase={phase} rec={rec} unlocked={canAccessLawyerFeatures(rec)} gate={lawyerGateReason(rec)}
-              overrideReason={overrideReason} setOverrideReason={setOverrideReason} onOverride={lawyerOverride} onRetry={() => go('retry')} />
+              onRetry={() => go('retry')} />
               : <StudentResult phase={phase} srec={srec} minor={minorCtx.isMinor} guardianOk={guardianConsentSatisfied(guardian)}
                 pro={proFeaturesUnlocked({ verification: srec, minor: minorCtx })}
                 gate={studentGateReason({ verification: srec, minor: minorCtx })} onRetry={() => go('retry')} />}
@@ -321,9 +462,9 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   );
 }
 
-function LawyerResult({ phase, rec, unlocked, gate, overrideReason, setOverrideReason, onOverride, onRetry }: {
+function LawyerResult({ phase, rec, unlocked, gate, onRetry }: {
   phase: AuthPhase; rec: VerificationRecord | null; unlocked: boolean; gate: string | null;
-  overrideReason: string; setOverrideReason: (v: string) => void; onOverride: () => void; onRetry: () => void;
+  onRetry: () => void;
 }) {
   return (
     <>
@@ -331,10 +472,8 @@ function LawyerResult({ phase, rec, unlocked, gate, overrideReason, setOverrideR
       {phase === 'manual_review' && <p>Your enrolment is in manual review by our compliance team. Lawyer features unlock once a reviewer confirms it.</p>}
       {phase === 'rejected' && (
         <>
-          <p>We could not verify this enrolment. You can re-check the number, or an authorised reviewer can record a manual override.</p>
+          <p>We could not verify this enrolment. Re-check the number or contact the compliance team for an independent review.</p>
           <div className="st-actions"><button type="button" className="btn tap" onClick={onRetry}>Re-check enrolment</button></div>
-          <TextField id="lw-ovr" label="Authorised reviewer override reason" value={overrideReason} onChange={setOverrideReason} help="Human reviewers only — automation can never clear a verification. Recorded to the immutable audit log." />
-          <div className="st-actions"><button type="button" className="btn tap" disabled={!overrideReason.trim()} aria-disabled={!overrideReason.trim()} onClick={onOverride}>Record authorised override</button></div>
         </>
       )}
       <section className="st-panel" aria-label="Lawyer workspace" style={{ marginTop: 'var(--space-3)' }}>

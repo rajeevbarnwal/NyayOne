@@ -4,6 +4,7 @@ import {
   availableModules,
   upcomingModules,
   releaseRank,
+  profileCompletionPct,
 } from './dashboard';
 
 describe('dashboard graceful degradation by release (SAATHI-57)', () => {
@@ -26,5 +27,16 @@ describe('dashboard graceful degradation by release (SAATHI-57)', () => {
     expect(live.every((m) => m.release === 'R1')).toBe(true);
     // No overlap.
     expect(live.some((m) => soon.some((s) => s.id === m.id))).toBe(false);
+  });
+});
+
+describe('dashboard real-data summary', () => {
+  it('derives profile completion instead of using a fixed momentum score', () => {
+    const empty = {
+      fullName: '', dateOfBirth: '', college: '', yearOfStudy: '', enrolmentNumber: '',
+      institutionalEmail: '', interests: [] as string[], careerGoal: '',
+    };
+    expect(profileCompletionPct(empty)).toBe(0);
+    expect(profileCompletionPct({ ...empty, fullName: 'Rajeev', dateOfBirth: '2000-01-01' })).toBe(25);
   });
 });

@@ -100,7 +100,32 @@ export interface AuthSnapshot {
   readonly destinationMasked: string | null;
   readonly challenge: RedactedChallenge | null;
   readonly consentAt: string | null;
+  /**
+   * Stable opaque authenticated subject id, issued by the verified identity
+   * lifecycle. This is the ONLY value used as the downstream audit actor id — it
+   * is never a masked contact, name or BCI number.
+   */
+  readonly subjectId?: string | null;
+  /**
+   * Verified legal-workspace authorisation claim (functional role: lawyer /
+   * senior_advocate / firm_partner / associate / clerk / billing_admin). Distinct
+   * from the identity `role`; absent → treated as base 'lawyer' once verified.
+   */
+  readonly filingRole?: string | null;
   readonly updatedAt: number;
+}
+
+/**
+ * Mint a stable opaque subject id from a non-reversible fingerprint of the
+ * identity seed. Never derived from, and never reveals, contact/BCI/name values.
+ */
+export function makeSubjectId(seed: string): string {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return `subj_${h.toString(16)}`;
 }
 
 /** Guard: assert a snapshot carries no secret material (used in tests). */

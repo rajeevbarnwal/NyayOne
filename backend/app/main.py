@@ -12,6 +12,12 @@ def create_app() -> FastAPI:
     configure_logging(settings.log_level, settings.log_file_path)
     logger = get_logger("legalsaathi.app")
 
+    # Fail closed if registration crypto is misconfigured in prod/staging
+    # (absent or the known dev default). No-op in development.
+    from app.core.crypto import assert_crypto_ready
+
+    assert_crypto_ready()
+
     app = FastAPI(title=settings.app_name, version=settings.app_version)
 
     # Request correlation ID + access logging (added first so it wraps all requests).

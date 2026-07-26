@@ -1,0 +1,4 @@
+{"ts":"2026-07-18T10:00:00Z","level":"INFO","logger":"app.request","message":"missing request id"}
+{"ts":"2026-07-18T10:00:01Z","level":"INFO","logger":"app.request","message":"null request id","request_id":null}
+{"ts":"2026-07-18T10:00:02Z","level":"INFO","logger":"app.request","message":"empty request id","request_id":""}
+{"ts":"2026-07-18T10:00:03Z","level":"INFO","logger":"app.request","message":"real request id","request_id":"req-abc-123"}

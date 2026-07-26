@@ -1,0 +1,1190 @@
+{
+  "dialect": "postgresql",
+  "tables": {
+    "audit_events": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "actor_user_id",
+          "type": "UUID",
+          "nullable": true
+        },
+        {
+          "name": "actor_role",
+          "type": "VARCHAR(40)",
+          "nullable": true
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(120)",
+          "nullable": false
+        },
+        {
+          "name": "resource_type",
+          "type": "VARCHAR(80)",
+          "nullable": false
+        },
+        {
+          "name": "resource_id",
+          "type": "UUID",
+          "nullable": true
+        },
+        {
+          "name": "before_state",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "after_state",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "ip_hash",
+          "type": "VARCHAR(64)",
+          "nullable": true
+        },
+        {
+          "name": "user_agent_hash",
+          "type": "VARCHAR(64)",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "name": "ix_audit_events_resource_id",
+          "unique": false,
+          "column_names": [
+            "resource_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [],
+      "check_constraints": []
+    },
+    "consents": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "purpose",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "accepted",
+          "type": "BOOLEAN",
+          "nullable": false
+        },
+        {
+          "name": "policy_version",
+          "type": "VARCHAR(40)",
+          "nullable": false
+        },
+        {
+          "name": "accepted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_consents_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_consents_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_consents_ck_consents_affirmative",
+          "sqltext": "accepted = true",
+          "comment": null
+        }
+      ]
+    },
+    "guardian_consents": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "verified",
+          "type": "BOOLEAN",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_guardian_consents_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_guardian_consents_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_guardian_consents_ck_guardian_consents_status",
+          "sqltext": "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'verified'::character varying, 'rejected'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "otp_challenges": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "verifier_hash",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "attempts",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "max_attempts",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "locked_until",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "purpose",
+          "type": "VARCHAR(16)",
+          "nullable": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_otp_challenges_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_otp_challenges_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_otp_challenges_ck_otp_challenges_attempts_le_max",
+          "sqltext": "attempts <= max_attempts",
+          "comment": null
+        },
+        {
+          "name": "ck_otp_challenges_ck_otp_challenges_attempts_nonneg",
+          "sqltext": "attempts >= 0",
+          "comment": null
+        },
+        {
+          "name": "ck_otp_challenges_ck_otp_challenges_max_positive",
+          "sqltext": "max_attempts > 0",
+          "comment": null
+        },
+        {
+          "name": "ck_otp_challenges_ck_otp_challenges_purpose",
+          "sqltext": "purpose::text = ANY (ARRAY['signup'::character varying, 'recovery'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "otp_outbox": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "challenge_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "destination_ct",
+          "type": "VARCHAR(600)",
+          "nullable": false
+        },
+        {
+          "name": "code_ct",
+          "type": "VARCHAR(600)",
+          "nullable": true
+        },
+        {
+          "name": "key_version",
+          "type": "VARCHAR(8)",
+          "nullable": false
+        },
+        {
+          "name": "purpose",
+          "type": "VARCHAR(16)",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "nullable": false
+        },
+        {
+          "name": "attempts",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "last_error",
+          "type": "VARCHAR(200)",
+          "nullable": true
+        },
+        {
+          "name": "delivered_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_otp_outbox_challenge_id_otp_challenges",
+          "constrained_columns": [
+            "challenge_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "otp_challenges",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_otp_outbox_challenge_id",
+          "unique": false,
+          "column_names": [
+            "challenge_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "uq_otp_outbox_challenge_id",
+          "unique": true,
+          "column_names": [
+            "challenge_id"
+          ],
+          "duplicates_constraint": "uq_otp_outbox_challenge_id",
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [
+        {
+          "column_names": [
+            "challenge_id"
+          ],
+          "name": "uq_otp_outbox_challenge_id",
+          "comment": null,
+          "dialect_options": {
+            "postgresql_include": [],
+            "postgresql_nulls_not_distinct": false
+          }
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_otp_outbox_ck_otp_outbox_attempts_nonneg",
+          "sqltext": "attempts >= 0",
+          "comment": null
+        },
+        {
+          "name": "ck_otp_outbox_ck_otp_outbox_status",
+          "sqltext": "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying, 'void'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "recovery_sessions": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "opaque_id",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "lookup_hash",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": true
+        },
+        {
+          "name": "challenge_id",
+          "type": "UUID",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(24)",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_recovery_sessions_challenge_id_otp_challenges",
+          "constrained_columns": [
+            "challenge_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "otp_challenges",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "SET NULL"
+          },
+          "comment": null
+        },
+        {
+          "name": "fk_recovery_sessions_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_recovery_sessions_challenge_id",
+          "unique": false,
+          "column_names": [
+            "challenge_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_recovery_sessions_lookup_hash",
+          "unique": false,
+          "column_names": [
+            "lookup_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_recovery_sessions_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "uq_recovery_sessions_opaque_id",
+          "unique": true,
+          "column_names": [
+            "opaque_id"
+          ],
+          "duplicates_constraint": "uq_recovery_sessions_opaque_id",
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [
+        {
+          "column_names": [
+            "opaque_id"
+          ],
+          "name": "uq_recovery_sessions_opaque_id",
+          "comment": null,
+          "dialect_options": {
+            "postgresql_include": [],
+            "postgresql_nulls_not_distinct": false
+          }
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_recovery_sessions_ck_recovery_sessions_status",
+          "sqltext": "status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'consumed'::character varying, 'expired'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "student_profiles": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "college",
+          "type": "VARCHAR(160)",
+          "nullable": true
+        },
+        {
+          "name": "year_of_study",
+          "type": "VARCHAR(40)",
+          "nullable": true
+        },
+        {
+          "name": "enrolment_ct",
+          "type": "VARCHAR(600)",
+          "nullable": true
+        },
+        {
+          "name": "enrolment_hash",
+          "type": "VARCHAR(64)",
+          "nullable": true
+        },
+        {
+          "name": "institutional_email_ct",
+          "type": "VARCHAR(600)",
+          "nullable": true
+        },
+        {
+          "name": "institutional_email_hash",
+          "type": "VARCHAR(64)",
+          "nullable": true
+        },
+        {
+          "name": "bar_enrolment_ct",
+          "type": "VARCHAR(600)",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "bar_enrolment_hash",
+          "type": "VARCHAR(64)",
+          "nullable": true
+        },
+        {
+          "name": "key_version",
+          "type": "VARCHAR(8)",
+          "nullable": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_student_profiles_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_student_profiles_bar_enrolment_hash",
+          "unique": false,
+          "column_names": [
+            "bar_enrolment_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_student_profiles_enrolment_hash",
+          "unique": false,
+          "column_names": [
+            "enrolment_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_student_profiles_institutional_email_hash",
+          "unique": false,
+          "column_names": [
+            "institutional_email_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_student_profiles_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "uq_student_profiles_registration_id",
+          "unique": true,
+          "column_names": [
+            "registration_id"
+          ],
+          "duplicates_constraint": "uq_student_profiles_registration_id",
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [
+        {
+          "column_names": [
+            "registration_id"
+          ],
+          "name": "uq_student_profiles_registration_id",
+          "comment": null,
+          "dialect_options": {
+            "postgresql_include": [],
+            "postgresql_nulls_not_distinct": false
+          }
+        }
+      ],
+      "check_constraints": []
+    },
+    "student_registrations": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "first_name",
+          "type": "VARCHAR(60)",
+          "nullable": false
+        },
+        {
+          "name": "middle_name",
+          "type": "VARCHAR(60)",
+          "nullable": true
+        },
+        {
+          "name": "last_name",
+          "type": "VARCHAR(60)",
+          "nullable": false
+        },
+        {
+          "name": "mobile_hash",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "mobile_ct",
+          "type": "VARCHAR(600)",
+          "nullable": false
+        },
+        {
+          "name": "dob_ct",
+          "type": "VARCHAR(600)",
+          "nullable": false
+        },
+        {
+          "name": "institution_ref",
+          "type": "VARCHAR(120)",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "is_minor",
+          "type": "BOOLEAN",
+          "nullable": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(200)",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "dob_hash",
+          "type": "VARCHAR(64)",
+          "nullable": false
+        },
+        {
+          "name": "key_version",
+          "type": "VARCHAR(8)",
+          "nullable": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_student_registrations_user_id_users",
+          "constrained_columns": [
+            "user_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "users",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_student_registrations_dob_hash",
+          "unique": false,
+          "column_names": [
+            "dob_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_student_registrations_mobile_hash",
+          "unique": false,
+          "column_names": [
+            "mobile_hash"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "ix_student_registrations_user_id",
+          "unique": false,
+          "column_names": [
+            "user_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "uq_student_registrations_idempotency_key",
+          "unique": true,
+          "column_names": [
+            "idempotency_key"
+          ],
+          "duplicates_constraint": "uq_student_registrations_idempotency_key",
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        },
+        {
+          "name": "uq_student_registrations_mobile_hash",
+          "unique": true,
+          "column_names": [
+            "mobile_hash"
+          ],
+          "duplicates_constraint": "uq_student_registrations_mobile_hash",
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [
+        {
+          "column_names": [
+            "idempotency_key"
+          ],
+          "name": "uq_student_registrations_idempotency_key",
+          "comment": null,
+          "dialect_options": {
+            "postgresql_include": [],
+            "postgresql_nulls_not_distinct": false
+          }
+        },
+        {
+          "column_names": [
+            "mobile_hash"
+          ],
+          "name": "uq_student_registrations_mobile_hash",
+          "comment": null,
+          "dialect_options": {
+            "postgresql_include": [],
+            "postgresql_nulls_not_distinct": false
+          }
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_student_registrations_ck_student_registrations_status",
+          "sqltext": "status::text = ANY (ARRAY['otp_pending'::character varying, 'otp_verified'::character varying, 'active'::character varying, 'suspended'::character varying, 'deleted'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "student_verifications": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "registration_id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "method",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_student_verifications_registration_id_student_registrations",
+          "constrained_columns": [
+            "registration_id"
+          ],
+          "referred_schema": null,
+          "referred_table": "student_registrations",
+          "referred_columns": [
+            "id"
+          ],
+          "options": {
+            "ondelete": "CASCADE"
+          },
+          "comment": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_student_verifications_registration_id",
+          "unique": false,
+          "column_names": [
+            "registration_id"
+          ],
+          "include_columns": [],
+          "dialect_options": {
+            "postgresql_include": []
+          }
+        }
+      ],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_student_verifications_ck_student_verifications_method",
+          "sqltext": "method::text = ANY (ARRAY['institutional_email'::character varying, 'college_id'::character varying, 'manual'::character varying]::text[])",
+          "comment": null
+        },
+        {
+          "name": "ck_student_verifications_ck_student_verifications_status",
+          "sqltext": "status::text = ANY (ARRAY['pending'::character varying, 'in_review'::character varying, 'verified'::character varying, 'rejected'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    },
+    "users": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(32)",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "metadata_json",
+          "type": "JSON",
+          "nullable": true
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_users_ck_users_role",
+          "sqltext": "role::text = ANY (ARRAY['student'::character varying, 'lawyer'::character varying, 'admin'::character varying]::text[])",
+          "comment": null
+        },
+        {
+          "name": "ck_users_ck_users_status",
+          "sqltext": "status::text = ANY (ARRAY['pending'::character varying, 'active'::character varying, 'suspended'::character varying, 'deleted'::character varying]::text[])",
+          "comment": null
+        }
+      ]
+    }
+  }
+}

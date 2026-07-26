@@ -11,6 +11,8 @@ import {
   verificationSteps,
   exportSummary,
   canExport,
+  buildClinicalExport,
+  recordClinicalExportAudit,
   CATEGORY_LABELS,
   CATEGORY_OPTIONS,
   TARGET_HOURS,
@@ -234,7 +236,28 @@ export function ClinicalExport() {
   const s = exportSummary(SAMPLE_ENTRIES);
   const [includeEvidence, setIncludeEvidence] = useState(false);
   const [reauthed, setReauthed] = useState(false);
+  const [exportStatus, setExportStatus] = useState('');
   const ready = canExport({ includesEvidence: includeEvidence, reauthenticated: reauthed });
+
+  function runExport(format: 'pdf' | 'csv' | 'institution') {
+    const payload = buildClinicalExport(SAMPLE_ENTRIES, format, {
+      includesEvidence: includeEvidence,
+      reauthenticated: reauthed,
+      generatedAt: new Date().toISOString(),
+    });
+    recordClinicalExportAudit(payload);
+    if (format !== 'institution') {
+      const url = URL.createObjectURL(new Blob([payload.content], { type: payload.mimeType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = payload.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportStatus(`${format.toUpperCase()} export downloaded. Audit event recorded.`);
+    } else {
+      setExportStatus('Institution package prepared. No external transfer occurs in this prototype. Audit event recorded.');
+    }
+  }
   return (
     <StudentScreen screenId="S-65" className="st-set">
       <div className="st-set__head">
@@ -264,10 +287,11 @@ export function ClinicalExport() {
           </button>
         )}
         <div className="st-actions">
-          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready}>PDF report</button>
-          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready}>CSV</button>
-          <button type="button" className="btn btn--primary tap" disabled={!ready} aria-disabled={!ready}>Send to institution</button>
+          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready} onClick={() => runExport('pdf')}>PDF report</button>
+          <button type="button" className="btn tap" disabled={!ready} aria-disabled={!ready} onClick={() => runExport('csv')}>CSV</button>
+          <button type="button" className="btn btn--primary tap" disabled={!ready} aria-disabled={!ready} onClick={() => runExport('institution')}>Send to institution</button>
         </div>
+        {exportStatus && <p className="st-item__meta" role="status">{exportStatus}</p>}
       </section>
       <div className="st-actions">
         <button type="button" className="btn tap" onClick={() => nav('/s-61')}>Back to log</button>

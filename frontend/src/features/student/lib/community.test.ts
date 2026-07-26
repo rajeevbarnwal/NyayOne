@@ -7,6 +7,7 @@ import {
   validateCompose,
   REPORT_REASONS,
   SAMPLE_POSTS,
+  validateReply,
 } from './community';
 
 describe('community moderation — not public until moderated (SAATHI-74)', () => {
@@ -29,5 +30,10 @@ describe('community moderation — not public until moderated (SAATHI-74)', () =
     expect(Object.keys(validateCompose({ channel: '', title: '', body: '' })).length).toBe(3);
     expect(Object.keys(validateCompose({ channel: 'Con', title: 'Q', body: 'B' })).length).toBe(0);
     expect(REPORT_REASONS.find((r) => r.id === 'harassment')?.kind).toBe('risk');
+  });
+  it('validates replies before publishing', () => {
+    expect(validateReply('   ')).toContain('Enter a reply');
+    expect(validateReply('Can I sue my landlord?')).toContain('legal advice');
+    expect(validateReply('The judgment distinguishes the earlier ratio.')).toBeNull();
   });
 });
