@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TextField, SelectField, Checkbox, DpdpFootnote } from '../student/components';
+import { TextField, SelectField, Checkbox, DpdpFootnote, InfoTooltip } from '../student/components';
+import {
+  isValidMobile, MOBILE_ERROR,
+  validateNameParts, nameErrorMessage, composeDisplayName,
+} from '../student/lib/registration';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
 import { Workbench, type WorkbenchStep, type Requirement, type LedgerEntry } from './Workbench';
 import {
@@ -64,6 +68,9 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const restored = useMemo(() => loadAuthSnapshot(role), [role]);
   const [phase, setPhase] = useState<AuthPhase>(restored?.phase ?? 'register');
   const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
   const [challenge, setChallenge] = useState<OtpChallenge | null>(
     restored?.challenge ? { ...restored.challenge, code: STUB_OTP_CODE } : null,
@@ -104,7 +111,18 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const go = (event: Parameters<typeof nextPhase>[1]) => setPhase((p) => nextPhase(p, event));
 
   function sendOtp() {
-    if (mobile.replace(/\D/g, '').length !== 10) { setErrors({ mobile: 'Enter a valid 10-digit mobile number.' }); return; }
+    const e: Record<string, string> = {};
+    // Shared exact-10 contract on the raw value (reject <10 AND >10; no strip).
+    if (!isValidMobile(mobile)) e.mobile = MOBILE_ERROR;
+    // Students use the split legal name (First required / Middle optional / Last required).
+    if (!isLawyer) {
+      const ne = validateNameParts({ firstName, middleName, lastName });
+      if (ne.firstName) e.firstName = nameErrorMessage('firstName', ne.firstName);
+      if (ne.middleName) e.middleName = nameErrorMessage('middleName', ne.middleName);
+      if (ne.lastName) e.lastName = nameErrorMessage('lastName', ne.lastName);
+    }
+    if (Object.keys(e).length > 0) { setErrors(e); return; }
+    if (!isLawyer) setName(composeDisplayName({ firstName, middleName, lastName }));
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
     setChallenge(ch);
@@ -216,8 +234,23 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         {phase === 'register' && (
           <div className="st-stack">
             <h2 className="st-panel__title">Register</h2>
-            <TextField id="reg-name" label="Full name" value={name} onChange={setName} autoComplete="name" />
-            <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} inputMode="tel" autoComplete="tel" help="We send a one-time code by SMS." />
+            {isLawyer ? (
+              <TextField id="reg-name" label="Full name" value={name} onChange={setName} autoComplete="name" />
+            ) : (
+              <fieldset className="st-namegroup">
+                <legend className="st-namegroup__legend">
+                  Name
+                  <InfoTooltip
+                    label="Information about name and guardian consent"
+                    text="Under-18 accounts need verified guardian consent before full access · collected under data minimisation · DPDP Act, 2023."
+                  />
+                </legend>
+                <TextField id="reg-first-name" label="First name" value={firstName} onChange={setFirstName} error={errors.firstName} autoComplete="given-name" />
+                <TextField id="reg-middle-name" label="Middle name" optional="optional" value={middleName} onChange={setMiddleName} error={errors.middleName} autoComplete="additional-name" />
+                <TextField id="reg-last-name" label="Last name" value={lastName} onChange={setLastName} error={errors.lastName} autoComplete="family-name" />
+              </fieldset>
+            )}
+            <TextField id="reg-mobile" label="Mobile number" value={mobile} onChange={setMobile} error={errors.mobile} type="text" inputMode="numeric" autoComplete="tel" help="We send a one-time code by SMS." />
             {!isLawyer && (
               <SelectField id="reg-college" label="College / university" value={sv.collegeName} onChange={(v) => setSv((s) => ({ ...s, collegeName: v }))} options={['NLSIU', 'NALSAR', 'NLU Delhi', 'Other']} />
             )}

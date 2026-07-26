@@ -43,9 +43,11 @@ async function fill(page, { first = '', middle = '', last = '', mobile = '', dob
   if (last !== null) await page.fill('#reg-last-name', last);
   await page.fill('#reg-mobile', mobile);
   if (dob) await page.fill('#reg-dob', dob);
-  if (terms) await page.check('#reg-terms');
-  if (privacy) await page.check('#reg-privacy');
-  if (law) await page.check('#reg-law');
+  // Interact with consent through the visible clickable label row (the native
+  // checkbox is visually covered by .st-check__box), like a real user.
+  if (terms) await page.click('label[for="reg-terms"]');
+  if (privacy) await page.click('label[for="reg-privacy"]');
+  if (law) await page.click('label[for="reg-law"]');
   await page.getByRole('button', { name: /create account/i }).click();
 }
 
@@ -99,7 +101,7 @@ for (const [name, input, errId] of NEG) {
   await ctx.close();
 }
 
-// --- Tooltip: accessible button exposes exact text; static footnote absent --
+// --- Tooltip: accessible; open on focus; exact text; geometry; Escape hides ---
 {
   const { ctx, page } = await freshPage();
   const btn = page.getByRole('button', { name: /information about name and guardian consent/i });
@@ -107,12 +109,50 @@ for (const [name, input, errId] of NEG) {
   await btn.focus();
   const expanded = await btn.getAttribute('aria-expanded');
   const controls = await btn.getAttribute('aria-controls');
-  const tipText = controls ? await page.locator(`#${controls}`).textContent().catch(() => null) : null;
-  const footnoteBelow = await page.locator('.st-dpdp', { hasText: 'guardian consent' }).count();
+  const panel = controls ? page.locator(`#${controls}`) : null;
+  const tipText = panel ? await panel.textContent().catch(() => null) : null;
+  const visible = panel ? await panel.isVisible().catch(() => false) : false;
+  // Geometry: non-static position, inside viewport, no overlap with the inputs/CTA.
+  const geom = panel
+    ? await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const pos = getComputedStyle(el).position;
+        const r = el.getBoundingClientRect();
+        const inViewport = r.left >= 0 && r.top >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
+        const overlaps = ['#reg-first-name', '#reg-middle-name', '#reg-last-name'].some((s) => {
+          const t = document.querySelector(s); if (!t) return false; const b = t.getBoundingClientRect();
+          return !(r.right <= b.left || r.left >= b.right || r.bottom <= b.top || r.top >= b.bottom);
+        });
+        return { pos, inViewport, overlaps };
+      }, `#${controls}`)
+    : null;
   await page.screenshot({ path: `${OUT}/tooltip_focus.png` });
-  rec('TOOLTIP accessible + exact text + no static footnote',
-    present === 1 && (expanded === 'true' || expanded === 'false') && !!tipText && /DPDP Act, 2023/.test(tipText || '') && footnoteBelow === 0,
-    { present, expanded, tipText, footnoteBelow });
+  rec('TOOLTIP open-on-focus + exact text + non-static + in-viewport + no overlap',
+    present === 1 && expanded === 'true' && visible && /DPDP Act, 2023/.test(tipText || '') &&
+    !!geom && geom.pos !== 'static' && geom.inViewport && !geom.overlaps,
+    { present, expanded, visible, geom });
+  // Escape hides the tooltip.
+  await btn.press('Escape');
+  const hiddenAfterEscape = panel ? !(await panel.isVisible().catch(() => true)) : false;
+  const footnoteBelow = await page.locator('.st-dpdp', { hasText: 'guardian consent' }).count();
+  rec('TOOLTIP Escape hides + no static footnote', hiddenAfterEscape && footnoteBelow === 0, { hiddenAfterEscape, footnoteBelow });
+  await ctx.close();
+}
+
+// --- SAATHI-421 surface /auth/student: split name + tooltip present ----------
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/auth/student`, { waitUntil: 'networkidle' });
+  const first = await page.locator('#reg-first-name').count();
+  const middle = await page.locator('#reg-middle-name').count();
+  const last = await page.locator('#reg-last-name').count();
+  const fullNameOnly = await page.locator('#reg-name').count();
+  const tip = await page.getByRole('button', { name: /information about name and guardian consent/i }).count();
+  await page.screenshot({ path: `${OUT}/auth_student_register.png` });
+  rec('AUTH-STUDENT split name + tooltip, no single Full name', first === 1 && middle === 1 && last === 1 && fullNameOnly === 0 && tip === 1,
+    { first, middle, last, fullNameOnly, tip });
   await ctx.close();
 }
 

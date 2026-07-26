@@ -153,22 +153,16 @@ export function ProfileStep2() {
 }
 
 export function ProfileResume() {
-  // S-13: resume from the last incomplete step. Seeds a partial draft and jumps
-  // the user to whichever step is incomplete (academic here).
+  // S-13: resume from the last incomplete step. The RENDERED form must match the
+  // computed step (independent-QA fix, comment 12458/12459): step 1 → Personal,
+  // step 2 → Academic, step 3 → Preferences, complete → completion. Saved
+  // academic values are preserved (seedResumeDraft never seeds over real data).
   const seeded = useMemo(() => seedResumeDraft(), []);
   const step = nextIncompleteStep(seeded);
-  const label = step === 1 ? 'personal' : step === 2 ? 'academic' : 'preferences';
-  const firstName = seeded.fullName.trim().split(/\s+/)[0] || 'Student';
-  return (
-    <StudentScreen screenId="S-13" className="st-authwrap">
-      <div className="st-card">
-        <p className="st-card__kicker">Resume setup</p>
-        <h1 className="st-card__title">Welcome back, {firstName}</h1>
-        <p className="st-card__sub">Your profile is partly complete. Pick up from the {label} step.</p>
-        <AcademicStep screenId="S-13" />
-      </div>
-    </StudentScreen>
-  );
+  if (step === 1) return <ProfileStep1 />;
+  if (step === 2) return <AcademicStep screenId="S-13" />;
+  if (step === 3) return <ProfileStep3 />;
+  return <ProfileDone />;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -256,35 +256,39 @@ export function Register() {
       meta={<StatusBadge status="info" label="New account" />}
       sub="Create your account with a few details. Verification follows."
     >
-      <TextField
-        id="reg-first-name"
-        label="First name"
-        value={firstName}
-        onChange={setFirstName}
-        error={errors.firstName}
-        autoComplete="given-name"
-        maxLength={60}
-        labelAddon={<InfoTooltip label="Information about name and guardian consent" text={NAME_CONSENT_INFO} />}
-      />
-      <TextField
-        id="reg-middle-name"
-        label="Middle name"
-        optional="optional"
-        value={middleName}
-        onChange={setMiddleName}
-        error={errors.middleName}
-        autoComplete="additional-name"
-        maxLength={60}
-      />
-      <TextField
-        id="reg-last-name"
-        label="Last name"
-        value={lastName}
-        onChange={setLastName}
-        error={errors.lastName}
-        autoComplete="family-name"
-        maxLength={60}
-      />
+      <fieldset className="st-namegroup">
+        <legend className="st-namegroup__legend">
+          Name
+          <InfoTooltip label="Information about name and guardian consent" text={NAME_CONSENT_INFO} />
+        </legend>
+        {/* No maxLength: the raw attempted value must reach the domain validator
+            so an over-length entry is REJECTED, not silently truncated. */}
+        <TextField
+          id="reg-first-name"
+          label="First name"
+          value={firstName}
+          onChange={setFirstName}
+          error={errors.firstName}
+          autoComplete="given-name"
+        />
+        <TextField
+          id="reg-middle-name"
+          label="Middle name"
+          optional="optional"
+          value={middleName}
+          onChange={setMiddleName}
+          error={errors.middleName}
+          autoComplete="additional-name"
+        />
+        <TextField
+          id="reg-last-name"
+          label="Last name"
+          value={lastName}
+          onChange={setLastName}
+          error={errors.lastName}
+          autoComplete="family-name"
+        />
+      </fieldset>
       <TextField
         id="reg-mobile"
         label="Mobile number"
@@ -293,7 +297,6 @@ export function Register() {
         type="text"
         inputMode="numeric"
         autoComplete="tel"
-        maxLength={10}
         error={errors.mobile}
         help="10-digit mobile number"
       />
