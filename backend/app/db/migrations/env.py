@@ -10,8 +10,10 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.base import Base
 
-# Import model modules here as they are added so their tables register on Base.metadata.
-# (No domain models exist yet in the foundation stage.)
+# Import model modules so their tables register on Base.metadata for autogenerate
+# and for `alembic upgrade head` (SAATHI-366/448 registration schema).
+import app.db.models.audit  # noqa: E402,F401
+import app.models  # noqa: E402,F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

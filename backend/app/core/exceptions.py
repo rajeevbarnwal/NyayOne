@@ -1,5 +1,7 @@
-"""Baseline exception handling that returns structured, request-id-tagged errors."""
+"""Privacy-safe exception handling with stable, typed API error contracts."""
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,29 +12,66 @@ from app.core.logging import get_logger, request_id_ctx
 logger = get_logger("legalsaathi.error")
 
 
-def _error_body(code: str, message: str, detail: object | None = None) -> dict[str, object]:
-    body: dict[str, object] = {
-        "error": {"code": code, "message": message},
-        "request_id": request_id_ctx.get(),
-    }
-    if detail is not None:
-        body["error"]["detail"] = detail
-    return body
+def _detail_body(detail: Mapping[str, object]) -> dict[str, object]:
+    """Return the single error envelope consumed by browser/API clients."""
+    return {"detail": dict(detail), "request_id": request_id_ctx.get()}
+
+
+def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, object]]:
+    """Expose validation metadata without echoing submitted PII.
+
+    Pydantic's default ``errors()`` payload contains the rejected ``input`` and
+    occasionally a context object. Registration inputs include mobile, DOB,
+    email and enrolment identifiers, so neither is safe to return or log.
+    """
+    safe: list[dict[str, object]] = []
+    for error in exc.errors():
+        safe.append(
+            {
+                "type": str(error.get("type", "value_error")),
+                "loc": [str(part) for part in error.get("loc", ())],
+                "msg": str(error.get("msg", "Invalid value")),
+            }
+        )
+    return safe
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def _http_exc(request: Request, exc: HTTPException) -> JSONResponse:
+        if isinstance(exc.detail, Mapping):
+            detail = dict(exc.detail)
+            detail.setdefault("code", "http_error")
+            detail.setdefault("message", "Request failed")
+        else:
+            detail = {"code": "http_error", "message": str(exc.detail)}
         return JSONResponse(
             status_code=exc.status_code,
-            content=_error_body("http_error", str(exc.detail)),
+            content=_detail_body(detail),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
+        errors = _safe_validation_errors(exc)
+        field = next(
+            (
+                str(error["loc"][-1])
+                for error in errors
+                if error.get("loc")
+            ),
+            None,
+        )
+        detail: dict[str, object] = {
+            "code": "validation_error",
+            "message": "Request validation failed",
+            "errors": errors,
+        }
+        if field is not None:
+            detail["field"] = field
         return JSONResponse(
             status_code=422,
-            content=_error_body("validation_error", "Request validation failed", exc.errors()),
+            content=_detail_body(detail),
         )
 
     @app.exception_handler(Exception)
@@ -40,5 +79,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.exception("unhandled_exception")
         return JSONResponse(
             status_code=500,
-            content=_error_body("internal_error", "An unexpected error occurred"),
+            content=_detail_body(
+                {"code": "internal_error", "message": "An unexpected error occurred"}
+            ),
         )

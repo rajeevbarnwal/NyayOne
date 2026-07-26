@@ -20,6 +20,9 @@ export interface KvStore {
 export class InMemoryKvStore implements KvStore {
   private map = new Map<string, string>();
   get<T>(key: string): T | null {
+    // Per the KvStore.get<T>(): T | null contract, a missing key returns null —
+    // identical to LocalKvStore. A rejected write is proven by this null and by
+    // unchanged domain/audit state, not by a distinct `undefined`.
     const raw = this.map.get(key);
     return raw == null ? null : (JSON.parse(raw) as T);
   }

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../app/authContext';
+import { filingActorFromAuth } from './lib/caseAuth';
+import type { FilingActor } from './lib/filingWorkflow';
 import { TextField, SelectField, DpdpFootnote } from '../student/components';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, EmptyState, ValidationState } from '../../components/ui/primitives';
 import {
@@ -36,9 +39,44 @@ import {
   CHECKLIST_KEYS, CHECKLIST_LABELS, FILING_MODES, FEE_CATEGORIES, FEE_CATEGORY_LABELS,
   cnrFormatValid, trackingStale, INTERNAL_LOCK_NOTICE, AI_NON_BINDING_NOTICE,
   FILING_NOT_ACCEPTANCE_NOTICE, DIARY_MANUAL_LABEL, GST_REVIEW_NOTICE as FEE_GST_REVIEW_NOTICE, CNR_MANUAL_NOTICE,
+  validateUpload, UPLOAD_ERROR_MESSAGES, ALLOWED_UPLOAD_MIME, buildClientStatement, describeActor,
   type FilingWorkflow, type ChecklistKey, type FilingMode,
   type FeeCategory, type DiarySource, type IdentifierSourceType,
+  type UploadInput, type UploadMeta,
 } from './lib/filingWorkflow';
+
+/** Build a safe UploadInput from a browser File (no bytes read into state). */
+function fileToUploadInput(file: File): UploadInput {
+  return { filename: file.name, mime: file.type, size: file.size, present: true };
+}
+
+/**
+ * Accessible file-upload field. Shows the allowed formats, a live validation
+ * error, and the currently-attached file. The input is a real <input type=file>
+ * (44px+ target) — never a typed reference.
+ */
+function FileField({ id, label, help, onPick, error, current }: {
+  id: string; label: string; help?: string; onPick: (input: UploadInput, file: File) => void;
+  error?: string | null; current?: UploadMeta | null;
+}) {
+  return (
+    <div className="st-field">
+      <label className="st-field__label" htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        data-testid={id}
+        className="st-input tap"
+        type="file"
+        accept={[...ALLOWED_UPLOAD_MIME, '.pdf', '.png', '.jpg', '.jpeg'].join(',')}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(fileToUploadInput(f), f); }}
+        style={{ minHeight: 44, paddingBlock: 10 }}
+      />
+      {help && <span className="st-field__help">{help}</span>}
+      {current && <span className="st-field__help" data-testid={`${id}-current`}>Attached: {current.filename} ({Math.ceil(current.size / 1024)} KB)</span>}
+      {error && <span role="alert" data-testid={`${id}-error`} className="st-field__error" style={{ color: 'var(--danger, #b3261e)' }}>{error}</span>}
+    </div>
+  );
+}
 
 /** Lightweight lawyer-module screen scaffold (Core has no v3.2 design yet). */
 function CaseScreen({ eyebrow, title, sub, children, className }: { eyebrow: string; title: string; sub?: string; children: React.ReactNode; className?: string }) {
@@ -56,11 +94,24 @@ function CaseScreen({ eyebrow, title, sub, children, className }: { eyebrow: str
 
 const chip = (k: 'ok' | 'warn' | 'risk' | 'info') => k;
 
+// Defence-in-depth fallback: if a guarded screen ever renders without a verified
+// lawyer session, this un-roled actor is refused at the service boundary.
+const UNAUTHENTICATED_ACTOR: FilingActor = { id: 'anonymous', role: 'unknown' };
+
+/** Move keyboard focus to the first invalid field on a failed submit (a11y). */
+function focusField(id: string) {
+  if (typeof document !== 'undefined') {
+    const el = document.getElementById(id);
+    if (el) el.focus();
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* E01 (SAATHI-6) — Intake + conflict check                                    */
 /* -------------------------------------------------------------------------- */
 export function CaseIntake() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const [d, setD] = useState<IntakeDraft>(EMPTY_INTAKE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ConflictResult | null>(null);
@@ -72,11 +123,11 @@ export function CaseIntake() {
     setErrors(e);
     if (Object.keys(e).length) return;
     const matches = checkConflicts(d, SAMPLE_REGISTER);
-    setResult(decideConflict(matches, new Date().toISOString(), 'adv.rao'));
+    setResult(decideConflict(matches, new Date().toISOString(), describeActor(actor)));
   }
   function override() {
     if (!result) return;
-    setResult(decideConflict(result.matches, new Date().toISOString(), 'adv.rao', { authorised: true, reason }));
+    setResult(decideConflict(result.matches, new Date().toISOString(), describeActor(actor), { authorised: true, reason }));
   }
 
   return (
@@ -348,6 +399,7 @@ export function CaseDocuments() {
 const DRAFT_CASE_ID = 'LS-CASE-2026-014';
 export function CaseDraft() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const assistant = useMemo(() => createStubDraftingAssistant(), []);
   const svc = useMemo(() => new DraftWorkspaceService(), []);
   const wsId = workspaceIdFor(DRAFT_CASE_ID);
@@ -376,11 +428,11 @@ export function CaseDraft() {
   }
   function saveEdit() {
     if (!editBody.trim()) return;
-    setWs(svc.addVersion(wsId, { authorId: 'lawyer:rao', createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
+    setWs(svc.addVersion(wsId, { authorId: describeActor(actor), createdAt: new Date().toISOString(), changeNote: 'Manual revision', body: editBody, aiGenerated: false }));
     setEditBody('');
   }
   function approve() {
-    if (latest) setWs(svc.approve(wsId, latest.id, 'lawyer:rao', new Date().toISOString()));
+    if (latest) setWs(svc.approve(wsId, latest.id, describeActor(actor), new Date().toISOString()));
   }
   function sendForReview() {
     svc.setCurrent(wsId); // hand the actual workspace to E07 (no seed)
@@ -599,6 +651,7 @@ function PrereqGate({ title, eyebrow, hint, to, label }: { title: string; eyebro
 /* E08 (SAATHI-20) — Vet & lock final filing version ------------------------- */
 export function CaseFinalize() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.initBundle(wsId, nowISO()) ?? svc.get(wsId) : null));
@@ -621,7 +674,7 @@ export function CaseFinalize() {
         <div className="st-chips" role="group" aria-label="Filing checklist" style={{ marginBottom: 'var(--space-3)' }}>
           {CHECKLIST_KEYS.map((k) => (
             <button key={k} type="button" className="st-chip tap" aria-pressed={b.checklist[k]} disabled={b.locked} aria-disabled={b.locked}
-              onClick={() => setFw(svc.setChecklist(wsId, k as ChecklistKey, !b.checklist[k], nowISO()))}>
+              onClick={() => setFw(svc.setChecklist(wsId, k as ChecklistKey, !b.checklist[k], nowISO(), actor))}>
               {b.checklist[k] ? '✓ ' : ''}{CHECKLIST_LABELS[k]}
             </button>
           ))}
@@ -631,7 +684,7 @@ export function CaseFinalize() {
           <>
             <p className="st-item__meta">Locked by {b.lockedBy} · hash {b.hash}</p>
             <div className="st-actions st-actions--split">
-              <button type="button" className="btn tap" onClick={() => setFw(svc.editAfterLock(wsId, nowISO()))}>Edit (creates new version)</button>
+              <button type="button" className="btn tap" onClick={() => setFw(svc.editAfterLock(wsId, nowISO(), actor))}>Edit (creates new version)</button>
               <button type="button" className="btn btn--primary tap" disabled={!proceed} aria-disabled={!proceed} onClick={() => nav('/case/filing')}>Proceed to filing</button>
             </div>
           </>
@@ -639,7 +692,7 @@ export function CaseFinalize() {
           <>
             {!complete && <ValidationState message="Complete every checklist item before locking the bundle." />}
             <div className="st-actions">
-              <button type="button" className="btn btn--primary tap" disabled={!complete} aria-disabled={!complete} onClick={() => setFw(svc.lockBundle(wsId, 'lawyer:rao', nowISO()))}>Approve &amp; lock final version</button>
+              <button type="button" className="btn btn--primary tap" disabled={!complete} aria-disabled={!complete} onClick={() => setFw(svc.lockBundle(wsId, actor, nowISO()))}>Approve &amp; lock final version</button>
             </div>
           </>
         )}
@@ -663,33 +716,55 @@ export function CaseFinalize() {
 /* E09 (SAATHI-22) — Record court filing ------------------------------------- */
 export function CaseFiling() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
-  const [f, setF] = useState({ court: '', benchLocation: '', filedAt: '', mode: 'e-filing' as FilingMode, filedBy: '', notes: '', proofRef: '' });
+  const [f, setF] = useState({ court: '', benchLocation: '', filedAt: '', mode: 'e-filing' as FilingMode, filedBy: '', notes: '' });
+  const [proof, setProof] = useState<UploadInput | null>(null);
+  const [proofErr, setProofErr] = useState<string | null>(null);
+  const [errs, setErrs] = useState<{ court?: string; filedAt?: string }>({});
   useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+  function pickProof(input: UploadInput) {
+    const v = validateUpload(input);
+    if (!v.ok) { setProof(null); setProofErr(UPLOAD_ERROR_MESSAGES[v.reason]); return; }
+    setProof(input); setProofErr(null);
+  }
 
   if (!wsId || !fw || !canProceedToFiling(fw)) {
     return <PrereqGate eyebrow="Filing · E09" title="Record court filing" hint="A locked, checklist-complete filing bundle (E08) is required before recording a court filing." to="/case/finalize" label="Go to finalize" />;
   }
   const filing = fw.filing;
   function record() {
-    if (!f.court.trim() || !f.filedAt.trim() || !f.proofRef.trim()) return;
-    const next = svc.recordFiling(wsId!, { court: f.court, benchLocation: f.benchLocation, filedAt: f.filedAt, mode: f.mode, filedBy: f.filedBy || 'clerk', notes: f.notes, proofRef: f.proofRef }, nowISO());
-    if (next) setFw(next);
+    const nextErrs: { court?: string; filedAt?: string } = {};
+    if (!f.court.trim()) nextErrs.court = 'Court is required.';
+    if (!f.filedAt.trim()) nextErrs.filedAt = 'Filing date/time is required.';
+    const proofMissing = !proof;
+    setErrs(nextErrs);
+    if (proofMissing) setProofErr(UPLOAD_ERROR_MESSAGES.missing);
+    if (nextErrs.court || nextErrs.filedAt || proofMissing) {
+      const firstId = nextErrs.court ? 'fl-court' : nextErrs.filedAt ? 'fl-date' : 'fl-proof';
+      focusField(firstId);
+      return; // preserve valid entries; do not persist
+    }
+    const rec = svc.recordFiling(wsId!, { court: f.court, benchLocation: f.benchLocation, filedAt: f.filedAt, mode: f.mode, filedBy: f.filedBy || describeActor(actor), notes: f.notes, proofRef: '' }, nowISO(), actor);
+    if (!rec) return;
+    const { fw: withProof, validation } = svc.attachFilingProof(wsId!, proof!, nowISO(), actor);
+    if (!validation.ok) { setProofErr(UPLOAD_ERROR_MESSAGES[validation.reason]); setFw(rec); return; }
+    setProofErr(null); setFw(withProof);
   }
   return (
     <CaseScreen eyebrow="Filing · E09" title="Record court filing">
       {!filing ? (
         <section className="st-panel">
           <h2 className="st-panel__title">Filing details</h2>
-          <TextField id="fl-court" label="Court" value={f.court} onChange={set('court')} help="User-entered; the product does not invent court-specific rules." />
+          <TextField id="fl-court" label="Court" value={f.court} onChange={set('court')} error={errs.court} help="User-entered; the product does not invent court-specific rules." />
           <TextField id="fl-bench" label="Bench / location" value={f.benchLocation} onChange={set('benchLocation')} optional="if applicable" />
-          <TextField id="fl-date" label="Filing date/time" value={f.filedAt} onChange={set('filedAt')} type="datetime-local" />
+          <TextField id="fl-date" label="Filing date/time" value={f.filedAt} onChange={set('filedAt')} type="datetime-local" error={errs.filedAt} />
           <SelectField id="fl-mode" label="Filing mode" value={f.mode} onChange={(v) => setF((s) => ({ ...s, mode: v as FilingMode }))} options={FILING_MODES as unknown as string[]} />
           <TextField id="fl-by" label="Filed by" value={f.filedBy} onChange={set('filedBy')} />
-          <TextField id="fl-proof" label="Filing proof / acknowledgement reference" value={f.proofRef} onChange={set('proofRef')} help="Stored as a secure reference; no PII in the URL." />
+          <FileField id="fl-proof" label="Filing proof document (PDF/PNG/JPEG)" help="A copy of the filing acknowledgement. Stored as secure metadata + an opaque reference; the file itself is never placed in a URL." onPick={pickProof} error={proofErr} current={proof ? { ref: '', filename: proof.filename, mime: proof.mime, size: proof.size, uploadedAt: '' } : null} />
           <TextField id="fl-notes" label="Notes" value={f.notes} onChange={set('notes')} />
           <GuardrailNotice>{FILING_NOT_ACCEPTANCE_NOTICE}</GuardrailNotice>
           <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={record}>Record filing</button></div>
@@ -700,11 +775,21 @@ export function CaseFiling() {
             <h2 className="st-panel__title">Filed · {filing.court}</h2>
             <StatusBadge status={chip('ok')} label="Stage complete" />
           </div>
-          <p className="st-item__meta">{filing.mode} · {filing.filedAt} · proof {filing.proofRef}</p>
+          <p className="st-item__meta">{filing.mode} · {filing.filedAt} · {filing.proof ? `proof: ${filing.proof.filename}` : 'no proof attached'}</p>
+          {filing.proof ? (
+            <StatusBadge status={chip('ok')} label={`Proof stored (${filing.proof.ref.slice(0, 14)}…)`} />
+          ) : (
+            <FileField id="fl-proof-late" label="Attach filing proof document (PDF/PNG/JPEG)" onPick={(input) => {
+              const v = validateUpload(input);
+              if (!v.ok) { setProofErr(UPLOAD_ERROR_MESSAGES[v.reason]); return; }
+              const { fw: next, validation } = svc.attachFilingProof(wsId!, input, nowISO(), actor);
+              if (validation.ok) { setProofErr(null); setFw(next); } else setProofErr(UPLOAD_ERROR_MESSAGES[validation.reason]);
+            }} error={proofErr} />
+          )}
           <StatusBadge status={chip('warn')} label={`Milestone: Case Filed ${filing.milestonePct}%`} />
           <div className="st-actions st-actions--split">
             <StatusBadge status={filing.invoiceStatus === 'approved' ? chip('ok') : chip('info')} label={`Invoice ${filing.invoiceStatus}`} />
-            {filing.invoiceStatus === 'draft' && <button type="button" className="btn tap" onClick={() => setFw(svc.approveFilingInvoice(wsId!, 'billing', nowISO()))}>Approve invoice</button>}
+            {filing.invoiceStatus === 'draft' && <button type="button" className="btn tap" onClick={() => setFw(svc.approveFilingInvoice(wsId!, nowISO(), actor))}>Approve invoice</button>}
           </div>
           <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/diary')}>Proceed to diary number</button></div>
         </section>
@@ -717,34 +802,56 @@ export function CaseFiling() {
 /* E10 (SAATHI-24) — Capture diary number ------------------------------------ */
 export function CaseDiary() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
-  const [d, setD] = useState({ number: '', court: '', year: '', source: 'manual' as DiarySource, receivedDate: '', acknowledgementRef: '' });
+  const [d, setD] = useState({ number: '', court: '', year: '', source: 'manual' as DiarySource, receivedDate: '' });
+  const [ack, setAck] = useState<UploadInput | null>(null);
+  const [ackErr, setAckErr] = useState<string | null>(null);
+  const [dErrs, setDErrs] = useState<{ number?: string; court?: string }>({});
   const [correction, setCorrection] = useState({ number: '', reason: '' });
   useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
   const set = (k: keyof typeof d) => (v: string) => setD((s) => ({ ...s, [k]: v }));
+  function pickAck(input: UploadInput) {
+    const v = validateUpload(input);
+    if (!v.ok) { setAck(null); setAckErr(UPLOAD_ERROR_MESSAGES[v.reason]); return; }
+    setAck(input); setAckErr(null);
+  }
+  function attachAck(input: UploadInput) {
+    const v = validateUpload(input);
+    if (!v.ok) { setAckErr(UPLOAD_ERROR_MESSAGES[v.reason]); return; }
+    const { fw: next, validation } = svc.attachDiaryAcknowledgement(wsId!, input, nowISO(), actor);
+    if (validation.ok) { setAckErr(null); setFw(next); } else setAckErr(UPLOAD_ERROR_MESSAGES[validation.reason]);
+  }
 
   if (!wsId || !fw || !fw.filing) {
     return <PrereqGate eyebrow="Diary · E10" title="Capture diary number" hint="A recorded court filing (E09) is required before capturing the diary number." to="/case/filing" label="Go to filing" />;
   }
   const diary = fw.diary;
+  const clientNotifyQueued = svc.diaryClientStatusQueued(fw);
   function capture() {
-    if (!d.number.trim() || !d.court.trim()) return;
-    const next = svc.captureDiary(wsId!, { number: d.number, court: d.court, year: d.year, source: d.source, receivedDate: d.receivedDate, acknowledgementRef: d.acknowledgementRef }, nowISO());
-    if (next) setFw(next);
+    const nextErrs: { number?: string; court?: string } = {};
+    if (!d.number.trim()) nextErrs.number = 'Diary number is required.';
+    if (!d.court.trim()) nextErrs.court = 'Court is required.';
+    setDErrs(nextErrs);
+    if (nextErrs.number || nextErrs.court) { focusField(nextErrs.number ? 'dy-num' : 'dy-court'); return; }
+    const next = svc.captureDiary(wsId!, { number: d.number, court: d.court, year: d.year, source: d.source, receivedDate: d.receivedDate, acknowledgementRef: '' }, nowISO(), actor);
+    if (!next) return;
+    setFw(next);
+    if (ack) { const { fw: withAck, validation } = svc.attachDiaryAcknowledgement(wsId!, ack, nowISO(), actor); if (validation.ok) setFw(withAck); }
   }
   return (
     <CaseScreen eyebrow="Diary · E10" title="Capture diary number">
       {!diary ? (
         <section className="st-panel">
           <h2 className="st-panel__title">Diary / filing number</h2>
-          <TextField id="dy-num" label="Diary number" value={d.number} onChange={set('number')} help="Manually entered or from an authorised source. Validated only where a court rule is configured." />
-          <TextField id="dy-court" label="Court" value={d.court} onChange={set('court')} />
+          <TextField id="dy-num" label="Diary number" value={d.number} onChange={set('number')} error={dErrs.number} help="Manually entered or from an authorised source. Validated only where a court rule is configured." />
+          <TextField id="dy-court" label="Court" value={d.court} onChange={set('court')} error={dErrs.court} />
           <TextField id="dy-year" label="Year" value={d.year} onChange={set('year')} inputMode="numeric" />
           <SelectField id="dy-src" label="Source" value={d.source} onChange={(v) => setD((s) => ({ ...s, source: v as DiarySource }))} options={['manual', 'authorised_source']} />
           <TextField id="dy-recv" label="Received date" value={d.receivedDate} onChange={set('receivedDate')} type="date" />
-          <TextField id="dy-ack" label="Acknowledgement reference" value={d.acknowledgementRef} onChange={set('acknowledgementRef')} />
+          <FileField id="dy-ack" label="Acknowledgement document (PDF/PNG/JPEG)" help="Upload the diary/acknowledgement receipt. Stored as secure metadata + an opaque reference." onPick={pickAck} error={ackErr} current={ack ? { ref: '', filename: ack.filename, mime: ack.mime, size: ack.size, uploadedAt: '' } : null} />
           <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={capture}>Capture diary number</button></div>
         </section>
       ) : (
@@ -754,14 +861,33 @@ export function CaseDiary() {
             <StatusBadge status={diary.officiallyValidated ? chip('ok') : chip('warn')} label={diary.officiallyValidated ? 'Authorised source' : 'Manually recorded'} />
           </div>
           <p className="st-item__meta">{diary.court} · {diary.year} · bound to filing {diary.boundFilingId}</p>
+          {diary.acknowledgement ? (
+            <StatusBadge status={chip('ok')} label={`Acknowledgement: ${diary.acknowledgement.filename}`} />
+          ) : (
+            <FileField id="dy-ack-late" label="Attach acknowledgement document (PDF/PNG/JPEG)" onPick={attachAck} error={ackErr} />
+          )}
           {!diary.officiallyValidated && <PrivacyNotice>{DIARY_MANUAL_LABEL}</PrivacyNotice>}
           <label className="st-field" htmlFor="dy-correct"><span className="st-field__label">Correct diary number</span>
             <input id="dy-correct" className="st-input" value={correction.number} onChange={(e) => setCorrection((s) => ({ ...s, number: e.target.value }))} /></label>
           <TextField id="dy-reason" label="Correction reason" value={correction.reason} onChange={(v) => setCorrection((s) => ({ ...s, reason: v }))} />
           <div className="st-actions st-actions--split">
             <button type="button" className="btn tap" disabled={!correction.number.trim() || !correction.reason.trim()} aria-disabled={!correction.number.trim() || !correction.reason.trim()}
-              onClick={() => { setFw(svc.correctDiary(wsId!, correction.number, correction.reason, 'lawyer', nowISO())); setCorrection({ number: '', reason: '' }); }}>Record correction</button>
+              onClick={() => { setFw(svc.correctDiary(wsId!, correction.number, correction.reason, nowISO(), actor)); setCorrection({ number: '', reason: '' }); }}>Record correction</button>
             <button type="button" className="btn btn--primary tap" onClick={() => nav('/case/fees')}>Proceed to fees</button>
+          </div>
+          <div className="st-setrow" style={{ flexDirection: 'column', alignItems: 'stretch' }} aria-label="Client status update">
+            <div>
+              <div className="st-setrow__label">Optional client status update</div>
+              <div className="st-setrow__sub">Off by default. A privacy-safe status notification is queued only after you explicitly approve it — nothing is sent before approval.</div>
+            </div>
+            {clientNotifyQueued ? (
+              <StatusBadge status={chip('ok')} label="Client status update approved &amp; queued" />
+            ) : (
+              <div className="st-actions">
+                <button type="button" className="btn tap" data-testid="dy-notify-approve" onClick={() => setFw(svc.approveDiaryClientStatus(wsId!, actor, nowISO()))}>Approve client status update</button>
+                <StatusBadge status={chip('info')} label="Suppressed (not approved)" />
+              </div>
+            )}
           </div>
           {diary.history.length > 0 && (
             <ul className="st-list" aria-label="Change history">
@@ -778,10 +904,13 @@ export function CaseDiary() {
 /* E11 (SAATHI-26) — Court & process fee ------------------------------------- */
 export function CaseFees() {
   const nav = useNavigate();
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
-  const [line, setLine] = useState({ category: 'court_fee' as FeeCategory, amount: '', receiptRef: '' });
+  const [line, setLine] = useState({ category: 'court_fee' as FeeCategory, amount: '' });
+  const [amtErr, setAmtErr] = useState<string | null>(null);
+  const [rcErr, setRcErr] = useState<Record<string, string | null>>({});
   useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
 
   if (!wsId || !fw || !fw.filing) {
@@ -789,20 +918,32 @@ export function CaseFees() {
   }
   const fees = fw.fees;
   function add() {
-    const amt = Number(line.amount);
-    if (!Number.isFinite(amt) || amt <= 0) return;
+    const raw = line.amount.trim();
+    const amt = Number(raw);
+    if (raw === '') { setAmtErr('Amount is required.'); focusField('fee-amt'); return; }
+    if (!Number.isFinite(amt)) { setAmtErr('Enter a valid number.'); focusField('fee-amt'); return; }
+    if (amt <= 0) { setAmtErr('Amount must be greater than zero.'); focusField('fee-amt'); return; }
+    setAmtErr(null);
     const id = `L${fees.lines.length + 1}`;
-    setFw(svc.addFee(wsId!, { id, category: line.category, amount: amt, payer: 'client', payee: 'court', date: nowISO(), mode: 'online', receiptRef: line.receiptRef.trim() || null }, nowISO()));
-    setLine({ category: 'court_fee', amount: '', receiptRef: '' });
+    setFw(svc.addFee(wsId!, { id, category: line.category, amount: amt, payer: 'client', payee: 'court', date: nowISO(), mode: 'online', receiptRef: null }, nowISO(), actor));
+    setLine({ category: 'court_fee', amount: '' });
   }
+  function attachReceipt(lineId: string, input: UploadInput) {
+    const v = validateUpload(input);
+    if (!v.ok) { setRcErr((s) => ({ ...s, [lineId]: UPLOAD_ERROR_MESSAGES[v.reason] })); return; }
+    const { fw: next, validation } = svc.attachFeeReceipt(wsId!, lineId, input, nowISO(), actor);
+    if (validation.ok) { setRcErr((s) => ({ ...s, [lineId]: null })); setFw(next); }
+    else setRcErr((s) => ({ ...s, [lineId]: UPLOAD_ERROR_MESSAGES[validation.reason] }));
+  }
+  const statement = buildClientStatement(fees);
   const stChip = (s: string) => (s === 'paid' ? chip('ok') : s === 'manual_review' ? chip('warn') : chip('info'));
   return (
     <CaseScreen eyebrow="Fees · E11" title="Court & process fee" sub={`Advance balance ₹${fees.advanceBalance.toLocaleString('en-IN')}`}>
       <section className="st-panel">
         <h2 className="st-panel__title">Add fee line</h2>
         <SelectField id="fee-cat" label="Fee category" value={line.category} onChange={(v) => setLine((s) => ({ ...s, category: v as FeeCategory }))} options={FEE_CATEGORIES as unknown as string[]} help="Court fee and process fee are tracked as distinct categories." />
-        <TextField id="fee-amt" label="Amount (₹)" value={line.amount} onChange={(v) => setLine((s) => ({ ...s, amount: v }))} inputMode="numeric" />
-        <TextField id="fee-rc" label="Receipt / proof reference" value={line.receiptRef} onChange={(v) => setLine((s) => ({ ...s, receiptRef: v }))} help="A line becomes paid only with a receipt + server-verified payment." />
+        <TextField id="fee-amt" label="Amount (₹)" value={line.amount} onChange={(v) => setLine((s) => ({ ...s, amount: v }))} inputMode="numeric" error={amtErr ?? undefined} />
+        <p className="st-field__help">Upload a receipt per line below. A line becomes paid only with a receipt + server-verified payment.</p>
         <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={add}>Add line</button></div>
         <GuardrailNotice>{FEE_GST_REVIEW_NOTICE}</GuardrailNotice>
       </section>
@@ -812,17 +953,37 @@ export function CaseFees() {
           <ul className="st-list">
             {fees.lines.map((l) => (
               <li className="st-item" key={l.id}>
-                <div>{FEE_CATEGORY_LABELS[l.category]} · ₹{l.amount.toLocaleString('en-IN')}<div className="st-item__meta">{l.receiptRef ? `receipt ${l.receiptRef}` : 'no receipt'} · allocated ₹{l.allocations.reduce((s, a) => s + a.amount, 0)}</div></div>
+                <div style={{ flex: 1 }}>
+                  {FEE_CATEGORY_LABELS[l.category]} · ₹{l.amount.toLocaleString('en-IN')}
+                  <div className="st-item__meta">{l.receipt ? `receipt: ${l.receipt.filename}` : (l.receiptRef ? `receipt ${l.receiptRef}` : 'no receipt')} · allocated ₹{l.allocations.reduce((s, a) => s + a.amount, 0)}</div>
+                  {!l.receipt && l.status !== 'paid' && <FileField id={`fee-rc-${l.id}`} label="Upload receipt (PDF/PNG/JPEG)" onPick={(input) => attachReceipt(l.id, input)} error={rcErr[l.id]} />}
+                </div>
                 <div className="st-actions">
                   <StatusBadge status={stChip(l.status)} label={l.status.replace('_', ' ')} />
-                  {l.status !== 'paid' && <button type="button" className="btn tap" onClick={() => setFw(svc.payFee(wsId!, { lineId: l.id, providerRef: `evt-${Date.now()}`, serverVerified: true, receiptRef: l.receiptRef ?? undefined }, nowISO()))}>Server-verify</button>}
-                  {l.status !== 'paid' && <button type="button" className="btn tap" onClick={() => setFw(svc.allocate(wsId!, l.id, Math.min(l.amount, fees.advanceBalance), nowISO()))}>Allocate advance</button>}
+                  {l.status !== 'paid' && <button type="button" className="btn tap" disabled={!l.receiptRef} aria-disabled={!l.receiptRef} title={l.receiptRef ? '' : 'Upload a receipt first'} onClick={() => setFw(svc.payFee(wsId!, { lineId: l.id, providerRef: `evt-${Date.now()}`, serverVerified: true, receiptRef: l.receiptRef ?? undefined }, nowISO(), actor))}>Server-verify</button>}
+                  {l.status !== 'paid' && <button type="button" className="btn tap" onClick={() => setFw(svc.allocate(wsId!, l.id, Math.min(l.amount, fees.advanceBalance), nowISO(), actor))}>Allocate advance</button>}
                 </div>
               </li>
             ))}
           </ul>
         )}
         <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/case/tracking')}>Proceed to CNR &amp; tracking</button></div>
+      </section>
+      <section className="st-panel" aria-label="Client statement">
+        <h2 className="st-panel__title">Client statement</h2>
+        {statement.lines.length === 0 ? <EmptyState title="No fee lines yet" /> : (
+          <>
+            <ul className="st-list" data-testid="client-statement">
+              {statement.lines.map((l) => (
+                <li className="st-item" key={l.id}>
+                  <div>{l.categoryLabel} · ₹{l.amount.toLocaleString('en-IN')}<div className="st-item__meta">{l.receiptPresent ? 'receipt on file' : 'no receipt'}{l.allocatedFromAdvance ? ` · advance ₹${l.allocatedFromAdvance.toLocaleString('en-IN')}` : ''}</div></div>
+                  <StatusBadge status={l.status === 'paid' ? chip('ok') : l.status === 'refunded' ? chip('info') : chip('warn')} label={l.status} />
+                </li>
+              ))}
+            </ul>
+            <p className="st-item__meta" data-testid="statement-totals">Gross billed ₹{statement.totalBilled.toLocaleString('en-IN')} · Receipt-paid ₹{statement.totalPaid.toLocaleString('en-IN')} · Advance applied ₹{statement.advanceApplied.toLocaleString('en-IN')} · Pending shortfall ₹{statement.totalPending.toLocaleString('en-IN')} · Refunded ₹{statement.totalRefunded.toLocaleString('en-IN')}</p>
+          </>
+        )}
       </section>
       <DpdpFootnote>Paid status is server-authoritative + receipt-gated and idempotent; court vs process fee stay distinct; GST/reimbursement pending CA review</DpdpFootnote>
     </CaseScreen>
@@ -831,13 +992,17 @@ export function CaseFees() {
 
 /* E12 (SAATHI-28) — CNR & tracking ------------------------------------------ */
 export function CaseTracking() {
+  const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;
   const svc = useMemo(() => new FilingWorkflowService(), []);
   const wsId = svc.currentWorkspaceId();
   const [fw, setFw] = useState<FilingWorkflow | null>(() => (wsId ? svc.get(wsId) : null));
   const [c, setC] = useState({ cnr: '', caseNumber: '', source: '', sourceType: 'manual' as IdentifierSourceType });
   const [consent, setConsent] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState<string | null>(null);
+  const [mu, setMu] = useState({ cnr: '', caseNumber: '' });
   useEffect(() => { if (wsId) setFw(svc.get(wsId)); }, [svc, wsId]);
   const set = (k: keyof typeof c) => (v: string) => setC((s) => ({ ...s, [k]: v }));
+  function retryFetch() { const { fw: next, result } = svc.attemptIdentifierFetch(wsId!, nowISO(), actor); setFw(next); setFetchMsg(result.message); }
 
   if (!wsId || !fw || (!fw.filing && !fw.diary)) {
     return <PrereqGate eyebrow="Tracking · E12" title="CNR & tracking" hint="Filing (E09) or diary (E10) identifiers are required before capturing the CNR." to="/case/diary" label="Go to diary" />;
@@ -845,7 +1010,7 @@ export function CaseTracking() {
   const tr = fw.tracking;
   function capture() {
     if (!c.cnr.trim()) return;
-    const next = svc.captureCnr(wsId!, { cnr: c.cnr, caseNumber: c.caseNumber, source: c.source || 'manual entry', sourceType: c.sourceType }, nowISO());
+    const next = svc.captureCnr(wsId!, { cnr: c.cnr, caseNumber: c.caseNumber, source: c.source || 'manual entry', sourceType: c.sourceType }, nowISO(), actor);
     if (next) setFw(next);
   }
   const stale = tr ? trackingStale(tr, Date.now()) : false;
@@ -859,8 +1024,12 @@ export function CaseTracking() {
           <TextField id="tr-src" label="Source" value={c.source} onChange={set('source')} />
           <SelectField id="tr-srctype" label="Source type" value={c.sourceType} onChange={(v) => setC((s) => ({ ...s, sourceType: v as IdentifierSourceType }))} options={['manual', 'authorised']} />
           {c.cnr.trim() !== '' && !cnrFormatValid(c.cnr) && <ValidationState message="CNR format not recognised — you can still record it manually; tracking stays disabled until confirmed." />}
+          {fetchMsg && <ValidationState message={fetchMsg} />}
           <GuardrailNotice>{CNR_MANUAL_NOTICE}</GuardrailNotice>
-          <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={capture}>Capture CNR</button></div>
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" data-testid="tr-fetch" onClick={retryFetch}>Retry automated fetch</button>
+            <button type="button" className="btn btn--primary tap" onClick={capture}>Capture CNR manually</button>
+          </div>
         </section>
       ) : (
         <section className="st-panel" aria-label="Tracking">
@@ -873,10 +1042,21 @@ export function CaseTracking() {
             <div><div className="st-setrow__label">Hearing/case-update alerts</div><div className="st-setrow__sub">Consent-gated; court polling is disabled pending TOS/legal review (LCR-009).</div></div>
             <button type="button" className="st-toggle" aria-pressed={consent} onClick={() => setConsent((v) => !v)}>{consent ? 'On' : 'Off'}</button>
           </div>
-          {!tr.validated && <ValidationState message="Identifier not validated — tracking cannot be activated until it is confirmed." />}
+          {!tr.validated && <ValidationState message="Identifier not validated — retry the automated fetch or manually update the CNR below before activating tracking." />}
           <div className="st-actions st-actions--split">
             <StatusBadge status={tr.trackingEnabled ? chip('ok') : chip('info')} label={tr.trackingEnabled ? 'Tracking active' : 'Tracking disabled'} />
-            <button type="button" className="btn btn--primary tap" disabled={!tr.validated || tr.trackingEnabled} aria-disabled={!tr.validated || tr.trackingEnabled} onClick={() => setFw(svc.activateTracking(wsId!, consent, nowISO()))}>Activate tracking</button>
+            <button type="button" className="btn btn--primary tap" disabled={!tr.validated || tr.trackingEnabled} aria-disabled={!tr.validated || tr.trackingEnabled} onClick={() => setFw(svc.activateTracking(wsId!, consent, nowISO(), actor))}>Activate tracking</button>
+          </div>
+          <div className="st-panel" style={{ marginTop: 'var(--space-3)' }} aria-label="Identifier fallback">
+            <h3 className="st-panel__title">Fix or update identifier</h3>
+            <div className="st-actions"><button type="button" className="btn tap" data-testid="tr-retry" onClick={retryFetch}>Retry automated fetch</button></div>
+            {fetchMsg && <p className="st-item__meta">{fetchMsg}</p>}
+            <label className="st-field" htmlFor="tr-mu-cnr"><span className="st-field__label">Updated CNR</span>
+              <input id="tr-mu-cnr" data-testid="tr-mu-cnr" className="st-input" value={mu.cnr} onChange={(e) => setMu((s) => ({ ...s, cnr: e.target.value }))} /></label>
+            <label className="st-field" htmlFor="tr-mu-case"><span className="st-field__label">Updated case number</span>
+              <input id="tr-mu-case" className="st-input" value={mu.caseNumber} onChange={(e) => setMu((s) => ({ ...s, caseNumber: e.target.value }))} /></label>
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" data-testid="tr-mu-save" disabled={!mu.cnr.trim()} aria-disabled={!mu.cnr.trim()}
+              onClick={() => { setFw(svc.manualUpdateIdentifier(wsId!, { cnr: mu.cnr, caseNumber: mu.caseNumber || tr.caseNumber }, nowISO(), actor)); setMu({ cnr: '', caseNumber: '' }); }}>Update identifier manually</button></div>
           </div>
         </section>
       )}

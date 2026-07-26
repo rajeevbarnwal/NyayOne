@@ -10,6 +10,16 @@ import {
   type ProfileDraft,
 } from '../lib/profile';
 import { getProfileDraft, updateProfileDraft, seedResumeDraft } from '../lib/profileStore';
+import {
+  loadRegistrationSession,
+  saveAcademicProfile,
+} from '../lib/registrationApi';
+import {
+  composeDisplayName,
+  fullNameToParts,
+  nameErrorMessage,
+  validateNameParts,
+} from '../lib/registration';
 
 const LANGUAGES = ['English', 'हिन्दी (Hindi)'];
 const COLLEGES = [
@@ -43,14 +53,29 @@ function Progress({ pct }: { pct: number }) {
 export function ProfileStep1() {
   const nav = useNavigate();
   const d = getProfileDraft();
-  const [fullName, setFullName] = useState(d.fullName);
+  const initialName = d.firstName || d.lastName
+    ? { firstName: d.firstName, middleName: d.middleName, lastName: d.lastName }
+    : fullNameToParts(d.fullName);
+  const [firstName, setFirstName] = useState(initialName.firstName);
+  const [middleName, setMiddleName] = useState(initialName.middleName);
+  const [lastName, setLastName] = useState(initialName.lastName);
   const [preferredLanguage, setLang] = useState(d.preferredLanguage || 'English');
   const [dateOfBirth, setDob] = useState(d.dateOfBirth);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   function next() {
-    const draft = updateProfileDraft({ fullName, preferredLanguage, dateOfBirth });
+    const parts = { firstName, middleName, lastName };
+    const nameErrors = validateNameParts(parts);
+    const draft = updateProfileDraft({
+      ...parts,
+      fullName: composeDisplayName(parts),
+      preferredLanguage,
+      dateOfBirth,
+    });
     const e = validateStep(1, draft);
+    if (nameErrors.firstName) e.firstName = nameErrorMessage('firstName', nameErrors.firstName);
+    if (nameErrors.middleName) e.middleName = nameErrorMessage('middleName', nameErrors.middleName);
+    if (nameErrors.lastName) e.lastName = nameErrorMessage('lastName', nameErrors.lastName);
     setErrors(e);
     if (Object.keys(e).length === 0) nav('/s-10');
   }
@@ -58,7 +83,12 @@ export function ProfileStep1() {
   return (
     <AuthCard screenId="S-09" kicker="Step 1 of 3 · Personal" title="About you">
       <Progress pct={33} />
-      <TextField id="p1-name" label="Full name" value={fullName} onChange={setFullName} error={errors.fullName} autoComplete="name" />
+      <fieldset className="st-namegroup">
+        <legend className="st-namegroup__legend">Legal name</legend>
+        <TextField id="p1-first-name" label="First name" value={firstName} onChange={setFirstName} error={errors.firstName} autoComplete="given-name" />
+        <TextField id="p1-middle-name" label="Middle name" optional="optional" value={middleName} onChange={setMiddleName} error={errors.middleName} autoComplete="additional-name" />
+        <TextField id="p1-last-name" label="Last name" value={lastName} onChange={setLastName} error={errors.lastName} autoComplete="family-name" />
+      </fieldset>
       <SelectField id="p1-lang" label="Preferred language" value={preferredLanguage} onChange={setLang} options={LANGUAGES} error={errors.preferredLanguage} />
       <TextField
         id="p1-dob"
@@ -91,12 +121,34 @@ function AcademicStep({ screenId }: { screenId: string }) {
   const [institutionalEmail, setEmail] = useState(d.institutionalEmail);
   const [barEnrolmentNumber, setBar] = useState(d.barEnrolmentNumber ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
 
-  function save() {
+  async function save() {
     const draft = updateProfileDraft({ college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber });
     const e = validateStep(2, draft);
     setErrors(e);
-    if (Object.keys(e).length === 0) nav('/s-11');
+    if (Object.keys(e).length > 0) return;
+    const registration = loadRegistrationSession();
+    if (!registration) {
+      setErrors({ submit: 'Your registration session expired. Return to registration and verify your mobile again.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveAcademicProfile({
+        registrationId: registration.registrationId,
+        college,
+        yearOfStudy,
+        enrolmentNumber,
+        institutionalEmail,
+        barEnrolmentNumber,
+      });
+      nav('/s-11');
+    } catch {
+      setErrors({ submit: 'Academic details could not be saved. Please retry.' });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -139,10 +191,11 @@ function AcademicStep({ screenId }: { screenId: string }) {
         <button type="button" className="btn tap" onClick={() => nav('/s-09')}>
           Back
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={save}>
-          Save &amp; continue
+        <button type="button" className="btn btn--primary tap" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save & continue'}
         </button>
       </div>
+      {errors.submit && <span className="ui-validation" role="alert">{errors.submit}</span>}
       <DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote>
     </AuthCard>
   );
@@ -153,21 +206,16 @@ export function ProfileStep2() {
 }
 
 export function ProfileResume() {
-  // S-13: resume from the last incomplete step. Seeds a partial draft and jumps
-  // the user to whichever step is incomplete (academic here).
+  // S-13: resume from the last incomplete step. The RENDERED form must match the
+  // computed step (independent-QA fix, comment 12458/12459): step 1 → Personal,
+  // step 2 → Academic, step 3 → Preferences, complete → completion. Saved
+  // academic values are preserved (seedResumeDraft never seeds over real data).
   const seeded = useMemo(() => seedResumeDraft(), []);
   const step = nextIncompleteStep(seeded);
-  const label = step === 1 ? 'personal' : step === 2 ? 'academic' : 'preferences';
-  return (
-    <StudentScreen screenId="S-13" className="st-authwrap">
-      <div className="st-card">
-        <p className="st-card__kicker">Resume setup</p>
-        <h1 className="st-card__title">Welcome back, Aditi</h1>
-        <p className="st-card__sub">Your profile is partly complete. Pick up from the {label} step.</p>
-        <AcademicStep screenId="S-13" />
-      </div>
-    </StudentScreen>
-  );
+  if (step === 1) return <ProfileStep1 />;
+  if (step === 2) return <AcademicStep screenId="S-13" />;
+  if (step === 3) return <ProfileStep3 />;
+  return <ProfileDone />;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -230,9 +278,11 @@ export function ProfileStep3() {
 /* -------------------------------------------------------------------------- */
 export function ProfileDone() {
   const nav = useNavigate();
-  const tier = profileTier(getProfileDraft());
+  const draft = getProfileDraft();
+  const tier = profileTier(draft);
+  const firstName = draft.fullName.trim().split(/\s+/)[0] || 'Student';
   return (
-    <AuthCard screenId="S-12" kicker="Profile complete" title="You’re all set, Aditi">
+    <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re all set, ${firstName}`}>
       <p className="st-card__sub">Tier badge earned. Your hub is now personalised.</p>
       <span className="st-badge">
         <span aria-hidden>✓</span> {TIER_LABELS[tier === 'verified_student' ? 'verified_student' : 'incomplete']}
@@ -254,11 +304,11 @@ export function ProfileView() {
   const d: ProfileDraft = getProfileDraft();
   const tier = profileTier(d);
   const rows: Array<[string, string]> = [
-    ['Full name', d.fullName || 'Aditi Nair'],
-    ['College', d.college || 'National Law School of India University (NLSIU)'],
-    ['Year of study', d.yearOfStudy || '4th year · B.A. LL.B. (Hons.)'],
-    ['Interests', d.interests.length ? d.interests.join(', ') : 'Constitutional, Arbitration'],
-    ['Career goal', d.careerGoal || 'Litigation & judiciary'],
+    ['Full name', d.fullName || 'Not provided'],
+    ['College', d.college || 'Not provided'],
+    ['Year of study', d.yearOfStudy || 'Not provided'],
+    ['Interests', d.interests.length ? d.interests.join(', ') : 'Not provided'],
+    ['Career goal', d.careerGoal || 'Not provided'],
   ];
   return (
     <StudentScreen screenId="S-17" className="st-set">

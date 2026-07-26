@@ -64,6 +64,13 @@ export function validateCompose(d: ComposeDraft): Record<string, string> {
   return e;
 }
 
+/** Replies share compose guardrails: non-empty and never publish legal advice. */
+export function validateReply(text: string): string | null {
+  if (!text.trim()) return 'Enter a reply before posting.';
+  if (looksLikeLegalAdvice(text)) return 'Requests for legal advice cannot be posted. Use the referral and disclaimer paths.';
+  return null;
+}
+
 export interface Channel {
   readonly id: string;
   readonly name: string;

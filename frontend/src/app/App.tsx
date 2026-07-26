@@ -3,11 +3,12 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
 import { screenRoutes } from './screenRegistry';
-import { AuthProvider } from './authContext';
+import { AuthProvider, useDerivedAuth } from './authContext';
 import { AppShell } from '../components/shell/AppShell';
 import { useTheme } from '../hooks/useTheme';
 import { studentScreens } from '../features/student/screens';
 import { lawyerRoutes } from '../features/lawyer/screens';
+import { LawyerGuard } from '../features/lawyer/CaseAuthGuard';
 import { authRoutes } from '../features/auth/screens';
 
 // Route-level lazy loading. Screens share one placeholder component in the
@@ -37,7 +38,12 @@ function ShellRoutes() {
           })}
           {lawyerRoutes.map((r) => {
             const Case = r.Component;
-            return <Route key={r.path} path={r.path} element={<Case />} />;
+            const element = r.guarded ? (
+              <LawyerGuard stage={r.stage}><Case /></LawyerGuard>
+            ) : (
+              <Case />
+            );
+            return <Route key={r.path} path={r.path} element={element} />;
           })}
           {authRoutes.map((r) => {
             const Auth = r.Component;
@@ -51,9 +57,12 @@ function ShellRoutes() {
 }
 
 export function App() {
+  // Reactive auth: derives the live state from the persisted, secret-free lawyer
+  // session snapshot and updates immediately on P0.1 create/update/clear/expiry.
+  const auth = useDerivedAuth();
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <AuthProvider value={auth}>
         <BrowserRouter>
           <ShellRoutes />
         </BrowserRouter>

@@ -1,0 +1,45 @@
+{
+  "issue": "SAATHI-286 (FE) / parent SAATHI-285",
+  "title": "S-90/S-91 calendar FE remediation — date/timezone filters, states/retry, route map, deep-link, Add Event",
+  "layer": "frontend (features/student/calendar/CalendarScreens.tsx) + contract (features/student/lib/calendar.ts)",
+  "tested_branch": "main",
+  "tested_commit": "PENDING_COMMIT",
+  "status_decision": "SAATHI-286 remains In Progress. It is NOT moved to Testing: its assigned criteria include TC-285-08 (Playwright 5 widths x light/dark) and the v2 DoD requires native build + native Vitest, all of which cannot execute in this sandbox (recorded below). Independent QA must run them.",
+  "mandatory_fixes": {
+    "1_registry_test": "features/student/screens.test.ts updated to include S-90/S-91 in the exact-match expected set (assertions strengthened, not weakened).",
+    "2_date_filters": "S-90 From/To date inputs (labelled, aria-invalid/aria-describedby), Clear button, user-scoped persistence via CalendarService.setFilters; validateDateRange(from,to) → from_after_to/invalid_date; invalid range shows message and falls back to all-dates without dropping events.",
+    "3_timezone": "S-90 IANA timezone <select> (TIMEZONE_OPTIONS), persisted; zonedToUtcIso() converts wall date+time→UTC via Intl offset (runtime-tz independent); localDateKey/localTime prove boundary (e.g. 09:30 Asia/Kolkata → 04:00 UTC, same local day).",
+    "4_states_retry": "loading/empty/success/partial/error via deriveStatus; partial banner + 'Retry failed sources' calls retryFailed (retry-only-failed; healthy SourceResult objects preserved by identity).",
+    "5_source_routes": "SOURCE_ROUTE map → canonical /s-NN screens; fixtures updated; 'Go to source' navigates to a real registered screen.",
+    "6_deeplink_privacy": "resolveDeepLink ownership-aware; missing and unauthorized render an identical 'isn't available' state (no existence disclosure).",
+    "7_add_event": "S-91 real Add Event workflow: Title, Date, Time, Type (PERSONAL_EVENT_TYPES), typed validation, Cancel/Back, Add to calendar.",
+    "8_persist": "addPersonalEvent validates→persists via service (ls-cal-personal-<user>); appears on S-90 via calendarLoaders; survives reload; user-scoped.",
+    "9_preserved": "privacy redaction, ownership, source-filter persistence, 44px targets, light/dark tokens, responsive shell preserved.",
+    "10_tests": "calendar.test.ts extended (unit/integration); Playwright browser gate deferred to CI (cannot build/serve app here)."
+  },
+  "tc_matrix": {
+    "TC-285-01": "PASS (unit)", "TC-285-02": "PASS (filters+date+tz persist across reload, unit)",
+    "TC-285-03": "PASS (unit)", "TC-285-04": "PASS (tz boundary + zonedToUtcIso, unit)",
+    "TC-285-05": "PASS (loading/empty/partial/error + retry-only-failed, unit)",
+    "TC-285-06": "PASS (ownership deep link; missing==forbidden safe state, unit)",
+    "TC-285-07": "PASS (preview redaction upheld, unit)",
+    "TC-285-08": "NOT RUN — Playwright cannot execute here (no bundler; vite build core-dumps). Deferred to CI."
+  },
+  "validation": {
+    "typecheck": "npm run typecheck → exit 0",
+    "lint": "eslint changed files → 0 errors / 0 warnings",
+    "native_vitest": "npm run test:run → Bus error (core dumped), exit 135 — recorded",
+    "native_build": "npm run build → Bus error (core dumped), exit 135 — recorded",
+    "fallback_unit": "node --experimental-strip-types + vitest shim: calendar 30/30, report 15/15 (regression intact). screens.test.ts requires native Vitest (JSX transform) — typecheck-verified, CI to run.",
+    "playwright": "NOT RUN — no app bundle (vite build core-dumps; no esbuild). Required at 390/430/768/1024/1440 light/dark in CI."
+  },
+  "files": [
+    "frontend/src/features/student/lib/calendar.ts",
+    "frontend/src/features/student/lib/calendar.test.ts",
+    "frontend/src/features/student/calendar/CalendarScreens.tsx",
+    "frontend/src/features/student/screens.tsx",
+    "frontend/src/features/student/screens.test.ts"
+  ],
+  "blockers": "native build, native Vitest, Playwright browser gate, and git push (SSH RC=128) are all environment-blocked in this sandbox. Independent QA/CI must run them and own Testing/In-Review transitions.",
+  "no_visual_parity_claim": true
+}

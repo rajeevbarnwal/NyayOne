@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StudentScreen, TextField, DpdpFootnote } from '../components';
-import { StatusBadge, EmptyState } from '../../../components/ui/primitives';
+import { StudentScreen, DpdpFootnote } from '../components';
+import { StatusBadge, EmptyState, ValidationState } from '../../../components/ui/primitives';
 import {
   filterListings,
   toggleSave,
@@ -9,6 +9,9 @@ import {
   stepForStatus,
   statusChip,
   newApplicationRef,
+  validateApplicationPdf,
+  saveSubmittedApplication,
+  loadSubmittedApplications,
   APPLICATION_STAGES,
   SAMPLE_LISTINGS,
   SAMPLE_APPLICATIONS,
@@ -152,16 +155,29 @@ export function InternshipDetail() {
 export function InternshipApply() {
   const nav = useNavigate();
   const [cover, setCover] = useState('I am a 4th-year student at NLSIU focused on disputes…');
-  const [resume, setResume] = useState('aditi-nair-resume.pdf');
-  const [transcript, setTranscript] = useState('');
-  const [err, setErr] = useState<string | undefined>();
+  const [resume, setResume] = useState<File | null>(null);
+  const [transcript, setTranscript] = useState<File | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function submit() {
-    if (!transcript.trim()) {
-      setErr('Transcript is required for this listing');
-      return;
-    }
-    setErr(undefined);
+    const nextErrors: Record<string, string> = {};
+    const resumeError = validateApplicationPdf(resume, 'Résumé');
+    const transcriptError = validateApplicationPdf(transcript, 'Transcript');
+    if (resumeError) nextErrors.resume = resumeError;
+    if (transcriptError) nextErrors.transcript = transcriptError;
+    if (!cover.trim()) nextErrors.cover = 'Cover note is required.';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    const ref = newApplicationRef();
+    saveSubmittedApplication({
+      id: ref,
+      listingId: 'cam',
+      org: 'Cyril Amarchand Mangaldas',
+      role: 'Summer Associate',
+      meta: `Mumbai · submitted ${new Date().toLocaleDateString('en-IN')}`,
+      status: 'applied',
+      note: `Reference ${ref}`,
+    });
     nav('/s-23');
   }
   return (
@@ -170,19 +186,23 @@ export function InternshipApply() {
         <ModuleHead eyebrow="Internships · S4" title="Apply — CAM Summer Associate" />
         <section className="st-panel">
           <h2 className="st-panel__title">Your application</h2>
-          <TextField id="app-resume" label="Résumé (PDF)" value={resume} onChange={setResume} help="Uploaded file reference — replace if needed." />
+          <label className="st-field" htmlFor="app-resume">
+            <span className="st-field__label">Résumé (PDF)</span>
+            <input id="app-resume" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => setResume(e.target.files?.[0] ?? null)} aria-describedby={errors.resume ? 'app-resume-error' : undefined} />
+            <span className="st-field__help">PDF only · maximum 5 MB.</span>
+            {errors.resume && <span id="app-resume-error"><ValidationState message={errors.resume} /></span>}
+          </label>
           <label className="st-field" htmlFor="app-cover">
             <span className="st-field__label">Cover note</span>
             <textarea id="app-cover" className="st-input" style={{ minHeight: 96, padding: 'var(--space-3)' }} value={cover} onChange={(e) => setCover(e.target.value)} />
+            {errors.cover && <ValidationState message={errors.cover} />}
           </label>
-          <TextField
-            id="app-transcript"
-            label="Transcript (PDF)"
-            value={transcript}
-            onChange={setTranscript}
-            placeholder="No file selected"
-            error={err}
-          />
+          <label className="st-field" htmlFor="app-transcript">
+            <span className="st-field__label">Transcript (PDF)</span>
+            <input id="app-transcript" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => setTranscript(e.target.files?.[0] ?? null)} aria-describedby={errors.transcript ? 'app-transcript-error' : undefined} />
+            <span className="st-field__help">PDF only · maximum 5 MB.</span>
+            {errors.transcript && <span id="app-transcript-error"><ValidationState message={errors.transcript} /></span>}
+          </label>
           <div className="st-actions">
             <button type="button" className="btn btn--primary tap" onClick={submit}>
               Submit application
@@ -244,7 +264,7 @@ function Stepper({ current }: { current: number }) {
 /* -------------------------------------------------------------------------- */
 export function InternshipTracker() {
   const nav = useNavigate();
-  const apps = SAMPLE_APPLICATIONS;
+  const apps = [...loadSubmittedApplications(), ...SAMPLE_APPLICATIONS];
   return (
     <StudentScreen screenId="S-24">
       <div className="st-stack">

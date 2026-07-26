@@ -56,7 +56,7 @@ export function ExamOverview() {
               {t}
             </button>
           ))}
-          <button role="tab" aria-selected={false} className="st-tab">Analytics</button>
+          <button role="tab" aria-selected={false} className="st-tab" onClick={() => nav('/s-59')}>Analytics</button>
         </div>
 
         <div className="st-metarow">
@@ -74,7 +74,7 @@ export function ExamOverview() {
             <p>Prelims mock — 100 questions</p>
             <p className="st-item__meta">2 hours · Law, GK &amp; current affairs, reasoning</p>
             <div className="st-actions">
-              <button type="button" className="btn btn--primary tap">Start timed mock</button>
+              <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-56')}>Start timed mock</button>
             </div>
             <p className="st-item__meta" style={{ marginTop: 'var(--space-3)' }}>
               {ESTIMATED_PERCENTILE_LABEL} · best 91.2 · avg 84.0

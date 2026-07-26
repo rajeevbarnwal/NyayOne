@@ -19,6 +19,17 @@ export function computeAge(dobISO: string, nowISO: string): number {
   return age;
 }
 
+/** A registration DOB must be a real calendar date and cannot be in the future. */
+export function isValidDateOfBirth(dobISO: string, nowISO: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dobISO)) return false;
+  const dob = new Date(`${dobISO}T00:00:00.000Z`);
+  const now = new Date(nowISO);
+  if (Number.isNaN(dob.getTime()) || Number.isNaN(now.getTime())) return false;
+  // Reject normalised invalid dates such as 2026-02-31.
+  if (dob.toISOString().slice(0, 10) !== dobISO) return false;
+  return dob.getTime() <= now.getTime();
+}
+
 export function isMinor(dobISO: string, nowISO: string): boolean {
   return computeAge(dobISO, nowISO) < AGE_OF_MAJORITY;
 }

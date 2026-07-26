@@ -113,6 +113,44 @@ export function newApplicationRef(): string {
   return `LS-INT-${refSeq}`;
 }
 
+export const MAX_APPLICATION_PDF_BYTES = 5 * 1024 * 1024;
+
+/** Validate an actual upload, not a typed file-name placeholder. */
+export function validateApplicationPdf(
+  file: Pick<File, 'name' | 'type' | 'size'> | null,
+  label: string,
+): string | null {
+  if (!file) return `${label} PDF is required.`;
+  const pdfType = file.type === 'application/pdf';
+  const pdfName = file.name.toLowerCase().endsWith('.pdf');
+  if (!pdfType || !pdfName) return `${label} must be a PDF file.`;
+  if (file.size <= 0) return `${label} file is empty.`;
+  if (file.size > MAX_APPLICATION_PDF_BYTES) return `${label} must be 5 MB or smaller.`;
+  return null;
+}
+
+const SUBMITTED_KEY = 'legalsaathi.internship.applications.v1';
+
+export function saveSubmittedApplication(application: Application): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = JSON.parse(window.localStorage.getItem(SUBMITTED_KEY) ?? '[]') as Application[];
+    window.localStorage.setItem(SUBMITTED_KEY, JSON.stringify([application, ...existing.filter((a) => a.id !== application.id)]));
+  } catch {
+    // Storage denial must not make the submit action crash.
+  }
+}
+
+export function loadSubmittedApplications(): Application[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SUBMITTED_KEY) ?? '[]') as Application[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const SAMPLE_LISTINGS: readonly InternshipListing[] = [
   {
     id: 'cam',
