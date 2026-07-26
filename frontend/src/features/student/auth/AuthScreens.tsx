@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen } from '../components';
+import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip } from '../components';
+import {
+  isValidMobile, MOBILE_ERROR,
+  isRegistrableDob, DOB_ERROR, todayLocalISO,
+  validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName,
+} from '../lib/registration';
 import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
 import {
   isValidOtpFormat,
@@ -11,7 +16,7 @@ import {
   type OtpChannel,
 } from '../lib/otp';
 import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
-import { isMinor, isValidDateOfBirth, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
+import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
 import { updateProfileDraft } from '../lib/profileStore';
 import { useAuth } from '../../../app/authContext';
 
@@ -180,9 +185,15 @@ export function LanguageSelect() {
 /* -------------------------------------------------------------------------- */
 /* S-05 — Register as student (age-gate + mandatory consent)                   */
 /* -------------------------------------------------------------------------- */
+/** Exact legal text moved from the static footnote into the accessible tooltip. */
+const NAME_CONSENT_INFO =
+  'Under-18 accounts need verified guardian consent before full access · collected under data minimisation · DPDP Act, 2023.';
+
 export function Register() {
   const nav = useNavigate();
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
   const [dob, setDob] = useState('');
   const [terms, setTerms] = useState(false);
@@ -191,12 +202,24 @@ export function Register() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function submit() {
-    const nowISO = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = 'Enter your full name.';
-    if (mobile.replace(/\D/g, '').length !== 10) e.mobile = 'Enter a valid 10-digit mobile number.';
+
+    // Split legal name (First required, Middle optional, Last required).
+    const parts = { firstName, middleName, lastName };
+    const nameErrors = validateNameParts(parts);
+    if (nameErrors.firstName) e.firstName = nameErrorMessage('firstName', nameErrors.firstName);
+    if (nameErrors.middleName) e.middleName = nameErrorMessage('middleName', nameErrors.middleName);
+    if (nameErrors.lastName) e.lastName = nameErrorMessage('lastName', nameErrors.lastName);
+
+    // Mobile: exactly 10 digits on the raw value (reject shorter AND longer).
+    if (!isValidMobile(mobile)) e.mobile = MOBILE_ERROR;
+
+    // Date of birth: real calendar date, not in the (local) future.
     if (!dob) e.dob = 'Enter your date of birth to confirm eligibility.';
-    else if (!isValidDateOfBirth(dob, nowISO)) e.dob = 'Enter a valid date of birth that is not in the future.';
+    else if (!isRegistrableDob(dob, now)) e.dob = DOB_ERROR;
+
     const consent: RegistrationConsent = {
       version: CONSENT_VERSION,
       acceptedTerms: terms,
@@ -210,8 +233,15 @@ export function Register() {
     if (Object.keys(e).length > 0) return;
 
     const minor = isMinor(dob, nowISO);
-    updateProfileDraft({ fullName: name.trim(), dateOfBirth: dob });
-    startOtp({ channel: 'sms' as OtpChannel, ref: mobile.replace(/\D/g, '') }, Date.now());
+    const payload = namePartsToPayload(parts);
+    updateProfileDraft({
+      firstName: payload.firstName,
+      middleName: payload.middleName ?? '',
+      lastName: payload.lastName,
+      fullName: composeDisplayName(parts), // compat: no double spaces when middle absent
+      dateOfBirth: dob,
+    });
+    startOtp({ channel: 'sms' as OtpChannel, ref: mobile }, Date.now());
     setMinor(minor, minor); // guardian consent pending until verified server-side
     // Minors continue through OTP but land in a restricted state (S-16) until
     // guardian consent is verified. All enforcement is server-side.
@@ -226,16 +256,46 @@ export function Register() {
       meta={<StatusBadge status="info" label="New account" />}
       sub="Create your account with a few details. Verification follows."
     >
-      <TextField id="reg-name" label="Full name" value={name} onChange={setName} error={errors.name} autoComplete="name" />
+      <TextField
+        id="reg-first-name"
+        label="First name"
+        value={firstName}
+        onChange={setFirstName}
+        error={errors.firstName}
+        autoComplete="given-name"
+        maxLength={60}
+        labelAddon={<InfoTooltip label="Information about name and guardian consent" text={NAME_CONSENT_INFO} />}
+      />
+      <TextField
+        id="reg-middle-name"
+        label="Middle name"
+        optional="optional"
+        value={middleName}
+        onChange={setMiddleName}
+        error={errors.middleName}
+        autoComplete="additional-name"
+        maxLength={60}
+      />
+      <TextField
+        id="reg-last-name"
+        label="Last name"
+        value={lastName}
+        onChange={setLastName}
+        error={errors.lastName}
+        autoComplete="family-name"
+        maxLength={60}
+      />
       <TextField
         id="reg-mobile"
         label="Mobile number"
         value={mobile}
         onChange={setMobile}
-        type="tel"
-        inputMode="tel"
+        type="text"
+        inputMode="numeric"
         autoComplete="tel"
+        maxLength={10}
         error={errors.mobile}
+        help="10-digit mobile number"
       />
       <TextField
         id="reg-dob"
@@ -243,6 +303,7 @@ export function Register() {
         value={dob}
         onChange={setDob}
         type="date"
+        max={todayLocalISO()}
         error={errors.dob}
         help="Used only to confirm eligibility · not shown publicly"
       />
@@ -267,9 +328,6 @@ export function Register() {
           Create account &amp; send OTP
         </button>
       </div>
-      <DpdpFootnote>
-        Under-18 accounts need verified guardian consent before full access · collected under data minimisation
-      </DpdpFootnote>
     </AuthCard>
   );
 }

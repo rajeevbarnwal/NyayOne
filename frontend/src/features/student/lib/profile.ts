@@ -10,6 +10,11 @@ export type ProfileStep = 1 | 2 | 3;
 
 export interface ProfileDraft {
   // Step 1 — personal
+  // Split legal name (SAATHI-388/421). fullName is retained as a derived
+  // compatibility display value for existing consumers.
+  firstName: string;
+  middleName: string; // optional value; '' when absent
+  lastName: string;
   fullName: string;
   preferredLanguage: string;
   dateOfBirth: string; // yyyy-mm-dd
@@ -25,6 +30,9 @@ export interface ProfileDraft {
 }
 
 export const EMPTY_PROFILE: ProfileDraft = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
   fullName: '',
   preferredLanguage: 'English',
   dateOfBirth: '',

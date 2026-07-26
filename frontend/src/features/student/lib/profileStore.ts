@@ -5,15 +5,27 @@
  * refreshes. This boundary contains no secrets or verification documents.
  */
 import { EMPTY_PROFILE, type ProfileDraft } from './profile';
+import { fullNameToParts } from './registration';
 
 const STORAGE_KEY = 'legalsaathi.student.profile.v1';
+
+/**
+ * Migrate a legacy record that has only `fullName` (no split parts) into
+ * First/Middle/Last so existing users are never stranded (SAATHI-388/421).
+ */
+function migrateName(parsed: Partial<ProfileDraft>): Partial<ProfileDraft> {
+  const hasParts = !!(parsed.firstName || parsed.lastName);
+  if (hasParts || !parsed.fullName) return parsed;
+  const parts = fullNameToParts(parsed.fullName);
+  return { ...parsed, firstName: parts.firstName, middleName: parts.middleName, lastName: parts.lastName };
+}
 
 function loadDraft(): ProfileDraft {
   if (typeof window === 'undefined') return { ...EMPTY_PROFILE, interests: [] };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...EMPTY_PROFILE, interests: [] };
-    const parsed = JSON.parse(raw) as Partial<ProfileDraft>;
+    const parsed = migrateName(JSON.parse(raw) as Partial<ProfileDraft>);
     return { ...EMPTY_PROFILE, ...parsed, interests: Array.isArray(parsed.interests) ? parsed.interests : [] };
   } catch {
     return { ...EMPTY_PROFILE, interests: [] };

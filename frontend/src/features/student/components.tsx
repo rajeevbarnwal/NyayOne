@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { TraceabilityBanner } from '../../components/shell/TraceabilityBanner';
 
 /**
@@ -69,6 +69,9 @@ export function TextField({
   placeholder,
   inputMode,
   autoComplete,
+  max,
+  maxLength,
+  labelAddon,
 }: {
   id: string;
   label: string;
@@ -81,6 +84,11 @@ export function TextField({
   placeholder?: string;
   inputMode?: 'text' | 'numeric' | 'tel' | 'email';
   autoComplete?: string;
+  /** Usability constraint for date inputs (YYYY-MM-DD). Domain validator stays authoritative. */
+  max?: string;
+  maxLength?: number;
+  /** Optional adornment rendered beside the label (e.g. an info tooltip). */
+  labelAddon?: ReactNode;
 }) {
   const errId = error ? `${id}-error` : undefined;
   const helpId = help ? `${id}-help` : undefined;
@@ -89,6 +97,7 @@ export function TextField({
       <span className="st-field__label">
         {label}
         {optional && <span className="st-field__opt"> · {optional}</span>}
+        {labelAddon}
       </span>
       <input
         id={id}
@@ -98,6 +107,8 @@ export function TextField({
         placeholder={placeholder}
         inputMode={inputMode}
         autoComplete={autoComplete}
+        max={max}
+        maxLength={maxLength}
         aria-invalid={error ? true : undefined}
         aria-describedby={[errId, helpId].filter(Boolean).join(' ') || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -198,6 +209,53 @@ export function Checkbox({
       </span>
       <span className="st-check__text">{label}</span>
     </label>
+  );
+}
+
+/**
+ * Accessible information control (SAATHI-388 / SAATHI-421). A real 44×44 button
+ * that reveals `text` in a tooltip/popover via keyboard focus, pointer hover and
+ * click; exposes expanded state; dismisses on Escape and focus/pointer exit. The
+ * legal text is available here instead of as static helper text below the form.
+ */
+export function InfoTooltip({ label, text }: { label: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  return (
+    <span
+      className="st-info"
+      style={{ position: 'relative', display: 'inline-flex' }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        className="st-info__btn tap"
+        style={{ minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        aria-label={label}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-describedby={open ? panelId : undefined}
+        onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
+      >
+        <span aria-hidden>ⓘ</span>
+      </button>
+      <span
+        id={panelId}
+        role="tooltip"
+        className={`st-info__panel${open ? ' st-info__panel--open' : ''}`}
+        hidden={!open}
+      >
+        {text}
+      </span>
+    </span>
   );
 }
 
