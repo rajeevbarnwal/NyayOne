@@ -56,6 +56,9 @@ class StudentProfile(TimestampedBase):
     institutional_email_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     bar_enrolment_ct: Mapped[str | None] = mapped_column(String(512), nullable=True)
     registration: Mapped[StudentRegistration] = relationship(back_populates="profile")
+    __table_args__ = (
+        UniqueConstraint("registration_id", name="uq_student_profiles_registration_id"),
+    )
 
 
 class OtpChallenge(TimestampedBase):
