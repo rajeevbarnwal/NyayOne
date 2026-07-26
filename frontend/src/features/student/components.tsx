@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { TraceabilityBanner } from '../../components/shell/TraceabilityBanner';
 
 /**
@@ -220,17 +220,60 @@ export function Checkbox({
  */
 export function InfoTooltip({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
+
+  // Collision-aware placement: fixed to the viewport (escapes card/legend
+  // coordinates), horizontally clamped to [16, viewport - width - 16], and
+  // flipped above the trigger when there isn't room below. Recomputed on open,
+  // resize and scroll so it never lands offscreen or over the name inputs/CTA.
+  const reposition = useCallback(() => {
+    const btn = btnRef.current;
+    const panel = panelRef.current;
+    if (!btn || !panel) return;
+    const b = btn.getBoundingClientRect();
+    const pw = panel.offsetWidth || 280;
+    const ph = panel.offsetHeight || 96;
+    const margin = 16;
+    const left = Math.max(margin, Math.min(b.left, window.innerWidth - pw - margin));
+    const placeAbove = window.innerHeight - b.bottom < ph + margin;
+    const top = placeAbove ? Math.max(margin, b.top - ph - 8) : b.bottom + 8;
+    setPos({ top, left });
+  }, []);
+
+  useLayoutEffect(() => { if (open) reposition(); }, [open, reposition]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onMove = () => reposition();
+    window.addEventListener('resize', onMove);
+    window.addEventListener('scroll', onMove, true);
+    return () => {
+      window.removeEventListener('resize', onMove);
+      window.removeEventListener('scroll', onMove, true);
+    };
+  }, [open, reposition]);
+
+  const panelStyle: CSSProperties = {
+    position: 'fixed',
+    top: pos ? pos.top : -9999,
+    left: pos ? pos.left : -9999,
+    right: 'auto',
+    maxWidth: 'min(280px, calc(100vw - 32px))',
+  };
+
   return (
     <span
       className="st-info"
-      style={{ position: 'relative', display: 'inline-flex' }}
+      style={{ display: 'inline-flex' }}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
       }}
       onMouseLeave={() => setOpen(false)}
     >
       <button
+        ref={btnRef}
         type="button"
         className="st-info__btn tap"
         style={{ minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -248,9 +291,11 @@ export function InfoTooltip({ label, text }: { label: string; text: string }) {
         <span aria-hidden>ⓘ</span>
       </button>
       <span
+        ref={panelRef}
         id={panelId}
         role="tooltip"
         className={`st-info__panel${open ? ' st-info__panel--open' : ''}`}
+        style={panelStyle}
         hidden={!open}
       >
         {text}

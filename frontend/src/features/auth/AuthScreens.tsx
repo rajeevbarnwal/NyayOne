@@ -3,7 +3,7 @@ import { TextField, SelectField, Checkbox, DpdpFootnote, InfoTooltip } from '../
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, DOB_ERROR, todayLocalISO,
-  buildStudentRegistrationCommand, maskMobile,
+  buildStudentRegistrationCommand,
 } from '../student/lib/registration';
 import { defaultKvStore } from '../../lib/kvStore';
 import { StatusBadge, GuardrailNotice, PrivacyNotice, RestrictedState, ValidationState, EmptyState } from '../../components/ui/primitives';
@@ -127,19 +127,14 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         return;
       }
       setName(built.command.fullName);
-      // Persist a REDACTED registration snapshot to the service boundary: names +
-      // masked mobile only — no raw OTP, no full mobile, no PII in the URL.
+      // The validated command is the payload destined for the server-authoritative
+      // registration endpoint (SAATHI-3 backend dependency; Product schema approval
+      // pending — see round-4 blocker). We do NOT persist PII (names, mobile,
+      // college) to browser storage. Only a non-PII progress flag is kept so a
+      // refresh does not silently lose that registration was in flight.
       try {
-        defaultKvStore().set('ls-student-registration', {
-          firstName: built.command.firstName,
-          middleName: built.command.middleName,
-          lastName: built.command.lastName,
-          fullName: built.command.fullName,
-          mobileMasked: maskMobile(built.command.mobile),
-          college: built.command.college ?? null,
-          at: nowISO(),
-        });
-      } catch { /* best-effort persistence; must not break registration */ }
+        defaultKvStore().set('ls-student-registration', { registrationPending: true, at: nowISO() });
+      } catch { /* best-effort; must not break registration */ }
     }
     setErrors({});
     const ch = createChallenge(STUB_OTP_CODE, Date.now());
