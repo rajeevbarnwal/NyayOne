@@ -916,6 +916,165 @@ if (browser) {
       await ctx.close();
     }
   });
+
+  /* ---------------- SAATHI-121 — Option C+ visual phase (Mac-delegated) -----
+   * Captures the DEVELOPED S-27..S-30 screens and the approved Option C+
+   * reference frames (docs/design/lawschool_reference/option_c_plus) per
+   * viewport x theme, records provenance metadata + SHA256 per capture, and
+   * produces side-by-side + pixel-diff artifacts.
+   * Threshold policy: the <2% gate is enforced ONLY for pairs listed in
+   * APPROVED_DETERMINISTIC_PAIRS. The independent review (2026-07-27)
+   * explicitly deferred visual-baseline freeze until Product approves the
+   * corrected native-viewport baseline, so that list ships EMPTY and every
+   * pair is recorded as advisory evidence with its measured ratio.
+   * Documented dynamic exclusions: the developed capture is the .st-screen
+   * ELEMENT — the global AppShell (rail/topbar/theme control) is excluded by
+   * construction; the reference is captured with baseline mode (&baseline=1
+   * in the hash query) which hides all reviewer tooling.
+   * Disable with QA_VISUAL_C_PLUS=0. */
+  const APPROVED_DETERMINISTIC_PAIRS = []; // e.g. 's27-390x844-light' once Product freezes the baseline
+  const VISUAL_THRESHOLD = 0.02;
+  if (process.env.QA_VISUAL_C_PLUS !== '0') await phase('option-c-plus-visual', async () => {
+    const { pathToFileURL } = await import('node:url');
+    const refFile = path.resolve('..', 'docs', 'design', 'lawschool_reference', 'option_c_plus', 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
+    let pixelmatch = null; let PNG = null;
+    try {
+      pixelmatch = (await import('pixelmatch')).default;
+      PNG = (await import('pngjs')).PNG;
+    } catch (err) {
+      recordNA('VIS-C+-deps', 'pixelmatch_pngjs_available', 'pixelmatch + pngjs installed',
+        `visual diff dependencies unavailable (${err?.message}) — run npm install`);
+      return;
+    }
+    try { await fs.access(refFile); } catch {
+      recordNA('VIS-C+-reference', 'reference_package_present',
+        'docs/design/lawschool_reference/option_c_plus reference frame present',
+        `reference artifact missing at ${refFile}`);
+      return;
+    }
+    const visDir = path.join(evidence, 'option_c_plus_visual');
+    await fs.mkdir(visDir, { recursive: true });
+    const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+    const visEntries = [];
+    /* Deterministic populated states for parity with the reference fixtures. */
+    await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
+    await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
+    const VIS_SCREENS = [
+      { key: 's27', devUrl: () => `${base}/s-27`,
+        devReady: (page) => page.getByText('12 found').waitFor(),
+        refRoute: '#/s27', refState: 's27-default' },
+      { key: 's28', devUrl: () => `${base}/s-28?id=${ids4[0]}`,
+        devReady: (page) => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(),
+        refRoute: '#/s28?id=nlsiu', refState: 's28-detail' },
+      { key: 's29', devUrl: () => `${base}/s-29?ids=${ids4.join(',')}`,
+        devReady: (page) => page.getByRole('heading', { name: 'Side by side' }).waitFor(),
+        refRoute: '#/s29?cmp=nlsiu,nalsar', refState: 's29-4' },
+      { key: 's30', devUrl: () => `${base}/s-30`,
+        devReady: (page) => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(),
+        refRoute: '#/s30', refState: 's30-both' },
+    ];
+    const pad = (png, w, h) => {
+      if (png.width === w && png.height === h) return png;
+      const out = new PNG({ width: w, height: h });
+      out.data.fill(255);
+      PNG.bitblt(png, out, 0, 0, png.width, png.height, 0, 0);
+      return out;
+    };
+    for (const { width, height } of [
+      { width: 390, height: 844 }, { width: 430, height: 932 }, { width: 768, height: 1024 },
+      { width: 1024, height: 768 }, { width: 1440, height: 900 }]) {
+      for (const theme of ['light', 'dark']) {
+        for (const screen of VIS_SCREENS) {
+          const pairKey = `${screen.key}-${width}x${height}-${theme}`;
+          await tcase(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
+            `developed + reference captured with provenance; diff recorded${APPROVED_DETERMINISTIC_PAIRS.includes(pairKey) ? ` and < ${VISUAL_THRESHOLD * 100}%` : ' (advisory — baseline not frozen)'}`,
+            async () => {
+              /* Developed capture (element = global shell excluded). */
+              const dev = await fresh({ viewport: { width, height }, theme, label: `vis-${pairKey}` });
+              let entry;
+              try {
+                await dev.page.goto(screen.devUrl());
+                await screen.devReady(dev.page);
+                await dev.page.waitForTimeout(250);
+                const devMeta = await dev.page.evaluate(() => ({
+                  dpr: window.devicePixelRatio,
+                  docScrollWidth: document.documentElement.scrollWidth,
+                  innerWidth: window.innerWidth,
+                  minTargetPx: Math.min(...Array.from(document.querySelectorAll('button, a, input, select'))
+                    .filter((el) => el.offsetParent !== null)
+                    .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height); })
+                    .filter((m) => m > 0), Infinity),
+                }));
+                const devPng = await dev.page.locator('section.st-screen').screenshot();
+                const devFile = `dev_${pairKey}.png`;
+                await fs.writeFile(path.join(visDir, devFile), devPng);
+                /* Reference capture (baseline mode hides reviewer tooling). */
+                const ref = await fresh({ viewport: { width, height }, label: `visref-${pairKey}` });
+                let refPng; let refMeta;
+                try {
+                  const hashRoute = screen.refRoute + (screen.refRoute.includes('?') ? '&' : '?') + 'baseline=1';
+                  await ref.page.goto(`${pathToFileURL(refFile).href}${hashRoute}`);
+                  await ref.page.waitForFunction(() => !!window.__opt, null, { timeout: 20000 });
+                  await ref.page.evaluate(([t, st]) => { window.__opt.theme.set(t); window.__opt.apply(st); document.body.setAttribute('data-baseline', '1'); }, [theme, screen.refState]);
+                  await ref.page.waitForTimeout(400);
+                  refMeta = await ref.page.evaluate(() => ({
+                    dpr: window.devicePixelRatio,
+                    docScrollWidth: document.documentElement.scrollWidth,
+                    innerWidth: window.innerWidth,
+                  }));
+                  refPng = await ref.page.screenshot({ fullPage: true });
+                } finally { await ref.close(); }
+                const refFileName = `ref_${pairKey}.png`;
+                await fs.writeFile(path.join(visDir, refFileName), refPng);
+                /* Pixel diff + side-by-side (advisory unless pair approved). */
+                const a = PNG.sync.read(devPng);
+                const b = PNG.sync.read(refPng);
+                const w = Math.max(a.width, b.width);
+                const h = Math.max(a.height, b.height);
+                const pa = pad(a, w, h); const pb = pad(b, w, h);
+                const diff = new PNG({ width: w, height: h });
+                const mismatched = pixelmatch(pa.data, pb.data, diff.data, w, h, { threshold: 0.1 });
+                const ratio = mismatched / (w * h);
+                const side = new PNG({ width: w * 2 + 8, height: h });
+                side.data.fill(255);
+                PNG.bitblt(pa, side, 0, 0, w, h, 0, 0);
+                PNG.bitblt(pb, side, 0, 0, w, h, w + 8, 0);
+                await fs.writeFile(path.join(visDir, `diff_${pairKey}.png`), PNG.sync.write(diff));
+                await fs.writeFile(path.join(visDir, `side_${pairKey}.png`), PNG.sync.write(side));
+                const approved = APPROVED_DETERMINISTIC_PAIRS.includes(pairKey);
+                entry = {
+                  pair: pairKey, screen: screen.key, theme,
+                  viewport: { width, height },
+                  developed: { file: `option_c_plus_visual/dev_${pairKey}.png`, url: screen.devUrl(), sha256: sha256(devPng), ...devMeta,
+                    consoleErrors: dev.consoleErrors.slice(), pageErrors: dev.pageErrors.slice(), unexpectedHttp: dev.unexpectedHttp.slice(),
+                    exclusions: 'captured as .st-screen element — global AppShell excluded by construction' },
+                  reference: { file: `option_c_plus_visual/${refFileName}`, route: screen.refRoute, state: screen.refState, sha256: sha256(refPng), ...refMeta,
+                    exclusions: 'baseline mode (&baseline=1 + body[data-baseline=1]) hides reviewer tooling' },
+                  diff: { file: `option_c_plus_visual/diff_${pairKey}.png`, sideBySide: `option_c_plus_visual/side_${pairKey}.png`,
+                    mismatchedPixels: mismatched, ratio, threshold: VISUAL_THRESHOLD, approvedDeterministicPair: approved,
+                    gate: approved ? (ratio < VISUAL_THRESHOLD ? 'pass' : 'fail') : 'advisory' },
+                };
+                visEntries.push(entry);
+                return { actual: { ratio: Number(ratio.toFixed(4)), approved, docScrollWidth: devMeta.docScrollWidth, minTargetPx: Math.round(devMeta.minTargetPx) },
+                  pass: (!approved || ratio < VISUAL_THRESHOLD)
+                    && devMeta.docScrollWidth <= width
+                    && dev.pageErrors.length === 0 && dev.unexpectedHttp.length === 0,
+                  evidence: `option_c_plus_visual/side_${pairKey}.png` };
+              } finally { await dev.close(); }
+            });
+        }
+      }
+    }
+    await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
+    await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
+    await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
+      commit, generatedAt: new Date().toISOString(),
+      reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
+      thresholdPolicy: `pixel-diff ratio < ${VISUAL_THRESHOLD} enforced only for APPROVED_DETERMINISTIC_PAIRS (currently ${APPROVED_DETERMINISTIC_PAIRS.length}); all other pairs advisory pending Product baseline freeze (independent review 2026-07-27)`,
+      exclusions: { developed: 'global AppShell excluded — .st-screen element capture', reference: 'reviewer tooling hidden via baseline mode' },
+      entries: visEntries,
+    }, null, 2));
+  });
 }
 
 /* -------------------- finalize artifacts, then set exit code ---------------- */

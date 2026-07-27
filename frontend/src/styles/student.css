@@ -706,3 +706,213 @@ textarea.st-input {
   white-space: nowrap;
   font-weight: 600;
 }
+
+/* ===========================================================================
+   Option C+ "Guided Confidence" — law-school screens S-27..S-30 ONLY
+   (SAATHI-63 / SAATHI-121 visual integration, 2026-07-28).
+   Reference package: docs/design/lawschool_reference/option_c_plus.
+   Functional palette layered as SCOPED custom properties on the existing
+   Option J token system (no global token changes): forest = primary/verified/
+   saved, terracotta = energy/kickers, indigo = everything comparison (picks,
+   differ marks, toggle, focus), teal = Following identity, amber = sample/
+   caution. Light/dark values from the approved token spec (28/28 pairs AA,
+   min 5.15:1 per the package audit). No AppShell/global changes.
+=========================================================================== */
+.st-lawschool {
+  --ls-pri: #1d5c3f;
+  --ls-pri-tint: #e3efe8;
+  --ls-acc: #a3430f;
+  --ls-acc-tint: #f6e8de;
+  --ls-ind: #3a4691;
+  --ls-ind-tint: #e8ebf9;
+  --ls-teal: #0e5f64;
+  --ls-teal-tint: #e1eff0;
+  --ls-amber: #7a5a14;
+  --ls-amber-bg: #f6efdb;
+}
+[data-theme='dark'] .st-lawschool {
+  --ls-pri: #82c4a0;
+  --ls-pri-tint: #1a2a22;
+  --ls-acc: #e2915a;
+  --ls-acc-tint: #2e2013;
+  --ls-ind: #a4b0ef;
+  --ls-ind-tint: #232948;
+  --ls-teal: #7cc7cc;
+  --ls-teal-tint: #16292b;
+  --ls-amber: #dcb964;
+  --ls-amber-bg: #2e2513;
+}
+
+/* Terracotta kicker; indigo comparison focus ring (Option C+ semantic). */
+.st-lawschool .st-eyebrow { color: var(--ls-acc); }
+.st-lawschool :focus-visible { outline: 2px solid var(--ls-ind); outline-offset: 2px; }
+/* F1 heading focus is programmatic (tabindex=-1) — no ring on mouse/route focus. */
+.st-lawschool h1:focus:not(:focus-visible) { outline: none; }
+
+/* Guided three-step journey header — rendered on S-27 ONLY (frozen decision). */
+.ls-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.ls-steps__node {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text3);
+}
+.ls-steps__dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  color: var(--text2);
+  font: 700 var(--fs-xs) var(--font-mono);
+}
+.ls-steps__node--done { color: var(--ls-pri); }
+.ls-steps__node--done .ls-steps__dot {
+  background: var(--ls-pri);
+  border-color: var(--ls-pri);
+  color: var(--on-accent);
+}
+.ls-steps__node--now { color: var(--text); }
+.ls-steps__node--now .ls-steps__dot {
+  border: 2px solid var(--ls-acc);
+  color: var(--ls-acc);
+  background: var(--surface);
+}
+.ls-steps__meta {
+  margin-left: auto;
+  font: 600 var(--fs-xs) var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+/* Selected/unselected chip semantics (F2): state is carried by aria-pressed;
+   the check glyph is rendered only when selected and is aria-hidden in TSX. */
+.st-lawschool .st-chip[aria-pressed='true'] {
+  background: var(--ls-pri-tint);
+  border-color: var(--ls-pri);
+  color: var(--ls-pri);
+}
+.st-lawschool .ls-ck { font-weight: 700; }
+
+/* Compare selection = indigo; Saved = forest; Following = teal. */
+.st-lawschool .btn.ls-cmp[aria-pressed='true'] {
+  background: var(--ls-ind-tint);
+  border-color: var(--ls-ind);
+  color: var(--ls-ind);
+  font-weight: 600;
+}
+.st-lawschool .btn.ls-save[aria-pressed='true'] {
+  background: var(--ls-pri-tint);
+  border-color: var(--ls-pri);
+  color: var(--ls-pri);
+  font-weight: 600;
+}
+.st-lawschool .btn.ls-follow[aria-pressed='true'] {
+  background: var(--ls-teal-tint);
+  border-color: var(--ls-teal);
+  color: var(--ls-teal);
+  font-weight: 600;
+}
+
+/* Monograms only (frozen decision) — 2-letter serif initials, forest tint. */
+.ls-card__id {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  min-width: 0;
+}
+.ls-card__id > div { min-width: 0; overflow-wrap: anywhere; }
+.ls-mono {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  background: var(--ls-pri-tint);
+  color: var(--ls-pri);
+  font: 600 var(--fs-md) var(--font-serif);
+  letter-spacing: 0.02em;
+}
+.ls-mono--sm {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  font-size: var(--fs-xs);
+  vertical-align: middle;
+}
+
+/* Corrected Follow wording line (no implied notification queue). */
+.st-lawschool .ls-followcopy { margin: 0; }
+
+/* S-29 comparison: indigo differ treatment + "Differences only" toggle
+   (frozen decision: OFF by default — aria-pressed carries the state). */
+.ls-comparehead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.st-lawschool .ls-toggle[aria-pressed='true'] {
+  background: var(--ls-ind);
+  border-color: var(--ls-ind);
+  color: var(--on-accent);
+}
+.st-lawschool .st-table tr.ls-differ th,
+.st-lawschool .st-table tr.ls-differ td {
+  background: var(--ls-ind-tint);
+}
+.st-lawschool .st-table tr.ls-differ th { box-shadow: inset 3px 0 0 var(--ls-ind); }
+.ls-differbadge,
+.ls-samebadge {
+  display: block;
+  margin-top: 2px;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ls-differbadge { color: var(--ls-ind); }
+.ls-samebadge { color: var(--text3); }
+
+/* S-30 identities: Saved = forest, Following = teal (visually distinct). */
+.ls-saved { border-top: 3px solid var(--ls-pri); }
+.ls-saved .st-panel__title { color: var(--ls-pri); }
+.ls-followed { border-top: 3px solid var(--ls-teal); }
+.ls-followed .st-panel__title { color: var(--ls-teal); }
+
+/* S-27 three-column directory at >=1360px (frozen decision). Below 1360 the
+   approved single/two-column rhythm is unchanged. The compare tray panel
+   remains IN-FLOW (never fixed/sticky) so it can never obscure card actions
+   or focused controls (F3) at any viewport. */
+@media (min-width: 1360px) {
+  .st-screen.st-lawschool--s27 { max-width: min(1320px, 100%); }
+  .st-lawschool--s27 .st-stack { max-width: 1280px; }
+  .st-lawschool--s27 .ls-results .st-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .st-lawschool--s27 .ls-results .st-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .st-lawschool--s27 .ls-results .st-item > div:last-child {
+    margin-top: auto;
+    padding-top: var(--space-3);
+  }
+}
