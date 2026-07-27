@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
 import {
   searchLawSchools,
   getLawSchoolDetail,
@@ -9,6 +10,7 @@ import {
   unfollowLawSchool,
   buildSearchQuery,
   LawSchoolsApiError,
+  isRetryableLawSchoolsError,
   COMPARE_LIMIT_EXCEEDED,
   COMPARE_MIN_NOT_MET,
   DUPLICATE_SCHOOL,
@@ -218,5 +220,50 @@ describe('save & follow API (S-28/S-30)', () => {
   it('DELETE follow returns followed:false', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ followed: false, notify_opt_in: false })));
     expect(await unfollowLawSchool('school-1')).toEqual({ followed: false, notifyOptIn: false });
+  });
+});
+
+describe('query retry policy (SAATHI-118/120 F4)', () => {
+  it('isRetryableLawSchoolsError is false for typed 4xx (422, 404, 401)', () => {
+    expect(isRetryableLawSchoolsError(new LawSchoolsApiError(422, 'unsupported_institution_type'))).toBe(false);
+    expect(isRetryableLawSchoolsError(new LawSchoolsApiError(404, SCHOOL_NOT_FOUND))).toBe(false);
+    expect(isRetryableLawSchoolsError(new LawSchoolsApiError(401, 'unauthorized'))).toBe(false);
+  });
+
+  it('isRetryableLawSchoolsError is true for 5xx and network errors', () => {
+    expect(isRetryableLawSchoolsError(new LawSchoolsApiError(500, 'http_500'))).toBe(true);
+    expect(isRetryableLawSchoolsError(new LawSchoolsApiError(503, 'http_503'))).toBe(true);
+    expect(isRetryableLawSchoolsError(new TypeError('Failed to fetch'))).toBe(true);
+  });
+
+  /* React Query-level proof, headless (the repo has no @testing-library/react,
+   * so we drive a real QueryClient via fetchQuery instead of rendering). */
+  const retry = (failureCount: number, error: unknown) =>
+    isRetryableLawSchoolsError(error) && failureCount < 1;
+
+  it('a deterministic typed 422 is fetched exactly ONCE through a real QueryClient', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(
+      { detail: { code: 'unsupported_institution_type' } }, 422));
+    vi.stubGlobal('fetch', fetchMock);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry, retryDelay: 0 } } });
+    await expect(qc.fetchQuery({
+      queryKey: ['law-schools', 'institution_type=not-a-wire-value'],
+      queryFn: () => searchLawSchools({ institutionType: 'not-a-wire-value' }),
+    })).rejects.toMatchObject({ status: 422, code: 'unsupported_institution_type' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    qc.clear();
+  });
+
+  it('a 500 is retried exactly once (two fetches) through a real QueryClient', async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(jsonResponse({ detail: 'boom' }, 500)));
+    vi.stubGlobal('fetch', fetchMock);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry, retryDelay: 0 } } });
+    await expect(qc.fetchQuery({
+      queryKey: ['law-schools', 'flaky'],
+      queryFn: () => searchLawSchools({}),
+    })).rejects.toMatchObject({ status: 500 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    qc.clear();
   });
 });

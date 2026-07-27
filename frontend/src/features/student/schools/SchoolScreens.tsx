@@ -22,6 +22,7 @@ import {
   addToCompareSelection,
   compareSelectionState,
   LawSchoolsApiError,
+  isRetryableLawSchoolsError,
   COMPARE_MIN,
   DEFAULT_COMPARE_MAX,
   COMPARE_LIMIT_EXCEEDED,
@@ -33,6 +34,15 @@ import {
   type LawSchoolSort,
   type LawSchoolSummary,
 } from '../lib/lawSchoolsApi';
+
+/**
+ * Query retry policy (F4): never retry typed 4xx (deterministic verdicts such
+ * as 422 unsupported_institution_type — a retry would duplicate the observable
+ * error); allow at most one retry for network failures / 5xx. Overrides the
+ * global queryClient `retry: 1`.
+ */
+const lawSchoolsRetry = (failureCount: number, error: unknown): boolean =>
+  isRetryableLawSchoolsError(error) && failureCount < 1;
 
 /**
  * S5 law-school directory screens (SAATHI-63 / SAATHI-118): S-27 search,
@@ -193,6 +203,7 @@ export function SchoolSearch() {
   const query = useQuery({
     queryKey: ['law-schools', searchContext(sp)],
     queryFn: () => searchLawSchools(params),
+    retry: lawSchoolsRetry,
   });
 
   const compareMax = query.data?.compareMax ?? DEFAULT_COMPARE_MAX;
@@ -394,6 +405,7 @@ export function SchoolDetail() {
     queryKey: ['law-school', id],
     queryFn: () => getLawSchoolDetail(id),
     enabled: id !== '',
+    retry: lawSchoolsRetry,
   });
 
   const saveMut = useMutation({
@@ -673,8 +685,8 @@ export function SchoolSavedFollowed() {
   const qc = useQueryClient();
   const ret = sp.get('ret') ?? '';
 
-  const savedQ = useQuery({ queryKey: ['law-schools-saved'], queryFn: listSavedLawSchools });
-  const followedQ = useQuery({ queryKey: ['law-schools-followed'], queryFn: listFollowedLawSchools });
+  const savedQ = useQuery({ queryKey: ['law-schools-saved'], queryFn: listSavedLawSchools, retry: lawSchoolsRetry });
+  const followedQ = useQuery({ queryKey: ['law-schools-followed'], queryFn: listFollowedLawSchools, retry: lawSchoolsRetry });
 
   const unsaveMut = useMutation({
     mutationFn: (id: string) => unsaveLawSchool(id),
