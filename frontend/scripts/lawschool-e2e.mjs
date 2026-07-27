@@ -856,10 +856,11 @@ if (browser) {
   });
 
   /* TC-63-10 — ISOLATED expected-error fixture (F4). The ONLY place the
-   * intentional institution_type=not-a-wire-value 422 is provoked. Here the
-   * single typed 422 and its two browser console messages are EXPECTED and
-   * asserted exactly; the S-27 error state must still render with zero
-   * overflow and >=44px targets. The clean matrix above never sees this URL. */
+   * intentional institution_type=not-a-wire-value 422 is provoked. With the
+   * non-retryable typed-4xx query policy, EXACTLY ONE API 422 is expected and
+   * every console error must be attributable to it; the S-27 error state must
+   * still render with zero overflow and >=44px targets. The clean matrix
+   * above never sees this URL. */
   await phase('ui-error-state-isolated', async () => {
     for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
       const tag = `${width}-${theme}`;
@@ -867,15 +868,25 @@ if (browser) {
         allow4xx: [/institution_type=not-a-wire-value/] });
       const { page } = ctx;
       const errResponses = [];
+      /* Precise filter (F4): count ONLY the API search request itself — GET
+       * /api/v1/law-schools carrying the deterministic bad param. Excludes the
+       * document navigation to /s-27?... (different pathname), OPTIONS
+       * preflights, and any other resource whose URL merely mentions the
+       * param. */
       page.on('response', async (r) => {
-        if (r.url().includes('institution_type=not-a-wire-value')) {
+        let u;
+        try { u = new URL(r.url()); } catch { return; }
+        const isIsolated422Api = r.request().method() === 'GET'
+          && u.pathname === '/api/v1/law-schools'
+          && u.searchParams.get('institution_type') === 'not-a-wire-value';
+        if (isIsolated422Api) {
           let body = null;
           try { body = await r.json(); } catch { /* non-JSON body */ }
           errResponses.push({ status: r.status(), code: body?.detail?.code ?? null });
         }
       });
       await tcase(`TC-63-10-error-state-isolated-${tag}`, 'expected_422_error_state',
-        'exactly ONE typed 422 unsupported_institution_type; exactly TWO expected console messages; ErrorState rendered; no overflow; >=44px targets', async () => {
+        'exactly ONE typed 422 unsupported_institution_type (no retry); every console error attributable to it; ErrorState rendered; no overflow; >=44px targets', async () => {
           await page.goto(`${base}/s-27?institution_type=not-a-wire-value`);
           await page.getByText('Could not load law schools').waitFor();
           await page.waitForTimeout(300); // settle: response-body reads + any stray retry would surface here
@@ -888,8 +899,12 @@ if (browser) {
               h: Math.round(el.getBoundingClientRect().height),
             }))
             .filter((t) => t.w > 0 && t.h > 0 && (t.w < 44 || t.h < 44)));
-          const consoleExpected = ctx.consoleErrors.length === 2
-            && ctx.consoleErrors.every((t) => /422|failed to load resource|institution_type|law-schools/i.test(t));
+          /* No hard-coded console count (F4): browsers differ in how many
+           * messages one failed fetch emits. Instead, EVERY console error must
+           * be attributable to the single expected 422 (mentions the status,
+           * the request URL/path, or the bad param); anything else fails. */
+          const consoleExpected = ctx.consoleErrors
+            .every((t) => /422|failed to load resource|institution_type=not-a-wire-value|\/api\/v1\/law-schools/i.test(t));
           return { actual: { errResponses, consoleErrors: ctx.consoleErrors, pageErrors: ctx.pageErrors,
             unexpectedHttp: ctx.unexpectedHttp, scrollWidth: sw, smallTargets: small },
           pass: errResponses.length === 1 && errResponses[0].status === 422
