@@ -245,3 +245,226 @@ def test_no_pii_in_audit_for_school_actions(ctx):
     with SessionLocal() as s:
         ev = s.scalar(select(AuditEvent).where(AuditEvent.action == "law_school.followed"))
         assert ev is not None and "mobile" not in str(ev.after_state)
+
+# ------------- F1 (SAATHI-119) — parallel save/follow idempotency ----------------
+def _serialized_file_engine(tmp_path, name):
+    """File-backed sqlite + NullPool so every thread owns a REAL connection
+    (test_concurrent_additions pattern), plus BEGIN IMMEDIATE so sqlite
+    serializes writers under the busy timeout instead of deadlocking on lock
+    upgrades — the way PostgreSQL serializes on the unique index for the
+    production ON CONFLICT DO NOTHING path."""
+    from sqlalchemy import event
+    from sqlalchemy.pool import NullPool
+
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path}/{name}.db", poolclass=NullPool,
+                           connect_args={"timeout": 15})
+
+    @event.listens_for(engine, "connect")
+    def _autocommit(dbapi_conn, _record):
+        dbapi_conn.isolation_level = None  # SQLAlchemy issues explicit BEGIN
+
+    @event.listens_for(engine, "begin")
+    def _begin_immediate(conn):
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
+
+    return engine
+
+
+def test_concurrent_follow_service_level_single_row_single_audit(tmp_path):
+    """8 parallel threads race the idempotent follow insert on ONE
+    (user, school): every caller succeeds logically, exactly 1 row persists
+    and exactly 1 audit event is written (audit only on actual creation)."""
+    from app.api.v1.law_schools import _idempotent_insert
+    from app.db.models.audit import AuditEvent
+
+    engine = _serialized_file_engine(tmp_path, "conc_follow_service")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
+    with SessionLocal() as s:
+        seed_law_schools(s)
+        user = User(role="student", status="active")
+        s.add(user)
+        s.commit()
+        uid = user.id
+        school_id = s.scalars(select(LawSchool.id).order_by(LawSchool.name)).first()
+    outcomes = []
+
+    def worker():
+        with SessionLocal() as s:
+            try:
+                created = _idempotent_insert(
+                    s, LawSchoolFollow,
+                    {"user_id": uid, "school_id": school_id, "notify_opt_in": False})
+                if created:  # mirror of the endpoint: audit only on real creation
+                    s.add(AuditEvent(actor_user_id=uid, actor_role="student",
+                                     action="law_school.followed", resource_type="law_school",
+                                     resource_id=school_id,
+                                     after_state={"followed": True, "notify_opt_in": False}))
+                s.commit()
+                outcomes.append("ok")
+            except Exception as exc:  # any escape = logical failure of a caller
+                s.rollback()
+                outcomes.append(f"{type(exc).__name__}: {exc}")
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert outcomes == ["ok"] * 8, outcomes
+    with SessionLocal() as s:
+        assert s.scalar(select(func.count()).select_from(LawSchoolFollow)) == 1
+        assert s.scalar(select(func.count()).select_from(AuditEvent)
+                        .where(AuditEvent.action == "law_school.followed")) == 1
+    Base.metadata.drop_all(engine)
+
+
+@pytest.mark.parametrize("surface", ["follow", "saved"])
+def test_http_concurrent_put_all_200_one_row_one_audit(tmp_path, surface):
+    """TC-63-04 remediation at the HTTP boundary: 8 parallel PUTs on one
+    (user, school) via ThreadPoolExecutor against a production-style session
+    → ALL return 200 (idempotent, never 500), one row, one audit row."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.db.models.audit import AuditEvent
+
+    engine = _serialized_file_engine(tmp_path, f"conc_{surface}_http")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
+
+    def prod_session():
+        s = SessionLocal()
+        try:
+            yield s
+            s.commit()
+        except Exception:
+            s.rollback()
+            raise
+        finally:
+            s.close()
+
+    app = FastAPI()
+    app.include_router(api_router, prefix="/api/v1")
+    app.dependency_overrides[get_session] = prod_session
+    client = TestClient(app)
+    with SessionLocal() as s:
+        seed_law_schools(s)
+        user = User(role="student", status="active")
+        s.add(user)
+        s.commit()
+        uid = user.id
+        sid = str(s.scalars(select(LawSchool.id).order_by(LawSchool.name)).first())
+    h = _claims(uid)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        rs = list(pool.map(
+            lambda _i: client.put(f"/api/v1/student/law-schools/{sid}/{surface}", headers=h),
+            range(8)))
+    assert [r.status_code for r in rs] == [200] * 8, [(r.status_code, r.text) for r in rs]
+    model = LawSchoolFollow if surface == "follow" else SavedLawSchool
+    action = "law_school.followed" if surface == "follow" else "law_school.saved"
+    with SessionLocal() as s:
+        assert s.scalar(select(func.count()).select_from(model)) == 1
+        assert s.scalar(select(func.count()).select_from(AuditEvent)
+                        .where(AuditEvent.action == action)) == 1
+    Base.metadata.drop_all(engine)
+
+
+# ------- F5 (TC-63-09) — executable commit-failure injection (HTTP boundary) -----
+class _CommitFailOnce(Session):
+    """Session whose commit() raises once while armed (mirror of
+    test_http_contract._CommitFailSession) — a REAL, executable failure
+    injection through the deployed HTTP app, not a citation."""
+
+    arm = False
+
+    def commit(self):  # type: ignore[override]
+        if type(self).arm:
+            type(self).arm = False
+            raise RuntimeError("forced commit failure (injected)")
+        return super().commit()
+
+
+def _injection_ctx():
+    from app.core.exceptions import register_exception_handlers
+
+    engine = create_engine("sqlite+pysqlite:///:memory:",
+                           connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=_CommitFailOnce)
+
+    def prod_session():
+        s = SessionLocal()
+        try:
+            yield s
+            s.commit()
+        except Exception:
+            s.rollback()
+            raise
+        finally:
+            s.close()
+
+    app = FastAPI()
+    app.include_router(api_router, prefix="/api/v1")
+    register_exception_handlers(app)  # production typed 500 envelope
+    app.dependency_overrides[get_session] = prod_session
+    client = TestClient(app, raise_server_exceptions=False)
+    with SessionLocal() as s:  # seeding happens BEFORE the fault is armed
+        assert seed_law_schools(s) == 12
+        user = User(role="student", status="active")
+        s.add(user)
+        s.commit()
+        uid = user.id
+        ids = [str(x) for x in s.scalars(select(LawSchool.id).order_by(LawSchool.name)).all()]
+    return client, SessionLocal, uid, ids, engine
+
+
+def test_commit_failure_put_follow_rolls_back_and_retries():
+    """Forced commit failure on PUT follow → typed 500 internal_error envelope,
+    ZERO partial rows in a fresh session, NO audit row; safe retry succeeds."""
+    from app.db.models.audit import AuditEvent
+
+    client, SessionLocal, uid, ids, engine = _injection_ctx()
+    try:
+        _CommitFailOnce.arm = True
+        r = client.put(f"/api/v1/student/law-schools/{ids[0]}/follow",
+                       headers=_claims(uid), json={"notify_opt_in": True})
+        assert r.status_code == 500
+        assert r.json()["detail"]["code"] == "internal_error"
+        assert "RuntimeError" not in r.text  # no internal leak in the envelope
+        with SessionLocal() as s:  # fresh session: nothing persisted
+            assert s.scalar(select(func.count()).select_from(LawSchoolFollow)) == 0
+            assert s.scalar(select(func.count()).select_from(AuditEvent)
+                            .where(AuditEvent.action == "law_school.followed")) == 0
+        r2 = client.put(f"/api/v1/student/law-schools/{ids[0]}/follow",
+                        headers=_claims(uid), json={"notify_opt_in": True})
+        assert r2.status_code == 200 and r2.json() == {"followed": True, "notify_opt_in": True}
+        with SessionLocal() as s:
+            assert s.scalar(select(func.count()).select_from(LawSchoolFollow)) == 1
+            assert s.scalar(select(func.count()).select_from(AuditEvent)
+                            .where(AuditEvent.action == "law_school.followed")) == 1
+    finally:
+        _CommitFailOnce.arm = False
+        Base.metadata.drop_all(engine)
+
+
+def test_commit_failure_post_compare_rolls_back_and_retries():
+    """Forced commit failure on POST compare → typed 500 envelope, ZERO partial
+    comparison rows in a fresh session; safe retry creates exactly one set."""
+    client, SessionLocal, uid, ids, engine = _injection_ctx()
+    try:
+        _CommitFailOnce.arm = True
+        r = client.post("/api/v1/law-schools/compare",
+                        json={"school_ids": ids[:2]}, headers=_claims(uid))
+        assert r.status_code == 500
+        assert r.json()["detail"]["code"] == "internal_error"
+        with SessionLocal() as s:  # fresh session: no partial set/items
+            assert s.scalar(select(func.count()).select_from(ComparisonSet)) == 0
+            assert s.scalar(select(func.count()).select_from(ComparisonItem)) == 0
+        r2 = client.post("/api/v1/law-schools/compare",
+                         json={"school_ids": ids[:2]}, headers=_claims(uid))
+        assert r2.status_code == 200 and len(r2.json()["items"]) == 2
+        with SessionLocal() as s:
+            assert s.scalar(select(func.count()).select_from(ComparisonSet)) == 1
+            assert s.scalar(select(func.count()).select_from(ComparisonItem)) == 2
+    finally:
+        _CommitFailOnce.arm = False
+        Base.metadata.drop_all(engine)
+

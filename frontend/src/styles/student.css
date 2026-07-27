@@ -386,6 +386,22 @@
   color: var(--text3);
   font-family: var(--font-mono);
 }
+/* SAATHI-118 (TC-63-11): source/action links rendered inline inside item
+   metadata (e.g. S-28 verified-fact source links) must expose a >=44x44px
+   interactive rect at every viewport/theme pair. inline-flex + min sizes
+   grow the hit target; the negative block margins collapse the extra height
+   back to one metadata text line, so wrapping, rhythm and overflow are
+   unchanged. */
+.st-item__meta a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  margin-block: calc((1lh - 44px) / 2);
+  vertical-align: middle;
+}
 .st-ring {
   font-family: var(--font-serif);
   font-size: var(--fs-3xl);

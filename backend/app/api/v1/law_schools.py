@@ -5,7 +5,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import asc, func, select
+from sqlalchemy import asc, func, insert, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth import ActorContext, Role, get_actor_context
@@ -132,6 +133,33 @@ def _school_or_404(session: Session, school_id: uuid.UUID) -> LawSchool:
     return s
 
 
+
+def _idempotent_insert(session: Session, model, values: dict) -> bool:
+    """Race-safe idempotent single-row insert against the (user_id, school_id)
+    unique constraint. Returns True iff a NEW row was actually inserted.
+
+    PostgreSQL (production): native ``INSERT .. ON CONFLICT DO NOTHING`` — the
+    loser of a parallel PUT race skips the insert without raising, so every
+    caller gets an idempotent 200 (SAATHI-119 TC-63-04 remediation of the
+    check-then-insert 500s). Other dialects (sqlite test rigs): plain INSERT;
+    a unique-constraint IntegrityError from a racing/replayed writer is rolled
+    back and treated as "row already exists". Callers write the audit event
+    ONLY when this returns True, so replay/race never duplicates audit rows.
+    """
+    if session.get_bind().dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = pg_insert(model.__table__).values(**values).on_conflict_do_nothing(
+            index_elements=["user_id", "school_id"])
+        return bool(session.execute(stmt).rowcount)
+    try:
+        session.execute(insert(model).values(**values))
+        return True
+    except IntegrityError:
+        session.rollback()  # loser of the race — existing row is re-read by caller
+        return False
+
+
 @student.get("/saved")
 def list_saved(actor: ActorContext = Depends(_require_student), session: Session = Depends(get_session)) -> dict:
     rows = session.execute(
@@ -154,12 +182,12 @@ def list_followed(actor: ActorContext = Depends(_require_student), session: Sess
 def save_school(school_id: uuid.UUID, actor: ActorContext = Depends(_require_student),
                 session: Session = Depends(get_session)) -> dict:
     _school_or_404(session, school_id)
-    if session.scalar(select(SavedLawSchool).where(
-            SavedLawSchool.user_id == actor.user_id, SavedLawSchool.school_id == school_id)) is None:
-        session.add(SavedLawSchool(user_id=actor.user_id, school_id=school_id))
+    created = _idempotent_insert(
+        session, SavedLawSchool, {"user_id": actor.user_id, "school_id": school_id})
+    if created:  # audit exactly once — only when a new row was actually created
         session.add(AuditEvent(actor_user_id=actor.user_id, actor_role="student", action="law_school.saved",
                                resource_type="law_school", resource_id=school_id, after_state={"saved": True}))
-    session.commit()  # idempotent: replay is a no-op, single row
+    session.commit()  # idempotent: parallel/replayed PUTs all 200, single row
     return {"saved": True}
 
 
@@ -185,18 +213,26 @@ def follow_school(school_id: uuid.UUID, payload: FollowIn | None = None,
                   session: Session = Depends(get_session)) -> dict:
     _school_or_404(session, school_id)
     opt_in = payload.notify_opt_in if payload else False
-    row = session.scalar(select(LawSchoolFollow).where(
-        LawSchoolFollow.user_id == actor.user_id, LawSchoolFollow.school_id == school_id))
-    if row is None:
-        row = LawSchoolFollow(user_id=actor.user_id, school_id=school_id, notify_opt_in=opt_in)
-        session.add(row)
+    created = _idempotent_insert(
+        session, LawSchoolFollow,
+        {"user_id": actor.user_id, "school_id": school_id, "notify_opt_in": opt_in})
+    if not created:
+        row = session.scalar(select(LawSchoolFollow).where(
+            LawSchoolFollow.user_id == actor.user_id, LawSchoolFollow.school_id == school_id))
+        if row is None:
+            # Conflicting row vanished between insert and re-read (raced with an
+            # unfollow) — one retry restores the idempotent-200 contract.
+            created = _idempotent_insert(
+                session, LawSchoolFollow,
+                {"user_id": actor.user_id, "school_id": school_id, "notify_opt_in": opt_in})
+        elif row.notify_opt_in != opt_in:
+            row.notify_opt_in = opt_in
+    if created:  # audit exactly once — only when a new row was actually created
         session.add(AuditEvent(actor_user_id=actor.user_id, actor_role="student", action="law_school.followed",
                                resource_type="law_school", resource_id=school_id,
                                after_state={"followed": True, "notify_opt_in": opt_in}))
-    else:
-        row.notify_opt_in = opt_in
     session.commit()
-    return {"followed": True, "notify_opt_in": row.notify_opt_in}
+    return {"followed": True, "notify_opt_in": opt_in}
 
 
 @student.delete("/{school_id}/follow")
