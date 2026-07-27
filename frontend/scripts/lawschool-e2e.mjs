@@ -57,10 +57,14 @@ const NLU_SLUGS = [
 const COMPARE_SLUGS = ['nlsiu-bengaluru', 'nalsar-hyderabad', 'wbnujs-kolkata', 'nlu-delhi'];
 
 const cases = [];
-const record = (tc, name, expected, actual, pass, evidenceFile = null) => {
-  cases.push({ tc, name, expected, actual, pass, evidence: evidenceFile });
-  console.log(`${pass ? 'PASS' : 'FAIL'} ${tc} (${name})`);
+/** status: 'pass' | 'fail' | 'na'. 'na' NEVER increments the passed count —
+ * it is reported separately (QA defect: an N/A case was previously a false PASS). */
+const record = (tc, name, expected, actual, pass, evidenceFile = null, status = null) => {
+  const st = status ?? (pass ? 'pass' : 'fail');
+  cases.push({ tc, name, expected, actual, status: st, pass: st === 'pass', evidence: evidenceFile });
+  console.log(`${st.toUpperCase()} ${tc} (${name})`);
 };
+const recordNA = (tc, name, expected, note) => record(tc, name, expected, note, false, null, 'na');
 /** Per-case try/catch: a throwing case records FAIL and the run continues. */
 async function tcase(tc, name, expected, fn) {
   try {
@@ -341,14 +345,13 @@ await phase('tc-63-09-atomicity', async () => {
         pass: badSave.status === 404 && errCode(badSave) === 'school_not_found'
           && JSON.stringify(before) === JSON.stringify(after) };
     });
-  await tcase('TC-63-09-failure-injection', 'failure_injection_na_backend_pytest',
-    'HTTP-reachable rollback-injection seam, if one existed in the deployed app', async () => ({
-      actual: 'N/A at browser/HTTP level: no injection seam is exposed by the deployed app; '
-        + 'covered by backend pytest — backend/tests/test_wave1_law_schools.py (concurrent '
-        + 'add_comparison_item race: count<=4, losers roll back) and '
-        + 'backend/tests/test_http_contract.py (provider failure → rollback probes)',
-      pass: true,
-    }));
+  recordNA('TC-63-09-failure-injection', 'failure_injection_owned_by_backend',
+    'executable commit-failure injection at the owning HTTP boundary',
+    'owned by backend TC test_commit_failure_* — backend/tests/test_wave1_law_schools.py '
+      + 'test_commit_failure_put_follow_rolls_back_and_retries and '
+      + 'test_commit_failure_post_compare_rolls_back_and_retries execute a forced commit '
+      + 'failure through the real HTTP app: typed 500 internal_error envelope, ZERO partial '
+      + 'rows in a fresh session, no audit row, and a safe retry succeeds after the fault clears');
 });
 
 /* ------- TC-63-07 — anonymous 401 + cross-user isolation (API probe) ------- */
@@ -634,32 +637,50 @@ if (browser) {
    * NOTE (QA defect #8): the dev frontend bakes USER_A's X-Actor-Claims into
    * every request at compile time, so a fresh browser context proves
    * server-side persistence for the same principal — it is NOT a logout/login
-   * journey. The case is named accordingly; the session-restoration case
-   * below exercises the 401 boundary; a real logout/login journey belongs to
-   * the auth contract (SAATHI auth tickets), not this directory suite. */
+   * journey. Locators use EXACT state-specific accessible names
+   * ('Save school' / 'Saved — remove' / 'Follow school' / 'Following — unfollow')
+   * so pre/post states can never be confused (the old /^Save/ regex matched
+   * both states and invalidated setup). Setup success (both PUTs 200) is
+   * asserted as its OWN case BEFORE any reload/fresh-context check, so a setup
+   * failure reports as itself instead of cascading. */
   await phase('ui-persistence', async () => {
     const ctx = await fresh({ label: 'persist' });
     const { page } = ctx;
-    await tcase('TC-63-05-reload-persistence', 'reload_persistence',
-      'saved+followed state survives reload (server-backed)', async () => {
+    let setupOk = false;
+    await tcase('TC-63-05-setup-save-follow', 'setup_save_follow_put_200',
+      'Save school + Follow school clicks each PUT once and return 200 (asserted BEFORE reload checks)', async () => {
+        const puts = [];
+        page.on('response', (r) => {
+          if (r.request().method() === 'PUT' && /\/student\/law-schools\/[^/]+\/(saved|follow)$/.test(r.url())) {
+            puts.push({ path: r.url().split('/api/v1')[1], status: r.status() });
+          }
+        });
         await page.goto(`${base}/s-28?id=${ids4[0]}`);
-        const saveBtn = page.getByRole('button', { name: /^Save/ });
+        const saveBtn = page.getByRole('button', { name: 'Save school', exact: true });
         await saveBtn.waitFor();
         await saveBtn.click();
-        await page.getByRole('button', { name: 'Saved ✓' }).waitFor();
-        await page.getByRole('button', { name: /^Follow/ }).click();
-        await page.getByRole('button', { name: 'Following ✓' }).waitFor();
-        await shot(page, 's28_saved_followed.png');
+        await page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Follow school', exact: true }).click();
+        await page.getByRole('button', { name: 'Following — unfollow', exact: true }).waitFor();
+        setupOk = puts.length === 2 && puts.every((r) => r.status === 200)
+          && puts.some((r) => r.path.endsWith('/saved')) && puts.some((r) => r.path.endsWith('/follow'));
+        return { actual: puts, pass: setupOk, evidence: await shot(page, 's28_saved_followed.png') };
+      });
+    await tcase('TC-63-05-reload-persistence', 'reload_persistence',
+      'saved+followed state survives reload (server-backed)', async () => {
+        if (!setupOk) return { actual: 'setup case failed — reload persistence not evaluated', pass: false };
         await page.reload();
-        await page.getByRole('button', { name: 'Saved ✓' }).waitFor();
-        await page.getByRole('button', { name: 'Following ✓' }).waitFor();
-        return { actual: 'Saved ✓ / Following ✓ after reload', pass: true, evidence: 's28_saved_followed.png' };
+        await page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Following — unfollow', exact: true }).waitFor();
+        return { actual: 'Saved — remove / Following — unfollow present after reload', pass: true,
+          evidence: await shot(page, 's28_after_reload.png') };
       });
     await ctx.close();
 
     const second = await fresh({ label: 'freshctx' });
     await tcase('TC-63-05-fresh-browser-context-persistence', 'fresh_browser_context_persistence',
       'fresh browser context (same compile-time claims) sees saved+followed on S-30 — server persistence, not logout/login', async () => {
+        if (!setupOk) return { actual: 'setup case failed — fresh-context persistence not evaluated', pass: false };
         await second.page.goto(`${base}/s-30`);
         await second.page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor();
         const savedHas = await second.page.locator('section[aria-label="Saved schools"]').getByText('National Law School of India University').count();
@@ -667,13 +688,35 @@ if (browser) {
         return { actual: { savedHas, followedHas }, pass: savedHas > 0 && followedHas > 0,
           evidence: await shot(second.page, 's30_saved_followed.png') };
       });
+    await tcase('TC-63-05-server-lists', 'server_list_endpoints_contain_school',
+      'GET /student/law-schools/saved + /followed both contain nlsiu-bengaluru (server truth)', async () => {
+        const sv = await savedSlugs(USER_A);
+        const fo = await followedSlugs(USER_A);
+        return { actual: { saved: sv, followed: fo },
+          pass: sv.includes('nlsiu-bengaluru') && fo.includes('nlsiu-bengaluru') };
+      });
     await tcase('TC-63-05-unsave', 'unsave_empties_list', 'unsave removes the row and shows the empty state', async () => {
       await second.page.locator('section[aria-label="Saved schools"]').getByRole('button', { name: 'Unsave' }).first().click();
       await second.page.locator('section[aria-label="Saved schools"]').getByText('No saved schools yet').waitFor();
       return { actual: 'No saved schools yet', pass: true, evidence: await shot(second.page, 's30_after_unsave.png') };
     });
-    await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Unfollow' }).first().click();
-    await second.page.locator('section[aria-label="Followed schools"]').getByText('No followed schools yet').waitFor();
+    await tcase('TC-63-05-unfollow', 'unfollow_empties_list', 'unfollow removes the row and shows the empty state', async () => {
+      await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Unfollow' }).first().click();
+      await second.page.locator('section[aria-label="Followed schools"]').getByText('No followed schools yet').waitFor();
+      return { actual: 'No followed schools yet', pass: true, evidence: await shot(second.page, 's30_after_unfollow.png') };
+    });
+    await tcase('TC-63-05-storage-privacy', 'storage_privacy_after_lifecycle',
+      'no actor claims/sub/token material in browser storage after the full save/follow lifecycle', async () => {
+        const storage = await second.page.evaluate(() => ({
+          local: Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)])),
+          session: Object.fromEntries(Object.keys(sessionStorage).map((k) => [k, sessionStorage.getItem(k)])),
+        }));
+        const serialized = JSON.stringify(storage);
+        const leaks = ['00000000-0000-4000-8000-0000000000de', 'X-Actor-Claims', 'Bearer ', 'roles']
+          .filter((needle) => serialized.includes(needle));
+        return { actual: { keys: [...Object.keys(storage.local), ...Object.keys(storage.session)], leaks },
+          pass: leaks.length === 0 };
+      });
     await second.close();
   });
 
@@ -722,7 +765,7 @@ if (browser) {
     await page.goto(`${base}/s-27`);
     await resultsItem(page, 'NALSAR').waitFor();
     await page.goto(`${base}/s-28?id=${ids4[1]}`);
-    await page.getByRole('button', { name: /^Save/ }).waitFor();
+    await page.getByRole('button', { name: 'Save school', exact: true }).waitFor();
     await tcase('TC-63-10-storage-privacy', 'storage_privacy',
       'no actor claims/sub/token material in browser storage', async () => {
         const storage = await page.evaluate(() => ({
@@ -746,30 +789,27 @@ if (browser) {
     await ctx.close();
   });
 
-  /* TC-63-08/10/11/12 — responsive × theme matrix over ALL FOUR screens
-   * (S-27 results/empty/error, S-28 detail, S-29 compare with 2 AND 4,
+  /* TC-63-08/10/11/12 — CLEAN responsive × theme matrix over ALL FOUR screens
+   * (S-27 results/empty, S-28 detail, S-29 compare with 2 AND 4,
    * S-30 saved/followed lists) asserting: no horizontal overflow, >=44px
    * targets, Tab traversal reaching every actionable control in DOM order,
    * zero console/page errors and zero unexpected 4xx/5xx per pair.
-   * The S-27 error state is provoked deterministically with a DIRECT bad
-   * API-param probe (institution_type=not-a-wire-value in the deep-link URL,
-   * bypassing the select, which now only emits canonical wire values) →
-   * typed 422 unsupported_institution_type rendered as ErrorState; that 422
-   * is the only allowlisted 4xx in the matrix. */
+   * STRICT (F4): the clean matrix carries NO 4xx/console allowlist of any
+   * kind. The intentional 422 error-state fixture lives in its own isolated
+   * phase below (ui-error-state-isolated), where the typed 422 and its two
+   * console messages are explicitly EXPECTED and asserted. */
   await phase('ui-matrix', async () => {
     await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
     await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
     for (const width of [390, 430, 768, 1024, 1440]) {
       for (const theme of ['light', 'dark']) {
         const tag = `${width}-${theme}`;
-        const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `mx-${tag}`,
-          allow4xx: [/institution_type=not-a-wire-value/] });
+        const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `mx-${tag}` });
         const { page } = ctx;
         const states = [
           { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText('12 found').waitFor(), keyboard: true },
           { key: 's27-empty', url: `${base}/s-27?q=zz-no-such-school`, ready: () => page.getByText('No schools match').waitFor(), keyboard: false },
-          { key: 's27-error', url: `${base}/s-27?institution_type=not-a-wire-value`, ready: () => page.getByText('Could not load law schools').waitFor(), keyboard: false },
-          { key: 's28-detail', url: `${base}/s-28?id=${ids4[0]}`, ready: () => page.getByRole('button', { name: 'Saved ✓' }).waitFor(), keyboard: true },
+          { key: 's28-detail', url: `${base}/s-28?id=${ids4[0]}`, ready: () => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(), keyboard: true },
           { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: false },
           { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: true },
           { key: 's30-lists', url: `${base}/s-30`, ready: () => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(), keyboard: true },
@@ -814,6 +854,53 @@ if (browser) {
     await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
     await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
   });
+
+  /* TC-63-10 — ISOLATED expected-error fixture (F4). The ONLY place the
+   * intentional institution_type=not-a-wire-value 422 is provoked. Here the
+   * single typed 422 and its two browser console messages are EXPECTED and
+   * asserted exactly; the S-27 error state must still render with zero
+   * overflow and >=44px targets. The clean matrix above never sees this URL. */
+  await phase('ui-error-state-isolated', async () => {
+    for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
+      const tag = `${width}-${theme}`;
+      const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `err422-${tag}`,
+        allow4xx: [/institution_type=not-a-wire-value/] });
+      const { page } = ctx;
+      const errResponses = [];
+      page.on('response', async (r) => {
+        if (r.url().includes('institution_type=not-a-wire-value')) {
+          let body = null;
+          try { body = await r.json(); } catch { /* non-JSON body */ }
+          errResponses.push({ status: r.status(), code: body?.detail?.code ?? null });
+        }
+      });
+      await tcase(`TC-63-10-error-state-isolated-${tag}`, 'expected_422_error_state',
+        'exactly ONE typed 422 unsupported_institution_type; exactly TWO expected console messages; ErrorState rendered; no overflow; >=44px targets', async () => {
+          await page.goto(`${base}/s-27?institution_type=not-a-wire-value`);
+          await page.getByText('Could not load law schools').waitFor();
+          await page.waitForTimeout(300); // settle: response-body reads + any stray retry would surface here
+          const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+          const small = await page.evaluate(() => Array.from(document.querySelectorAll('button, a, input, select'))
+            .filter((el) => el.offsetParent !== null)
+            .map((el) => ({
+              label: (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 40),
+              w: Math.round(el.getBoundingClientRect().width),
+              h: Math.round(el.getBoundingClientRect().height),
+            }))
+            .filter((t) => t.w > 0 && t.h > 0 && (t.w < 44 || t.h < 44)));
+          const consoleExpected = ctx.consoleErrors.length === 2
+            && ctx.consoleErrors.every((t) => /422|failed to load resource|institution_type|law-schools/i.test(t));
+          return { actual: { errResponses, consoleErrors: ctx.consoleErrors, pageErrors: ctx.pageErrors,
+            unexpectedHttp: ctx.unexpectedHttp, scrollWidth: sw, smallTargets: small },
+          pass: errResponses.length === 1 && errResponses[0].status === 422
+            && errResponses[0].code === 'unsupported_institution_type'
+            && consoleExpected && ctx.pageErrors.length === 0 && ctx.unexpectedHttp.length === 0
+            && sw <= width && small.length === 0,
+          evidence: await shot(page, `s27_error_isolated_${tag.replace('-', '_')}.png`) };
+        });
+      await ctx.close();
+    }
+  });
 }
 
 /* -------------------- finalize artifacts, then set exit code ---------------- */
@@ -823,8 +910,9 @@ try {
     commit,
     env: { base, api, node: process.version, platform: process.platform },
     generatedAt: new Date().toISOString(),
-    passed: cases.filter((c) => c.pass).length,
-    failed: cases.filter((c) => !c.pass).length,
+    passed: cases.filter((c) => c.status === 'pass').length,
+    failed: cases.filter((c) => c.status === 'fail').length,
+    na: cases.filter((c) => c.status === 'na').length,
     cases,
   };
 } finally {
@@ -832,6 +920,6 @@ try {
   await fs.writeFile(path.join(evidence, 'lawschool_e2e_report.json'), JSON.stringify(report ?? { cases }, null, 2));
   await fs.writeFile(path.join(evidence, 'network_console.log'),
     [...netLines, '', '--- console ---', ...consoleLines].join('\n'));
-  console.log(JSON.stringify({ passed: report?.passed, failed: report?.failed, evidence }, null, 2));
+  console.log(JSON.stringify({ passed: report?.passed, failed: report?.failed, na: report?.na, evidence }, null, 2));
   if (!report || report.failed > 0) process.exitCode = 1;
 }
