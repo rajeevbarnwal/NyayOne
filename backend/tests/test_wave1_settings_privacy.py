@@ -278,3 +278,66 @@ def test_d3_stale_version_no_partial_privacy_write(ctx):
     assert stale.status_code == 409
     now = client.get("/api/v1/student/settings", headers=h).json()
     assert all(p["enabled"] is False for p in now["privacy"])  # nothing landed
+
+
+# ===================== F2 remediation (QA ceaf11f) ===========================
+def test_f2_db_check_rejects_noncanonical_language(ctx):
+    """The DATABASE (not just Pydantic) rejects non-canonical language values."""
+    import pytest as _pytest
+    from sqlalchemy.exc import IntegrityError
+    client, SessionLocal, uid, rid = ctx
+    for bad in ("English", "Hindi", "", "xx", "x" * 16):
+        with SessionLocal() as s:
+            from app.models.registration import User
+            u = User(role="student", status="pending"); s.add(u); s.flush()
+            s.add(UserSettings(user_id=u.id, language=bad))
+            with _pytest.raises(IntegrityError):
+                s.flush()
+            s.rollback()
+    with SessionLocal() as s:  # canonical codes accepted
+        from app.models.registration import User
+        u = User(role="student", status="pending"); s.add(u); s.flush()
+        s.add(UserSettings(user_id=u.id, language="hi")); s.flush(); s.rollback()
+
+
+def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
+    """Upgrade 0004 -> insert legacy rows -> upgrade head maps them; unknown
+    values abort the migration with an explicit report."""
+    import os
+    import subprocess
+    import sys
+    import uuid as _uuid
+
+    def alembic(db, *args):
+        env = {**os.environ, "DATABASE_URL": f"sqlite+pysqlite:///{db}"}
+        return subprocess.run([sys.executable, "-m", "alembic", *args],
+                              capture_output=True, text=True, env=env, cwd=os.getcwd())
+
+    import sqlite3
+
+    def insert(db, lang):
+        c = sqlite3.connect(db)
+        uid_u, uid_s = _uuid.uuid4().hex, _uuid.uuid4().hex
+        c.execute("INSERT INTO users (id, role, status, created_at, updated_at) VALUES (?, 'student', 'pending', datetime('now'), datetime('now'))", (uid_u,))
+        c.execute("INSERT INTO user_settings (id, user_id, theme, language, notif_email, notif_sms, notif_updates, version, created_at, updated_at) VALUES (?, ?, 'system', ?, 1, 0, 1, 1, datetime('now'), datetime('now'))", (uid_s, uid_u, lang))
+        c.commit(); c.close()
+
+    # Case A: legacy labels map to canonical codes.
+    db_a = str(tmp_path / "a.db")
+    assert alembic(db_a, "upgrade", "0004_wave1_foundation").returncode == 0
+    insert(db_a, "English"); insert(db_a, "हिन्दी (Hindi)")
+    up = alembic(db_a, "upgrade", "head")
+    assert up.returncode == 0, up.stderr[-500:]
+    langs = sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings"))
+    assert langs == ["en", "hi"]
+    # Downgrade removes only the constraint; data survives; re-upgrade clean.
+    assert alembic(db_a, "downgrade", "-1").returncode == 0
+    assert sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings")) == ["en", "hi"]
+    assert alembic(db_a, "upgrade", "head").returncode == 0
+
+    # Case B: unknown value aborts loudly (no silent coercion).
+    db_b = str(tmp_path / "b.db")
+    assert alembic(db_b, "upgrade", "0004_wave1_foundation").returncode == 0
+    insert(db_b, "Klingon")
+    bad = alembic(db_b, "upgrade", "head")
+    assert bad.returncode != 0 and "unmapped legacy language values" in (bad.stderr + bad.stdout)

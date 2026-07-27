@@ -44,6 +44,7 @@ class UserSettings(TimestampedBase):
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_user_settings_user_id"),
         _in("theme", THEMES, "theme"),
+        _in("language", ("en", "hi"), "language"),
         CheckConstraint("version >= 1", name="version_positive"),
     )
 
