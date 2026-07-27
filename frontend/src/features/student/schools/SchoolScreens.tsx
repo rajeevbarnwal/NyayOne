@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StudentScreen, SelectField, Checkbox, DpdpFootnote } from '../components';
 import {
@@ -43,6 +43,83 @@ import {
  */
 const lawSchoolsRetry = (failureCount: number, error: unknown): boolean =>
   isRetryableLawSchoolsError(error) && failureCount < 1;
+
+/* ---------------- Option C+ visual integration (SAATHI-63 / SAATHI-121) ----
+ * Reference package: docs/design/lawschool_reference/option_c_plus (approved
+ * "Guided Confidence" direction, corrections 2026-07-27). Visual-only layer:
+ * scoped palette classes, guided step header (S-27 only), monograms,
+ * F1 destination scroll/focus, F2 chip glyph semantics, corrected Follow
+ * wording, S-29 "Differences only" (default OFF). All functional behaviour
+ * (real API adapter, typed errors, compare 2/4/5/duplicate semantics,
+ * idempotent save/follow) is unchanged from commit 9803978.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * F1 — deterministic destination scroll/focus. A forward navigation (PUSH or
+ * REPLACE) presents the destination from its heading: scroll to top, then move
+ * focus to the screen heading (tabindex=-1, preventScroll — headings carry no
+ * aria-live, so there is no double announcement). Browser Back/Forward (POP)
+ * is left to native scroll restoration, so the prior position is preserved.
+ * Runs once per screen mount — same-route re-renders never steal focus.
+ */
+function useRouteArrival(screenKey: string): void {
+  const navType = useNavigationType();
+  useEffect(() => {
+    if (navType === 'POP') return; // Back/Forward: browser restores scroll
+    window.scrollTo(0, 0);
+    const heading = document.querySelector<HTMLElement>('.st-lawschool h1');
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+    }
+    // Mount-only per screen (deps intentionally exclude navType): re-running
+    // on param-driven re-renders would steal focus from form controls.
+  }, [screenKey]);
+}
+
+/** Monograms only (frozen decision): 2-letter serif initials, no logos. */
+function monogram(name: string): string {
+  const words = name.split(/[\s,]+/).filter((w) => /^[A-Za-z]/.test(w));
+  return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? '')).toUpperCase();
+}
+
+/**
+ * Guided three-step journey header — rendered on S-27 ONLY (frozen decision).
+ * Non-interactive; the done check glyph is decorative (aria-hidden) so the
+ * spoken output is exactly the step label + status text (F2 pattern).
+ */
+function GuidedSteps({
+  whereDone,
+  budgetDone,
+  pickCount,
+  compareMax,
+}: {
+  whereDone: boolean;
+  budgetDone: boolean;
+  pickCount: number;
+  compareMax: number;
+}) {
+  const steps = [
+    { label: 'Where?', done: whereDone },
+    { label: 'Budget', done: budgetDone },
+    { label: `Pick ${COMPARE_MIN}\u2013${compareMax}`, done: pickCount >= COMPARE_MIN },
+  ];
+  const current = steps.findIndex((step) => !step.done);
+  return (
+    <div className="ls-steps" data-testid="ls-guided-steps">
+      {steps.map((step, i) => (
+        <span
+          key={step.label}
+          className={`ls-steps__node${step.done ? ' ls-steps__node--done' : ''}${i === current ? ' ls-steps__node--now' : ''}`}
+        >
+          <span className="ls-steps__dot" aria-hidden="true">{step.done ? '\u2713' : i + 1}</span>
+          {step.label}
+        </span>
+      ))}
+      <span className="ls-steps__meta">{pickCount} of {compareMax} picked</span>
+    </div>
+  );
+}
 
 /**
  * S5 law-school directory screens (SAATHI-63 / SAATHI-118): S-27 search,
@@ -243,10 +320,18 @@ export function SchoolSearch() {
   const page = query.data?.page ?? params.page ?? 1;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  useRouteArrival('S-27');
+
   return (
-    <StudentScreen screenId="S-27">
-      <div className="st-stack">
+    <StudentScreen screenId="S-27" className="st-lawschool st-lawschool--s27">
+      <div className="st-stack ls-stack27">
         <ModuleHead eyebrow="Law schools · S5" title="Find your law school" sub="search · filter · compare · follow" />
+        <GuidedSteps
+          whereDone={Boolean(params.state) || Boolean(params.q)}
+          budgetDone={params.feesMax !== undefined}
+          pickCount={tray.length}
+          compareMax={compareMax}
+        />
         <form
           role="search"
           onSubmit={(e) => {
@@ -292,6 +377,7 @@ export function SchoolSearch() {
               aria-pressed={params.sort === s.value}
               onClick={() => setParam('sort', params.sort === s.value ? '' : s.value)}
             >
+              {params.sort === s.value && <span className="ls-ck" aria-hidden="true">{'\u2713'}&nbsp;</span>}
               Sort: {s.label}
             </button>
           ))}
@@ -311,7 +397,7 @@ export function SchoolSearch() {
             <div className="st-chips">
               {tray.map((t) => (
                 <button key={t.id} type="button" className="st-chip" onClick={() => removeFromTray(t.id)} aria-label={`Remove ${t.name} from comparison`}>
-                  {t.name} ✕
+                  {t.name} <span aria-hidden="true">{'\u2715'}</span>
                 </button>
               ))}
             </div>
@@ -330,7 +416,7 @@ export function SchoolSearch() {
           </div>
         </section>
 
-        <section className="st-panel" aria-label="Search results">
+        <section className="st-panel ls-results" aria-label="Search results">
           <div className="st-panel__head">
             <h2 className="st-panel__title">Results</h2>
             <span className="st-metatag">{query.data ? `${total} found` : '…'}</span>
@@ -343,19 +429,22 @@ export function SchoolSearch() {
           {query.data && query.data.items.length > 0 && (
             <ul className="st-list">
               {query.data.items.map((s) => (
-                <li className="st-item" key={s.id}>
-                  <div>
+                <li className="st-item ls-card" key={s.id}>
+                  <div className="ls-card__id">
+                    <span className="ls-mono" aria-hidden="true">{monogram(s.name)}</span>
+                    <div>
                     <div>{s.name}</div>
                     <div className="st-item__meta">
                       {s.state} · {s.institutionType} · {s.entranceExam} · <span className="st-price">{feesText(s)}</span>
                       {s.nirfRank !== null && ` · NIRF #${s.nirfRank}`}
+                    </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
                     <StatusBadge status="info" label={s.accreditation} />
                     <button
                       type="button"
-                      className="btn tap"
+                      className="btn tap ls-cmp"
                       aria-pressed={trayIds.includes(s.id)}
                       disabled={!trayIds.includes(s.id) && selection.atLimit}
                       onClick={() => (trayIds.includes(s.id) ? removeFromTray(s.id) : addToTray(s))}
@@ -382,7 +471,7 @@ export function SchoolSearch() {
             </div>
           )}
         </section>
-        <DpdpFootnote>Directory facts cite official sources · verify before applying</DpdpFootnote>
+        <DpdpFootnote>Directory facts cite official sources · pilot catalogue uses sample directory data · verify before applying</DpdpFootnote>
       </div>
     </StudentScreen>
   );
@@ -435,9 +524,11 @@ export function SchoolDetail() {
 
   const back = () => nav(ret ? `/s-27?${ret}` : '/s-27');
 
+  useRouteArrival('S-28');
+
   if (!id) {
     return (
-      <StudentScreen screenId="S-28">
+      <StudentScreen screenId="S-28" className="st-lawschool">
         <div className="st-stack">
           <ModuleHead eyebrow="Law schools · S5" title="School detail" />
           <ValidationState message="No school selected — open one from search." />
@@ -453,7 +544,7 @@ export function SchoolDetail() {
   const d = query.data;
 
   return (
-    <StudentScreen screenId="S-28">
+    <StudentScreen screenId="S-28" className="st-lawschool">
       <div className="st-stack">
         <ModuleHead eyebrow="Law schools · S5" title={d?.name ?? 'School detail'} sub={d ? `${d.state} · ${d.institutionType}` : undefined} />
         {query.isPending && <LoadingState label="Loading school…" />}
@@ -484,20 +575,29 @@ export function SchoolDetail() {
                 {/* SAATHI-120 QA (TC-63-05): exact, state-specific accessible names so
                     assistive tech and test locators can never confuse the pre/post
                     states ("Save" is a prefix of "Saved ✓"). */}
-                <button type="button" className="btn tap" aria-pressed={d.saved} aria-label={d.saved ? 'Saved — remove' : 'Save school'} disabled={saveMut.isPending} onClick={() => saveMut.mutate(d.saved)}>
-                  {d.saved ? 'Saved ✓' : 'Save'}
+                <button type="button" className="btn tap ls-save" aria-pressed={d.saved} aria-label={d.saved ? 'Saved — remove' : 'Save school'} disabled={saveMut.isPending} onClick={() => saveMut.mutate(d.saved)}>
+                  {d.saved ? <>Saved <span aria-hidden="true">{'\u2713'}</span></> : 'Save'}
                 </button>
-                <button type="button" className="btn tap" aria-pressed={d.followed} aria-label={d.followed ? 'Following — unfollow' : 'Follow school'} disabled={followMut.isPending} onClick={() => followMut.mutate(d.followed)}>
-                  {d.followed ? 'Following ✓' : 'Follow'}
+                <button type="button" className="btn tap ls-follow" aria-pressed={d.followed} aria-label={d.followed ? 'Following — unfollow' : 'Follow school'} disabled={followMut.isPending} onClick={() => followMut.mutate(d.followed)}>
+                  {d.followed ? <>Following <span aria-hidden="true">{'\u2713'}</span></> : 'Follow'}
                 </button>
               </div>
+              {/* Corrected Follow wording (independent review, 2026-07-27): no
+                  implied notification queue. The opt-in flag is still sent to
+                  the follow endpoint unchanged (functional behaviour kept). */}
+              <p className="st-item__meta ls-followcopy">
+                Following marks a school for future verified updates. Prototype: no notifications are sent.
+              </p>
               {!d.followed && (
-                <Checkbox id="follow-notify" label="Notify me about admission updates" checked={notifyOptIn} onChange={setNotifyOptIn} />
+                <Checkbox id="follow-notify" label="Include admission updates if notifications launch" checked={notifyOptIn} onChange={setNotifyOptIn} />
               )}
               {actionError && <ValidationState message={actionError} />}
             </section>
             <section className="st-panel">
-              <h2 className="st-panel__title">Verified facts &amp; sources</h2>
+              <div className="st-panel__head">
+                <h2 className="st-panel__title">Verified facts &amp; sources</h2>
+                <span className="st-metatag">sample data · sources cited</span>
+              </div>
               {d.facts.length === 0 ? (
                 <EmptyState title="No facts published yet" />
               ) : (
@@ -523,7 +623,7 @@ export function SchoolDetail() {
             Saved &amp; followed
           </button>
         </div>
-        <DpdpFootnote>Facts carry their official source and retrieval date · verify before relying</DpdpFootnote>
+        <DpdpFootnote>Facts carry their official source and retrieval date · pilot catalogue uses sample directory data · verify before relying</DpdpFootnote>
       </div>
     </StudentScreen>
   );
@@ -563,6 +663,11 @@ export function SchoolCompare() {
   });
 
   const compareMax = query.data?.compareMax ?? DEFAULT_COMPARE_MAX;
+  /* "Differences only" — frozen decision: OFF by default. Pure client-side
+   * view filter over the server comparison result; never mutates the set. */
+  const [diffOnly, setDiffOnly] = useState(false);
+
+  useRouteArrival('S-29');
 
   function removeSchool(id: string): void {
     const nextIds = ids.filter((s) => s !== id);
@@ -594,6 +699,11 @@ export function SchoolCompare() {
     return <QueryFailure error={error} onRetry={() => void query.refetch()} />;
   }
 
+  function rowDiffers(row: { value: (i: LawSchoolDetailLike) => string }): boolean {
+    const items = query.data?.items ?? [];
+    return items.length >= 2 && new Set(items.map((i) => row.value(i))).size > 1;
+  }
+
   const rows: Array<{ label: string; value: (i: LawSchoolDetailLike) => string }> = [
     { label: 'State', value: (i) => i.state },
     { label: 'Institution type', value: (i) => i.institutionType },
@@ -607,8 +717,10 @@ export function SchoolCompare() {
     },
   ];
 
+  const visibleRows = diffOnly ? rows.filter((row) => rowDiffers(row)) : rows;
+
   return (
-    <StudentScreen screenId="S-29">
+    <StudentScreen screenId="S-29" className="st-lawschool">
       <div className="st-stack">
         <ModuleHead
           eyebrow="Law schools · S5"
@@ -629,7 +741,17 @@ export function SchoolCompare() {
           <section className="st-panel" aria-label="Comparison table">
             <div className="st-panel__head">
               <h2 className="st-panel__title">Side by side</h2>
-              <span className="st-metatag">{query.data.items.length} of max {query.data.compareMax}</span>
+              <div className="ls-comparehead">
+                <span className="st-metatag">{query.data.items.length} of max {query.data.compareMax}</span>
+                <button
+                  type="button"
+                  className="st-toggle ls-toggle"
+                  aria-pressed={diffOnly}
+                  onClick={() => setDiffOnly((v) => !v)}
+                >
+                  Differences only
+                </button>
+              </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="st-table">
@@ -638,10 +760,10 @@ export function SchoolCompare() {
                     <th scope="col">Attribute</th>
                     {query.data.items.map((i) => (
                       <th scope="col" key={i.id}>
-                        {i.name}
+                        <span className="ls-mono ls-mono--sm" aria-hidden="true">{monogram(i.name)}</span> {i.name}
                         <div>
                           <button type="button" className="st-chip" onClick={() => removeSchool(i.id)} aria-label={`Remove ${i.name} from comparison`}>
-                            Remove ✕
+                            Remove <span aria-hidden="true">{'\u2715'}</span>
                           </button>
                         </div>
                       </th>
@@ -649,9 +771,14 @@ export function SchoolCompare() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.label}>
-                      <th scope="row">{row.label}</th>
+                  {visibleRows.map((row) => (
+                    <tr key={row.label} className={rowDiffers(row) ? 'ls-differ' : undefined}>
+                      <th scope="row">
+                        {row.label}
+                        {rowDiffers(row)
+                          ? <span className="ls-differbadge">values differ</span>
+                          : <span className="ls-samebadge">same for all</span>}
+                      </th>
                       {query.data.items.map((i) => (
                         <td key={i.id}>{row.value(i)}</td>
                       ))}
@@ -659,13 +786,18 @@ export function SchoolCompare() {
                   ))}
                 </tbody>
               </table>
+              {diffOnly && visibleRows.length === 0 && (
+                <p className="st-item__meta" style={{ marginTop: 'var(--space-3)' }}>
+                  Every compared fact is the same for the selected schools.
+                </p>
+              )}
             </div>
           </section>
         )}
         <div className="st-actions">
           <button type="button" className="btn tap" onClick={back}>Back to search</button>
         </div>
-        <DpdpFootnote>Server enforces the compare limits · figures cite official sources</DpdpFootnote>
+        <DpdpFootnote>Server enforces the compare limits · figures cite official sources · pilot catalogue uses sample directory data</DpdpFootnote>
       </div>
     </StudentScreen>
   );
@@ -701,6 +833,8 @@ export function SchoolSavedFollowed() {
     (e) => e instanceof LawSchoolsApiError && e.status === 401,
   );
 
+  useRouteArrival('S-30');
+
   function list(
     label: string,
     q: typeof savedQ | typeof followedQ,
@@ -708,9 +842,10 @@ export function SchoolSavedFollowed() {
     onAction: (id: string) => void,
     actionPending: boolean,
     emptyHint: string,
+    identityClass: string,
   ) {
     return (
-      <section className="st-panel" aria-label={label}>
+      <section className={`st-panel ${identityClass}`} aria-label={label}>
         <div className="st-panel__head">
           <h2 className="st-panel__title">{label}</h2>
           <span className="st-metatag">{q.data ? `${q.data.length}` : '…'}</span>
@@ -721,11 +856,14 @@ export function SchoolSavedFollowed() {
         {q.data && q.data.length > 0 && (
           <ul className="st-list">
             {q.data.map((s) => (
-              <li className="st-item" key={s.id}>
-                <div>
-                  <div>{s.name}</div>
-                  <div className="st-item__meta">
-                    {s.state} · {s.entranceExam} · <span className="st-price">{feesText(s)}</span>
+              <li className="st-item ls-card" key={s.id}>
+                <div className="ls-card__id">
+                  <span className="ls-mono" aria-hidden="true">{monogram(s.name)}</span>
+                  <div>
+                    <div>{s.name}</div>
+                    <div className="st-item__meta">
+                      {s.state} · {s.entranceExam} · <span className="st-price">{feesText(s)}</span>
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -745,15 +883,18 @@ export function SchoolSavedFollowed() {
   }
 
   return (
-    <StudentScreen screenId="S-30">
+    <StudentScreen screenId="S-30" className="st-lawschool">
       <div className="st-stack">
-        <ModuleHead eyebrow="Law schools · S5" title="Saved & followed" sub="your shortlist and admission updates" />
+        <ModuleHead eyebrow="Law schools · S5" title="Saved & followed" sub="your private shortlist · following marks schools for future verified updates" />
+        <p className="st-item__meta ls-followcopy">
+          Following marks a school for future verified updates. Prototype: no notifications are sent.
+        </p>
         {authError ? (
           <SignInPrompt />
         ) : (
           <>
-            {list('Saved schools', savedQ, 'Unsave', (id) => unsaveMut.mutate(id), unsaveMut.isPending, 'Save schools from search or detail to build a shortlist.')}
-            {list('Followed schools', followedQ, 'Unfollow', (id) => unfollowMut.mutate(id), unfollowMut.isPending, 'Follow a school to get admission updates.')}
+            {list('Saved schools', savedQ, 'Unsave', (id) => unsaveMut.mutate(id), unsaveMut.isPending, 'Save schools from search or detail to build a shortlist.', 'ls-saved')}
+            {list('Followed schools', followedQ, 'Unfollow', (id) => unfollowMut.mutate(id), unfollowMut.isPending, 'Follow a school to mark it for future verified updates.', 'ls-followed')}
           </>
         )}
         <div className="st-actions">
@@ -761,7 +902,7 @@ export function SchoolSavedFollowed() {
             Back to search
           </button>
         </div>
-        <DpdpFootnote>Follow notifications honour your notification settings (S-18)</DpdpFootnote>
+        <DpdpFootnote>Saved and Following are private to your account · notification preferences will live in Settings (S-18) when notifications launch</DpdpFootnote>
       </div>
     </StudentScreen>
   );
