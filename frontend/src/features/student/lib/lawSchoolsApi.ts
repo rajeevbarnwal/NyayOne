@@ -99,6 +99,18 @@ export class LawSchoolsApiError extends Error {
   }
 }
 
+/**
+ * Retry predicate for law-school queries (SAATHI-118/120 F4). Typed 4xx
+ * responses (422 unsupported_* / 404 school_not_found / 401 ...) are
+ * deterministic server verdicts — retrying re-issues an identical request and
+ * doubles the observable error, so they must never be retried. Network
+ * failures (TypeError) and 5xx remain retryable (React Query default cap of
+ * one retry is applied at the call site: `failureCount < 1`).
+ */
+export function isRetryableLawSchoolsError(error: unknown): boolean {
+  return !(error instanceof LawSchoolsApiError && error.status >= 400 && error.status < 500);
+}
+
 async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
