@@ -158,10 +158,24 @@ function QueryFailure({ error, onRetry }: { error: unknown; onRetry: () => void 
 /* -------------------------------------------------------------------------- */
 
 const STATES = ['Delhi', 'Karnataka', 'Maharashtra', 'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal'];
-const INSTITUTION_TYPES = ['NLU', 'Government', 'Private', 'Deemed'];
-const DEGREES = ['BA LLB (Hons.)', 'BBA LLB', 'LLB', 'LLM'];
+/* Filter options emit canonical WIRE values (query params); labels are display-only.
+ * institution_type wire values are frozen in backend/app/models/wave1.py INSTITUTION_TYPES. */
+const INSTITUTION_TYPES: Array<{ value: string; label: string }> = [
+  { value: 'national_law_university', label: 'National Law University' },
+  { value: 'government', label: 'Government' },
+  { value: 'private', label: 'Private' },
+  { value: 'deemed', label: 'Deemed' },
+];
+const DEGREES = [
+  { value: 'BA LLB (Hons)', label: 'BA LLB (Hons.)' },
+  'BBA LLB', 'LLB', 'LLM',
+];
 const ACCREDITATIONS = ['NAAC A++', 'NAAC A+', 'NAAC A', 'BCI approved'];
-const ENTRANCE_EXAMS = ['CLAT', 'AILET', 'LSAT—India', 'MH CET Law', 'Own exam'];
+const ENTRANCE_EXAMS = [
+  'CLAT', 'AILET',
+  { value: 'LSAT-India', label: 'LSAT—India' },
+  'MH CET Law', 'Own exam',
+];
 const SORTS: Array<{ value: LawSchoolSort; label: string }> = [
   { value: 'name', label: 'Name' },
   { value: 'fees', label: 'Fees' },
