@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthCard, TextField, SelectField, StudentScreen, DpdpFootnote } from '../components';
+import { ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
   validateStep,
   nextIncompleteStep,
   profileTier,
   TIER_LABELS,
   type FieldErrors,
-  type ProfileDraft,
 } from '../lib/profile';
+import {
+  getStudentProfile,
+  updateStudentProfile,
+  SettingsApiError,
+  type StudentProfile,
+} from '../lib/settingsApi';
 import { getProfileDraft, updateProfileDraft, seedResumeDraft } from '../lib/profileStore';
 import {
   loadRegistrationSession,
@@ -21,14 +28,16 @@ import {
   validateNameParts,
 } from '../lib/registration';
 
-const LANGUAGES = ['English', 'हिन्दी (Hindi)'];
-const COLLEGES = [
-  'National Law School of India University (NLSIU)',
-  'NALSAR University of Law',
-  'The West Bengal NUJS',
-  'Other',
-];
-const YEARS = ['1st year', '2nd year', '3rd year', '4th year · B.A. LL.B. (Hons.)', '5th year', 'LL.M.'];
+import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
+
+const labelForCollege = (v: string | null | undefined) => labelFor(COLLEGE_OPTIONS, toCanonicalCollege(v));
+const labelForYear = (v: string | null | undefined) => labelFor(YEAR_OPTIONS, toCanonicalYear(v));
+const toCanonicalLanguage = (v: string | null | undefined): string =>
+  v === 'English' || v === 'English (en-IN)' ? 'en' : v === 'हिन्दी (Hindi)' || v === 'हिन्दी (hi-IN)' ? 'hi' : (v ?? '');
+
+const LANGUAGES = LANGUAGE_OPTIONS;
+const COLLEGES = COLLEGE_OPTIONS;
+const YEARS = YEAR_OPTIONS;
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
 
@@ -59,7 +68,7 @@ export function ProfileStep1() {
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [middleName, setMiddleName] = useState(initialName.middleName);
   const [lastName, setLastName] = useState(initialName.lastName);
-  const [preferredLanguage, setLang] = useState(d.preferredLanguage || 'English');
+  const [preferredLanguage, setLang] = useState(toCanonicalLanguage(d.preferredLanguage) || 'en');
   const [dateOfBirth, setDob] = useState(d.dateOfBirth);
   const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -297,51 +306,119 @@ export function ProfileDone() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* S-17 — Profile view (sectioned edit entry points)                           */
+/* S-17 — Profile view/edit (server-authoritative, SAATHI-58)                  */
 /* -------------------------------------------------------------------------- */
+const PROFILE_KEY = ['student-profile'] as const;
+
 export function ProfileView() {
   const nav = useNavigate();
-  const d: ProfileDraft = getProfileDraft();
-  const tier = profileTier(d);
-  const rows: Array<[string, string]> = [
-    ['Full name', d.fullName || 'Not provided'],
-    ['College', d.college || 'Not provided'],
-    ['Year of study', d.yearOfStudy || 'Not provided'],
-    ['Interests', d.interests.length ? d.interests.join(', ') : 'Not provided'],
-    ['Career goal', d.careerGoal || 'Not provided'],
-  ];
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: PROFILE_KEY, queryFn: getStudentProfile });
+  const [editing, setEditing] = useState(false);
+  const [college, setCollege] = useState('');
+  const [yearOfStudy, setYear] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () => updateStudentProfile({ college, yearOfStudy }),
+    onSuccess: (data) => {
+      qc.setQueryData<StudentProfile>(PROFILE_KEY, data);
+      setEditing(false);
+      setSaveError(null);
+    },
+    onError: (error) => {
+      setSaveError(
+        error instanceof SettingsApiError && error.status === 401
+          ? 'Your session expired — sign in again to edit your profile.'
+          : 'Could not save your changes — check your connection and retry.',
+      );
+    },
+  });
+
+  const p = query.data;
+  const signedOut = query.error instanceof SettingsApiError && query.error.status === 401;
+  const fullName = p ? [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ') : '';
+
+  function beginEdit(): void {
+    if (!p) return;
+    setCollege(toCanonicalCollege(p.college) ?? '');
+    setYear(toCanonicalYear(p.yearOfStudy) ?? '');
+    setSaveError(null);
+    setEditing(true);
+  }
+
   return (
     <StudentScreen screenId="S-17" className="st-set">
       <div className="st-set__head">
         <p className="st-eyebrow">Profile · S3</p>
         <h1 className="st-h1">Your profile</h1>
-        <div className="st-metarow">
-          <span className="st-badge">
-            <span aria-hidden>✓</span> {TIER_LABELS[tier]}
-          </span>
-        </div>
       </div>
-      <div className="st-panel">
-        {rows.map(([k, v]) => (
-          <div className="st-setrow" key={k}>
-            <div>
-              <div className="st-setrow__label">{k}</div>
-              <div className="st-setrow__sub">{v}</div>
-            </div>
+
+      {query.isPending && <LoadingState label="Loading your profile…" />}
+      {query.isError && (signedOut ? (
+        <div className="ui-state" role="alert">
+          <p className="ui-state__eyebrow">Signed out</p>
+          <p className="ui-state__title">Sign in to view your profile</p>
+          <div className="ui-state__action">
+            <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button>
           </div>
-        ))}
-        <p className="st-setrow__sub" style={{ marginTop: 'var(--space-3)' }}>
-          Bar enrolment number stays private · never on your public profile.
-        </p>
-      </div>
-      <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-09')}>
-          Edit details
-        </button>
-        <button type="button" className="btn tap" onClick={() => nav('/s-19')}>
-          Privacy &amp; settings
-        </button>
-      </div>
+        </div>
+      ) : (
+        <ErrorState
+          title="Could not load your profile"
+          detail="Check your connection and retry."
+          onRetry={() => void query.refetch()}
+        />
+      ))}
+
+      {p && (
+        <>
+          <div className="st-panel">
+            {([
+              ['Full name', fullName || 'Not provided'],
+              ['Mobile', p.maskedMobile || 'Not provided'],
+              ['College', labelForCollege(p.college) || 'Not provided'],
+              ['Year of study', labelForYear(p.yearOfStudy) || 'Not provided'],
+            ] as Array<[string, string]>).map(([k, v]) => (
+              <div className="st-setrow" key={k}>
+                <div>
+                  <div className="st-setrow__label">{k}</div>
+                  <div className="st-setrow__sub">{v}</div>
+                </div>
+              </div>
+            ))}
+            <p className="st-setrow__sub" style={{ marginTop: 'var(--space-3)' }}>
+              Bar enrolment number stays private · never on your public profile.
+            </p>
+          </div>
+
+          {editing && (
+            <div className="st-panel" style={{ marginTop: 'var(--space-3)' }}>
+              <h2 className="st-panel__title">Edit college &amp; year</h2>
+              <SelectField id="pv-college" label="College / University" value={college} onChange={setCollege} options={COLLEGES} />
+              <SelectField id="pv-year" label="Year of study" value={yearOfStudy} onChange={setYear} options={YEARS} />
+              <div className="st-actions st-actions--split">
+                <button type="button" className="btn tap" onClick={() => setEditing(false)} disabled={save.isPending}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn--primary tap" onClick={() => save.mutate()} disabled={save.isPending}>
+                  {save.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+              {saveError && <ValidationState message={saveError} />}
+            </div>
+          )}
+
+          <div className="st-actions st-actions--split">
+            <button type="button" className="btn tap" onClick={beginEdit} disabled={editing}>
+              Edit college &amp; year
+            </button>
+            <button type="button" className="btn tap" onClick={() => nav('/s-19')}>
+              Privacy &amp; settings
+            </button>
+          </div>
+        </>
+      )}
     </StudentScreen>
   );
 }

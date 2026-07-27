@@ -38,6 +38,12 @@ import {
   CommunityReport,
   CommunityModerated,
 } from './community/CommunityScreens';
+import {
+  SchoolSearch,
+  SchoolDetail,
+  SchoolCompare,
+  SchoolSavedFollowed,
+} from './schools/SchoolScreens';
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
 import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
 import { CalendarMonth, CalendarAdd } from './calendar/CalendarScreens';
@@ -81,6 +87,11 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-24': InternshipTracker,
   'S-25': InternshipSaved,
   'S-26': InternshipEmpty,
+  // S5 law schools (SAATHI-63): schools/search, schools/detail, schools/compare, schools/saved-followed
+  'S-27': SchoolSearch,
+  'S-28': SchoolDetail,
+  'S-29': SchoolCompare,
+  'S-30': SchoolSavedFollowed,
   // S10 community (SAATHI-74)
   'S-50': CommunityFeed,
   'S-51': CommunityPost,

@@ -144,7 +144,7 @@ export function SelectField({
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: readonly string[];
+  options: ReadonlyArray<string | { value: string; label: string }>;
   error?: string;
   help?: string;
 }) {
@@ -161,11 +161,14 @@ export function SelectField({
         onChange={(e) => onChange(e.target.value)}
       >
         <option value="">Select…</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
+        {options.map((raw) => {
+          const o = typeof raw === 'string' ? { value: raw, label: raw } : raw;
+          return (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          );
+        })}
       </select>
       {error ? (
         <span className="ui-validation" role="alert" id={errId}>
