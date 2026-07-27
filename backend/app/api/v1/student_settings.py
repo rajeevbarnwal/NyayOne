@@ -28,6 +28,40 @@ from app.models.wave1 import (
 
 router = APIRouter(prefix="/student", tags=["student"])
 
+# --- Canonical wire values (SAATHI-58 D1/D2). Labels live in the UI only. ---
+LANGUAGES = ("en", "hi")
+CANONICAL_COLLEGES = (
+    "National Law School of India University",
+    "NALSAR University of Law",
+    "The West Bengal National University of Juridical Sciences",
+    "Other",
+)
+CANONICAL_YEARS = ("1st", "2nd", "3rd", "4th", "5th", "llm")
+_LEGACY_COLLEGE = {
+    "NLSIU": "National Law School of India University",
+    "National Law School of India University (NLSIU)": "National Law School of India University",
+    "NALSAR": "NALSAR University of Law",
+    "The West Bengal NUJS": "The West Bengal National University of Juridical Sciences",
+    "WBNUJS": "The West Bengal National University of Juridical Sciences",
+}
+_LEGACY_YEAR = {
+    "1st year": "1st", "2nd year": "2nd", "3rd year": "3rd",
+    "4th year \u00b7 B.A. LL.B. (Hons.)": "4th", "4th year": "4th", "5th year": "5th",
+    "LL.M.": "llm", "LLM": "llm",
+}
+
+
+def canonical_college(v):
+    if v is None:
+        return None
+    return v if v in CANONICAL_COLLEGES else _LEGACY_COLLEGE.get(v, v)
+
+
+def canonical_year(v):
+    if v is None:
+        return None
+    return v if v in CANONICAL_YEARS else _LEGACY_YEAR.get(v, v)
+
 
 def _require_student(actor: ActorContext = Depends(get_actor_context)) -> ActorContext:
     if not actor.is_authenticated:
@@ -64,16 +98,28 @@ class ProfilePatch(BaseModel):
     college: str | None = None
     year_of_study: str | None = None
 
-    @field_validator("college", "year_of_study")
+    @field_validator("college")
     @classmethod
-    def _trim(cls, v: str | None) -> str | None:
+    def _college(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        v = v.strip()
+        v = canonical_college(v.strip())
         if not v:
             raise ValueError("must not be empty or whitespace")
-        if len(v) > 160:
-            raise ValueError("too long")
+        if v not in CANONICAL_COLLEGES:
+            raise ValueError(f"college must be one of {CANONICAL_COLLEGES}")
+        return v
+
+    @field_validator("year_of_study")
+    @classmethod
+    def _year(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = canonical_year(v.strip())
+        if not v:
+            raise ValueError("must not be empty or whitespace")
+        if v not in CANONICAL_YEARS:
+            raise ValueError(f"year_of_study must be one of {CANONICAL_YEARS}")
         return v
 
 
@@ -82,8 +128,8 @@ def _profile_payload(session: Session, reg: StudentRegistration) -> dict:
     mobile = decrypt(reg.mobile_ct)
     return {
         "first_name": reg.first_name, "middle_name": reg.middle_name, "last_name": reg.last_name,
-        "college": prof.college if prof else None,
-        "year_of_study": prof.year_of_study if prof else None,
+        "college": canonical_college(prof.college) if prof else None,
+        "year_of_study": canonical_year(prof.year_of_study) if prof else None,
         "masked_mobile": f"******{mobile[-4:]}",
     }
 
@@ -149,8 +195,8 @@ class SettingsPatch(BaseModel):
         if v is None:
             return None
         v = v.strip()
-        if not v or len(v) > 16:
-            raise ValueError("language must be 1-16 chars")
+        if v not in LANGUAGES:
+            raise ValueError(f"language must be one of {LANGUAGES}")
         return v
 
 
@@ -164,14 +210,19 @@ def _settings_row(session: Session, actor: ActorContext) -> UserSettings:
 
 
 def _settings_payload(session: Session, row: UserSettings, actor: ActorContext) -> dict:
-    prefs = session.scalars(
-        select(PrivacyPreference).where(PrivacyPreference.user_id == actor.user_id)
-    ).all()
+    stored = {
+        p.kind: p.enabled
+        for p in session.scalars(
+            select(PrivacyPreference).where(PrivacyPreference.user_id == actor.user_id)
+        )
+    }
     return {
         "theme": row.theme, "language": row.language,
         "notif_email": row.notif_email, "notif_sms": row.notif_sms, "notif_updates": row.notif_updates,
         "version": row.version,
-        "privacy": [{"kind": p.kind, "enabled": p.enabled} for p in prefs],
+        # D3: ALWAYS synthesize the complete canonical set (safe defaults false);
+        # PATCH upserts rows (unique (user_id, kind) enforced by the schema).
+        "privacy": [{"kind": k, "enabled": stored.get(k, False)} for k in PRIVACY_KINDS],
     }
 
 

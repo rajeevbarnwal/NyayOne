@@ -36,7 +36,7 @@ export const EMPTY_PROFILE: ProfileDraft = {
   middleName: '',
   lastName: '',
   fullName: '',
-  preferredLanguage: 'English',
+  preferredLanguage: 'en',
   dateOfBirth: '',
   college: '',
   yearOfStudy: '',

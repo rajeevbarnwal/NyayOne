@@ -74,10 +74,13 @@ def test_profile_get_patch_and_fresh_session(ctx):
     assert p.status_code == 200 and p.json()["first_name"] == "Aditi"
     assert p.json()["masked_mobile"].endswith("3210") and "9876543210" not in p.json()["masked_mobile"]
     up = client.patch("/api/v1/student/profile", headers=h, json={"college": "NLSIU", "year_of_study": "3rd"})
-    assert up.status_code == 200 and up.json()["college"] == "NLSIU"
+    assert up.status_code == 200
+    # D1: legacy submissions map onto CANONICAL wire values
+    assert up.json()["college"] == "National Law School of India University"
+    assert up.json()["year_of_study"] == "3rd"
     with SessionLocal() as s:  # refresh-safe: fresh session sees the persisted value
         reg = s.get(StudentRegistration, rid)
-        assert reg.institution_ref == "NLSIU"
+        assert reg.institution_ref == "National Law School of India University"
 
 
 @pytest.mark.parametrize("bad", [{"college": "   "}, {"college": "x" * 161}, {"nickname": "no"}])
@@ -169,9 +172,109 @@ def test_delete_requires_typed_confirmation_and_real_reauth(ctx):
 
 def test_audit_written_and_pii_free(ctx):
     client, SessionLocal, uid, rid = ctx
-    client.patch("/api/v1/student/profile", headers=_claims(uid), json={"college": "NLSIU"})
+    client.patch("/api/v1/student/profile", headers=_claims(uid), json={"college": "Other"})
     with SessionLocal() as s:
         evs = s.scalars(select(AuditEvent)).all()
         blob = "".join(str(e.after_state) for e in evs)
         assert any(e.action == "student.profile.update" for e in evs)
         assert "9876543210" not in blob and "Aditi" not in blob
+
+
+# ===================== D1/D2/D3 remediation (QA 18c9fba) =====================
+def test_d1_unsupported_college_and_year_rejected(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    r1 = client.patch("/api/v1/student/profile", headers=h, json={"college": "Hogwarts School of Law"})
+    r2 = client.patch("/api/v1/student/profile", headers=h, json={"year_of_study": "9th year"})
+    assert r1.status_code == 422 and r2.status_code == 422
+
+
+def test_d1_legacy_display_labels_map_to_canonical(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    up = client.patch("/api/v1/student/profile", headers=h, json={
+        "college": "National Law School of India University (NLSIU)", "year_of_study": "3rd year"})
+    assert up.status_code == 200
+    assert up.json()["college"] == "National Law School of India University"
+    assert up.json()["year_of_study"] == "3rd"
+
+
+def test_d1_returning_user_reads_canonical_from_legacy_rows(ctx):
+    """Returning user: legacy DB values are mapped on READ without mutation."""
+    client, SessionLocal, uid, rid = ctx
+    from app.models.registration import StudentProfile
+    with SessionLocal() as s:
+        prof = s.scalar(select(StudentProfile).where(StudentProfile.registration_id == rid))
+        if prof is None:
+            prof = StudentProfile(registration_id=rid)
+            s.add(prof)
+        prof.college = "NLSIU"; prof.year_of_study = "3rd year"
+        s.commit()
+    g = client.get("/api/v1/student/profile", headers=_claims(uid))
+    assert g.json()["college"] == "National Law School of India University"
+    assert g.json()["year_of_study"] == "3rd"
+
+
+def test_d1_open_save_without_change_preserves_values(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    client.patch("/api/v1/student/profile", headers=h, json={
+        "college": "National Law School of India University", "year_of_study": "3rd"})
+    g1 = client.get("/api/v1/student/profile", headers=h).json()
+    # simulate open-edit + save-without-modification (echo canonical values back)
+    up = client.patch("/api/v1/student/profile", headers=h, json={
+        "college": g1["college"], "year_of_study": g1["year_of_study"]})
+    assert up.status_code == 200
+    g2 = client.get("/api/v1/student/profile", headers=h).json()
+    assert g2["college"] == g1["college"] and g2["year_of_study"] == g1["year_of_study"]
+
+
+def test_d2_language_enum_fresh_default_and_persistence(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    fresh = client.get("/api/v1/student/settings", headers=h).json()
+    assert fresh["language"] == "en"  # wire code, not a display label
+    ok = client.patch("/api/v1/student/settings", headers=h,
+                      json={"language": "hi", "expected_version": fresh["version"]})
+    assert ok.status_code == 200 and ok.json()["language"] == "hi"
+    with SessionLocal() as s:  # returning user / reload: fresh session shows 'hi'
+        row = s.scalar(select(UserSettings).where(UserSettings.user_id == uid))
+        assert row.language == "hi"
+    bad = client.patch("/api/v1/student/settings", headers=h,
+                       json={"language": "English", "expected_version": ok.json()["version"]})
+    assert bad.status_code == 422  # display labels are rejected at the API boundary
+
+
+def test_d3_fresh_user_gets_all_three_privacy_defaults_false(ctx):
+    client, SessionLocal, uid, rid = ctx
+    fresh = client.get("/api/v1/student/settings", headers=_claims(uid)).json()
+    assert sorted(p["kind"] for p in fresh["privacy"]) == ["analytics", "marketing", "share_partners"]
+    assert all(p["enabled"] is False for p in fresh["privacy"])
+
+
+def test_d3_toggle_each_kind_persists_and_survives_fresh_session(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    v = client.get("/api/v1/student/settings", headers=h).json()["version"]
+    for kind in ("analytics", "marketing", "share_partners"):
+        r = client.patch("/api/v1/student/settings", headers=h,
+                         json={"privacy": [{"kind": kind, "enabled": True}], "expected_version": v})
+        assert r.status_code == 200
+        v = r.json()["version"]
+    final = client.get("/api/v1/student/settings", headers=h).json()
+    assert all(p["enabled"] is True for p in final["privacy"]) and len(final["privacy"]) == 3
+    with SessionLocal() as s:  # exactly one row per kind (uniqueness held on upsert)
+        from app.models.wave1 import PrivacyPreference
+        rows = s.scalars(select(PrivacyPreference).where(PrivacyPreference.user_id == uid)).all()
+        assert len(rows) == 3 and all(r.enabled for r in rows)
+
+
+def test_d3_stale_version_no_partial_privacy_write(ctx):
+    client, SessionLocal, uid, rid = ctx
+    h = _claims(uid)
+    v = client.get("/api/v1/student/settings", headers=h).json()["version"]
+    stale = client.patch("/api/v1/student/settings", headers=h,
+                         json={"privacy": [{"kind": "analytics", "enabled": True}], "expected_version": v + 7})
+    assert stale.status_code == 409
+    now = client.get("/api/v1/student/settings", headers=h).json()
+    assert all(p["enabled"] is False for p in now["privacy"])  # nothing landed
