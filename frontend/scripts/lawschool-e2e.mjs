@@ -187,9 +187,9 @@ await phase('tc-63-01-api', async () => {
       return { actual: { total: it.json?.total, slugs },
         pass: it.json?.total === 6 && JSON.stringify(slugs) === JSON.stringify(NLU_SLUGS) };
     });
-  await tcase('TC-63-01-institution-type-label-rejected', 'institution_type_label_rejected',
-    'label value institution_type=NLU is NOT a wire value → 422 unsupported_institution_type', async () => {
-      const bad = await apiCall('GET', '/api/v1/law-schools?institution_type=NLU');
+  await tcase('TC-63-01-institution-type-bad-param', 'institution_type_bad_param_rejected',
+    'direct bad API param institution_type=not-a-wire-value → 422 unsupported_institution_type', async () => {
+      const bad = await apiCall('GET', '/api/v1/law-schools?institution_type=not-a-wire-value');
       return { actual: { status: bad.status, code: errCode(bad) },
         pass: bad.status === 422 && errCode(bad) === 'unsupported_institution_type' };
     });
@@ -510,21 +510,32 @@ if (browser) {
     await ctx.close();
   });
 
-  /* TC-63-01 — institution-type filter driven by the WIRE VALUE (S-27 reads
-   * filters from URL search params, so this exercises the real UI pipeline).
-   * QA defect #2: a label ('NLU') is never sent; typed error or empty = FAIL. */
+  /* TC-63-01 — institution-type filter: the SELECT WIDGET itself must emit the
+   * canonical wire value (labels are display-only per SAATHI-120/118 fix).
+   * Selecting by visible label proves the label->wire mapping end to end. */
   await phase('ui-institution-type', async () => {
     const ctx = await fresh({ label: 'insttype' });
     const { page } = ctx;
-    await tcase('TC-63-01-ui-institution-type', 'ui_institution_type_wire_value',
-      'institution_type=national_law_university → exactly the 6 NLU schools rendered', async () => {
-        await page.goto(`${base}/s-27?institution_type=national_law_university`);
+    await tcase('TC-63-01-ui-institution-type-select', 'ui_institution_type_select_wire_value',
+      'selecting label "National Law University" sends wire value and renders the 6 NLU schools', async () => {
+        await page.goto(`${base}/s-27`);
+        await page.getByText('12 found').waitFor();
+        await page.getByLabel('Institution type').selectOption({ label: 'National Law University' });
         await page.getByText('6 found').waitFor();
+        const urlParam = new URL(page.url()).searchParams.get('institution_type');
         const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
         const gnlu = await resultsItem(page, 'Gujarat National Law University').count();
         const rgnul = await resultsItem(page, 'Rajiv Gandhi National University of Law').count();
-        return { actual: { rendered: n, gnlu, rgnul }, pass: n === 6 && gnlu === 1 && rgnul === 1,
+        return { actual: { urlParam, rendered: n, gnlu, rgnul },
+          pass: urlParam === 'national_law_university' && n === 6 && gnlu === 1 && rgnul === 1,
           evidence: await shot(page, 's27_institution_type_wire.png') };
+      });
+    await tcase('TC-63-01-ui-institution-type-url', 'ui_institution_type_url_wire_value',
+      'deep link institution_type=national_law_university → exactly the 6 NLU schools rendered', async () => {
+        await page.goto(`${base}/s-27?institution_type=national_law_university`);
+        await page.getByText('6 found').waitFor();
+        const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
+        return { actual: { rendered: n }, pass: n === 6 };
       });
     await ctx.close();
   });
@@ -740,10 +751,11 @@ if (browser) {
    * S-30 saved/followed lists) asserting: no horizontal overflow, >=44px
    * targets, Tab traversal reaching every actionable control in DOM order,
    * zero console/page errors and zero unexpected 4xx/5xx per pair.
-   * The S-27 error state is provoked deterministically with the known
-   * label-value defect (institution_type=NLU → typed 422
-   * unsupported_institution_type rendered as ErrorState); that 422 is the
-   * only allowlisted 4xx in the matrix. */
+   * The S-27 error state is provoked deterministically with a DIRECT bad
+   * API-param probe (institution_type=not-a-wire-value in the deep-link URL,
+   * bypassing the select, which now only emits canonical wire values) →
+   * typed 422 unsupported_institution_type rendered as ErrorState; that 422
+   * is the only allowlisted 4xx in the matrix. */
   await phase('ui-matrix', async () => {
     await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
     await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
@@ -751,12 +763,12 @@ if (browser) {
       for (const theme of ['light', 'dark']) {
         const tag = `${width}-${theme}`;
         const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `mx-${tag}`,
-          allow4xx: [/institution_type=NLU/] });
+          allow4xx: [/institution_type=not-a-wire-value/] });
         const { page } = ctx;
         const states = [
           { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText('12 found').waitFor(), keyboard: true },
           { key: 's27-empty', url: `${base}/s-27?q=zz-no-such-school`, ready: () => page.getByText('No schools match').waitFor(), keyboard: false },
-          { key: 's27-error', url: `${base}/s-27?institution_type=NLU`, ready: () => page.getByText('Could not load law schools').waitFor(), keyboard: false },
+          { key: 's27-error', url: `${base}/s-27?institution_type=not-a-wire-value`, ready: () => page.getByText('Could not load law schools').waitFor(), keyboard: false },
           { key: 's28-detail', url: `${base}/s-28?id=${ids4[0]}`, ready: () => page.getByRole('button', { name: 'Saved ✓' }).waitFor(), keyboard: true },
           { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: false },
           { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: true },
