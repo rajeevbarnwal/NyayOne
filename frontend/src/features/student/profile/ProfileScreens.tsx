@@ -28,14 +28,16 @@ import {
   validateNameParts,
 } from '../lib/registration';
 
-const LANGUAGES = ['English', 'हिन्दी (Hindi)'];
-const COLLEGES = [
-  'National Law School of India University (NLSIU)',
-  'NALSAR University of Law',
-  'The West Bengal NUJS',
-  'Other',
-];
-const YEARS = ['1st year', '2nd year', '3rd year', '4th year · B.A. LL.B. (Hons.)', '5th year', 'LL.M.'];
+import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
+
+const labelForCollege = (v: string | null | undefined) => labelFor(COLLEGE_OPTIONS, toCanonicalCollege(v));
+const labelForYear = (v: string | null | undefined) => labelFor(YEAR_OPTIONS, toCanonicalYear(v));
+const toCanonicalLanguage = (v: string | null | undefined): string =>
+  v === 'English' || v === 'English (en-IN)' ? 'en' : v === 'हिन्दी (Hindi)' || v === 'हिन्दी (hi-IN)' ? 'hi' : (v ?? '');
+
+const LANGUAGES = LANGUAGE_OPTIONS;
+const COLLEGES = COLLEGE_OPTIONS;
+const YEARS = YEAR_OPTIONS;
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
 
@@ -66,7 +68,7 @@ export function ProfileStep1() {
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [middleName, setMiddleName] = useState(initialName.middleName);
   const [lastName, setLastName] = useState(initialName.lastName);
-  const [preferredLanguage, setLang] = useState(d.preferredLanguage || 'English');
+  const [preferredLanguage, setLang] = useState(toCanonicalLanguage(d.preferredLanguage) || 'en');
   const [dateOfBirth, setDob] = useState(d.dateOfBirth);
   const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -339,8 +341,8 @@ export function ProfileView() {
 
   function beginEdit(): void {
     if (!p) return;
-    setCollege(p.college);
-    setYear(p.yearOfStudy);
+    setCollege(toCanonicalCollege(p.college) ?? '');
+    setYear(toCanonicalYear(p.yearOfStudy) ?? '');
     setSaveError(null);
     setEditing(true);
   }
@@ -375,8 +377,8 @@ export function ProfileView() {
             {([
               ['Full name', fullName || 'Not provided'],
               ['Mobile', p.maskedMobile || 'Not provided'],
-              ['College', p.college || 'Not provided'],
-              ['Year of study', p.yearOfStudy || 'Not provided'],
+              ['College', labelForCollege(p.college) || 'Not provided'],
+              ['Year of study', labelForYear(p.yearOfStudy) || 'Not provided'],
             ] as Array<[string, string]>).map(([k, v]) => (
               <div className="st-setrow" key={k}>
                 <div>

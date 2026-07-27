@@ -40,7 +40,9 @@ import {
  */
 
 const SETTINGS_KEY = ['student-settings'] as const;
-const LANGUAGES = ['English', 'हिन्दी (Hindi)'];
+import { LANGUAGE_OPTIONS } from '../lib/catalog';
+
+const LANGUAGES = LANGUAGE_OPTIONS;
 
 function Toggle({ id, on, onToggle, label, disabled }: { id: string; on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
   return (
