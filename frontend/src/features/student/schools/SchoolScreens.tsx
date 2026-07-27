@@ -469,10 +469,13 @@ export function SchoolDetail() {
                 </li>
               </ul>
               <div className="st-actions" style={{ marginTop: 'var(--space-3)' }}>
-                <button type="button" className="btn tap" aria-pressed={d.saved} disabled={saveMut.isPending} onClick={() => saveMut.mutate(d.saved)}>
+                {/* SAATHI-120 QA (TC-63-05): exact, state-specific accessible names so
+                    assistive tech and test locators can never confuse the pre/post
+                    states ("Save" is a prefix of "Saved ✓"). */}
+                <button type="button" className="btn tap" aria-pressed={d.saved} aria-label={d.saved ? 'Saved — remove' : 'Save school'} disabled={saveMut.isPending} onClick={() => saveMut.mutate(d.saved)}>
                   {d.saved ? 'Saved ✓' : 'Save'}
                 </button>
-                <button type="button" className="btn tap" aria-pressed={d.followed} disabled={followMut.isPending} onClick={() => followMut.mutate(d.followed)}>
+                <button type="button" className="btn tap" aria-pressed={d.followed} aria-label={d.followed ? 'Following — unfollow' : 'Follow school'} disabled={followMut.isPending} onClick={() => followMut.mutate(d.followed)}>
                   {d.followed ? 'Following ✓' : 'Follow'}
                 </button>
               </div>
