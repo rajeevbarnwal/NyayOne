@@ -43,7 +43,7 @@ export function seedResumeDraft(): ProfileDraft {
     draft = {
       ...EMPTY_PROFILE,
       fullName: 'Student',
-      preferredLanguage: 'English',
+      preferredLanguage: 'en',
       dateOfBirth: '2004-03-14',
       college: '',
       interests: [],

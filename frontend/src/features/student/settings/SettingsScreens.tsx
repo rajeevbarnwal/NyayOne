@@ -1,16 +1,50 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StudentScreen, TextField, DpdpFootnote } from '../components';
-import type { ThemeMode } from '../../../hooks/useTheme';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { StudentScreen, TextField, SelectField, DpdpFootnote } from '../components';
 import {
-  canSubmitDelete,
-  submitRequest,
-  DELETE_CONFIRM_PHRASE,
-  DEFAULT_NOTIFICATION_PREFS,
-  type DataRequestStatus,
-} from '../lib/dpdp';
+  ErrorState,
+  LoadingState,
+  StatusBadge,
+  ValidationState,
+} from '../../../components/ui/primitives';
+import type { ThemeMode } from '../../../hooks/useTheme';
+import { canSubmitDelete, DELETE_CONFIRM_PHRASE } from '../lib/dpdp';
+import { startRecovery, verifyRecovery } from '../lib/registrationApi';
+import {
+  getStudentSettings,
+  updateStudentSettings,
+  requestDataExport,
+  requestAccountDeletion,
+  getPrivacyRequest,
+  savePrivacyRequestRef,
+  loadPrivacyRequestRef,
+  clearPrivacyRequestRef,
+  SettingsApiError,
+  SETTINGS_CONFLICT_CODE,
+  REAUTH_REQUIRED_CODE,
+  type PrivacyConsentKind,
+  type PrivacyRequestKind,
+  type PrivacyRequestStatus,
+  type StudentSettings,
+  type StudentSettingsPatch,
+  type ThemePreference,
+} from '../lib/settingsApi';
 
-function Toggle({ id, on, onToggle, label }: { id: string; on: boolean; onToggle: () => void; label: string }) {
+/**
+ * S-18/S-19 are server-backed (SAATHI-58/SAATHI-391): GET/PATCH
+ * /api/v1/student/settings with optimistic-concurrency (expected_version;
+ * 409 conflict refetches and shows a non-blocking notice), and the DPDP
+ * export/delete request flow with status polling. PII never touches browser
+ * storage — only the opaque privacy request id is kept in sessionStorage.
+ */
+
+const SETTINGS_KEY = ['student-settings'] as const;
+import { LANGUAGE_OPTIONS } from '../lib/catalog';
+
+const LANGUAGES = LANGUAGE_OPTIONS;
+
+function Toggle({ id, on, onToggle, label, disabled }: { id: string; on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
   return (
     <button
       id={id}
@@ -18,6 +52,7 @@ function Toggle({ id, on, onToggle, label }: { id: string; on: boolean; onToggle
       className="st-toggle"
       aria-pressed={on}
       aria-label={`${label}: ${on ? 'On' : 'Off'}`}
+      disabled={disabled}
       onClick={onToggle}
     >
       {on ? 'On' : 'Off'}
@@ -25,12 +60,89 @@ function Toggle({ id, on, onToggle, label }: { id: string; on: boolean; onToggle
   );
 }
 
+function applyPatch(s: StudentSettings, patch: StudentSettingsPatch): StudentSettings {
+  return {
+    ...s,
+    theme: patch.theme ?? s.theme,
+    language: patch.language ?? s.language,
+    notifEmail: patch.notifEmail ?? s.notifEmail,
+    notifSms: patch.notifSms ?? s.notifSms,
+    notifUpdates: patch.notifUpdates ?? s.notifUpdates,
+    privacy: patch.privacy
+      ? s.privacy.map((p) => patch.privacy?.find((n) => n.kind === p.kind) ?? p)
+      : s.privacy,
+  };
+}
+
+/** Shared optimistic settings PATCH with 409 conflict recovery. */
+function useSettingsPatch() {
+  const qc = useQueryClient();
+  const [conflict, setConflict] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: (input: { patch: StudentSettingsPatch; expectedVersion: number }) =>
+      updateStudentSettings(input.patch, input.expectedVersion),
+    onMutate: async (input) => {
+      setConflict(null);
+      setFailure(null);
+      await qc.cancelQueries({ queryKey: SETTINGS_KEY });
+      const previous = qc.getQueryData<StudentSettings>(SETTINGS_KEY);
+      if (previous) qc.setQueryData<StudentSettings>(SETTINGS_KEY, applyPatch(previous, input.patch));
+      return { previous };
+    },
+    onError: (error, _input, context) => {
+      if (context?.previous) qc.setQueryData<StudentSettings>(SETTINGS_KEY, context.previous);
+      if (error instanceof SettingsApiError && error.status === 409 && error.code === SETTINGS_CONFLICT_CODE) {
+        // Non-blocking: reload the authoritative copy and tell the user.
+        setConflict('Settings changed on another device — showing the latest values. Reapply your change if needed.');
+        void qc.invalidateQueries({ queryKey: SETTINGS_KEY });
+        return;
+      }
+      setFailure('Could not save that change — check your connection and try again.');
+    },
+    onSuccess: (data) => {
+      qc.setQueryData<StudentSettings>(SETTINGS_KEY, data);
+    },
+  });
+  return { mutation, conflict, failure };
+}
+
+function SettingsNotices({ conflict, failure }: { conflict: string | null; failure: string | null }) {
+  return (
+    <>
+      {conflict && (
+        <div className="ui-banner ui-banner--warn" role="status">
+          <span className="ui-banner__mark" aria-hidden>!</span>
+          <span>{conflict}</span>
+        </div>
+      )}
+      {failure && <ValidationState message={failure} />}
+    </>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
-/* S-18 — Notifications & appearance preferences                               */
+/* S-18 — Notifications & appearance preferences (server-backed)               */
 /* -------------------------------------------------------------------------- */
 export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMode; toggleTheme?: () => void }) {
   const nav = useNavigate();
-  const [prefs, setPrefs] = useState(DEFAULT_NOTIFICATION_PREFS);
+  const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: getStudentSettings });
+  const { mutation, conflict, failure } = useSettingsPatch();
+  const s = settings.data;
+
+  function patch(p: StudentSettingsPatch): void {
+    if (!s) return;
+    mutation.mutate({ patch: p, expectedVersion: s.version });
+  }
+
+  function pickTheme(next: ThemePreference): void {
+    patch({ theme: next });
+    // Keep the shell theme in sync immediately for light/dark picks.
+    if ((next === 'light' || next === 'dark') && theme && theme !== next) toggleTheme?.();
+  }
+
+  const signedOut = settings.error instanceof SettingsApiError && settings.error.status === 401;
+
   return (
     <StudentScreen screenId="S-18" className="st-set">
       <div className="st-set__head">
@@ -38,61 +150,78 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
         <h1 className="st-h1">Notifications &amp; appearance</h1>
       </div>
 
-      <section className="st-panel">
-        <h2 className="st-panel__title">Notifications</h2>
-        <div className="st-setrow">
-          <div>
-            <div className="st-setrow__label">Deadline reminders</div>
-            <div className="st-setrow__sub">Exam, moot and internship deadlines.</div>
+      {settings.isPending && <LoadingState label="Loading your settings…" />}
+      {settings.isError && (signedOut ? (
+        <div className="ui-state" role="alert">
+          <p className="ui-state__eyebrow">Signed out</p>
+          <p className="ui-state__title">Sign in to manage settings</p>
+          <div className="ui-state__action">
+            <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button>
           </div>
-          <Toggle
-            id="pref-deadline"
-            on={prefs.deadlineReminders}
-            label="Deadline reminders"
-            onToggle={() => setPrefs((p) => ({ ...p, deadlineReminders: !p.deadlineReminders }))}
-          />
         </div>
-        <div className="st-setrow">
-          <div>
-            <div className="st-setrow__label">Sensitive activity on lock screen</div>
-            <div className="st-setrow__sub">Off by default — never shown on a locked device without your say-so.</div>
-          </div>
-          <Toggle
-            id="pref-lock"
-            on={prefs.lockscreenSensitiveActivity}
-            label="Sensitive activity on lock screen"
-            onToggle={() => setPrefs((p) => ({ ...p, lockscreenSensitiveActivity: !p.lockscreenSensitiveActivity }))}
-          />
-        </div>
-      </section>
+      ) : (
+        <ErrorState title="Could not load settings" detail="Check your connection and retry." onRetry={() => void settings.refetch()} />
+      ))}
 
-      <section className="st-panel">
-        <h2 className="st-panel__title">Appearance</h2>
-        <div className="st-setrow">
-          <div>
-            <div className="st-setrow__label">Theme</div>
-            <div className="st-setrow__sub">Chambers Dark for focused work · Clean Chambers Light for reading.</div>
-          </div>
-          <div className="st-seg" role="group" aria-label="Theme">
-            <button
-              type="button"
-              className="st-seg__btn"
-              aria-pressed={theme === 'light'}
-              onClick={() => theme === 'dark' && toggleTheme?.()}
-            >
-              Light
-            </button>
-            <button
-              type="button"
-              className="st-seg__btn"
-              aria-pressed={theme === 'dark'}
-              onClick={() => theme === 'light' && toggleTheme?.()}
-            >
-              Dark
-            </button>
-          </div>
-        </div>
-      </section>
+      {s && (
+        <>
+          <SettingsNotices conflict={conflict} failure={failure} />
+          <section className="st-panel">
+            <h2 className="st-panel__title">Notifications</h2>
+            <div className="st-setrow">
+              <div>
+                <div className="st-setrow__label">Email notifications</div>
+                <div className="st-setrow__sub">Deadlines, applications and account activity by email.</div>
+              </div>
+              <Toggle id="pref-email" on={s.notifEmail} label="Email notifications" onToggle={() => patch({ notifEmail: !s.notifEmail })} />
+            </div>
+            <div className="st-setrow">
+              <div>
+                <div className="st-setrow__label">SMS notifications</div>
+                <div className="st-setrow__sub">Time-critical alerts to your registered mobile.</div>
+              </div>
+              <Toggle id="pref-sms" on={s.notifSms} label="SMS notifications" onToggle={() => patch({ notifSms: !s.notifSms })} />
+            </div>
+            <div className="st-setrow">
+              <div>
+                <div className="st-setrow__label">Product updates</div>
+                <div className="st-setrow__sub">New features and followed-school admission updates.</div>
+              </div>
+              <Toggle id="pref-updates" on={s.notifUpdates} label="Product updates" onToggle={() => patch({ notifUpdates: !s.notifUpdates })} />
+            </div>
+          </section>
+
+          <section className="st-panel">
+            <h2 className="st-panel__title">Appearance &amp; language</h2>
+            <div className="st-setrow">
+              <div>
+                <div className="st-setrow__label">Theme</div>
+                <div className="st-setrow__sub">Chambers Dark for focused work · Clean Chambers Light for reading.</div>
+              </div>
+              <div className="st-seg" role="group" aria-label="Theme">
+                {(['system', 'light', 'dark'] as ThemePreference[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="st-seg__btn"
+                    aria-pressed={s.theme === t}
+                    onClick={() => pickTheme(t)}
+                  >
+                    {t === 'system' ? 'System' : t === 'light' ? 'Light' : 'Dark'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <SelectField
+              id="pref-language"
+              label="Language"
+              value={s.language}
+              onChange={(v) => v && patch({ language: v })}
+              options={LANGUAGES}
+            />
+          </section>
+        </>
+      )}
 
       <div className="st-actions">
         <button type="button" className="btn tap" onClick={() => nav('/s-19')}>
@@ -104,25 +233,150 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
 }
 
 /* -------------------------------------------------------------------------- */
-/* S-19 — Privacy & DPDP controls                                              */
+/* S-19 — Privacy & DPDP controls (server-backed with status polling)          */
 /* -------------------------------------------------------------------------- */
+
+const REQUEST_BADGE: Record<PrivacyRequestStatus, { s: 'ok' | 'warn' | 'risk' | 'info'; label: string }> = {
+  pending: { s: 'info', label: 'Pending' },
+  processing: { s: 'warn', label: 'Processing' },
+  complete: { s: 'ok', label: 'Complete' },
+  failed: { s: 'risk', label: 'Failed' },
+  cancelled: { s: 'warn', label: 'Cancelled' },
+};
+
+const CONSENT_LABELS: Record<PrivacyConsentKind, { label: string; sub: string }> = {
+  analytics: { label: 'Product analytics', sub: 'Anonymous usage metrics that improve the app.' },
+  marketing: { label: 'Marketing messages', sub: 'Occasional offers and programme announcements.' },
+  share_partners: { label: 'Share with partners', sub: 'Share limited profile data with education partners.' },
+};
+
+/** Poll a DPDP request until it leaves pending/processing. */
+function usePrivacyRequestPolling(kind: PrivacyRequestKind) {
+  const [requestId, setRequestId] = useState<string | null>(() => loadPrivacyRequestRef(kind));
+  const query = useQuery({
+    queryKey: ['privacy-request', kind, requestId],
+    queryFn: () => getPrivacyRequest(requestId as string),
+    enabled: requestId !== null,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      return status === 'pending' || status === 'processing' ? 4000 : false;
+    },
+  });
+  return {
+    requestId,
+    status: query.data?.status ?? (requestId !== null ? ('pending' as PrivacyRequestStatus) : null),
+    statusError: query.isError,
+    refetchStatus: () => void query.refetch(),
+    track(id: string) {
+      savePrivacyRequestRef(kind, id); // opaque id only — never request contents
+      setRequestId(id);
+    },
+    clear() {
+      clearPrivacyRequestRef(kind);
+      setRequestId(null);
+    },
+  };
+}
+
+type DeleteStage = 'reauth-mobile' | 'reauth-otp' | 'confirm';
+
 export function PrivacySettings() {
-  const [exportStatus, setExportStatus] = useState<DataRequestStatus>('idle');
+  const nav = useNavigate();
+  const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: getStudentSettings });
+  const { mutation: settingsMutation, conflict, failure } = useSettingsPatch();
+  const s = settings.data;
+
+  const exportPoll = usePrivacyRequestPolling('export');
+  const deletePoll = usePrivacyRequestPolling('delete');
+
   const [showDelete, setShowDelete] = useState(false);
-  const [reauthed, setReauthed] = useState(false);
+  const [stage, setStage] = useState<DeleteStage>('reauth-mobile');
+  const [mobile, setMobile] = useState('');
+  const [otp, setOtp] = useState('');
+  const [recoveryId, setRecoveryId] = useState('');
   const [typed, setTyped] = useState('');
-  const [deleteStatus, setDeleteStatus] = useState<DataRequestStatus>('idle');
+  const [flowError, setFlowError] = useState<string | null>(null);
 
-  const deleteReady = canSubmitDelete({ typedConfirmation: typed, reauthenticated: reauthed });
+  const exportMut = useMutation({
+    mutationFn: () => requestDataExport(),
+    onSuccess: (res) => exportPoll.track(res.requestId),
+  });
 
-  function doExport() {
-    const req = submitRequest('export', new Date().toISOString());
-    setExportStatus(req.status);
+  const startMut = useMutation({
+    mutationFn: () => startRecovery(mobile.trim()),
+    onSuccess: (id) => {
+      setRecoveryId(id);
+      setStage('reauth-otp');
+      setFlowError(null);
+    },
+    onError: () => setFlowError('Could not start re-authentication. Check the mobile number and retry.'),
+  });
+
+  const verifyMut = useMutation({
+    mutationFn: () => verifyRecovery(recoveryId, otp.trim()),
+    onSuccess: () => {
+      setStage('confirm');
+      setFlowError(null);
+    },
+    onError: () => setFlowError('That code did not match. Try again.'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => requestAccountDeletion({ confirmation: typed.trim(), reauthRecoveryId: recoveryId }),
+    onSuccess: (res) => {
+      deletePoll.track(res.requestId);
+      setFlowError(null);
+    },
+    onError: (error) => {
+      if (error instanceof SettingsApiError && (error.status === 401 || error.code === REAUTH_REQUIRED_CODE)) {
+        setStage('reauth-mobile');
+        setRecoveryId('');
+        setOtp('');
+        setFlowError('Re-authentication expired — verify your mobile again.');
+        return;
+      }
+      if (error instanceof SettingsApiError && error.status === 422) {
+        setFlowError(`Confirmation must be exactly ${DELETE_CONFIRM_PHRASE}.`);
+        return;
+      }
+      setFlowError('Could not submit the deletion request — try again.');
+    },
+  });
+
+  const reauthenticated = stage === 'confirm' && recoveryId !== '';
+  const deleteReady = canSubmitDelete({ typedConfirmation: typed, reauthenticated })
+    && !deleteMut.isPending && deletePoll.status === null;
+
+  function toggleConsent(kind: PrivacyConsentKind): void {
+    if (!s) return;
+    const entry = s.privacy.find((p) => p.kind === kind);
+    if (!entry) return;
+    settingsMutation.mutate({
+      patch: { privacy: [{ kind, enabled: !entry.enabled }] },
+      expectedVersion: s.version,
+    });
   }
-  function doDelete() {
-    if (!deleteReady) return;
-    const req = submitRequest('delete', new Date().toISOString());
-    setDeleteStatus(req.status);
+
+  function requestStatusRow(kind: PrivacyRequestKind, poll: ReturnType<typeof usePrivacyRequestPolling>) {
+    if (poll.status === null) return null;
+    const badge = REQUEST_BADGE[poll.status];
+    return (
+      <div className="ui-banner ui-banner--warn" role="status">
+        <span className="ui-banner__mark" aria-hidden>i</span>
+        <span>
+          {kind === 'export' ? 'Export' : 'Deletion'} request <StatusBadge status={badge.s} label={badge.label} />
+          {poll.statusError && ' · status check failed — '}
+          {poll.statusError && (
+            <button type="button" className="btn tap" onClick={poll.refetchStatus}>Retry</button>
+          )}
+          {(poll.status === 'complete' || poll.status === 'failed' || poll.status === 'cancelled') && (
+            <button type="button" className="btn tap" onClick={poll.clear} style={{ marginLeft: 'var(--space-2)' }}>
+              Dismiss
+            </button>
+          )}
+        </span>
+      </div>
+    );
   }
 
   return (
@@ -133,21 +387,48 @@ export function PrivacySettings() {
       </div>
 
       <section className="st-panel">
+        <h2 className="st-panel__title">Consent preferences</h2>
+        {settings.isPending && <LoadingState label="Loading consent preferences…" />}
+        {settings.isError && (
+          <ErrorState title="Could not load consent preferences" onRetry={() => void settings.refetch()} />
+        )}
+        {s && (
+          <>
+            <SettingsNotices conflict={conflict} failure={failure} />
+            {s.privacy.map((p) => (
+              <div className="st-setrow" key={p.kind}>
+                <div>
+                  <div className="st-setrow__label">{CONSENT_LABELS[p.kind].label}</div>
+                  <div className="st-setrow__sub">{CONSENT_LABELS[p.kind].sub}</div>
+                </div>
+                <Toggle id={`consent-${p.kind}`} on={p.enabled} label={CONSENT_LABELS[p.kind].label} onToggle={() => toggleConsent(p.kind)} />
+              </div>
+            ))}
+          </>
+        )}
+      </section>
+
+      <section className="st-panel">
         <div className="st-setrow">
           <div>
             <div className="st-setrow__label">Download my data</div>
             <div className="st-setrow__sub">Export a copy of your account data.</div>
           </div>
-          <button type="button" className="btn tap" onClick={doExport}>
-            {exportStatus === 'requested' ? 'Requested' : 'Export'}
+          <button
+            type="button"
+            className="btn tap"
+            disabled={exportMut.isPending || exportPoll.status === 'pending' || exportPoll.status === 'processing'}
+            onClick={() => exportMut.mutate()}
+          >
+            {exportPoll.status === 'pending' || exportPoll.status === 'processing' ? 'Requested' : 'Export'}
           </button>
         </div>
-        {exportStatus === 'requested' && (
+        {exportMut.isError && <ValidationState message="Could not request the export — try again." />}
+        {requestStatusRow('export', exportPoll)}
+        {exportPoll.status === 'complete' && (
           <div className="ui-banner ui-banner--warn" role="status">
-            <span className="ui-banner__mark" aria-hidden>
-              i
-            </span>
-            <span>Export requested — we’ll notify you when your copy is ready.</span>
+            <span className="ui-banner__mark" aria-hidden>✓</span>
+            <span>Your export is ready — check your registered email for the secure download.</span>
           </div>
         )}
 
@@ -168,38 +449,74 @@ export function PrivacySettings() {
           </button>
         </div>
 
-        {showDelete && (
+        {requestStatusRow('delete', deletePoll)}
+
+        {showDelete && deletePoll.status === null && (
           <div className="st-panel" style={{ marginTop: 'var(--space-3)', borderColor: 'var(--risk)' }}>
             <p className="st-setrow__sub">
-              This permanently deletes your account. Re-authenticate and type <strong>{DELETE_CONFIRM_PHRASE}</strong> to confirm.
-              You can export your data first.
+              This permanently deletes your account. Re-authenticate with an OTP and type{' '}
+              <strong>{DELETE_CONFIRM_PHRASE}</strong> to confirm. You can export your data first.
             </p>
-            <button
-              type="button"
-              className="st-toggle"
-              aria-pressed={reauthed}
-              onClick={() => setReauthed((v) => !v)}
-              style={{ marginBottom: 'var(--space-3)' }}
-            >
-              {reauthed ? 'Re-authenticated' : 'Re-authenticate'}
-            </button>
-            <TextField id="del-confirm" label={`Type ${DELETE_CONFIRM_PHRASE} to confirm`} value={typed} onChange={setTyped} />
-            <div className="st-actions">
-              <button type="button" className="btn btn--primary tap" disabled={!deleteReady} aria-disabled={!deleteReady} onClick={doDelete}>
-                Delete my account
-              </button>
-            </div>
-            {deleteStatus === 'requested' && (
-              <div className="ui-banner ui-banner--risk" role="alert">
-                <span className="ui-banner__mark" aria-hidden>
-                  !
-                </span>
-                <span>Deletion requested. A support ticket has been created to complete it.</span>
-              </div>
+
+            {stage === 'reauth-mobile' && (
+              <>
+                <TextField
+                  id="del-mobile"
+                  label="Registered mobile number"
+                  value={mobile}
+                  onChange={setMobile}
+                  inputMode="tel"
+                  help="We send a one-time code to re-verify it is you."
+                />
+                <div className="st-actions">
+                  <button type="button" className="btn tap" disabled={startMut.isPending || mobile.trim() === ''} onClick={() => startMut.mutate()}>
+                    {startMut.isPending ? 'Sending…' : 'Send code'}
+                  </button>
+                </div>
+              </>
             )}
+
+            {stage === 'reauth-otp' && (
+              <>
+                <TextField id="del-otp" label="One-time code" value={otp} onChange={setOtp} inputMode="numeric" />
+                <div className="st-actions">
+                  <button type="button" className="btn tap" disabled={verifyMut.isPending || otp.trim() === ''} onClick={() => verifyMut.mutate()}>
+                    {verifyMut.isPending ? 'Verifying…' : 'Verify code'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {stage === 'confirm' && (
+              <>
+                <p className="st-setrow__sub">
+                  <StatusBadge status="ok" label="Re-authenticated" />
+                </p>
+                <TextField id="del-confirm" label={`Type ${DELETE_CONFIRM_PHRASE} to confirm`} value={typed} onChange={setTyped} />
+                <div className="st-actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary tap"
+                    disabled={!deleteReady}
+                    aria-disabled={!deleteReady}
+                    onClick={() => deleteReady && deleteMut.mutate()}
+                  >
+                    {deleteMut.isPending ? 'Submitting…' : 'Delete my account'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {flowError && <ValidationState message={flowError} />}
           </div>
         )}
       </section>
+
+      <div className="st-actions">
+        <button type="button" className="btn tap" onClick={() => nav('/s-18')}>
+          Back to settings
+        </button>
+      </div>
 
       <DpdpFootnote>Data-principal rights honoured · retention exceptions need counsel-approved policy</DpdpFootnote>
     </StudentScreen>
