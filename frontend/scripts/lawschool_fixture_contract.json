@@ -1,0 +1,36 @@
+{
+  "version": "1.0.0-option-c-plus-oracle",
+  "verifiedDate": "2026-07-01",
+  "sourceName": "Institution official website (dev seed)",
+  "compare": { "min": 2, "max": 4 },
+  "factKeys": ["established", "location", "intake", "hostel", "legal_aid_clinics", "moot_teams"],
+  "catalog": [
+    { "slug": "nlsiu-bengaluru", "short": "NLSIU", "name": "National Law School of India University", "city": "Bengaluru", "state": "Karnataka", "region": "South", "established": 1987, "institutionType": "national_law_university", "accreditation": "NAAC A++", "entranceExam": "CLAT", "feesMin": 285000, "feesMax": 320000, "nirfRank": 1, "seats": 120, "legalAidClinics": 8, "mootTeams": 12, "hostel": "Available" },
+    { "slug": "nalsar-hyderabad", "short": "NALSAR", "name": "NALSAR University of Law", "city": "Hyderabad", "state": "Telangana", "region": "South", "established": 1998, "institutionType": "national_law_university", "accreditation": "NAAC A+", "entranceExam": "CLAT", "feesMin": 260000, "feesMax": 300000, "nirfRank": 2, "seats": 132, "legalAidClinics": 7, "mootTeams": 10, "hostel": "Available" },
+    { "slug": "wbnujs-kolkata", "short": "WBNUJS", "name": "The West Bengal National University of Juridical Sciences", "city": "Kolkata", "state": "West Bengal", "region": "East", "established": 1999, "institutionType": "national_law_university", "accreditation": "NAAC A", "entranceExam": "CLAT", "feesMin": 240000, "feesMax": 280000, "nirfRank": 4, "seats": 127, "legalAidClinics": 6, "mootTeams": 11, "hostel": "Available" },
+    { "slug": "nlu-delhi", "short": "NLU Delhi", "name": "National Law University, Delhi", "city": "New Delhi", "state": "Delhi", "region": "North", "established": 2008, "institutionType": "national_law_university", "accreditation": "NAAC A+", "entranceExam": "AILET", "feesMin": 250000, "feesMax": 295000, "nirfRank": 3, "seats": 110, "legalAidClinics": 9, "mootTeams": 9, "hostel": "Available" },
+    { "slug": "gnlu-gandhinagar", "short": "GNLU", "name": "Gujarat National Law University", "city": "Gandhinagar", "state": "Gujarat", "region": "West", "established": 2003, "institutionType": "national_law_university", "accreditation": "NAAC A", "entranceExam": "CLAT", "feesMin": 230000, "feesMax": 270000, "nirfRank": 7, "seats": 180, "legalAidClinics": 6, "mootTeams": 9, "hostel": "Available" },
+    { "slug": "sls-pune", "short": "SLS Pune", "name": "Symbiosis Law School, Pune", "city": "Pune", "state": "Maharashtra", "region": "West", "established": 1977, "institutionType": "deemed", "accreditation": "NAAC A", "entranceExam": "SLAT", "feesMin": 320000, "feesMax": 385000, "nirfRank": 12, "seats": 300, "legalAidClinics": 5, "mootTeams": 8, "hostel": "Available" },
+    { "slug": "jgls-sonipat", "short": "JGLS", "name": "Jindal Global Law School", "city": "Sonipat", "state": "Haryana", "region": "North", "established": 2009, "institutionType": "private", "accreditation": "NAAC A", "entranceExam": "LSAT-India", "feesMin": 550000, "feesMax": 700000, "nirfRank": 5, "seats": 400, "legalAidClinics": 7, "mootTeams": 10, "hostel": "Available" },
+    { "slug": "glc-mumbai", "short": "GLC Mumbai", "name": "Government Law College, Mumbai", "city": "Mumbai", "state": "Maharashtra", "region": "West", "established": 1855, "institutionType": "government", "accreditation": "NAAC B+", "entranceExam": "MH CET Law", "feesMin": 15000, "feesMax": 25000, "nirfRank": 20, "seats": 240, "legalAidClinics": 4, "mootTeams": 6, "hostel": "Available" },
+    { "slug": "du-law-delhi", "short": "DU Law", "name": "Faculty of Law, University of Delhi", "city": "New Delhi", "state": "Delhi", "region": "North", "established": 1924, "institutionType": "government", "accreditation": "NAAC A+", "entranceExam": "DU LLB", "feesMin": 12000, "feesMax": 20000, "nirfRank": 8, "seats": 240, "legalAidClinics": 5, "mootTeams": 7, "hostel": "Available" },
+    { "slug": "ils-pune", "short": "ILS Pune", "name": "ILS Law College, Pune", "city": "Pune", "state": "Maharashtra", "region": "West", "established": 1924, "institutionType": "government", "accreditation": "NAAC A", "entranceExam": "MH CET Law", "feesMin": 40000, "feesMax": 60000, "nirfRank": 15, "seats": 300, "legalAidClinics": 4, "mootTeams": 6, "hostel": "Available" },
+    { "slug": "christ-law-bengaluru", "short": "Christ Law", "name": "Christ University School of Law", "city": "Bengaluru", "state": "Karnataka", "region": "South", "established": 2006, "institutionType": "deemed", "accreditation": "NAAC A+", "entranceExam": "CUET", "feesMin": 210000, "feesMax": 260000, "nirfRank": 18, "seats": 180, "legalAidClinics": 3, "mootTeams": 5, "hostel": "Available" },
+    { "slug": "rgnul-patiala", "short": "RGNUL", "name": "Rajiv Gandhi National University of Law", "city": "Patiala", "state": "Punjab", "region": "North", "established": 2006, "institutionType": "national_law_university", "accreditation": "NAAC A", "entranceExam": "CLAT", "feesMin": 200000, "feesMax": 240000, "nirfRank": 10, "seats": 196, "legalAidClinics": 3, "mootTeams": 6, "hostel": "Available" }
+  ],
+  "s27": {
+    "sort": "name",
+    "page": 1,
+    "pageSize": 6,
+    "filters": {},
+    "total": 12,
+    "pageCount": 2,
+    "visibleSlugs": ["christ-law-bengaluru", "du-law-delhi", "glc-mumbai", "gnlu-gandhinagar", "ils-pune", "jgls-sonipat"]
+  },
+  "s28": { "slug": "nlsiu-bengaluru", "saved": true, "followed": false },
+  "s29": { "slugs": ["nlsiu-bengaluru", "nalsar-hyderabad", "wbnujs-kolkata", "nlu-delhi"], "diffOnly": false },
+  "s30": {
+    "saved": ["nlsiu-bengaluru", "gnlu-gandhinagar"],
+    "followed": ["nlu-delhi", "nalsar-hyderabad"]
+  }
+}

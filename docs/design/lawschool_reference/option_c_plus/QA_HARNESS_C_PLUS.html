@@ -115,8 +115,8 @@ async function run(){
  prog.textContent='Differences only…';
  setVP(1440,900);await sleep(200);O.apply('s29-2');await sleep(140);
  var all=D().querySelectorAll('.attrcard').length,tg=D().getElementById('diffonly');
- row('S-29 · “Differences only” off by default','aria-pressed=false · 11 fact cards','pressed='+(tg?tg.getAttribute('aria-pressed'):'?')+' · '+all+' cards',!!tg&&tg.getAttribute('aria-pressed')==='false'&&all===11);
- var expDiff=(function(){var K=W().LSKIT,a=K.byId('nlsiu'),b=K.byId('nalsar');return K.FACTS.filter(function(f){return f.get(a)!==f.get(b);}).length;})();
+ row('S-29 · “Differences only” off by default','aria-pressed=false · 13 fact cards','pressed='+(tg?tg.getAttribute('aria-pressed'):'?')+' · '+all+' cards',!!tg&&tg.getAttribute('aria-pressed')==='false'&&all===13);
+ var expDiff=(function(){var K=W().LSKIT,a=K.byId('nlsiu-bengaluru'),b=K.byId('nalsar-hyderabad');return (K.FACTS29||K.FACTS).filter(function(f){return f.get(a)!==f.get(b);}).length;})();
  tg.click();await sleep(140);
  var dn=D().querySelectorAll('.attrcard').length,tg2=D().getElementById('diffonly');
  row('S-29 · toggle → differing facts only (nlsiu+nalsar fixture)','aria-pressed=true · '+expDiff+' differing cards','pressed='+tg2.getAttribute('aria-pressed')+' · '+dn+' cards',tg2.getAttribute('aria-pressed')==='true'&&dn===expDiff);

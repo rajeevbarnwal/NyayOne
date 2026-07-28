@@ -137,6 +137,7 @@ const SEARCH_KEYS = [
   'fees_max',
   'sort',
   'page',
+  'page_size',
 ] as const;
 
 /** Extract only the S-27 search/filter keys as a return-context query string. */
@@ -157,6 +158,11 @@ function paramsFromUrl(sp: URLSearchParams): LawSchoolSearchParams {
   const feesMaxRaw = sp.get('fees_max');
   const feesMax = feesMaxRaw ? Number(feesMaxRaw) : NaN;
   const pageRaw = Number(sp.get('page') ?? '1');
+  /* page_size is a supported wire param (backend-validated 1..50). The visual
+   * oracle pins the S-27 baseline to the reference pagination state
+   * (6 records/page — see scripts/lawschool_fixture_contract.json); default
+   * stays 20 for normal navigation. */
+  const pageSizeRaw = Number(sp.get('page_size') ?? '20');
   return {
     q: sp.get('q') ?? undefined,
     state: sp.get('state') ?? undefined,
@@ -167,7 +173,7 @@ function paramsFromUrl(sp: URLSearchParams): LawSchoolSearchParams {
     feesMax: Number.isFinite(feesMax) && feesMax > 0 ? feesMax : undefined,
     sort: isSort(sp.get('sort')) ? (sp.get('sort') as LawSchoolSort) : undefined,
     page: Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1,
-    pageSize: 20,
+    pageSize: Number.isInteger(pageSizeRaw) && pageSizeRaw >= 1 && pageSizeRaw <= 50 ? pageSizeRaw : 20,
   };
 }
 
