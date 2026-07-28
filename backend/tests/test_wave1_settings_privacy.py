@@ -311,7 +311,7 @@ def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
     def alembic(db, *args):
         env = {**os.environ, "DATABASE_URL": f"sqlite+pysqlite:///{db}"}
         return subprocess.run([sys.executable, "-m", "alembic", *args],
-                              capture_output=True, text=True, env=env, cwd=os.getcwd())
+                              capture_output=True, text=True, env=env, cwd=str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 
     import sqlite3
 

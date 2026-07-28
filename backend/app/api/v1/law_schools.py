@@ -20,6 +20,16 @@ from app.models.wave1 import (
 from app.services.law_school_service import CompareError, create_comparison
 
 router = APIRouter(tags=["law-schools"])
+
+# Production-owned SEMANTIC fact order (approved Option C+ contract; SAATHI-63).
+# Alphabetical determinism is NOT the approved order. Unknown keys sort after
+# the approved set, alphabetically, so the projection stays deterministic.
+FACT_SEMANTIC_ORDER = ("established", "location", "intake", "hostel", "legal_aid_clinics", "moot_teams")
+_FACT_RANK = {k: i for i, k in enumerate(FACT_SEMANTIC_ORDER)}
+
+
+def _fact_sort_key(key: str) -> tuple[int, str]:
+    return (_FACT_RANK.get(key, len(FACT_SEMANTIC_ORDER)), key)
 _SORTS = {"name": LawSchool.name, "fees": LawSchool.fees_min, "nirf_rank": LawSchool.nirf_rank}
 
 
@@ -50,8 +60,9 @@ def _detail(session: Session, s: LawSchool, actor: ActorContext) -> dict:
         select(LawSchoolFact, LawSchoolSource)
         .join(LawSchoolSource, LawSchoolFact.source_id == LawSchoolSource.id, isouter=True)
         .where(LawSchoolFact.school_id == s.id)
-        .order_by(LawSchoolFact.key)
+        # ordered in Python by the semantic contract (cross-dialect deterministic)
     ).all()
+    facts = sorted(facts, key=lambda pair: _fact_sort_key(pair[0].key))
     saved = followed = False
     if actor.is_authenticated:
         saved = session.scalar(select(SavedLawSchool).where(
