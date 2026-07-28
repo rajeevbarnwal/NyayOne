@@ -23,7 +23,9 @@ function embeddedResources() {
   const templateOpen = lines.findIndex((l) => l.includes('<script type="__bundler/template">'));
   const manifest = JSON.parse(lines[manifestOpen + 1]);
   const jsKey = Object.keys(manifest).find((k) => manifest[k].mime === 'application/javascript');
-  const lskit = zlib.gunzipSync(Buffer.from(manifest[jsKey].data, 'base64')).toString('utf8');
+  const entry = manifest[jsKey];
+  const raw = Buffer.from(entry.data, 'base64');
+  const lskit = (entry.compressed ? zlib.gunzipSync(raw) : raw).toString('utf8');
   const template = JSON.parse(lines[templateOpen + 1]);
   return { lskit, template };
 }
