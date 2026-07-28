@@ -785,6 +785,7 @@ textarea.st-input {
 .st-screen.st-lawschool {
   max-width: none;
   background: var(--ls-bg);
+  border-inline: 1px solid var(--ls-line);
   color: var(--ls-ink);
   font-family: var(--ls-sans);
   font-size: 14px;
@@ -875,7 +876,7 @@ textarea.st-input {
   letter-spacing: -0.01em;
   color: var(--ls-ink);
 }
-.st-lawschool .ls-lede--profile { margin: 0; font-size: 28px; }
+.st-lawschool h1.ls-lede--profile { margin: 0; font-size: 28px; }
 .st-lawschool .ls-stand { color: var(--ls-ink2); margin: 0; line-height: 1.55; font-size: 13.5px; }
 .st-lawschool .ls-metaline {
   font-family: var(--ls-mono);
@@ -965,6 +966,7 @@ textarea.st-input {
   font-family: var(--ls-serif);
   font-size: 19px;
   font-weight: 600;
+  line-height: normal;
   margin: 0 0 4px;
   color: var(--ls-ink);
 }
@@ -1099,6 +1101,19 @@ textarea.st-input {
 .st-lawschool .ls-acts .btn { flex: 1; min-width: 130px; }
 .st-lawschool .ls-acts--profile { margin-top: 12px; }
 
+/* S-27 has three approved actions: the visible View CTA plus Compare and
+   Save. Keep all three on the reference card's single action row instead of
+   letting the generic 130px button minimum create a second row. View retains
+   its 44px accessible target while the two primary actions share the rest. */
+.st-lawschool--s27 .ls-card .ls-acts {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr);
+}
+.st-lawschool--s27 .ls-card .ls-acts .btn {
+  min-width: 0;
+  padding-inline: 7px;
+}
+
 /* Tool row + inputs (reference .in / .lb). */
 .st-lawschool .ls-toolrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
 .st-lawschool .ls-qrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1198,6 +1213,7 @@ textarea.st-input {
   line-height: 1.5;
   max-width: 560px;
 }
+.st-lawschool .ls-qcard > .ls-helper { max-width: none; }
 .st-lawschool .ls-helper b { font-weight: 800; }
 
 /* S-29 stacked comparison fact cards (reference .attrcard) — indigo differ. */
@@ -1298,9 +1314,20 @@ textarea.st-input {
 .st-lawschool .ls-pnum .ls-n--on { background: var(--ls-ind); border-color: var(--ls-ind); color: var(--ls-ind-ink); }
 .st-lawschool .ls-pl { font-size: 12.5px; font-weight: 700; color: var(--ls-ink2); }
 
+/* At the 390px approved reference width the progress labels stay on one row,
+   while the first three comparison chips each occupy their own flex row. Keep
+   those reference wrap points explicit so font-metric differences cannot
+   reorder the S-29 feature geometry. */
+@media (max-width: 390px) {
+  .st-lawschool--s29 .ls-pnum { flex-wrap: nowrap; }
+  .st-lawschool--s29 .ls-cmprow > .ls-chp:nth-child(-n + 3) {
+    margin-inline-end: calc(100% - 165px);
+  }
+}
+
 /* S-30 group sections. */
 .st-lawschool .ls-sect { margin-top: 16px; }
-.st-lawschool .ls-h2 { font-family: var(--ls-serif); font-size: 19px; font-weight: 600; margin: 0 0 2px; color: var(--ls-ink); }
+.st-lawschool .ls-h2 { font-family: var(--ls-serif); font-size: 19px; font-weight: 600; line-height: normal; margin: 0 0 2px; color: var(--ls-ink); }
 .st-lawschool .ls-sect--saved .ls-h2 { color: var(--ls-pri); }
 .st-lawschool .ls-sect--followed .ls-h2 { color: var(--ls-teal); }
 
@@ -1373,3 +1400,12 @@ textarea.st-input {
   color: var(--ls-ink);
   min-height: 48px;
 }
+
+/* Spacing utilities must come after component defaults. Several elements
+   combine a utility with .ls-metaline/.ls-qcard/.ls-cards; the later component
+   rules previously reset those margins and shifted every approved frame. */
+.st-lawschool .ls-mt2 { margin-top: 2px; }
+.st-lawschool .ls-mt10 { margin-top: 10px; }
+.st-lawschool .ls-mt12 { margin-top: 12px; }
+.st-lawschool .ls-mt14 { margin-top: 14px; }
+.st-lawschool .ls-mt16 { margin-top: 16px; }

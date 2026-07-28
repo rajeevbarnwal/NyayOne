@@ -1168,7 +1168,7 @@ export function SchoolCompare() {
   const items = query.data?.items ?? [];
 
   return (
-    <StudentScreen screenId="S-29" className="st-lawschool">
+    <StudentScreen screenId="S-29" className="st-lawschool st-lawschool--s29">
       <LsShell active="s29" ctx={ret}>
         <div className="ls-wrap">
           <p className="ls-metaline ls-mt14">S-29 · COMPARE YOUR PICKS</p>
