@@ -47,6 +47,12 @@ import {
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
 import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
 import { CalendarMonth, CalendarAdd } from './calendar/CalendarScreens';
+import {
+  CredentialWallet,
+  CredentialAdd,
+  CredentialPending,
+  CredentialShare,
+} from './credentials/CredentialScreens';
 
 /** Props every student screen may receive from the shell (theme is shell-owned). */
 export interface StudentScreenProps {
@@ -111,6 +117,11 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-63': ClinicalPending,
   'S-64': ClinicalVerified,
   'S-65': ClinicalExport,
+  // S17 credential trust (SAATHI-253/258): canonical S-82..S-85.
+  'S-82': CredentialWallet,
+  'S-83': CredentialAdd,
+  'S-84': CredentialPending,
+  'S-85': CredentialShare,
   // S19.1 cross-module calendar (SAATHI-286)
   'S-90': CalendarMonth,
   'S-91': CalendarAdd,

@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     compare_max_schools: int = 4
     compare_min_schools: int = 2
 
+    # --- Wave 3 credential trust (SAATHI-253/258) --------------------------
+    credential_max_file_bytes: int = 10 * 1024 * 1024
+    credential_max_evidence_files: int = 5
+    credential_token_lifetime_days: int = 90
+    credential_public_rate_per_minute: int = 30
+    credential_storage_root: str = "/tmp/legalsaathi_credential_storage"
+    credential_scanner_provider: str = "deterministic"
+    credential_public_base_url: str = "https://localhost:1030/verify"
+    retention_days_credential_audit: int | None = None
+    retention_days_credential_evidence: int | None = None
+
     # OTP delivery must be explicitly enabled + provider-bound in a deployment;
     # otherwise the API fails closed rather than pretending an OTP was sent.
     otp_delivery_enabled: bool = False
@@ -96,6 +107,16 @@ class Settings(BaseSettings):
     jira_board_id: int = 2
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+
+    @field_validator("credential_public_base_url")
+    @classmethod
+    def validate_credential_public_base_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if not normalized.startswith("https://") or not normalized.endswith("/verify"):
+            raise ValueError(
+                "credential_public_base_url must be an HTTPS URL ending in /verify"
+            )
+        return normalized
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
