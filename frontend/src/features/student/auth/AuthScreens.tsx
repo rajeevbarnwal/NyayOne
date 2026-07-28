@@ -126,7 +126,7 @@ export function AuthGate() {
         <>
           <TextField
             id="login-mobile"
-            label="Mobile number"
+            label="Enter your Mobile Number"
             value={mobile}
             onChange={setMobile}
             type="tel"
