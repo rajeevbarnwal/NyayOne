@@ -119,5 +119,5 @@ export function profileTier(d: ProfileDraft): ProfileTier {
 
 export const TIER_LABELS: Record<ProfileTier, string> = {
   incomplete: 'Profile completed',
-  verified_student: 'Verified Student',
+  verified_student: 'Profile completed',
 };

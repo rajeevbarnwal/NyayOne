@@ -292,7 +292,7 @@ export function ProfileDone() {
   const firstName = draft.fullName.trim().split(/\s+/)[0] || 'Student';
   return (
     <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re all set, ${firstName}`}>
-      <p className="st-card__sub">Tier badge earned. Your hub is now personalised.</p>
+      <p className="st-card__sub">Your hub is now personalised.</p>
       <span className="st-badge">
         <span aria-hidden>✓</span> {TIER_LABELS[tier === 'verified_student' ? 'verified_student' : 'incomplete']}
       </span>
