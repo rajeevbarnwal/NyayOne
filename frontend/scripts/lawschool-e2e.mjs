@@ -26,6 +26,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { manifestCounts } from './lib/lawschool_visual_manifest.mjs';
+import {
+  COMPARE_ROWS, FACT_LABELS, verifiedText,
+} from '../src/features/student/schools/lawschoolFormat.mjs';
 
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1050';
 const api = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:1031';
@@ -79,8 +82,13 @@ async function tcase(tc, name, expected, fn) {
     record(tc, name, expected, `uncaught: ${err?.message ?? String(err)}`, false, null);
   }
 }
+/** F1 — typed preflight abort: when the deterministic e2e actors are missing
+ * (ACTOR_SETUP_MISSING) every later phase is skipped so no browser case can
+ * run against an unprovisioned database. */
+let abortAll = false;
 /** Per-phase try/catch: an aborted phase records one FAIL, never kills the run. */
 async function phase(name, fn) {
+  if (abortAll) { console.log(`SKIP phase ${name} (ACTOR_SETUP_MISSING preflight abort)`); return; }
   try { await fn(); } catch (err) {
     record(`${name}-uncaught`, name, 'phase completes without uncaught exception',
       String(err?.stack ?? err).slice(0, 500), false);
@@ -136,6 +144,35 @@ await phase('seed-and-reset', async () => {
     }
   }
   ids4 = COMPARE_SLUGS.map((slug) => bySlug[slug]?.id).filter(Boolean);
+});
+
+/* ---------------- F1 — deterministic actor preflight (typed) ----------------
+ * QA independent_option_c_e843116: a clean PostgreSQL run failed 105 cases
+ * because the dev-claims actors (…00de, …00b2) had no `users` rows and the
+ * save/follow FKs correctly rejected mutations with 500. The repository-owned
+ * setup seam is backend/scripts/seed_e2e_actors.py (idempotent, run against
+ * the migrated database BEFORE this suite). This preflight probes each actor
+ * with an idempotent PUT+DELETE save on one school; anything but 200/200
+ * FAILS the run with typed ACTOR_SETUP_MISSING before any browser case. */
+await phase('actor-preflight', async () => {
+  const probe = bySlug['nlsiu-bengaluru'];
+  const results = [];
+  let ok = !!probe;
+  if (probe) {
+    for (const claims of [USER_A, USER_B]) {
+      const put = await apiCall('PUT', `/api/v1/student/law-schools/${probe.id}/saved`, { claims });
+      const del = await apiCall('DELETE', `/api/v1/student/law-schools/${probe.id}/saved`, { claims });
+      results.push({ sub: claims.sub, put: put.status, del: del.status });
+      if (put.status !== 200 || del.status !== 200) ok = false;
+    }
+  }
+  record('PREFLIGHT-ACTORS', 'e2e_actor_rows_present',
+    'both deterministic dev actors (…00de student, …00b2 student) exist as users rows: idempotent PUT+DELETE saved probe returns 200/200 per actor',
+    ok ? results : { code: 'ACTOR_SETUP_MISSING',
+      remedy: 'run `python backend/scripts/seed_e2e_actors.py` (idempotent) against the migrated database, then re-run this suite',
+      results, catalogFound: !!probe },
+    ok);
+  if (!ok) abortAll = true;
 });
 
 /* ---------------- TC-63-01 — search/filter/sort/pagination (API) ----------- */
@@ -453,11 +490,13 @@ async function tabOrder(page) {
   return { total, reached: firstVisit.length, inDomOrder, missing: total - firstVisit.length };
 }
 
-try {
-  browser = await chromium.launch({ headless: true });
-} catch (err) {
-  record('BROWSER-LAUNCH', 'chromium_launch', 'chromium launches headless',
-    `launch failed: ${err?.message ?? err}`, false);
+if (!abortAll) {
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (err) {
+    record('BROWSER-LAUNCH', 'chromium_launch', 'chromium launches headless',
+      `launch failed: ${err?.message ?? err}`, false);
+  }
 }
 
 if (browser) {
@@ -614,11 +653,11 @@ if (browser) {
       await cta.click();
       await page.waitForURL('**/s-29*');
       await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
-      /* Reference r29 structure: 7 stacked fact cards, each listing every
-       * pick (no table, nothing scrolls sideways). */
+      /* Reference r29 structure: the APPROVED 13 stacked fact cards, each
+       * listing every pick (no table, nothing scrolls sideways). */
       const cards = await page.locator('.ls-attrcard').count();
       const vals = await page.locator('.ls-attrcard').first().locator('li').count();
-      return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 2,
+      return { actual: { cards, valsPerCard: vals }, pass: cards === 13 && vals === 2,
         evidence: await shot(page, 's29_compare_2.png') };
     });
     await tcase('TC-63-04-ui-refresh-replay', 'refresh_state_survives',
@@ -627,16 +666,22 @@ if (browser) {
         await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
         const cards = await page.locator('.ls-attrcard').count();
         const vals = await page.locator('.ls-attrcard').first().locator('li').count();
-        return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 2 };
+        return { actual: { cards, valsPerCard: vals }, pass: cards === 13 && vals === 2 };
       });
-    await tcase('TC-63-03-ui-compare-4', 'compare_table_4_max', '4-school table renders (config max)', async () => {
-      await page.goto(`${base}/s-29?ids=${ids4.join(',')}`);
-      await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
-      const cards = await page.locator('.ls-attrcard').count();
-      const vals = await page.locator('.ls-attrcard').first().locator('li').count();
-      return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 4,
-        evidence: await shot(page, 's29_compare_4.png') };
-    });
+    await tcase('TC-63-03-ui-compare-4', 'compare_table_4_max',
+      '4-school compare renders the APPROVED 13 fact cards in the approved label order (config max)', async () => {
+        await page.goto(`${base}/s-29?ids=${ids4.join(',')}`);
+        await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        const cards = await page.locator('.ls-attrcard').count();
+        const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+        /* label = first text node of .ls-al (excludes the differ/same badge) */
+        const labels = await page.locator('.ls-attrcard .ls-al').evaluateAll(
+          (els) => els.map((el) => (el.childNodes[0]?.textContent ?? '').trim()));
+        const approved = COMPARE_ROWS.map((r) => r.label);
+        return { actual: { cards, valsPerCard: vals, labels },
+          pass: cards === 13 && vals === 4 && JSON.stringify(labels) === JSON.stringify(approved),
+          evidence: await shot(page, 's29_compare_4.png') };
+      });
     await tcase('TC-63-03-ui-fifth-refusal', 'fifth_refusal_typed',
       'fifth school → typed COMPARE_LIMIT_EXCEEDED message, no table', async () => {
         await page.goto(`${base}/s-29?ids=${[...ids4, bySlug['gnlu-gandhinagar'].id].join(',')}`);
@@ -980,6 +1025,7 @@ if (browser) {
     const { pathToFileURL } = await import('node:url');
     const {
       contract: FX, contractChecksum, checksumOfProjection, catalogSlugsByName,
+      fixtureProjection, tokensHash, TOKENS_CSS_RELPATH,
     } = await import('./lawschool_fixture_contract.mjs');
     const refFile = path.resolve('..', 'docs', 'design', 'lawschool_reference', 'option_c_plus', 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
     let pixelmatch = null; let PNG = null;
@@ -1049,11 +1095,7 @@ if (browser) {
           followed: setEq(followedNow, FX.s30.followed) ? FX.s30.followed : followedNow,
         },
       };
-      gate.devChecksum = checksumOfProjection(devProjection);
       gate.devVisibleS27 = devProjection.s27.visibleSlugs;
-      if (gate.devChecksum !== expectedChecksum) {
-        gate.mismatches.push(`developed API projection checksum ${gate.devChecksum} != contract ${expectedChecksum}`);
-      }
       if (seq(devProjection.s27.visibleSlugs) !== seq(FX.s27.visibleSlugs)) {
         gate.mismatches.push(`developed S-27 page-${FX.s27.page} slugs ${seq(devProjection.s27.visibleSlugs)} != contract ${seq(FX.s27.visibleSlugs)}`);
       }
@@ -1096,17 +1138,119 @@ if (browser) {
           document.querySelectorAll('section.st-screen ul.ls-cards h3 a'))
           .map((a) => new URLSearchParams((a.getAttribute('href') || '').split('?')[1] || '').get('id') || ''));
         gate.devDomVisibleS27 = [...new Set(hrefIds)].map((uuid) => slugOfId[uuid] ?? uuid);
+        /* v2: every visible S-27 card's rendered fee string + CTA labels */
+        gate.devDomS27Cards = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen ul.ls-cards > li')).map((li) => ({
+          name: (li.querySelector('h3 a')?.textContent ?? '').trim(),
+          fees: (Array.from(li.querySelectorAll('ul.ls-plain li'))
+            .find((x) => /Costs about/.test(x.textContent || ''))?.querySelector('b')?.textContent ?? '')
+            .replace(/\u00a0/g, ' ').trim(),
+          compareCta: (li.querySelector('button.ls-cmp')?.textContent ?? '').trim(),
+          viewCta: (Array.from(li.querySelectorAll('.ls-acts button'))
+            .map((b) => (b.textContent ?? '').trim()).find((t) => t === 'View')) ?? 'MISSING',
+        })));
         await probeDev.page.goto(`${base}/s-28?id=${idOf(FX.s28.slug)}`);
         await probeDev.page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor();
-        const domLabels = await probeDev.page.evaluate(() => Array.from(
-          document.querySelectorAll('section.st-screen .ls-fact__l')).map((el) => (el.textContent || '').trim()));
-        gate.devDomFactKeys = domLabels.filter((l) => FX.factKeys.includes(l));
+        /* v2: complete S-28 fact-row labels AND values in render order */
+        gate.devDomS28Rows = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen .ls-fact')).map((f) => ({
+          label: (f.querySelector('.ls-fact__l')?.textContent ?? '').trim(),
+          value: (f.querySelector('.ls-fact__v')?.textContent ?? '').trim(),
+        })));
+        const domLabels = gate.devDomS28Rows.map((r) => r.label);
+        const expectedFactLabels = FX.factKeys.map((k) => FACT_LABELS[k] ?? k);
+        gate.devDomFactLabels = domLabels.filter((l) => expectedFactLabels.includes(l));
+        if (seq(gate.devDomFactLabels) !== seq(expectedFactLabels)) {
+          gate.mismatches.push(`developed S-28 rendered fact-row labels ${seq(gate.devDomFactLabels)} != approved ${seq(expectedFactLabels)}`);
+        }
+        /* v2: ALL 13 S-29 rows — rendered labels and per-school values */
+        await probeDev.page.goto(`${base}/s-29?ids=${FX.s29.slugs.map(idOf).join(',')}`);
+        await probeDev.page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        gate.devDomS29 = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen .ls-attrcard')).map((card) => ({
+          label: (card.querySelector('.ls-al')?.childNodes[0]?.textContent ?? '').trim(),
+          values: Array.from(card.querySelectorAll('ul.ls-vals li b')).map((b) => (b.textContent ?? '').trim()),
+        })));
+        if (gate.devDomS29.length !== COMPARE_ROWS.length) {
+          gate.mismatches.push(`developed S-29 renders ${gate.devDomS29.length} fact cards != approved 13`);
+        }
+        /* v2: S-30 group order/names/metalines/CTAs */
+        await probeDev.page.goto(`${base}/s-30`);
+        await probeDev.page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor();
+        gate.devDomS30 = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen section.ls-sect')).map((sect) => ({
+          ariaLabel: sect.getAttribute('aria-label') ?? '',
+          name: (sect.querySelector('h2')?.childNodes[0]?.textContent ?? '').trim(),
+          cta: (sect.querySelector('li.st-item .ls-acts button')?.textContent ?? '').trim(),
+          cards: Array.from(sect.querySelectorAll('li.st-item')).map((li) => ({
+            name: (li.querySelector('h3 a')?.textContent ?? '').trim(),
+            metaline: (li.querySelector('.ls-metaline')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+            viewCta: (Array.from(li.querySelectorAll('.ls-acts button'))
+              .map((b) => (b.textContent ?? '').trim()).find((t) => t === 'View')) ?? 'MISSING',
+          })),
+        })));
       } finally { await probeDev.close(); }
       if (seq(gate.devDomVisibleS27) !== seq(FX.s27.visibleSlugs)) {
         gate.mismatches.push(`developed S-27 rendered card ids ${seq(gate.devDomVisibleS27)} != contract ${seq(FX.s27.visibleSlugs)}`);
       }
-      if (seq(gate.devDomFactKeys) !== seq(FX.factKeys)) {
-        gate.mismatches.push(`developed S-28 rendered fact-row keys ${seq(gate.devDomFactKeys)} != contract ${seq(FX.factKeys)}`);
+
+      /* ---- v2 projection assembly (live API + rendered DOM through the ----
+       * ---- SHARED formatter) and full-scope checksum equality gate      ---- */
+      const nameToSlug = Object.fromEntries(Object.values(bySlug).map((x) => [x.name, x.slug]));
+      const { nirfText } = await import('../src/features/student/schools/lawschoolFormat.mjs');
+      devProjection.s27Cards = (p1.json?.items ?? []).map((sm, i) => ({
+        slug: sm.slug, name: sm.name, state: sm.state, institutionType: sm.institution_type,
+        feesLakh: gate.devDomS27Cards?.[i]?.fees ?? 'MISSING',
+        entranceExam: sm.entrance_exam, nirf: nirfText(sm.nirf_rank),
+        compareCta: gate.devDomS27Cards?.[i]?.compareCta ?? 'MISSING',
+        viewCta: gate.devDomS27Cards?.[i]?.viewCta ?? 'MISSING',
+      }));
+      const domRow = (label) => (gate.devDomS28Rows ?? []).find((r) => r.label === label);
+      devProjection.s28Card = {
+        slug: FX.s28.slug,
+        name: s28det.name,
+        identity: `${s28det.state} · ${s28det.institution_type} · ${s28det.accreditation}.`,
+        essentials: [['exam', 'Entrance exam'], ['fees', 'Fee band (sample)'],
+          ['nirf', 'NIRF rank (sample)'], ['progs', 'Programmes']].map(([key, label]) => ({
+          key, label: domRow(label) ? label : `MISSING:${label}`, value: domRow(label)?.value ?? 'MISSING',
+        })),
+        factRows: FX.factKeys.map((k) => {
+          const f = (s28det.facts ?? []).find((x) => x.key === k);
+          const label = FACT_LABELS[k] ?? k;
+          return {
+            key: k,
+            label: domRow(label) ? label : `MISSING:${label}`,
+            value: f?.value ?? 'MISSING',
+            sourceName: f?.source_name ?? null,
+            freshness: f?.retrieved_at ? verifiedText(f.retrieved_at.slice(0, 10)) : null,
+          };
+        }),
+        saved: !!s28det.saved, followed: !!s28det.followed,
+      };
+      devProjection.s29Rows = {
+        order: cmpSlugs,
+        labels: (gate.devDomS29 ?? []).map((c) => c.label),
+        cards: COMPARE_ROWS.map(({ key }, i) => ({
+          key,
+          label: gate.devDomS29?.[i]?.label ?? 'MISSING',
+          values: gate.devDomS29?.[i]?.values ?? [],
+        })),
+      };
+      devProjection.s30Groups = (gate.devDomS30 ?? []).map((g) => ({
+        name: g.name, ariaLabel: g.ariaLabel, cta: g.cta,
+        slugs: g.cards.map((cd) => nameToSlug[cd.name] ?? cd.name),
+        cards: g.cards.map((cd) => ({
+          slug: nameToSlug[cd.name] ?? cd.name, name: cd.name,
+          metaline: cd.metaline, viewCta: cd.viewCta,
+        })),
+      }));
+      devProjection.tokens = { file: TOKENS_CSS_RELPATH, sha256: tokensHash() };
+      gate.devChecksum = checksumOfProjection(devProjection);
+      if (gate.devChecksum !== expectedChecksum) {
+        const refProj = fixtureProjection();
+        const differing = Object.keys(refProj).filter(
+          (k) => checksumOfProjection(refProj[k] ?? null) !== checksumOfProjection(devProjection[k] ?? null));
+        gate.mismatches.push(`developed v2 projection checksum ${gate.devChecksum} != contract ${expectedChecksum} (differing fields: ${differing.join(', ') || 'none-at-top-level'})`);
       }
     } catch (err) {
       gate.mismatches.push(`fixture gate could not be evaluated: ${err?.message ?? err}`);
@@ -1124,7 +1268,7 @@ if (browser) {
         commit, generatedAt: new Date().toISOString(),
         reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
         oracle: {
-          method: 'feature-region element captures on both sides; dimension-strict (CAPTURE_DIMENSION_MISMATCH on any width/height difference, no percentage computed, no padding ever); top-left content origin aligned by element capture; reference frame width pinned to the developed feature-region width via __opt.setFrame',
+          method: 'feature-region element captures on both sides; TEST-ONLY stylesheet hides global shell (.ls-topbar/.ls-bnav) before every developed capture with a per-pair executable isolation assertion (SHELL_ISOLATION_VIOLATION fail-closed); dimension-strict (CAPTURE_DIMENSION_MISMATCH on any width/height difference, no percentage computed, no padding ever); top-left content origin aligned by element capture; reference frame width pinned to the developed feature-region width via __opt.setFrame',
           developedSelector: 'section.st-screen',
           referenceSelector: '#frame',
           fixtureContract: {
@@ -1161,6 +1305,56 @@ if (browser) {
       await writeManifest();
       return;
     }
+
+    /* ---- F3 — REAL global-shell isolation (TEST-ONLY, capture setup) ----
+     * QA proved the sticky global AppShell (.ls-topbar header, .ls-bnav
+     * mobile nav) overlaps the developed `section.st-screen` locator
+     * screenshots, so "excluded by construction" was false. Before EVERY
+     * developed capture a test-only stylesheet hides the global shell
+     * (production AppShell untouched), then an EXECUTABLE assertion verifies
+     * per pair that (a) every global shell element is hidden and its bounding
+     * box does not intersect the feature region and (b) the first/last
+     * visible children of section.st-screen are feature-local chrome
+     * (header.ls-top / nav.ls-tabbar), i.e. the captured top and bottom rows
+     * belong to the feature. Any violation fails the pair with
+     * SHELL_ISOLATION_VIOLATION before any diff. */
+    const GLOBAL_SHELL_HIDE_CSS = '.ls-topbar, .ls-bnav { display: none !important; }';
+    const shellIsolationProbe = () => {
+      const screen = document.querySelector('section.st-screen');
+      const sBox = screen ? screen.getBoundingClientRect() : null;
+      const shells = [];
+      for (const sel of ['.ls-topbar', '.ls-bnav']) {
+        for (const el of document.querySelectorAll(sel)) {
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          const hidden = cs.display === 'none' || cs.visibility === 'hidden' || (r.width === 0 && r.height === 0);
+          const intersectsFeature = !!sBox && !hidden && r.width > 0 && r.height > 0
+            && r.left < sBox.right && r.right > sBox.left && r.top < sBox.bottom && r.bottom > sBox.top;
+          shells.push({ selector: sel, hidden,
+            box: hidden ? null : { x: r.x, y: r.y, width: r.width, height: r.height },
+            intersectsFeature });
+        }
+      }
+      const visibleChildren = screen ? Array.from(screen.children).filter((el) => {
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && r.height > 0;
+      }) : [];
+      const first = visibleChildren[0] ?? null;
+      const last = visibleChildren[visibleChildren.length - 1] ?? null;
+      const featureLocal = (el) => !!el
+        && el.matches('header.ls-top, nav.ls-tabbar, .ls-wrap, .ls-trace')
+        && !el.matches('.ls-topbar, .ls-bnav');
+      return {
+        screenBox: sBox ? { x: sBox.x, y: sBox.y, width: sBox.width, height: sBox.height } : null,
+        shells,
+        firstChild: first ? { className: String(first.className), featureLocal: featureLocal(first) } : null,
+        lastChild: last ? { className: String(last.className), featureLocal: featureLocal(last) } : null,
+      };
+    };
+    const shellIsolationOk = (iso) => !!iso
+      && iso.shells.every((sh) => sh.hidden && !sh.intersectsFeature)
+      && !!iso.firstChild?.featureLocal && !!iso.lastChild?.featureLocal;
 
     const VIS_SCREENS = [
       { key: 's27',
@@ -1203,6 +1397,11 @@ if (browser) {
                 await dev.page.goto(screen.devUrl());
                 await screen.devReady(dev.page);
                 await dev.page.waitForTimeout(250);
+                /* F3: hide the global sticky shell BEFORE capture (test-only) */
+                await dev.page.addStyleTag({ content: GLOBAL_SHELL_HIDE_CSS });
+                await dev.page.waitForTimeout(50);
+                const shellIsolation = await dev.page.evaluate(shellIsolationProbe);
+                const shellOk = shellIsolationOk(shellIsolation);
                 const devLoc = dev.page.locator('section.st-screen');
                 const devBox = await devLoc.boundingBox();
                 const devMeta = await dev.page.evaluate(() => ({
@@ -1252,8 +1451,9 @@ if (browser) {
                   selector: 'section.st-screen', boundingBox: devBox,
                   pngSize: { width: a.width, height: a.height },
                   sha256: sha256(devPng), ...devMeta,
+                  shellIsolation,
                   consoleErrors: dev.consoleErrors.slice(), pageErrors: dev.pageErrors.slice(), unexpectedHttp: dev.unexpectedHttp.slice(),
-                  exclusions: 'feature-region element capture — global AppShell/top shell/nav excluded by construction',
+                  exclusions: 'feature-region element capture + TEST-ONLY stylesheet hiding .ls-topbar/.ls-bnav before capture; per-pair executable assertion: shell hidden, no bounding-box intersection with section.st-screen, first/last visible children are feature-local chrome',
                 };
                 const referenceRecord = {
                   file: `option_c_plus_visual/${refFileName}`, route: screen.refRoute, state: screen.refState,
@@ -1262,6 +1462,21 @@ if (browser) {
                   sha256: sha256(refPng), ...refMeta,
                   exclusions: 'baseline mode (&baseline=1 + body[data-baseline=1]) hides reviewer tooling; #frame element capture only',
                 };
+                if (!shellOk) {
+                  /* F3 fail-closed: overlapping/unhidden global shell — the
+                   * pair FAILS with no percentage; captures kept as evidence. */
+                  entry = {
+                    pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                    developed: developedRecord, reference: referenceRecord,
+                    diff: { code: 'SHELL_ISOLATION_VIOLATION', shellIsolation,
+                      ratio: null, threshold: VISUAL_THRESHOLD,
+                      approvedDeterministicPair: approved, gate: approved ? 'fail' : 'advisory' },
+                  };
+                  visEntries.push(entry);
+                  return { actual: { code: 'SHELL_ISOLATION_VIOLATION', shellIsolation },
+                    na: !approved, pass: false,
+                    evidence: `option_c_plus_visual/${devFile}` };
+                }
                 if (a.width !== b.width || a.height !== b.height) {
                   /* DIMENSION-STRICT: no percentage, no padding, pair FAILS. */
                   entry = {

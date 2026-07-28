@@ -26,7 +26,7 @@ import { chromium } from 'playwright';
 import { contractChecksum } from './lawschool_fixture_contract.mjs';
 
 /** Approved Option C+ oracle checksum (frozen; must equal contractChecksum()). */
-const APPROVED_CHECKSUM = '49f3bce98b8ae00e7073b6899c6ec65d5dee4d3b9d2ba82f012e6172ba0c74c9';
+const APPROVED_CHECKSUM = '942ff09e326428405a364c89aa5ccb513526c11314d092673f845a25e931809e';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE = path.resolve(

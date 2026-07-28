@@ -11,8 +11,11 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import {
   contract, contractChecksum, checksumOfProjection, fixtureProjection,
-  catalogSlugsByName, factRowsFor, programmesFor,
+  catalogSlugsByName, factRowsFor, programmesFor, s29RowCards, s30Groups, tokensHash,
 } from './lawschool_fixture_contract.mjs';
+import {
+  COMPARE_ROWS, REFERENCE_VERIFIED_DATE,
+} from '../src/features/student/schools/lawschoolFormat.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REF_DIR = path.resolve(HERE, '..', '..', 'docs', 'design', 'lawschool_reference', 'option_c_plus');
@@ -116,5 +119,79 @@ describe('lawschool fixture contract (shared visual-oracle fixture)', () => {
       expect(template.includes(stale)).toBe(false);
     }
     expect(template).toContain('(K.FACTS29||F).map(');
+  });
+});
+
+describe('fixture contract v2 (full visible semantic scope — QA F4)', () => {
+  const APPROVED_LABELS = [
+    'State', 'Institution type', 'Accreditation', 'Entrance exam', 'Fees',
+    'NIRF rank', 'Programmes', 'Established', 'Location', 'Intake', 'Hostel',
+    'Legal aid clinics', 'Moot teams',
+  ];
+
+  it('is versioned v2 and stays date-synced with the shared formatter', () => {
+    expect(contract.version.startsWith('2.')).toBe(true);
+    expect(contract.verifiedDate).toBe(REFERENCE_VERIFIED_DATE);
+    expect(COMPARE_ROWS.map((r) => r.label)).toEqual(APPROVED_LABELS);
+  });
+
+  it('projects ALL 13 approved S-29 rows in order for every compared school', () => {
+    const cards = s29RowCards();
+    expect(cards).toHaveLength(13);
+    expect(cards.map((c) => c.label)).toEqual(APPROVED_LABELS);
+    for (const card of cards) {
+      expect(card.values).toHaveLength(contract.s29.slugs.length);
+      for (const v of card.values) expect(typeof v).toBe('string');
+    }
+    const p = fixtureProjection();
+    expect(p.s29Rows.labels).toEqual(APPROVED_LABELS);
+    expect(p.s29Rows.order).toEqual(contract.s29.slugs);
+    expect(p.s27Cards).toHaveLength(6);
+    for (const c of p.s27Cards) expect(c.feesLakh).toMatch(/^₹.+ L–₹.+ L \/ yr$/);
+    expect(p.s28Card.factRows.map((r) => r.key)).toEqual(contract.factKeys);
+    for (const r of p.s28Card.factRows) {
+      expect(r.label).toBeTruthy();
+      expect(r.sourceName).toBe(contract.sourceName);
+      expect(r.freshness).toBe('Verified 1 Jul 2026');
+    }
+    expect(s30Groups().map((g) => g.name)).toEqual(['Saved', 'Following']);
+    expect(p.tokens.sha256).toBe(tokensHash());
+    expect(p.tokens.sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('FAILS the v2 checksum for a 7-row S-29 projection vs the 13-row reference', () => {
+    /* Explicit regression for the QA finding: the v1 checksum PASSED while the
+     * developed S-29 rendered only seven rows. A projection whose S-29 schema
+     * is truncated to the first seven rows must NEVER checksum-match. */
+    const reference = contractChecksum();
+    const p = fixtureProjection();
+    const sevenRow = {
+      ...p,
+      s29Rows: {
+        ...p.s29Rows,
+        labels: p.s29Rows.labels.slice(0, 7),
+        cards: p.s29Rows.cards.slice(0, 7),
+      },
+    };
+    expect(sevenRow.s29Rows.cards).toHaveLength(7);
+    expect(checksumOfProjection(sevenRow)).not.toBe(reference);
+    /* and the full 13-row projection still matches exactly */
+    expect(checksumOfProjection(p)).toBe(reference);
+  });
+
+  it('covers every v2 semantic field in the checksum (mutation flips it)', () => {
+    const reference = contractChecksum();
+    const mutate = (fn) => {
+      const p = fixtureProjection();
+      fn(p);
+      return checksumOfProjection(p);
+    };
+    expect(mutate((p) => { p.s27Cards[0].feesLakh = '₹1 L–₹2 L / yr'; })).not.toBe(reference);
+    expect(mutate((p) => { p.s28Card.factRows[0].freshness = 'Verified 2 Jul 2026'; })).not.toBe(reference);
+    expect(mutate((p) => { p.s29Rows.cards[4].values[0] = '₹9,99,999–₹9,99,999/yr'; })).not.toBe(reference);
+    expect(mutate((p) => { p.s30Groups.reverse(); })).not.toBe(reference);
+    expect(mutate((p) => { p.s30Groups[0].cards[0].metaline = 'X'; })).not.toBe(reference);
+    expect(mutate((p) => { p.tokens.sha256 = '0'.repeat(64); })).not.toBe(reference);
+    expect(mutate((p) => { p.s29Rows.labels[4] = 'Fees (per year)'; })).not.toBe(reference);
   });
 });

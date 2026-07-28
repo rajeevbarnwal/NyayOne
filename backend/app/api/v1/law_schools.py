@@ -39,11 +39,18 @@ def _summary(s: LawSchool) -> dict:
 
 
 def _detail(session: Session, s: LawSchool, actor: ActorContext) -> dict:
-    progs = session.scalars(select(LawSchoolProgramme).where(LawSchoolProgramme.school_id == s.id)).all()
+    # Deterministic projection order (SAATHI-119 F2): facts by key, programmes
+    # by degree — identical on every dialect/run so the compare endpoint feeds
+    # the approved 13-row S-29 schema deterministically.
+    progs = session.scalars(
+        select(LawSchoolProgramme).where(LawSchoolProgramme.school_id == s.id)
+        .order_by(LawSchoolProgramme.degree)
+    ).all()
     facts = session.execute(
         select(LawSchoolFact, LawSchoolSource)
         .join(LawSchoolSource, LawSchoolFact.source_id == LawSchoolSource.id, isouter=True)
         .where(LawSchoolFact.school_id == s.id)
+        .order_by(LawSchoolFact.key)
     ).all()
     saved = followed = False
     if actor.is_authenticated:
@@ -165,6 +172,7 @@ def list_saved(actor: ActorContext = Depends(_require_student), session: Session
     rows = session.execute(
         select(LawSchool).join(SavedLawSchool, SavedLawSchool.school_id == LawSchool.id)
         .where(SavedLawSchool.user_id == actor.user_id)
+        .order_by(SavedLawSchool.created_at, LawSchool.name)  # deterministic list order (F4)
     ).scalars().all()
     return {"items": [_summary(s) for s in rows]}
 
@@ -174,6 +182,7 @@ def list_followed(actor: ActorContext = Depends(_require_student), session: Sess
     rows = session.execute(
         select(LawSchool, LawSchoolFollow).join(LawSchoolFollow, LawSchoolFollow.school_id == LawSchool.id)
         .where(LawSchoolFollow.user_id == actor.user_id)
+        .order_by(LawSchoolFollow.created_at, LawSchool.name)  # deterministic list order (F4)
     ).all()
     return {"items": [{**_summary(s), "notify_opt_in": f.notify_opt_in} for s, f in rows]}
 

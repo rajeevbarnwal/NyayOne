@@ -28,6 +28,18 @@ import {
   type LawSchoolSort,
   type LawSchoolSummary,
 } from '../lib/lawSchoolsApi';
+import {
+  COMPARE_ROWS,
+  FACT_LABELS,
+  compareRowValue,
+  feesInrBand,
+  feesLakhBand,
+  lakhAmount,
+  verifiedText,
+  referenceSourceFoot,
+  REFERENCE_RESPONSIBLE_COPY,
+  type CompareFormatInput,
+} from './lawschoolFormat.mjs';
 
 /**
  * Query retry policy (F4): never retry typed 4xx (deterministic verdicts such
@@ -96,13 +108,16 @@ function shortName(name: string): string {
     .slice(0, 6);
 }
 
+/* Shared-formatter delegates (SAATHI-118 F2): the SAME functions feed the
+ * fixture contract projection and the reference generator, so INR-raw vs
+ * lakh can never diverge between the developed UI and the reference frame. */
 function lakhText(n: number): string {
-  return `₹${(n / 100000).toFixed(1).replace(/\.0$/, '')} L`;
+  return lakhAmount(n);
 }
 
+/** INR-raw band (reference r28 fee band / r29 fees row). */
 function feesText(s: LawSchoolSummary): string {
-  const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
-  return `${fmt(s.feesMin)}–${fmt(s.feesMax)}/yr`;
+  return feesInrBand(s.feesMin, s.feesMax);
 }
 
 /* ------------------------- compare tray (ids only) ------------------------- */
@@ -634,7 +649,7 @@ export function SchoolSearch() {
                         </div>
                       )}
                       <ul className="ls-plain">
-                        <li><span className="ls-b" aria-hidden="true" />Costs about <b>&nbsp;{feesText(s)}&nbsp;</b> (sample)</li>
+                        <li><span className="ls-b" aria-hidden="true" />Costs about <b>&nbsp;{feesLakhBand(s.feesMin, s.feesMax)}&nbsp;</b> (sample)</li>
                         <li><span className="ls-b" aria-hidden="true" />Admission through {s.entranceExam}</li>
                         <li>
                           <span className="ls-b" aria-hidden="true" />
@@ -857,7 +872,7 @@ export function SchoolDetail() {
                 ))}
                 {d.facts.map((f) => (
                   <div className="ls-fact" key={f.key}>
-                    <div className="ls-fact__l">{f.key}</div>
+                    <div className="ls-fact__l">{FACT_LABELS[f.key] ?? f.key}</div>
                     <div className="ls-fact__v">{f.value}</div>
                     <p className="ls-src">
                       Source: <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{f.sourceName}</a> · retrieved {f.retrievedAt}
@@ -974,18 +989,26 @@ export function SchoolCompare() {
     return items.length >= 2 && new Set(items.map((i) => row.value(i))).size > 1;
   }
 
-  const rows: Array<{ label: string; value: (i: LawSchoolDetailLike) => string }> = [
-    { label: 'State', value: (i) => i.state },
-    { label: 'Institution type', value: (i) => i.institutionType },
-    { label: 'Accreditation', value: (i) => i.accreditation },
-    { label: 'Entrance exam', value: (i) => i.entranceExam },
-    { label: 'Fees (per year)', value: (i) => feesText(i) },
-    { label: 'NIRF rank', value: (i) => (i.nirfRank !== null ? `#${i.nirfRank}` : 'Not ranked') },
-    {
-      label: 'Programmes',
-      value: (i) => (i.programmes.length ? i.programmes.map((p) => `${p.degree} (${p.durationYears} yrs)`).join(', ') : 'Not listed'),
-    },
-  ];
+  /* APPROVED 13-row S-29 schema (SAATHI-63/118 final closure): State,
+   * Institution type, Accreditation, Entrance exam, Fees, NIRF rank,
+   * Programmes, Established, Location, Intake, Hostel, Legal aid clinics,
+   * Moot teams — order, labels and value formatting come from the SHARED
+   * formatter (lawschoolFormat.mjs) that also drives the fixture contract
+   * and the reference generator. */
+  const toFormatInput = (i: LawSchoolDetailLike): CompareFormatInput => ({
+    state: i.state,
+    institutionType: i.institutionType,
+    accreditation: i.accreditation,
+    entranceExam: i.entranceExam,
+    feesMin: i.feesMin,
+    feesMax: i.feesMax,
+    nirfRank: i.nirfRank,
+    programmes: i.programmes,
+    facts: Object.fromEntries(i.facts.map((f) => [f.key, f.value])),
+  });
+  const rows: Array<{ label: string; value: (i: LawSchoolDetailLike) => string }> = COMPARE_ROWS.map(
+    ({ key, label }) => ({ label, value: (i: LawSchoolDetailLike) => compareRowValue(key, toFormatInput(i)) }),
+  );
 
   const visibleRows = diffOnly ? rows.filter((row) => rowDiffers(row)) : rows;
   const items = query.data?.items ?? [];
@@ -1069,7 +1092,7 @@ export function SchoolCompare() {
               )}
             </>
           )}
-          <div className="ls-foot">Server enforces the compare limits · figures cite official sources. {RESPONSIBLE_COPY}</div>
+          <div className="ls-foot">{referenceSourceFoot()}<br />{REFERENCE_RESPONSIBLE_COPY}</div>
         </div>
       </LsShell>
     </StudentScreen>
@@ -1095,6 +1118,7 @@ function BelowMin({ min, max, onBack }: { min: number; max: number; onBack: () =
 
 interface LawSchoolDetailLike extends LawSchoolSummary {
   programmes: Array<{ degree: string; durationYears: number }>;
+  facts: Array<{ key: string; value: string }>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1161,7 +1185,7 @@ export function SchoolSavedFollowed() {
                   </h3>
                 </div>
                 <p className="ls-metaline ls-mt2">
-                  {s.state.toUpperCase()} · {feesText(s).toUpperCase()} (SAMPLE) · VERIFIED SOURCE
+                  {s.state.toUpperCase()} · {feesLakhBand(s.feesMin, s.feesMax).toUpperCase()} (SAMPLE) · {verifiedText().toUpperCase()}
                 </p>
                 <div className="ls-acts">
                   <button type="button" className="btn tap" disabled={actionPending} onClick={() => onAction(s.id)}>
