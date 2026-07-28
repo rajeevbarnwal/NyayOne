@@ -5,10 +5,18 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  APPROVED_SHORT_HANDLES,
   COMPARE_ROWS,
   FACT_LABELS,
   INSTITUTION_TYPE_LABELS,
+  REGIONS,
+  REGION_STATES,
+  S28_FACT_KEY_ORDER,
   compareRowValue,
+  factSourceLine,
+  monogramText,
+  regionOfState,
+  shortHandle,
   feesInrBand,
   feesLakhBand,
   inrAmount,
@@ -126,5 +134,82 @@ describe('labels and freshness copy', () => {
     expect(referenceSourceFoot()).toBe(
       'Source: institution website · sample verification 1 Jul 2026 · prototype data, not production facts',
     );
+  });
+});
+
+/* ------------------- Option C+ reference-owned taxonomy ------------------- */
+
+describe('S-28 essentials literal order (independent of FACT_SEMANTIC_ORDER)', () => {
+  it('freezes the six-key order literally', () => {
+    // Written out verbatim on purpose: a backend ordering regression must FAIL
+    // here rather than be mirrored through a shared constant.
+    expect([...S28_FACT_KEY_ORDER]).toEqual(
+      ['established', 'location', 'intake', 'hostel', 'legal_aid_clinics', 'moot_teams'],
+    );
+  });
+
+  it('labels every literal key with the approved display label', () => {
+    expect(S28_FACT_KEY_ORDER.map((k) => FACT_LABELS[k])).toEqual(
+      ['Established', 'Location', 'Intake', 'Hostel', 'Legal aid clinics', 'Moot teams'],
+    );
+  });
+
+  it('renders the frozen-fixture source row wording from a real retrieved_at', () => {
+    expect(factSourceLine('2026-07-01T05:30:00+05:30')).toBe(
+      'Source: institution website · sample verification 1 Jul 2026 · prototype data, not production facts',
+    );
+    expect(factSourceLine(null)).toBe(referenceSourceFoot());
+  });
+});
+
+describe('approved short handles and monograms (reference SEED shorts)', () => {
+  it('maps all 12 catalogue names to the approved shorts', () => {
+    expect(APPROVED_SHORT_HANDLES).toEqual({
+      'National Law School of India University': 'NLSIU',
+      'NALSAR University of Law': 'NALSAR',
+      'The West Bengal National University of Juridical Sciences': 'WBNUJS',
+      'National Law University, Delhi': 'NLU Delhi',
+      'Gujarat National Law University': 'GNLU',
+      'Symbiosis Law School, Pune': 'SLS Pune',
+      'Jindal Global Law School': 'JGLS',
+      'Government Law College, Mumbai': 'GLC Mumbai',
+      'Faculty of Law, University of Delhi': 'DU Law',
+      'ILS Law College, Pune': 'ILS Pune',
+      'Christ University School of Law': 'Christ Law',
+      'Rajiv Gandhi National University of Law': 'RGNUL',
+    });
+  });
+
+  it('derives reference monograms from the approved short, not word initials', () => {
+    expect(monogramText('NALSAR University of Law')).toBe('NA'); // not 'NU'
+    expect(monogramText('Christ University School of Law')).toBe('CL'); // not 'CU'
+    expect(monogramText('Faculty of Law, University of Delhi')).toBe('DU'); // not 'FO'
+    expect(monogramText('National Law School of India University')).toBe('NL');
+  });
+
+  it('falls back deterministically for names outside the approved map', () => {
+    expect(shortHandle('Some New College of Law')).toBe('SNCL');
+  });
+});
+
+describe('reference region taxonomy (S-27 Where? chips)', () => {
+  it('offers the five reference regions', () => {
+    expect([...REGIONS]).toEqual(['North', 'South', 'East', 'West', 'Central']);
+  });
+
+  it('assigns every catalogue state to its frozen-fixture region', () => {
+    expect(regionOfState('Karnataka')).toBe('South');
+    expect(regionOfState('Telangana')).toBe('South');
+    expect(regionOfState('West Bengal')).toBe('East');
+    expect(regionOfState('Delhi')).toBe('North');
+    expect(regionOfState('Haryana')).toBe('North');
+    expect(regionOfState('Punjab')).toBe('North');
+    expect(regionOfState('Gujarat')).toBe('West');
+    expect(regionOfState('Maharashtra')).toBe('West');
+  });
+
+  it('never maps one state to two regions', () => {
+    const all = REGIONS.flatMap((r) => [...REGION_STATES[r]]);
+    expect(new Set(all).size).toBe(all.length);
   });
 });

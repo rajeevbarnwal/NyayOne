@@ -140,3 +140,101 @@ export function referenceSourceFoot() {
 export const REFERENCE_RESPONSIBLE_COPY =
   'Verify every fact on the institution’s official website before acting on it. '
   + 'This directory shows sample prototype data with source and freshness context; it is not admission guidance.';
+
+/* ----------------- approved display handles / monograms ------------------- */
+
+/**
+ * Approved short display handles (reference LSKIT SEED[].short — frozen
+ * catalogue taxonomy). Keys are the canonical school names returned by the
+ * backend catalogue; values drive S-29 chips/fact rows and the 2-letter
+ * monograms on S-27/S-30 cards. Unknown names fall back to a deterministic
+ * derivation so the UI never breaks on future catalogue rows.
+ */
+export const APPROVED_SHORT_HANDLES = Object.freeze({
+  'National Law School of India University': 'NLSIU',
+  'NALSAR University of Law': 'NALSAR',
+  'The West Bengal National University of Juridical Sciences': 'WBNUJS',
+  'National Law University, Delhi': 'NLU Delhi',
+  'Gujarat National Law University': 'GNLU',
+  'Symbiosis Law School, Pune': 'SLS Pune',
+  'Jindal Global Law School': 'JGLS',
+  'Government Law College, Mumbai': 'GLC Mumbai',
+  'Faculty of Law, University of Delhi': 'DU Law',
+  'ILS Law College, Pune': 'ILS Pune',
+  'Christ University School of Law': 'Christ Law',
+  'Rajiv Gandhi National University of Law': 'RGNUL',
+});
+
+/** Approved short handle with deterministic fallback (initials, stop words dropped). */
+export function shortHandle(name) {
+  const approved = APPROVED_SHORT_HANDLES[name];
+  if (approved) return approved;
+  const words = String(name).split(/[\s,]+/).filter(Boolean);
+  const allCaps = words.find((w) => /^[A-Z]{3,}$/.test(w));
+  if (allCaps) return allCaps;
+  const stop = new Set(['of', 'the', 'and', 'for']);
+  return words
+    .filter((w) => !stop.has(w.toLowerCase()) && /^[A-Za-z]/.test(w))
+    .map((w) => w[0].toUpperCase())
+    .join('')
+    .slice(0, 6);
+}
+
+/** Reference mono(): first two capital letters of the approved short handle. */
+export function monogramText(name) {
+  const m = shortHandle(name).replace(/[^A-Z]/g, '').slice(0, 2);
+  return m || String(name).slice(0, 2).toUpperCase();
+}
+
+/* --------------------- S-28 essentials literal order ---------------------- */
+
+/**
+ * LITERAL S-28 six-key fact order (approved Option C+ S-28 state). Written
+ * out verbatim — intentionally NOT imported from the backend
+ * FACT_SEMANTIC_ORDER — so a production regression in the API ordering is
+ * caught rather than mirrored.
+ */
+export const S28_FACT_KEY_ORDER = Object.freeze([
+  'established',
+  'location',
+  'intake',
+  'hostel',
+  'legal_aid_clinics',
+  'moot_teams',
+]);
+
+/**
+ * Reference COPY.source with real freshness: the per-fact source row uses the
+ * date the fact row was actually retrieved (API retrieved_at), rendered in the
+ * frozen-fixture wording. Falls back to the contract-pinned date.
+ */
+export function factSourceLine(retrievedAtIso) {
+  const iso = retrievedAtIso ? String(retrievedAtIso).slice(0, 10) : REFERENCE_VERIFIED_DATE;
+  return `Source: institution website · sample verification ${verifiedText(iso).replace('Verified ', '')} · prototype data, not production facts`;
+}
+
+/* -------------------------- region taxonomy (S-27) ------------------------ */
+
+/**
+ * Reference "Where would you like to study?" regions (r27 chips). The wire
+ * API filters by state; each region maps to its member states (standard zonal
+ * grouping, consistent with the frozen fixture region assignment for every
+ * catalogue state).
+ */
+export const REGIONS = Object.freeze(['North', 'South', 'East', 'West', 'Central']);
+
+export const REGION_STATES = Object.freeze({
+  North: Object.freeze(['Delhi', 'Haryana', 'Punjab', 'Uttar Pradesh', 'Uttarakhand', 'Himachal Pradesh', 'Rajasthan', 'Chandigarh', 'Jammu and Kashmir']),
+  South: Object.freeze(['Karnataka', 'Telangana', 'Tamil Nadu', 'Kerala', 'Andhra Pradesh', 'Puducherry']),
+  East: Object.freeze(['West Bengal', 'Odisha', 'Bihar', 'Jharkhand', 'Assam']),
+  West: Object.freeze(['Maharashtra', 'Gujarat', 'Goa']),
+  Central: Object.freeze(['Madhya Pradesh', 'Chhattisgarh']),
+});
+
+/** Region containing a state ('' when unmapped). */
+export function regionOfState(state) {
+  for (const region of REGIONS) {
+    if (REGION_STATES[region].includes(state)) return region;
+  }
+  return '';
+}

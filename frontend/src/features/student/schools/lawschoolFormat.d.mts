@@ -26,3 +26,12 @@ export declare function programmesText(progs: Array<{ degree: string; durationYe
 export declare function compareRowValue(key: string, s: CompareFormatInput): string;
 export declare function verifiedText(isoDate?: string): string;
 export declare function referenceSourceFoot(): string;
+
+export declare const APPROVED_SHORT_HANDLES: Readonly<Record<string, string>>;
+export declare function shortHandle(name: string): string;
+export declare function monogramText(name: string): string;
+export declare const S28_FACT_KEY_ORDER: readonly string[];
+export declare function factSourceLine(retrievedAtIso?: string | null): string;
+export declare const REGIONS: readonly string[];
+export declare const REGION_STATES: Readonly<Record<string, readonly string[]>>;
+export declare function regionOfState(state: string): string;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { StudentScreen, SelectField, Checkbox } from '../components';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { StudentScreen, SelectField } from '../components';
 import { useTheme } from '../../../hooks/useTheme';
 import {
   searchLawSchools,
@@ -31,10 +31,18 @@ import {
 import {
   COMPARE_ROWS,
   FACT_LABELS,
+  REGIONS,
+  REGION_STATES,
+  S28_FACT_KEY_ORDER,
   compareRowValue,
+  factSourceLine,
   feesInrBand,
   feesLakhBand,
+  institutionTypeLabel,
   lakhAmount,
+  monogramText,
+  regionOfState,
+  shortHandle,
   verifiedText,
   referenceSourceFoot,
   REFERENCE_RESPONSIBLE_COPY,
@@ -88,24 +96,56 @@ function useRouteArrival(screenKey: string): void {
   }, [screenKey]);
 }
 
-/** Monograms only (frozen decision): 2-letter serif initials, no logos. */
-function monogram(name: string): string {
-  const words = name.split(/[\s,]+/).filter((w) => /^[A-Za-z]/.test(w));
-  return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? '')).toUpperCase();
+/* Monograms + short display handles come from the APPROVED reference
+ * taxonomy (lawschoolFormat.mjs APPROVED_SHORT_HANDLES): reference mono()
+ * derives the 2-letter serif monogram from the approved short, so 'NALSAR
+ * University of Law' renders 'NA' (not word initials). */
+
+/**
+ * Reference display extras derived from each school's REAL fact rows
+ * (location / established / intake) plus its saved flag — the reference
+ * S-27 card metaline ('CITY, STATE · SINCE est'), seats fact and S-30 card
+ * metaline city are fact-backed, not summary columns. One cached detail
+ * query per visible card; every value remains real API data.
+ */
+interface SchoolExtras {
+  cityState: string | null;
+  city: string | null;
+  established: string | null;
+  seats: string | null;
+  saved: boolean | null;
 }
 
-/** Compact display handle for S-29 chips/fact rows (reference uses seeded
- * shorts like "NLSIU"; the live catalogue derives an equivalent handle). */
-function shortName(name: string): string {
-  const words = name.split(/[\s,]+/).filter(Boolean);
-  const allCaps = words.find((w) => /^[A-Z]{3,}$/.test(w));
-  if (allCaps) return allCaps;
-  const stop = new Set(['of', 'the', 'and', 'for']);
-  return words
-    .filter((w) => !stop.has(w.toLowerCase()) && /^[A-Za-z]/.test(w))
-    .map((w) => w[0].toUpperCase())
-    .join('')
-    .slice(0, 6);
+const stripSample = (v: string): string => v.replace(/ \(sample\)$/, '');
+
+function extrasOf(d: LawSchoolDetail | undefined): SchoolExtras {
+  if (!d) return { cityState: null, city: null, established: null, seats: null, saved: null };
+  const fact = (key: string): string | undefined => d.facts.find((f) => f.key === key)?.value;
+  const location = fact('location');
+  const cityState = location ? stripSample(location) : null;
+  const established = fact('established');
+  const intake = fact('intake');
+  return {
+    cityState,
+    city: cityState ? cityState.split(',')[0].trim() : null,
+    established: established ? (/^\d{4}/.exec(established)?.[0] ?? null) : null,
+    seats: intake ? (/^\d+/.exec(intake)?.[0] ?? null) : null,
+    saved: d.saved,
+  };
+}
+
+function useSchoolExtras(ids: string[]): Record<string, SchoolExtras> {
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ['law-school', id],
+      queryFn: () => getLawSchoolDetail(id),
+      retry: lawSchoolsRetry,
+      staleTime: 60_000,
+    })),
+  });
+  const map: Record<string, SchoolExtras> = {};
+  ids.forEach((id, i) => { map[id] = extrasOf(results[i]?.data); });
+  return map;
 }
 
 /* Shared-formatter delegates (SAATHI-118 F2): the SAME functions feed the
@@ -144,6 +184,7 @@ function writeCompareTray(entries: TrayEntry[]): TrayEntry[] {
 
 const SEARCH_KEYS = [
   'q',
+  'region',
   'state',
   'institution_type',
   'degree',
@@ -260,16 +301,13 @@ function Chip({ pressed, label, onClick }: { pressed: boolean; label: string; on
 function LsTags({ followed }: { followed?: boolean }) {
   return (
     <div className="ls-tags">
-      <span className="ls-tag ls-tag--v"><span className="ls-gl" aria-hidden="true" />Verified source</span>
+      <span className="ls-tag ls-tag--v"><span className="ls-gl" aria-hidden="true" />{verifiedText()}</span>
       <span className="ls-tag ls-tag--warn"><span className="ls-gl" aria-hidden="true" />Sample data · prototype</span>
       {followed && <span className="ls-tag ls-tag--teal"><span className="ls-gl" aria-hidden="true" />Following</span>}
     </div>
   );
 }
 
-const RESPONSIBLE_COPY =
-  'Verify every fact on the institution’s official website before acting on it. '
-  + 'This directory shows sample directory data with source context; it is not admission guidance.';
 const DPDP_COPY =
   'Saved and followed lists are stored against your account under the DPDP Act, 2023 — export or delete them anytime in Privacy.';
 const FOLLOW_COPY =
@@ -308,7 +346,6 @@ function QueryFailure({ error, onRetry }: { error: unknown; onRetry: () => void 
 /* S-27 — Guided search & filter (reference r27 structure)                     */
 /* -------------------------------------------------------------------------- */
 
-const STATES = ['Delhi', 'Karnataka', 'Maharashtra', 'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal'];
 /* Filter options emit canonical WIRE values (query params); labels are display-only.
  * institution_type wire values are frozen in backend/app/models/wave1.py INSTITUTION_TYPES. */
 const INSTITUTION_TYPES: Array<{ value: string; label: string }> = [
@@ -343,8 +380,11 @@ const SORT_LABELS: Record<LawSchoolSort, string> = {
 
 export function SchoolSearch() {
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [sp, setSp] = useSearchParams();
   const params = useMemo(() => paramsFromUrl(sp), [sp]);
+  const regionRaw = sp.get('region') ?? '';
+  const region = (REGIONS as readonly string[]).includes(regionRaw) ? regionRaw : '';
   const [qInput, setQInput] = useState(params.q ?? '');
   const [tray, setTray] = useState<TrayEntry[]>(readCompareTray);
   const [trayMsg, setTrayMsg] = useState<string | null>(null);
@@ -355,8 +395,47 @@ export function SchoolSearch() {
 
   const query = useQuery({
     queryKey: ['law-schools', searchContext(sp)],
-    queryFn: () => searchLawSchools(params),
+    queryFn: async () => {
+      if (params.state || !region) return searchLawSchools(params);
+      /* Reference r27 'Where?' chips are REGIONS. The wire API filters by a
+       * single state, so a region answer fans out one real state-filtered
+       * search per member state and merges deterministically, replicating the
+       * server sort. The explicit state wire param (deep links) still wins. */
+      const parts = await Promise.all(
+        REGION_STATES[region].map((st) => searchLawSchools({ ...params, state: st, page: 1, pageSize: 50 })),
+      );
+      const merged = parts.flatMap((part) => part.items);
+      const sortKey = params.sort ?? 'name';
+      merged.sort((a, b) => {
+        if (sortKey === 'fees') return a.feesMin - b.feesMin;
+        if (sortKey === 'nirf_rank') {
+          return (a.nirfRank ?? Number.MAX_SAFE_INTEGER) - (b.nirfRank ?? Number.MAX_SAFE_INTEGER);
+        }
+        return a.name < b.name ? -1 : 1;
+      });
+      const pageSize = params.pageSize ?? 20;
+      const page = params.page ?? 1;
+      return {
+        items: merged.slice((page - 1) * pageSize, page * pageSize),
+        total: merged.length,
+        page,
+        pageSize,
+        compareMax: parts[0]?.compareMax ?? DEFAULT_COMPARE_MAX,
+      };
+    },
     retry: lawSchoolsRetry,
+  });
+
+  /* Reference card action hierarchy: + Compare / Save (aria-pressed) — the
+   * card Save button drives the REAL save/unsave endpoints; detail opens from
+   * the card title link. */
+  const cardSave = useMutation({
+    mutationFn: ({ id, saved }: { id: string; saved: boolean }) => (saved ? unsaveLawSchool(id) : saveLawSchool(id)),
+    onSuccess: (res, vars) => {
+      qc.setQueryData<LawSchoolDetail>(['law-school', vars.id], (d) => (d ? { ...d, saved: res.saved } : d));
+      void qc.invalidateQueries({ queryKey: ['law-schools-saved'] });
+    },
+    onError: () => setTrayMsg('Sign in to save schools — your lists are private to your account.'),
   });
 
   const compareMax = query.data?.compareMax ?? DEFAULT_COMPARE_MAX;
@@ -369,6 +448,16 @@ export function SchoolSearch() {
     if (value) next.set(key, value);
     else next.delete(key);
     if (key !== 'page') next.delete('page');
+    setSp(next);
+  }
+
+  /** Reference 'Where?' answer — a region chip replaces any explicit state. */
+  function setRegion(value: string): void {
+    const next = new URLSearchParams(sp);
+    if (value) next.set('region', value);
+    else next.delete('region');
+    next.delete('state');
+    next.delete('page');
     setSp(next);
   }
 
@@ -396,7 +485,7 @@ export function SchoolSearch() {
   const page = query.data?.page ?? params.page ?? 1;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const whereDone = Boolean(params.state);
+  const whereDone = Boolean(region) || Boolean(params.state);
   const budgetDone = params.feesMax !== undefined;
   const answered = whereDone || budgetDone;
   const sortKey: LawSchoolSort = params.sort ?? 'name';
@@ -404,7 +493,8 @@ export function SchoolSearch() {
   /** Evidence-led "Matches" line — built ONLY from the user's own answers. */
   function whyMatch(s: LawSchoolSummary): string[] {
     const why: string[] = [];
-    if (params.state && s.state === params.state) why.push(`${params.state} — your pick`);
+    if (region && regionOfState(s.state) === region) why.push(`${region} region — your pick`);
+    else if (params.state && s.state === params.state) why.push(`${params.state} — your pick`);
     if (params.feesMax !== undefined && s.feesMax <= params.feesMax) {
       why.push(`fees within ${lakhText(params.feesMax)} (sample)`);
     }
@@ -412,6 +502,8 @@ export function SchoolSearch() {
   }
 
   useRouteArrival('S-27');
+
+  const extras = useSchoolExtras(query.data ? query.data.items.map((i) => i.id) : []);
 
   return (
     <StudentScreen screenId="S-27" className="st-lawschool st-lawschool--s27">
@@ -437,7 +529,7 @@ export function SchoolSearch() {
             <span className="ls-metaline">CATALOGUE {query.data ? total : '…'} · LIMIT (CONFIG) {compareMax}</span>
           </section>
 
-          <p className="ls-metaline ls-mt14">S-27 · GUIDED SEARCH · SAMPLE DATA</p>
+          <p className="ls-metaline ls-mt14">S-27 · GUIDED SEARCH · {verifiedText().toUpperCase()} · SAMPLE DATA</p>
           <h1 className="ls-lede">Let’s find your law school.</h1>
           <p className="ls-stand">
             Answer two quick questions — or skip straight to the list. Every fact shows its source,
@@ -457,7 +549,7 @@ export function SchoolSearch() {
                 <span className="ls-n" aria-hidden="true">{whereDone ? '✓' : '1'}</span>
                 <div>
                   <div className="ls-l">Where?</div>
-                  <div className="ls-s">{params.state ?? 'Anywhere'}</div>
+                  <div className="ls-s">{region || params.state || 'Anywhere'}</div>
                 </div>
               </div>
               <div className="ls-stp" data-done={budgetDone ? 1 : 0} data-cur={whereDone && !budgetDone ? 1 : 0}>
@@ -481,11 +573,11 @@ export function SchoolSearch() {
           <div className="ls-duo">
             <section className="ls-qcard">
               <h2>Where would you like to study?</h2>
-              <p className="ls-why">We’ll show schools in that state first.</p>
-              <div className="ls-chips" role="group" aria-label="State">
-                <Chip pressed={!params.state} label="Anywhere" onClick={() => setParam('state', '')} />
-                {STATES.map((s) => (
-                  <Chip key={s} pressed={params.state === s} label={s} onClick={() => setParam('state', s)} />
+              <p className="ls-why">We’ll show schools in that part of India first.</p>
+              <div className="ls-chips" role="group" aria-label="Region">
+                <Chip pressed={!region && !params.state} label="Anywhere" onClick={() => setRegion('')} />
+                {REGIONS.map((r) => (
+                  <Chip key={r} pressed={region === r} label={r} onClick={() => setRegion(r)} />
                 ))}
               </div>
             </section>
@@ -514,14 +606,6 @@ export function SchoolSearch() {
               onClick={() => setShowSearch((v) => !v)}
             >
               {showSearch ? 'Hide search' : 'Or search by name ⌕'}
-            </button>
-            <button
-              type="button"
-              className="btn ls-ghost tap"
-              aria-expanded={showFilters}
-              onClick={() => setShowFilters((v) => !v)}
-            >
-              {showFilters ? 'Hide filters' : 'More filters'}
             </button>
             <span className="ls-flex1" />
             <label className="ls-lb ls-lb--inline" htmlFor="ls-sort">Order</label>
@@ -560,30 +644,35 @@ export function SchoolSearch() {
                   <button type="submit" className="btn ls-solid tap">Search</button>
                 </div>
               </form>
-            </section>
-          )}
-
-          {showFilters && (
-            <section className="ls-qcard ls-mt10" aria-label="More filters">
-              <h2>More filters</h2>
-              <p className="ls-why">Every filter sends its canonical wire value — labels are display-only.</p>
-              <div className="ls-filtergrid">
-                <SelectField id="f-type" label="Institution type" value={params.institutionType ?? ''} onChange={(v) => setParam('institution_type', v)} options={INSTITUTION_TYPES} />
-                <SelectField id="f-degree" label="Degree" value={params.degree ?? ''} onChange={(v) => setParam('degree', v)} options={DEGREES} />
-                <SelectField id="f-accr" label="Accreditation" value={params.accreditation ?? ''} onChange={(v) => setParam('accreditation', v)} options={ACCREDITATIONS} />
-                <SelectField id="f-exam" label="Entrance exam" value={params.entranceExam ?? ''} onChange={(v) => setParam('entrance_exam', v)} options={ENTRANCE_EXAMS} />
-                <label className="st-field" htmlFor="f-fees">
-                  <span className="st-field__label">Max fees (₹/yr)</span>
-                  <input
-                    id="f-fees"
-                    className="ls-in"
-                    type="number"
-                    min={0}
-                    value={params.feesMax ?? ''}
-                    onChange={(e) => setParam('fees_max', e.target.value)}
-                  />
-                </label>
-              </div>
+              {/* Advanced wire filters live inside the search disclosure —
+                  the reference default S-27 frame shows no filter chrome. */}
+              <button
+                type="button"
+                className="btn ls-ghost tap ls-mt12"
+                aria-expanded={showFilters}
+                onClick={() => setShowFilters((v) => !v)}
+              >
+                {showFilters ? 'Hide filters' : 'More filters'}
+              </button>
+              {showFilters && (
+                <div className="ls-filtergrid ls-mt12" role="group" aria-label="More filters">
+                  <SelectField id="f-type" label="Institution type" value={params.institutionType ?? ''} onChange={(v) => setParam('institution_type', v)} options={INSTITUTION_TYPES} />
+                  <SelectField id="f-degree" label="Degree" value={params.degree ?? ''} onChange={(v) => setParam('degree', v)} options={DEGREES} />
+                  <SelectField id="f-accr" label="Accreditation" value={params.accreditation ?? ''} onChange={(v) => setParam('accreditation', v)} options={ACCREDITATIONS} />
+                  <SelectField id="f-exam" label="Entrance exam" value={params.entranceExam ?? ''} onChange={(v) => setParam('entrance_exam', v)} options={ENTRANCE_EXAMS} />
+                  <label className="st-field" htmlFor="f-fees">
+                    <span className="st-field__label">Max fees (₹/yr)</span>
+                    <input
+                      id="f-fees"
+                      className="ls-in"
+                      type="number"
+                      min={0}
+                      value={params.feesMax ?? ''}
+                      onChange={(e) => setParam('fees_max', e.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
             </section>
           )}
 
@@ -630,10 +719,12 @@ export function SchoolSearch() {
                 {query.data.items.map((s) => {
                   const inTray = trayIds.includes(s.id);
                   const why = whyMatch(s);
+                  const ex = extras[s.id];
+                  const saved = ex?.saved ?? false;
                   return (
                     <li className="st-item ls-card" key={s.id}>
                       <div className="ls-hd">
-                        <span className="ls-mg" aria-hidden="true">{monogram(s.name)}</span>
+                        <span className="ls-mg" aria-hidden="true">{monogramText(s.name)}</span>
                         <h3 className="ls-name">
                           <Link to={`/s-28?id=${encodeURIComponent(s.id)}${ctx ? `&ret=${encodeURIComponent(ctx)}` : ''}`}>
                             {s.name}
@@ -641,7 +732,7 @@ export function SchoolSearch() {
                         </h3>
                       </div>
                       <p className="ls-metaline ls-mt2">
-                        {s.state.toUpperCase()} · {s.institutionType.toUpperCase()}
+                        {(ex?.cityState ?? s.state).toUpperCase()} · SINCE {ex?.established ?? '—'}
                       </p>
                       {why.length > 0 && (
                         <div className="ls-match">
@@ -650,11 +741,8 @@ export function SchoolSearch() {
                       )}
                       <ul className="ls-plain">
                         <li><span className="ls-b" aria-hidden="true" />Costs about <b>&nbsp;{feesLakhBand(s.feesMin, s.feesMax)}&nbsp;</b> (sample)</li>
+                        <li><span className="ls-b" aria-hidden="true" />{ex?.seats ?? '—'} UG seats last cycle (sample)</li>
                         <li><span className="ls-b" aria-hidden="true" />Admission through {s.entranceExam}</li>
-                        <li>
-                          <span className="ls-b" aria-hidden="true" />
-                          {s.nirfRank !== null ? <>NIRF rank <b>&nbsp;#{s.nirfRank}&nbsp;</b> (sample)</> : 'Not NIRF-ranked (sample)'}
-                        </li>
                       </ul>
                       <LsTags />
                       <div className="ls-acts">
@@ -669,13 +757,16 @@ export function SchoolSearch() {
                         </button>
                         <button
                           type="button"
-                          className="btn tap"
-                          onClick={() => nav(`/s-28?id=${encodeURIComponent(s.id)}${ctx ? `&ret=${encodeURIComponent(ctx)}` : ''}`)}
+                          className="btn tap ls-save"
+                          aria-pressed={saved}
+                          aria-label={saved ? 'Saved — remove' : 'Save school'}
+                          disabled={cardSave.isPending && cardSave.variables?.id === s.id}
+                          onClick={() => cardSave.mutate({ id: s.id, saved })}
                         >
-                          View
+                          {saved ? <><span aria-hidden="true">★ </span>Saved</> : 'Save'}
                         </button>
                       </div>
-                      <p className="ls-src">Source: institution website · sample directory data · verify before applying</p>
+                      <p className="ls-src">{referenceSourceFoot()}</p>
                     </li>
                   );
                 })}
@@ -693,7 +784,7 @@ export function SchoolSearch() {
               </nav>
             )}
           </section>
-          <div className="ls-foot">{RESPONSIBLE_COPY}</div>
+          <div className="ls-foot">{REFERENCE_RESPONSIBLE_COPY}</div>
         </div>
       </LsShell>
     </StudentScreen>
@@ -710,7 +801,6 @@ export function SchoolDetail() {
   const qc = useQueryClient();
   const id = sp.get('id') ?? '';
   const ret = sp.get('ret') ?? '';
-  const [notifyOptIn, setNotifyOptIn] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [tray, setTray] = useState<TrayEntry[]>(readCompareTray);
   const trayIds = tray.map((t) => t.id);
@@ -732,8 +822,11 @@ export function SchoolDetail() {
     onError: (err) => setActionError(errText(err, 'Could not update saved state.')),
   });
 
+  /* Follow keeps the persisted opt-in wire flag (default true) — the approved
+   * S-28 state carries no separate notification checkbox; the Follow action
+   * IS the opt-in per the corrected reference copy. */
   const followMut = useMutation({
-    mutationFn: (followed: boolean) => (followed ? unfollowLawSchool(id) : followLawSchool(id, notifyOptIn)),
+    mutationFn: (followed: boolean) => (followed ? unfollowLawSchool(id) : followLawSchool(id, true)),
     onSuccess: (res) => {
       setActionError(null);
       qc.setQueryData<LawSchoolDetail>(['law-school', id], (d) => (d ? { ...d, followed: res.followed } : d));
@@ -767,6 +860,7 @@ export function SchoolDetail() {
 
   const notFound = query.error instanceof LawSchoolsApiError && query.error.code === SCHOOL_NOT_FOUND;
   const d = query.data;
+  const ex28 = extrasOf(d);
 
   return (
     <StudentScreen screenId="S-28" className="st-lawschool">
@@ -801,10 +895,12 @@ export function SchoolDetail() {
                 ‹ Back to schools
               </button>
               <div className="ls-idrow">
-                <span className="ls-mg ls-mg--lg" aria-hidden="true">{monogram(d.name)}</span>
+                <span className="ls-mg ls-mg--lg" aria-hidden="true">{monogramText(d.name)}</span>
                 <div>
                   <h1 className="ls-lede ls-lede--profile">{d.name}</h1>
-                  <p className="ls-stand">{d.state} · {d.institutionType} · {d.accreditation}.</p>
+                  <p className="ls-stand">
+                    {ex28.cityState ?? d.state} · {institutionTypeLabel(d.institutionType)} · teaching law since {ex28.established ?? '—'}.
+                  </p>
                 </div>
               </div>
               <LsTags followed={d.followed} />
@@ -845,9 +941,6 @@ export function SchoolDetail() {
                   implied notification queue. The opt-in flag is still sent to
                   the follow endpoint unchanged (functional behaviour kept). */}
               <p className="ls-helper ls-followcopy">{FOLLOW_COPY}</p>
-              {!d.followed && (
-                <Checkbox id="follow-notify" label="Include admission updates if notifications launch" checked={notifyOptIn} onChange={setNotifyOptIn} />
-              )}
               {actionError && <p className="ls-err" role="alert">{actionError}</p>}
               <section className="ls-qcard ls-mt16" aria-label="The essentials">
                 <h2>The essentials</h2>
@@ -867,31 +960,45 @@ export function SchoolDetail() {
                   <div className="ls-fact" key={row.key}>
                     <div className="ls-fact__l">{row.label}</div>
                     <div className="ls-fact__v">{row.value}</div>
-                    <p className="ls-src">Source: institution website · sample directory data</p>
+                    <p className="ls-src">{referenceSourceFoot()}</p>
                   </div>
                 ))}
-                {d.facts.map((f) => (
-                  <div className="ls-fact" key={f.key}>
-                    <div className="ls-fact__l">{FACT_LABELS[f.key] ?? f.key}</div>
-                    <div className="ls-fact__v">{f.value}</div>
-                    <p className="ls-src">
-                      Source: <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{f.sourceName}</a> · retrieved {f.retrievedAt}
-                    </p>
-                  </div>
-                ))}
+                {[...d.facts]
+                  .sort((a, b) => {
+                    const rank = (k: string): number => {
+                      const i = S28_FACT_KEY_ORDER.indexOf(k);
+                      return i < 0 ? S28_FACT_KEY_ORDER.length : i;
+                    };
+                    return rank(a.key) - rank(b.key);
+                  })
+                  .map((f) => (
+                    <div className="ls-fact" key={f.key}>
+                      <div className="ls-fact__l">{FACT_LABELS[f.key] ?? f.key}</div>
+                      <div className="ls-fact__v">{f.value}</div>
+                      <p className="ls-src">
+                        {/* Reference source-row density: frozen-fixture wording with the
+                            fact's REAL retrieved_at date; the provenance link stays live
+                            (target-size met via layout-neutral padding, see student.css). */}
+                        {f.sourceUrl
+                          ? <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{factSourceLine(f.retrievedAt)}</a>
+                          : factSourceLine(f.retrievedAt)}
+                      </p>
+                    </div>
+                  ))}
                 {d.facts.length === 0 && (
                   <p className="ls-stand ls-mt10">
                     No further verified facts are published yet — we only show facts with a source and verification date.
                   </p>
                 )}
                 <div className="ls-helper ls-mt12">
-                  <b>What’s “NIRF rank”?</b> NIRF is the government’s National Institutional Ranking
-                  Framework. We show a rank only where NIRF (Law) publishes one — never our own ranking.
+                  <b>What’s “NIRF band”?</b> NIRF is the government’s National Institutional Ranking
+                  Framework. We show a band only where NIRF (Law) publishes one — never our own
+                  ranking. Rank shown only where NIRF (Law) publishes it · sample rank for prototype.
                 </div>
               </section>
             </>
           )}
-          <div className="ls-foot">{RESPONSIBLE_COPY} {DPDP_COPY}</div>
+          <div className="ls-foot">{REFERENCE_RESPONSIBLE_COPY} {DPDP_COPY}</div>
         </div>
       </LsShell>
     </StudentScreen>
@@ -1038,7 +1145,7 @@ export function SchoolCompare() {
               <div className="ls-cmprow">
                 {items.map((i) => (
                   <span className="ls-chp ls-chp--on ls-chp--static" key={i.id}>
-                    <span className="ls-ckg" aria-hidden="true">✓ </span>{shortName(i.name)}
+                    <span className="ls-ckg" aria-hidden="true">✓ </span>{shortHandle(i.name)}
                     <button
                       type="button"
                       className="ls-ibtn ls-x"
@@ -1064,8 +1171,7 @@ export function SchoolCompare() {
                 </button>
               </div>
               <p className="ls-metaline ls-mt10">
-                EACH FACT CARD LISTS ALL YOUR PICKS — NOTHING SCROLLS SIDEWAYS.
-                {diffOnly ? ` ${visibleRows.length} OF ${rows.length} FACTS DIFFER ·` : ''} SAMPLE DATA
+                {`EACH FACT CARD LISTS ALL YOUR PICKS — NOTHING SCROLLS SIDEWAYS. ${diffOnly ? `${visibleRows.length} OF ${rows.length} FACTS DIFFER · ` : ''}${verifiedText().toUpperCase()} · SAMPLE DATA`}
               </p>
               <div className="ls-cards" data-cmp-cards="1">
                 {visibleRows.map((row) => {
@@ -1080,7 +1186,7 @@ export function SchoolCompare() {
                       </div>
                       <ul className="ls-vals">
                         {items.map((i) => (
-                          <li key={i.id}><span>{shortName(i.name)}</span><b>{row.value(i)}</b></li>
+                          <li key={i.id}><span>{shortHandle(i.name)}</span><b>{row.value(i)}</b></li>
                         ))}
                       </ul>
                     </div>
@@ -1149,6 +1255,11 @@ export function SchoolSavedFollowed() {
 
   useRouteArrival('S-30');
 
+  const extras30 = useSchoolExtras([
+    ...(savedQ.data ?? []).map((s) => s.id),
+    ...(followedQ.data ?? []).map((s) => s.id),
+  ]);
+
   const browse = () => nav(ret ? `/s-27?${ret}` : '/s-27');
 
   function group(
@@ -1177,7 +1288,7 @@ export function SchoolSavedFollowed() {
             {q.data.map((s) => (
               <li className="st-item ls-card" key={s.id}>
                 <div className="ls-hd">
-                  <span className="ls-mg" aria-hidden="true">{monogram(s.name)}</span>
+                  <span className="ls-mg" aria-hidden="true">{monogramText(s.name)}</span>
                   <h3 className="ls-name">
                     <Link to={`/s-28?id=${encodeURIComponent(s.id)}${ret ? `&ret=${encodeURIComponent(ret)}` : ''}`}>
                       {s.name}
@@ -1185,7 +1296,7 @@ export function SchoolSavedFollowed() {
                   </h3>
                 </div>
                 <p className="ls-metaline ls-mt2">
-                  {s.state.toUpperCase()} · {feesLakhBand(s.feesMin, s.feesMax).toUpperCase()} (SAMPLE) · {verifiedText().toUpperCase()}
+                  {(extras30[s.id]?.city ?? s.state).toUpperCase()} · {feesLakhBand(s.feesMin, s.feesMax).toUpperCase()} (SAMPLE) · {verifiedText().toUpperCase()}
                 </p>
                 <div className="ls-acts">
                   <button type="button" className="btn tap" disabled={actionPending} onClick={() => onAction(s.id)}>
@@ -1230,7 +1341,7 @@ export function SchoolSavedFollowed() {
               )}
             </>
           )}
-          <div className="ls-foot">{DPDP_COPY} Saved and Following are private to your account · notification preferences will live in Settings (S-18) when notifications launch.</div>
+          <div className="ls-foot">{DPDP_COPY}</div>
         </div>
       </LsShell>
     </StudentScreen>
