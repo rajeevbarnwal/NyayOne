@@ -515,9 +515,7 @@ def test_seed_facts_match_shared_fixture_contract(ctx):
 # accreditation, entrance_exam, fees_min+fees_max, nirf_rank, programmes) plus
 # the six 0006-backfilled facts with source/freshness — for EVERY compared
 # school, in a stable order.
-APPROVED_FACT_KEYS_SORTED = [
-    "established", "hostel", "intake", "legal_aid_clinics", "location", "moot_teams",
-]
+APPROVED_FACT_KEYS_SORTED = ["established", "location", "intake", "hostel", "legal_aid_clinics", "moot_teams"]  # approved SEMANTIC order (QA fb8dbc1)
 APPROVED_SUMMARY_ROW_FIELDS = [
     "state", "institution_type", "accreditation", "entrance_exam",
     "fees_min", "fees_max", "nirf_rank", "programmes",
@@ -572,3 +570,24 @@ def test_detail_facts_deterministically_ordered(ctx):
     keys1 = [f["key"] for f in r1.json()["facts"]]
     keys2 = [f["key"] for f in r2.json()["facts"]]
     assert keys1 == keys2 == APPROVED_FACT_KEYS_SORTED
+
+
+# ------- approved semantic fact order (QA fb8dbc1 blocker) -------------------
+def test_s28_detail_facts_in_approved_semantic_order(ctx):
+    client, SessionLocal, uid, ids = ctx
+    from app.api.v1.law_schools import FACT_SEMANTIC_ORDER
+    r = client.get(f"/api/v1/law-schools/{ids[0]}")
+    assert r.status_code == 200
+    keys = [f["key"] for f in r.json()["facts"] if f["key"] in FACT_SEMANTIC_ORDER]
+    assert keys == list(FACT_SEMANTIC_ORDER), keys  # exact approved order, not alphabetical
+
+
+def test_compare_facts_semantic_order_2_and_4(ctx):
+    client, SessionLocal, uid, ids = ctx
+    from app.api.v1.law_schools import FACT_SEMANTIC_ORDER
+    for n in (2, 4):
+        r = client.post("/api/v1/law-schools/compare", json={"school_ids": ids[:n]}, headers=_claims(uid))
+        assert r.status_code == 200
+        for item in r.json()["items"]:
+            keys = [f["key"] for f in item["facts"] if f["key"] in FACT_SEMANTIC_ORDER]
+            assert keys == list(FACT_SEMANTIC_ORDER)

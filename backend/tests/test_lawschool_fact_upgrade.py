@@ -41,7 +41,7 @@ def expected_facts(school: dict) -> dict[str, str]:
 def alembic(db: str, *args: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "DATABASE_URL": f"sqlite+pysqlite:///{db}"}
     return subprocess.run([sys.executable, "-m", "alembic", *args],
-                          capture_output=True, text=True, env=env, cwd=os.getcwd())
+                          capture_output=True, text=True, env=env, cwd=str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 
 
 def seed_old_style(db: str) -> None:
