@@ -553,38 +553,93 @@ export function OtpExpired() {
 /* S-08 — Lockout after retries (restricted)                                   */
 /* -------------------------------------------------------------------------- */
 export function Lockout() {
+  const nav = useNavigate();
   const [mobile, setMobile] = useState('');
   const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(900); // 15 minutes = 900 seconds
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+  const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
   async function begin() {
     try {
       setRecoveryId(await startRecovery(mobile));
-      setMessage('If an account matches, a recovery code has been sent.');
+      setMessage('If an account matches, an instant unlock code has been sent.');
     } catch {
       setMessage('Enter a valid 10-digit mobile number.');
     }
   }
+
   async function finish() {
     try {
       await verifyRecovery(recoveryId, code);
       await completeRecovery(recoveryId);
-      setMessage('Recovery verified. You may now sign in again.');
+      setMessage('Account recovery verified! You may now sign in again.');
+      setTimeout(() => nav('/s-03'), 1500);
     } catch {
       setMessage('Recovery could not be verified. Check the code or request a new one.');
     }
   }
+
   return (
-    <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked" meta={<StatusBadge status="risk" label="Locked" />}>
-      <RestrictedState reason="Too many incorrect attempts. Login is locked for 15 minutes." />
-      <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" />
-      {recoveryId && <TextField id="recovery-code" label="6-digit recovery code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />}
-      {message && <p role="status">{message}</p>}
-      <div className="st-actions">
-        <button type="button" className="btn tap" onClick={recoveryId ? finish : begin}>
-          {recoveryId ? 'Verify recovery code' : 'Start account recovery'}
-        </button>
-      </div>
+    <AuthCard
+      screenId="S-08"
+      kicker="OTP · S1"
+      title="Locked"
+      meta={<StatusBadge status={secondsLeft === 0 ? 'ok' : 'risk'} label={secondsLeft === 0 ? 'Lock Expired' : 'Locked'} />}
+    >
+      <RestrictedState
+        reason={`Too many incorrect attempts. Login is locked for 15 minutes.${
+          secondsLeft > 0 ? ` ⏱️ Automatic unlock in ${timeFormatted}` : ' Lock duration expired — you can now log in again.'
+        }`}
+      />
+
+      {secondsLeft === 0 ? (
+        <div className="st-actions">
+          <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-03')}>
+            Return to Login
+          </button>
+        </div>
+      ) : (
+        <>
+          <div style={{ marginTop: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-fg-default)' }}>
+              ⚡ Need to log in immediately?
+            </h4>
+            <p className="ui-notice ui-notice--info" style={{ marginTop: 'var(--space-2)', fontSize: '0.85rem' }}>
+              💡 <strong>Don’t want to wait 15 minutes?</strong> Enter your registered 10-digit mobile number below to receive an instant recovery code and unlock your account immediately.
+            </p>
+          </div>
+
+          <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" placeholder="10-digit mobile number" />
+          {recoveryId && (
+            <TextField
+              id="recovery-code"
+              label="6-digit recovery code"
+              value={code}
+              onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+          )}
+          {message && <p role="status" style={{ fontSize: '0.875rem', color: 'var(--color-fg-muted)' }}>{message}</p>}
+          <div className="st-actions">
+            <button type="button" className="btn btn--primary tap" onClick={recoveryId ? finish : begin}>
+              {recoveryId ? 'Verify & Unlock Account' : 'Send Instant Unlock Code'}
+            </button>
+          </div>
+        </>
+      )}
     </AuthCard>
   );
 }
