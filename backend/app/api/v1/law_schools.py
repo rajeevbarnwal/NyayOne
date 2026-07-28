@@ -20,6 +20,16 @@ from app.models.wave1 import (
 from app.services.law_school_service import CompareError, create_comparison
 
 router = APIRouter(tags=["law-schools"])
+
+# Production-owned SEMANTIC fact order (approved Option C+ contract; SAATHI-63).
+# Alphabetical determinism is NOT the approved order. Unknown keys sort after
+# the approved set, alphabetically, so the projection stays deterministic.
+FACT_SEMANTIC_ORDER = ("established", "location", "intake", "hostel", "legal_aid_clinics", "moot_teams")
+_FACT_RANK = {k: i for i, k in enumerate(FACT_SEMANTIC_ORDER)}
+
+
+def _fact_sort_key(key: str) -> tuple[int, str]:
+    return (_FACT_RANK.get(key, len(FACT_SEMANTIC_ORDER)), key)
 _SORTS = {"name": LawSchool.name, "fees": LawSchool.fees_min, "nirf_rank": LawSchool.nirf_rank}
 
 
@@ -39,12 +49,20 @@ def _summary(s: LawSchool) -> dict:
 
 
 def _detail(session: Session, s: LawSchool, actor: ActorContext) -> dict:
-    progs = session.scalars(select(LawSchoolProgramme).where(LawSchoolProgramme.school_id == s.id)).all()
+    # Deterministic projection order (SAATHI-119 F2): facts by key, programmes
+    # by degree — identical on every dialect/run so the compare endpoint feeds
+    # the approved 13-row S-29 schema deterministically.
+    progs = session.scalars(
+        select(LawSchoolProgramme).where(LawSchoolProgramme.school_id == s.id)
+        .order_by(LawSchoolProgramme.degree)
+    ).all()
     facts = session.execute(
         select(LawSchoolFact, LawSchoolSource)
         .join(LawSchoolSource, LawSchoolFact.source_id == LawSchoolSource.id, isouter=True)
         .where(LawSchoolFact.school_id == s.id)
+        # ordered in Python by the semantic contract (cross-dialect deterministic)
     ).all()
+    facts = sorted(facts, key=lambda pair: _fact_sort_key(pair[0].key))
     saved = followed = False
     if actor.is_authenticated:
         saved = session.scalar(select(SavedLawSchool).where(
@@ -165,6 +183,7 @@ def list_saved(actor: ActorContext = Depends(_require_student), session: Session
     rows = session.execute(
         select(LawSchool).join(SavedLawSchool, SavedLawSchool.school_id == LawSchool.id)
         .where(SavedLawSchool.user_id == actor.user_id)
+        .order_by(SavedLawSchool.created_at, LawSchool.name)  # deterministic list order (F4)
     ).scalars().all()
     return {"items": [_summary(s) for s in rows]}
 
@@ -174,6 +193,7 @@ def list_followed(actor: ActorContext = Depends(_require_student), session: Sess
     rows = session.execute(
         select(LawSchool, LawSchoolFollow).join(LawSchoolFollow, LawSchoolFollow.school_id == LawSchool.id)
         .where(LawSchoolFollow.user_id == actor.user_id)
+        .order_by(LawSchoolFollow.created_at, LawSchool.name)  # deterministic list order (F4)
     ).all()
     return {"items": [{**_summary(s), "notify_opt_in": f.notify_opt_in} for s, f in rows]}
 

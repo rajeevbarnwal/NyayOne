@@ -47,6 +47,8 @@
     "typescript": "latest",
     "typescript-eslint": "^8.63.0",
     "vite": "latest",
-    "vitest": "latest"
+    "vitest": "latest",
+    "pixelmatch": "^5.3.0",
+    "pngjs": "^7.0.0"
   }
 }
