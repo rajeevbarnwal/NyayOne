@@ -26,6 +26,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { manifestCounts } from './lib/lawschool_visual_manifest.mjs';
+import { contract as FX } from './lawschool_fixture_contract.mjs';
 import {
   COMPARE_ROWS, FACT_LABELS, verifiedText,
 } from '../src/features/student/schools/lawschoolFormat.mjs';
@@ -440,11 +441,13 @@ async function fresh({ viewport = { width: 1440, height: 1000 }, theme = null, l
   page.setDefaultTimeout(10_000);
   if (theme) await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
   const consoleErrors = [];
+  const consoleWarnings = [];
   const pageErrors = [];
   const unexpectedHttp = [];
   page.on('console', (m) => {
     consoleLines.push(`[${label}][console.${m.type()}] ${m.text()}`);
     if (m.type() === 'error') consoleErrors.push(m.text());
+    if (m.type() === 'warning') consoleWarnings.push(m.text());
   });
   page.on('pageerror', (e) => { pageErrors.push(String(e)); consoleLines.push(`[${label}][pageerror] ${e}`); });
   page.on('response', (r) => {
@@ -460,7 +463,7 @@ async function fresh({ viewport = { width: 1440, height: 1000 }, theme = null, l
     } catch { /* trace must never mask the run */ }
     await context.close();
   };
-  return { context, page, consoleErrors, pageErrors, unexpectedHttp, close };
+  return { context, page, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp, close };
 }
 
 const resultsItem = (page, name) => page
@@ -470,6 +473,26 @@ const shot = async (page, file) => {
   await page.screenshot({ path: path.join(evidence, file), fullPage: true });
   return file;
 };
+
+/**
+ * Production exposes a deterministic readiness contract after the catalogue
+ * and every visible school-detail query settle. A rejected detail query is a
+ * typed failure; a partially populated page is never captured.
+ */
+async function waitForLawSchoolFeatureReady(page) {
+  await page.waitForFunction(() => !!document.querySelector(
+    '[data-qa-lawschool-ready="true"], [data-qa-lawschool-readiness-error]',
+  ));
+  const failure = await page.locator('[data-qa-lawschool-readiness-error]').first()
+    .evaluate((el) => ({
+      code: el.getAttribute('data-qa-lawschool-readiness-error'),
+      ids: el.getAttribute('data-qa-lawschool-failed-ids'),
+    }))
+    .catch(() => null);
+  if (failure) {
+    throw new Error(`${failure.code}${failure.ids ? `:${failure.ids}` : ''}`);
+  }
+}
 /** Tab traversal must reach EVERY visible actionable control in DOM order. */
 async function tabOrder(page) {
   const total = await page.evaluate(() => {
@@ -616,9 +639,10 @@ if (browser) {
     const { page } = ctx;
     await page.goto(`${base}/s-27?state=Karnataka`);
     await resultsItem(page, 'National Law School of India University').waitFor();
-    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'card title link routes to /s-28 with id + ret context', async () => {
+    await waitForLawSchoolFeatureReady(page);
+    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'visible View CTA routes to /s-28 with id + ret context', async () => {
       await resultsItem(page, 'National Law School of India University')
-        .getByRole('link', { name: 'National Law School of India University' }).click();
+        .getByRole('button', { name: 'View', exact: true }).click();
       await page.waitForURL('**/s-28*');
       const s28 = new URL(page.url());
       return { actual: s28.pathname + s28.search,
@@ -640,6 +664,53 @@ if (browser) {
         evidence: await shot(page, 's27_return_context.png') };
     });
     await ctx.close();
+  });
+
+  /* Frozen Option C+ S-27 contract: every deterministic card has an exact,
+   * visible View CTA and every mobile target is at least 44x44. */
+  await phase('ui-view-cta-contract', async () => {
+    for (const viewport of [{ width: 390, height: 844 }, { width: 430, height: 932 }]) {
+      const ctx = await fresh({ viewport, label: `view-cta-${viewport.width}` });
+      const { page, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp } = ctx;
+      await page.goto(`${base}/s-27?page_size=${FX.s27.pageSize}`);
+      await waitForLawSchoolFeatureReady(page);
+      await tcase(`TC-63-06-view-cta-${viewport.width}`, `view_cta_${viewport.width}`,
+        `all six deterministic S-27 cards expose exact accessible name View at >=44x44 on ${viewport.width}px`,
+        async () => {
+          const views = page.locator('section[aria-label="Search results"] li.st-item')
+            .getByRole('button', { name: 'View', exact: true });
+          const count = await views.count();
+          const boxes = await views.evaluateAll((els) => els.map((el) => {
+            const box = el.getBoundingClientRect();
+            return { width: box.width, height: box.height };
+          }));
+          return {
+            actual: { count, boxes, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp },
+            pass: count === FX.s27.visibleSlugs.length
+              && boxes.every((box) => box.width >= 44 && box.height >= 44)
+              && consoleErrors.length === 0 && consoleWarnings.length === 0
+              && pageErrors.length === 0 && unexpectedHttp.length === 0,
+            evidence: await shot(page, `s27_view_cta_${viewport.width}.png`),
+          };
+        });
+      if (viewport.width === 390) {
+        await tcase('TC-63-06-view-cta-route', 'view_cta_preserves_return_context',
+          'first deterministic View CTA routes to S-28 with school id + page_size return context',
+          async () => {
+            await page.locator('section[aria-label="Search results"] li.st-item').first()
+              .getByRole('button', { name: 'View', exact: true }).click();
+            await page.waitForURL('**/s-28*');
+            const target = new URL(page.url());
+            return {
+              actual: target.pathname + target.search,
+              pass: target.pathname === '/s-28'
+                && target.searchParams.get('id') === bySlug[FX.s27.visibleSlugs[0]].id
+                && (target.searchParams.get('ret') ?? '').includes('page_size=6'),
+            };
+          });
+      }
+      await ctx.close();
+    }
   });
 
   /* TC-63-03/04 — compare UI: min 2, max 4, fifth refusal, duplicate, refresh */
@@ -766,15 +837,41 @@ if (browser) {
     await ctx.close();
 
     const second = await fresh({ label: 'freshctx' });
+    const overlappingDetailRequests = [];
+    second.page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (request.method() === 'GET' && url.pathname === `/api/v1/law-schools/${ids4[0]}`) {
+        overlappingDetailRequests.push(url.pathname);
+      }
+    });
     await tcase('TC-63-05-fresh-browser-context-persistence', 'fresh_browser_context_persistence',
       'fresh browser context (same compile-time claims) sees saved+followed on S-30 — server persistence, not logout/login', async () => {
         if (!setupOk) return { actual: 'setup case failed — fresh-context persistence not evaluated', pass: false };
         await second.page.goto(`${base}/s-30`);
-        await second.page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor();
+        await waitForLawSchoolFeatureReady(second.page);
         const savedHas = await second.page.locator('section[aria-label="Saved schools"]').getByText('National Law School of India University').count();
         const followedHas = await second.page.locator('section[aria-label="Followed schools"]').getByText('National Law School of India University').count();
         return { actual: { savedHas, followedHas }, pass: savedHas > 0 && followedHas > 0,
           evidence: await shot(second.page, 's30_saved_followed.png') };
+      });
+    await tcase('TC-63-05-overlap-dedup', 'saved_followed_query_keys_deduplicated',
+      'same school in Saved and Following → one detail query, both groups render, zero console warnings/errors',
+      async () => {
+        const savedHas = await second.page.locator('section[aria-label="Saved schools"]').getByText('National Law School of India University').count();
+        const followedHas = await second.page.locator('section[aria-label="Followed schools"]').getByText('National Law School of India University').count();
+        return {
+          actual: {
+            detailRequests: overlappingDetailRequests.length,
+            savedHas,
+            followedHas,
+            consoleWarnings: second.consoleWarnings,
+            consoleErrors: second.consoleErrors,
+            pageErrors: second.pageErrors,
+          },
+          pass: overlappingDetailRequests.length === 1 && savedHas > 0 && followedHas > 0
+            && second.consoleWarnings.length === 0 && second.consoleErrors.length === 0
+            && second.pageErrors.length === 0,
+        };
       });
     await tcase('TC-63-05-server-lists', 'server_list_endpoints_contain_school',
       'GET /student/law-schools/saved + /followed both contain nlsiu-bengaluru (server truth)', async () => {
@@ -1044,7 +1141,7 @@ if (browser) {
   if (process.env.QA_VISUAL_C_PLUS !== '0') await phase('option-c-plus-visual', async () => {
     const { pathToFileURL } = await import('node:url');
     const {
-      contract: FX, contractChecksum, checksumOfProjection, catalogSlugsByName,
+      contractChecksum, checksumOfProjection, catalogSlugsByName,
       fixtureProjection, tokensHash, TOKENS_CSS_RELPATH,
     } = await import('./lawschool_fixture_contract.mjs');
     const refFile = path.resolve('..', 'docs', 'design', 'lawschool_reference', 'option_c_plus', 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
@@ -1153,7 +1250,7 @@ if (browser) {
       try {
         await probeDev.page.goto(`${base}/s-27?page_size=${FX.s27.pageSize}`);
         await probeDev.page.getByText(/^12 SCHOOLS/).waitFor();
-        await probeDev.page.waitForTimeout(250);
+        await waitForLawSchoolFeatureReady(probeDev.page);
         const hrefIds = await probeDev.page.evaluate(() => Array.from(
           document.querySelectorAll('section.st-screen ul.ls-cards h3 a'))
           .map((a) => new URLSearchParams((a.getAttribute('href') || '').split('?')[1] || '').get('id') || ''));
@@ -1382,6 +1479,7 @@ if (browser) {
         devReady: async (page) => {
           await page.getByText(/^12 SCHOOLS/).waitFor();
           await page.getByText(`PAGE ${FX.s27.page} OF 2`).waitFor();
+          await waitForLawSchoolFeatureReady(page);
         },
         refRoute: '#/s27', refState: 's27-default' },
       { key: 's28',
@@ -1394,11 +1492,14 @@ if (browser) {
         refRoute: `#/s29?cmp=${FX.s29.slugs.join(',')}`, refState: 's29-4' },
       { key: 's30',
         devUrl: () => `${base}/s-30`,
-        devReady: (page) => page.waitForFunction(
-          ([nSaved, nFollowed]) =>
+        devReady: async (page) => {
+          await page.waitForFunction(
+            ([nSaved, nFollowed]) =>
             document.querySelectorAll('section[aria-label="Saved schools"] li.st-item').length === nSaved
             && document.querySelectorAll('section[aria-label="Followed schools"] li.st-item').length === nFollowed,
-          [FX.s30.saved.length, FX.s30.followed.length]),
+            [FX.s30.saved.length, FX.s30.followed.length]);
+          await waitForLawSchoolFeatureReady(page);
+        },
         refRoute: '#/s30', refState: 's30-both' },
     ];
     for (const { width, height } of [
@@ -1416,7 +1517,6 @@ if (browser) {
               try {
                 await dev.page.goto(screen.devUrl());
                 await screen.devReady(dev.page);
-                await dev.page.waitForTimeout(250);
                 /* F3: hide the global sticky shell BEFORE capture (test-only) */
                 await dev.page.addStyleTag({ content: GLOBAL_SHELL_HIDE_CSS });
                 await dev.page.waitForTimeout(50);

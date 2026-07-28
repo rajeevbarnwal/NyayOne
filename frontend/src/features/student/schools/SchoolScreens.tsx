@@ -110,7 +110,6 @@ function useRouteArrival(screenKey: string): void {
  */
 interface SchoolExtras {
   cityState: string | null;
-  city: string | null;
   established: string | null;
   seats: string | null;
   saved: boolean | null;
@@ -119,7 +118,7 @@ interface SchoolExtras {
 const stripSample = (v: string): string => v.replace(/ \(sample\)$/, '');
 
 function extrasOf(d: LawSchoolDetail | undefined): SchoolExtras {
-  if (!d) return { cityState: null, city: null, established: null, seats: null, saved: null };
+  if (!d) return { cityState: null, established: null, seats: null, saved: null };
   const fact = (key: string): string | undefined => d.facts.find((f) => f.key === key)?.value;
   const location = fact('location');
   const cityState = location ? stripSample(location) : null;
@@ -127,25 +126,56 @@ function extrasOf(d: LawSchoolDetail | undefined): SchoolExtras {
   const intake = fact('intake');
   return {
     cityState,
-    city: cityState ? cityState.split(',')[0].trim() : null,
     established: established ? (/^\d{4}/.exec(established)?.[0] ?? null) : null,
     seats: intake ? (/^\d+/.exec(intake)?.[0] ?? null) : null,
     saved: d.saved,
   };
 }
 
-function useSchoolExtras(ids: string[]): Record<string, SchoolExtras> {
+export const SCHOOL_DETAIL_READINESS_FAILED = 'SCHOOL_DETAIL_READINESS_FAILED';
+
+/** Stable first-seen deduplication prevents duplicate React Query observer keys. */
+export function stableUniqueSchoolIds(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+/** One canonical S-27/S-30 detail destination preserving the search return context. */
+export function lawSchoolDetailPath(id: string, returnContext: string): string {
+  return `/s-28?id=${encodeURIComponent(id)}${returnContext ? `&ret=${encodeURIComponent(returnContext)}` : ''}`;
+}
+
+/** Frozen S-30 contract: state (not city) + unchanged fee/sample/verification copy. */
+export function schoolListMetaline(s: LawSchoolSummary): string {
+  return `${s.state.toUpperCase()} · ${feesLakhBand(s.feesMin, s.feesMax).toUpperCase()} (SAMPLE) · ${verifiedText().toUpperCase()}`;
+}
+
+interface SchoolExtrasResult {
+  byId: Record<string, SchoolExtras>;
+  status: 'pending' | 'ready' | 'error';
+  failedIds: string[];
+  queryIds: string[];
+}
+
+function useSchoolExtras(ids: string[]): SchoolExtrasResult {
+  const queryIds = stableUniqueSchoolIds(ids);
   const results = useQueries({
-    queries: ids.map((id) => ({
+    queries: queryIds.map((id) => ({
       queryKey: ['law-school', id],
       queryFn: () => getLawSchoolDetail(id),
       retry: lawSchoolsRetry,
       staleTime: 60_000,
     })),
   });
-  const map: Record<string, SchoolExtras> = {};
-  ids.forEach((id, i) => { map[id] = extrasOf(results[i]?.data); });
-  return map;
+  const byId: Record<string, SchoolExtras> = {};
+  queryIds.forEach((id, i) => { byId[id] = extrasOf(results[i]?.data); });
+  const failedIds = queryIds.filter((_, i) => results[i]?.isError);
+  const settled = results.every((result) => result.isSuccess || result.isError);
+  return {
+    byId,
+    status: failedIds.length > 0 ? 'error' : settled ? 'ready' : 'pending',
+    failedIds,
+    queryIds,
+  };
 }
 
 /* Shared-formatter delegates (SAATHI-118 F2): the SAME functions feed the
@@ -503,12 +533,22 @@ export function SchoolSearch() {
 
   useRouteArrival('S-27');
 
-  const extras = useSchoolExtras(query.data ? query.data.items.map((i) => i.id) : []);
+  const extrasResult = useSchoolExtras(query.data ? query.data.items.map((i) => i.id) : []);
+  const detailReadiness = query.isError
+    ? 'error'
+    : query.data
+      ? extrasResult.status
+      : 'pending';
 
   return (
     <StudentScreen screenId="S-27" className="st-lawschool st-lawschool--s27">
       <LsShell active="s27" ctx={ctx}>
-        <div className="ls-wrap">
+        <div
+          className="ls-wrap"
+          data-qa-lawschool-ready={detailReadiness === 'ready' ? 'true' : undefined}
+          data-qa-lawschool-readiness-error={detailReadiness === 'error' ? SCHOOL_DETAIL_READINESS_FAILED : undefined}
+          data-qa-lawschool-failed-ids={extrasResult.failedIds.length > 0 ? extrasResult.failedIds.join(',') : undefined}
+        >
           {/* Step-3 pick tray — reference #pb: in-flow sticky band, never an overlay. */}
           <section className="ls-pickbar" aria-label="Compare tray">
             <span className="ls-pickbar__t">Step 3 · {tray.length} of {compareMax} picked</span>
@@ -719,7 +759,7 @@ export function SchoolSearch() {
                 {query.data.items.map((s) => {
                   const inTray = trayIds.includes(s.id);
                   const why = whyMatch(s);
-                  const ex = extras[s.id];
+                  const ex = extrasResult.byId[s.id];
                   const saved = ex?.saved ?? false;
                   return (
                     <li className="st-item ls-card" key={s.id}>
@@ -746,6 +786,13 @@ export function SchoolSearch() {
                       </ul>
                       <LsTags />
                       <div className="ls-acts">
+                        <button
+                          type="button"
+                          className="btn ls-ghost tap ls-view"
+                          onClick={() => nav(lawSchoolDetailPath(s.id, ctx))}
+                        >
+                          View
+                        </button>
                         <button
                           type="button"
                           className={`btn tap ls-cmp${inTray ? ' ls-ind' : ''}`}
@@ -1259,6 +1306,13 @@ export function SchoolSavedFollowed() {
     ...(savedQ.data ?? []).map((s) => s.id),
     ...(followedQ.data ?? []).map((s) => s.id),
   ]);
+  const listsSettled = savedQ.isSuccess && followedQ.isSuccess;
+  const listFailed = savedQ.isError || followedQ.isError;
+  const s30Readiness = listFailed
+    ? 'error'
+    : listsSettled
+      ? extras30.status
+      : 'pending';
 
   const browse = () => nav(ret ? `/s-27?${ret}` : '/s-27');
 
@@ -1296,7 +1350,7 @@ export function SchoolSavedFollowed() {
                   </h3>
                 </div>
                 <p className="ls-metaline ls-mt2">
-                  {(extras30[s.id]?.city ?? s.state).toUpperCase()} · {feesLakhBand(s.feesMin, s.feesMax).toUpperCase()} (SAMPLE) · {verifiedText().toUpperCase()}
+                  {schoolListMetaline(s)}
                 </p>
                 <div className="ls-acts">
                   <button type="button" className="btn tap" disabled={actionPending} onClick={() => onAction(s.id)}>
@@ -1321,7 +1375,12 @@ export function SchoolSavedFollowed() {
   return (
     <StudentScreen screenId="S-30" className="st-lawschool">
       <LsShell active="s30" ctx={ret}>
-        <div className="ls-wrap">
+        <div
+          className="ls-wrap"
+          data-qa-lawschool-ready={s30Readiness === 'ready' ? 'true' : undefined}
+          data-qa-lawschool-readiness-error={s30Readiness === 'error' ? SCHOOL_DETAIL_READINESS_FAILED : undefined}
+          data-qa-lawschool-failed-ids={extras30.failedIds.length > 0 ? extras30.failedIds.join(',') : undefined}
+        >
           <p className="ls-metaline ls-mt14">S-30 · MY SCHOOLS</p>
           {authError ? (
             <SignInPrompt />
