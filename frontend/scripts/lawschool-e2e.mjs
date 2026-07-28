@@ -533,11 +533,27 @@ if (browser) {
         pass: await page.getByText('Try clearing a filter or broadening your search.').isVisible(),
         evidence: await shot(page, 's27_empty_state.png') };
     });
-    await tcase('TC-63-01-ui-filter-state', 'ui_filter_state_delhi',
-      'state=Delhi filters to the 2 Delhi schools incl. NLU Delhi', async () => {
+    await tcase('TC-63-01-ui-filter-region', 'ui_filter_region_north',
+      'reference Region chip North fans out real state queries → the 4 North schools incl. NLU Delhi + DU Law', async () => {
+        /* Reference r27 taxonomy: the Where? chips are REGIONS (Anywhere/
+         * North/South/East/West/Central); each region resolves to real
+         * state-filtered /law-schools queries. */
         await page.getByLabel('Search law schools').fill('');
         await page.getByLabel('Search law schools').press('Enter');
-        await page.getByRole('group', { name: 'State' }).getByRole('button', { name: 'Delhi' }).click();
+        await page.getByRole('group', { name: 'Region' }).getByRole('button', { name: 'North' }).click();
+        await page.getByText(/^4 SCHOOLS/).waitFor();
+        const urlRegion = new URL(page.url()).searchParams.get('region');
+        const nlu = await resultsItem(page, 'National Law University, Delhi').count();
+        const du = await resultsItem(page, 'Faculty of Law, University of Delhi').count();
+        const jgls = await resultsItem(page, 'Jindal Global Law School').count();
+        const rgnul = await resultsItem(page, 'Rajiv Gandhi National University of Law').count();
+        return { actual: { urlRegion, nlu, du, jgls, rgnul },
+          pass: urlRegion === 'North' && nlu === 1 && du === 1 && jgls === 1 && rgnul === 1,
+          evidence: await shot(page, 's27_filter_region_north.png') };
+      });
+    await tcase('TC-63-01-ui-filter-state-wire', 'ui_filter_state_delhi_deeplink',
+      'state=Delhi wire param (deep link) still filters to the 2 Delhi schools incl. NLU Delhi', async () => {
+        await page.goto(`${base}/s-27?state=Delhi`);
         await page.getByText(/^2 SCHOOLS/).waitFor();
         const nlu = await resultsItem(page, 'National Law University, Delhi').count();
         const du = await resultsItem(page, 'Faculty of Law, University of Delhi').count();
@@ -545,7 +561,7 @@ if (browser) {
       });
     await tcase('TC-63-01-ui-sort-fees', 'ui_sort_fees_first',
       'fees sort puts Faculty of Law, University of Delhi (lowest fees_min) first', async () => {
-        await page.getByRole('group', { name: 'State' }).getByRole('button', { name: 'Anywhere' }).click();
+        await page.getByRole('group', { name: 'Region' }).getByRole('button', { name: 'Anywhere' }).click();
         await page.getByLabel('Order').selectOption('fees');
         await page.getByText(/^12 SCHOOLS/).waitFor();
         const firstName = await page.locator('section[aria-label="Search results"] li.st-item').first().innerText();
@@ -570,6 +586,9 @@ if (browser) {
       'selecting label "National Law University" sends wire value and renders the 6 NLU schools', async () => {
         await page.goto(`${base}/s-27`);
         await page.getByText(/^12 SCHOOLS/).waitFor();
+        /* Reference structure: filters are part of the in-flow search
+         * disclosure (no default-frame filter chrome). */
+        await page.getByRole('button', { name: 'Or search by name ⌕' }).click();
         await page.getByRole('button', { name: 'More filters' }).click();
         await page.getByLabel('Institution type').selectOption({ label: 'National Law University' });
         await page.getByText(/^6 SCHOOLS/).waitFor();
@@ -597,8 +616,9 @@ if (browser) {
     const { page } = ctx;
     await page.goto(`${base}/s-27?state=Karnataka`);
     await resultsItem(page, 'National Law School of India University').waitFor();
-    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'View routes to /s-28 with id + ret context', async () => {
-      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: 'View' }).click();
+    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'card title link routes to /s-28 with id + ret context', async () => {
+      await resultsItem(page, 'National Law School of India University')
+        .getByRole('link', { name: 'National Law School of India University' }).click();
       await page.waitForURL('**/s-28*');
       const s28 = new URL(page.url());
       return { actual: s28.pathname + s28.search,

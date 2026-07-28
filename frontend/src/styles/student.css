@@ -788,6 +788,11 @@ textarea.st-input {
   color: var(--ls-ink);
   font-family: var(--ls-sans);
   font-size: 14px;
+  /* Reference body sets NO line-height (normal). The global app shell sets
+     1.5, which added ~3px to every text row in the region and broke capture
+     height parity. Reference-specified line-heights (1.55/1.5/1.6) stay on
+     .ls-stand/.ls-src/.ls-helper/.ls-foot below. */
+  line-height: normal;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -1080,19 +1085,19 @@ textarea.st-input {
 }
 .st-lawschool .ls-src { font-family: var(--ls-mono); font-size: 8.5px; color: var(--ls-faint); margin: 10px 0 0; line-height: 1.5; }
 .st-lawschool .ls-src a {
-  /* SAATHI-118 target-size fix carried forward: every provenance link keeps
-     a >= 44x44 interactive rect at all viewport/theme pairs. */
+  /* SAATHI-118 target-size fix carried forward: the provenance link keeps a
+     >= 44px interactive rect via vertical padding on an INLINE box — inline
+     vertical padding extends the clickable rect but adds ZERO layout height,
+     so the source row keeps the reference text-row density. */
   color: inherit;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
+  text-decoration: none;
+  display: inline;
+  padding: 18px 2px;
+  margin: 0 -2px;
 }
 .st-lawschool .ls-acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .st-lawschool .ls-acts .btn { flex: 1; min-width: 130px; }
 .st-lawschool .ls-acts--profile { margin-top: 12px; }
-.st-lawschool .ls-acts--profile .btn { flex: 0 1 auto; }
 
 /* Tool row + inputs (reference .in / .lb). */
 .st-lawschool .ls-toolrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
