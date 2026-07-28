@@ -468,3 +468,42 @@ def test_commit_failure_post_compare_rolls_back_and_retries():
         _CommitFailOnce.arm = False
         Base.metadata.drop_all(engine)
 
+
+
+# ------------- fixture contract parity (SAATHI-121 visual oracle) ---------------
+def test_seed_facts_match_shared_fixture_contract(ctx):
+    """The seeded law_school_facts MUST byte-match the shared visual fixture
+    contract (frontend/scripts/lawschool_fixture_contract.json) — the single
+    source consumed by the developed E2E harness AND the Option C+ reference
+    renderer. Strengthened (not weakened) per SAATHI-121 oracle closure."""
+    import json
+    from pathlib import Path
+
+    client, SessionLocal, uid, ids = ctx
+    contract_path = Path(__file__).resolve().parents[2] / "frontend" / "scripts" / "lawschool_fixture_contract.json"
+    contract = json.loads(contract_path.read_text())
+    assert len(contract["catalog"]) == 12  # frozen catalog size
+
+    listing = client.get("/api/v1/law-schools", params={"sort": "name", "page_size": 50}).json()
+    by_slug = {i["slug"]: i for i in listing["items"]}
+    assert listing["total"] == 12
+    assert sorted(by_slug) == sorted(s["slug"] for s in contract["catalog"])
+
+    for cs in contract["catalog"]:
+        detail = client.get(f"/api/v1/law-schools/{by_slug[cs['slug']]['id']}").json()
+        rows = [(f["key"], f["value"]) for f in detail["facts"]]
+        expected = [
+            ("established", f"{cs['established']} (sample)"),
+            ("location", f"{cs['city']}, {cs['state']} (sample)"),
+            ("intake", f"{cs['seats']} seats (sample)"),
+            ("hostel", f"{cs['hostel']} (sample)"),
+            ("legal_aid_clinics", f"{cs['legalAidClinics']} clinics (sample)"),
+            ("moot_teams", f"{cs['mootTeams']} teams (sample)"),
+        ]
+        assert sorted(rows) == sorted(expected), cs["slug"]
+        # sample labelling is mandatory — a sample value must never read as a
+        # verified claim
+        assert all(v.endswith("(sample)") for _, v in rows)
+        assert detail["entrance_exam"] == cs["entranceExam"]
+        assert detail["fees_min"] == cs["feesMin"] and detail["fees_max"] == cs["feesMax"]
+        assert detail["nirf_rank"] == cs["nirfRank"]

@@ -94,18 +94,23 @@ def add_comparison_item(session: Session, set_id: uuid.UUID, school_id: uuid.UUI
 
 # ------------------------------ deterministic seed ------------------------------
 _SEED = [
-    ("National Law School of India University", "nlsiu-bengaluru", "Karnataka", "national_law_university", "NAAC A++", "CLAT", 285000, 320000, 1),
-    ("NALSAR University of Law", "nalsar-hyderabad", "Telangana", "national_law_university", "NAAC A+", "CLAT", 260000, 300000, 2),
-    ("The West Bengal National University of Juridical Sciences", "wbnujs-kolkata", "West Bengal", "national_law_university", "NAAC A", "CLAT", 240000, 280000, 4),
-    ("National Law University, Delhi", "nlu-delhi", "Delhi", "national_law_university", "NAAC A+", "AILET", 250000, 295000, 3),
-    ("Gujarat National Law University", "gnlu-gandhinagar", "Gujarat", "national_law_university", "NAAC A", "CLAT", 230000, 270000, 7),
-    ("Symbiosis Law School, Pune", "sls-pune", "Maharashtra", "deemed", "NAAC A", "SLAT", 320000, 385000, 12),
-    ("Jindal Global Law School", "jgls-sonipat", "Haryana", "private", "NAAC A", "LSAT-India", 550000, 700000, 5),
-    ("Government Law College, Mumbai", "glc-mumbai", "Maharashtra", "government", "NAAC B+", "MH CET Law", 15000, 25000, 20),
-    ("Faculty of Law, University of Delhi", "du-law-delhi", "Delhi", "government", "NAAC A+", "DU LLB", 12000, 20000, 8),
-    ("ILS Law College, Pune", "ils-pune", "Maharashtra", "government", "NAAC A", "MH CET Law", 40000, 60000, 15),
-    ("Christ University School of Law", "christ-law-bengaluru", "Karnataka", "deemed", "NAAC A+", "CUET", 210000, 260000, 18),
-    ("Rajiv Gandhi National University of Law", "rgnul-patiala", "Punjab", "national_law_university", "NAAC A", "CLAT", 200000, 240000, 10),
+    # (name, slug, state, itype, accr, exam, fmin, fmax, rank, city, est, seats, clinics, moots)
+    # Sample-fact columns (city/est/seats/clinics/moots) are the SHARED visual
+    # fixture contract values — frontend/scripts/lawschool_fixture_contract.json
+    # is the single source both the developed harness and the Option C+
+    # reference renderer consume; keep the two in byte-exact sync.
+    ("National Law School of India University", "nlsiu-bengaluru", "Karnataka", "national_law_university", "NAAC A++", "CLAT", 285000, 320000, 1, "Bengaluru", 1987, 120, 8, 12),
+    ("NALSAR University of Law", "nalsar-hyderabad", "Telangana", "national_law_university", "NAAC A+", "CLAT", 260000, 300000, 2, "Hyderabad", 1998, 132, 7, 10),
+    ("The West Bengal National University of Juridical Sciences", "wbnujs-kolkata", "West Bengal", "national_law_university", "NAAC A", "CLAT", 240000, 280000, 4, "Kolkata", 1999, 127, 6, 11),
+    ("National Law University, Delhi", "nlu-delhi", "Delhi", "national_law_university", "NAAC A+", "AILET", 250000, 295000, 3, "New Delhi", 2008, 110, 9, 9),
+    ("Gujarat National Law University", "gnlu-gandhinagar", "Gujarat", "national_law_university", "NAAC A", "CLAT", 230000, 270000, 7, "Gandhinagar", 2003, 180, 6, 9),
+    ("Symbiosis Law School, Pune", "sls-pune", "Maharashtra", "deemed", "NAAC A", "SLAT", 320000, 385000, 12, "Pune", 1977, 300, 5, 8),
+    ("Jindal Global Law School", "jgls-sonipat", "Haryana", "private", "NAAC A", "LSAT-India", 550000, 700000, 5, "Sonipat", 2009, 400, 7, 10),
+    ("Government Law College, Mumbai", "glc-mumbai", "Maharashtra", "government", "NAAC B+", "MH CET Law", 15000, 25000, 20, "Mumbai", 1855, 240, 4, 6),
+    ("Faculty of Law, University of Delhi", "du-law-delhi", "Delhi", "government", "NAAC A+", "DU LLB", 12000, 20000, 8, "New Delhi", 1924, 240, 5, 7),
+    ("ILS Law College, Pune", "ils-pune", "Maharashtra", "government", "NAAC A", "MH CET Law", 40000, 60000, 15, "Pune", 1924, 300, 4, 6),
+    ("Christ University School of Law", "christ-law-bengaluru", "Karnataka", "deemed", "NAAC A+", "CUET", 210000, 260000, 18, "Bengaluru", 2006, 180, 3, 5),
+    ("Rajiv Gandhi National University of Law", "rgnul-patiala", "Punjab", "national_law_university", "NAAC A", "CLAT", 200000, 240000, 10, "Patiala", 2006, 196, 3, 6),
 ]
 _RETRIEVED = datetime(2026, 7, 1, tzinfo=timezone.utc)
 
@@ -119,7 +124,7 @@ def seed_law_schools(session: Session) -> int:
     session.add(src)
     session.flush()
     n = 0
-    for name, slug, state, itype, accr, exam, fmin, fmax, rank in _SEED:
+    for name, slug, state, itype, accr, exam, fmin, fmax, rank, city, est, seats, clinics, moots in _SEED:
         sc = LawSchool(name=name, slug=slug, state=state, institution_type=itype,
                        accreditation=accr, entrance_exam=exam, fees_min=fmin, fees_max=fmax, nirf_rank=rank)
         session.add(sc)
@@ -127,7 +132,16 @@ def seed_law_schools(session: Session) -> int:
         session.add(LawSchoolProgramme(school_id=sc.id, degree="BA LLB (Hons)", duration_years=5))
         if itype in ("government", "national_law_university"):
             session.add(LawSchoolProgramme(school_id=sc.id, degree="LLM", duration_years=1))
-        for key, value in (("intake", "180 seats (dev seed)"), ("hostel", "Available (dev seed)")):
+        # Deterministic SAMPLE-labelled facts (SAATHI-121 fixture contract):
+        # every value carries "(sample)" — never presented as a verified claim.
+        for key, value in (
+            ("established", f"{est} (sample)"),
+            ("location", f"{city}, {state} (sample)"),
+            ("intake", f"{seats} seats (sample)"),
+            ("hostel", "Available (sample)"),
+            ("legal_aid_clinics", f"{clinics} clinics (sample)"),
+            ("moot_teams", f"{moots} teams (sample)"),
+        ):
             session.add(LawSchoolFact(school_id=sc.id, key=key, value=value, source_id=src.id))
         n += 1
     session.flush()

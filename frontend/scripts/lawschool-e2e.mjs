@@ -940,26 +940,35 @@ if (browser) {
   });
 
   /* ---------------- SAATHI-121 — Option C+ visual phase (Mac-delegated) -----
-   * Captures the DEVELOPED S-27..S-30 screens and the approved Option C+
-   * reference frames (docs/design/lawschool_reference/option_c_plus) per
-   * viewport x theme, records provenance metadata + SHA256 per capture, and
-   * produces side-by-side + pixel-diff artifacts.
-   * STRICT threshold policy (SAATHI-121 closure, 2026-07-28): the baseline is
-   * FROZEN to the full 40-pair matrix from CAPTURE_MANIFEST.json —
-   * S-27..S-30 x {390x844, 430x932, 768x1024, 1024x768, 1440x900} x
-   * {light, dark}. Every approved pair MUST diff < 2% against the reference
-   * or its case FAILS (process exits non-zero AFTER all evidence + manifest
-   * are written). A pair that is somehow not approved is recorded as N/A and
-   * NEVER counts as PASS. The independent QA run at bbc85c3 measured
-   * 40/40 pairs >= 2% (avg 29.908%) under the previous advisory policy —
-   * that policy is retired here.
-   * Documented dynamic exclusions (the ONLY exclusions):
-   *   - developed capture is the .st-screen ELEMENT, so the global AppShell
-   *     (rail/topbar/theme control) is excluded by construction;
-   *   - reference is captured in baseline mode (&baseline=1 hash query +
-   *     body[data-baseline=1]) which hides all reviewer tooling.
-   * Disable with QA_VISUAL_C_PLUS=0 (sandbox runs without Chromium only —
-   * never for closure evidence). */
+   * VALID ORACLE RULES (SAATHI-118/120/121 oracle closure, 2026-07-28 —
+   * replaces the padded full-page method the independent QA at 60fe345
+   * invalidated):
+   *  1. FEATURE-REGION-ONLY capture on BOTH sides via recorded bounding-box
+   *     selectors: developed = `section.st-screen` element (global AppShell /
+   *     top shell / nav excluded by construction); reference = `#frame`
+   *     element, with `__opt.setFrame(<developed region CSS width>)` applied
+   *     first so both captures share the same content width. Selector,
+   *     bounding box and PNG size are recorded per side per pair.
+   *  2. DIMENSION-STRICT: if the two PNGs differ in width or height the pair
+   *     FAILS with code CAPTURE_DIMENSION_MISMATCH and NO percentage is
+   *     computed or reported. Captures are NEVER padded onto white or
+   *     background canvases.
+   *  3. Top-left content origin aligned by construction (element screenshots).
+   *  4. IDENTICAL DETERMINISTIC STATE: both renderers consume the SAME
+   *     repository-owned fixture contract
+   *     (scripts/lawschool_fixture_contract.json — see also
+   *     generate-lawschool-reference-fixture.mjs). The phase FAILS BEFORE any
+   *     capture with FIXTURE_CONTRACT_MISMATCH unless
+   *     contract checksum == developed live-API projection checksum ==
+   *     reference embedded LSKIT.FIXTURE checksum, and the visible school ids
+   *     and fact-row keys match the contract on both sides.
+   *  5. STRICT 40-pair set (frozen): S-27..S-30 x {390x844, 430x932,
+   *     768x1024, 1024x768, 1440x900} x {light, dark}; every pair must diff
+   *     < 2%; N/A / advisory / missing NEVER count as PASS; the process exits
+   *     non-zero AFTER all evidence + manifest are written when any pair
+   *     fails.
+   * Disable with QA_VISUAL_C_PLUS=0 (sandbox without Chromium only — never
+   * for closure evidence). */
   const VIS_SCREEN_KEYS = ['s27', 's28', 's29', 's30'];
   const VIS_VIEWPORTS = ['390x844', '430x932', '768x1024', '1024x768', '1440x900'];
   const VIS_THEMES = ['light', 'dark'];
@@ -968,6 +977,9 @@ if (browser) {
   const VISUAL_THRESHOLD = 0.02;
   if (process.env.QA_VISUAL_C_PLUS !== '0') await phase('option-c-plus-visual', async () => {
     const { pathToFileURL } = await import('node:url');
+    const {
+      contract: FX, contractChecksum, checksumOfProjection, catalogSlugsByName,
+    } = await import('./lawschool_fixture_contract.mjs');
     const refFile = path.resolve('..', 'docs', 'design', 'lawschool_reference', 'option_c_plus', 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
     let pixelmatch = null; let PNG = null;
     try {
@@ -987,31 +999,193 @@ if (browser) {
     const visDir = path.join(evidence, 'option_c_plus_visual');
     await fs.mkdir(visDir, { recursive: true });
     const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+    const expectedChecksum = contractChecksum();
+    const idOf = (slug) => bySlug[slug]?.id;
+    const slugOfId = Object.fromEntries(Object.values(bySlug).map((s) => [s.id, s.slug]));
+    const seq = (a) => JSON.stringify(a ?? null);
+    const setEq = (a, b) => seq([...a].sort()) === seq([...b].sort());
+
+    /* --- deterministic populated state (contract-owned, server-side) --- */
+    for (const slug of FX.s30.saved) await apiCall('PUT', `/api/v1/student/law-schools/${idOf(slug)}/saved`, { claims: USER_A });
+    for (const slug of FX.s30.followed) await apiCall('PUT', `/api/v1/student/law-schools/${idOf(slug)}/follow`, { claims: USER_A });
+
+    /* ------- fixture gate: MUST pass BEFORE any capture happens ------- */
+    const gate = { expectedChecksum, mismatches: [] };
+    try {
+      /* developed live-API projection (same canonical shape as the contract) */
+      const catalogRes = await apiCall('GET', '/api/v1/law-schools?sort=name&page=1&page_size=50');
+      const p1 = await apiCall('GET', `/api/v1/law-schools?sort=name&page=${FX.s27.page}&page_size=${FX.s27.pageSize}`);
+      const devSchools = [];
+      for (const slug of catalogSlugsByName()) {
+        const det = (await apiCall('GET', `/api/v1/law-schools/${idOf(slug)}`)).json ?? {};
+        devSchools.push({
+          slug: det.slug, name: det.name, state: det.state,
+          institutionType: det.institution_type, accreditation: det.accreditation,
+          entranceExam: det.entrance_exam, feesMin: det.fees_min, feesMax: det.fees_max,
+          nirfRank: det.nirf_rank,
+          programmes: (det.programmes ?? []).map((x) => ({ degree: x.degree, durationYears: x.duration_years })),
+          facts: (det.facts ?? []).map((f) => ({ key: f.key, value: f.value })).sort((a, b) => (a.key < b.key ? -1 : 1)),
+        });
+      }
+      const observedFactKeys = [...new Set(devSchools.flatMap((s) => s.facts.map((f) => f.key)))];
+      const cmpRes = await apiCall('POST', '/api/v1/law-schools/compare',
+        { claims: USER_A, body: { school_ids: FX.s29.slugs.map(idOf) } });
+      const cmpSlugs = (cmpRes.json?.items ?? []).map((i) => i.slug);
+      const s28det = (await apiCall('GET', `/api/v1/law-schools/${idOf(FX.s28.slug)}`, { claims: USER_A })).json ?? {};
+      const savedNow = await savedSlugs(USER_A);
+      const followedNow = await followedSlugs(USER_A);
+      const devProjection = {
+        version: FX.version, verifiedDate: FX.verifiedDate,
+        compare: { min: FX.compare.min, max: catalogRes.json?.compare_max },
+        factKeys: setEq(observedFactKeys, FX.factKeys) ? FX.factKeys : observedFactKeys.sort(),
+        catalogSlugsByName: (catalogRes.json?.items ?? []).map((s) => s.slug),
+        schools: devSchools,
+        s27: { ...FX.s27, visibleSlugs: (p1.json?.items ?? []).map((s) => s.slug), total: p1.json?.total, pageCount: Math.max(1, Math.ceil((p1.json?.total ?? 0) / FX.s27.pageSize)) },
+        s28: { slug: FX.s28.slug, saved: !!s28det.saved, followed: !!s28det.followed },
+        s29: { slugs: cmpSlugs, diffOnly: FX.s29.diffOnly },
+        s30: {
+          saved: setEq(savedNow, FX.s30.saved) ? FX.s30.saved : savedNow,
+          followed: setEq(followedNow, FX.s30.followed) ? FX.s30.followed : followedNow,
+        },
+      };
+      gate.devChecksum = checksumOfProjection(devProjection);
+      gate.devVisibleS27 = devProjection.s27.visibleSlugs;
+      if (gate.devChecksum !== expectedChecksum) {
+        gate.mismatches.push(`developed API projection checksum ${gate.devChecksum} != contract ${expectedChecksum}`);
+      }
+      if (seq(devProjection.s27.visibleSlugs) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`developed S-27 page-${FX.s27.page} slugs ${seq(devProjection.s27.visibleSlugs)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+      if (seq(cmpSlugs) !== seq(FX.s29.slugs)) {
+        gate.mismatches.push(`developed compare slugs ${seq(cmpSlugs)} != contract ${seq(FX.s29.slugs)}`);
+      }
+
+      /* reference embedded fixture + rendered DOM ids */
+      const probeRef = await fresh({ viewport: { width: 1440, height: 900 }, label: 'vis-fixture-probe-ref' });
+      try {
+        await probeRef.page.goto(`${pathToFileURL(refFile).href}#/s27?baseline=1`);
+        await probeRef.page.waitForFunction(() => !!window.__opt, null, { timeout: 20000 });
+        await probeRef.page.evaluate(() => { window.__opt.apply('s27-default'); document.body.setAttribute('data-baseline', '1'); });
+        await probeRef.page.waitForTimeout(200);
+        gate.referenceFixture = await probeRef.page.evaluate(() => (window.LSKIT && window.LSKIT.FIXTURE) || null);
+        gate.refVisibleS27 = await probeRef.page.evaluate(() => Array.from(
+          document.querySelectorAll('#app .cards article h3 a'))
+          .map((a) => ((a.getAttribute('href') || '').split('id=')[1] || '')));
+        gate.refFacts28Keys = await probeRef.page.evaluate(() => (window.LSKIT?.FACTS ?? []).map((f) => f.k));
+        gate.refFacts29Keys = await probeRef.page.evaluate(() => (window.LSKIT?.FACTS29 ?? []).map((f) => f.k));
+      } finally { await probeRef.close(); }
+      if (!gate.referenceFixture || gate.referenceFixture.checksum !== expectedChecksum) {
+        gate.mismatches.push(`reference embedded checksum ${gate.referenceFixture?.checksum ?? 'MISSING'} != contract ${expectedChecksum} — regenerate with generate-lawschool-reference-fixture.mjs`);
+      }
+      if (seq(gate.refVisibleS27) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`reference S-27 visible ids ${seq(gate.refVisibleS27)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+      const refFactSubset = (gate.refFacts28Keys ?? []).filter((k) => FX.factKeys.includes(k));
+      if (seq(refFactSubset) !== seq(FX.factKeys)) {
+        gate.mismatches.push(`reference S-28 fact-row keys ${seq(refFactSubset)} != contract ${seq(FX.factKeys)}`);
+      }
+
+      /* developed rendered DOM ids/keys */
+      const probeDev = await fresh({ viewport: { width: 1440, height: 900 }, theme: 'light', label: 'vis-fixture-probe-dev' });
+      try {
+        await probeDev.page.goto(`${base}/s-27?page_size=${FX.s27.pageSize}`);
+        await probeDev.page.getByText(/^12 SCHOOLS/).waitFor();
+        await probeDev.page.waitForTimeout(250);
+        const hrefIds = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen ul.ls-cards h3 a'))
+          .map((a) => new URLSearchParams((a.getAttribute('href') || '').split('?')[1] || '').get('id') || ''));
+        gate.devDomVisibleS27 = [...new Set(hrefIds)].map((uuid) => slugOfId[uuid] ?? uuid);
+        await probeDev.page.goto(`${base}/s-28?id=${idOf(FX.s28.slug)}`);
+        await probeDev.page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor();
+        const domLabels = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen .ls-fact__l')).map((el) => (el.textContent || '').trim()));
+        gate.devDomFactKeys = domLabels.filter((l) => FX.factKeys.includes(l));
+      } finally { await probeDev.close(); }
+      if (seq(gate.devDomVisibleS27) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`developed S-27 rendered card ids ${seq(gate.devDomVisibleS27)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+      if (seq(gate.devDomFactKeys) !== seq(FX.factKeys)) {
+        gate.mismatches.push(`developed S-28 rendered fact-row keys ${seq(gate.devDomFactKeys)} != contract ${seq(FX.factKeys)}`);
+      }
+    } catch (err) {
+      gate.mismatches.push(`fixture gate could not be evaluated: ${err?.message ?? err}`);
+    }
+
+    const gatePassed = gate.mismatches.length === 0;
+    record('VIS-C+-fixture-gate', 'shared_fixture_contract_gate',
+      'contract checksum == developed API projection checksum == reference embedded checksum; visible ids + fact-row keys identical on both sides (BEFORE any capture)',
+      gatePassed ? { checksum: expectedChecksum } : { code: 'FIXTURE_CONTRACT_MISMATCH', ...gate },
+      gatePassed);
+
     const visEntries = [];
-    /* Deterministic populated states for parity with the reference fixtures. */
-    await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
-    await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
+    const writeManifest = async () => {
+      const approvedEntries = visEntries.filter((e) => e.diff.approvedDeterministicPair);
+      await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
+        commit, generatedAt: new Date().toISOString(),
+        reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
+        oracle: {
+          method: 'feature-region element captures on both sides; dimension-strict (CAPTURE_DIMENSION_MISMATCH on any width/height difference, no percentage computed, no padding ever); top-left content origin aligned by element capture; reference frame width pinned to the developed feature-region width via __opt.setFrame',
+          developedSelector: 'section.st-screen',
+          referenceSelector: '#frame',
+          fixtureContract: {
+            file: 'frontend/scripts/lawschool_fixture_contract.json',
+            checksum: expectedChecksum,
+            devChecksum: gate.devChecksum ?? null,
+            referenceChecksum: gate.referenceFixture?.checksum ?? null,
+            gatePassed,
+            mismatches: gate.mismatches,
+            s27Visible: FX.s27.visibleSlugs, s28Slug: FX.s28.slug,
+            s29Slugs: FX.s29.slugs, s30: FX.s30, factKeys: FX.factKeys,
+          },
+        },
+        thresholdPolicy: `STRICT: pixel-diff ratio < ${VISUAL_THRESHOLD} enforced for ALL ${APPROVED_DETERMINISTIC_PAIRS.length} approved deterministic pairs (frozen full matrix); dimension mismatch or fixture mismatch is a FAIL with NO percentage; any failing pair fails the run (non-zero exit after evidence); unapproved pairs are N/A and never PASS`,
+        approved: APPROVED_DETERMINISTIC_PAIRS.length,
+        captured: visEntries.length,
+        passed: approvedEntries.filter((e) => e.diff.gate === 'pass').length,
+        failed: approvedEntries.filter((e) => e.diff.gate === 'fail').length,
+        entries: visEntries,
+      }, null, 2));
+    };
+
+    if (!gatePassed) {
+      /* FAIL BEFORE CAPTURE: every approved pair is recorded as FAIL with the
+       * contract-mismatch code; no pixels are captured or scored. */
+      for (const pairKey of APPROVED_DETERMINISTIC_PAIRS) {
+        record(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
+          `pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% over identical fixture + identical capture geometry`,
+          { code: 'FIXTURE_CONTRACT_MISMATCH', detail: 'fixture gate failed — capture refused (see VIS-C+-fixture-gate)' },
+          false);
+        visEntries.push({ pair: pairKey, diff: { code: 'FIXTURE_CONTRACT_MISMATCH', gate: 'fail', approvedDeterministicPair: true } });
+      }
+      await writeManifest();
+      return;
+    }
+
     const VIS_SCREENS = [
-      { key: 's27', devUrl: () => `${base}/s-27`,
-        devReady: (page) => page.getByText(/^12 SCHOOLS/).waitFor(),
+      { key: 's27',
+        devUrl: () => `${base}/s-27?page_size=${FX.s27.pageSize}`,
+        devReady: async (page) => {
+          await page.getByText(/^12 SCHOOLS/).waitFor();
+          await page.getByText(`PAGE ${FX.s27.page} OF 2`).waitFor();
+        },
         refRoute: '#/s27', refState: 's27-default' },
-      { key: 's28', devUrl: () => `${base}/s-28?id=${ids4[0]}`,
+      { key: 's28',
+        devUrl: () => `${base}/s-28?id=${idOf(FX.s28.slug)}`,
         devReady: (page) => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(),
-        refRoute: '#/s28?id=nlsiu', refState: 's28-detail' },
-      { key: 's29', devUrl: () => `${base}/s-29?ids=${ids4.join(',')}`,
+        refRoute: `#/s28?id=${FX.s28.slug}`, refState: 's28-detail' },
+      { key: 's29',
+        devUrl: () => `${base}/s-29?ids=${FX.s29.slugs.map(idOf).join(',')}`,
         devReady: (page) => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(),
-        refRoute: '#/s29?cmp=nlsiu,nalsar', refState: 's29-4' },
-      { key: 's30', devUrl: () => `${base}/s-30`,
-        devReady: (page) => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(),
+        refRoute: `#/s29?cmp=${FX.s29.slugs.join(',')}`, refState: 's29-4' },
+      { key: 's30',
+        devUrl: () => `${base}/s-30`,
+        devReady: (page) => page.waitForFunction(
+          ([nSaved, nFollowed]) =>
+            document.querySelectorAll('section[aria-label="Saved schools"] li.st-item').length === nSaved
+            && document.querySelectorAll('section[aria-label="Followed schools"] li.st-item').length === nFollowed,
+          [FX.s30.saved.length, FX.s30.followed.length]),
         refRoute: '#/s30', refState: 's30-both' },
     ];
-    const pad = (png, w, h) => {
-      if (png.width === w && png.height === h) return png;
-      const out = new PNG({ width: w, height: h });
-      out.data.fill(255);
-      PNG.bitblt(png, out, 0, 0, png.width, png.height, 0, 0);
-      return out;
-    };
     for (const { width, height } of [
       { width: 390, height: 844 }, { width: 430, height: 932 }, { width: 768, height: 1024 },
       { width: 1024, height: 768 }, { width: 1440, height: 900 }]) {
@@ -1019,15 +1193,17 @@ if (browser) {
         for (const screen of VIS_SCREENS) {
           const pairKey = `${screen.key}-${width}x${height}-${theme}`;
           await tcase(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
-            `developed + reference captured with provenance; pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% (STRICT — approved deterministic pair)`,
+            `identical fixture + identical capture geometry; pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% (STRICT — approved deterministic pair; CAPTURE_DIMENSION_MISMATCH fails with no percentage)`,
             async () => {
-              /* Developed capture (element = global shell excluded). */
+              /* Developed capture: feature region element (AppShell excluded). */
               const dev = await fresh({ viewport: { width, height }, theme, label: `vis-${pairKey}` });
               let entry;
               try {
                 await dev.page.goto(screen.devUrl());
                 await screen.devReady(dev.page);
                 await dev.page.waitForTimeout(250);
+                const devLoc = dev.page.locator('section.st-screen');
+                const devBox = await devLoc.boundingBox();
                 const devMeta = await dev.page.evaluate(() => ({
                   dpr: window.devicePixelRatio,
                   docScrollWidth: document.documentElement.scrollWidth,
@@ -1037,51 +1213,84 @@ if (browser) {
                     .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height); })
                     .filter((m) => m > 0), Infinity),
                 }));
-                const devPng = await dev.page.locator('section.st-screen').screenshot();
+                const devPng = await devLoc.screenshot();
                 const devFile = `dev_${pairKey}.png`;
                 await fs.writeFile(path.join(visDir, devFile), devPng);
-                /* Reference capture (baseline mode hides reviewer tooling). */
+                /* Reference capture: #frame element, frame width pinned to the
+                 * developed feature-region CSS width, baseline mode on. */
+                const regionWidth = Math.round(devBox?.width ?? width);
                 const ref = await fresh({ viewport: { width, height }, label: `visref-${pairKey}` });
-                let refPng; let refMeta;
+                let refPng; let refMeta; let refBox;
                 try {
                   const hashRoute = screen.refRoute + (screen.refRoute.includes('?') ? '&' : '?') + 'baseline=1';
                   await ref.page.goto(`${pathToFileURL(refFile).href}${hashRoute}`);
                   await ref.page.waitForFunction(() => !!window.__opt, null, { timeout: 20000 });
-                  await ref.page.evaluate(([t, st]) => { window.__opt.theme.set(t); window.__opt.apply(st); document.body.setAttribute('data-baseline', '1'); }, [theme, screen.refState]);
+                  await ref.page.evaluate(([t, st, w]) => {
+                    window.__opt.theme.set(t);
+                    window.__opt.apply(st);
+                    window.__opt.setFrame(w);
+                    document.body.setAttribute('data-baseline', '1');
+                  }, [theme, screen.refState, regionWidth]);
                   await ref.page.waitForTimeout(400);
                   refMeta = await ref.page.evaluate(() => ({
                     dpr: window.devicePixelRatio,
                     docScrollWidth: document.documentElement.scrollWidth,
                     innerWidth: window.innerWidth,
                   }));
-                  refPng = await ref.page.screenshot({ fullPage: true });
+                  const refLoc = ref.page.locator('#frame');
+                  refBox = await refLoc.boundingBox();
+                  refPng = await refLoc.screenshot();
                 } finally { await ref.close(); }
                 const refFileName = `ref_${pairKey}.png`;
                 await fs.writeFile(path.join(visDir, refFileName), refPng);
-                /* Pixel diff + side-by-side (advisory unless pair approved). */
                 const a = PNG.sync.read(devPng);
                 const b = PNG.sync.read(refPng);
-                const w = Math.max(a.width, b.width);
-                const h = Math.max(a.height, b.height);
-                const pa = pad(a, w, h); const pb = pad(b, w, h);
+                const approved = APPROVED_DETERMINISTIC_PAIRS.includes(pairKey);
+                const developedRecord = {
+                  file: `option_c_plus_visual/dev_${pairKey}.png`, url: screen.devUrl(),
+                  selector: 'section.st-screen', boundingBox: devBox,
+                  pngSize: { width: a.width, height: a.height },
+                  sha256: sha256(devPng), ...devMeta,
+                  consoleErrors: dev.consoleErrors.slice(), pageErrors: dev.pageErrors.slice(), unexpectedHttp: dev.unexpectedHttp.slice(),
+                  exclusions: 'feature-region element capture — global AppShell/top shell/nav excluded by construction',
+                };
+                const referenceRecord = {
+                  file: `option_c_plus_visual/${refFileName}`, route: screen.refRoute, state: screen.refState,
+                  selector: '#frame', frameWidthSet: regionWidth, boundingBox: refBox,
+                  pngSize: { width: b.width, height: b.height },
+                  sha256: sha256(refPng), ...refMeta,
+                  exclusions: 'baseline mode (&baseline=1 + body[data-baseline=1]) hides reviewer tooling; #frame element capture only',
+                };
+                if (a.width !== b.width || a.height !== b.height) {
+                  /* DIMENSION-STRICT: no percentage, no padding, pair FAILS. */
+                  entry = {
+                    pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                    developed: developedRecord, reference: referenceRecord,
+                    diff: { code: 'CAPTURE_DIMENSION_MISMATCH',
+                      developedSize: { width: a.width, height: a.height },
+                      referenceSize: { width: b.width, height: b.height },
+                      ratio: null, threshold: VISUAL_THRESHOLD,
+                      approvedDeterministicPair: approved, gate: approved ? 'fail' : 'advisory' },
+                  };
+                  visEntries.push(entry);
+                  return { actual: { code: 'CAPTURE_DIMENSION_MISMATCH',
+                    developedSize: `${a.width}x${a.height}`, referenceSize: `${b.width}x${b.height}` },
+                  na: !approved, pass: false,
+                  evidence: `option_c_plus_visual/${devFile}` };
+                }
+                const w = a.width; const h = a.height;
                 const diff = new PNG({ width: w, height: h });
-                const mismatched = pixelmatch(pa.data, pb.data, diff.data, w, h, { threshold: 0.1 });
+                const mismatched = pixelmatch(a.data, b.data, diff.data, w, h, { threshold: 0.1 });
                 const ratio = mismatched / (w * h);
                 const side = new PNG({ width: w * 2 + 8, height: h });
                 side.data.fill(255);
-                PNG.bitblt(pa, side, 0, 0, w, h, 0, 0);
-                PNG.bitblt(pb, side, 0, 0, w, h, w + 8, 0);
+                PNG.bitblt(a, side, 0, 0, w, h, 0, 0);
+                PNG.bitblt(b, side, 0, 0, w, h, w + 8, 0);
                 await fs.writeFile(path.join(visDir, `diff_${pairKey}.png`), PNG.sync.write(diff));
                 await fs.writeFile(path.join(visDir, `side_${pairKey}.png`), PNG.sync.write(side));
-                const approved = APPROVED_DETERMINISTIC_PAIRS.includes(pairKey);
                 entry = {
-                  pair: pairKey, screen: screen.key, theme,
-                  viewport: { width, height },
-                  developed: { file: `option_c_plus_visual/dev_${pairKey}.png`, url: screen.devUrl(), sha256: sha256(devPng), ...devMeta,
-                    consoleErrors: dev.consoleErrors.slice(), pageErrors: dev.pageErrors.slice(), unexpectedHttp: dev.unexpectedHttp.slice(),
-                    exclusions: 'captured as .st-screen element — global AppShell excluded by construction' },
-                  reference: { file: `option_c_plus_visual/${refFileName}`, route: screen.refRoute, state: screen.refState, sha256: sha256(refPng), ...refMeta,
-                    exclusions: 'baseline mode (&baseline=1 + body[data-baseline=1]) hides reviewer tooling' },
+                  pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                  developed: developedRecord, reference: referenceRecord,
                   diff: { file: `option_c_plus_visual/diff_${pairKey}.png`, sideBySide: `option_c_plus_visual/side_${pairKey}.png`,
                     mismatchedPixels: mismatched, ratio, threshold: VISUAL_THRESHOLD, approvedDeterministicPair: approved,
                     gate: approved ? (ratio < VISUAL_THRESHOLD ? 'pass' : 'fail') : 'advisory' },
@@ -1100,20 +1309,9 @@ if (browser) {
         }
       }
     }
-    await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
-    await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
-    const approvedEntries = visEntries.filter((e) => e.diff.approvedDeterministicPair);
-    await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
-      commit, generatedAt: new Date().toISOString(),
-      reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
-      thresholdPolicy: `STRICT: pixel-diff ratio < ${VISUAL_THRESHOLD} enforced for ALL ${APPROVED_DETERMINISTIC_PAIRS.length} approved deterministic pairs (frozen full matrix, SAATHI-121 closure 2026-07-28); any pair >= ${VISUAL_THRESHOLD} fails the run (non-zero exit after evidence); unapproved pairs are N/A and never PASS`,
-      approved: APPROVED_DETERMINISTIC_PAIRS.length,
-      captured: visEntries.length,
-      passed: approvedEntries.filter((e) => e.diff.gate === 'pass').length,
-      failed: approvedEntries.filter((e) => e.diff.gate === 'fail').length,
-      exclusions: { developed: 'global AppShell excluded — .st-screen element capture', reference: 'reviewer tooling hidden via baseline mode (&baseline=1 + body[data-baseline=1])' },
-      entries: visEntries,
-    }, null, 2));
+    for (const slug of FX.s30.saved) await apiCall('DELETE', `/api/v1/student/law-schools/${idOf(slug)}/saved`, { claims: USER_A });
+    for (const slug of FX.s30.followed) await apiCall('DELETE', `/api/v1/student/law-schools/${idOf(slug)}/follow`, { claims: USER_A });
+    await writeManifest();
   });
 }
 
