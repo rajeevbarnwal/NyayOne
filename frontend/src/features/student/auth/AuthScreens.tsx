@@ -558,14 +558,36 @@ export function Lockout() {
   const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(900); // 15 minutes = 900 seconds
+
+  // Retrieve or set the absolute lockout expiration timestamp (15 minutes).
+  // Persisted in sessionStorage so refreshing the page preserves the actual remaining time.
+  const lockExpiryTime = useMemo(() => {
+    const KEY = 'ls_lockout_until';
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem(KEY) : null;
+    const now = Date.now();
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed > now) return parsed;
+    }
+    const expiry = now + 900 * 1000; // 15 minutes = 900,000 ms
+    if (typeof window !== 'undefined') sessionStorage.setItem(KEY, String(expiry));
+    return expiry;
+  }, []);
+
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(0, Math.floor((lockExpiryTime - Date.now()) / 1000))
+  );
 
   useEffect(() => {
     const t = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      const remaining = Math.max(0, Math.floor((lockExpiryTime - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0 && typeof window !== 'undefined') {
+        sessionStorage.removeItem('ls_lockout_until');
+      }
     }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [lockExpiryTime]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -584,6 +606,7 @@ export function Lockout() {
     try {
       await verifyRecovery(recoveryId, code);
       await completeRecovery(recoveryId);
+      if (typeof window !== 'undefined') sessionStorage.removeItem('ls_lockout_until');
       setMessage('Account recovery verified! You may now sign in again.');
       setTimeout(() => nav('/s-03'), 1500);
     } catch {
