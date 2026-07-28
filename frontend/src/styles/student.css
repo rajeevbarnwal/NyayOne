@@ -709,210 +709,662 @@ textarea.st-input {
 
 /* ===========================================================================
    Option C+ "Guided Confidence" — law-school screens S-27..S-30 ONLY
-   (SAATHI-63 / SAATHI-121 visual integration, 2026-07-28).
-   Reference package: docs/design/lawschool_reference/option_c_plus.
-   Functional palette layered as SCOPED custom properties on the existing
-   Option J token system (no global token changes): forest = primary/verified/
-   saved, terracotta = energy/kickers, indigo = everything comparison (picks,
-   differ marks, toggle, focus), teal = Following identity, amber = sample/
-   caution. Light/dark values from the approved token spec (28/28 pairs AA,
-   min 5.15:1 per the package audit). No AppShell/global changes.
+   (SAATHI-118/120/121 STRUCTURAL integration, 2026-07-28).
+   Source of truth: docs/design/lawschool_reference/option_c_plus
+   (OPTION_C_PLUS_GUIDED_CONFIDENCE.html template CSS + TOKEN_COMPONENT_SPEC).
+   This block replicates the reference frame structure — page tokens, top
+   header/wordmark, sticky pick tray, guided steps, question cards, result
+   cards, stacked comparison fact cards, Saved/Following groups, fixed tab
+   bar — scoped to .st-lawschool (the .st-screen feature region the visual
+   gate captures). Light/dark values are the approved token set (28/28 AA,
+   min 5.15:1). No AppShell/global token changes.
 =========================================================================== */
 .st-lawschool {
+  /* Reference :root[data-theme=light] tokens, scoped. */
+  --ls-bg: #f7f5ee;
+  --ls-card: #ffffff;
+  --ls-panel: #efece2;
+  --ls-ink: #221d14;
+  --ls-ink2: #4a4335;
+  --ls-mut: #6f6555;
+  --ls-faint: #766a58;
+  --ls-line: #e7e1d2;
+  --ls-line2: #d3cbb8;
   --ls-pri: #1d5c3f;
-  --ls-pri-tint: #e3efe8;
+  --ls-pri-ink: #ffffff;
+  --ls-priq: rgba(29, 92, 63, 0.09);
   --ls-acc: #a3430f;
-  --ls-acc-tint: #f6e8de;
+  --ls-acc-ink: #ffffff;
+  --ls-accq: rgba(163, 67, 15, 0.09);
   --ls-ind: #3a4691;
-  --ls-ind-tint: #e8ebf9;
+  --ls-ind-ink: #ffffff;
+  --ls-indq: rgba(58, 70, 145, 0.1);
   --ls-teal: #0e5f64;
-  --ls-teal-tint: #e1eff0;
-  --ls-amber: #7a5a14;
-  --ls-amber-bg: #f6efdb;
+  --ls-tealq: rgba(14, 95, 100, 0.1);
+  --ls-warn: #7a5a14;
+  --ls-warn-bg: #f6efdb;
+  --ls-risk: #8f2f22;
+  --ls-risk-bg: #f8e9e5;
+  --ls-focus: #3a4691;
+  --ls-shadow: 0 16px 36px -24px rgba(34, 29, 20, 0.35);
+  --ls-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --ls-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --ls-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 [data-theme='dark'] .st-lawschool {
+  --ls-bg: #131009;
+  --ls-card: #1c1812;
+  --ls-panel: #262019;
+  --ls-ink: #f2ecdf;
+  --ls-ink2: #d5cab7;
+  --ls-mut: #a89a82;
+  --ls-faint: #97896f;
+  --ls-line: #352d1f;
+  --ls-line2: #4a4030;
   --ls-pri: #82c4a0;
-  --ls-pri-tint: #1a2a22;
+  --ls-pri-ink: #0a1810;
+  --ls-priq: rgba(130, 196, 160, 0.13);
   --ls-acc: #e2915a;
-  --ls-acc-tint: #2e2013;
+  --ls-acc-ink: #241105;
+  --ls-accq: rgba(226, 145, 90, 0.13);
   --ls-ind: #a4b0ef;
-  --ls-ind-tint: #232948;
+  --ls-ind-ink: #10142e;
+  --ls-indq: rgba(164, 176, 239, 0.14);
   --ls-teal: #7cc7cc;
-  --ls-teal-tint: #16292b;
-  --ls-amber: #dcb964;
-  --ls-amber-bg: #2e2513;
+  --ls-tealq: rgba(124, 199, 204, 0.13);
+  --ls-warn: #dcb964;
+  --ls-warn-bg: #2e2513;
+  --ls-risk: #e69c85;
+  --ls-risk-bg: #31201a;
+  --ls-focus: #a4b0ef;
+  --ls-shadow: 0 16px 36px -24px rgba(0, 0, 0, 0.7);
 }
 
-/* Terracotta kicker; indigo comparison focus ring (Option C+ semantic). */
-.st-lawschool .st-eyebrow { color: var(--ls-acc); }
-.st-lawschool :focus-visible { outline: 2px solid var(--ls-ind); outline-offset: 2px; }
+/* Frame: the feature region paints the reference page background full-bleed
+   inside the shell content area. */
+.st-screen.st-lawschool {
+  max-width: none;
+  background: var(--ls-bg);
+  color: var(--ls-ink);
+  font-family: var(--ls-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+.st-lawschool :focus-visible { outline: 2.5px solid var(--ls-focus); outline-offset: 2px; border-radius: 6px; }
 /* F1 heading focus is programmatic (tabindex=-1) — no ring on mouse/route focus. */
 .st-lawschool h1:focus:not(:focus-visible) { outline: none; }
+.st-lawschool .ls-flex1 { flex: 1; }
+.st-lawschool .ls-mt2 { margin-top: 2px; }
+.st-lawschool .ls-mt10 { margin-top: 10px; }
+.st-lawschool .ls-mt12 { margin-top: 12px; }
+.st-lawschool .ls-mt14 { margin-top: 14px; }
+.st-lawschool .ls-mt16 { margin-top: 16px; }
 
-/* Guided three-step journey header — rendered on S-27 ONLY (frozen decision). */
-.ls-steps {
+/* Top header (reference .top / .wm): scoped feature chrome, not AppShell. */
+.st-lawschool .ls-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ls-line);
+  background: var(--ls-card);
 }
-.ls-steps__node {
+.st-lawschool .ls-wm { font-family: var(--ls-serif); font-weight: 600; font-size: 18px; }
+.st-lawschool .ls-wm .ls-mk { color: var(--ls-pri); }
+.st-lawschool .ls-wm .ls-sub {
+  display: block;
+  font-family: var(--ls-mono);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ls-mut);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.st-lawschool .ls-ibtn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--ls-line2);
+  border-radius: 12px;
+  background: var(--ls-card);
+  color: var(--ls-ink2);
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--text3);
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 11px;
 }
-.ls-steps__dot {
+
+/* Content column (reference .wrap): 660 → 980 (≥760) → 1360 (≥1360). */
+.st-lawschool .ls-wrap { max-width: 660px; margin: 0 auto; padding: 0 18px 190px; }
+.st-lawschool .ls-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 760px) {
+  .st-lawschool .ls-wrap { max-width: 980px; }
+  .st-lawschool .ls-cards { grid-template-columns: 1fr 1fr; }
+  .st-lawschool .ls-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+}
+@media (min-width: 1360px) {
+  .st-lawschool .ls-wrap { max-width: 1360px; }
+  .st-lawschool .ls-cards { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* Type scale. */
+.st-lawschool h1.ls-lede {
+  font-family: var(--ls-serif);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.1;
+  margin: 14px 0 6px;
+  letter-spacing: -0.01em;
+  color: var(--ls-ink);
+}
+.st-lawschool .ls-lede--profile { margin: 0; font-size: 28px; }
+.st-lawschool .ls-stand { color: var(--ls-ink2); margin: 0; line-height: 1.55; font-size: 13.5px; }
+.st-lawschool .ls-metaline {
+  font-family: var(--ls-mono);
+  font-size: 9px;
+  color: var(--ls-mut);
+  letter-spacing: 0.05em;
+  margin: 0;
+  display: block;
+}
+.st-lawschool span.ls-metaline { display: inline; }
+
+/* Buttons (reference .btn + solid/ind/ghost variants) — the scoped rules
+   fully restyle the shared .btn primitive inside the law-school region. */
+.st-lawschool .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1.5px solid var(--ls-line2);
+  background: var(--ls-card);
+  color: var(--ls-ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.st-lawschool .btn.ls-solid { background: var(--ls-pri); border-color: var(--ls-pri); color: var(--ls-pri-ink); }
+.st-lawschool .btn.ls-ind { background: var(--ls-ind); border-color: var(--ls-ind); color: var(--ls-ind-ink); }
+.st-lawschool .btn.ls-ghost { border-color: transparent; background: transparent; color: var(--ls-ink2); }
+.st-lawschool .btn[aria-pressed='true'] { background: var(--ls-pri); border-color: var(--ls-pri); color: var(--ls-pri-ink); }
+.st-lawschool .btn.ls-ind[aria-pressed='true'],
+.st-lawschool .btn.ls-cmp[aria-pressed='true'] { background: var(--ls-ind); border-color: var(--ls-ind); color: var(--ls-ind-ink); }
+.st-lawschool .btn[disabled] { opacity: 0.5; cursor: default; }
+.st-lawschool .ls-back { padding-left: 4px; align-self: flex-start; }
+
+/* Guided step header (reference .stephead). */
+.st-lawschool .ls-stephead {
+  background: var(--ls-card);
+  border: 1px solid var(--ls-line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+.st-lawschool .ls-srow { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-lawschool .ls-stp {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1.5px solid var(--ls-line);
+  border-radius: 12px;
+  padding: 9px 12px;
+}
+.st-lawschool .ls-stp .ls-n {
   width: 26px;
   height: 26px;
   border-radius: 50%;
+  border: 1.5px solid var(--ls-line2);
   display: grid;
   place-items: center;
-  border: 1px solid var(--line2);
-  background: var(--panel);
-  color: var(--text2);
-  font: 700 var(--fs-xs) var(--font-mono);
-}
-.ls-steps__node--done { color: var(--ls-pri); }
-.ls-steps__node--done .ls-steps__dot {
-  background: var(--ls-pri);
-  border-color: var(--ls-pri);
-  color: var(--on-accent);
-}
-.ls-steps__node--now { color: var(--text); }
-.ls-steps__node--now .ls-steps__dot {
-  border: 2px solid var(--ls-acc);
-  color: var(--ls-acc);
-  background: var(--surface);
-}
-.ls-steps__meta {
-  margin-left: auto;
-  font: 600 var(--fs-xs) var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text3);
-}
-
-/* Selected/unselected chip semantics (F2): state is carried by aria-pressed;
-   the check glyph is rendered only when selected and is aria-hidden in TSX. */
-.st-lawschool .st-chip[aria-pressed='true'] {
-  background: var(--ls-pri-tint);
-  border-color: var(--ls-pri);
-  color: var(--ls-pri);
-}
-.st-lawschool .ls-ck { font-weight: 700; }
-
-/* Compare selection = indigo; Saved = forest; Following = teal. */
-.st-lawschool .btn.ls-cmp[aria-pressed='true'] {
-  background: var(--ls-ind-tint);
-  border-color: var(--ls-ind);
-  color: var(--ls-ind);
-  font-weight: 600;
-}
-.st-lawschool .btn.ls-save[aria-pressed='true'] {
-  background: var(--ls-pri-tint);
-  border-color: var(--ls-pri);
-  color: var(--ls-pri);
-  font-weight: 600;
-}
-.st-lawschool .btn.ls-follow[aria-pressed='true'] {
-  background: var(--ls-teal-tint);
-  border-color: var(--ls-teal);
-  color: var(--ls-teal);
-  font-weight: 600;
-}
-
-/* Monograms only (frozen decision) — 2-letter serif initials, forest tint. */
-.ls-card__id {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  min-width: 0;
-}
-.ls-card__id > div { min-width: 0; overflow-wrap: anywhere; }
-.ls-mono {
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--ls-mut);
   flex: none;
+}
+.st-lawschool .ls-stp[data-done='1'] .ls-n { background: var(--ls-pri); border-color: var(--ls-pri); color: var(--ls-pri-ink); }
+.st-lawschool .ls-stp[data-cur='1'] { border-color: var(--ls-acc); }
+.st-lawschool .ls-stp[data-cur='1'] .ls-n { border-color: var(--ls-acc); color: var(--ls-acc); }
+.st-lawschool .ls-stp .ls-l { font-size: 12px; font-weight: 800; }
+.st-lawschool .ls-stp .ls-s { font-size: 11px; color: var(--ls-mut); font-weight: 600; }
+
+/* Question cards (reference .qcard). */
+.st-lawschool .ls-qcard {
+  background: var(--ls-card);
+  border: 1px solid var(--ls-line);
+  border-radius: 18px;
+  padding: 18px;
+  margin-top: 14px;
+  box-shadow: var(--ls-shadow);
+}
+.st-lawschool .ls-qcard h2 {
+  font-family: var(--ls-serif);
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--ls-ink);
+}
+.st-lawschool .ls-why { font-size: 12px; color: var(--ls-mut); margin: 0 0 12px; }
+.st-lawschool .ls-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-lawschool .ls-chp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 24px;
+  border: 1.5px solid var(--ls-line2);
+  background: var(--ls-bg);
+  color: var(--ls-ink2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.st-lawschool .ls-chp[aria-pressed='true'],
+.st-lawschool .ls-chp--on { border-color: var(--ls-pri); background: var(--ls-priq); color: var(--ls-pri); }
+.st-lawschool .ls-chp--static { cursor: default; }
+.st-lawschool .ls-ckg { font-weight: 800; }
+
+/* Step-3 pick tray (reference #pb): in-flow sticky band, never an overlay. */
+.st-lawschool .ls-pickbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--ls-card);
+  border-bottom: 1.5px solid var(--ls-line);
+  margin: 0 -18px;
+  padding: 9px 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.st-lawschool .ls-pickbar__t { font-size: 12px; font-weight: 800; white-space: nowrap; }
+.st-lawschool .ls-bar {
+  flex: 1;
+  min-width: 120px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--ls-panel);
+  overflow: hidden;
+}
+.st-lawschool .ls-bar i { display: block; height: 100%; background: var(--ls-ind); border-radius: 4px; }
+.st-lawschool .ls-pickbar .btn { min-height: 44px; border-radius: 12px; }
+.st-lawschool .ls-pickbar .ls-metaline { white-space: nowrap; }
+
+/* Monograms (frozen decision — 2-letter serif initials, forest tint). */
+.st-lawschool .ls-mg {
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
+  background: var(--ls-priq);
+  border: 1px solid var(--ls-line);
   display: grid;
   place-items: center;
-  background: var(--ls-pri-tint);
+  font-family: var(--ls-serif);
+  font-weight: 600;
+  font-size: 16px;
   color: var(--ls-pri);
-  font: 600 var(--fs-md) var(--font-serif);
-  letter-spacing: 0.02em;
+  flex: none;
 }
-.ls-mono--sm {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  font-size: var(--fs-xs);
-  vertical-align: middle;
-}
+.st-lawschool .ls-mg--lg { width: 56px; height: 56px; font-size: 20px; }
 
-/* Corrected Follow wording line (no implied notification queue). */
-.st-lawschool .ls-followcopy { margin: 0; }
-
-/* S-29 comparison: indigo differ treatment + "Differences only" toggle
-   (frozen decision: OFF by default — aria-pressed carries the state). */
-.ls-comparehead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.st-lawschool .ls-toggle[aria-pressed='true'] {
-  background: var(--ls-ind);
-  border-color: var(--ls-ind);
-  color: var(--on-accent);
-}
-.st-lawschool .st-table tr.ls-differ th,
-.st-lawschool .st-table tr.ls-differ td {
-  background: var(--ls-ind-tint);
-}
-.st-lawschool .st-table tr.ls-differ th { box-shadow: inset 3px 0 0 var(--ls-ind); }
-.ls-differbadge,
-.ls-samebadge {
+/* Result / list cards (reference .card). */
+.st-lawschool .ls-card {
+  background: var(--ls-card);
+  border: 1px solid var(--ls-line);
+  border-radius: 18px;
+  padding: 16px;
+  margin: 0;
   display: block;
-  margin-top: 2px;
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
-.ls-differbadge { color: var(--ls-ind); }
-.ls-samebadge { color: var(--text3); }
+.st-lawschool .ls-card--empty { text-align: center; margin-top: 10px; }
+.st-lawschool .ls-card--empty .ls-stand { margin: 6px 0 12px; }
+.st-lawschool .ls-hd { display: flex; gap: 12px; align-items: flex-start; }
+.st-lawschool .ls-name { font-family: var(--ls-serif); font-size: 18px; font-weight: 600; margin: 0; min-width: 0; }
+.st-lawschool .ls-name a { color: inherit; text-decoration: none; display: inline-flex; min-height: 44px; align-items: center; }
+.st-lawschool .ls-name a:hover { color: var(--ls-acc); }
+.st-lawschool .ls-plain { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.st-lawschool .ls-plain li { display: flex; gap: 9px; font-size: 13px; color: var(--ls-ink2); align-items: baseline; }
+.st-lawschool .ls-plain .ls-b { width: 7px; height: 7px; border-radius: 50%; background: var(--ls-acc); flex: none; transform: translateY(-1px); }
+.st-lawschool .ls-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.st-lawschool .ls-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ls-line2);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-family: var(--ls-mono);
+  font-size: 9.5px;
+  color: var(--ls-ink2);
+}
+.st-lawschool .ls-tag--v { border-color: var(--ls-pri); color: var(--ls-pri); }
+.st-lawschool .ls-tag--v .ls-gl { width: 7px; height: 7px; border-radius: 50%; background: var(--ls-pri); }
+.st-lawschool .ls-tag--warn { border-color: var(--ls-warn); color: var(--ls-warn); }
+.st-lawschool .ls-tag--warn .ls-gl { width: 7px; height: 7px; background: var(--ls-warn); border-radius: 2px; transform: rotate(45deg); }
+.st-lawschool .ls-tag--teal { border-color: var(--ls-teal); color: var(--ls-teal); }
+.st-lawschool .ls-tag--teal .ls-gl { width: 7px; height: 7px; background: var(--ls-teal); border-radius: 50%; }
+.st-lawschool .ls-match {
+  background: var(--ls-priq);
+  border: 1px solid var(--ls-pri);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--ls-pri);
+  font-weight: 600;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.st-lawschool .ls-src { font-family: var(--ls-mono); font-size: 8.5px; color: var(--ls-faint); margin: 10px 0 0; line-height: 1.5; }
+.st-lawschool .ls-src a {
+  /* SAATHI-118 target-size fix carried forward: every provenance link keeps
+     a >= 44x44 interactive rect at all viewport/theme pairs. */
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+.st-lawschool .ls-acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.st-lawschool .ls-acts .btn { flex: 1; min-width: 130px; }
+.st-lawschool .ls-acts--profile { margin-top: 12px; }
+.st-lawschool .ls-acts--profile .btn { flex: 0 1 auto; }
 
-/* S-30 identities: Saved = forest, Following = teal (visually distinct). */
-.ls-saved { border-top: 3px solid var(--ls-pri); }
-.ls-saved .st-panel__title { color: var(--ls-pri); }
-.ls-followed { border-top: 3px solid var(--ls-teal); }
-.ls-followed .st-panel__title { color: var(--ls-teal); }
+/* Tool row + inputs (reference .in / .lb). */
+.st-lawschool .ls-toolrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.st-lawschool .ls-qrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-lawschool .ls-in {
+  width: 100%;
+  min-height: 48px;
+  border: 1.5px solid var(--ls-line2);
+  border-radius: 14px;
+  background: var(--ls-card);
+  color: var(--ls-ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 14px;
+}
+.st-lawschool .ls-in:focus { border-color: var(--ls-focus); outline: none; box-shadow: 0 0 0 3px var(--ls-indq); }
+.st-lawschool .ls-in--auto { width: auto; min-width: 170px; }
+.st-lawschool .ls-in--grow { flex: 1; min-width: 200px; width: auto; }
+.st-lawschool .ls-lb {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ls-mut);
+  margin: 0 0 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.st-lawschool .ls-lb--inline { margin: 0; }
+.st-lawschool .ls-filtergrid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 760px) { .st-lawschool .ls-filtergrid { grid-template-columns: 1fr 1fr; } }
+.st-lawschool .ls-err { color: var(--ls-risk); font-size: 12.5px; margin: 8px 0 0; font-weight: 600; }
 
-/* S-27 three-column directory at >=1360px (frozen decision). Below 1360 the
-   approved single/two-column rhythm is unchanged. The compare tray panel
-   remains IN-FLOW (never fixed/sticky) so it can never obscure card actions
-   or focused controls (F3) at any viewport. */
-@media (min-width: 1360px) {
-  .st-screen.st-lawschool--s27 { max-width: min(1320px, 100%); }
-  .st-lawschool--s27 .st-stack { max-width: 1280px; }
-  .st-lawschool--s27 .ls-results .st-list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: stretch;
-  }
-  .st-lawschool--s27 .ls-results .st-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .st-lawschool--s27 .ls-results .st-item > div:last-child {
-    margin-top: auto;
-    padding-top: var(--space-3);
-  }
+/* Banners (reference .banner): mono kicker + message. */
+.st-lawschool .ls-banner {
+  border: 1px solid var(--ls-line2);
+  border-left: 5px solid var(--ls-pri);
+  background: var(--ls-card);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--ls-ink2);
+}
+.st-lawschool .ls-banner--warn { border-left-color: var(--ls-warn); background: var(--ls-warn-bg); }
+.st-lawschool .ls-banner--risk { border-left-color: var(--ls-risk); background: var(--ls-risk-bg); }
+.st-lawschool .ls-banner .ls-k {
+  font-family: var(--ls-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Panel boxes (reference .panelbox): empty / error / sign-in states. */
+.st-lawschool .ls-panelbox {
+  border: 1px solid var(--ls-line);
+  background: var(--ls-card);
+  border-radius: 18px;
+  padding: 26px;
+  text-align: center;
+  max-width: 480px;
+  margin: 24px auto;
+}
+.st-lawschool .ls-panelbox h2 { font-family: var(--ls-serif); font-size: 20px; margin: 0 0 8px; color: var(--ls-ink); }
+.st-lawschool .ls-panelbox p { color: var(--ls-ink2); line-height: 1.55; margin: 0 0 16px; font-size: 13px; }
+
+/* Skeletons — shimmer only without prefers-reduced-motion (motion spec). */
+.st-lawschool .ls-skel { background: linear-gradient(90deg, var(--ls-panel), var(--ls-card), var(--ls-panel)); border-radius: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .st-lawschool .ls-skel { background-size: 200% 100%; animation: ls-sh 1.2s linear infinite; }
+}
+@keyframes ls-sh { to { background-position: -200% 0; } }
+
+/* S-28 identity + essentials facts. */
+.st-lawschool .ls-idrow { display: flex; gap: 14px; align-items: flex-start; margin-top: 10px; }
+.st-lawschool .ls-fact { border-bottom: 1px dashed var(--ls-line); padding: 11px 0; }
+.st-lawschool .ls-fact__l {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ls-mut);
+}
+.st-lawschool .ls-fact__v { font-size: 14.5px; font-weight: 700; margin-top: 3px; overflow-wrap: anywhere; }
+.st-lawschool .ls-fact .ls-src { margin-top: 4px; }
+.st-lawschool .ls-helper {
+  background: var(--ls-panel);
+  border-radius: 12px;
+  padding: 10px 13px;
+  font-size: 12px;
+  color: var(--ls-ink2);
+  margin: 8px 0 0;
+  line-height: 1.5;
+  max-width: 560px;
+}
+.st-lawschool .ls-helper b { font-weight: 800; }
+
+/* S-29 stacked comparison fact cards (reference .attrcard) — indigo differ. */
+.st-lawschool .ls-attrcard { background: var(--ls-card); border: 1px solid var(--ls-line); border-radius: 16px; padding: 14px 16px; }
+.st-lawschool .ls-attrcard[data-differ='1'] { border-color: var(--ls-ind); background: var(--ls-indq); }
+.st-lawschool .ls-al {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ls-mut);
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+.st-lawschool .ls-vals { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.st-lawschool .ls-vals li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--ls-line);
+  padding-bottom: 7px;
+}
+.st-lawschool .ls-vals li:last-child { border: none; padding-bottom: 0; }
+.st-lawschool .ls-vals b { font-weight: 800; text-align: right; overflow-wrap: anywhere; }
+.st-lawschool .ls-dbadge {
+  font-family: var(--ls-mono);
+  font-size: 8.5px;
+  color: var(--ls-ind);
+  border: 1px solid var(--ls-ind);
+  border-radius: 10px;
+  padding: 3px 8px;
+  background: var(--ls-card);
+}
+.st-lawschool .ls-cmprow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+.st-lawschool .ls-x {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--ls-mut);
+  cursor: pointer;
+  font-size: 12px;
+}
+.st-lawschool .ls-tgl {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  border: 1.5px solid var(--ls-line2);
+  border-radius: 12px;
+  background: var(--ls-card);
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ls-ink2);
+}
+.st-lawschool .ls-sw {
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: var(--ls-panel);
+  border: 1px solid var(--ls-line2);
+  position: relative;
+  flex: none;
+}
+.st-lawschool .ls-sw::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ls-mut);
+}
+.st-lawschool .ls-tgl[aria-pressed='true'] { border-color: var(--ls-ind); color: var(--ls-ind); }
+.st-lawschool .ls-tgl[aria-pressed='true'] .ls-sw { background: var(--ls-ind); border-color: var(--ls-ind); }
+.st-lawschool .ls-tgl[aria-pressed='true'] .ls-sw::after { left: auto; right: 2px; background: var(--ls-ind-ink); }
+.st-lawschool .ls-pnum { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.st-lawschool .ls-pnum--center { justify-content: center; }
+.st-lawschool .ls-pnum .ls-n {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ls-line2);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ls-mut);
+  flex: none;
+}
+.st-lawschool .ls-pnum .ls-n--on { background: var(--ls-ind); border-color: var(--ls-ind); color: var(--ls-ind-ink); }
+.st-lawschool .ls-pl { font-size: 12.5px; font-weight: 700; color: var(--ls-ink2); }
+
+/* S-30 group sections. */
+.st-lawschool .ls-sect { margin-top: 16px; }
+.st-lawschool .ls-h2 { font-family: var(--ls-serif); font-size: 19px; font-weight: 600; margin: 0 0 2px; color: var(--ls-ink); }
+.st-lawschool .ls-sect--saved .ls-h2 { color: var(--ls-pri); }
+.st-lawschool .ls-sect--followed .ls-h2 { color: var(--ls-teal); }
+
+/* Pagination. */
+.st-lawschool .ls-pager { display: flex; gap: 8px; align-items: center; margin-top: 16px; justify-content: center; }
+
+/* Footer provenance line (reference .foot). */
+.st-lawschool .ls-foot {
+  border-top: 1px solid var(--ls-line);
+  margin-top: 26px;
+  padding: 14px 2px 0;
+  font-family: var(--ls-mono);
+  font-size: 8.5px;
+  color: var(--ls-faint);
+  line-height: 1.6;
+}
+
+/* Bottom tab bar (reference .tabbar): fixed with safe-area padding; the
+   focusin scroll-padding guard keeps focused controls clear of it. */
+.st-lawschool .ls-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 46;
+  background: var(--ls-card);
+  border-top: 1px solid var(--ls-line);
+  display: flex;
+  padding: 4px 6px calc(6px + env(safe-area-inset-bottom));
+}
+.st-lawschool .ls-tabbar a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+  text-decoration: none;
+  color: var(--ls-mut);
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 12px;
+}
+.st-lawschool .ls-tabbar a[aria-current='page'] { color: var(--ls-pri); background: var(--ls-priq); }
+
+/* Removal spinner (reference .spin) — rotation gated by reduced motion. */
+.st-lawschool .ls-spin {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--ls-line2);
+  border-top-color: var(--ls-pri);
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: -3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .st-lawschool .ls-spin { animation: ls-sp 1s linear infinite; }
+}
+@keyframes ls-sp { to { transform: rotate(360deg); } }
+
+/* Shared primitives that remain inside the scope (SelectField/Checkbox)
+   inherit the reference palette. */
+.st-lawschool .st-field__label { color: var(--ls-mut); }
+.st-lawschool .st-select,
+.st-lawschool .st-input {
+  border: 1.5px solid var(--ls-line2);
+  border-radius: 14px;
+  background: var(--ls-card);
+  color: var(--ls-ink);
+  min-height: 48px;
 }

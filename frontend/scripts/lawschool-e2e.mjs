@@ -69,6 +69,10 @@ const recordNA = (tc, name, expected, note) => record(tc, name, expected, note, 
 async function tcase(tc, name, expected, fn) {
   try {
     const out = await fn();
+    if (out.na) {
+      record(tc, name, expected, out.actual, false, out.evidence ?? null, 'na');
+      return;
+    }
     record(tc, name, expected, out.actual, !!out.pass, out.evidence ?? null);
   } catch (err) {
     record(tc, name, expected, `uncaught: ${err?.message ?? String(err)}`, false, null);
@@ -461,20 +465,23 @@ if (browser) {
     const ctx = await fresh({ label: 'search' });
     const { page, consoleErrors, unexpectedHttp } = ctx;
     await page.goto(`${base}/s-27`);
-    await page.getByText('12 found').waitFor();
+    await page.getByText(/^12 SCHOOLS/).waitFor();
     await tcase('TC-63-01-ui-results', 'ui_lists_full_catalog', 'all 12 seeded schools listed', async () => {
       const count = await page.locator('section[aria-label="Search results"] li.st-item').count();
       return { actual: count, pass: count === 12, evidence: await shot(page, 's27_results_12.png') };
     });
     await tcase('TC-63-01-ui-pagination-idle', 'ui_no_pager_single_page',
       'no pagination controls (total 12 <= page size 20)', async () => {
-        const n = await page.getByRole('button', { name: 'Previous' }).count();
+        const n = await page.getByRole('button', { name: '‹ Back' }).count();
         return { actual: n, pass: n === 0 };
       });
     await tcase('TC-63-01-ui-search', 'ui_search_nalsar', 'q=NALSAR shows exactly one result', async () => {
+      /* Reference structure: the name-search card is collapsed by default and
+       * opens in-flow from the tool row (s27-default parity). */
+      await page.getByRole('button', { name: 'Or search by name ⌕' }).click();
       await page.getByLabel('Search law schools').fill('NALSAR');
       await page.getByLabel('Search law schools').press('Enter');
-      await page.getByText('1 found').waitFor();
+      await page.getByText(/^1 SCHOOL\b/).waitFor();
       const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
       return { actual: n, pass: n === 1, evidence: await shot(page, 's27_search_nalsar.png') };
     });
@@ -490,17 +497,17 @@ if (browser) {
       'state=Delhi filters to the 2 Delhi schools incl. NLU Delhi', async () => {
         await page.getByLabel('Search law schools').fill('');
         await page.getByLabel('Search law schools').press('Enter');
-        await page.getByLabel('State').selectOption('Delhi');
-        await page.getByText('2 found').waitFor();
+        await page.getByRole('group', { name: 'State' }).getByRole('button', { name: 'Delhi' }).click();
+        await page.getByText(/^2 SCHOOLS/).waitFor();
         const nlu = await resultsItem(page, 'National Law University, Delhi').count();
         const du = await resultsItem(page, 'Faculty of Law, University of Delhi').count();
         return { actual: { nlu, du }, pass: nlu === 1 && du === 1, evidence: await shot(page, 's27_filter_delhi.png') };
       });
     await tcase('TC-63-01-ui-sort-fees', 'ui_sort_fees_first',
       'fees sort puts Faculty of Law, University of Delhi (lowest fees_min) first', async () => {
-        await page.getByLabel('State').selectOption('');
-        await page.getByRole('button', { name: 'Sort: Fees' }).click();
-        await page.getByText('12 found').waitFor();
+        await page.getByRole('group', { name: 'State' }).getByRole('button', { name: 'Anywhere' }).click();
+        await page.getByLabel('Order').selectOption('fees');
+        await page.getByText(/^12 SCHOOLS/).waitFor();
         const firstName = await page.locator('section[aria-label="Search results"] li.st-item').first().innerText();
         return { actual: firstName.split('\n')[0], pass: firstName.includes('Faculty of Law'),
           evidence: await shot(page, 's27_sort_fees.png') };
@@ -522,9 +529,10 @@ if (browser) {
     await tcase('TC-63-01-ui-institution-type-select', 'ui_institution_type_select_wire_value',
       'selecting label "National Law University" sends wire value and renders the 6 NLU schools', async () => {
         await page.goto(`${base}/s-27`);
-        await page.getByText('12 found').waitFor();
+        await page.getByText(/^12 SCHOOLS/).waitFor();
+        await page.getByRole('button', { name: 'More filters' }).click();
         await page.getByLabel('Institution type').selectOption({ label: 'National Law University' });
-        await page.getByText('6 found').waitFor();
+        await page.getByText(/^6 SCHOOLS/).waitFor();
         const urlParam = new URL(page.url()).searchParams.get('institution_type');
         const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
         const gnlu = await resultsItem(page, 'Gujarat National Law University').count();
@@ -536,7 +544,7 @@ if (browser) {
     await tcase('TC-63-01-ui-institution-type-url', 'ui_institution_type_url_wire_value',
       'deep link institution_type=national_law_university → exactly the 6 NLU schools rendered', async () => {
         await page.goto(`${base}/s-27?institution_type=national_law_university`);
-        await page.getByText('6 found').waitFor();
+        await page.getByText(/^6 SCHOOLS/).waitFor();
         const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
         return { actual: { rendered: n }, pass: n === 6 };
       });
@@ -559,12 +567,12 @@ if (browser) {
     });
     await tcase('TC-63-06-detail-facts', 'detail_facts_sourced', 'detail shows verified facts with source link', async () => {
       await page.getByRole('heading', { name: 'National Law School of India University' }).waitFor();
-      const ok = await page.getByText('Verified facts').isVisible()
+      const ok = await page.getByRole('heading', { name: 'The essentials' }).isVisible()
         && (await page.locator('section a[target="_blank"]').count()) > 0;
       return { actual: ok, pass: ok, evidence: await shot(page, 's28_detail_nlsiu.png') };
     });
     await tcase('TC-63-06-return-context', 'back_restores_filters', 'Back to search restores /s-27?state=Karnataka', async () => {
-      await page.getByRole('button', { name: 'Back to search' }).first().click();
+      await page.getByRole('button', { name: '‹ Back to schools' }).first().click();
       await page.waitForURL('**/s-27*');
       const back = new URL(page.url());
       return { actual: back.pathname + back.search,
@@ -580,54 +588,68 @@ if (browser) {
     const { page } = ctx;
     await page.goto(`${base}/s-27`);
     await resultsItem(page, 'NALSAR').waitFor();
-    const cta = page.locator('section[aria-label="Compare tray"]').getByRole('button', { name: /^Compare/ });
-    await tcase('TC-63-03-ui-min-disabled', 'cta_disabled_below_min', 'CTA disabled below minimum of 2', async () => {
-      const d = await cta.isDisabled();
-      return { actual: d, pass: d };
+    const tray = page.locator('section[aria-label="Compare tray"]');
+    const cta = tray.getByRole('button', { name: /^Compare/ });
+    /* Reference #pb semantics: below the minimum the tray shows the
+     * "PICK n MORE TO COMPARE" metaline and NO Compare CTA exists at all —
+     * equally strong as the old disabled-CTA assertion (no enabled path). */
+    await tcase('TC-63-03-ui-min-disabled', 'cta_absent_below_min', 'below minimum of 2: no Compare CTA; tray asks to pick 2 more', async () => {
+      const n = await cta.count();
+      const ask = await tray.getByText('PICK 2 MORE TO COMPARE').isVisible();
+      return { actual: { ctaCount: n, ask }, pass: n === 0 && ask };
     });
-    await tcase('TC-63-03-ui-one-selected', 'cta_asks_one_more', 'with 1 selected CTA still disabled and asks for 1 more', async () => {
-      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: 'Compare', exact: true }).click();
-      const text = await cta.innerText();
-      return { actual: text, pass: (await cta.isDisabled()) && text.includes('select 1 more') };
+    await tcase('TC-63-03-ui-one-selected', 'cta_asks_one_more', 'with 1 selected still no CTA; tray asks for 1 more', async () => {
+      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: '+ Compare', exact: true }).click();
+      const n = await cta.count();
+      const ask = await tray.getByText('PICK 1 MORE TO COMPARE').isVisible();
+      return { actual: { ctaCount: n, ask }, pass: n === 0 && ask };
     });
-    await tcase('TC-63-03-ui-two-enabled', 'cta_enables_at_min', 'with 2 selected CTA enables', async () => {
-      await resultsItem(page, 'NALSAR').getByRole('button', { name: 'Compare', exact: true }).click();
+    await tcase('TC-63-03-ui-two-enabled', 'cta_enables_at_min', 'with 2 selected the Compare CTA appears enabled', async () => {
+      await resultsItem(page, 'NALSAR').getByRole('button', { name: '+ Compare', exact: true }).click();
+      await cta.waitFor();
       return { actual: await cta.innerText(), pass: !(await cta.isDisabled()) };
     });
     await tcase('TC-63-03-ui-compare-2', 'compare_table_2', '2-school table renders (attribute col + 2 schools)', async () => {
       await cta.click();
       await page.waitForURL('**/s-29*');
-      await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-      const cols2 = await page.locator('table.st-table thead th').count();
-      return { actual: cols2, pass: cols2 === 3, evidence: await shot(page, 's29_compare_2.png') };
+      await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+      /* Reference r29 structure: 7 stacked fact cards, each listing every
+       * pick (no table, nothing scrolls sideways). */
+      const cards = await page.locator('.ls-attrcard').count();
+      const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+      return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 2,
+        evidence: await shot(page, 's29_compare_2.png') };
     });
     await tcase('TC-63-04-ui-refresh-replay', 'refresh_state_survives',
       'refresh re-creates the comparison from the URL (state survives; distinct set per POST — not idempotency)', async () => {
         await page.reload();
-        await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-        const cols = await page.locator('table.st-table thead th').count();
-        return { actual: cols, pass: cols === 3 };
+        await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        const cards = await page.locator('.ls-attrcard').count();
+        const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+        return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 2 };
       });
     await tcase('TC-63-03-ui-compare-4', 'compare_table_4_max', '4-school table renders (config max)', async () => {
       await page.goto(`${base}/s-29?ids=${ids4.join(',')}`);
-      await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-      const cols4 = await page.locator('table.st-table thead th').count();
-      return { actual: cols4, pass: cols4 === 5, evidence: await shot(page, 's29_compare_4.png') };
+      await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+      const cards = await page.locator('.ls-attrcard').count();
+      const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+      return { actual: { cards, valsPerCard: vals }, pass: cards === 7 && vals === 4,
+        evidence: await shot(page, 's29_compare_4.png') };
     });
     await tcase('TC-63-03-ui-fifth-refusal', 'fifth_refusal_typed',
       'fifth school → typed COMPARE_LIMIT_EXCEEDED message, no table', async () => {
         await page.goto(`${base}/s-29?ids=${[...ids4, bySlug['gnlu-gandhinagar'].id].join(',')}`);
         await page.getByText(/at most 4 schools/).waitFor();
         return { actual: await page.getByText(/at most 4 schools/).innerText(),
-          pass: (await page.locator('table.st-table').count()) === 0,
+          pass: (await page.locator('.ls-attrcard').count()) === 0,
           evidence: await shot(page, 's29_limit_refusal.png') };
       });
     await tcase('TC-63-04-ui-duplicate-blocked', 'duplicate_ids_deduped',
       'duplicate ids deduped client-side → below-minimum validation, no request crash', async () => {
         await page.goto(`${base}/s-29?ids=${ids4[0]},${ids4[0]}`);
-        await page.getByText(/Select at least 2 schools/).waitFor();
-        return { actual: await page.getByText(/Select at least 2 schools/).innerText(),
-          pass: (await page.locator('table.st-table').count()) === 0,
+        await page.getByText(/at least 2 schools/).waitFor();
+        return { actual: await page.getByText(/at least 2 schools/).innerText(),
+          pass: (await page.locator('.ls-attrcard').count()) === 0,
           evidence: await shot(page, 's29_duplicate_blocked.png') };
       });
     await ctx.close();
@@ -696,12 +718,12 @@ if (browser) {
           pass: sv.includes('nlsiu-bengaluru') && fo.includes('nlsiu-bengaluru') };
       });
     await tcase('TC-63-05-unsave', 'unsave_empties_list', 'unsave removes the row and shows the empty state', async () => {
-      await second.page.locator('section[aria-label="Saved schools"]').getByRole('button', { name: 'Unsave' }).first().click();
+      await second.page.locator('section[aria-label="Saved schools"]').getByRole('button', { name: 'Remove from saved' }).first().click();
       await second.page.locator('section[aria-label="Saved schools"]').getByText('No saved schools yet').waitFor();
       return { actual: 'No saved schools yet', pass: true, evidence: await shot(second.page, 's30_after_unsave.png') };
     });
     await tcase('TC-63-05-unfollow', 'unfollow_empties_list', 'unfollow removes the row and shows the empty state', async () => {
-      await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Unfollow' }).first().click();
+      await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Stop following' }).first().click();
       await second.page.locator('section[aria-label="Followed schools"]').getByText('No followed schools yet').waitFor();
       return { actual: 'No followed schools yet', pass: true, evidence: await shot(second.page, 's30_after_unfollow.png') };
     });
@@ -807,11 +829,11 @@ if (browser) {
         const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `mx-${tag}` });
         const { page } = ctx;
         const states = [
-          { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText('12 found').waitFor(), keyboard: true },
+          { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText(/^12 SCHOOLS/).waitFor(), keyboard: true },
           { key: 's27-empty', url: `${base}/s-27?q=zz-no-such-school`, ready: () => page.getByText('No schools match').waitFor(), keyboard: false },
           { key: 's28-detail', url: `${base}/s-28?id=${ids4[0]}`, ready: () => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(), keyboard: true },
-          { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: false },
-          { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: true },
+          { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(), keyboard: false },
+          { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(), keyboard: true },
           { key: 's30-lists', url: `${base}/s-30`, ready: () => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(), keyboard: true },
         ];
         for (const state of states) {
@@ -922,17 +944,27 @@ if (browser) {
    * reference frames (docs/design/lawschool_reference/option_c_plus) per
    * viewport x theme, records provenance metadata + SHA256 per capture, and
    * produces side-by-side + pixel-diff artifacts.
-   * Threshold policy: the <2% gate is enforced ONLY for pairs listed in
-   * APPROVED_DETERMINISTIC_PAIRS. The independent review (2026-07-27)
-   * explicitly deferred visual-baseline freeze until Product approves the
-   * corrected native-viewport baseline, so that list ships EMPTY and every
-   * pair is recorded as advisory evidence with its measured ratio.
-   * Documented dynamic exclusions: the developed capture is the .st-screen
-   * ELEMENT — the global AppShell (rail/topbar/theme control) is excluded by
-   * construction; the reference is captured with baseline mode (&baseline=1
-   * in the hash query) which hides all reviewer tooling.
-   * Disable with QA_VISUAL_C_PLUS=0. */
-  const APPROVED_DETERMINISTIC_PAIRS = []; // e.g. 's27-390x844-light' once Product freezes the baseline
+   * STRICT threshold policy (SAATHI-121 closure, 2026-07-28): the baseline is
+   * FROZEN to the full 40-pair matrix from CAPTURE_MANIFEST.json —
+   * S-27..S-30 x {390x844, 430x932, 768x1024, 1024x768, 1440x900} x
+   * {light, dark}. Every approved pair MUST diff < 2% against the reference
+   * or its case FAILS (process exits non-zero AFTER all evidence + manifest
+   * are written). A pair that is somehow not approved is recorded as N/A and
+   * NEVER counts as PASS. The independent QA run at bbc85c3 measured
+   * 40/40 pairs >= 2% (avg 29.908%) under the previous advisory policy —
+   * that policy is retired here.
+   * Documented dynamic exclusions (the ONLY exclusions):
+   *   - developed capture is the .st-screen ELEMENT, so the global AppShell
+   *     (rail/topbar/theme control) is excluded by construction;
+   *   - reference is captured in baseline mode (&baseline=1 hash query +
+   *     body[data-baseline=1]) which hides all reviewer tooling.
+   * Disable with QA_VISUAL_C_PLUS=0 (sandbox runs without Chromium only —
+   * never for closure evidence). */
+  const VIS_SCREEN_KEYS = ['s27', 's28', 's29', 's30'];
+  const VIS_VIEWPORTS = ['390x844', '430x932', '768x1024', '1024x768', '1440x900'];
+  const VIS_THEMES = ['light', 'dark'];
+  const APPROVED_DETERMINISTIC_PAIRS = VIS_SCREEN_KEYS.flatMap((sc) =>
+    VIS_VIEWPORTS.flatMap((vp) => VIS_THEMES.map((th) => `${sc}-${vp}-${th}`)));
   const VISUAL_THRESHOLD = 0.02;
   if (process.env.QA_VISUAL_C_PLUS !== '0') await phase('option-c-plus-visual', async () => {
     const { pathToFileURL } = await import('node:url');
@@ -961,13 +993,13 @@ if (browser) {
     await apiCall('PUT', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
     const VIS_SCREENS = [
       { key: 's27', devUrl: () => `${base}/s-27`,
-        devReady: (page) => page.getByText('12 found').waitFor(),
+        devReady: (page) => page.getByText(/^12 SCHOOLS/).waitFor(),
         refRoute: '#/s27', refState: 's27-default' },
       { key: 's28', devUrl: () => `${base}/s-28?id=${ids4[0]}`,
         devReady: (page) => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(),
         refRoute: '#/s28?id=nlsiu', refState: 's28-detail' },
       { key: 's29', devUrl: () => `${base}/s-29?ids=${ids4.join(',')}`,
-        devReady: (page) => page.getByRole('heading', { name: 'Side by side' }).waitFor(),
+        devReady: (page) => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(),
         refRoute: '#/s29?cmp=nlsiu,nalsar', refState: 's29-4' },
       { key: 's30', devUrl: () => `${base}/s-30`,
         devReady: (page) => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(),
@@ -987,7 +1019,7 @@ if (browser) {
         for (const screen of VIS_SCREENS) {
           const pairKey = `${screen.key}-${width}x${height}-${theme}`;
           await tcase(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
-            `developed + reference captured with provenance; diff recorded${APPROVED_DETERMINISTIC_PAIRS.includes(pairKey) ? ` and < ${VISUAL_THRESHOLD * 100}%` : ' (advisory — baseline not frozen)'}`,
+            `developed + reference captured with provenance; pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% (STRICT — approved deterministic pair)`,
             async () => {
               /* Developed capture (element = global shell excluded). */
               const dev = await fresh({ viewport: { width, height }, theme, label: `vis-${pairKey}` });
@@ -1055,8 +1087,11 @@ if (browser) {
                     gate: approved ? (ratio < VISUAL_THRESHOLD ? 'pass' : 'fail') : 'advisory' },
                 };
                 visEntries.push(entry);
+                /* STRICT: an unapproved pair is N/A (never PASS); an approved
+                 * pair passes ONLY under the 2% threshold with a clean page. */
                 return { actual: { ratio: Number(ratio.toFixed(4)), approved, docScrollWidth: devMeta.docScrollWidth, minTargetPx: Math.round(devMeta.minTargetPx) },
-                  pass: (!approved || ratio < VISUAL_THRESHOLD)
+                  na: !approved,
+                  pass: approved && ratio < VISUAL_THRESHOLD
                     && devMeta.docScrollWidth <= width
                     && dev.pageErrors.length === 0 && dev.unexpectedHttp.length === 0,
                   evidence: `option_c_plus_visual/side_${pairKey}.png` };
@@ -1067,11 +1102,16 @@ if (browser) {
     }
     await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/saved`, { claims: USER_A });
     await apiCall('DELETE', `/api/v1/student/law-schools/${ids4[0]}/follow`, { claims: USER_A });
+    const approvedEntries = visEntries.filter((e) => e.diff.approvedDeterministicPair);
     await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
       commit, generatedAt: new Date().toISOString(),
       reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
-      thresholdPolicy: `pixel-diff ratio < ${VISUAL_THRESHOLD} enforced only for APPROVED_DETERMINISTIC_PAIRS (currently ${APPROVED_DETERMINISTIC_PAIRS.length}); all other pairs advisory pending Product baseline freeze (independent review 2026-07-27)`,
-      exclusions: { developed: 'global AppShell excluded — .st-screen element capture', reference: 'reviewer tooling hidden via baseline mode' },
+      thresholdPolicy: `STRICT: pixel-diff ratio < ${VISUAL_THRESHOLD} enforced for ALL ${APPROVED_DETERMINISTIC_PAIRS.length} approved deterministic pairs (frozen full matrix, SAATHI-121 closure 2026-07-28); any pair >= ${VISUAL_THRESHOLD} fails the run (non-zero exit after evidence); unapproved pairs are N/A and never PASS`,
+      approved: APPROVED_DETERMINISTIC_PAIRS.length,
+      captured: visEntries.length,
+      passed: approvedEntries.filter((e) => e.diff.gate === 'pass').length,
+      failed: approvedEntries.filter((e) => e.diff.gate === 'fail').length,
+      exclusions: { developed: 'global AppShell excluded — .st-screen element capture', reference: 'reviewer tooling hidden via baseline mode (&baseline=1 + body[data-baseline=1])' },
       entries: visEntries,
     }, null, 2));
   });
