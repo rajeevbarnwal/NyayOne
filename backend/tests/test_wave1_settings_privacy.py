@@ -331,7 +331,9 @@ def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
     langs = sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings"))
     assert langs == ["en", "hi"]
     # Downgrade removes only the constraint; data survives; re-upgrade clean.
-    assert alembic(db_a, "downgrade", "-1").returncode == 0
+    # Target 0005's parent explicitly: later migrations must not make this
+    # constraint downgrade assertion accidentally exercise another revision.
+    assert alembic(db_a, "downgrade", "0004_wave1_foundation").returncode == 0
     assert sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings")) == ["en", "hi"]
     assert alembic(db_a, "upgrade", "head").returncode == 0
 

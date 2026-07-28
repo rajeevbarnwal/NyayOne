@@ -5,7 +5,7 @@ Builds a REAL parent-state database: alembic upgrade to 0005, then the OLD
 reconcile it to the approved fixture contract (12 schools, 72 facts, every
 (slug, key, value) matching frontend/scripts/lawschool_fixture_contract.json),
 re-running the app-level reconciliation must change nothing and create no
-duplicates, and downgrade -1 / re-upgrade must stay clean.
+duplicates, and downgrade to its parent / re-upgrade must stay clean.
 """
 from __future__ import annotations
 
@@ -156,7 +156,9 @@ def test_upgrade_is_idempotent_and_seed_reconciliation_changes_nothing(parent_db
 
 def test_downgrade_then_reupgrade_clean(parent_db):
     assert alembic(parent_db, "upgrade", "head").returncode == 0
-    assert alembic(parent_db, "downgrade", "-1").returncode == 0
+    # Target 0006's parent explicitly: later forward migrations must not turn
+    # this historical data-migration test into a no-op.
+    assert alembic(parent_db, "downgrade", "0005_language_check").returncode == 0
     schools, facts, dup, _, _ = snapshot(parent_db)
     # policy: only the four added keys are removed; intake/hostel remain.
     assert schools == 12 and len(facts) == 24 and dup == []
