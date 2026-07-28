@@ -118,7 +118,7 @@ export function AuthGate() {
           Login
         </button>
         <button role="tab" aria-selected={tab === 'register'} className="st-tab" onClick={() => nav('/s-05')}>
-          Register as student
+          Register
         </button>
       </div>
 
