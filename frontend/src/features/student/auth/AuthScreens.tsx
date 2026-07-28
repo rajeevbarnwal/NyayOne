@@ -644,7 +644,7 @@ export function Lockout() {
             </p>
           </div>
 
-          <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" placeholder="10-digit mobile number" />
+          <TextField id="recovery-mobile" label="Enter your Mobile Number" value={mobile} onChange={setMobile} inputMode="numeric" placeholder="10-digit mobile number" />
           {recoveryId && (
             <TextField
               id="recovery-code"
