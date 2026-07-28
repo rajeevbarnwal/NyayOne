@@ -87,9 +87,14 @@ async function tcase(tc, name, expected, fn) {
  * (ACTOR_SETUP_MISSING) every later phase is skipped so no browser case can
  * run against an unprovisioned database. */
 let abortAll = false;
+const visualOnly = process.env.QA_VISUAL_ONLY === '1';
 /** Per-phase try/catch: an aborted phase records one FAIL, never kills the run. */
 async function phase(name, fn) {
   if (abortAll) { console.log(`SKIP phase ${name} (ACTOR_SETUP_MISSING preflight abort)`); return; }
+  if (visualOnly && !['seed-and-reset', 'actor-preflight', 'option-c-plus-visual'].includes(name)) {
+    console.log(`SKIP phase ${name} (QA_VISUAL_ONLY=1)`);
+    return;
+  }
   try { await fn(); } catch (err) {
     record(`${name}-uncaught`, name, 'phase completes without uncaught exception',
       String(err?.stack ?? err).slice(0, 500), false);
@@ -1293,7 +1298,11 @@ if (browser) {
         }
         /* v2: S-30 group order/names/metalines/CTAs */
         await probeDev.page.goto(`${base}/s-30`);
-        await probeDev.page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor();
+        await waitForLawSchoolFeatureReady(probeDev.page);
+        await probeDev.page.waitForFunction(() =>
+          document.querySelectorAll('section[aria-label="Saved schools"] li.st-item').length === 2
+          && document.querySelectorAll('section[aria-label="Followed schools"] li.st-item').length === 2,
+        null, { timeout: 20000 });
         gate.devDomS30 = await probeDev.page.evaluate(() => Array.from(
           document.querySelectorAll('section.st-screen section.ls-sect')).map((sect) => ({
           ariaLabel: sect.getAttribute('aria-label') ?? '',
