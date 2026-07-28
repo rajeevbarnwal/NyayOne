@@ -2,7 +2,7 @@
  * by frontend/scripts/generate-lawschool-reference-fixture.mjs — DO NOT EDIT
  * BY HAND. Shared deterministic fixture for S-27..S-30: school ids are the
  * backend catalog slugs and every fact row byte-matches the backend seed
- * (law_school_service.seed_law_schools). contract checksum: 49f3bce98b8ae00e7073b6899c6ec65d5dee4d3b9d2ba82f012e6172ba0c74c9 */
+ * (law_school_service.seed_law_schools). contract checksum: 942ff09e326428405a364c89aa5ccb513526c11314d092673f845a25e931809e */
 window.LSKIT=(function(){
 var SEED=[
  {
@@ -410,8 +410,8 @@ var LABELS={
 };
 var VERIFIED="2026-07-01";
 var FIXTURE={
- "version": "1.0.0-option-c-plus-oracle",
- "checksum": "49f3bce98b8ae00e7073b6899c6ec65d5dee4d3b9d2ba82f012e6172ba0c74c9",
+ "version": "2.0.0-option-c-plus-oracle",
+ "checksum": "942ff09e326428405a364c89aa5ccb513526c11314d092673f845a25e931809e",
  "catalogSlugsByName": [
   "christ-law-bengaluru",
   "du-law-delhi",
@@ -487,8 +487,8 @@ var COPY={
  dpdp:'Saved and followed lists are stored against your account under the DPDP Act, 2023 — export or delete them anytime in Privacy.'
 };
 function rowFact(defs){return defs.map(function(d){return {k:d[0],label:d[1],get:function(s){return String(s.rows[d[0]]);}};});}
-var FACTS=rowFact([["exam","Entrance exam"],["fees","Fee band (sample)"],["nirf","NIRF rank (sample)"],["progs","Programmes"],["established","established"],["location","location"],["intake","intake"],["hostel","hostel"],["legal_aid_clinics","legal_aid_clinics"],["moot_teams","moot_teams"]]);
-var FACTS29=rowFact([["state","State"],["type","Institution type"],["accr","Accreditation"],["exam","Entrance exam"],["fees","Fees (per year)"],["nirf","NIRF rank"],["progs","Programmes"],["established","established"],["location","location"],["intake","intake"],["hostel","hostel"],["legal_aid_clinics","legal_aid_clinics"],["moot_teams","moot_teams"]]);
+var FACTS=rowFact([["exam","Entrance exam"],["fees","Fee band (sample)"],["nirf","NIRF rank (sample)"],["progs","Programmes"],["established","Established"],["location","Location"],["intake","Intake"],["hostel","Hostel"],["legal_aid_clinics","Legal aid clinics"],["moot_teams","Moot teams"]]);
+var FACTS29=rowFact([["state","State"],["type","Institution type"],["accr","Accreditation"],["exam","Entrance exam"],["fees","Fees"],["nirf","NIRF rank"],["progs","Programmes"],["established","Established"],["location","Location"],["intake","Intake"],["hostel","Hostel"],["legal_aid_clinics","Legal aid clinics"],["moot_teams","Moot teams"]]);
 var STATES=[
  ['s27-default','S-27','Initial / default (12 results)'],['s27-search','S-27','Search result'],['s27-filtered','S-27','Filtered result'],['s27-sorted','S-27','Sorted + selected-sort indication'],['s27-page','S-27','Pagination (page 2)'],['s27-empty','S-27','Empty result'],['s27-loading','S-27','Loading / skeleton'],['s27-validation','S-27','Typed validation error'],['s27-fail','S-27','Provider failure + Retry'],['s27-tray0','S-27','Comparison tray · 0 selected'],['s27-tray1','S-27','Comparison tray · 1 selected'],['s27-tray2','S-27','Comparison tray · 2 selected'],['s27-tray4','S-27','Comparison tray · 4 selected'],['s27-refusal','S-27','Fifth-school refusal (typed error)'],['s27-dup','S-27','Duplicate-school feedback'],['s27-url','S-27','Refreshed URL-state restoration'],
  ['s28-detail','S-28','Full verified detail'],['s28-loading','S-28','Loading'],['s28-missing','S-28','Missing ID'],['s28-unknown','S-28','Unknown school'],['s28-zero','S-28','Zero facts'],['s28-saved','S-28','Save → Saved'],['s28-follow','S-28','Follow → Following'],['s28-signedout','S-28','Signed-out action'],['s28-forbidden','S-28','Wrong-role / forbidden'],['s28-fail','S-28','Fetch failure + Retry'],['s28-restored','S-28','Refresh with state restored'],

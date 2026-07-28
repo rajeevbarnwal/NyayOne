@@ -28,6 +28,9 @@ import { fileURLToPath } from 'node:url';
 import {
   contract, contractChecksum, catalogSlugsByName, factRowsFor, programmesFor,
 } from './lawschool_fixture_contract.mjs';
+import {
+  COMPARE_ROWS, FACT_LABELS, INSTITUTION_TYPE_LABELS, feesInrBand, nirfText,
+} from '../src/features/student/schools/lawschoolFormat.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REF_DIR = path.resolve(HERE, '..', '..', 'docs', 'design', 'lawschool_reference', 'option_c_plus');
@@ -35,13 +38,9 @@ const HTML = path.join(REF_DIR, 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
 const QA_HARNESS = path.join(REF_DIR, 'QA_HARNESS_C_PLUS.html');
 
 const checksum = contractChecksum();
-const feeInr = (n) => `₹${n.toLocaleString('en-IN')}`;
-const TYPE_LABELS = {
-  national_law_university: 'National Law University · state-established',
-  deemed: 'Deemed university',
-  private: 'Private university',
-  government: 'Government law college',
-};
+/* SHARED formatter (F2): the same module drives the developed UI and the
+ * fixture-contract projection, so reference values can never diverge. */
+const TYPE_LABELS = INSTITUTION_TYPE_LABELS;
 
 function rowsFor(slug) {
   const s = contract.catalog.find((x) => x.slug === slug);
@@ -51,8 +50,8 @@ function rowsFor(slug) {
     type: TYPE_LABELS[s.institutionType],
     accr: s.accreditation,
     exam: s.entranceExam,
-    fees: `${feeInr(s.feesMin)}–${feeInr(s.feesMax)}/yr`,
-    nirf: `#${s.nirfRank}`,
+    fees: feesInrBand(s.feesMin, s.feesMax),
+    nirf: nirfText(s.nirfRank),
     progs: programmesFor(slug).map((p) => `${p.degree} (${p.durationYears} yrs)`).join(' · '),
     ...facts,
   };
@@ -80,20 +79,19 @@ const seedEntries = contract.catalog.map((s) => ({
 
 /* Row schemas: FACTS drives S-28 ("The essentials", matches the developed
  * S-28 rows: exam/fees/nirf/progs + the six seeded fact rows); FACTS29 drives
- * S-29 fact cards (developed compare columns + the same six fact rows). */
+ * S-29 fact cards — the APPROVED 13-row schema, order and labels taken from
+ * the SHARED formatter (COMPARE_ROWS) so all three renderers agree. */
 const FACTS28_DEFS = [
   ['exam', 'Entrance exam'], ['fees', 'Fee band (sample)'], ['nirf', 'NIRF rank (sample)'],
   ['progs', 'Programmes'],
-  ['established', 'established'], ['location', 'location'], ['intake', 'intake'],
-  ['hostel', 'hostel'], ['legal_aid_clinics', 'legal_aid_clinics'], ['moot_teams', 'moot_teams'],
+  ...Object.entries(FACT_LABELS),
 ];
-const FACTS29_DEFS = [
-  ['state', 'State'], ['type', 'Institution type'], ['accr', 'Accreditation'],
-  ['exam', 'Entrance exam'], ['fees', 'Fees (per year)'], ['nirf', 'NIRF rank'],
-  ['progs', 'Programmes'],
-  ['established', 'established'], ['location', 'location'], ['intake', 'intake'],
-  ['hostel', 'hostel'], ['legal_aid_clinics', 'legal_aid_clinics'], ['moot_teams', 'moot_teams'],
-];
+/* COMPARE_ROWS keys -> LSKIT row keys (first seven are seed columns). */
+const LSKIT_ROW_KEY = {
+  state: 'state', institution_type: 'type', accreditation: 'accr',
+  entrance_exam: 'exam', fees: 'fees', nirf_rank: 'nirf', programmes: 'progs',
+};
+const FACTS29_DEFS = COMPARE_ROWS.map(({ key, label }) => [LSKIT_ROW_KEY[key] ?? key, label]);
 
 const examLabels = Object.fromEntries(contract.catalog.map((s) => [s.entranceExam, s.entranceExam]));
 

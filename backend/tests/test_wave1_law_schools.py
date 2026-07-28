@@ -507,3 +507,68 @@ def test_seed_facts_match_shared_fixture_contract(ctx):
         assert detail["entrance_exam"] == cs["entranceExam"]
         assert detail["fees_min"] == cs["feesMin"] and detail["fees_max"] == cs["feesMax"]
         assert detail["nirf_rank"] == cs["nirfRank"]
+
+
+# -------- SAATHI-119 (F2) — approved 13-row S-29 compare projection ------------
+# The compare endpoint must deterministically return everything the approved
+# 13-row schema renders: 7 catalogue columns (state, institution_type,
+# accreditation, entrance_exam, fees_min+fees_max, nirf_rank, programmes) plus
+# the six 0006-backfilled facts with source/freshness — for EVERY compared
+# school, in a stable order.
+APPROVED_FACT_KEYS_SORTED = [
+    "established", "hostel", "intake", "legal_aid_clinics", "location", "moot_teams",
+]
+APPROVED_SUMMARY_ROW_FIELDS = [
+    "state", "institution_type", "accreditation", "entrance_exam",
+    "fees_min", "fees_max", "nirf_rank", "programmes",
+]
+
+
+def _thirteen_row_keys(item: dict) -> list[str]:
+    """The 13 approved S-29 row keys derivable from one compare item."""
+    return (
+        ["state", "institution_type", "accreditation", "entrance_exam", "fees",
+         "nirf_rank", "programmes"]
+        + [f["key"] for f in item["facts"]]
+    )
+
+
+@pytest.mark.parametrize("n", [2, 4])
+def test_compare_returns_13_row_projection(ctx, n):
+    client, SessionLocal, uid, ids = ctx
+    r = client.post("/api/v1/law-schools/compare", json={"school_ids": ids[:n]}, headers=_claims(uid))
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert len(items) == n
+    for item in items:
+        for field in APPROVED_SUMMARY_ROW_FIELDS:
+            assert field in item, f"missing summary field {field}"
+        # exactly the six approved facts, deterministically key-ordered
+        fact_keys = [f["key"] for f in item["facts"]]
+        assert fact_keys == APPROVED_FACT_KEYS_SORTED
+        for f in item["facts"]:
+            assert f["value"].endswith("(sample)")
+            assert f["source_name"] and f["source_url"] and f["retrieved_at"]
+        row_keys = _thirteen_row_keys(item)
+        assert len(row_keys) == 13 and len(set(row_keys)) == 13
+        assert item["programmes"] == sorted(item["programmes"], key=lambda p: p["degree"])
+
+
+def test_compare_projection_deterministic_across_calls(ctx):
+    client, SessionLocal, uid, ids = ctx
+    a = client.post("/api/v1/law-schools/compare", json={"school_ids": ids[:4]}, headers=_claims(uid))
+    b = client.post("/api/v1/law-schools/compare", json={"school_ids": ids[:4]}, headers=_claims(uid))
+    assert a.status_code == b.status_code == 200
+    strip = lambda payload: [  # noqa: E731 - local shaping helper
+        {k: v for k, v in item.items() if k != "id"} for item in payload["items"]
+    ]
+    assert strip(a.json()) == strip(b.json())  # identical order + content
+
+
+def test_detail_facts_deterministically_ordered(ctx):
+    client, SessionLocal, uid, ids = ctx
+    r1 = client.get(f"/api/v1/law-schools/{ids[0]}")
+    r2 = client.get(f"/api/v1/law-schools/{ids[0]}")
+    keys1 = [f["key"] for f in r1.json()["facts"]]
+    keys2 = [f["key"] for f in r2.json()["facts"]]
+    assert keys1 == keys2 == APPROVED_FACT_KEYS_SORTED
