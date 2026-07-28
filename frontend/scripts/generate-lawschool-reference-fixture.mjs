@@ -23,7 +23,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
@@ -199,6 +198,23 @@ function replaceCounted(source, from, to, expected, label) {
   return out;
 }
 
+/* --------------------------- HTML-safe JSON --------------------------------
+ * ROOT FIX (SAATHI-121 / QA F1): JSON.parse of the template/manifest payload
+ * un-escapes any embedded "<\u002Fscript" back to a literal "</script>", and a
+ * plain JSON.stringify writes it back literally. An HTML parser then terminates
+ * the OUTER <script type="__bundler/*"> element at the first embedded literal
+ * close tag, the unpacker never runs and window.__opt never boots. Every JSON
+ * payload written into a <script> element MUST therefore re-escape
+ * "</script" -> "<\u002Fscript" (and "<!--" -> "\u003C!--" so script-data
+ * escaped-state parsing can never engage). Both replacements happen inside
+ * JSON string literals where "\u002F" / "\u003C" are exact-equivalent
+ * escapes, so JSON.parse round-trips byte-identically. */
+function htmlSafeJson(value) {
+  return JSON.stringify(value)
+    .split('</script').join('<\\u002Fscript')
+    .split('<!--').join('\\u003C!--');
+}
+
 const lines = fs.readFileSync(HTML, 'utf8').split('\n');
 const manifestOpen = lines.findIndex((l) => l.includes('<script type="__bundler/manifest">'));
 const templateOpen = lines.findIndex((l) => l.includes('<script type="__bundler/template">'));
@@ -207,12 +223,15 @@ if (manifestOpen < 0 || templateOpen < 0) throw new Error('bundler blocks not fo
 const manifest = JSON.parse(lines[manifestOpen + 1]);
 const jsKey = Object.keys(manifest).find((k) => manifest[k].mime === 'application/javascript');
 if (!jsKey) throw new Error('LSKIT javascript resource not found in manifest');
+/* Uncompressed base64: identical LSKIT source bytes -> identical bundle bytes
+ * on every Node/zlib version (gzip output is zlib-build dependent). The
+ * unpacker treats compressed:false entries as raw bytes. */
 manifest[jsKey] = {
   ...manifest[jsKey],
-  compressed: true,
-  data: zlib.gzipSync(Buffer.from(lskit, 'utf8'), { level: 9 }).toString('base64'),
+  compressed: false,
+  data: Buffer.from(lskit, 'utf8').toString('base64'),
 };
-lines[manifestOpen + 1] = JSON.stringify(manifest);
+lines[manifestOpen + 1] = htmlSafeJson(manifest);
 
 let tpl = JSON.parse(lines[templateOpen + 1]);
 const [c1, c2, c3, c4] = contract.s29.slugs;
@@ -235,8 +254,36 @@ for (const [from, to] of [
 for (const short of ['nalsar', 'nlud', 'gnlu', 'nujs']) {
   if (tpl.includes(`'${short}'`)) throw new Error(`unpatched short id token '${short}' remains in template`);
 }
-lines[templateOpen + 1] = JSON.stringify(tpl);
+lines[templateOpen + 1] = htmlSafeJson(tpl);
 fs.writeFileSync(HTML, lines.join('\n'));
+
+/* Structural boot-safety assertion: the outer document must keep EXACTLY one
+ * literal close tag per <script> element and the JSON payload segments must
+ * contain zero literal "</script" / "<!--" tokens (else the bundle cannot
+ * boot; see F1). Throws — the generator refuses to emit a broken bundle. */
+{
+  const finalHtml = fs.readFileSync(HTML, 'utf8');
+  const finalLines = finalHtml.split('\n');
+  const count = (hay, needle) => hay.split(needle).length - 1;
+  const closeTags = count(finalHtml, '</script');
+  /* Outer script ELEMENTS open at line starts; '<script' tokens inside JS
+   * string literals or JSON payloads are not element opens. */
+  const blockOpens = finalLines.filter((l) => /^\s*<script[\s>]/.test(l)).length;
+  const payloads = [
+    ['__bundler/manifest payload', finalLines[manifestOpen + 1]],
+    ['__bundler/template payload', finalLines[templateOpen + 1]],
+  ];
+  for (const [label, payload] of payloads) {
+    for (const tok of ['</script', '<!--']) {
+      const n = count(payload, tok);
+      if (n !== 0) throw new Error(`boot-safety: ${n} literal ${JSON.stringify(tok)} token(s) inside ${label} — bundle would terminate early and never boot`);
+    }
+  }
+  const EXPECTED_SCRIPT_BLOCKS = 5; /* unpacker + manifest + ext_resources + page_order + template */
+  if (blockOpens !== EXPECTED_SCRIPT_BLOCKS || closeTags !== EXPECTED_SCRIPT_BLOCKS) {
+    throw new Error(`boot-safety: expected ${EXPECTED_SCRIPT_BLOCKS} outer <script> blocks with exactly one close tag each; saw opens=${blockOpens} closeTags=${closeTags}`);
+  }
+}
 
 /* readable LSKIT copy for review/diffing */
 fs.writeFileSync(path.join(REF_DIR, 'OPTION_C_PLUS_LSKIT_GENERATED.js'), lskit);

@@ -25,6 +25,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { manifestCounts } from './lib/lawschool_visual_manifest.mjs';
 
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1050';
 const api = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:1031';
@@ -1119,7 +1120,6 @@ if (browser) {
 
     const visEntries = [];
     const writeManifest = async () => {
-      const approvedEntries = visEntries.filter((e) => e.diff.approvedDeterministicPair);
       await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
         commit, generatedAt: new Date().toISOString(),
         reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
@@ -1139,10 +1139,11 @@ if (browser) {
           },
         },
         thresholdPolicy: `STRICT: pixel-diff ratio < ${VISUAL_THRESHOLD} enforced for ALL ${APPROVED_DETERMINISTIC_PAIRS.length} approved deterministic pairs (frozen full matrix); dimension mismatch or fixture mismatch is a FAIL with NO percentage; any failing pair fails the run (non-zero exit after evidence); unapproved pairs are N/A and never PASS`,
-        approved: APPROVED_DETERMINISTIC_PAIRS.length,
-        captured: visEntries.length,
-        passed: approvedEntries.filter((e) => e.diff.gate === 'pass').length,
-        failed: approvedEntries.filter((e) => e.diff.gate === 'fail').length,
+        /* TRUTHFUL fail-closed accounting (QA F3): capturedPairs counts only
+         * pairs whose developed AND reference PNGs were physically written;
+         * scoredPairs only pairs with a computed pixel ratio. On a fixture
+         * gate failure this reads 40/40/0/0/0/40 — never "captured: 40". */
+        ...manifestCounts(visEntries, APPROVED_DETERMINISTIC_PAIRS.length),
         entries: visEntries,
       }, null, 2));
     };
