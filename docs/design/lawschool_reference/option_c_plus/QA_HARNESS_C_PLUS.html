@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA Harness — Option C+ (executable checks, expected vs actual)</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#f4f2ec;color:#221d14;font-size:14px}
+header{background:#1d5c3f;color:#fff;padding:14px 18px}
+header h1{font-size:16px;margin:0}
+header p{margin:4px 0 0;font-size:12px;opacity:.85}
+main{padding:16px 18px;max-width:1100px;margin:0 auto}
+button{font:inherit;min-height:44px;border-radius:10px;border:1px solid #c9c2b0;background:#fff;padding:0 16px;cursor:pointer;font-weight:700}
+button.primary{background:#1d5c3f;border-color:#1d5c3f;color:#fff}
+#banner{padding:12px 16px;border-radius:10px;margin:14px 0;font-weight:800;display:none}
+#banner.pass{display:block;background:#e3efe8;color:#1d5c3f;border:1px solid #1d5c3f}
+#banner.fail{display:block;background:#f8e9e5;color:#8f2f22;border:1px solid #8f2f22}
+table{border-collapse:collapse;width:100%;background:#fff;border:1px solid #ddd6c4}
+th,td{border-bottom:1px solid #eee8d8;padding:8px 10px;text-align:left;font-size:12px;vertical-align:top}
+th{background:#efece0;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+td.ok{color:#1d5c3f;font-weight:800}
+td.no{color:#8f2f22;font-weight:800}
+code{font-family:ui-monospace,monospace;font-size:11px;background:#efece0;padding:1px 5px;border-radius:4px}
+#stage{position:fixed;left:-20000px;top:0;border:0;background:#fff}
+#guard{display:none;background:#f8e9e5;border:1px solid #8f2f22;border-radius:10px;padding:14px 16px;margin:14px 0;line-height:1.5;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>Option C+ — Executable QA (F1–F3 + gates, true-iframe viewports)</h1><p>Loads the shipped <code>OPTION_C_PLUS_GUIDED_CONFIDENCE.html</code> in a real iframe sized to true viewports. Every row records expected vs actual; nothing is PASS unless executed here.</p></header>
+<main>
+<div style="display:flex;gap:10px;align-items:center;margin:14px 0;flex-wrap:wrap">
+<button class="primary" id="run">Run all checks</button>
+<button id="dl" disabled>Download JSON report</button>
+<span id="prog" style="font-size:12px;color:#6f6555"></span>
+</div>
+<div id="guard"><b>Cannot script the prototype iframe.</b> If you opened this via <code>file://</code>, Chromium blocks it. Serve the folder instead: <code>python3 -m http.server 8080</code> → <code>http://localhost:8080/QA_HARNESS_C_PLUS.html</code> (Playwright: use a served origin).</div>
+<div id="banner"></div>
+<table id="tbl"><thead><tr><th style="width:26%">Check</th><th style="width:27%">Expected</th><th style="width:27%">Actual</th><th>Result</th></tr></thead><tbody></tbody></table>
+</main>
+<iframe id="stage" title="Prototype under test" width="1440" height="900" src="OPTION_C_PLUS_GUIDED_CONFIDENCE.html"></iframe>
+<script>
+var R=[],cErrs=[],stage=document.getElementById('stage');
+function row(c,e,a,p){R.push({check:c,expected:String(e),actual:String(a),pass:!!p});var tr=document.createElement('tr');tr.innerHTML='<td>'+c+'</td><td>'+e+'</td><td>'+a+'</td><td class="'+(p?'ok':'no')+'">'+(p?'PASS':'FAIL')+'</td>';document.querySelector('#tbl tbody').appendChild(tr);}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function W(){return stage.contentWindow;}function D(){return stage.contentDocument;}
+function accName(el){var c=el.cloneNode(true);c.querySelectorAll('[aria-hidden="true"]').forEach(function(n){n.remove();});return (el.getAttribute('aria-label')||c.textContent).replace(/\s+/g,' ').trim();}
+function hook(){try{var w=W();w.addEventListener('error',function(e){cErrs.push('error: '+e.message);});var ce=w.console.error;w.console.error=function(){cErrs.push('console.error: '+[].slice.call(arguments).join(' '));ce.apply(this,arguments);};}catch(e){}}
+function setVP(w,h){stage.width=w;stage.height=h;stage.style.width=w+'px';stage.style.height=h+'px';}
+/* HARNESS FIX (SAATHI-63 integration, 2026-07-28): the previous implementation set
+   stage.src to the SAME document plus a fragment. Same-document fragment navigation
+   never fires the iframe load event, so `await reload()` hung forever (first call and
+   the theme-persistence reload both reproduce it). Deterministic fix: (a) a cache-buster
+   query param forces a full navigation on every call; (b) an explicit ready handshake
+   polls contentWindow readyState + the __opt automation boot (max 10s) instead of
+   trusting onload alone; (c) a 15s hard timeout REJECTS (surfaced as a failing row) —
+   the harness can no longer hang and never fabricates a result. */
+var _cb=0;
+function reload(hash){
+ _cb+=1;
+ return new Promise(function(res,rej){
+  var settled=false;
+  function settle(){if(settled)return;settled=true;stage.onload=null;hook();res();}
+  var hard=setTimeout(function(){if(settled)return;settled=true;stage.onload=null;rej(new Error('reload handshake timeout (cb='+_cb+'): iframe load/boot did not complete in 15s'));},15000);
+  stage.onload=function(){
+   var t0=Date.now();
+   (function poll(){
+    if(settled)return;
+    var ok=false;
+    try{var w=stage.contentWindow;ok=!!(w&&w.document&&w.document.readyState==='complete'&&w.__opt);}catch(e){ok=false;}
+    if(ok||Date.now()-t0>10000){clearTimeout(hard);return settle();}
+    setTimeout(poll,50);
+   })();
+  };
+  stage.src='OPTION_C_PLUS_GUIDED_CONFIDENCE.html?cb='+_cb+(hash||'#/s27');
+ });
+}
+async function run(){
+ R=[];cErrs=[];document.querySelector('#tbl tbody').innerHTML='';document.getElementById('banner').className='';
+ var prog=document.getElementById('prog');
+ try{W().document.title;}catch(e){document.getElementById('guard').style.display='block';return;}
+ document.getElementById('guard').style.display='none';
+ setVP(1440,900);await reload();await sleep(700);
+ var O=W().__opt;
+ row('Boot + automation API','__opt present · 48 states',(O?'present · '+O.STATES.length+' states':'absent'),O&&O.STATES.length===48);
+ if(!O){finish();return;}
+ prog.textContent='Walking 48 states…';var bad=[];
+ for(var i=0;i<O.STATES.length;i++){var s=O.STATES[i];try{O.apply(s[0]);await sleep(s[0].indexOf('refusal')>=0||s[0].indexOf('dup')>=0?170:25);var app=D().getElementById('app');if(!app||app.innerHTML.length<80)bad.push(s[0]);}catch(e){bad.push(s[0]+':'+e.message);}}
+ var dlg=D().getElementById('modal');if(dlg&&dlg.open)dlg.close();
+ row('All 48 declared states render','48 render · 0 empty/throw',(48-bad.length)+' render'+(bad.length?' · failed: '+bad.join(', '):''),!bad.length);
+ prog.textContent='F1 route scroll/focus…';
+ async function f1(from,to,label){O.apply(from);await sleep(90);W().scrollTo(0,400);await sleep(60);var y0=Math.round(W().scrollY);W().location.hash=to;await sleep(430);var h=D().querySelector('#app h1')||D().querySelector('#app .panelbox h2');var ae=D().activeElement;var ok=W().scrollY===0&&h&&ae===h;row('F1 · '+label,'from scrollY '+y0+' → scrollY 0 · focus = destination heading','scrollY '+W().scrollY+' · focus <'+(ae?ae.tagName.toLowerCase():'?')+'> “'+(ae?accName(ae).slice(0,32):'')+'”',ok);}
+ await f1('s27-default','#/s28?id=nlsiu','S-27 scrolled → S-28');
+ await f1('s28-detail','#/s29?cmp=nlsiu,nalsar','S-28 scrolled → S-29');
+ await f1('s28-detail','#/s30','S-28 scrolled → S-30');
+ prog.textContent='F2 chip semantics…';
+ O.apply('s27-default');await sleep(90);
+ var un=D().querySelector('[data-region="South"]');
+ var seln=D().querySelector('[data-region=""]');
+ row('F2 · unselected chip name','exactly “South” · no ✓ · aria-pressed=false',un?('“'+accName(un)+'” · pressed='+un.getAttribute('aria-pressed')):'not found',!!un&&accName(un)==='South'&&un.getAttribute('aria-pressed')==='false');
+ row('F2 · selected chip name','exactly “Anywhere” · glyph aria-hidden · aria-pressed=true',seln?('“'+accName(seln)+'” · pressed='+seln.getAttribute('aria-pressed')+' · glyphHidden='+!!seln.querySelector('.ckg[aria-hidden="true"]')):'not found',!!seln&&accName(seln)==='Anywhere'&&seln.getAttribute('aria-pressed')==='true'&&!!seln.querySelector('.ckg[aria-hidden="true"]'));
+ un.click();await sleep(130);
+ var selS=D().querySelector('[data-region="South"]');
+ row('F2 · after selecting South','aria-pressed=true · name still exactly “South”','pressed='+selS.getAttribute('aria-pressed')+' · “'+accName(selS)+'”',selS.getAttribute('aria-pressed')==='true'&&accName(selS)==='South');
+ prog.textContent='F3 obstruction @390×844…';
+ setVP(390,844);await sleep(280);O.apply('s27-tray2');await sleep(160);
+ var pb=D().getElementById('pb'),rv=D().getElementById('rvbtn');
+ row('F3 · tray is in-flow sticky','#pb computed position: sticky',pb?getComputedStyle(pb).position:'missing',!!pb&&getComputedStyle(pb).position==='sticky');
+ row('F3 · reviewer control in-flow in header','inside <header> · position static',rv?((rv.closest('header')?'in header':'NOT in header')+' · '+getComputedStyle(rv).position):'missing',!!rv&&!!rv.closest('header')&&getComputedStyle(rv).position==='static');
+ D().body.setAttribute('data-baseline','1');await sleep(60);
+ row('F3/F4 · baseline mode hides reviewer UI','rvbtn hidden under body[data-baseline=1]',rv.offsetParent===null?'hidden':'visible',rv.offsetParent===null);
+ D().body.removeAttribute('data-baseline');
+ var targets=[].slice.call(D().querySelectorAll('#app .card button, #app .card a, #app nav[aria-label="Pagination"] button')).slice(0,8),obs=[];
+ for(var t=0;t<targets.length;t++){var el=targets[t];el.focus();await sleep(170);var r=el.getBoundingClientRect();[pb,D().querySelector('.tabbar')].forEach(function(bar){if(!bar)return;var b=bar.getBoundingClientRect();var inter=!(r.bottom<=b.top||r.top>=b.bottom||r.right<=b.left||r.left>=b.right);if(inter)obs.push(accName(el).slice(0,16)+'↔'+(bar.id||'tabbar'));});}
+ row('F3 · focused element never under tray/tab bar','0 obstructions across '+targets.length+' focus targets (after focusin guard)',obs.length?obs.join(' · '):'0 obstructions',!obs.length);
+ prog.textContent='Differences only…';
+ setVP(1440,900);await sleep(200);O.apply('s29-2');await sleep(140);
+ var all=D().querySelectorAll('.attrcard').length,tg=D().getElementById('diffonly');
+ row('S-29 · “Differences only” off by default','aria-pressed=false · 13 fact cards','pressed='+(tg?tg.getAttribute('aria-pressed'):'?')+' · '+all+' cards',!!tg&&tg.getAttribute('aria-pressed')==='false'&&all===13);
+ var expDiff=(function(){var K=W().LSKIT,a=K.byId('nlsiu-bengaluru'),b=K.byId('nalsar-hyderabad');return (K.FACTS29||K.FACTS).filter(function(f){return f.get(a)!==f.get(b);}).length;})();
+ tg.click();await sleep(140);
+ var dn=D().querySelectorAll('.attrcard').length,tg2=D().getElementById('diffonly');
+ row('S-29 · toggle → differing facts only (nlsiu+nalsar fixture)','aria-pressed=true · '+expDiff+' differing cards','pressed='+tg2.getAttribute('aria-pressed')+' · '+dn+' cards',tg2.getAttribute('aria-pressed')==='true'&&dn===expDiff);
+ prog.textContent='Overflow at true viewports…';
+ var vps=[[390,844],[430,932],[768,1024],[1024,768],[1440,900]],routes=['s27-default','s28-detail','s29-4','s30-both'],ovf=[];
+ for(var th=0;th<2;th++){O.theme.set(th?'dark':'light');for(var v=0;v<vps.length;v++){setVP(vps[v][0],vps[v][1]);await sleep(140);for(var rt=0;rt<routes.length;rt++){O.apply(routes[rt]);await sleep(60);var de=D().documentElement;var iw=W().innerWidth;if(de.scrollWidth>iw)ovf.push((th?'dark':'light')+' '+vps[v][0]+'px '+routes[rt]+' ('+de.scrollWidth+'>'+iw+')');}}}
+ row('Zero horizontal overflow · 5 true viewports × 2 themes × 4 screens','0 of 40 measurements overflow (innerWidth respected)',ovf.length?ovf.slice(0,4).join(' · ')+(ovf.length>4?' +'+(ovf.length-4):''):'0 of 40 overflow',!ovf.length);
+ prog.textContent='Touch targets @390…';
+ setVP(390,844);O.theme.set('light');await sleep(160);var minR={v:1e4,sel:''},small=[];
+ for(var rt2=0;rt2<routes.length;rt2++){O.apply(routes[rt2]);await sleep(70);[].slice.call(D().querySelectorAll('button, a, select, input')).forEach(function(el){var r=el.getBoundingClientRect();if(!r.width&&!r.height)return;if(getComputedStyle(el).visibility==='hidden')return;var m=Math.min(r.width,r.height);if(m<minR.v){minR={v:m,sel:accName(el).slice(0,18)||el.tagName};}if(m<43.5)small.push(routes[rt2]+':'+(accName(el).slice(0,16)||el.tagName)+' '+Math.round(r.width)+'×'+Math.round(r.height));});}
+ row('All actionable targets ≥44×44 @390 (4 screens)','minimum actionable rectangle ≥44px','min '+minR.v.toFixed(1)+'px (“'+minR.sel+'”)'+(small.length?' · small: '+small.slice(0,3).join(' · '):''),!small.length);
+ prog.textContent='Theme persistence…';
+ O.theme.set('dark');await sleep(80);await reload('#/s27');await sleep(650);
+ var themeAfter=D().documentElement.getAttribute('data-theme');
+ row('Theme persists across reload','data-theme=dark after reload (key lsCP-theme)','data-theme='+themeAfter,themeAfter==='dark');
+ try{W().__opt.theme.set('light');}catch(e){}
+ row('Zero uncaught console/page errors across all checks','0 errors',cErrs.length?cErrs.length+' · '+cErrs.slice(0,3).join(' | '):'0 errors',!cErrs.length);
+ finish();
+}
+function finish(){var pass=R.filter(function(r){return r.pass;}).length,fail=R.length-pass;
+ var b=document.getElementById('banner');b.className=fail?'fail':'pass';b.textContent=(fail?'FAIL — ':'PASS — ')+pass+' / '+R.length+' checks passed'+(fail?' · '+fail+' failing':'')+'. True-viewport iframe evidence; native full-page captures still belong to the Playwright rig.';
+ document.getElementById('prog').textContent='Done.';
+ var dl=document.getElementById('dl');dl.disabled=false;
+ dl.onclick=function(){var rep={artifact:'OPTION_C_PLUS_GUIDED_CONFIDENCE.html',harness:'QA_HARNESS_C_PLUS.html',generated:new Date().toISOString(),environment:{userAgent:navigator.userAgent,devicePixelRatio:window.devicePixelRatio},summary:{pass:pass,fail:fail,total:R.length,consoleErrors:cErrs},checks:R};
+ var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(rep,null,2)],{type:'application/json'}));a.download='QA_C_PLUS_EXECUTED_RESULTS.json';a.click();};
+}
+document.getElementById('run').onclick=function(){run().catch(function(e){row('Harness runtime','no exception',String(e),false);finish();});};
+</script>
+</body>
+</html>

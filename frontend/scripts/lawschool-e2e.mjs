@@ -25,6 +25,11 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { manifestCounts } from './lib/lawschool_visual_manifest.mjs';
+import { contract as FX } from './lawschool_fixture_contract.mjs';
+import {
+  COMPARE_ROWS, FACT_LABELS, verifiedText,
+} from '../src/features/student/schools/lawschoolFormat.mjs';
 
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1050';
 const api = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:1031';
@@ -69,13 +74,27 @@ const recordNA = (tc, name, expected, note) => record(tc, name, expected, note, 
 async function tcase(tc, name, expected, fn) {
   try {
     const out = await fn();
+    if (out.na) {
+      record(tc, name, expected, out.actual, false, out.evidence ?? null, 'na');
+      return;
+    }
     record(tc, name, expected, out.actual, !!out.pass, out.evidence ?? null);
   } catch (err) {
     record(tc, name, expected, `uncaught: ${err?.message ?? String(err)}`, false, null);
   }
 }
+/** F1 — typed preflight abort: when the deterministic e2e actors are missing
+ * (ACTOR_SETUP_MISSING) every later phase is skipped so no browser case can
+ * run against an unprovisioned database. */
+let abortAll = false;
+const visualOnly = process.env.QA_VISUAL_ONLY === '1';
 /** Per-phase try/catch: an aborted phase records one FAIL, never kills the run. */
 async function phase(name, fn) {
+  if (abortAll) { console.log(`SKIP phase ${name} (ACTOR_SETUP_MISSING preflight abort)`); return; }
+  if (visualOnly && !['seed-and-reset', 'actor-preflight', 'option-c-plus-visual'].includes(name)) {
+    console.log(`SKIP phase ${name} (QA_VISUAL_ONLY=1)`);
+    return;
+  }
   try { await fn(); } catch (err) {
     record(`${name}-uncaught`, name, 'phase completes without uncaught exception',
       String(err?.stack ?? err).slice(0, 500), false);
@@ -131,6 +150,35 @@ await phase('seed-and-reset', async () => {
     }
   }
   ids4 = COMPARE_SLUGS.map((slug) => bySlug[slug]?.id).filter(Boolean);
+});
+
+/* ---------------- F1 — deterministic actor preflight (typed) ----------------
+ * QA independent_option_c_e843116: a clean PostgreSQL run failed 105 cases
+ * because the dev-claims actors (…00de, …00b2) had no `users` rows and the
+ * save/follow FKs correctly rejected mutations with 500. The repository-owned
+ * setup seam is backend/scripts/seed_e2e_actors.py (idempotent, run against
+ * the migrated database BEFORE this suite). This preflight probes each actor
+ * with an idempotent PUT+DELETE save on one school; anything but 200/200
+ * FAILS the run with typed ACTOR_SETUP_MISSING before any browser case. */
+await phase('actor-preflight', async () => {
+  const probe = bySlug['nlsiu-bengaluru'];
+  const results = [];
+  let ok = !!probe;
+  if (probe) {
+    for (const claims of [USER_A, USER_B]) {
+      const put = await apiCall('PUT', `/api/v1/student/law-schools/${probe.id}/saved`, { claims });
+      const del = await apiCall('DELETE', `/api/v1/student/law-schools/${probe.id}/saved`, { claims });
+      results.push({ sub: claims.sub, put: put.status, del: del.status });
+      if (put.status !== 200 || del.status !== 200) ok = false;
+    }
+  }
+  record('PREFLIGHT-ACTORS', 'e2e_actor_rows_present',
+    'both deterministic dev actors (…00de student, …00b2 student) exist as users rows: idempotent PUT+DELETE saved probe returns 200/200 per actor',
+    ok ? results : { code: 'ACTOR_SETUP_MISSING',
+      remedy: 'run `python backend/scripts/seed_e2e_actors.py` (idempotent) against the migrated database, then re-run this suite',
+      results, catalogFound: !!probe },
+    ok);
+  if (!ok) abortAll = true;
 });
 
 /* ---------------- TC-63-01 — search/filter/sort/pagination (API) ----------- */
@@ -398,11 +446,13 @@ async function fresh({ viewport = { width: 1440, height: 1000 }, theme = null, l
   page.setDefaultTimeout(10_000);
   if (theme) await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
   const consoleErrors = [];
+  const consoleWarnings = [];
   const pageErrors = [];
   const unexpectedHttp = [];
   page.on('console', (m) => {
     consoleLines.push(`[${label}][console.${m.type()}] ${m.text()}`);
     if (m.type() === 'error') consoleErrors.push(m.text());
+    if (m.type() === 'warning') consoleWarnings.push(m.text());
   });
   page.on('pageerror', (e) => { pageErrors.push(String(e)); consoleLines.push(`[${label}][pageerror] ${e}`); });
   page.on('response', (r) => {
@@ -418,7 +468,7 @@ async function fresh({ viewport = { width: 1440, height: 1000 }, theme = null, l
     } catch { /* trace must never mask the run */ }
     await context.close();
   };
-  return { context, page, consoleErrors, pageErrors, unexpectedHttp, close };
+  return { context, page, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp, close };
 }
 
 const resultsItem = (page, name) => page
@@ -428,6 +478,26 @@ const shot = async (page, file) => {
   await page.screenshot({ path: path.join(evidence, file), fullPage: true });
   return file;
 };
+
+/**
+ * Production exposes a deterministic readiness contract after the catalogue
+ * and every visible school-detail query settle. A rejected detail query is a
+ * typed failure; a partially populated page is never captured.
+ */
+async function waitForLawSchoolFeatureReady(page) {
+  await page.waitForFunction(() => !!document.querySelector(
+    '[data-qa-lawschool-ready="true"], [data-qa-lawschool-readiness-error]',
+  ));
+  const failure = await page.locator('[data-qa-lawschool-readiness-error]').first()
+    .evaluate((el) => ({
+      code: el.getAttribute('data-qa-lawschool-readiness-error'),
+      ids: el.getAttribute('data-qa-lawschool-failed-ids'),
+    }))
+    .catch(() => null);
+  if (failure) {
+    throw new Error(`${failure.code}${failure.ids ? `:${failure.ids}` : ''}`);
+  }
+}
 /** Tab traversal must reach EVERY visible actionable control in DOM order. */
 async function tabOrder(page) {
   const total = await page.evaluate(() => {
@@ -448,11 +518,13 @@ async function tabOrder(page) {
   return { total, reached: firstVisit.length, inDomOrder, missing: total - firstVisit.length };
 }
 
-try {
-  browser = await chromium.launch({ headless: true });
-} catch (err) {
-  record('BROWSER-LAUNCH', 'chromium_launch', 'chromium launches headless',
-    `launch failed: ${err?.message ?? err}`, false);
+if (!abortAll) {
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (err) {
+    record('BROWSER-LAUNCH', 'chromium_launch', 'chromium launches headless',
+      `launch failed: ${err?.message ?? err}`, false);
+  }
 }
 
 if (browser) {
@@ -461,20 +533,23 @@ if (browser) {
     const ctx = await fresh({ label: 'search' });
     const { page, consoleErrors, unexpectedHttp } = ctx;
     await page.goto(`${base}/s-27`);
-    await page.getByText('12 found').waitFor();
+    await page.getByText(/^12 SCHOOLS/).waitFor();
     await tcase('TC-63-01-ui-results', 'ui_lists_full_catalog', 'all 12 seeded schools listed', async () => {
       const count = await page.locator('section[aria-label="Search results"] li.st-item').count();
       return { actual: count, pass: count === 12, evidence: await shot(page, 's27_results_12.png') };
     });
     await tcase('TC-63-01-ui-pagination-idle', 'ui_no_pager_single_page',
       'no pagination controls (total 12 <= page size 20)', async () => {
-        const n = await page.getByRole('button', { name: 'Previous' }).count();
+        const n = await page.getByRole('button', { name: '‹ Back' }).count();
         return { actual: n, pass: n === 0 };
       });
     await tcase('TC-63-01-ui-search', 'ui_search_nalsar', 'q=NALSAR shows exactly one result', async () => {
+      /* Reference structure: the name-search card is collapsed by default and
+       * opens in-flow from the tool row (s27-default parity). */
+      await page.getByRole('button', { name: 'Or search by name ⌕' }).click();
       await page.getByLabel('Search law schools').fill('NALSAR');
       await page.getByLabel('Search law schools').press('Enter');
-      await page.getByText('1 found').waitFor();
+      await page.getByText(/^1 SCHOOL\b/).waitFor();
       const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
       return { actual: n, pass: n === 1, evidence: await shot(page, 's27_search_nalsar.png') };
     });
@@ -486,21 +561,37 @@ if (browser) {
         pass: await page.getByText('Try clearing a filter or broadening your search.').isVisible(),
         evidence: await shot(page, 's27_empty_state.png') };
     });
-    await tcase('TC-63-01-ui-filter-state', 'ui_filter_state_delhi',
-      'state=Delhi filters to the 2 Delhi schools incl. NLU Delhi', async () => {
+    await tcase('TC-63-01-ui-filter-region', 'ui_filter_region_north',
+      'reference Region chip North fans out real state queries → the 4 North schools incl. NLU Delhi + DU Law', async () => {
+        /* Reference r27 taxonomy: the Where? chips are REGIONS (Anywhere/
+         * North/South/East/West/Central); each region resolves to real
+         * state-filtered /law-schools queries. */
         await page.getByLabel('Search law schools').fill('');
         await page.getByLabel('Search law schools').press('Enter');
-        await page.getByLabel('State').selectOption('Delhi');
-        await page.getByText('2 found').waitFor();
+        await page.getByRole('group', { name: 'Region' }).getByRole('button', { name: 'North' }).click();
+        await page.getByText(/^4 SCHOOLS/).waitFor();
+        const urlRegion = new URL(page.url()).searchParams.get('region');
+        const nlu = await resultsItem(page, 'National Law University, Delhi').count();
+        const du = await resultsItem(page, 'Faculty of Law, University of Delhi').count();
+        const jgls = await resultsItem(page, 'Jindal Global Law School').count();
+        const rgnul = await resultsItem(page, 'Rajiv Gandhi National University of Law').count();
+        return { actual: { urlRegion, nlu, du, jgls, rgnul },
+          pass: urlRegion === 'North' && nlu === 1 && du === 1 && jgls === 1 && rgnul === 1,
+          evidence: await shot(page, 's27_filter_region_north.png') };
+      });
+    await tcase('TC-63-01-ui-filter-state-wire', 'ui_filter_state_delhi_deeplink',
+      'state=Delhi wire param (deep link) still filters to the 2 Delhi schools incl. NLU Delhi', async () => {
+        await page.goto(`${base}/s-27?state=Delhi`);
+        await page.getByText(/^2 SCHOOLS/).waitFor();
         const nlu = await resultsItem(page, 'National Law University, Delhi').count();
         const du = await resultsItem(page, 'Faculty of Law, University of Delhi').count();
         return { actual: { nlu, du }, pass: nlu === 1 && du === 1, evidence: await shot(page, 's27_filter_delhi.png') };
       });
     await tcase('TC-63-01-ui-sort-fees', 'ui_sort_fees_first',
       'fees sort puts Faculty of Law, University of Delhi (lowest fees_min) first', async () => {
-        await page.getByLabel('State').selectOption('');
-        await page.getByRole('button', { name: 'Sort: Fees' }).click();
-        await page.getByText('12 found').waitFor();
+        await page.getByRole('group', { name: 'Region' }).getByRole('button', { name: 'Anywhere' }).click();
+        await page.getByLabel('Order').selectOption('fees');
+        await page.getByText(/^12 SCHOOLS/).waitFor();
         const firstName = await page.locator('section[aria-label="Search results"] li.st-item').first().innerText();
         return { actual: firstName.split('\n')[0], pass: firstName.includes('Faculty of Law'),
           evidence: await shot(page, 's27_sort_fees.png') };
@@ -522,9 +613,13 @@ if (browser) {
     await tcase('TC-63-01-ui-institution-type-select', 'ui_institution_type_select_wire_value',
       'selecting label "National Law University" sends wire value and renders the 6 NLU schools', async () => {
         await page.goto(`${base}/s-27`);
-        await page.getByText('12 found').waitFor();
+        await page.getByText(/^12 SCHOOLS/).waitFor();
+        /* Reference structure: filters are part of the in-flow search
+         * disclosure (no default-frame filter chrome). */
+        await page.getByRole('button', { name: 'Or search by name ⌕' }).click();
+        await page.getByRole('button', { name: 'More filters' }).click();
         await page.getByLabel('Institution type').selectOption({ label: 'National Law University' });
-        await page.getByText('6 found').waitFor();
+        await page.getByText(/^6 SCHOOLS/).waitFor();
         const urlParam = new URL(page.url()).searchParams.get('institution_type');
         const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
         const gnlu = await resultsItem(page, 'Gujarat National Law University').count();
@@ -536,7 +631,7 @@ if (browser) {
     await tcase('TC-63-01-ui-institution-type-url', 'ui_institution_type_url_wire_value',
       'deep link institution_type=national_law_university → exactly the 6 NLU schools rendered', async () => {
         await page.goto(`${base}/s-27?institution_type=national_law_university`);
-        await page.getByText('6 found').waitFor();
+        await page.getByText(/^6 SCHOOLS/).waitFor();
         const n = await page.locator('section[aria-label="Search results"] li.st-item').count();
         return { actual: { rendered: n }, pass: n === 6 };
       });
@@ -549,8 +644,10 @@ if (browser) {
     const { page } = ctx;
     await page.goto(`${base}/s-27?state=Karnataka`);
     await resultsItem(page, 'National Law School of India University').waitFor();
-    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'View routes to /s-28 with id + ret context', async () => {
-      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: 'View' }).click();
+    await waitForLawSchoolFeatureReady(page);
+    await tcase('TC-63-06-detail-nav', 'view_routes_with_context', 'visible View CTA routes to /s-28 with id + ret context', async () => {
+      await resultsItem(page, 'National Law School of India University')
+        .getByRole('button', { name: 'View', exact: true }).click();
       await page.waitForURL('**/s-28*');
       const s28 = new URL(page.url());
       return { actual: s28.pathname + s28.search,
@@ -559,12 +656,12 @@ if (browser) {
     });
     await tcase('TC-63-06-detail-facts', 'detail_facts_sourced', 'detail shows verified facts with source link', async () => {
       await page.getByRole('heading', { name: 'National Law School of India University' }).waitFor();
-      const ok = await page.getByText('Verified facts').isVisible()
+      const ok = await page.getByRole('heading', { name: 'The essentials' }).isVisible()
         && (await page.locator('section a[target="_blank"]').count()) > 0;
       return { actual: ok, pass: ok, evidence: await shot(page, 's28_detail_nlsiu.png') };
     });
     await tcase('TC-63-06-return-context', 'back_restores_filters', 'Back to search restores /s-27?state=Karnataka', async () => {
-      await page.getByRole('button', { name: 'Back to search' }).first().click();
+      await page.getByRole('button', { name: '‹ Back to schools' }).first().click();
       await page.waitForURL('**/s-27*');
       const back = new URL(page.url());
       return { actual: back.pathname + back.search,
@@ -574,60 +671,127 @@ if (browser) {
     await ctx.close();
   });
 
+  /* Frozen Option C+ S-27 contract: every deterministic card has an exact,
+   * visible View CTA and every mobile target is at least 44x44. */
+  await phase('ui-view-cta-contract', async () => {
+    for (const viewport of [{ width: 390, height: 844 }, { width: 430, height: 932 }]) {
+      const ctx = await fresh({ viewport, label: `view-cta-${viewport.width}` });
+      const { page, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp } = ctx;
+      await page.goto(`${base}/s-27?page_size=${FX.s27.pageSize}`);
+      await waitForLawSchoolFeatureReady(page);
+      await tcase(`TC-63-06-view-cta-${viewport.width}`, `view_cta_${viewport.width}`,
+        `all six deterministic S-27 cards expose exact accessible name View at >=44x44 on ${viewport.width}px`,
+        async () => {
+          const views = page.locator('section[aria-label="Search results"] li.st-item')
+            .getByRole('button', { name: 'View', exact: true });
+          const count = await views.count();
+          const boxes = await views.evaluateAll((els) => els.map((el) => {
+            const box = el.getBoundingClientRect();
+            return { width: box.width, height: box.height };
+          }));
+          return {
+            actual: { count, boxes, consoleErrors, consoleWarnings, pageErrors, unexpectedHttp },
+            pass: count === FX.s27.visibleSlugs.length
+              && boxes.every((box) => box.width >= 44 && box.height >= 44)
+              && consoleErrors.length === 0 && consoleWarnings.length === 0
+              && pageErrors.length === 0 && unexpectedHttp.length === 0,
+            evidence: await shot(page, `s27_view_cta_${viewport.width}.png`),
+          };
+        });
+      if (viewport.width === 390) {
+        await tcase('TC-63-06-view-cta-route', 'view_cta_preserves_return_context',
+          'first deterministic View CTA routes to S-28 with school id + page_size return context',
+          async () => {
+            await page.locator('section[aria-label="Search results"] li.st-item').first()
+              .getByRole('button', { name: 'View', exact: true }).click();
+            await page.waitForURL('**/s-28*');
+            const target = new URL(page.url());
+            return {
+              actual: target.pathname + target.search,
+              pass: target.pathname === '/s-28'
+                && target.searchParams.get('id') === bySlug[FX.s27.visibleSlugs[0]].id
+                && (target.searchParams.get('ret') ?? '').includes('page_size=6'),
+            };
+          });
+      }
+      await ctx.close();
+    }
+  });
+
   /* TC-63-03/04 — compare UI: min 2, max 4, fifth refusal, duplicate, refresh */
   await phase('ui-compare', async () => {
     const ctx = await fresh({ label: 'compare', allow4xx: [/\/law-schools\/compare$/] });
     const { page } = ctx;
     await page.goto(`${base}/s-27`);
     await resultsItem(page, 'NALSAR').waitFor();
-    const cta = page.locator('section[aria-label="Compare tray"]').getByRole('button', { name: /^Compare/ });
-    await tcase('TC-63-03-ui-min-disabled', 'cta_disabled_below_min', 'CTA disabled below minimum of 2', async () => {
-      const d = await cta.isDisabled();
-      return { actual: d, pass: d };
+    const tray = page.locator('section[aria-label="Compare tray"]');
+    const cta = tray.getByRole('button', { name: /^Compare/ });
+    /* Reference #pb semantics: below the minimum the tray shows the
+     * "PICK n MORE TO COMPARE" metaline and NO Compare CTA exists at all —
+     * equally strong as the old disabled-CTA assertion (no enabled path). */
+    await tcase('TC-63-03-ui-min-disabled', 'cta_absent_below_min', 'below minimum of 2: no Compare CTA; tray asks to pick 2 more', async () => {
+      const n = await cta.count();
+      const ask = await tray.getByText('PICK 2 MORE TO COMPARE').isVisible();
+      return { actual: { ctaCount: n, ask }, pass: n === 0 && ask };
     });
-    await tcase('TC-63-03-ui-one-selected', 'cta_asks_one_more', 'with 1 selected CTA still disabled and asks for 1 more', async () => {
-      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: 'Compare', exact: true }).click();
-      const text = await cta.innerText();
-      return { actual: text, pass: (await cta.isDisabled()) && text.includes('select 1 more') };
+    await tcase('TC-63-03-ui-one-selected', 'cta_asks_one_more', 'with 1 selected still no CTA; tray asks for 1 more', async () => {
+      await resultsItem(page, 'National Law School of India University').getByRole('button', { name: '+ Compare', exact: true }).click();
+      const n = await cta.count();
+      const ask = await tray.getByText('PICK 1 MORE TO COMPARE').isVisible();
+      return { actual: { ctaCount: n, ask }, pass: n === 0 && ask };
     });
-    await tcase('TC-63-03-ui-two-enabled', 'cta_enables_at_min', 'with 2 selected CTA enables', async () => {
-      await resultsItem(page, 'NALSAR').getByRole('button', { name: 'Compare', exact: true }).click();
+    await tcase('TC-63-03-ui-two-enabled', 'cta_enables_at_min', 'with 2 selected the Compare CTA appears enabled', async () => {
+      await resultsItem(page, 'NALSAR').getByRole('button', { name: '+ Compare', exact: true }).click();
+      await cta.waitFor();
       return { actual: await cta.innerText(), pass: !(await cta.isDisabled()) };
     });
     await tcase('TC-63-03-ui-compare-2', 'compare_table_2', '2-school table renders (attribute col + 2 schools)', async () => {
       await cta.click();
       await page.waitForURL('**/s-29*');
-      await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-      const cols2 = await page.locator('table.st-table thead th').count();
-      return { actual: cols2, pass: cols2 === 3, evidence: await shot(page, 's29_compare_2.png') };
+      await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+      /* Reference r29 structure: the APPROVED 13 stacked fact cards, each
+       * listing every pick (no table, nothing scrolls sideways). */
+      const cards = await page.locator('.ls-attrcard').count();
+      const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+      return { actual: { cards, valsPerCard: vals }, pass: cards === 13 && vals === 2,
+        evidence: await shot(page, 's29_compare_2.png') };
     });
     await tcase('TC-63-04-ui-refresh-replay', 'refresh_state_survives',
       'refresh re-creates the comparison from the URL (state survives; distinct set per POST — not idempotency)', async () => {
         await page.reload();
-        await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-        const cols = await page.locator('table.st-table thead th').count();
-        return { actual: cols, pass: cols === 3 };
+        await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        const cards = await page.locator('.ls-attrcard').count();
+        const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+        return { actual: { cards, valsPerCard: vals }, pass: cards === 13 && vals === 2 };
       });
-    await tcase('TC-63-03-ui-compare-4', 'compare_table_4_max', '4-school table renders (config max)', async () => {
-      await page.goto(`${base}/s-29?ids=${ids4.join(',')}`);
-      await page.getByRole('heading', { name: 'Side by side' }).waitFor();
-      const cols4 = await page.locator('table.st-table thead th').count();
-      return { actual: cols4, pass: cols4 === 5, evidence: await shot(page, 's29_compare_4.png') };
-    });
+    await tcase('TC-63-03-ui-compare-4', 'compare_table_4_max',
+      '4-school compare renders the APPROVED 13 fact cards in the approved label order (config max)', async () => {
+        await page.goto(`${base}/s-29?ids=${ids4.join(',')}`);
+        await page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        const cards = await page.locator('.ls-attrcard').count();
+        const vals = await page.locator('.ls-attrcard').first().locator('li').count();
+        /* label = first text node of .ls-al (excludes the differ/same badge) */
+        const labels = await page.locator('.ls-attrcard .ls-al').evaluateAll(
+          (els) => els.map((el) => (el.childNodes[0]?.textContent ?? '').trim()));
+        const approved = COMPARE_ROWS.map((r) => r.label);
+        return { actual: { cards, valsPerCard: vals, labels },
+          pass: cards === 13 && vals === 4 && JSON.stringify(labels) === JSON.stringify(approved),
+          evidence: await shot(page, 's29_compare_4.png') };
+      });
     await tcase('TC-63-03-ui-fifth-refusal', 'fifth_refusal_typed',
       'fifth school → typed COMPARE_LIMIT_EXCEEDED message, no table', async () => {
         await page.goto(`${base}/s-29?ids=${[...ids4, bySlug['gnlu-gandhinagar'].id].join(',')}`);
         await page.getByText(/at most 4 schools/).waitFor();
         return { actual: await page.getByText(/at most 4 schools/).innerText(),
-          pass: (await page.locator('table.st-table').count()) === 0,
+          pass: (await page.locator('.ls-attrcard').count()) === 0,
           evidence: await shot(page, 's29_limit_refusal.png') };
       });
     await tcase('TC-63-04-ui-duplicate-blocked', 'duplicate_ids_deduped',
       'duplicate ids deduped client-side → below-minimum validation, no request crash', async () => {
         await page.goto(`${base}/s-29?ids=${ids4[0]},${ids4[0]}`);
-        await page.getByText(/Select at least 2 schools/).waitFor();
-        return { actual: await page.getByText(/Select at least 2 schools/).innerText(),
-          pass: (await page.locator('table.st-table').count()) === 0,
+        await page.getByText(/at least 2 schools/).waitFor();
+        return { actual: await page.getByText(/at least 2 schools/).innerText(),
+          pass: (await page.locator('.ls-attrcard').count()) === 0,
           evidence: await shot(page, 's29_duplicate_blocked.png') };
       });
     await ctx.close();
@@ -678,15 +842,41 @@ if (browser) {
     await ctx.close();
 
     const second = await fresh({ label: 'freshctx' });
+    const overlappingDetailRequests = [];
+    second.page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (request.method() === 'GET' && url.pathname === `/api/v1/law-schools/${ids4[0]}`) {
+        overlappingDetailRequests.push(url.pathname);
+      }
+    });
     await tcase('TC-63-05-fresh-browser-context-persistence', 'fresh_browser_context_persistence',
       'fresh browser context (same compile-time claims) sees saved+followed on S-30 — server persistence, not logout/login', async () => {
         if (!setupOk) return { actual: 'setup case failed — fresh-context persistence not evaluated', pass: false };
         await second.page.goto(`${base}/s-30`);
-        await second.page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor();
+        await waitForLawSchoolFeatureReady(second.page);
         const savedHas = await second.page.locator('section[aria-label="Saved schools"]').getByText('National Law School of India University').count();
         const followedHas = await second.page.locator('section[aria-label="Followed schools"]').getByText('National Law School of India University').count();
         return { actual: { savedHas, followedHas }, pass: savedHas > 0 && followedHas > 0,
           evidence: await shot(second.page, 's30_saved_followed.png') };
+      });
+    await tcase('TC-63-05-overlap-dedup', 'saved_followed_query_keys_deduplicated',
+      'same school in Saved and Following → one detail query, both groups render, zero console warnings/errors',
+      async () => {
+        const savedHas = await second.page.locator('section[aria-label="Saved schools"]').getByText('National Law School of India University').count();
+        const followedHas = await second.page.locator('section[aria-label="Followed schools"]').getByText('National Law School of India University').count();
+        return {
+          actual: {
+            detailRequests: overlappingDetailRequests.length,
+            savedHas,
+            followedHas,
+            consoleWarnings: second.consoleWarnings,
+            consoleErrors: second.consoleErrors,
+            pageErrors: second.pageErrors,
+          },
+          pass: overlappingDetailRequests.length === 1 && savedHas > 0 && followedHas > 0
+            && second.consoleWarnings.length === 0 && second.consoleErrors.length === 0
+            && second.pageErrors.length === 0,
+        };
       });
     await tcase('TC-63-05-server-lists', 'server_list_endpoints_contain_school',
       'GET /student/law-schools/saved + /followed both contain nlsiu-bengaluru (server truth)', async () => {
@@ -696,12 +886,12 @@ if (browser) {
           pass: sv.includes('nlsiu-bengaluru') && fo.includes('nlsiu-bengaluru') };
       });
     await tcase('TC-63-05-unsave', 'unsave_empties_list', 'unsave removes the row and shows the empty state', async () => {
-      await second.page.locator('section[aria-label="Saved schools"]').getByRole('button', { name: 'Unsave' }).first().click();
+      await second.page.locator('section[aria-label="Saved schools"]').getByRole('button', { name: 'Remove from saved' }).first().click();
       await second.page.locator('section[aria-label="Saved schools"]').getByText('No saved schools yet').waitFor();
       return { actual: 'No saved schools yet', pass: true, evidence: await shot(second.page, 's30_after_unsave.png') };
     });
     await tcase('TC-63-05-unfollow', 'unfollow_empties_list', 'unfollow removes the row and shows the empty state', async () => {
-      await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Unfollow' }).first().click();
+      await second.page.locator('section[aria-label="Followed schools"]').getByRole('button', { name: 'Stop following' }).first().click();
       await second.page.locator('section[aria-label="Followed schools"]').getByText('No followed schools yet').waitFor();
       return { actual: 'No followed schools yet', pass: true, evidence: await shot(second.page, 's30_after_unfollow.png') };
     });
@@ -807,11 +997,11 @@ if (browser) {
         const ctx = await fresh({ viewport: { width, height: 1000 }, theme, label: `mx-${tag}` });
         const { page } = ctx;
         const states = [
-          { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText('12 found').waitFor(), keyboard: true },
+          { key: 's27-results', url: `${base}/s-27`, ready: () => page.getByText(/^12 SCHOOLS/).waitFor(), keyboard: true },
           { key: 's27-empty', url: `${base}/s-27?q=zz-no-such-school`, ready: () => page.getByText('No schools match').waitFor(), keyboard: false },
           { key: 's28-detail', url: `${base}/s-28?id=${ids4[0]}`, ready: () => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(), keyboard: true },
-          { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: false },
-          { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: 'Side by side' }).waitFor(), keyboard: true },
+          { key: 's29-compare-2', url: `${base}/s-29?ids=${ids4.slice(0, 2).join(',')}`, ready: () => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(), keyboard: false },
+          { key: 's29-compare-4', url: `${base}/s-29?ids=${ids4.join(',')}`, ready: () => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(), keyboard: true },
           { key: 's30-lists', url: `${base}/s-30`, ready: () => page.locator('section[aria-label="Saved schools"] li.st-item').first().waitFor(), keyboard: true },
         ];
         for (const state of states) {
@@ -915,6 +1105,558 @@ if (browser) {
         });
       await ctx.close();
     }
+  });
+
+  /* ---------------- SAATHI-121 — Option C+ visual phase (Mac-delegated) -----
+   * VALID ORACLE RULES (SAATHI-118/120/121 oracle closure, 2026-07-28 —
+   * replaces the padded full-page method the independent QA at 60fe345
+   * invalidated):
+   *  1. FEATURE-REGION-ONLY capture on BOTH sides via recorded bounding-box
+   *     selectors: developed = `section.st-screen` element (global AppShell /
+   *     top shell / nav excluded by construction); reference = `#frame`
+   *     element, with `__opt.setFrame(<developed region CSS width>)` applied
+   *     first so both captures share the same content width. Selector,
+   *     bounding box and PNG size are recorded per side per pair.
+   *  2. DIMENSION-STRICT: if the two PNGs differ in width or height the pair
+   *     FAILS with code CAPTURE_DIMENSION_MISMATCH and NO percentage is
+   *     computed or reported. Captures are NEVER padded onto white or
+   *     background canvases.
+   *  3. Top-left content origin aligned by construction (element screenshots).
+   *  4. IDENTICAL DETERMINISTIC STATE: both renderers consume the SAME
+   *     repository-owned fixture contract
+   *     (scripts/lawschool_fixture_contract.json — see also
+   *     generate-lawschool-reference-fixture.mjs). The phase FAILS BEFORE any
+   *     capture with FIXTURE_CONTRACT_MISMATCH unless
+   *     contract checksum == developed live-API projection checksum ==
+   *     reference embedded LSKIT.FIXTURE checksum, and the visible school ids
+   *     and fact-row keys match the contract on both sides.
+   *  5. STRICT 40-pair set (frozen): S-27..S-30 x {390x844, 430x932,
+   *     768x1024, 1024x768, 1440x900} x {light, dark}; every pair must diff
+   *     < 2%; N/A / advisory / missing NEVER count as PASS; the process exits
+   *     non-zero AFTER all evidence + manifest are written when any pair
+   *     fails.
+   * Disable with QA_VISUAL_C_PLUS=0 (sandbox without Chromium only — never
+   * for closure evidence). */
+  const VIS_SCREEN_KEYS = ['s27', 's28', 's29', 's30'];
+  const VIS_VIEWPORTS = ['390x844', '430x932', '768x1024', '1024x768', '1440x900'];
+  const VIS_THEMES = ['light', 'dark'];
+  const APPROVED_DETERMINISTIC_PAIRS = VIS_SCREEN_KEYS.flatMap((sc) =>
+    VIS_VIEWPORTS.flatMap((vp) => VIS_THEMES.map((th) => `${sc}-${vp}-${th}`)));
+  const VISUAL_THRESHOLD = 0.02;
+  if (process.env.QA_VISUAL_C_PLUS !== '0') await phase('option-c-plus-visual', async () => {
+    const { pathToFileURL } = await import('node:url');
+    const {
+      contractChecksum, checksumOfProjection, catalogSlugsByName,
+      fixtureProjection, tokensHash, TOKENS_CSS_RELPATH,
+    } = await import('./lawschool_fixture_contract.mjs');
+    const refFile = path.resolve('..', 'docs', 'design', 'lawschool_reference', 'option_c_plus', 'OPTION_C_PLUS_GUIDED_CONFIDENCE.html');
+    let pixelmatch = null; let PNG = null;
+    try {
+      pixelmatch = (await import('pixelmatch')).default;
+      PNG = (await import('pngjs')).PNG;
+    } catch (err) {
+      recordNA('VIS-C+-deps', 'pixelmatch_pngjs_available', 'pixelmatch + pngjs installed',
+        `visual diff dependencies unavailable (${err?.message}) — run npm install`);
+      return;
+    }
+    try { await fs.access(refFile); } catch {
+      recordNA('VIS-C+-reference', 'reference_package_present',
+        'docs/design/lawschool_reference/option_c_plus reference frame present',
+        `reference artifact missing at ${refFile}`);
+      return;
+    }
+    const visDir = path.join(evidence, 'option_c_plus_visual');
+    await fs.mkdir(visDir, { recursive: true });
+    const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+    const expectedChecksum = contractChecksum();
+    const idOf = (slug) => bySlug[slug]?.id;
+    const slugOfId = Object.fromEntries(Object.values(bySlug).map((s) => [s.id, s.slug]));
+    const seq = (a) => JSON.stringify(a ?? null);
+    const setEq = (a, b) => seq([...a].sort()) === seq([...b].sort());
+
+    /* --- deterministic populated state (contract-owned, server-side) --- */
+    for (const slug of FX.s30.saved) await apiCall('PUT', `/api/v1/student/law-schools/${idOf(slug)}/saved`, { claims: USER_A });
+    for (const slug of FX.s30.followed) await apiCall('PUT', `/api/v1/student/law-schools/${idOf(slug)}/follow`, { claims: USER_A });
+
+    /* ------- fixture gate: MUST pass BEFORE any capture happens ------- */
+    const gate = { expectedChecksum, mismatches: [] };
+    try {
+      /* developed live-API projection (same canonical shape as the contract) */
+      const catalogRes = await apiCall('GET', '/api/v1/law-schools?sort=name&page=1&page_size=50');
+      const p1 = await apiCall('GET', `/api/v1/law-schools?sort=name&page=${FX.s27.page}&page_size=${FX.s27.pageSize}`);
+      const devSchools = [];
+      for (const slug of catalogSlugsByName()) {
+        const det = (await apiCall('GET', `/api/v1/law-schools/${idOf(slug)}`)).json ?? {};
+        devSchools.push({
+          slug: det.slug, name: det.name, state: det.state,
+          institutionType: det.institution_type, accreditation: det.accreditation,
+          entranceExam: det.entrance_exam, feesMin: det.fees_min, feesMax: det.fees_max,
+          nirfRank: det.nirf_rank,
+          programmes: (det.programmes ?? []).map((x) => ({ degree: x.degree, durationYears: x.duration_years })),
+          facts: (det.facts ?? []).map((f) => ({ key: f.key, value: f.value })).sort((a, b) => (a.key < b.key ? -1 : 1)),
+        });
+      }
+      const observedFactKeys = [...new Set(devSchools.flatMap((s) => s.facts.map((f) => f.key)))];
+      const cmpRes = await apiCall('POST', '/api/v1/law-schools/compare',
+        { claims: USER_A, body: { school_ids: FX.s29.slugs.map(idOf) } });
+      const cmpSlugs = (cmpRes.json?.items ?? []).map((i) => i.slug);
+      const s28det = (await apiCall('GET', `/api/v1/law-schools/${idOf(FX.s28.slug)}`, { claims: USER_A })).json ?? {};
+      const savedNow = await savedSlugs(USER_A);
+      const followedNow = await followedSlugs(USER_A);
+      const devProjection = {
+        version: FX.version, verifiedDate: FX.verifiedDate,
+        compare: { min: FX.compare.min, max: catalogRes.json?.compare_max },
+        factKeys: setEq(observedFactKeys, FX.factKeys) ? FX.factKeys : observedFactKeys.sort(),
+        catalogSlugsByName: (catalogRes.json?.items ?? []).map((s) => s.slug),
+        schools: devSchools,
+        s27: { ...FX.s27, visibleSlugs: (p1.json?.items ?? []).map((s) => s.slug), total: p1.json?.total, pageCount: Math.max(1, Math.ceil((p1.json?.total ?? 0) / FX.s27.pageSize)) },
+        s28: { slug: FX.s28.slug, saved: !!s28det.saved, followed: !!s28det.followed },
+        s29: { slugs: cmpSlugs, diffOnly: FX.s29.diffOnly },
+        s30: {
+          saved: setEq(savedNow, FX.s30.saved) ? FX.s30.saved : savedNow,
+          followed: setEq(followedNow, FX.s30.followed) ? FX.s30.followed : followedNow,
+        },
+      };
+      gate.devVisibleS27 = devProjection.s27.visibleSlugs;
+      if (seq(devProjection.s27.visibleSlugs) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`developed S-27 page-${FX.s27.page} slugs ${seq(devProjection.s27.visibleSlugs)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+      if (seq(cmpSlugs) !== seq(FX.s29.slugs)) {
+        gate.mismatches.push(`developed compare slugs ${seq(cmpSlugs)} != contract ${seq(FX.s29.slugs)}`);
+      }
+
+      /* reference embedded fixture + rendered DOM ids */
+      const probeRef = await fresh({ viewport: { width: 1440, height: 900 }, label: 'vis-fixture-probe-ref' });
+      try {
+        await probeRef.page.goto(`${pathToFileURL(refFile).href}#/s27?baseline=1`);
+        await probeRef.page.waitForFunction(() => !!window.__opt, null, { timeout: 20000 });
+        await probeRef.page.evaluate(() => { window.__opt.apply('s27-default'); document.body.setAttribute('data-baseline', '1'); });
+        await probeRef.page.waitForTimeout(200);
+        gate.referenceFixture = await probeRef.page.evaluate(() => (window.LSKIT && window.LSKIT.FIXTURE) || null);
+        gate.refVisibleS27 = await probeRef.page.evaluate(() => Array.from(
+          document.querySelectorAll('#app .cards article h3 a'))
+          .map((a) => ((a.getAttribute('href') || '').split('id=')[1] || '')));
+        gate.refFacts28Keys = await probeRef.page.evaluate(() => (window.LSKIT?.FACTS ?? []).map((f) => f.k));
+        gate.refFacts29Keys = await probeRef.page.evaluate(() => (window.LSKIT?.FACTS29 ?? []).map((f) => f.k));
+      } finally { await probeRef.close(); }
+      if (!gate.referenceFixture || gate.referenceFixture.checksum !== expectedChecksum) {
+        gate.mismatches.push(`reference embedded checksum ${gate.referenceFixture?.checksum ?? 'MISSING'} != contract ${expectedChecksum} — regenerate with generate-lawschool-reference-fixture.mjs`);
+      }
+      if (seq(gate.refVisibleS27) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`reference S-27 visible ids ${seq(gate.refVisibleS27)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+      const refFactSubset = (gate.refFacts28Keys ?? []).filter((k) => FX.factKeys.includes(k));
+      if (seq(refFactSubset) !== seq(FX.factKeys)) {
+        gate.mismatches.push(`reference S-28 fact-row keys ${seq(refFactSubset)} != contract ${seq(FX.factKeys)}`);
+      }
+
+      /* developed rendered DOM ids/keys */
+      const probeDev = await fresh({ viewport: { width: 1440, height: 900 }, theme: 'light', label: 'vis-fixture-probe-dev' });
+      try {
+        await probeDev.page.goto(`${base}/s-27?page_size=${FX.s27.pageSize}`);
+        await probeDev.page.getByText(/^12 SCHOOLS/).waitFor();
+        await waitForLawSchoolFeatureReady(probeDev.page);
+        const hrefIds = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen ul.ls-cards h3 a'))
+          .map((a) => new URLSearchParams((a.getAttribute('href') || '').split('?')[1] || '').get('id') || ''));
+        gate.devDomVisibleS27 = [...new Set(hrefIds)].map((uuid) => slugOfId[uuid] ?? uuid);
+        /* v2: every visible S-27 card's rendered fee string + CTA labels */
+        gate.devDomS27Cards = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen ul.ls-cards > li')).map((li) => ({
+          name: (li.querySelector('h3 a')?.textContent ?? '').trim(),
+          fees: (Array.from(li.querySelectorAll('ul.ls-plain li'))
+            .find((x) => /Costs about/.test(x.textContent || ''))?.querySelector('b')?.textContent ?? '')
+            .replace(/\u00a0/g, ' ').trim(),
+          compareCta: (li.querySelector('button.ls-cmp')?.textContent ?? '').trim(),
+          viewCta: (Array.from(li.querySelectorAll('.ls-acts button'))
+            .map((b) => (b.textContent ?? '').trim()).find((t) => t === 'View')) ?? 'MISSING',
+        })));
+        await probeDev.page.goto(`${base}/s-28?id=${idOf(FX.s28.slug)}`);
+        await probeDev.page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor();
+        /* v2: complete S-28 fact-row labels AND values in render order */
+        gate.devDomS28Rows = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen .ls-fact')).map((f) => ({
+          label: (f.querySelector('.ls-fact__l')?.textContent ?? '').trim(),
+          value: (f.querySelector('.ls-fact__v')?.textContent ?? '').trim(),
+        })));
+        const domLabels = gate.devDomS28Rows.map((r) => r.label);
+        const expectedFactLabels = FX.factKeys.map((k) => FACT_LABELS[k] ?? k);
+        gate.devDomFactLabels = domLabels.filter((l) => expectedFactLabels.includes(l));
+        if (seq(gate.devDomFactLabels) !== seq(expectedFactLabels)) {
+          gate.mismatches.push(`developed S-28 rendered fact-row labels ${seq(gate.devDomFactLabels)} != approved ${seq(expectedFactLabels)}`);
+        }
+        /* v2: ALL 13 S-29 rows — rendered labels and per-school values */
+        await probeDev.page.goto(`${base}/s-29?ids=${FX.s29.slugs.map(idOf).join(',')}`);
+        await probeDev.page.getByRole('heading', { name: /picks, side by side/ }).waitFor();
+        gate.devDomS29 = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen .ls-attrcard')).map((card) => ({
+          label: (card.querySelector('.ls-al')?.childNodes[0]?.textContent ?? '').trim(),
+          values: Array.from(card.querySelectorAll('ul.ls-vals li b')).map((b) => (b.textContent ?? '').trim()),
+        })));
+        if (gate.devDomS29.length !== COMPARE_ROWS.length) {
+          gate.mismatches.push(`developed S-29 renders ${gate.devDomS29.length} fact cards != approved 13`);
+        }
+        /* v2: S-30 group order/names/metalines/CTAs */
+        await probeDev.page.goto(`${base}/s-30`);
+        await waitForLawSchoolFeatureReady(probeDev.page);
+        await probeDev.page.waitForFunction(() =>
+          document.querySelectorAll('section[aria-label="Saved schools"] li.st-item').length === 2
+          && document.querySelectorAll('section[aria-label="Followed schools"] li.st-item').length === 2,
+        null, { timeout: 20000 });
+        gate.devDomS30 = await probeDev.page.evaluate(() => Array.from(
+          document.querySelectorAll('section.st-screen section.ls-sect')).map((sect) => ({
+          ariaLabel: sect.getAttribute('aria-label') ?? '',
+          name: (sect.querySelector('h2')?.childNodes[0]?.textContent ?? '').trim(),
+          cta: (sect.querySelector('li.st-item .ls-acts button')?.textContent ?? '').trim(),
+          cards: Array.from(sect.querySelectorAll('li.st-item')).map((li) => ({
+            name: (li.querySelector('h3 a')?.textContent ?? '').trim(),
+            metaline: (li.querySelector('.ls-metaline')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+            viewCta: (Array.from(li.querySelectorAll('.ls-acts button'))
+              .map((b) => (b.textContent ?? '').trim()).find((t) => t === 'View')) ?? 'MISSING',
+          })),
+        })));
+      } finally { await probeDev.close(); }
+      if (seq(gate.devDomVisibleS27) !== seq(FX.s27.visibleSlugs)) {
+        gate.mismatches.push(`developed S-27 rendered card ids ${seq(gate.devDomVisibleS27)} != contract ${seq(FX.s27.visibleSlugs)}`);
+      }
+
+      /* ---- v2 projection assembly (live API + rendered DOM through the ----
+       * ---- SHARED formatter) and full-scope checksum equality gate      ---- */
+      const nameToSlug = Object.fromEntries(Object.values(bySlug).map((x) => [x.name, x.slug]));
+      const { nirfText } = await import('../src/features/student/schools/lawschoolFormat.mjs');
+      devProjection.s27Cards = (p1.json?.items ?? []).map((sm, i) => ({
+        slug: sm.slug, name: sm.name, state: sm.state, institutionType: sm.institution_type,
+        feesLakh: gate.devDomS27Cards?.[i]?.fees ?? 'MISSING',
+        entranceExam: sm.entrance_exam, nirf: nirfText(sm.nirf_rank),
+        compareCta: gate.devDomS27Cards?.[i]?.compareCta ?? 'MISSING',
+        viewCta: gate.devDomS27Cards?.[i]?.viewCta ?? 'MISSING',
+      }));
+      const domRow = (label) => (gate.devDomS28Rows ?? []).find((r) => r.label === label);
+      devProjection.s28Card = {
+        slug: FX.s28.slug,
+        name: s28det.name,
+        identity: `${s28det.state} · ${s28det.institution_type} · ${s28det.accreditation}.`,
+        essentials: [['exam', 'Entrance exam'], ['fees', 'Fee band (sample)'],
+          ['nirf', 'NIRF rank (sample)'], ['progs', 'Programmes']].map(([key, label]) => ({
+          key, label: domRow(label) ? label : `MISSING:${label}`, value: domRow(label)?.value ?? 'MISSING',
+        })),
+        factRows: FX.factKeys.map((k) => {
+          const f = (s28det.facts ?? []).find((x) => x.key === k);
+          const label = FACT_LABELS[k] ?? k;
+          return {
+            key: k,
+            label: domRow(label) ? label : `MISSING:${label}`,
+            value: f?.value ?? 'MISSING',
+            sourceName: f?.source_name ?? null,
+            freshness: f?.retrieved_at ? verifiedText(f.retrieved_at.slice(0, 10)) : null,
+          };
+        }),
+        saved: !!s28det.saved, followed: !!s28det.followed,
+      };
+      devProjection.s29Rows = {
+        order: cmpSlugs,
+        labels: (gate.devDomS29 ?? []).map((c) => c.label),
+        cards: COMPARE_ROWS.map(({ key }, i) => ({
+          key,
+          label: gate.devDomS29?.[i]?.label ?? 'MISSING',
+          values: gate.devDomS29?.[i]?.values ?? [],
+        })),
+      };
+      devProjection.s30Groups = (gate.devDomS30 ?? []).map((g) => ({
+        name: g.name, ariaLabel: g.ariaLabel, cta: g.cta,
+        slugs: g.cards.map((cd) => nameToSlug[cd.name] ?? cd.name),
+        cards: g.cards.map((cd) => ({
+          slug: nameToSlug[cd.name] ?? cd.name, name: cd.name,
+          metaline: cd.metaline, viewCta: cd.viewCta,
+        })),
+      }));
+      devProjection.tokens = { file: TOKENS_CSS_RELPATH, sha256: tokensHash() };
+      gate.devChecksum = checksumOfProjection(devProjection);
+      if (gate.devChecksum !== expectedChecksum) {
+        const refProj = fixtureProjection();
+        const differing = Object.keys(refProj).filter(
+          (k) => checksumOfProjection(refProj[k] ?? null) !== checksumOfProjection(devProjection[k] ?? null));
+        gate.mismatches.push(`developed v2 projection checksum ${gate.devChecksum} != contract ${expectedChecksum} (differing fields: ${differing.join(', ') || 'none-at-top-level'})`);
+      }
+    } catch (err) {
+      gate.mismatches.push(`fixture gate could not be evaluated: ${err?.message ?? err}`);
+    }
+
+    const gatePassed = gate.mismatches.length === 0;
+    record('VIS-C+-fixture-gate', 'shared_fixture_contract_gate',
+      'contract checksum == developed API projection checksum == reference embedded checksum; visible ids + fact-row keys identical on both sides (BEFORE any capture)',
+      gatePassed ? { checksum: expectedChecksum } : { code: 'FIXTURE_CONTRACT_MISMATCH', ...gate },
+      gatePassed);
+
+    const visEntries = [];
+    const writeManifest = async () => {
+      await fs.writeFile(path.join(visDir, 'lawschool_c_plus_visual_manifest.json'), JSON.stringify({
+        commit, generatedAt: new Date().toISOString(),
+        reference: 'docs/design/lawschool_reference/option_c_plus/OPTION_C_PLUS_GUIDED_CONFIDENCE.html',
+        oracle: {
+          method: 'feature-region element captures on both sides; TEST-ONLY stylesheet hides global shell (.ls-topbar/.ls-bnav) before every developed capture with a per-pair executable isolation assertion (SHELL_ISOLATION_VIOLATION fail-closed); dimension-strict (CAPTURE_DIMENSION_MISMATCH on any width/height difference, no percentage computed, no padding ever); top-left content origin aligned by element capture; reference frame width pinned to the developed feature-region width via __opt.setFrame',
+          developedSelector: 'section.st-screen',
+          referenceSelector: '#frame',
+          fixtureContract: {
+            file: 'frontend/scripts/lawschool_fixture_contract.json',
+            checksum: expectedChecksum,
+            devChecksum: gate.devChecksum ?? null,
+            referenceChecksum: gate.referenceFixture?.checksum ?? null,
+            gatePassed,
+            mismatches: gate.mismatches,
+            s27Visible: FX.s27.visibleSlugs, s28Slug: FX.s28.slug,
+            s29Slugs: FX.s29.slugs, s30: FX.s30, factKeys: FX.factKeys,
+          },
+        },
+        thresholdPolicy: `STRICT: pixel-diff ratio < ${VISUAL_THRESHOLD} enforced for ALL ${APPROVED_DETERMINISTIC_PAIRS.length} approved deterministic pairs (frozen full matrix); dimension mismatch or fixture mismatch is a FAIL with NO percentage; any failing pair fails the run (non-zero exit after evidence); unapproved pairs are N/A and never PASS`,
+        /* TRUTHFUL fail-closed accounting (QA F3): capturedPairs counts only
+         * pairs whose developed AND reference PNGs were physically written;
+         * scoredPairs only pairs with a computed pixel ratio. On a fixture
+         * gate failure this reads 40/40/0/0/0/40 — never "captured: 40". */
+        ...manifestCounts(visEntries, APPROVED_DETERMINISTIC_PAIRS.length),
+        entries: visEntries,
+      }, null, 2));
+    };
+
+    if (!gatePassed) {
+      /* FAIL BEFORE CAPTURE: every approved pair is recorded as FAIL with the
+       * contract-mismatch code; no pixels are captured or scored. */
+      for (const pairKey of APPROVED_DETERMINISTIC_PAIRS) {
+        record(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
+          `pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% over identical fixture + identical capture geometry`,
+          { code: 'FIXTURE_CONTRACT_MISMATCH', detail: 'fixture gate failed — capture refused (see VIS-C+-fixture-gate)' },
+          false);
+        visEntries.push({ pair: pairKey, diff: { code: 'FIXTURE_CONTRACT_MISMATCH', gate: 'fail', approvedDeterministicPair: true } });
+      }
+      await writeManifest();
+      return;
+    }
+
+    /* ---- F3 — REAL global-shell isolation (TEST-ONLY, capture setup) ----
+     * QA proved the sticky global AppShell (.ls-topbar header, .ls-bnav
+     * mobile nav) overlaps the developed `section.st-screen` locator
+     * screenshots, so "excluded by construction" was false. Before EVERY
+     * developed capture a test-only stylesheet hides the global shell
+     * (production AppShell untouched), then an EXECUTABLE assertion verifies
+     * per pair that (a) every global shell element is hidden and its bounding
+     * box does not intersect the feature region and (b) the first/last
+     * visible children of section.st-screen are feature-local chrome
+     * (header.ls-top / nav.ls-tabbar), i.e. the captured top and bottom rows
+     * belong to the feature. Any violation fails the pair with
+     * SHELL_ISOLATION_VIOLATION before any diff. */
+    const GLOBAL_SHELL_HIDE_CSS = '.ls-topbar, .ls-bnav { display: none !important; }';
+    const shellIsolationProbe = () => {
+      const screen = document.querySelector('section.st-screen');
+      const sBox = screen ? screen.getBoundingClientRect() : null;
+      const shells = [];
+      for (const sel of ['.ls-topbar', '.ls-bnav']) {
+        for (const el of document.querySelectorAll(sel)) {
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          const hidden = cs.display === 'none' || cs.visibility === 'hidden' || (r.width === 0 && r.height === 0);
+          const intersectsFeature = !!sBox && !hidden && r.width > 0 && r.height > 0
+            && r.left < sBox.right && r.right > sBox.left && r.top < sBox.bottom && r.bottom > sBox.top;
+          shells.push({ selector: sel, hidden,
+            box: hidden ? null : { x: r.x, y: r.y, width: r.width, height: r.height },
+            intersectsFeature });
+        }
+      }
+      const visibleChildren = screen ? Array.from(screen.children).filter((el) => {
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && r.height > 0;
+      }) : [];
+      const first = visibleChildren[0] ?? null;
+      const last = visibleChildren[visibleChildren.length - 1] ?? null;
+      const featureLocal = (el) => !!el
+        && el.matches('header.ls-top, nav.ls-tabbar, .ls-wrap, .ls-trace')
+        && !el.matches('.ls-topbar, .ls-bnav');
+      return {
+        screenBox: sBox ? { x: sBox.x, y: sBox.y, width: sBox.width, height: sBox.height } : null,
+        shells,
+        firstChild: first ? { className: String(first.className), featureLocal: featureLocal(first) } : null,
+        lastChild: last ? { className: String(last.className), featureLocal: featureLocal(last) } : null,
+      };
+    };
+    const shellIsolationOk = (iso) => !!iso
+      && iso.shells.every((sh) => sh.hidden && !sh.intersectsFeature)
+      && !!iso.firstChild?.featureLocal && !!iso.lastChild?.featureLocal;
+
+    const VIS_SCREENS = [
+      { key: 's27',
+        devUrl: () => `${base}/s-27?page_size=${FX.s27.pageSize}`,
+        devReady: async (page) => {
+          await page.getByText(/^12 SCHOOLS/).waitFor();
+          await page.getByText(`PAGE ${FX.s27.page} OF 2`).waitFor();
+          await waitForLawSchoolFeatureReady(page);
+        },
+        refRoute: '#/s27', refState: 's27-default' },
+      { key: 's28',
+        devUrl: () => `${base}/s-28?id=${idOf(FX.s28.slug)}`,
+        devReady: (page) => page.getByRole('button', { name: 'Saved — remove', exact: true }).waitFor(),
+        refRoute: `#/s28?id=${FX.s28.slug}`, refState: 's28-detail' },
+      { key: 's29',
+        devUrl: () => `${base}/s-29?ids=${FX.s29.slugs.map(idOf).join(',')}`,
+        devReady: (page) => page.getByRole('heading', { name: /picks, side by side/ }).waitFor(),
+        refRoute: `#/s29?cmp=${FX.s29.slugs.join(',')}`, refState: 's29-4' },
+      { key: 's30',
+        devUrl: () => `${base}/s-30`,
+        devReady: async (page) => {
+          await page.waitForFunction(
+            ([nSaved, nFollowed]) =>
+            document.querySelectorAll('section[aria-label="Saved schools"] li.st-item').length === nSaved
+            && document.querySelectorAll('section[aria-label="Followed schools"] li.st-item').length === nFollowed,
+            [FX.s30.saved.length, FX.s30.followed.length]);
+          await waitForLawSchoolFeatureReady(page);
+        },
+        refRoute: '#/s30', refState: 's30-both' },
+    ];
+    for (const { width, height } of [
+      { width: 390, height: 844 }, { width: 430, height: 932 }, { width: 768, height: 1024 },
+      { width: 1024, height: 768 }, { width: 1440, height: 900 }]) {
+      for (const theme of ['light', 'dark']) {
+        for (const screen of VIS_SCREENS) {
+          const pairKey = `${screen.key}-${width}x${height}-${theme}`;
+          await tcase(`VIS-C+-${pairKey}`, 'option_c_plus_visual_pair',
+            `identical fixture + identical capture geometry; pixel-diff ratio < ${VISUAL_THRESHOLD * 100}% (STRICT — approved deterministic pair; CAPTURE_DIMENSION_MISMATCH fails with no percentage)`,
+            async () => {
+              /* Developed capture: feature region element (AppShell excluded). */
+              const dev = await fresh({ viewport: { width, height }, theme, label: `vis-${pairKey}` });
+              let entry;
+              try {
+                await dev.page.goto(screen.devUrl());
+                await screen.devReady(dev.page);
+                /* F3: hide the global sticky shell BEFORE capture (test-only) */
+                await dev.page.addStyleTag({ content: GLOBAL_SHELL_HIDE_CSS });
+                await dev.page.waitForTimeout(50);
+                const shellIsolation = await dev.page.evaluate(shellIsolationProbe);
+                const shellOk = shellIsolationOk(shellIsolation);
+                const devLoc = dev.page.locator('section.st-screen');
+                const devBox = await devLoc.boundingBox();
+                const devMeta = await dev.page.evaluate(() => ({
+                  dpr: window.devicePixelRatio,
+                  docScrollWidth: document.documentElement.scrollWidth,
+                  innerWidth: window.innerWidth,
+                  minTargetPx: Math.min(...Array.from(document.querySelectorAll('button, a, input, select'))
+                    .filter((el) => el.offsetParent !== null)
+                    .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height); })
+                    .filter((m) => m > 0), Infinity),
+                }));
+                const devPng = await devLoc.screenshot();
+                const devFile = `dev_${pairKey}.png`;
+                await fs.writeFile(path.join(visDir, devFile), devPng);
+                /* Reference capture: #frame element, frame width pinned to the
+                 * developed feature-region CSS width, baseline mode on. */
+                const regionWidth = Math.round(devBox?.width ?? width);
+                const ref = await fresh({ viewport: { width, height }, label: `visref-${pairKey}` });
+                let refPng; let refMeta; let refBox;
+                try {
+                  const hashRoute = screen.refRoute + (screen.refRoute.includes('?') ? '&' : '?') + 'baseline=1';
+                  await ref.page.goto(`${pathToFileURL(refFile).href}${hashRoute}`);
+                  await ref.page.waitForFunction(() => !!window.__opt, null, { timeout: 20000 });
+                  await ref.page.evaluate(([t, st, w]) => {
+                    window.__opt.theme.set(t);
+                    window.__opt.apply(st);
+                    window.__opt.setFrame(w);
+                    document.body.setAttribute('data-baseline', '1');
+                  }, [theme, screen.refState, regionWidth]);
+                  await ref.page.waitForTimeout(400);
+                  refMeta = await ref.page.evaluate(() => ({
+                    dpr: window.devicePixelRatio,
+                    docScrollWidth: document.documentElement.scrollWidth,
+                    innerWidth: window.innerWidth,
+                  }));
+                  const refLoc = ref.page.locator('#frame');
+                  refBox = await refLoc.boundingBox();
+                  refPng = await refLoc.screenshot();
+                } finally { await ref.close(); }
+                const refFileName = `ref_${pairKey}.png`;
+                await fs.writeFile(path.join(visDir, refFileName), refPng);
+                const a = PNG.sync.read(devPng);
+                const b = PNG.sync.read(refPng);
+                const approved = APPROVED_DETERMINISTIC_PAIRS.includes(pairKey);
+                const developedRecord = {
+                  file: `option_c_plus_visual/dev_${pairKey}.png`, url: screen.devUrl(),
+                  selector: 'section.st-screen', boundingBox: devBox,
+                  pngSize: { width: a.width, height: a.height },
+                  sha256: sha256(devPng), ...devMeta,
+                  shellIsolation,
+                  consoleErrors: dev.consoleErrors.slice(), pageErrors: dev.pageErrors.slice(), unexpectedHttp: dev.unexpectedHttp.slice(),
+                  exclusions: 'feature-region element capture + TEST-ONLY stylesheet hiding .ls-topbar/.ls-bnav before capture; per-pair executable assertion: shell hidden, no bounding-box intersection with section.st-screen, first/last visible children are feature-local chrome',
+                };
+                const referenceRecord = {
+                  file: `option_c_plus_visual/${refFileName}`, route: screen.refRoute, state: screen.refState,
+                  selector: '#frame', frameWidthSet: regionWidth, boundingBox: refBox,
+                  pngSize: { width: b.width, height: b.height },
+                  sha256: sha256(refPng), ...refMeta,
+                  exclusions: 'baseline mode (&baseline=1 + body[data-baseline=1]) hides reviewer tooling; #frame element capture only',
+                };
+                if (!shellOk) {
+                  /* F3 fail-closed: overlapping/unhidden global shell — the
+                   * pair FAILS with no percentage; captures kept as evidence. */
+                  entry = {
+                    pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                    developed: developedRecord, reference: referenceRecord,
+                    diff: { code: 'SHELL_ISOLATION_VIOLATION', shellIsolation,
+                      ratio: null, threshold: VISUAL_THRESHOLD,
+                      approvedDeterministicPair: approved, gate: approved ? 'fail' : 'advisory' },
+                  };
+                  visEntries.push(entry);
+                  return { actual: { code: 'SHELL_ISOLATION_VIOLATION', shellIsolation },
+                    na: !approved, pass: false,
+                    evidence: `option_c_plus_visual/${devFile}` };
+                }
+                if (a.width !== b.width || a.height !== b.height) {
+                  /* DIMENSION-STRICT: no percentage, no padding, pair FAILS. */
+                  entry = {
+                    pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                    developed: developedRecord, reference: referenceRecord,
+                    diff: { code: 'CAPTURE_DIMENSION_MISMATCH',
+                      developedSize: { width: a.width, height: a.height },
+                      referenceSize: { width: b.width, height: b.height },
+                      ratio: null, threshold: VISUAL_THRESHOLD,
+                      approvedDeterministicPair: approved, gate: approved ? 'fail' : 'advisory' },
+                  };
+                  visEntries.push(entry);
+                  return { actual: { code: 'CAPTURE_DIMENSION_MISMATCH',
+                    developedSize: `${a.width}x${a.height}`, referenceSize: `${b.width}x${b.height}` },
+                  na: !approved, pass: false,
+                  evidence: `option_c_plus_visual/${devFile}` };
+                }
+                const w = a.width; const h = a.height;
+                const diff = new PNG({ width: w, height: h });
+                const mismatched = pixelmatch(a.data, b.data, diff.data, w, h, { threshold: 0.1 });
+                const ratio = mismatched / (w * h);
+                const side = new PNG({ width: w * 2 + 8, height: h });
+                side.data.fill(255);
+                PNG.bitblt(a, side, 0, 0, w, h, 0, 0);
+                PNG.bitblt(b, side, 0, 0, w, h, w + 8, 0);
+                await fs.writeFile(path.join(visDir, `diff_${pairKey}.png`), PNG.sync.write(diff));
+                await fs.writeFile(path.join(visDir, `side_${pairKey}.png`), PNG.sync.write(side));
+                entry = {
+                  pair: pairKey, screen: screen.key, theme, viewport: { width, height },
+                  developed: developedRecord, reference: referenceRecord,
+                  diff: { file: `option_c_plus_visual/diff_${pairKey}.png`, sideBySide: `option_c_plus_visual/side_${pairKey}.png`,
+                    mismatchedPixels: mismatched, ratio, threshold: VISUAL_THRESHOLD, approvedDeterministicPair: approved,
+                    gate: approved ? (ratio < VISUAL_THRESHOLD ? 'pass' : 'fail') : 'advisory' },
+                };
+                visEntries.push(entry);
+                /* STRICT: an unapproved pair is N/A (never PASS); an approved
+                 * pair passes ONLY under the 2% threshold with a clean page. */
+                return { actual: { ratio: Number(ratio.toFixed(4)), approved, docScrollWidth: devMeta.docScrollWidth, minTargetPx: Math.round(devMeta.minTargetPx) },
+                  na: !approved,
+                  pass: approved && ratio < VISUAL_THRESHOLD
+                    && devMeta.docScrollWidth <= width
+                    && dev.pageErrors.length === 0 && dev.unexpectedHttp.length === 0,
+                  evidence: `option_c_plus_visual/side_${pairKey}.png` };
+              } finally { await dev.close(); }
+            });
+        }
+      }
+    }
+    for (const slug of FX.s30.saved) await apiCall('DELETE', `/api/v1/student/law-schools/${idOf(slug)}/saved`, { claims: USER_A });
+    for (const slug of FX.s30.followed) await apiCall('DELETE', `/api/v1/student/law-schools/${idOf(slug)}/follow`, { claims: USER_A });
+    await writeManifest();
   });
 }
 

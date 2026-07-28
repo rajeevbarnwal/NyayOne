@@ -69,3 +69,12 @@ jobs:
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)
         run: PYTHON=python bash scripts/db_gate.sh
+      - name: Provision deterministic E2E actors (idempotent — run twice, F1)
+        # SAATHI-120 F1: the law-school E2E suite requires the dev-claims
+        # actors (…00de/…00b2/…00c3) as users rows. This is the explicit
+        # repository-owned setup seam; running it twice on real PG16 proves
+        # zero-duplicate idempotency (backend/tests/test_seed_e2e_actors.py
+        # asserts the same contract natively).
+        run: |
+          python scripts/seed_e2e_actors.py
+          python scripts/seed_e2e_actors.py
