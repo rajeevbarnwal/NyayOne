@@ -91,9 +91,14 @@ describe('server-authoritative student registration API', () => {
       issuedAt: 123,
       isMinor: false,
       guardianConsentPending: false,
+      isLoginFlow: true,
+      isProfileComplete: true,
     });
 
-    expect(loadRegistrationSession()?.registrationId).toBe('opaque-registration-id');
+    const loaded = loadRegistrationSession();
+    expect(loaded?.registrationId).toBe('opaque-registration-id');
+    expect(loaded?.isLoginFlow).toBe(true);
+    expect(loaded?.isProfileComplete).toBe(true);
     expect(local.has('legalsaathi.student.profile.v1')).toBe(false);
     const serialized = [...session.values()].join(' ');
     expect(serialized).not.toContain('9876543210');

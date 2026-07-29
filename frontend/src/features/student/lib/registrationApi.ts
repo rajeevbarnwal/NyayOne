@@ -9,6 +9,8 @@ export interface RegistrationSession {
   issuedAt: number;
   isMinor: boolean;
   guardianConsentPending: boolean;
+  isLoginFlow?: boolean;
+  isProfileComplete?: boolean;
 }
 
 export interface RegisterStudentInput {

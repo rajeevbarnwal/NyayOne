@@ -17,7 +17,8 @@ import {
 } from '../lib/otp';
 import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
 import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
-import { updateProfileDraft } from '../lib/profileStore';
+import { isProfileComplete } from '../lib/profile';
+import { updateProfileDraft, getProfileDraft } from '../lib/profileStore';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
@@ -108,6 +109,19 @@ export function AuthGate() {
     setError(undefined);
     startOtp({ channel: 'sms' as OtpChannel, ref: digits }, Date.now());
     setMinor(false, false);
+    const existingServer = loadRegistrationSession();
+    if (existingServer) {
+      saveRegistrationSession({ ...existingServer, isLoginFlow: true });
+    } else {
+      saveRegistrationSession({
+        registrationId: 'login-' + digits,
+        destinationMasked: '+91 ' + digits,
+        issuedAt: Date.now(),
+        isMinor: false,
+        guardianConsentPending: false,
+        isLoginFlow: true,
+      });
+    }
     nav('/s-06');
   }
 
@@ -407,12 +421,22 @@ export function OtpVerify() {
       setStatus('incorrect');
       return;
     }
+    const draft = getProfileDraft();
+    const isProfileDone = isProfileComplete(draft) || Boolean(server?.isProfileComplete);
+    const isReturningUser = Boolean(server?.isLoginFlow) || isProfileDone;
+
     if (server) {
       setBusy(true);
       try {
         await verifyStudentOtp(server.registrationId, code);
         setStatus('verified');
-        nav(server.guardianConsentPending ? '/s-16' : '/s-09');
+        if (server.guardianConsentPending) {
+          nav('/s-16');
+        } else if (isReturningUser) {
+          nav('/s-14');
+        } else {
+          nav('/s-09');
+        }
       } catch (error) {
         if (error instanceof RegistrationApiError) {
           if (typeof error.attemptsLeft === 'number') setAttemptsLeftServer(error.attemptsLeft);
@@ -437,7 +461,13 @@ export function OtpVerify() {
     setChallenge(res.challenge);
     if (res.status === 'verified') {
       setStatus('verified');
-      nav(flow.guardianConsentPending ? '/s-16' : '/s-09');
+      if (flow.guardianConsentPending) {
+        nav('/s-16');
+      } else if (isReturningUser) {
+        nav('/s-14');
+      } else {
+        nav('/s-09');
+      }
     } else if (res.status === 'expired') nav('/s-07');
     else if (res.status === 'locked') nav('/s-08');
     else setStatus('incorrect');
