@@ -115,9 +115,9 @@ export function CalendarMonth() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, margin: '8px 0 12px' }}>
           <h1 className="lede" style={{ margin: 0 }}>Unified Calendar</h1>
           <div className="st-tabsrow" role="tablist" aria-label="Calendar View Mode">
-            <button type="button" className={`chip ${viewMode === 'month' ? 'on' : ''}`} aria-selected={viewMode === 'month'} onClick={() => changeViewMode('month')} data-testid="cal-view-month">Month View</button>
-            <button type="button" className={`chip ${viewMode === 'week' ? 'on' : ''}`} aria-selected={viewMode === 'week'} onClick={() => changeViewMode('week')} data-testid="cal-view-week">Week View</button>
-            <button type="button" className={`chip ${viewMode === 'day' ? 'on' : ''}`} aria-selected={viewMode === 'day'} onClick={() => changeViewMode('day')} data-testid="cal-view-day">Day View</button>
+            <button type="button" className={`chip ${viewMode === 'month' ? 'on active' : ''}`} aria-selected={viewMode === 'month'} onClick={() => changeViewMode('month')} data-testid="cal-view-month">Month</button>
+            <button type="button" className={`chip ${viewMode === 'week' ? 'on active' : ''}`} aria-selected={viewMode === 'week'} onClick={() => changeViewMode('week')} data-testid="cal-view-week">Week</button>
+            <button type="button" className={`chip ${viewMode === 'day' ? 'on active' : ''}`} aria-selected={viewMode === 'day'} onClick={() => changeViewMode('day')} data-testid="cal-view-day">Day</button>
           </div>
         </div>
 
