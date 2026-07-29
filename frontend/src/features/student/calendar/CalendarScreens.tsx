@@ -106,7 +106,7 @@ export function CalendarMonth() {
     <StudentScreen screenId="S-90" className="calv-screen">
       <div className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature">
         <CalSubnav active="month" />
-        <h1 className="lede">Unified Calendar <span className="m">· S19</span></h1>
+        <h1 className="lede">Unified Calendar</h1>
         <p className="stand">A platform primitive — every module writes here.</p>
 
 
@@ -275,7 +275,7 @@ export function CalendarAdd() {
     <StudentScreen screenId="S-91" className="calv-screen">
       <div className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature">
         <CalSubnav active="add" />
-        <h1 className="lede">Add event <span className="m">· S19</span></h1>
+        <h1 className="lede">Add event</h1>
         <p className="stand ident">Add a personal event to your unified calendar.</p>
         <div className="cardw">
           <div className="card">
