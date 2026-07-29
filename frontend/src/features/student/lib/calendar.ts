@@ -19,6 +19,7 @@
  * leakage in previews.
  */
 import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+import { formatDateDDMMYYYY } from '../../../lib/dateTime';
 
 // --- contract ---------------------------------------------------------------
 
@@ -339,6 +340,11 @@ export function localDateKey(iso: string, timezone: string): string {
     month: '2-digit',
     day: '2-digit',
   }).format(d);
+}
+
+/** Local wall-clock day in DD-MM-YYYY format for UI rendering. */
+export function localDateDisplay(iso: string, timezone: string): string {
+  return formatDateDDMMYYYY(localDateKey(iso, timezone));
 }
 
 /** Local wall-clock HH:mm of an instant in a timezone (24h). */
