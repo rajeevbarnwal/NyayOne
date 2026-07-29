@@ -42,6 +42,14 @@
 .calv .cal .cell .dn { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
 .calv .cal .cell.today .dn { color: var(--on-accent); background: var(--accent); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
 
+/* Date Filter Cell Range Highlighting (S-90) */
+.calv .cal .cell.in-range { background: var(--accent-tint); border-color: var(--accent); }
+.calv .cal .cell.start,
+.calv .cal .cell.end { background: var(--accent-tint); border-color: var(--accent); }
+.calv .cal .cell.start .dn,
+.calv .cal .cell.end .dn { background: var(--accent); color: var(--on-accent); border-radius: 4px; padding: 1px 5px; font-weight: 700; }
+.calv .cal .cell.out-of-range { opacity: 0.45; background: var(--panel); }
+
 /* 7-Column Vertical Week Grid (Columns = Days, Rows = Hours) */
 .calv .week-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 11px; border: 1px solid var(--line); }
 .calv .week-grid { display: grid; grid-template-columns: 75px repeat(7, minmax(75px, 1fr)); gap: 1px; background: var(--line); min-width: 600px; }
