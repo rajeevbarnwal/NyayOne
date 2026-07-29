@@ -1,0 +1,27 @@
+{
+  "schema": "legalsaathi.native-gate-results/1",
+  "provenance": "BROWSER_MEASURED (native toolchain execution, not a browser)",
+  "package": "docs/design/tutoring/option_c2_reference_v1",
+  "branch": "engineer/wave2-priority1-design-reference-saathi-125-129",
+  "workingDirectory": "frontend/",
+  "node": "v22.22.3",
+  "statement": "Priority 1 added only documentation and a self-contained offline reference under docs/. No file under frontend/src, frontend/tests, backend/ or any build configuration was modified. These gates were run to prove that production frontend behaviour is unchanged.",
+  "gates": [
+    { "gate": "install", "command": "npm ci --no-audit --no-fund", "rc": 0, "detail": "235 packages added in 9s. npm ci succeeded; the npm install fallback was not needed." },
+    { "gate": "typecheck", "command": "npm run typecheck", "rc": 0, "detail": "tsc --noEmit, no diagnostics" },
+    { "gate": "lint", "command": "npm run lint", "rc": 0, "detail": "eslint ., no findings" },
+    { "gate": "test", "command": "npm run test:run", "rc": 0, "detail": "vitest --run: 54 test files passed, 432 tests passed, 1 skipped (433 total), 4.30s" },
+    { "gate": "build", "command": "npm run build", "rc": 0, "detail": "tsc && vite build succeeded" }
+  ],
+  "totals": { "gates": 5, "rc0": 5, "nonZero": 0, "testFiles": 54, "testsPassed": 432, "testsSkipped": 1, "testsTotal": 433 },
+  "priority2Findings": [
+    {
+      "id": "P2-FIND-01",
+      "severity": "low",
+      "area": "frontend build",
+      "finding": "vite build emits 'Some chunks are larger than 500 kB after minification'. Pre-existing on this branch point and unrelated to Priority 1, which adds no application code.",
+      "action": "Recorded as a Priority 2 finding. Deliberately NOT fixed here: Priority 1 must not change production frontend behaviour.",
+      "evidence": "npm run build output"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+ "schema": "legalsaathi.tutoring.live-room-before-after/1",
+ "provenance": "BROWSER_MEASURED",
+ "independentReviewClaim": {
+  "source": "sources/OPTION_C2_MOBILE_GATE_INDEPENDENT_PRODUCT_UX_REVIEW.md",
+  "rows": [
+   {
+    "screen": "S-35 live portrait",
+    "viewport": "390x844",
+    "scrollBeyondViewportPx": 309,
+    "minTargetPx": 40,
+    "result": "FAIL"
+   },
+   {
+    "screen": "S-35 live portrait",
+    "viewport": "430x932",
+    "scrollBeyondViewportPx": 309,
+    "minTargetPx": 40,
+    "result": "FAIL"
+   },
+   {
+    "screen": "S-35 live landscape",
+    "viewport": "844x390",
+    "scrollBeyondViewportPx": 621,
+    "minTargetPx": 40,
+    "result": "FAIL"
+   },
+   {
+    "screen": "S-35 live landscape",
+    "viewport": "932x430",
+    "scrollBeyondViewportPx": 581,
+    "minTargetPx": 40,
+    "result": "FAIL"
+   }
+  ]
+ },
+ "reproducedBefore": [
+  {
+   "source": "HISTORICAL tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html (read-only)",
+   "screen": "s35live",
+   "viewport": "390x844",
+   "browserWindow": "390x844",
+   "scrollHeight": 1152,
+   "clientHeight": 844,
+   "verticalScrollPx": 308,
+   "horizontalOverflowPx": 0,
+   "minTargetPx": 40,
+   "minTargetControl": "Session, connection and priv",
+   "targetsUnder44": [
+    {
+     "n": "Session, connection and privac",
+     "w": 40,
+     "h": 40
+    },
+    {
+     "n": "Close session details",
+     "w": 40,
+     "h": 40
+    }
+   ]
+  },
+  {
+   "source": "HISTORICAL tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html (read-only)",
+   "screen": "s35live",
+   "viewport": "430x932",
+   "browserWindow": "430x932",
+   "scrollHeight": 1240,
+   "clientHeight": 932,
+   "verticalScrollPx": 308,
+   "horizontalOverflowPx": 0,
+   "minTargetPx": 40,
+   "minTargetControl": "Session, connection and priv",
+   "targetsUnder44": [
+    {
+     "n": "Session, connection and privac",
+     "w": 40,
+     "h": 40
+    },
+    {
+     "n": "Close session details",
+     "w": 40,
+     "h": 40
+    }
+   ]
+  },
+  {
+   "source": "HISTORICAL tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html (read-only)",
+   "screen": "s35land",
+   "viewport": "844x390",
+   "browserWindow": "844x390",
+   "scrollHeight": 671,
+   "clientHeight": 390,
+   "verticalScrollPx": 281,
+   "horizontalOverflowPx": 0,
+   "minTargetPx": 40,
+   "minTargetControl": "Session, connection and priv",
+   "targetsUnder44": [
+    {
+     "n": "Session, connection and privac",
+     "w": 40,
+     "h": 40
+    },
+    {
+     "n": "Close session details",
+     "w": 40,
+     "h": 40
+    }
+   ]
+  },
+  {
+   "source": "HISTORICAL tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html (read-only)",
+   "screen": "s35land",
+   "viewport": "932x430",
+   "browserWindow": "932x430",
+   "scrollHeight": 720,
+   "clientHeight": 430,
+   "verticalScrollPx": 290,
+   "horizontalOverflowPx": 0,
+   "minTargetPx": 40,
+   "minTargetControl": "Session, connection and priv",
+   "targetsUnder44": [
+    {
+     "n": "Session, connection and privac",
+     "w": 40,
+     "h": 40
+    },
+    {
+     "n": "Close session details",
+     "w": 40,
+     "h": 40
+    }
+   ]
+  }
+ ],
+ "rootCause": [
+  "The details sheet is position:absolute and its containing block is .app (position:relative), NOT .live.",
+  ".live{overflow:hidden} therefore never clips it, so the sheet translated by translateY(100%) adds exactly its own height to the document scroll height (308px portrait, 290-330px landscape).",
+  ".live also used height:100vh inside a nested device-bezel scroll container, where vh refers to the outer visual viewport rather than the bezel.",
+  "The session-info control was min 40x40 and the self-view Move/Minimise controls were 30x30, all below the 44px floor."
+ ],
+ "repair": [
+  "The reference renders every state as a full-page route at the real browser viewport: no device-bezel nesting, so 100dvh is meaningful.",
+  ".route.room is exactly 100dvh with grid-template-columns:minmax(0,1fr) and grid-template-rows:auto minmax(0,1fr) auto.",
+  "html[data-family=room] and body[data-family=room] set overflow:hidden and overscroll-behavior:none.",
+  "The details sheet is position:fixed, so it can never contribute to document height (asserted: sheetAddsNoHeight).",
+  "Every room control including session-info, self-view Move and Minimise is >=44x44.",
+  "Landscape compacts the header and self-view; the control dock is never removed. At <=360px the dock wraps rather than dropping controls."
+ ]
+}
