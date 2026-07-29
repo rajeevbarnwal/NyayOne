@@ -219,7 +219,8 @@ export function CalendarMonth() {
                       const isToday = `${year}-${mm}-${dd}` === todayKey;
                       return (
                         <div key={i} className={`day-hd${isToday ? ' today' : ''}`}>
-                          {WEEKDAYS[i]} {d}
+                          <span className="dow">{WEEKDAYS[i]}</span>
+                          <span className="dom">{d}</span>
                         </div>
                       );
                     })}
