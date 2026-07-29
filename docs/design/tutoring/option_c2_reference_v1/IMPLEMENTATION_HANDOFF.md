@@ -75,6 +75,20 @@ node tools/gen_checksums.mjs                      # SHA256SUMS.txt (idempotent)
 exists only because the execution environment caps a single command at 45 s; the output is
 identical either way because the merge sorts deterministically.
 
-All Chromium invocations in the environment used for this closure required
-`LD_LIBRARY_PATH=/sessions/cool-bold-clarke/tmp/stublib` (an arm64 `libXdamage` stub). That is an
-environment detail, not a package requirement.
+Every tool resolves its own paths at runtime: the repository root comes from
+`git rev-parse --show-toplevel` (with a structural fallback), playwright from `--playwright`,
+`PLAYWRIGHT_MODULE` or `<repo>/frontend/node_modules`, and anything underivable raises a typed
+fail-fast error naming the flag and the environment variable. No tool contains a machine path;
+`tests/portability.test.mjs` proves the package runs from a foreign directory.
+
+Some Linux/arm64 container images need a `libXdamage` stub for headless Chromium; when that is
+the case, prefix the commands with `LD_LIBRARY_PATH=<stublib>`. That is an environment detail,
+not a package requirement, and no tool encodes it.
+
+Additional executable gates added for D-1:
+
+```
+node tools/measure_live_room_addendum.mjs            # now includes rule 13, the banner content oracle
+node tests/banner_geometry_oracle_selftest.mjs       # 3 seeded defects must drive the gate non-zero
+node tests/portability.test.mjs                      # package must run from a foreign path
+```

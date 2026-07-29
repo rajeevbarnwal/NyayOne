@@ -4,12 +4,16 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { requireDirectory, failFast } from './env_paths.mjs';
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 globalThis.C2Fixtures = require(join(PKG, 'reference/fixtures.js'));
 const St = require(join(PKG, 'reference/states.js'));
 const idx = Object.fromEntries(St.STATES.map(s => [s.id, s.index]));
-const dir = process.argv[2] || '/sessions/cool-bold-clarke/tmp/w2p1/partials';
+/* The shard directory is caller-owned scratch: it has no repository-relative
+   default, so it must be supplied and is validated with a typed error. */
+const dir = failFast(() => requireDirectory(process.argv[2], 'C2_PARTIALS_DIR',
+  'PARTIALS_DIR_REQUIRED', 'the measurement partials directory'));
 
 const parts = readdirSync(dir).filter(f => f.endsWith('.json')).sort()
   .map(f => JSON.parse(readFileSync(join(dir, f), 'utf8')));
