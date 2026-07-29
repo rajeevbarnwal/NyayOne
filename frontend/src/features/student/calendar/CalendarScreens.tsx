@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StudentScreen, DpdpFootnote } from '../components';
-import { EmptyState, LoadingState, ErrorState, ValidationState } from '../../../components/ui/primitives';
+import { EmptyState, LoadingState, ErrorState, ValidationState, StatusBadge } from '../../../components/ui/primitives';
 import {
   CalendarService, calendarLoaders, runLoaders, aggregate, filterEvents, deriveStatus,
   retryFailed, resolveDeepLink, toPreview, localDateKey, localTime, validateDateRange,
-  validatePersonalEvent, PersonalEventError,
+  validatePersonalEvent, PersonalEventError, getSavedViewMode, saveViewMode, resolveEventBadge,
   SOURCE_LABELS, CALENDAR_SOURCE_TYPES, CALENDAR_SOURCE_NOTE,
   TIMEZONE_OPTIONS, PERSONAL_EVENT_TYPES, PERSONAL_EVENT_TYPE_LABELS,
   type CalendarFilters, type SourceResult, type CalendarSourceType, type PersonalEventType,
-  type CalendarEvent,
+  type CalendarEvent, type CalendarViewMode,
 } from '../lib/calendar';
+import { formatDateDDMMYYYY } from '../../../lib/dateTime';
 import '../../../styles/calendar.css';
 
 const STUDENT_ID = 'self';
@@ -58,6 +59,11 @@ export function CalendarMonth() {
   const [filters, setFilters] = useState<CalendarFilters>(() => svc.getFilters());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewModeState] = useState<CalendarViewMode>(() => getSavedViewMode());
+
+  function changeViewMode(mode: CalendarViewMode) {
+    setViewModeState(saveViewMode(mode));
+  }
 
   useEffect(() => { setResults(runLoaders(loaders)); }, [loaders]);
 
@@ -106,8 +112,14 @@ export function CalendarMonth() {
     <StudentScreen screenId="S-90" className="calv-screen">
       <div className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature">
         <CalSubnav active="month" />
-        <h1 className="lede">Unified Calendar</h1>
-
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, margin: '8px 0 12px' }}>
+          <h1 className="lede" style={{ margin: 0 }}>Unified Calendar</h1>
+          <div className="st-tabsrow" role="tablist" aria-label="Calendar View Mode">
+            <button type="button" className={`chip ${viewMode === 'month' ? 'on' : ''}`} aria-selected={viewMode === 'month'} onClick={() => changeViewMode('month')} data-testid="cal-view-month">Month View</button>
+            <button type="button" className={`chip ${viewMode === 'week' ? 'on' : ''}`} aria-selected={viewMode === 'week'} onClick={() => changeViewMode('week')} data-testid="cal-view-week">Week View</button>
+            <button type="button" className={`chip ${viewMode === 'day' ? 'on' : ''}`} aria-selected={viewMode === 'day'} onClick={() => changeViewMode('day')} data-testid="cal-view-day">Day View</button>
+          </div>
+        </div>
 
         {showFilters && (
           <section className="card filters" id="cal-filters" aria-label="Filters">
@@ -155,36 +167,92 @@ export function CalendarMonth() {
           <div className="two-b">
             <div>
               <div className="ph">
-                <span className="t">{monthLabel}</span>
+                <span className="t">{viewMode === 'month' ? monthLabel : viewMode === 'week' ? `7-Day Week (${monthLabel})` : `Day View (${formatDateDDMMYYYY(now)})`}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                   <span className="a" data-testid="cal-count">{visible.length} events</span>
                   <button type="button" className="chip" aria-expanded={showFilters} aria-controls="cal-filters" onClick={() => setShowFilters((v) => !v)} data-testid="cal-filters-toggle"><span className="g" />Filter</button>
                 </span>
               </div>
-              <div className="cal" role="grid" aria-label={`Calendar ${monthLabel}`}>
-                {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
-                {Array.from({ length: lead }, (_, i) => <div className="cell dim" key={`lead-${i}`} aria-hidden="true"><span className="dn" /></div>)}
-                {Array.from({ length: daysInMonth }, (_, i) => {
-                  const d = i + 1;
-                  const dd = String(d).padStart(2, '0');
-                  const isToday = `${year}-${mm}-${dd}` === todayKey;
-                  const items = byDay.get(d) ?? [];
-                  return (
-                    <div className={`cell${isToday ? ' today' : ''}`} key={d} role="gridcell">
-                      <span className="dn">{d}</span>
-                      {items.slice(0, 2).map((e) => {
-                        const p = toPreview(e);
-                        return (
-                          <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
-                            onClick={() => setSelectedId(p.id)} title={p.title}>
-                            <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
+
+              {viewMode === 'month' && (
+                <div className="cal" role="grid" aria-label={`Calendar ${monthLabel}`}>
+                  {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
+                  {Array.from({ length: lead }, (_, i) => <div className="cell dim" key={`lead-${i}`} aria-hidden="true"><span className="dn" /></div>)}
+                  {Array.from({ length: daysInMonth }, (_, i) => {
+                    const d = i + 1;
+                    const dd = String(d).padStart(2, '0');
+                    const isToday = `${year}-${mm}-${dd}` === todayKey;
+                    const items = byDay.get(d) ?? [];
+                    return (
+                      <div className={`cell${isToday ? ' today' : ''}`} key={d} role="gridcell">
+                        <span className="dn">{d}</span>
+                        {items.slice(0, 2).map((e) => {
+                          const p = toPreview(e);
+                          return (
+                            <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
+                              onClick={() => setSelectedId(p.id)} title={p.title}>
+                              <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {viewMode === 'week' && (
+                <div className="st-list" style={{ marginTop: 12 }}>
+                  {Array.from({ length: 7 }, (_, i) => {
+                    const d = i + 1;
+                    const items = byDay.get(d) ?? [];
+                    return (
+                      <div key={i} className="st-item" style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '10px 12px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-fg-default)' }}>
+                          {WEEKDAYS[i]} {d} {monthLabel}
+                        </div>
+                        {items.length === 0 ? (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-fg-muted)', marginTop: 4 }}>No events scheduled</div>
+                        ) : (
+                          items.map((e) => {
+                            const p = toPreview(e);
+                            const badge = resolveEventBadge(e);
+                            return (
+                              <button key={p.id} type="button" className="btn tap" style={{ marginTop: 4, width: '100%', justifyContent: 'space-between', padding: '6px 10px', fontSize: '0.8rem' }} onClick={() => setSelectedId(p.id)}>
+                                <span>{localTime(p.startsAt, filters.timezone)} · {p.title}</span>
+                                <StatusBadge status={badge.status} label={badge.label} />
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {viewMode === 'day' && (
+                <div className="st-list" style={{ marginTop: 12 }}>
+                  {(byDay.get(now.getDate()) ?? visible.slice(0, 5)).length === 0 ? (
+                    <EmptyState title="Nothing scheduled for today" hint="No events scheduled for today in your selected timezone." />
+                  ) : (
+                    (byDay.get(now.getDate()) ?? visible.slice(0, 5)).map((e) => {
+                      const p = toPreview(e);
+                      const badge = resolveEventBadge(e);
+                      return (
+                        <div key={p.id} className="st-item" style={{ justifyContent: 'space-between', padding: '10px 12px' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.title}</div>
+                            <div className="st-item__meta">{SOURCE_LABELS[e.sourceType]} · {formatDateDDMMYYYY(localDateKey(e.startsAt, filters.timezone))} · {localTime(e.startsAt, filters.timezone)}</div>
+                          </div>
+                          <StatusBadge status={badge.status} label={badge.label} />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
               {visible.length === 0 && <div style={{ marginTop: 12 }}><EmptyState title="Nothing scheduled" hint="Adjust filters, or add a personal event." /></div>}
             </div>
 

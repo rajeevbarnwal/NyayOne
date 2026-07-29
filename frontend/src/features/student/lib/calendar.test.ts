@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryKvStore } from '../../../lib/kvStore';
 import {
   aggregate, runAdapter, normalizeEvent, sortEvents, filterEvents,
-  localDateKey, localTime, resolveEventBadge, toPreview, previewLeaksRestricted, resolveDeepLink,
+  localDateKey, localTime, resolveEventBadge, getSavedViewMode, saveViewMode, toPreview, previewLeaksRestricted, resolveDeepLink,
   eventId, CalendarError, CalendarService, defaultFilters, sampleSourceResults,
   runLoaders, retryFailed, deriveStatus, calendarLoaders,
   validateDateRange, validatePersonalEvent, PersonalEventError, zonedToUtcIso, SOURCE_ROUTE,
@@ -301,5 +301,15 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
 
     expect(resolveEventBadge(pastEvent, now)).toEqual({ label: 'Deadline passed', status: 'risk' });
     expect(resolveEventBadge(futureEvent, now)).toEqual({ label: 'Deadline', status: 'warn' });
+  });
+
+  it('persists and restores calendar view mode preference (month, week, day)', () => {
+    expect(getSavedViewMode()).toBe('month');
+    saveViewMode('day');
+    expect(getSavedViewMode()).toBe('day');
+    saveViewMode('week');
+    expect(getSavedViewMode()).toBe('week');
+    saveViewMode('month');
+    expect(getSavedViewMode()).toBe('month');
   });
 });

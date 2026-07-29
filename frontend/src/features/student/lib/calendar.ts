@@ -381,6 +381,37 @@ export function resolveEventBadge(
   return { label: 'Scheduled', status: 'info' };
 }
 
+// --- view mode persistence (Month, Week, Day) --------------------------------
+export type CalendarViewMode = 'month' | 'week' | 'day';
+const VIEW_MODE_KEY = 'ls_calendar_view_mode';
+let memoryViewMode: CalendarViewMode = 'month';
+
+export function getSavedViewMode(): CalendarViewMode {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(VIEW_MODE_KEY);
+      if (saved === 'month' || saved === 'week' || saved === 'day') {
+        return saved;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return memoryViewMode;
+}
+
+export function saveViewMode(mode: CalendarViewMode): CalendarViewMode {
+  memoryViewMode = mode;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    }
+  } catch {
+    // fallback
+  }
+  return mode;
+}
+
 // --- filters ----------------------------------------------------------------
 
 export interface CalendarFilters {
