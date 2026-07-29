@@ -19,6 +19,12 @@ body{
 button,input,select,textarea{font-family:inherit}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 :focus-visible{outline:3px solid var(--terra);outline-offset:2px;border-radius:6px}
+/* 1.4.11 / 2.4.7: inside the dark studio surfaces the light-theme --terra ring only
+   reached 2.91:1 against the self-view tile. The studio rows get a studio-specific
+   ring token; the sheet and the leave dialog keep the global --terra ring because
+   they are painted on the light card surface. */
+.room>.lh :focus-visible,.room>.stage :focus-visible,.room>.lctrl :focus-visible,
+.live>.lh :focus-visible,.live>.stage :focus-visible,.live>.lctrl :focus-visible{outline-color:var(--studio-focus)}
 img,svg{max-width:100%}
 
 /* ---------- route root ---------- */
@@ -317,7 +323,10 @@ body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
   background:var(--studio2);color:var(--studiotx);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .room .cb[aria-pressed=true]{background:var(--studiotx);color:var(--studio)}
 .room .cb.leave{width:auto;border-radius:var(--r-pill);padding:0 15px;gap:8px;font-size:13px;font-weight:800;
-  border-color:var(--studio-leave);color:var(--studio-leave-ink);white-space:nowrap;flex:0 1 auto;min-width:var(--target-min)}
+  /* 1.4.11: the tinted edge is the only visual feature separating the destructive
+     control from the neutral dock controls, and at <=360px the visible label is
+     clipped, so the edge must itself reach 3:1 on the dock surface. */
+  border-color:var(--studio-leave-edge);color:var(--studio-leave-ink);white-space:nowrap;flex:0 1 auto;min-width:var(--target-min)}
 .room .lh .cb{min-width:var(--target-min);min-height:var(--target-min);border-width:1.5px;flex:none}
 
 /* details sheet: fixed to the room, cannot change document height */
@@ -338,7 +347,12 @@ body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
 .room .rbanner{position:absolute;left:12px;right:12px;top:12px;z-index:5;display:flex;gap:9px;align-items:flex-start;
   background:rgba(12,8,3,.9);border:1.5px solid var(--studio-line2);border-radius:var(--r-md);padding:9px 11px}
 .room .rbanner.warn{border-color:var(--terra)}
-.room .rbanner.err{border-color:var(--studio-leave)}
+.room .rbanner.err{border-color:var(--studio-leave);
+  /* the global .err utility paints --risk, which is a LIGHT-surface ink; on the
+     dark studio banner it measured 2.50:1 in the light theme. The studio banner is
+     theme-invariant, so it uses the studio leave ink in both themes (dark already
+     resolved to this exact value). */
+  color:var(--studio-leave-ink)}
 .room .rbanner .bt{font-size:12.5px;font-weight:800}
 .room .rbanner .bd2{font-size:11.5px;color:var(--studiomut);line-height:1.45;margin-top:2px}
 

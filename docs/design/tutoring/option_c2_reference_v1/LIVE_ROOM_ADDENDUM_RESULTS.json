@@ -39,10 +39,10 @@
       "orientation": "portrait",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 54
+        "ms": 70
       },
       "base": {
         "viewport": {
@@ -345,9 +345,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -635,13 +635,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__390x844__light.png",
+      "capture": "captures/addendum/after__s35-room-live__390x844__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__390x844__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -681,7 +681,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__390x844__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -721,7 +721,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__390x844__light.png",
+          "capture": "captures/addendum/after__state-disconnected__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -761,7 +761,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__390x844__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -801,7 +801,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__390x844__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -841,7 +841,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__390x844__light.png",
+          "capture": "captures/addendum/after__state-device-release__390x844__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -893,10 +893,10 @@
       "orientation": "portrait",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 60
+        "ms": 120
       },
       "base": {
         "viewport": {
@@ -1199,9 +1199,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -1489,13 +1489,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__390x844__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__390x844__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__390x844__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1535,7 +1535,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__390x844__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1575,7 +1575,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__390x844__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1615,7 +1615,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__390x844__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1655,7 +1655,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__390x844__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1695,7 +1695,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__390x844__dark.png",
+          "capture": "captures/addendum/after__state-device-release__390x844__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -1747,10 +1747,10 @@
       "orientation": "portrait",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 71
+        "ms": 64
       },
       "base": {
         "viewport": {
@@ -2053,9 +2053,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -2343,13 +2343,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__430x932__light.png",
+      "capture": "captures/addendum/after__s35-room-live__430x932__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__430x932__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2389,7 +2389,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__430x932__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2429,7 +2429,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__430x932__light.png",
+          "capture": "captures/addendum/after__state-disconnected__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2469,7 +2469,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__430x932__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2509,7 +2509,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__430x932__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2549,7 +2549,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__430x932__light.png",
+          "capture": "captures/addendum/after__state-device-release__430x932__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -2601,10 +2601,10 @@
       "orientation": "portrait",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 63
+        "ms": 70
       },
       "base": {
         "viewport": {
@@ -2907,9 +2907,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -3197,13 +3197,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__430x932__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__430x932__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__430x932__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3243,7 +3243,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__430x932__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3283,7 +3283,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__430x932__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3323,7 +3323,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__430x932__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3363,7 +3363,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__430x932__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3403,7 +3403,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__430x932__dark.png",
+          "capture": "captures/addendum/after__state-device-release__430x932__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -3455,10 +3455,10 @@
       "orientation": "portrait",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 64
+        "ms": 81
       },
       "base": {
         "viewport": {
@@ -3761,9 +3761,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -4051,13 +4051,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__768x1024__light.png",
+      "capture": "captures/addendum/after__s35-room-live__768x1024__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__768x1024__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4097,7 +4097,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__768x1024__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4137,7 +4137,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__768x1024__light.png",
+          "capture": "captures/addendum/after__state-disconnected__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4177,7 +4177,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__768x1024__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4217,7 +4217,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__768x1024__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4257,7 +4257,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__768x1024__light.png",
+          "capture": "captures/addendum/after__state-device-release__768x1024__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4309,10 +4309,10 @@
       "orientation": "portrait",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 53
+        "ms": 57
       },
       "base": {
         "viewport": {
@@ -4615,9 +4615,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -4905,13 +4905,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__768x1024__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__768x1024__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4951,7 +4951,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -4991,7 +4991,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5031,7 +5031,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5071,7 +5071,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5111,7 +5111,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__768x1024__dark.png",
+          "capture": "captures/addendum/after__state-device-release__768x1024__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5163,10 +5163,10 @@
       "orientation": "landscape",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 57
+        "ms": 74
       },
       "base": {
         "viewport": {
@@ -5469,9 +5469,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -5759,13 +5759,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__844x390__light.png",
+      "capture": "captures/addendum/after__s35-room-live__844x390__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__844x390__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5805,7 +5805,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__844x390__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5845,7 +5845,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__844x390__light.png",
+          "capture": "captures/addendum/after__state-disconnected__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5885,7 +5885,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__844x390__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5925,7 +5925,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__844x390__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -5965,7 +5965,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__844x390__light.png",
+          "capture": "captures/addendum/after__state-device-release__844x390__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6017,10 +6017,10 @@
       "orientation": "landscape",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 65
+        "ms": 72
       },
       "base": {
         "viewport": {
@@ -6323,9 +6323,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -6613,13 +6613,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__844x390__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__844x390__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__844x390__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6659,7 +6659,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__844x390__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6699,7 +6699,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__844x390__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6739,7 +6739,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__844x390__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6779,7 +6779,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__844x390__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6819,7 +6819,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__844x390__dark.png",
+          "capture": "captures/addendum/after__state-device-release__844x390__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -6871,10 +6871,10 @@
       "orientation": "landscape",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 52
+        "ms": 80
       },
       "base": {
         "viewport": {
@@ -7177,9 +7177,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -7467,13 +7467,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__932x430__light.png",
+      "capture": "captures/addendum/after__s35-room-live__932x430__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__932x430__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7513,7 +7513,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__932x430__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7553,7 +7553,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__932x430__light.png",
+          "capture": "captures/addendum/after__state-disconnected__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7593,7 +7593,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__932x430__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7633,7 +7633,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__932x430__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7673,7 +7673,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__932x430__light.png",
+          "capture": "captures/addendum/after__state-device-release__932x430__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -7725,10 +7725,10 @@
       "orientation": "landscape",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 61
+        "ms": 69
       },
       "base": {
         "viewport": {
@@ -8031,9 +8031,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -8321,13 +8321,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__932x430__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__932x430__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__932x430__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8367,7 +8367,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__932x430__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8407,7 +8407,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__932x430__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8447,7 +8447,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__932x430__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8487,7 +8487,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__932x430__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8527,7 +8527,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__932x430__dark.png",
+          "capture": "captures/addendum/after__state-device-release__932x430__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -8579,10 +8579,10 @@
       "orientation": "landscape",
       "theme": "light",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 62
+        "ms": 73
       },
       "base": {
         "viewport": {
@@ -8885,9 +8885,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -9175,13 +9175,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__1024x768__light.png",
+      "capture": "captures/addendum/after__s35-room-live__1024x768__light.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__1024x768__light.png",
+          "capture": "captures/addendum/after__state-camera-denied__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9221,7 +9221,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__1024x768__light.png",
+          "capture": "captures/addendum/after__state-mic-denied__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9261,7 +9261,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__1024x768__light.png",
+          "capture": "captures/addendum/after__state-disconnected__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9301,7 +9301,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__1024x768__light.png",
+          "capture": "captures/addendum/after__state-provider-failure__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9341,7 +9341,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__1024x768__light.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9381,7 +9381,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__1024x768__light.png",
+          "capture": "captures/addendum/after__state-device-release__1024x768__light.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -9433,10 +9433,10 @@
       "orientation": "landscape",
       "theme": "dark",
       "label": "after",
-      "phase": "states",
+      "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 63
+        "ms": 82
       },
       "base": {
         "viewport": {
@@ -9739,9 +9739,9 @@
         "r7_selfView": true,
         "r8_sheet": true,
         "r9_keyboard": true,
+        "r11_states": true,
         "r10_console": true,
-        "r12_ready": true,
-        "r11_states": true
+        "r12_ready": true
       },
       "rule7": {
         "corners": [
@@ -10029,13 +10029,13 @@
           }
         ]
       },
-      "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__s35-room-live__1024x768__dark.png",
+      "capture": "captures/addendum/after__s35-room-live__1024x768__dark.png",
       "rule11": [
         {
           "case": "camera-denied",
           "state": "s35-room-camoff",
           "note": "camera denied / off, device released wording",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-camera-denied__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-camera-denied__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -10075,7 +10075,7 @@
           "case": "mic-denied",
           "state": "s35-room-muted",
           "note": "microphone denied / muted",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-mic-denied__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-mic-denied__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -10115,7 +10115,7 @@
           "case": "disconnected",
           "state": "s35-reconnecting",
           "note": "disconnected / reconnecting",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-disconnected__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-disconnected__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -10155,7 +10155,7 @@
           "case": "provider-failure",
           "state": "s35-icefail",
           "note": "ICE/TURN provider failure",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-provider-failure__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-provider-failure__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -10195,7 +10195,7 @@
           "case": "leave-confirmation",
           "state": "s35-leave-confirm",
           "note": "leave confirmation dialog",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-leave-confirmation__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-leave-confirmation__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,
@@ -10235,7 +10235,7 @@
           "case": "device-release",
           "state": "s35-room-live",
           "note": "camera toggled off in-room, device released",
-          "capture": "/sessions/cool-bold-clarke/tmp/shots_after/after__state-device-release__1024x768__dark.png",
+          "capture": "captures/addendum/after__state-device-release__1024x768__dark.png",
           "rootHeightDelta": 0,
           "maxOverflowY": 0,
           "maxOverflowX": 0,

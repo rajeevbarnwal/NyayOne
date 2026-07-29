@@ -9,7 +9,7 @@
    Rule 12: readiness is awaited on [data-live-room-ready="true"] with a bounded
    REJECTING timeout. There is no fixed sleep anywhere in this file. */
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -227,6 +227,13 @@ function verdictFor(p) {
 
 /* ============================ run ============================ */
 mkdirSync(SHOTS, { recursive: true });
+/* Evidence must never embed an absolute, machine-specific path: record every
+   capture relative to the package root (or, if the caller redirected --shots
+   outside the package, relative to the repository root). */
+const shotRef = (abs) => {
+  const relPkg = relative(PKG, abs).split(sep).join('/');
+  return relPkg.startsWith('..') ? relative(join(PKG, '..', '..', '..', '..'), abs).split(sep).join('/') : relPkg;
+};
 const browser = await chromium.launch({ headless: true });
 const pairs = [];
 const failures = [];
@@ -402,7 +409,7 @@ for (const idx of wanted) {
     await waitReady(page);
     const shot = join(SHOTS, LABEL + '__s35-room-live__' + vp.name + '__' + theme + '.png');
     if (!NOSHOTS) await page.screenshot({ path: shot });
-    pair.capture = NOSHOTS ? null : shot;
+    pair.capture = NOSHOTS ? null : shotRef(shot);
 
     /* rule 11 — six named states re-assert rules 1-6 */
     pair.rule11 = [];
@@ -414,7 +421,7 @@ for (const idx of wanted) {
       const v = verdictFor(p);
       const sShot = join(SHOTS, LABEL + '__state-' + sc.key + '__' + vp.name + '__' + theme + '.png');
       if (!NOSHOTS) await page.screenshot({ path: sShot });
-      pair.rule11.push({ case: sc.key, state: sc.state, note: sc.note, capture: NOSHOTS ? null : sShot,
+      pair.rule11.push({ case: sc.key, state: sc.state, note: sc.note, capture: NOSHOTS ? null : shotRef(sShot),
         rootHeightDelta: p.rootHeightDelta, maxOverflowY: p.maxOverflowY, maxOverflowX: p.maxOverflowX,
         rowTracks: p.rowTracks, smallest: p.smallest, overlaps: p.overlaps.length,
         undersized: p.undersizedTargets.map(t => t.name + ' ' + t.w + 'x' + t.h),
