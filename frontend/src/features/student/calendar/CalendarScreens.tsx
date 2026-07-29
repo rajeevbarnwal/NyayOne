@@ -55,6 +55,18 @@ function CalSubnav({ active }: { active: 'month' | 'add' }) {
   );
 }
 
+function getRangeState(dayKey: string, from: string | null, to: string | null): 'start' | 'end' | 'in-range' | 'out-of-range' | 'normal' {
+  if (!from && !to) return 'normal';
+  if (from && dayKey === from) return 'start';
+  if (to && dayKey === to) return 'end';
+
+  const t = new Date(dayKey).getTime();
+  const f = from ? new Date(from).getTime() : -Infinity;
+  const o = to ? new Date(to).getTime() : Infinity;
+
+  return (t >= f && t <= o) ? 'in-range' : 'out-of-range';
+}
+
 /* -------------------------------------------------------------------------- */
 /* S-90 — Unified calendar (month grid) — v3.2 structural parity               */
 /* -------------------------------------------------------------------------- */
@@ -253,9 +265,11 @@ export function CalendarMonth() {
                       const d = i + 1;
                       const dd = String(d).padStart(2, '0');
                       const isToday = `${year}-${mm}-${dd}` === todayKey;
+                      const dayIsoKey = `${year}-${mm}-${dd}`;
+                      const rangeState = getRangeState(dayIsoKey, filters.from, filters.to);
                       const items = byDay.get(d) ?? [];
                       return (
-                        <div className={`cell${isToday ? ' today' : ''}`} key={d} role="gridcell">
+                        <div className={`cell${isToday ? ' today' : ''}${rangeState !== 'normal' ? ` ${rangeState}` : ''}`} key={d} role="gridcell">
                           <span className="dn">{d}</span>
                           {items.slice(0, 2).map((e) => {
                             const p = toPreview(e);
@@ -281,9 +295,11 @@ export function CalendarMonth() {
                           const d = i + 1;
                           const dd = String(d).padStart(2, '0');
                           const isToday = `${year2}-${mm2}-${dd}` === todayKey;
+                          const dayIsoKey = `${year2}-${mm2}-${dd}`;
+                          const rangeState = getRangeState(dayIsoKey, filters.from, filters.to);
                           const items = byDay2.get(d) ?? [];
                           return (
-                            <div className={`cell${isToday ? ' today' : ''}`} key={`m2-${d}`} role="gridcell">
+                            <div className={`cell${isToday ? ' today' : ''}${rangeState !== 'normal' ? ` ${rangeState}` : ''}`} key={`m2-${d}`} role="gridcell">
                               <span className="dn">{d}</span>
                               {items.slice(0, 2).map((e) => {
                                 const p = toPreview(e);
