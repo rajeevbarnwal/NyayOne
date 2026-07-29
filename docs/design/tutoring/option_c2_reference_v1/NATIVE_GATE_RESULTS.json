@@ -7,13 +7,46 @@
   "node": "v22.22.3",
   "statement": "Priority 1 added only documentation and a self-contained offline reference under docs/. No file under frontend/src, frontend/tests, backend/ or any build configuration was modified. These gates were run to prove that production frontend behaviour is unchanged.",
   "gates": [
-    { "gate": "install", "command": "npm ci --no-audit --no-fund", "rc": 0, "detail": "235 packages added in 9s. npm ci succeeded; the npm install fallback was not needed." },
-    { "gate": "typecheck", "command": "npm run typecheck", "rc": 0, "detail": "tsc --noEmit, no diagnostics" },
-    { "gate": "lint", "command": "npm run lint", "rc": 0, "detail": "eslint ., no findings" },
-    { "gate": "test", "command": "npm run test:run", "rc": 0, "detail": "vitest --run: 54 test files passed, 432 tests passed, 1 skipped (433 total), 4.30s" },
-    { "gate": "build", "command": "npm run build", "rc": 0, "detail": "tsc && vite build succeeded" }
+    {
+      "gate": "install",
+      "command": "npm ci --no-audit --no-fund",
+      "rc": 0,
+      "detail": "235 packages added in 9s. npm ci succeeded; the npm install fallback was not needed."
+    },
+    {
+      "gate": "typecheck",
+      "command": "npm run typecheck",
+      "rc": 0,
+      "detail": "tsc --noEmit, no diagnostics"
+    },
+    {
+      "gate": "lint",
+      "command": "npm run lint",
+      "rc": 0,
+      "detail": "eslint ., no findings"
+    },
+    {
+      "gate": "test",
+      "command": "npm run test:run",
+      "rc": 0,
+      "detail": "vitest --run: 54 test files passed, 432 tests passed, 1 skipped (433 total), 4.30s"
+    },
+    {
+      "gate": "build",
+      "command": "npm run build",
+      "rc": 0,
+      "detail": "tsc && vite build succeeded"
+    }
   ],
-  "totals": { "gates": 5, "rc0": 5, "nonZero": 0, "testFiles": 54, "testsPassed": 432, "testsSkipped": 1, "testsTotal": 433 },
+  "totals": {
+    "gates": 5,
+    "rc0": 5,
+    "nonZero": 0,
+    "testFiles": 54,
+    "testsPassed": 432,
+    "testsSkipped": 1,
+    "testsTotal": 433
+  },
   "priority2Findings": [
     {
       "id": "P2-FIND-01",
@@ -23,5 +56,44 @@
       "action": "Recorded as a Priority 2 finding. Deliberately NOT fixed here: Priority 1 must not change production frontend behaviour.",
       "evidence": "npm run build output"
     }
-  ]
+  ],
+  "addendumClosureRerun": {
+    "contract": "S35_LIVE_ROOM_GEOMETRY_CLOSURE_ADDENDUM.md",
+    "statement": "Re-run after the S-35 live-room addendum corrections. The corrections touch only docs/design/tutoring/option_c2_reference_v1/reference/{reference.css,frames.js,app.js} and package artifacts. No file under frontend/src, frontend/tests, backend/ or any build configuration was modified.",
+    "gates": [
+      {
+        "gate": "typecheck",
+        "command": "npm run typecheck",
+        "rc": 0,
+        "detail": "tsc --noEmit, no diagnostics"
+      },
+      {
+        "gate": "lint",
+        "command": "npm run lint",
+        "rc": 0,
+        "detail": "eslint ., no findings"
+      },
+      {
+        "gate": "test",
+        "command": "npm run test:run",
+        "rc": 0,
+        "detail": "vitest --run: 54 test files passed, 432 tests passed, 1 skipped (433 total)"
+      },
+      {
+        "gate": "build",
+        "command": "npm run build",
+        "rc": 0,
+        "detail": "tsc && vite build succeeded; the pre-existing P2-FIND-01 chunk-size warning is unchanged and still not fixed here"
+      }
+    ],
+    "totals": {
+      "gates": 4,
+      "rc0": 4,
+      "nonZero": 0,
+      "testFiles": 54,
+      "testsPassed": 432,
+      "testsSkipped": 1,
+      "testsTotal": 433
+    }
+  }
 }

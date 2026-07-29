@@ -2,6 +2,9 @@
    READY CONTRACT (no fixed sleeps anywhere):
      window.__C2_READY       Promise -> readiness descriptor, replaced on every navigation
      window.__C2_READY_FLAG  boolean, true only while the current state is settled
+     [data-live-room-ready="true"]  set on the live root ONLY when the room is settled
+                             (addendum rule 12). It starts at "false" in the markup and
+                             is never set optimistically.
      window.__C2.goto(id)    Promise resolving to the same descriptor
    __C2_READY resolves only when ALL of these hold:
      1. fixtures, states and frames are loaded and the fixture checksum matches
@@ -88,6 +91,11 @@
     };
     root.__C2_READY_FLAG = true;
     root.__C2_LAST_READY = d;
+    /* [ADDENDUM RULE 12] explicit, observable ready signal on the live root. It flips to
+       "true" only after fixtures+checksum, fonts, every required tile and the dock are
+       present and the DOM has been mutation-quiet for a full frame. */
+    var liveRoot = document.querySelector('.route.room.live') || document.querySelector('.live');
+    if (liveRoot) liveRoot.setAttribute('data-live-room-ready', 'true');
     readyResolve(d);
   }
 
@@ -103,8 +111,19 @@
     document.body.setAttribute('data-state', state.id);
     document.title = state.screen + ' · ' + state.label + ' · Option C2 reference';
 
-    var landscape = root.__C2.landscape || (window.innerWidth > window.innerHeight && window.innerHeight <= 520);
-    app.innerHTML = Fr.render(state, landscape);
+    var landscape = root.__C2.rig === 'vp'
+      ? (root.__C2.rigW > root.__C2.rigH && root.__C2.rigH <= 520)
+      : (root.__C2.landscape || (window.innerWidth > window.innerHeight && window.innerHeight <= 520));
+    var markup = Fr.render(state, landscape);
+    if (root.__C2.rig === 'vp') {
+      /* [ADDENDUM RC-2] offline device rig. The simulated device is a fixed-size .vp and
+         .vp>.app closes the height chain, so viewport units can never measure the outer
+         browser. Without the rig the reference renders each state at the real viewport. */
+      var screenKey = state.layoutFamily === 'room' ? (landscape ? 's35land' : 's35live') : state.id;
+      markup = '<div class="vp" data-screen="' + screenKey + '" data-testid="device-viewport" style="width:' +
+        root.__C2.rigW + 'px;height:' + root.__C2.rigH + 'px"><div class="app">' + markup + '</div></div>';
+    }
+    app.innerHTML = markup;
     wire(state);
     root.__C2.state = state;
 
@@ -169,7 +188,21 @@
       sb.addEventListener('click', function () { sh.getAttribute('data-open') === '1' ? close() : open(); });
       sc.addEventListener('click', close);
       if (scrim) scrim.addEventListener('click', close);
-      sh.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+      /* [ADDENDUM RULE 8] the sheet TRAPS focus and closes on Escape from anywhere while
+         open. Escape was previously bound to the sheet only, so it was unreachable once
+         focus had left the sheet; Tab could also walk out into the room behind it. */
+      document.addEventListener('keydown', function (e) {
+        if (sh.getAttribute('data-open') !== '1') return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+        if (e.key !== 'Tab') return;
+        var f = [].slice.call(sh.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'))
+          .filter(function (el) { var cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden'; });
+        if (!f.length) return;
+        e.preventDefault();
+        var i = f.indexOf(document.activeElement);
+        var next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i < 0 || i === f.length - 1 ? 0 : i + 1);
+        f[next].focus();
+      }, true);
       root.__C2.openSheet = open; root.__C2.closeSheet = close;
     }
 
@@ -182,24 +215,17 @@
       smin.setAttribute('aria-label', m ? 'Minimise self-view' : 'Restore self-view');
       announce(m ? 'Self-view restored' : 'Self-view minimised');
     });
+    /* [ADDENDUM RC-5 / RULE 7] the controls are children of the self-view, so moving the
+       tile moves them; nothing can be left behind or land outside the stage. */
     if (self && smove) smove.addEventListener('click', function () {
       var order = ['br', 'bl', 'tl', 'tr'], p = self.getAttribute('data-pos') || 'br';
       var n = order[(order.indexOf(p) + 1) % 4];
       self.setAttribute('data-pos', n);
-      var ctl = app.querySelector('.selfctl');
       var edge = window.matchMedia('(orientation:landscape) and (max-height:520px)').matches ? 10 : 14;
-      var sh2 = self.getBoundingClientRect().height;
-      [self, ctl].forEach(function (el) {
-        el.style.right = (n === 'br' || n === 'tr') ? edge + 'px' : 'auto';
-        el.style.left  = (n === 'bl' || n === 'tl') ? edge + 'px' : 'auto';
-      });
-      if (n === 'br' || n === 'bl') {
-        self.style.bottom = edge + 'px'; self.style.top = 'auto';
-        ctl.style.bottom = (edge + sh2 + 6) + 'px'; ctl.style.top = 'auto';
-      } else {
-        self.style.top = (edge + 48) + 'px'; self.style.bottom = 'auto';
-        ctl.style.top = edge + 'px'; ctl.style.bottom = 'auto';
-      }
+      self.style.right  = (n === 'br' || n === 'tr') ? edge + 'px' : 'auto';
+      self.style.left   = (n === 'bl' || n === 'tl') ? edge + 'px' : 'auto';
+      self.style.bottom = (n === 'br' || n === 'bl') ? edge + 'px' : 'auto';
+      self.style.top    = (n === 'tl' || n === 'tr') ? edge + 'px' : 'auto';
       announce('Self-view moved to ' + ({ br: 'bottom right', bl: 'bottom left', tl: 'top left', tr: 'top right' })[n]);
     });
 
@@ -254,6 +280,10 @@
     if (q.chrome === '1') document.body.setAttribute('data-chrome', '1');
     root.__C2 = root.__C2 || {};
     root.__C2.landscape = q.landscape === '1';
+    root.__C2.rig = (q.rig === 'vp') ? 'vp' : null;
+    var dev = String(q.device || '390x844').split('x');
+    root.__C2.rigW = parseInt(dev[0], 10) || 390;
+    root.__C2.rigH = parseInt(dev[1], 10) || 844;
     root.__C2.goto = go;
     root.__C2.states = St.IDS;
     root.__C2.fixtureChecksum = Fx.CHECKSUM;
