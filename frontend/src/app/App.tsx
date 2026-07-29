@@ -10,6 +10,7 @@ import { studentScreens } from '../features/student/screens';
 import { lawyerRoutes } from '../features/lawyer/screens';
 import { LawyerGuard } from '../features/lawyer/CaseAuthGuard';
 import { authRoutes } from '../features/auth/screens';
+import { PublicCredentialVerification } from '../features/student/credentials/CredentialScreens';
 
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; implemented S-01..S-19 screens (student module) render
@@ -56,6 +57,22 @@ function ShellRoutes() {
   );
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/verify/:token" element={<PublicVerificationRoute />} />
+      <Route path="*" element={<ShellRoutes />} />
+    </Routes>
+  );
+}
+
+function PublicVerificationRoute() {
+  // Apply the same stored/system theme tokens without rendering authenticated
+  // navigation around the anonymous verification surface.
+  useTheme();
+  return <PublicCredentialVerification />;
+}
+
 export function App() {
   // Reactive auth: derives the live state from the persisted, secret-free lawyer
   // session snapshot and updates immediately on P0.1 create/update/clear/expiry.
@@ -64,7 +81,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider value={auth}>
         <BrowserRouter>
-          <ShellRoutes />
+          <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
