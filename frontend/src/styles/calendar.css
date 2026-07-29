@@ -44,12 +44,14 @@
 
 /* 7-Column Vertical Week Grid (Columns = Days, Rows = Hours) */
 .calv .week-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 11px; border: 1px solid var(--line); }
-.calv .week-grid { display: grid; grid-template-columns: 80px repeat(7, minmax(110px, 1fr)); gap: 1px; background: var(--line); min-width: 850px; }
+.calv .week-grid { display: grid; grid-template-columns: 75px repeat(7, minmax(75px, 1fr)); gap: 1px; background: var(--line); min-width: 600px; }
 .calv .week-grid .time-hd,
-.calv .week-grid .day-hd { background: var(--panel); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); text-align: center; padding: 8px 4px; font-weight: 600; }
-.calv .week-grid .day-hd.today { color: var(--accent); font-weight: 700; }
-.calv .week-grid .time-cell { background: var(--panel); font-family: var(--font-mono); font-size: 10px; color: var(--text3); padding: 8px 6px; text-align: right; vertical-align: top; font-weight: 500; }
-.calv .week-grid .week-cell { background: var(--surface); min-height: 48px; padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+.calv .week-grid .day-hd { background: var(--panel); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); text-align: center; padding: 6px 2px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.calv .week-grid .day-hd .dow { font-size: 9px; color: var(--text3); }
+.calv .week-grid .day-hd .dom { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 1px; }
+.calv .week-grid .day-hd.today .dom { color: var(--on-accent); background: var(--accent); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; }
+.calv .week-grid .time-cell { background: var(--panel); font-family: var(--font-mono); font-size: 10px; color: var(--text3); padding: 8px 4px; text-align: center; vertical-align: middle; font-weight: 500; display: flex; align-items: center; justify-content: center; }
+.calv .week-grid .week-cell { background: var(--surface); min-height: 48px; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 3px; }
 
 .calv .ev { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 5px; display: flex; align-items: center; gap: 5px; line-height: 1.1; border: 1px solid transparent; width: 100%; max-width: 100%; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Accessible ≥44px hit area for interactive event markers (buttons) without
