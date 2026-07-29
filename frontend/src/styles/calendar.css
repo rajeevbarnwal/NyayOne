@@ -18,6 +18,16 @@
 .calv .subnav button { border: 1px solid var(--line2); background: var(--surface); color: var(--text2); font-size: 11.5px; font-weight: 600; padding: 0 14px; min-height: 44px; border-radius: 10px; white-space: nowrap; cursor: pointer; }
 .calv .subnav button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
+/* Active Segmented View Mode Switcher pill distinction */
+.calv .st-tabsrow .chip.on,
+.calv .st-tabsrow .chip.active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--on-accent) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
 .calv .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .calv .legend span { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text2); font-weight: 600; }
 .calv .legend .d { width: 8px; height: 8px; flex: none; }
