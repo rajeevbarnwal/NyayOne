@@ -19,7 +19,10 @@ is, and that label is 44 x 44. This is asserted, not assumed (NEG-REV-11).
 
 `PROPOSED`, `BROWSER_MEASURED`.
 
-- `:focus-visible` renders a 3 px `--terra` outline with 2 px offset in both themes.
+- `:focus-visible` renders a 3 px outline with 2 px offset in both themes: `--terra` on the light
+  card surfaces, and `--studio-focus` on the dark studio rows of the live room (`.lh`, `.stage`,
+  `.lctrl`). Every focus indicator is measured against BOTH adjacent colours by
+  `tools/a11y_oracle.mjs`; the floor is 3:1 and 2 px, and it is not waivable by product decision.
 - **Details sheet:** opening moves focus to the sheet's close control; closing returns focus to
   the invoking session-info control. Asserted on all 264 room rows
   (`focusMovedIntoSheet`, `focusRestoredOnClose`).
@@ -104,7 +107,13 @@ reference writes **no** storage and **no** cookie at all; five canary strings as
 
 ## 10. Known gaps
 
-- Colour-contrast ratios were not computed programmatically in this pass. The colour ramps are
+- Colour contrast IS now computed programmatically: `tools/a11y_oracle.mjs` collects the
+  measurements and `tools/a11y_oracle_report.mjs` adjudicates them and owns the exit code. Text
+  rows use 1.4.3, non-text rows use 1.4.11 with the adjudication register in
+  `tools/a11y_oracle_contract.mjs`, and focus indicators are checked in both themes. axe-core
+  violations and `incomplete` results are recorded separately and `incomplete` is never counted as
+  a pass. `tests/a11y_oracle_selftest.mjs` proves the oracle fails on seeded defects.
+- The historical note below is retained for the record: colour ramps are
   carried over unchanged from the approved C2 package, whose own `ACCESSIBILITY_PRECHECK.md`
   covers them. Recording this honestly rather than claiming an unmeasured pass.
 - Screen-reader behaviour was not verified with a real assistive technology. Only the DOM

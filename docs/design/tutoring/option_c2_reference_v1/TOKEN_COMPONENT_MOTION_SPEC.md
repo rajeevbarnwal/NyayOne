@@ -22,6 +22,17 @@ removed. Full definitions: `reference/tokens.css`.
 `--studio-leave`, `--studio-leave-ink` give names to literals that were previously inline in the
 approved room CSS.
 
+`PROPOSED` accessibility additions (SAATHI-129). Both are theme-invariant, exactly like the
+`--studio-*` tokens above, because the studio surfaces are dark in both themes:
+
+| Token | Value | Purpose | Measured |
+|---|---|---|---|
+| `--studio-leave-edge` | `#a4503f` | destructive dock-control boundary, the only visual feature separating it from the neutral dock controls (WCAG 1.4.11) | 3.60:1 light / 3.67:1 dark against the dock surface (was `--studio-leave` at 2.74:1 / 2.79:1) |
+| `--studio-focus` | `#f2986a` | keyboard focus ring on the dark studio surfaces (WCAG 1.4.11 + 2.4.7); the value is the already-approved dark-theme `--terra` | 8.06:1 – 9.17:1 against every studio surface (was `--terra` at 2.91:1 on the self-view tile in the light theme) |
+
+Hue, geometry and every other approved value are unchanged; the sheet and the leave dialog keep the
+global `--terra` focus ring because they are painted on the light card surface.
+
 ## 2. Type — `PRODUCT_APPROVED`
 
 | Token | Family | Use |
