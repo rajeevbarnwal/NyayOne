@@ -125,6 +125,47 @@ export function CalendarMonth() {
     return m;
   }, [visible, filters.timezone, year, mm]);
 
+  const toMonthDate = useMemo(() => {
+    if (filters.to) {
+      const parsed = new Date(filters.to);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    return null;
+  }, [filters.to]);
+
+  const isCrossMonth = useMemo(() => {
+    if (toMonthDate) {
+      return (
+        activeDate.getFullYear() !== toMonthDate.getFullYear() ||
+        activeDate.getMonth() !== toMonthDate.getMonth()
+      );
+    }
+    return false;
+  }, [activeDate, toMonthDate]);
+
+  const year2 = toMonthDate ? toMonthDate.getFullYear() : year;
+  const month2 = toMonthDate ? toMonthDate.getMonth() : month;
+  const month2Label = toMonthDate
+    ? new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: filters.timezone }).format(toMonthDate)
+    : '';
+  const daysInMonth2 = new Date(year2, month2 + 1, 0).getDate();
+  const lead2 = (new Date(year2, month2, 1).getDay() + 6) % 7;
+  const mm2 = String(month2 + 1).padStart(2, '0');
+
+  const byDay2 = useMemo(() => {
+    if (!isCrossMonth) return new Map<number, CalendarEvent[]>();
+    const m = new Map<number, CalendarEvent[]>();
+    for (const e of visible) {
+      const key = localDateKey(e.startsAt, filters.timezone);
+      if (key.slice(0, 7) !== `${year2}-${mm2}`) continue;
+      const d = Number(key.slice(8, 10));
+      m.set(d, [...(m.get(d) ?? []), e]);
+    }
+    return m;
+  }, [visible, filters.timezone, isCrossMonth, year2, mm2]);
+
   function stepMonth(delta: number) {
     setNavOffset((prev) => prev + delta);
   }
@@ -194,7 +235,7 @@ export function CalendarMonth() {
               <div className="ph">
                 <span className="t" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <button type="button" className="btn" style={{ minHeight: 28, padding: '2px 8px', fontSize: '12px' }} onClick={() => stepMonth(-1)} title="Previous month" data-testid="cal-prev-month">◄</button>
-                  <span>{viewMode === 'month' ? monthLabel : viewMode === 'week' ? `7-Day Week (${monthLabel})` : `Day View (${formatDateDDMMYYYY(activeDate.toISOString().slice(0, 10))})`}</span>
+                  <span>{viewMode === 'month' ? (isCrossMonth ? `${monthLabel} – ${month2Label}` : monthLabel) : viewMode === 'week' ? `7-Day Week (${monthLabel})` : `Day View (${formatDateDDMMYYYY(activeDate.toISOString().slice(0, 10))})`}</span>
                   <button type="button" className="btn" style={{ minHeight: 28, padding: '2px 8px', fontSize: '12px' }} onClick={() => stepMonth(1)} title="Next month" data-testid="cal-next-month">►</button>
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -204,30 +245,62 @@ export function CalendarMonth() {
               </div>
 
               {viewMode === 'month' && (
-                <div className="cal" role="grid" aria-label={`Calendar ${monthLabel}`}>
-                  {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
-                  {Array.from({ length: lead }, (_, i) => <div className="cell dim" key={`lead-${i}`} aria-hidden="true"><span className="dn" /></div>)}
-                  {Array.from({ length: daysInMonth }, (_, i) => {
-                    const d = i + 1;
-                    const dd = String(d).padStart(2, '0');
-                    const isToday = `${year}-${mm}-${dd}` === todayKey;
-                    const items = byDay.get(d) ?? [];
-                    return (
-                      <div className={`cell${isToday ? ' today' : ''}`} key={d} role="gridcell">
-                        <span className="dn">{d}</span>
-                        {items.slice(0, 2).map((e) => {
-                          const p = toPreview(e);
+                <>
+                  <div className="cal" role="grid" aria-label={`Calendar ${monthLabel}`}>
+                    {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
+                    {Array.from({ length: lead }, (_, i) => <div className="cell dim" key={`lead-${i}`} aria-hidden="true"><span className="dn" /></div>)}
+                    {Array.from({ length: daysInMonth }, (_, i) => {
+                      const d = i + 1;
+                      const dd = String(d).padStart(2, '0');
+                      const isToday = `${year}-${mm}-${dd}` === todayKey;
+                      const items = byDay.get(d) ?? [];
+                      return (
+                        <div className={`cell${isToday ? ' today' : ''}`} key={d} role="gridcell">
+                          <span className="dn">{d}</span>
+                          {items.slice(0, 2).map((e) => {
+                            const p = toPreview(e);
+                            return (
+                              <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
+                                onClick={() => setSelectedId(p.id)} title={p.title}>
+                                <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {isCrossMonth && (
+                    <div style={{ marginTop: 16 }}>
+                      <div className="ph" style={{ marginBottom: 6 }}><span className="t">{month2Label}</span></div>
+                      <div className="cal" role="grid" aria-label={`Calendar ${month2Label}`}>
+                        {WEEKDAYS.map((w) => <div className="hd" key={w}>{w}</div>)}
+                        {Array.from({ length: lead2 }, (_, i) => <div className="cell dim" key={`lead2-${i}`} aria-hidden="true"><span className="dn" /></div>)}
+                        {Array.from({ length: daysInMonth2 }, (_, i) => {
+                          const d = i + 1;
+                          const dd = String(d).padStart(2, '0');
+                          const isToday = `${year2}-${mm2}-${dd}` === todayKey;
+                          const items = byDay2.get(d) ?? [];
                           return (
-                            <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
-                              onClick={() => setSelectedId(p.id)} title={p.title}>
-                              <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
-                            </button>
+                            <div className={`cell${isToday ? ' today' : ''}`} key={`m2-${d}`} role="gridcell">
+                              <span className="dn">{d}</span>
+                              {items.slice(0, 2).map((e) => {
+                                const p = toPreview(e);
+                                return (
+                                  <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
+                                    onClick={() => setSelectedId(p.id)} title={p.title}>
+                                    <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           );
                         })}
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {viewMode === 'week' && (
