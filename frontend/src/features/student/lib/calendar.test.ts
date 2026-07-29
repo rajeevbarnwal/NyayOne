@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryKvStore } from '../../../lib/kvStore';
 import {
   aggregate, runAdapter, normalizeEvent, sortEvents, filterEvents,
-  localDateKey, localTime, toPreview, previewLeaksRestricted, resolveDeepLink,
+  localDateKey, localTime, resolveEventBadge, toPreview, previewLeaksRestricted, resolveDeepLink,
   eventId, CalendarError, CalendarService, defaultFilters, sampleSourceResults,
   runLoaders, retryFailed, deriveStatus, calendarLoaders,
   validateDateRange, validatePersonalEvent, PersonalEventError, zonedToUtcIso, SOURCE_ROUTE,
@@ -292,5 +292,14 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     const store = new InMemoryKvStore();
     new CalendarService('stu-1', store).addPersonalEvent({ title: 'Mine', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'UTC' }, '2026-07-12T00:00:00Z');
     expect(new CalendarService('stu-2', store).listPersonalRaw().length).toBe(0);
+  });
+
+  it('resolveEventBadge: evaluates past deadlines as Deadline passed (risk) and future as Deadline (warn)', () => {
+    const now = new Date('2026-07-29T12:00:00Z');
+    const pastEvent = normalizeEvent('internship', { sourceId: 'p1', title: 'Past Deadline', startsAt: '2026-07-20T18:30:00Z', status: 'deadline', sourceUrl: '/s-20' });
+    const futureEvent = normalizeEvent('internship', { sourceId: 'f1', title: 'Future Deadline', startsAt: '2026-08-05T18:30:00Z', status: 'deadline', sourceUrl: '/s-20' });
+
+    expect(resolveEventBadge(pastEvent, now)).toEqual({ label: 'Deadline passed', status: 'risk' });
+    expect(resolveEventBadge(futureEvent, now)).toEqual({ label: 'Deadline', status: 'warn' });
   });
 });

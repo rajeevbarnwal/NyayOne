@@ -10,7 +10,7 @@ import {
 } from '../lib/dashboard';
 import { profileTier, TIER_LABELS } from '../lib/profile';
 import { getProfileDraft } from '../lib/profileStore';
-import { aggregate, localDateDisplay, localDateKey, localTime, sampleSourceResults, SOURCE_LABELS } from '../lib/calendar';
+import { aggregate, localDateDisplay, localDateKey, localTime, resolveEventBadge, sampleSourceResults, SOURCE_LABELS } from '../lib/calendar';
 import { SAMPLE_ENTRIES, totalHours } from '../lib/clinical';
 
 const DASHBOARD_WEEK_START = new Date('2026-07-19T00:00:00.000Z');
@@ -34,12 +34,15 @@ export function Dashboard() {
       event: event ? `${event.title} · ${localTime(event.startsAt, event.timezone)}` : undefined,
     };
   });
-  const nextActions = events.slice(0, 4).map((e) => ({
-    title: e.title,
-    meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateDisplay(e.startsAt, e.timezone)} · ${localTime(e.startsAt, e.timezone)}`,
-    chip: e.status === 'deadline' ? 'Deadline' : e.status === 'tentative' ? 'Tentative' : 'Scheduled',
-    status: (e.status === 'deadline' ? 'warn' : e.status === 'done' ? 'ok' : 'info') as 'info' | 'warn' | 'ok',
-  }));
+  const nextActions = events.slice(0, 4).map((e) => {
+    const badge = resolveEventBadge(e);
+    return {
+      title: e.title,
+      meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateDisplay(e.startsAt, e.timezone)} · ${localTime(e.startsAt, e.timezone)}`,
+      chip: badge.label,
+      status: badge.status,
+    };
+  });
   const completion = profileCompletionPct(profile);
   const clinicalHours = totalHours(SAMPLE_ENTRIES);
 

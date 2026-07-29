@@ -357,6 +357,30 @@ export function localTime(iso: string, timezone: string): string {
   }).format(new Date(iso));
 }
 
+export interface DeadlineBadgeState {
+  label: 'Deadline passed' | 'Deadline' | 'Scheduled' | 'Tentative' | 'Completed';
+  status: 'risk' | 'warn' | 'info' | 'ok';
+}
+
+/**
+ * Resolves event badge label and status dynamically based on event status
+ * and temporal comparison against system time (action date vs system date).
+ */
+export function resolveEventBadge(
+  event: CalendarEvent,
+  now: Date = new Date()
+): DeadlineBadgeState {
+  if (event.status === 'deadline') {
+    const isPast = new Date(event.startsAt).getTime() < now.getTime();
+    return isPast
+      ? { label: 'Deadline passed', status: 'risk' }
+      : { label: 'Deadline', status: 'warn' };
+  }
+  if (event.status === 'done') return { label: 'Completed', status: 'ok' };
+  if (event.status === 'tentative') return { label: 'Tentative', status: 'info' };
+  return { label: 'Scheduled', status: 'info' };
+}
+
 // --- filters ----------------------------------------------------------------
 
 export interface CalendarFilters {
