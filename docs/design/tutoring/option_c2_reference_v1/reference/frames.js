@@ -515,16 +515,19 @@
       (b?'<div class="rbanner '+b[0]+'" role="status" data-testid="room-banner">'+ic('warn')+
          '<div style="min-width:0"><div class="bt">'+esc(b[1])+'</div><div class="bd2">'+esc(b[2])+'</div></div></div>':'')+
       '<div class="nm">'+esc(F.tutor.name)+' · Mentor<span style="width:8px;height:8px;border-radius:50%;background:#5fcb9c"></span></div></div>';
-    var self='<div class="self" id="self" data-min="0" data-testid="self-view">'+
+    var self='<div class="self" id="self" data-min="0" data-pos="br" data-testid="self-view">'+
       '<svg viewBox="0 0 100 '+(landscape?75:130)+'" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Your camera tile">'+
       '<defs><linearGradient id="svBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e2314"/><stop offset="1" stop-color="#1a1409"/></linearGradient></defs>'+
       '<rect width="100" height="'+(landscape?75:130)+'" fill="url(#svBg)"/>'+
       (camOff?'':'<circle cx="50" cy="'+(landscape?37:65)+'" r="'+(landscape?20:26)+'" fill="#6b5638" fill-opacity=".35" stroke="#8d7350" stroke-opacity=".65" stroke-width="1.6"/>'+
         '<text x="50" y="'+(landscape?44:74)+'" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="'+(landscape?15:19)+'" fill="#d9c9ad">AN</text>')+'</svg>'+
-      '<div class="nm2">'+(camOff?'Camera off':'You')+'</div></div>'+
+      '<div class="nm2">'+(camOff?'Camera off':'You')+'</div>'+
+      /* [ADDENDUM RC-5] Move and Minimise live INSIDE the self-view so the tile must be
+         large enough to contain two independent 44x44 targets without overlap. When
+         minimised, .selfmove is hidden and exactly one 44x44 restore control remains. */
       '<div class="selfctl">'+
-      '<button class="sb" type="button" id="selfmove" aria-label="Move self-view to another corner" data-testid="self-move">'+ic('move')+'</button>'+
-      '<button class="sb" type="button" id="selfmin" aria-pressed="false" aria-label="Minimise self-view" data-testid="self-min">'+ic('min')+'</button></div>';
+      '<button class="sb selfmove" type="button" id="selfmove" aria-label="Move self-view to another corner" data-testid="self-move">'+ic('move')+'</button>'+
+      '<button class="sb mini" type="button" id="selfmin" aria-pressed="false" aria-label="Minimise self-view" data-testid="self-min">'+ic('min')+'</button></div></div>';
     var dock='<div class="lctrl" data-testid="control-dock">'+
       '<button class="cb" type="button" id="mic" aria-pressed="'+(micOff?'true':'false')+'" aria-label="'+(micOff?'Unmute microphone':'Mute microphone')+'" data-testid="mic">'+ic(micOff?'micOff':'mic')+'</button>'+
       '<button class="cb" type="button" id="cam" aria-pressed="'+(camOff?'true':'false')+'" aria-label="'+(camOff?'Turn camera on':'Turn camera off')+'" data-testid="cam">'+ic(camOff?'camOff':'cam')+'</button>'+
@@ -546,7 +549,11 @@
       '<p class="m" style="font-size:13px">Your camera and microphone are released when you leave. You can rejoin while the session is running.</p>'+
       '<button class="btn terra block" type="button" data-testid="dialog-confirm">Leave the session</button>'+
       '<button class="btn block" type="button" data-testid="dialog-dismiss">Stay in the room</button></div>' : '';
-    return '<main class="route room" data-family="room">'+
+    /* [ADDENDUM RC-1/RC-2/RC-6] .live-host owns the 100vh -> 100dvh cascade and closes
+       the percentage height chain; .live is the constrained three-row grid. The room
+       advertises readiness only through data-live-room-ready. */
+    return '<div class="live-host" data-testid="live-host">'+
+      '<main class="route room live" data-family="room" data-live-room-ready="false">'+
       '<div class="lh">'+
         '<span class="chip g" style="font-size:10px;padding:4px 8px"><span class="d"></span>Live</span>'+
         '<span class="t">'+esc(F.session.topic)+'</span><span style="flex:1"></span>'+
@@ -554,7 +561,7 @@
         '<button class="cb" type="button" id="sheetbtn" aria-label="Session, connection and privacy details" aria-expanded="false" data-testid="session-info">'+ic('info')+'</button>'+
       '</div>'+
       '<div class="stage">'+tile+self+'</div>'+
-      dock+sheet+leaveDlg+'</main>';
+      dock+sheet+leaveDlg+'</main></div>';
   }
 
   var RENDER = { list:fList, profile:fProfile, checkout:fCheckout, receipt:fReceipt, manage:fManage, prejoin:fPrejoin, room:fRoom };

@@ -227,16 +227,38 @@ input.in{font-family:var(--font-mono)}
      D3 landscape lost the control dock -> dock is a grid row, never removed.
    ========================================================================== */
 html[data-family=room],body[data-family=room]{height:100%;max-height:100%;overflow:hidden;overscroll-behavior:none}
+
+/* [ADDENDUM RC-2] Complete percentage height chain html -> body -> #app -> .live-host -> .live.
+   Root cause: the rig's .app declared only min-height:100%, so the chain was broken
+   and viewport units resolved against the outer browser, not the simulated device. */
+body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
+
+/* [ADDENDUM RC-1] Route host. The 100vh FALLBACK IS DECLARED FIRST so that a
+   supporting engine applies 100dvh last and dynamic-viewport sizing wins. The
+   defective order (100dvh then 100vh) let 100vh override and defeat dvh. */
+.live-host{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+
+/* [ADDENDUM RC-2] Offline device rig: constrain the SIMULATED device rather than
+   letting viewport units measure the outer browser. Exercised by ?rig=vp&device=WxH. */
+.vp{position:relative;margin:0 auto;overflow:hidden}
+.vp[data-screen="s35live"],.vp[data-screen="s35land"]{overflow:hidden}
+.vp[data-screen="s35live"]>.app,.vp[data-screen="s35land"]>.app{height:100%;min-height:0;overflow:hidden}
+.vp[data-screen="s35live"] .live-host,.vp[data-screen="s35land"] .live-host{height:100%}
 /* every room row must be allowed to shrink: without min-width:0 the auto grid column
    sizes to max-content and the header/dock silently overflow behind overflow:hidden */
 .room>.lh,.room>.stage,.room>.lctrl{min-width:0}
-.route.room{
-  height:100dvh;min-height:0;max-height:100dvh;
+/* [ADDENDUM RC-6] Explicit positioned, constrained three-row layout. Height is
+   100% of .live-host (which owns the 100vh -> 100dvh cascade), so the room can
+   never be taller than the available viewport. */
+.route.room,.live{
+  position:relative;height:100%;min-height:0;max-height:100%;overflow:hidden;
   display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   background:var(--studio);color:var(--studiotx);
-  overflow:hidden;position:relative;isolation:isolate;
+  isolation:isolate;
   padding-left:var(--safe-l);padding-right:var(--safe-r);
 }
+/* [ADDENDUM RC-6] Every interactive surface inside the room is >= 44x44. */
+.live button,.live [role="button"]{min-width:var(--target-min);min-height:var(--target-min)}
 .room .lh{display:flex;gap:9px;align-items:center;padding:6px 12px;padding-top:calc(6px + var(--safe-t));
   border-bottom:1px solid var(--studio-line);min-height:56px;
   background:linear-gradient(90deg,rgba(15,107,71,.35),transparent)}
@@ -244,7 +266,7 @@ html[data-family=room],body[data-family=room]{height:100%;max-height:100%;overfl
   flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .room .lh .m{font-family:var(--font-mono);font-size:9.5px;color:var(--studiomut);white-space:nowrap;flex:none}
 .room .lh>.chip{flex:none}
-.room .stage{position:relative;min-height:0;min-width:0;padding:8px 12px;display:grid;
+.room .stage,.live .stage{position:relative;min-height:0;min-width:0;overflow:hidden;padding:8px 12px;display:grid;
   grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:hidden;contain:strict}
 .room .mtile{position:relative;min-width:0;min-height:0;border-radius:var(--r-lg);overflow:hidden;
   background:var(--studio2);border:1px solid #33270f;outline:3px solid var(--jade);outline-offset:-3px}
@@ -257,23 +279,40 @@ html[data-family=room],body[data-family=room]{height:100%;max-height:100%;overfl
 .room .mtile .stateveil span{font-size:12.5px;color:var(--studiomut);line-height:1.5;max-width:34ch}
 
 /* self-view: contained in the stage, controls >=44px, cannot expand the stage */
-.room .self{position:absolute;width:96px;height:128px;border-radius:var(--r-md);overflow:hidden;
+/* [ADDENDUM RC-5] The self-view now CONTAINS its Move and Minimise controls and is
+   large enough to hold two independent 44x44 targets (44 + 6 gap + 44 = 94 px plus
+   4 px padding each side = 102 px) without the two controls overlapping. The old
+   96x128 portrait / 72x54 landscape tile with 30x30 controls could not. */
+.room .self{position:absolute;width:112px;height:140px;border-radius:var(--r-md);overflow:hidden;
   border:2px solid var(--studio-line2);background:var(--studio2);right:14px;bottom:14px;z-index:3;
-  max-width:44%;max-height:44%;contain:layout size}
-.room .self svg{width:100%;height:100%;display:block}
+  max-width:46%;max-height:46%;contain:layout size}
+/* `>svg` scopes the tile fill so control icons keep their own 20px box */
+.room .self>svg{width:100%;height:100%;display:block}
 .room .self .nm2{position:absolute;left:5px;bottom:5px;font-size:9px;font-weight:800;background:rgba(0,0,0,.6);
   padding:3px 6px;border-radius:7px}
-.room .self[data-min="1"]{width:var(--target-min);height:var(--target-min);border-radius:50%}
-.room .self[data-min="1"] .nm2{display:none}
-.room .selfctl{position:absolute;right:14px;bottom:calc(14px + 128px + 6px);z-index:4;display:flex;gap:6px}
-.room .self[data-min="1"]~.selfctl{bottom:calc(14px + var(--target-min) + 6px)}
-.room .sb{min-width:var(--target-min);min-height:var(--target-min);border-radius:50%;background:rgba(0,0,0,.72);
+/* [ADDENDUM RC-3 sibling rule] the self-view control row never wraps either */
+.room .selfctl{position:absolute;left:0;right:0;top:0;z-index:4;display:flex;gap:6px;
+  justify-content:flex-end;padding:4px;flex:0 0 auto;flex-wrap:nowrap}
+.room .sb,.room .self .mini,.room .self .selfmove{
+  min-width:var(--target-min);min-height:var(--target-min);width:var(--target-min);height:var(--target-min);
+  border-radius:50%;background:rgba(0,0,0,.72);flex:0 0 auto;
   color:#fff;border:1.5px solid var(--studio-line2);display:grid;place-items:center;cursor:pointer}
+/* [ADDENDUM RC-5] Minimised state exposes exactly ONE non-overlapping 44x44 restore
+   control. The addendum's `.self[data-min="1"] svg` is applied as `>svg` so the tile
+   is hidden but the restore control keeps its icon — the behaviour is not weakened. */
+.room .self[data-min="1"]{width:var(--target-min);height:var(--target-min);border-radius:50%}
+.room .self[data-min="1"]>svg,
+.room .self[data-min="1"] .nm2,
+.room .self[data-min="1"] .selfmove{display:none}
+.room .self[data-min="1"] .selfctl{inset:0;padding:0;justify-content:center;align-items:center}
 
 /* control dock: always present, safe-area aware, never scrolled away */
 .room .lctrl{display:flex;gap:8px;align-items:center;justify-content:center;
   padding:8px 12px;padding-bottom:calc(8px + var(--safe-b));
-  border-top:1px solid var(--studio-line);background:rgba(0,0,0,.35);min-width:0;flex-wrap:nowrap}
+  border-top:1px solid var(--studio-line);background:rgba(0,0,0,.35);min-width:0;
+  /* [ADDENDUM RC-3] the persistent dock is a single fixed row: it may not wrap into
+     multiple rows and may not flex-grow or shrink out of the layout. */
+  flex:0 0 auto;flex-wrap:nowrap}
 .room .cb{min-width:var(--target-min);min-height:var(--target-min);border-radius:50%;border:2px solid var(--studio-line2);
   background:var(--studio2);color:var(--studiotx);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .room .cb[aria-pressed=true]{background:var(--studiotx);color:var(--studio)}
@@ -309,9 +348,9 @@ html[data-family=room],body[data-family=room]{height:100%;max-height:100%;overfl
   .room .lh{min-height:44px;padding:3px 10px;padding-top:calc(3px + var(--safe-t));gap:7px}
   .room .lh .t{font-size:13px}
   .room .stage{padding:6px 10px}
-  .room .self{width:72px;height:54px;right:10px;bottom:10px}
-  .room .selfctl{right:10px;bottom:calc(10px + 54px + 4px)}
-  .room .self[data-min="1"]~.selfctl{bottom:calc(10px + var(--target-min) + 4px)}
+  /* [ADDENDUM RC-5] landscape self-view enlarged from 72x54 (78x58 in the approved
+     source) so that it contains two independent 44x44 controls without overlap. */
+  .room .self{width:116px;height:100px;right:10px;bottom:10px}
   .room .lctrl{padding:5px 10px;padding-bottom:calc(5px + var(--safe-b));gap:7px}
   .room .cb.leave{padding:0 12px;font-size:12px}
   .room .sheet{max-height:88dvh}

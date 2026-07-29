@@ -29,3 +29,44 @@ Start with `SOURCE_OF_TRUTH.md`.
 
 Open `reference/index.html?state=s35-room-live&chrome=1` to browse all 82 states.
 Fully offline: no network request, no cookie, no web storage.
+
+## S-35 live-room geometry closure addendum
+
+Contract: `QA/wave2_priority1_design_reference_closure_2026-07-29/S35_LIVE_ROOM_GEOMETRY_CLOSURE_ADDENDUM.md`
+(SAATHI-129 comment 12935).
+
+The addendum named six root causes in the approved Option C2 source
+(`docs/design/tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html`). All six are
+corrected in this reference package. Option C2 art direction, S-31, S-33, S-34, the S-35
+refund journey, typography, colour tokens and copy are unchanged.
+
+| # | Root cause in the approved source | Correction in this package |
+|---|---|---|
+| RC-1 | `.live{height:100dvh;height:100vh}` — the later `100vh` wins and defeats dvh | `.live-host{height:100vh;height:100dvh}` — the fallback is declared **first**, so `100dvh` wins |
+| RC-2 | the rig `.app` used only `min-height:100%`, so viewport units measured the outer browser | complete chain `html -> body -> #app -> .live-host -> .live`, plus `.vp[data-screen="s35live"\|"s35land"] > .app{height:100%;min-height:0;overflow:hidden}` for the offline device rig (`?rig=vp&device=WxH`) |
+| RC-3 | `.lctrl` permitted `flex-wrap:wrap`, so the dock could become multiple rows | `.lctrl{flex:0 0 auto;flex-wrap:nowrap}` |
+| RC-4 | inline 40x40 minimums on session-details and sheet-close | removed; `.live button,.live [role="button"]{min-width:44px;min-height:44px}` is the floor |
+| RC-5 | 30x30 self-view controls and a 78x58 landscape self-view | controls moved **inside** the self-view; portrait 112x140 and landscape 116x100 contain two 44x44 targets without overlap; the minimised tile hides `.selfmove`, the tile `>svg` and `.nm2`, leaving exactly **one** 44x44 restore control |
+| RC-6 | no explicit positioned, constrained three-row layout | `.live{position:relative;height:100%;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto}` with `.stage{min-width:0;min-height:0;overflow:hidden}` |
+
+Documented exception: below a 361 px viewport the dock still wraps. That is the WCAG 2.2
+1.4.10 reflow path for 200 % zoom (the 195x422 case), and it drops no control. Every
+viewport in the mandatory matrix is >= 390 px wide and never wraps.
+
+### Readiness
+
+The live room advertises `data-live-room-ready="true"` on the live root, and only after the
+fixture checksum matches, `document.fonts.ready` has resolved, every required media tile and
+the control dock are mounted, and the DOM has been mutation-quiet for a full animation frame.
+The markup ships `data-live-room-ready="false"`. There are no fixed sleeps in any harness.
+
+### Executable acceptance matrix
+
+`node tools/measure_live_room_addendum.mjs` — 6 viewports (390x844, 430x932, 768x1024,
+844x390, 932x430, 1024x768) x 2 themes = 12 pairs, each asserting all 12 addendum rules from
+real Chromium rectangles, plus rules 1-6 re-asserted for six states (camera-denied,
+mic-denied, disconnected/reconnecting, provider-failure, leave-confirmation, device-release).
+
+Results: `LIVE_ROOM_ADDENDUM_RESULTS.json` (12/12 pairs, 72/72 state rows) and
+`BEFORE_AFTER_LIVE_ROOM_ADDENDUM.json` (before/after rectangles per pair).
+Captures: `captures/addendum/`.
