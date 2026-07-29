@@ -1,0 +1,73 @@
+{
+  "status": "pending_measured_run",
+  "note": "This file is the schema + method. Actual numbers come from the in-prototype harness: open C2_MOBILE_GATE.html → \"Run geometry checks\" → \"Download results JSON\", then overwrite this file. No PASS is claimed from static inspection (per brief).",
+  "method": {
+    "harness": "C2_MOBILE_GATE.html → window.__c2m.measure()",
+    "measures": [
+      "scrollHeight",
+      "clientHeight",
+      "scrollWidth",
+      "clientWidth",
+      "horizontalOverflowPx",
+      "verticalScrollPx",
+      "minTargetPx + control label",
+      "firstViewport content booleans per screen",
+      "stickyCoversFinalContent (after scrolling to bottom)",
+      "liveNoBodyScroll",
+      "sheetClipped"
+    ],
+    "viewports": [
+      "390x844",
+      "430x932",
+      "844x390 (landscape)"
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "reduced_motion": "set OS/browser preference, re-run"
+  },
+  "acceptance_budgets": {
+    "horizontal_overflow_px": 0,
+    "min_target_px": 44,
+    "s31_first_viewport": [
+      "search visible",
+      "one complete tutor card + View & book"
+    ],
+    "s33": [
+      "hold visible",
+      "total in dock",
+      "pay action present",
+      "dock does not cover final content"
+    ],
+    "s34_first_viewport": [
+      "confirmed",
+      "date/time",
+      "join eligibility",
+      "Join + Manage"
+    ],
+    "s35refund_first_viewport": [
+      "eligibility",
+      "amount",
+      "masked destination + timing",
+      "primary action in dock"
+    ],
+    "s35live": [
+      "scrollHeight <= clientHeight",
+      "control bar visible",
+      "sheet not clipped"
+    ]
+  },
+  "baseline_for_comparison": {
+    "source": "independent review of tutoring_option_c2_wow_art_direction_2026-07-29 (390 mode)",
+    "c2_per_frame_px": {
+      "S-31": 1834,
+      "S-33": 1302,
+      "S-34": 1125,
+      "S-35 refund": 1344,
+      "S-35 live": 1204,
+      "whole demo": 7164
+    }
+  },
+  "screens": []
+}
