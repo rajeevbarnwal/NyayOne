@@ -15,6 +15,17 @@ logger = get_logger("legalsaathi.request")
 REQUEST_ID_HEADER = "X-Request-ID"
 
 
+def redact_sensitive_path(path: str) -> str:
+    """Keep bearer/share tokens out of ordinary request logs."""
+    for prefix in (
+        "/api/v1/public/credential-verifications/",
+        "/verify/",
+    ):
+        if path.startswith(prefix):
+            return f"{prefix}:token"
+    return path
+
+
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Attach an incoming or generated request ID to the context and response."""
 
@@ -31,7 +42,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
                 extra={
                     "request_id": request_id,
                     "method": request.method,
-                    "path": request.url.path,
+                    "path": redact_sensitive_path(request.url.path),
                     "elapsed_ms": elapsed_ms,
                 },
             )

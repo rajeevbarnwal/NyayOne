@@ -31,6 +31,10 @@ const FEATURE_STATE_LABELS: Record<string, string> = {
   'S-28': 'schools/detail',
   'S-29': 'schools/compare',
   'S-30': 'schools/saved-followed',
+  'S-82': 'wallet/list',
+  'S-83': 'wallet/add',
+  'S-84': 'wallet/pending',
+  'S-85': 'wallet/share',
 };
 
 /** Generates the S-01 … S-99 canonical route registry. */

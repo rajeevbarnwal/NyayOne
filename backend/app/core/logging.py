@@ -51,6 +51,13 @@ def configure_logging(level: str = "INFO", log_file_path: str | None = None) -> 
         root.addHandler(handler)
     root.setLevel(level.upper())
 
+    # Uvicorn's default access logger formats the raw request target before
+    # application middleware can redact it. Public verification deliberately
+    # carries an opaque bearer token in the URL, so disable that duplicate
+    # logger and rely on RequestIDMiddleware's structured, redacted access
+    # event instead. Uvicorn's error/startup logger remains enabled.
+    logging.getLogger("uvicorn.access").disabled = True
+
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
