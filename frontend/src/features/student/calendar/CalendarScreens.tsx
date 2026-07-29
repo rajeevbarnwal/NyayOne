@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, Fragment, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StudentScreen, DpdpFootnote } from '../components';
 import { EmptyState, LoadingState, ErrorState, ValidationState, StatusBadge } from '../../../components/ui/primitives';
@@ -16,6 +16,13 @@ import '../../../styles/calendar.css';
 
 const STUDENT_ID = 'self';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEK_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+function formatHourSlot(h: number): string {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(hour12).padStart(2, '0')}:00 ${period}`;
+}
 
 /** Map a source type to the prototype's four marker/legend categories (shape+colour). */
 type MarkerCat = 'exam' | 'moot' | 'intern' | 'draft';
@@ -202,32 +209,49 @@ export function CalendarMonth() {
               )}
 
               {viewMode === 'week' && (
-                <div className="st-list" style={{ marginTop: 12 }}>
-                  {Array.from({ length: 7 }, (_, i) => {
-                    const d = i + 1;
-                    const items = byDay.get(d) ?? [];
-                    return (
-                      <div key={i} className="st-item" style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '10px 12px' }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-fg-default)' }}>
-                          {WEEKDAYS[i]} {d} {monthLabel}
+                <div className="week-grid-wrap" style={{ marginTop: 12 }}>
+                  <div className="week-grid" role="grid" aria-label={`Weekly Schedule ${monthLabel}`}>
+                    {/* Header Row: Time Label + 7 Day Columns */}
+                    <div className="time-hd">TIME</div>
+                    {Array.from({ length: 7 }, (_, i) => {
+                      const d = i + 1;
+                      const dd = String(d).padStart(2, '0');
+                      const isToday = `${year}-${mm}-${dd}` === todayKey;
+                      return (
+                        <div key={i} className={`day-hd${isToday ? ' today' : ''}`}>
+                          {WEEKDAYS[i]} {d}
                         </div>
-                        {items.length === 0 ? (
-                          <div style={{ fontSize: '0.8rem', color: 'var(--color-fg-muted)', marginTop: 4 }}>No events scheduled</div>
-                        ) : (
-                          items.map((e) => {
-                            const p = toPreview(e);
-                            const badge = resolveEventBadge(e);
-                            return (
-                              <button key={p.id} type="button" className="btn tap" style={{ marginTop: 4, width: '100%', justifyContent: 'space-between', padding: '6px 10px', fontSize: '0.8rem' }} onClick={() => setSelectedId(p.id)}>
-                                <span>{localTime(p.startsAt, filters.timezone)} · {p.title}</span>
-                                <StatusBadge status={badge.status} label={badge.label} />
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+
+                    {/* Hourly Rows x 7 Day Cells */}
+                    {WEEK_HOURS.map((h) => (
+                      <Fragment key={h}>
+                        <div className="time-cell">{formatHourSlot(h)}</div>
+                        {Array.from({ length: 7 }, (_, i) => {
+                          const d = i + 1;
+                          const dayItems = byDay.get(d) ?? [];
+                          const hourItems = dayItems.filter((e) => {
+                            const date = new Date(e.startsAt);
+                            return date.getUTCHours() === h;
+                          });
+                          return (
+                            <div key={`cell-${h}-${d}`} className="week-cell">
+                              {hourItems.map((e) => {
+                                const p = toPreview(e);
+                                return (
+                                  <button key={p.id} type="button" className={`ev ${CAT_FOR[p.sourceType]}`} data-testid={`cal-open-${p.id}`}
+                                    onClick={() => setSelectedId(p.id)} title={p.title}>
+                                    <span className="d" />{localTime(p.startsAt, filters.timezone)} {p.title.length > 8 ? `${p.title.slice(0, 8)}…` : p.title}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
+                  </div>
                 </div>
               )}
 
