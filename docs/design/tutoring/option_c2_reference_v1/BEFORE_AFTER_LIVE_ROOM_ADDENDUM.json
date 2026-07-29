@@ -1,6 +1,6 @@
 {
   "contract": "S35_LIVE_ROOM_GEOMETRY_CLOSURE_ADDENDUM.md",
-  "note": "BEFORE is commit 647aa76 reference/ measured unmodified; AFTER is this commit. Both measured in the same real headless Chromium with the same harness.",
+  "note": "BEFORE is commit 647aa76 reference/ measured unmodified; AFTER is this commit. Both measured in the same real headless Chromium with the same harness. The BEFORE container-geometry side is CARRIED FORWARD unchanged from the previous artifact (the commit it describes was not modified); the AFTER side and every D-1 banner rectangle below were measured fresh on this commit.",
   "rootCauses": [
     {
       "id": "RC-1",
@@ -357,12 +357,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "390x844__dark",
@@ -687,12 +738,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "430x932__light",
@@ -1017,12 +1119,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "430x932__dark",
@@ -1347,12 +1500,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "768x1024__light",
@@ -1677,12 +1881,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "768x1024__dark",
@@ -2007,12 +2262,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "844x390__light",
@@ -2337,12 +2643,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "844x390__dark",
@@ -2667,12 +3024,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "932x430__light",
@@ -2997,12 +3405,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "932x430__dark",
@@ -3327,12 +3786,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "1024x768__light",
@@ -3657,12 +4167,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        }
+      ]
     },
     {
       "pair": "1024x768__dark",
@@ -3987,12 +4548,63 @@
           "r7_selfView": true,
           "r8_sheet": true,
           "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
           "r10_console": true,
-          "r12_ready": true,
-          "r11_states": true
+          "r12_ready": true
         },
         "pass": true
-      }
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        }
+      ]
     }
   ]
 }

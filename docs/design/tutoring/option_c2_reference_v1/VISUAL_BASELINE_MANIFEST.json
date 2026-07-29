@@ -462,8 +462,8 @@
     },
     {
       "file": "captures/s35-room-live__932x430__dark.png",
-      "bytes": 152268,
-      "sha256": "c8610756011c7eb83eeaf871292cbdf1d075b08fadb11e020306a0dceb8994c0",
+      "bytes": 152471,
+      "sha256": "b0a1c7a41208694c316fe84132303de3a1924f33410eeb377e1d7ca10c12a3a7",
       "state": "s35-room-live",
       "label": "Room — live (tutor + student)",
       "screen": "S-35",
@@ -479,8 +479,8 @@
     },
     {
       "file": "captures/s35-reconnecting__390x844__light.png",
-      "bytes": 75550,
-      "sha256": "f147a6826cd978b1a47eb988b2226a65ecab6d6d6fd6a9b5397ebce46d2421b9",
+      "bytes": 97450,
+      "sha256": "1b38c8259cd6580bc518f572add0b93ec283ae6125a7af0a1c01e8e3ae6429c2",
       "state": "s35-reconnecting",
       "label": "Reconnecting",
       "screen": "S-35",
@@ -496,8 +496,8 @@
     },
     {
       "file": "captures/s35-reconnecting__390x844__dark.png",
-      "bytes": 75860,
-      "sha256": "c845ad4d4813a251f7610df37a23c6ff8a1861aec56a19554a29b778c9153068",
+      "bytes": 97944,
+      "sha256": "0e0a75a5ff191da5d0dbf21ce39070ecf21ccc12deda41bae8391db99f4e585b",
       "state": "s35-reconnecting",
       "label": "Reconnecting",
       "screen": "S-35",

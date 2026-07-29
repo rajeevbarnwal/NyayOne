@@ -6,13 +6,14 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { resolvePlaywright, failFast } from './env_paths.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PKG = join(here, '..');
 const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const PW = arg('--playwright', '/sessions/cool-bold-clarke/factorder_wt/frontend/node_modules/playwright/index.mjs');
+const PW = failFast(() => resolvePlaywright(arg('--playwright', '')));
 const { chromium } = await import(pathToFileURL(PW).href);
 
 globalThis.C2Fixtures = require(join(PKG, 'reference/fixtures.js'));

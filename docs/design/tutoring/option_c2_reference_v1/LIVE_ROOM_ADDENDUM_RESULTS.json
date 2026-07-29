@@ -25,12 +25,15 @@
     "r9_keyboard": "every control keyboard-reachable in DOM order with a stable accessible name",
     "r10_console": "zero console errors, zero warnings, zero page errors, zero failed requests",
     "r11_states": "camera-denied, mic-denied, disconnected/reconnecting, provider-failure, leave-confirmation and device-release preserve the same geometry",
-    "r12_ready": "the run waits on data-live-room-ready=\"true\" with a bounded rejecting timeout; no fixed sleeps"
+    "r12_ready": "the run waits on data-live-room-ready=\"true\" with a bounded rejecting timeout; no fixed sleeps",
+    "r13_bannerContent": "[D-1] every provider-error/reconnect banner state the state model declares passes the nine content-geometry rules: 18-24px status icon; non-zero visible title and detail; message column >= max(120px, 40% of the banner); text inside the banner; no icon/text overlap; scrollWidth<=clientWidth; nothing clipped by an overflow:hidden ancestor; banner inside the mentor tile and stage; readiness never counts as a visual pass on its own"
   },
   "pairsTotal": 12,
   "pairsPassed": 12,
   "stateRowsTotal": 72,
   "stateRowsPassed": 72,
+  "bannerContentRowsTotal": 48,
+  "bannerContentRowsPassed": 48,
   "pairs": [
     {
       "pair": "390x844__light",
@@ -42,7 +45,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 70
+        "ms": 79
       },
       "base": {
         "viewport": {
@@ -346,6 +349,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -666,6 +670,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -706,6 +711,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -746,6 +752,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -786,6 +809,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -826,6 +866,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -866,6 +907,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -878,6 +920,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__390x844__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 72.34,
+              "requiredColumnW": 136,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__390x844__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 72.34,
+              "requiredColumnW": 136,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__390x844__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__390x844__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -896,7 +1112,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 120
+        "ms": 74
       },
       "base": {
         "viewport": {
@@ -1200,6 +1416,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -1520,6 +1737,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1560,6 +1778,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1600,6 +1819,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1640,6 +1876,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1680,6 +1933,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1720,6 +1974,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -1732,6 +1987,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__390x844__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 72.34,
+              "requiredColumnW": 136,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__390x844__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 72.34,
+              "requiredColumnW": 136,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__390x844__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__390x844__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 287,
+              "detailW": 287,
+              "columnW": 287,
+              "bannerW": 340,
+              "bannerH": 55.67,
+              "requiredColumnW": 136,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -1750,7 +2179,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 64
+        "ms": 70
       },
       "base": {
         "viewport": {
@@ -2054,6 +2483,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -2374,6 +2804,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2414,6 +2845,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2454,6 +2886,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2494,6 +2943,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2534,6 +3000,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2574,6 +3041,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -2586,6 +3054,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__430x932__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 72.34,
+              "requiredColumnW": 152,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__430x932__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 72.34,
+              "requiredColumnW": 152,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__430x932__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__430x932__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -2604,7 +3246,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 70
+        "ms": 62
       },
       "base": {
         "viewport": {
@@ -2908,6 +3550,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -3228,6 +3871,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3268,6 +3912,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3308,6 +3953,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3348,6 +4010,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3388,6 +4067,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3428,6 +4108,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -3440,6 +4121,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__430x932__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 72.34,
+              "requiredColumnW": 152,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__430x932__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 72.34,
+              "requiredColumnW": 152,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__430x932__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__430x932__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 327,
+              "detailW": 327,
+              "columnW": 327,
+              "bannerW": 380,
+              "bannerH": 55.67,
+              "requiredColumnW": 152,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -3458,7 +4313,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 81
+        "ms": 78
       },
       "base": {
         "viewport": {
@@ -3762,6 +4617,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -4082,6 +4938,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4122,6 +4979,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4162,6 +5020,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4202,6 +5077,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4242,6 +5134,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4282,6 +5175,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4294,6 +5188,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__768x1024__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__768x1024__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__768x1024__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__768x1024__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -4312,7 +5380,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 57
+        "ms": 59
       },
       "base": {
         "viewport": {
@@ -4616,6 +5684,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -4936,6 +6005,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -4976,6 +6046,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5016,6 +6087,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5056,6 +6144,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5096,6 +6201,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5136,6 +6242,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5148,6 +6255,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__768x1024__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__768x1024__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__768x1024__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__768x1024__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 665,
+              "detailW": 665,
+              "columnW": 665,
+              "bannerW": 718,
+              "bannerH": 55.67,
+              "requiredColumnW": 287.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -5166,7 +6447,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 74
+        "ms": 69
       },
       "base": {
         "viewport": {
@@ -5470,6 +6751,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -5790,6 +7072,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5830,6 +7113,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5870,6 +7154,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5910,6 +7211,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5950,6 +7268,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -5990,6 +7309,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6002,6 +7322,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__844x390__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__844x390__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__844x390__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__844x390__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -6020,7 +7514,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 72
+        "ms": 82
       },
       "base": {
         "viewport": {
@@ -6324,6 +7818,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -6644,6 +8139,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6684,6 +8180,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6724,6 +8221,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6764,6 +8278,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6804,6 +8335,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6844,6 +8376,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -6856,6 +8389,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__844x390__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__844x390__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__844x390__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__844x390__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 745,
+              "detailW": 745,
+              "columnW": 745,
+              "bannerW": 798,
+              "bannerH": 55.67,
+              "requiredColumnW": 319.2,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -6874,7 +8581,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 80
+        "ms": 64
       },
       "base": {
         "viewport": {
@@ -7178,6 +8885,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -7498,6 +9206,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7538,6 +9247,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7578,6 +9288,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7618,6 +9345,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7658,6 +9402,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7698,6 +9443,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -7710,6 +9456,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__932x430__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__932x430__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__932x430__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__932x430__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -7728,7 +9648,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 69
+        "ms": 67
       },
       "base": {
         "viewport": {
@@ -8032,6 +9952,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -8352,6 +10273,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8392,6 +10314,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8432,6 +10355,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8472,6 +10412,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8512,6 +10469,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8552,6 +10510,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -8564,6 +10523,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__932x430__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__932x430__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__932x430__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__932x430__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 833,
+              "detailW": 833,
+              "columnW": 833,
+              "bannerW": 886,
+              "bannerH": 55.67,
+              "requiredColumnW": 354.4,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -8582,7 +10715,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 73
+        "ms": 68
       },
       "base": {
         "viewport": {
@@ -8886,6 +11019,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -9206,6 +11340,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9246,6 +11381,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9286,6 +11422,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9326,6 +11479,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9366,6 +11536,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9406,6 +11577,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -9418,6 +11590,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__1024x768__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__1024x768__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__1024x768__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__1024x768__light.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],
@@ -9436,7 +11782,7 @@
       "phase": "all",
       "ready": {
         "signal": "data-live-room-ready",
-        "ms": 82
+        "ms": 81
       },
       "base": {
         "viewport": {
@@ -9740,6 +12086,7 @@
         "r8_sheet": true,
         "r9_keyboard": true,
         "r11_states": true,
+        "r13_bannerContent": true,
         "r10_console": true,
         "r12_ready": true
       },
@@ -10060,6 +12407,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10100,6 +12448,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10140,6 +12489,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10180,6 +12546,23 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": {
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "failures": []
+          },
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10220,6 +12603,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10260,6 +12644,7 @@
           },
           "overlaps": 0,
           "undersized": [],
+          "bannerContent": null,
           "verdict": {
             "r1_rootHeight": true,
             "r2_noScroll": true,
@@ -10272,6 +12657,180 @@
           "sameGeometry": true
         }
       ],
+      "rule13": {
+        "ruleText": {
+          "g1_iconBox": "status/warning icon width AND height each within 18-24px",
+          "g2_textRendered": "title and detail each have non-zero rendered width and are visible",
+          "g3_textColumnWidth": "message column >= max(120px, 40% of banner width)",
+          "g4_textWithinBanner": "title and detail rects stay within the banner rect",
+          "g5_noIconTextOverlap": "icon rect and text rects do not overlap",
+          "g6_noHorizontalOverflow": "scrollWidth <= clientWidth for the title/detail container",
+          "g7_noClippedText": "no text clipped by an overflow:hidden ancestor",
+          "g8_bannerWithinTile": "banner stays inside the mentor tile / stage",
+          "g9_readinessNotSufficient": "readiness awaited; data-live-room-ready alone is never a visual pass"
+        },
+        "ruleIds": [
+          "g1_iconBox",
+          "g2_textRendered",
+          "g3_textColumnWidth",
+          "g4_textWithinBanner",
+          "g5_noIconTextOverlap",
+          "g6_noHorizontalOverflow",
+          "g7_noClippedText",
+          "g8_bannerWithinTile",
+          "g9_readinessNotSufficient"
+        ],
+        "coverage": {
+          "pass": true,
+          "reason": "ok",
+          "discovered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "covered": [
+            "s35-autoplay",
+            "s35-degraded",
+            "s35-reconnecting",
+            "s35-icefail"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cases": [
+          {
+            "state": "s35-autoplay",
+            "capture": "captures/addendum/after__banner-s35-autoplay__1024x768__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Sound is blocked by your browser",
+              "detailText": "Choose Enable sound to hear your mentor. Nothing else changes."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-degraded",
+            "capture": "captures/addendum/after__banner-s35-degraded__1024x768__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Connection is weak",
+              "detailText": "Video quality was reduced to keep audio clear. Your controls are unchanged."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-reconnecting",
+            "capture": "captures/addendum/after__banner-s35-reconnecting__1024x768__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Reconnecting",
+              "detailText": "Attempt 2. Leave stays available at all times."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          },
+          {
+            "state": "s35-icefail",
+            "capture": "captures/addendum/after__banner-s35-icefail__1024x768__dark.png",
+            "readySignal": "data-live-room-ready",
+            "pass": true,
+            "measured": {
+              "readyAttr": "true",
+              "iconW": 20,
+              "iconH": 20,
+              "titleW": 921,
+              "detailW": 921,
+              "columnW": 921,
+              "bannerW": 974,
+              "bannerH": 55.67,
+              "requiredColumnW": 389.6,
+              "titleText": "Media transport failed",
+              "detailText": "Rejoin to try a relayed path."
+            },
+            "rules": {
+              "g1_iconBox": true,
+              "g2_textRendered": true,
+              "g3_textColumnWidth": true,
+              "g4_textWithinBanner": true,
+              "g5_noIconTextOverlap": true,
+              "g6_noHorizontalOverflow": true,
+              "g7_noClippedText": true,
+              "g8_bannerWithinTile": true,
+              "g9_readinessNotSufficient": true
+            },
+            "failures": [],
+            "fatal": null
+          }
+        ],
+        "casesTotal": 4,
+        "casesPassed": 4
+      },
       "console": {
         "errors": [],
         "warnings": [],

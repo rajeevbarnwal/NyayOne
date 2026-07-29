@@ -4,11 +4,17 @@
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { resolvePlaywright, resolveRepoPath, failFast } from './env_paths.mjs';
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const PW = arg('--playwright', '/sessions/cool-bold-clarke/factorder_wt/frontend/node_modules/playwright/index.mjs');
-const HIST = arg('--historical', '/sessions/cool-bold-clarke/mnt/LegalSaathi/docs/design/tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html');
+/* No machine paths: playwright and the historical gate are resolved at runtime
+   from the repository root, or supplied explicitly, or the tool fails fast. */
+const PW = failFast(() => resolvePlaywright(arg('--playwright', '')));
+const HIST = failFast(() => resolveRepoPath(
+  arg('--historical', ''), 'C2_HISTORICAL_GATE',
+  'docs/design/tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html',
+  'HISTORICAL_GATE_NOT_FOUND', 'the historical C2 mobile-gate HTML'));
 const { chromium } = await import(pathToFileURL(PW).href);
 
 const VPS = [[390, 844], [430, 932], [844, 390], [932, 430]];

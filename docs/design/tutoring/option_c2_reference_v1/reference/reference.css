@@ -276,7 +276,11 @@ body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
   grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:hidden;contain:strict}
 .room .mtile{position:relative;min-width:0;min-height:0;border-radius:var(--r-lg);overflow:hidden;
   background:var(--studio2);border:1px solid #33270f;outline:3px solid var(--jade);outline-offset:-3px}
-.room .mtile svg{width:100%;height:100%;display:block;object-fit:cover}
+/* [D-1] `>svg` scopes the tile fill to the mentor-tile SVG only. The old descendant
+   selector also matched the room banner's 20px status icon (and any icon nested
+   anywhere in the tile), inflating it to the tile box and collapsing the banner
+   title/detail column to 0px width. Nested icons keep their own `.ic` 20x20 box. */
+.room .mtile>svg{width:100%;height:100%;display:block;object-fit:cover}
 .room .mtile .nm{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.62);border-radius:var(--r-sm);
   padding:5px 10px;font-size:11px;font-weight:800;display:flex;gap:7px;align-items:center;max-width:calc(100% - 20px)}
 .room .mtile .stateveil{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
@@ -353,6 +357,12 @@ body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
      theme-invariant, so it uses the studio leave ink in both themes (dark already
      resolved to this exact value). */
   color:var(--studio-leave-ink)}
+/* [D-1] The message column is the flexible track of the banner: it takes every
+   pixel the 20px status icon does not need, so a collapsed or shrink-wrapped
+   text column is a layout error rather than an accepted rendering. Glyph
+   positions are unchanged for the approved strings (they already fit on one
+   line); only the box the oracle measures becomes the real message column. */
+.room .rbanner>div{flex:1 1 auto;min-width:0}
 .room .rbanner .bt{font-size:12.5px;font-weight:800}
 .room .rbanner .bd2{font-size:11.5px;color:var(--studiomut);line-height:1.45;margin-top:2px}
 

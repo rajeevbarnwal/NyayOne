@@ -4,13 +4,23 @@
      LD_LIBRARY_PATH=<stublib> node tools/measure_live_room_addendum.mjs \
        [--ref <reference-dir>] [--label before|after] [--out <json>] [--shots <dir>] [--playwright <path>]
 
-   12 pairs = 6 viewports x 2 themes. Every pair asserts addendum rules 1-12.
+   12 pairs = 6 viewports x 2 themes. Every pair asserts addendum rules 1-13.
    Rule 11 re-runs rules 1-6 for six named states.
    Rule 12: readiness is awaited on [data-live-room-ready="true"] with a bounded
-   REJECTING timeout. There is no fixed sleep anywhere in this file. */
-import { writeFileSync, mkdirSync } from 'node:fs';
+   REJECTING timeout. There is no fixed sleep anywhere in this file.
+   Rule 13 [D-1]: the FAIL-CLOSED banner CONTENT-geometry oracle
+   (tools/banner_geometry_oracle.mjs) runs its nine rules against EVERY
+   provider-error / reconnect banner state the state model declares, at all 12
+   pairs. Container geometry alone (rules 1-6) let a 315x315 warning icon and a
+   0px message column pass; rule 13 exists so that can never happen again. */
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  BANNER_PROBE, BANNER_STATE_DISCOVERY, evaluateBannerGeometry, assertBannerStateCoverage,
+  RULE_IDS as BANNER_RULE_IDS, RULE_TEXT as BANNER_RULE_TEXT
+} from './banner_geometry_oracle.mjs';
+import { resolvePlaywright, failFast } from './env_paths.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PKG = join(here, '..');
@@ -21,10 +31,15 @@ const REF   = resolve(arg('--ref', join(PKG, 'reference')));
 const LABEL = arg('--label', 'after');
 const OUT   = resolve(arg('--out', join(PKG, 'LIVE_ROOM_ADDENDUM_RESULTS.json')));
 const SHOTS = resolve(arg('--shots', join(PKG, 'captures', 'addendum')));
-const PW    = arg('--playwright', '/sessions/cool-bold-clarke/w2p1_wt/frontend/node_modules/playwright/index.mjs');
+const PW    = failFast(() => resolvePlaywright(arg('--playwright', '')));
 const ONLY  = arg('--pairs', '');            /* comma-separated pair indices 0-11 */
 const PHASE = arg('--phase', 'all');         /* core | states | all */
 const NOSHOTS = argv.includes('--noshots');
+/* --inject-css is a TEST-ONLY hook: tests/banner_geometry_oracle_selftest.mjs
+   seeds deliberate layout defects with it and asserts this gate exits NON-ZERO.
+   It is never used by a normal evidence run; when unset nothing is injected. */
+const INJECT_CSS_PATH = arg('--inject-css', '');
+const INJECT_CSS = INJECT_CSS_PATH ? readFileSync(resolve(INJECT_CSS_PATH), 'utf8') : '';
 const READY_TIMEOUT_MS = 15000;
 const TOL = 1;            /* +-1 px, per the addendum */
 const TARGET_TOL = 43.5;  /* 44 px with sub-pixel border rounding */
@@ -246,6 +261,10 @@ for (const idx of wanted) {
   const vp = ALL_UNITS[idx].vp, theme = ALL_UNITS[idx].theme;
   const pairName = vp.name + '__' + theme;
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: 1, colorScheme: theme });
+  if (INJECT_CSS) await ctx.addInitScript((css) => {
+    const add = () => { const st = document.createElement('style'); st.id = '__seeded_defect__'; st.textContent = css; document.head.appendChild(st); };
+    if (document.head) add(); else document.addEventListener('DOMContentLoaded', add);
+  }, INJECT_CSS);
   const page = await ctx.newPage();
   const con = { errors: [], warnings: [], pageErrors: [], failedRequests: [] };
   page.on('console', m => { const t = m.type(); if (t === 'error') con.errors.push(m.text()); else if (t === 'warning') con.warnings.push(m.text()); });
@@ -419,17 +438,53 @@ for (const idx of wanted) {
       if (sc.drive === 'cam') await page.click('[data-testid=cam]');
       const p = await page.evaluate(PROBE);
       const v = verdictFor(p);
+      /* [D-1] provider-failure / reconnect rows must publish ICON SIZE and
+         TITLE/DETAIL WIDTHS, not just root height and scroll. */
+      const bProbe = await page.evaluate(BANNER_PROBE);
+      const bEval = (bProbe && bProbe.fatal === 'BANNER_NOT_FOUND')
+        ? null : evaluateBannerGeometry(bProbe, { pair: pairName, state: sc.state, theme, viewport: vp.name });
       const sShot = join(SHOTS, LABEL + '__state-' + sc.key + '__' + vp.name + '__' + theme + '.png');
       if (!NOSHOTS) await page.screenshot({ path: sShot });
       pair.rule11.push({ case: sc.key, state: sc.state, note: sc.note, capture: NOSHOTS ? null : shotRef(sShot),
         rootHeightDelta: p.rootHeightDelta, maxOverflowY: p.maxOverflowY, maxOverflowX: p.maxOverflowX,
         rowTracks: p.rowTracks, smallest: p.smallest, overlaps: p.overlaps.length,
         undersized: p.undersizedTargets.map(t => t.name + ' ' + t.w + 'x' + t.h),
-        verdict: v, pass: Object.values(v).every(Boolean),
+        bannerContent: bEval ? { pass: bEval.pass, measured: bEval.measured, failures: bEval.failures } : null,
+        verdict: v, pass: Object.values(v).every(Boolean) && (bEval ? bEval.pass : true),
         sameGeometry: Math.abs(p.rootHeight - pair.base.rootHeight) <= 1 &&
                       Math.abs((p.rects.stage ? p.rects.stage.h : -1) - (pair.base.rects.stage ? pair.base.rects.stage.h : -2)) <= 1 });
     }
     if (PHASE !== 'core') pair.verdict.r11_states = pair.rule11.every(s => s.pass && s.sameGeometry);
+
+    /* ---------------- rule 13 [D-1] banner CONTENT geometry ---------------- */
+    if (PHASE !== 'core') {
+      /* Discover every banner-bearing room state from the state model itself, so a
+         NEW banner state cannot silently escape the oracle (fail-closed coverage). */
+      await page.goto(nav('s35-room-live', theme), { waitUntil: 'load' });
+      await waitReady(page);
+      const discovered = await page.evaluate(BANNER_STATE_DISCOVERY);
+      const bannerStates = (discovered && Array.isArray(discovered.states)) ? discovered.states.map(s => s.id) : [];
+      const coverage = assertBannerStateCoverage(discovered, bannerStates);
+
+      const cases = [];
+      for (const stateId of bannerStates) {
+        await page.goto(nav(stateId, theme), { waitUntil: 'load' });
+        /* readiness is AWAITED (bounded, rejecting) — and never counts as a pass (g9) */
+        let readySignal = null, readyError = null;
+        try { readySignal = await waitReady(page); } catch (e) { readyError = String((e && e.message) || e); }
+        const probe = readyError ? { fatal: 'READY_TIMEOUT: ' + readyError } : await page.evaluate(BANNER_PROBE);
+        const ev = evaluateBannerGeometry(probe, { pair: pairName, state: stateId, theme, viewport: vp.name });
+        const bShot = join(SHOTS, LABEL + '__banner-' + stateId + '__' + vp.name + '__' + theme + '.png');
+        if (!NOSHOTS) await page.screenshot({ path: bShot });
+        cases.push({ state: stateId, capture: NOSHOTS ? null : shotRef(bShot),
+                     readySignal: readySignal && readySignal.signal, pass: ev.pass,
+                     measured: ev.measured, rules: ev.rules, failures: ev.failures, fatal: ev.fatal || null });
+      }
+      pair.rule13 = { ruleText: BANNER_RULE_TEXT, ruleIds: BANNER_RULE_IDS, coverage, cases,
+                      casesTotal: cases.length, casesPassed: cases.filter(c => c.pass).length };
+      /* fail-closed: zero discovered banner states is itself a failure */
+      pair.verdict.r13_bannerContent = coverage.pass && cases.length > 0 && cases.every(c => c.pass);
+    }
 
     pair.console = con;
     pair.verdict.r10_console = con.errors.length === 0 && con.pageErrors.length === 0 &&
@@ -457,7 +512,12 @@ const summary = {
   pairsTotal: pairs.length, pairsPassed: pairs.filter(p => p.pass).length, pairsFailed: failures.length,
   stateCases: STATE_CASES.map(s => s.key),
   assertions: ['r1_rootHeight', 'r2_noScroll', 'r3_threeRows', 'r4_dockVisible', 'r5_targets', 'r6_noOverlap',
-               'r7_selfView', 'r8_sheet', 'r9_keyboard', 'r10_console', 'r11_states', 'r12_ready'],
+               'r7_selfView', 'r8_sheet', 'r9_keyboard', 'r10_console', 'r11_states', 'r12_ready',
+               'r13_bannerContent'],
+  bannerOracle: { rules: BANNER_RULE_IDS, ruleText: BANNER_RULE_TEXT,
+                  casesTotal: pairs.reduce((n, p) => n + (p.rule13 ? p.rule13.casesTotal : 0), 0),
+                  casesPassed: pairs.reduce((n, p) => n + (p.rule13 ? p.rule13.casesPassed : 0), 0) },
+  seededCss: INJECT_CSS_PATH || null,
   failures, pairs
 };
 mkdirSync(dirname(OUT), { recursive: true });
