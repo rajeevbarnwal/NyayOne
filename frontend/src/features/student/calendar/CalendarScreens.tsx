@@ -236,7 +236,6 @@ export function CalendarMonth() {
             )}
           </section>
         )}
-        <DpdpFootnote>{CALENDAR_SOURCE_NOTE}</DpdpFootnote>
       </div>
     </StudentScreen>
   );
