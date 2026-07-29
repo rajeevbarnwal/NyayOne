@@ -107,7 +107,6 @@ export function CalendarMonth() {
       <div className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature">
         <CalSubnav active="month" />
         <h1 className="lede">Unified Calendar</h1>
-        <p className="stand">A platform primitive — every module writes here.</p>
 
 
         {showFilters && (
