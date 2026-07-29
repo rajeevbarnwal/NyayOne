@@ -147,13 +147,11 @@ export function CalendarMonth() {
                   aria-invalid={dateError ? true : undefined} aria-describedby={dateError ? 'cal-date-err' : undefined}
                   onChange={(e) => persist({ ...filters, to: e.target.value || null })} /></div>
             </div>
-            <div style={{ marginTop: 12 }}><label className="lbl" htmlFor="cal-tz">Timezone</label>
-              <select id="cal-tz" className="field" value={filters.timezone} data-testid="cal-tz"
-                onChange={(e) => persist({ ...filters, timezone: e.target.value })}>
-                {TIMEZONE_OPTIONS.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-              </select></div>
-            {dateError && <div id="cal-date-err"><ValidationState fieldId="cal-date" message={dateError === 'from_after_to' ? 'From date must be on or before To date — showing all dates until fixed.' : 'Enter a valid date.'} /></div>}
-            <div style={{ marginTop: 12 }}><button type="button" className="btn" onClick={() => persist({ ...filters, from: null, to: null })} data-testid="cal-clear">Clear dates</button></div>
+            {dateError && <div id="cal-date-err" style={{ marginTop: 8 }}><ValidationState fieldId="cal-date" message={dateError === 'from_after_to' ? 'From date must be on or before To date — showing all dates until fixed.' : 'Enter a valid date.'} /></div>}
+            <div className="st-actions st-actions--split" style={{ marginTop: 14 }}>
+              <button type="button" className="btn" onClick={() => persist({ ...filters, from: null, to: null, sources: [] })} data-testid="cal-clear">Reset filters</button>
+              <button type="button" className="btn solid" onClick={() => setShowFilters(false)} data-testid="cal-filter-done">Done</button>
+            </div>
           </section>
         )}
 
