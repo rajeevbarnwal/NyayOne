@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateDDMMYYYY, parseDDMMYYYYToISO } from './dateTime';
+import { formatDateDDMMYYYY, parseDDMMYYYYToISO, formatTime12Hour } from './dateTime';
 
 describe('Centralized Date Utility (formatDateDDMMYYYY)', () => {
   it('formats YYYY-MM-DD strings into DD-MM-YYYY', () => {
@@ -29,5 +29,10 @@ describe('Centralized Date Utility (formatDateDDMMYYYY)', () => {
   it('parses DD-MM-YYYY back to ISO YYYY-MM-DD format', () => {
     expect(parseDDMMYYYYToISO('14-03-2004')).toBe('2004-03-14');
     expect(parseDDMMYYYYToISO('2004-03-14')).toBe('2004-03-14');
+  });
+
+  it('formats timestamps into 12-Hour AM/PM time strings', () => {
+    expect(formatTime12Hour('2026-07-20T18:30:00Z', 'UTC')).toBe('06:30 PM');
+    expect(formatTime12Hour('2026-07-20T05:15:00Z', 'UTC')).toBe('05:15 AM');
   });
 });

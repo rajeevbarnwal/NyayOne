@@ -1,6 +1,7 @@
 /**
  * Centralized Date & Time Utility for LegalSaathi.
- * Standardizes UI date formatting across all student and lawyer modules to DD-MM-YYYY.
+ * Standardizes UI date formatting across all student and lawyer modules to DD-MM-YYYY
+ * and time formatting to 12-Hour AM/PM.
  */
 
 /**
@@ -51,4 +52,26 @@ export function parseDDMMYYYYToISO(dateStr: string | null | undefined): string {
     return `${year}-${month}-${day}`;
   }
   return trimmed;
+}
+
+/**
+ * Formats any ISO date string or Date object into 12-Hour AM/PM time format.
+ * Examples:
+ *   formatTime12Hour('2026-07-20T18:30:00Z', 'UTC') -> '06:30 PM'
+ *   formatTime12Hour('2026-07-20T05:30:00Z', 'UTC') -> '05:30 AM'
+ */
+export function formatTime12Hour(
+  dateInput: string | Date | number | null | undefined,
+  timeZone = 'UTC',
+): string {
+  if (!dateInput) return '';
+  const d = typeof dateInput === 'object' ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d);
 }

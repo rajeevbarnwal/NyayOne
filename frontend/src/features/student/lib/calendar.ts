@@ -347,13 +347,13 @@ export function localDateDisplay(iso: string, timezone: string): string {
   return formatDateDDMMYYYY(localDateKey(iso, timezone));
 }
 
-/** Local wall-clock HH:mm of an instant in a timezone (24h). */
+/** Local wall-clock hh:mm AM/PM of an instant in a timezone (12h). */
 export function localTime(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
   }).format(new Date(iso));
 }
 

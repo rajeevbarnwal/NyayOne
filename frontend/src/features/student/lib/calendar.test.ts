@@ -66,7 +66,7 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     const instant = '2026-07-20T18:30:00Z'; // 20th 18:30 UTC = 21st 00:00 IST
     expect(localDateKey(instant, 'Asia/Kolkata')).toBe('2026-07-21');
     expect(localDateKey(instant, 'UTC')).toBe('2026-07-20');
-    expect(localTime(instant, 'Asia/Kolkata')).toBe('00:00');
+    expect(localTime(instant, 'Asia/Kolkata')).toBe('12:00 AM');
   });
 
   it('TC-285-05: partial-source failure isolates the bad source; healthy ones survive', () => {
@@ -252,10 +252,10 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
   it('zonedToUtcIso: wall time in a tz round-trips to the same local day/time', () => {
     const iso = zonedToUtcIso('2026-07-20', '09:30', 'Asia/Kolkata');
     expect(localDateKey(iso, 'Asia/Kolkata')).toBe('2026-07-20');
-    expect(localTime(iso, 'Asia/Kolkata')).toBe('09:30');
+    expect(localTime(iso, 'Asia/Kolkata')).toBe('09:30 AM');
     // and lands on the previous UTC day (IST = UTC+5:30)
     expect(localDateKey(iso, 'UTC')).toBe('2026-07-20');
-    expect(localTime(iso, 'UTC')).toBe('04:00');
+    expect(localTime(iso, 'UTC')).toBe('04:00 AM');
   });
 
   it('validatePersonalEvent: typed errors for each invalid field', () => {
@@ -278,7 +278,7 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     const mine = events.filter((e) => e.sourceType === 'reminder' && e.title === 'Revise contracts');
     expect(mine.length).toBe(1);
     expect(mine[0].ownerId).toBe('stu-1');
-    expect(localTime(mine[0].startsAt, 'Asia/Kolkata')).toBe('09:30');
+    expect(localTime(mine[0].startsAt, 'Asia/Kolkata')).toBe('09:30 AM');
   });
 
   it('addPersonalEvent: invalid input throws and persists nothing', () => {
