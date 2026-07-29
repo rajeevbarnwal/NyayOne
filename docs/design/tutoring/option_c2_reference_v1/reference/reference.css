@@ -73,7 +73,7 @@ h1.m,h2.m,h3.m,p.m,.banner .bt,.banner .bd2,.chip,.steps h4,.steps p,.edu p,.mut
   border:2px solid var(--line2);background:var(--card);color:var(--ink);
   font-size:14px;font-weight:800;border-radius:var(--r-pill);cursor:pointer;text-decoration:none;text-align:center}
 .btn.jade{background:var(--jade);border-color:var(--jade);color:var(--jade-ink)}
-.btn.terra{background:var(--terra);border-color:var(--terra);color:#fff}
+.btn.terra{background:var(--terra);border-color:var(--terra);color:var(--terra-ink)}
 .btn.block{width:100%}
 .btn[disabled],.btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}
 .ib{min-width:var(--target-min);min-height:var(--target-min);border:2px solid var(--line2);border-radius:50%;
