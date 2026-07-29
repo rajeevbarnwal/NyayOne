@@ -89,11 +89,27 @@ export function CalendarMonth() {
   }
   function retry() { if (results) setResults(retryFailed(results, loaders)); }
 
-  // Month grid for the current month, in the selected timezone.
+  // Active date shifts to filter from date or navOffset, defaulting to now
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const monthLabel = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: filters.timezone }).format(now);
+  const [navOffset, setNavOffset] = useState(0);
+
+  const activeDate = useMemo(() => {
+    let d = new Date();
+    if (filters.from) {
+      const parsed = new Date(filters.from);
+      if (!isNaN(parsed.getTime())) {
+        d = parsed;
+      }
+    }
+    if (navOffset !== 0) {
+      d = new Date(d.getFullYear(), d.getMonth() + navOffset, 1);
+    }
+    return d;
+  }, [filters.from, navOffset]);
+
+  const year = activeDate.getFullYear();
+  const month = activeDate.getMonth();
+  const monthLabel = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: filters.timezone }).format(activeDate);
   const todayKey = localDateKey(now.toISOString(), filters.timezone);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const lead = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
@@ -109,9 +125,13 @@ export function CalendarMonth() {
     return m;
   }, [visible, filters.timezone, year, mm]);
 
+  function stepMonth(delta: number) {
+    setNavOffset((prev) => prev + delta);
+  }
+
   const upcoming = useMemo(
     () => [...visible].filter((e) => e.startsAt >= now.toISOString()).slice(0, 3),
-    [visible],
+    [visible, now],
   );
   const selected = selectedId && agg ? resolveDeepLink(agg.events, selectedId, STUDENT_ID) : null;
 
@@ -141,7 +161,7 @@ export function CalendarMonth() {
               <div><label className="lbl" htmlFor="cal-from">From date</label>
                 <input id="cal-from" className="field" type="date" value={filters.from ?? ''} data-testid="cal-from"
                   aria-invalid={dateError ? true : undefined} aria-describedby={dateError ? 'cal-date-err' : undefined}
-                  onChange={(e) => persist({ ...filters, from: e.target.value || null })} /></div>
+                  onChange={(e) => { setNavOffset(0); persist({ ...filters, from: e.target.value || null }); }} /></div>
               <div><label className="lbl" htmlFor="cal-to">To date</label>
                 <input id="cal-to" className="field" type="date" value={filters.to ?? ''} data-testid="cal-to"
                   aria-invalid={dateError ? true : undefined} aria-describedby={dateError ? 'cal-date-err' : undefined}
@@ -149,7 +169,7 @@ export function CalendarMonth() {
             </div>
             {dateError && <div id="cal-date-err" style={{ marginTop: 8 }}><ValidationState fieldId="cal-date" message={dateError === 'from_after_to' ? 'From date must be on or before To date — showing all dates until fixed.' : 'Enter a valid date.'} /></div>}
             <div className="st-actions st-actions--split" style={{ marginTop: 14 }}>
-              <button type="button" className="btn" onClick={() => persist({ ...filters, from: null, to: null, sources: [] })} data-testid="cal-clear">Reset filters</button>
+              <button type="button" className="btn" onClick={() => { setNavOffset(0); persist({ ...filters, from: null, to: null, sources: [] }); }} data-testid="cal-clear">Reset filters</button>
               <button type="button" className="btn solid" onClick={() => setShowFilters(false)} data-testid="cal-filter-done">Done</button>
             </div>
           </section>
@@ -172,7 +192,11 @@ export function CalendarMonth() {
           <div className="two-b">
             <div>
               <div className="ph">
-                <span className="t">{viewMode === 'month' ? monthLabel : viewMode === 'week' ? `7-Day Week (${monthLabel})` : `Day View (${formatDateDDMMYYYY(now)})`}</span>
+                <span className="t" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <button type="button" className="btn" style={{ minHeight: 28, padding: '2px 8px', fontSize: '12px' }} onClick={() => stepMonth(-1)} title="Previous month" data-testid="cal-prev-month">◄</button>
+                  <span>{viewMode === 'month' ? monthLabel : viewMode === 'week' ? `7-Day Week (${monthLabel})` : `Day View (${formatDateDDMMYYYY(activeDate.toISOString().slice(0, 10))})`}</span>
+                  <button type="button" className="btn" style={{ minHeight: 28, padding: '2px 8px', fontSize: '12px' }} onClick={() => stepMonth(1)} title="Next month" data-testid="cal-next-month">►</button>
+                </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                   <span className="a" data-testid="cal-count">{visible.length} events</span>
                   <button type="button" className="chip" aria-expanded={showFilters} aria-controls="cal-filters" onClick={() => setShowFilters((v) => !v)} data-testid="cal-filters-toggle"><span className="g" />Filter</button>
