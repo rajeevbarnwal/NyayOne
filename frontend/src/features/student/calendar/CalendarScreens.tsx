@@ -47,7 +47,6 @@ function CalSubnav({ active }: { active: 'month' | 'add' }) {
     <div className="subnav" role="tablist" aria-label="Calendar views">
       <button className={active === 'month' ? 'on' : ''} aria-selected={active === 'month'} onClick={() => nav('/s-90')} data-testid="cal-tab-month">Month</button>
       <button className={active === 'add' ? 'on' : ''} aria-selected={active === 'add'} onClick={() => nav('/s-91')} data-testid="cal-add">Add event</button>
-      <button onClick={() => nav('/s-91')}>Event</button>
       <button onClick={() => nav('/s-92')}>Conflict</button>
       <button onClick={() => nav('/s-93')}>Reminders</button>
       <button onClick={() => nav('/s-93')} data-testid="cal-export">Export</button>
