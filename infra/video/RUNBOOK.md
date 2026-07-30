@@ -94,7 +94,7 @@ symptom is `400 VIDEO_UNVERIFIED` on every delivery — see § 4.
 
 **What is still NOT proven:** no real LiveKit server has delivered a webhook to
 this backend in any environment we control. The transport is verified against the
-upstream algorithm, not against an observed delivery; § 9 item 6 is the live check
+upstream algorithm, not against an observed delivery; § 9 step S8 is the live check
 and stays UNEXECUTED until an operator runs it.
 
 **(b) `LIVEKIT_URL` must be `http://` or `https://`, never `wss://` — now
@@ -291,7 +291,8 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 ```
 
 The definitive negative control — physically blocking the direct path and showing
-the call still connects — is the smoke test in § 9, item 3.
+the call still connects — is § 9 step S9, run by
+`bash infra/video/scripts/livekit_turn_smoke.sh --steps S1,S2,S3,S4,S9`.
 
 ---
 
@@ -544,17 +545,33 @@ only outbound 443 will block 3478/udp *and* 3478/tcp. Enabling it later:
 
 ## 9. Environment-blocked checks
 
-The following were **NOT EXECUTED**. The sandbox this infrastructure was authored
-in has no `docker` binary, runs unprivileged, and has no network path to a
-LiveKit or TURN service. Every item below is UNEXECUTED / ENVIRONMENT-BLOCKED,
-with the exact command an operator runs on a Docker-capable host and the exact
-observable that constitutes a pass. **A config-file assertion is not a
+Everything in this section is now a **step of one runnable script**:
+
+```bash
+bash infra/video/scripts/livekit_turn_smoke.sh          # all steps
+bash infra/video/scripts/livekit_turn_smoke.sh --list   # the step contract
+bash infra/video/scripts/livekit_turn_smoke.sh --steps S1,S2,S3
+```
+
+That script IS the definition of this section, and this section IS the
+definition of that script: the step ids and titles below are asserted against
+`STEP_CONTRACT` in the script by
+`backend/tests/test_wave2_runtime_gates.py::test_runbook_section_9_matches_the_smoke_script_step_contract`,
+so the two cannot drift. Do not add a step here without adding it there.
+
+The script **fails closed**: a step that does not produce its documented
+observable stops the run and exits non-zero. A missing prerequisite is neither a
+pass nor a failure — it prints `BLOCKED: prerequisite runtime absent`, lists
+every missing prerequisite at once, and exits **78**.
+
+**Status in the authoring sandbox: every step below is UNEXECUTED /
+ENVIRONMENT-BLOCKED.** That sandbox has no `docker` binary, no `lk` binary, runs
+unprivileged, and has no network path to a LiveKit or TURN service; the script's
+own refusal there is the recorded evidence. **A config-file assertion is not a
 substitute for any of these, and none of them may be reported as passing on the
-basis of one.**
+basis of one.** What *was* executed is listed at the end of this section.
 
-What *was* executed here is listed at the end of this section.
-
-### 1. Bring-up and health — UNEXECUTED
+### S1 container/service health — UNEXECUTED
 
 ```bash
 python3 scripts/render_video_infra_config.py --env-file .env
@@ -563,128 +580,111 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   --profile video up -d coturn livekit
 sleep 20
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml ps
+curl -fsS http://localhost:1039/
+curl -fsS http://localhost:1042/metrics | head -20
+docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+  exec coturn turnutils_stunclient -p 3478 127.0.0.1
 ```
 
-Expected: `config -q` prints nothing and exits 0; `ps` shows both services
-`Up (healthy)`; `curl -fsS http://localhost:1039/` exits 0; `curl -fsS
-http://localhost:1042/metrics` returns Prometheus text containing `livekit_`.
+Pass: `config -q` prints nothing and exits 0; `ps` shows BOTH services
+`Up (healthy)`; `curl` on 1039 exits 0; the 1042 scrape contains `livekit_`
+series; the STUN transaction prints a line containing `reflexive addr`.
 
-### 2. Join a room with a real credential — UNEXECUTED
+### S2 server-created room — UNEXECUTED
 
 ```bash
-# Issue a credential through the committed API (authorised, paid participant).
+lk room create --url "$LIVEKIT_URL" "$ROOM_REF"
+lk room list  --url "$LIVEKIT_URL"
+```
+
+Pass: `room create` exits 0 and the SFU then LISTS that room. A room the server
+will not list is a room no participant can join.
+
+### S3 short-lived participant-bound join grant — UNEXECUTED
+
+```bash
 curl -fsS -X POST http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
-  -H "$AUTH_HEADER" | tee /tmp/cred.json | python3 -c \
-  'import json,sys;d=json.load(sys.stdin);print(d["room_ref"],d["permissions"],d["expires_at"])'
-# Connect with the LiveKit CLI using that token.
-lk room join --url ws://localhost:1039 --token "$(python3 -c \
-  'import json;print(json.load(open("/tmp/cred.json"))["join_token"])')" "$ROOM_REF"
+  -H "$AUTH_HEADER" -o /tmp/cred.json
 ```
 
-Expected: the CLI reports `connected to room`, and
-`docker ... logs livekit | grep participant_joined` shows one join whose identity
-is the 32-hex opaque `participant_ref` — **never** an email, name or user id.
-Delete `/tmp/cred.json` afterwards: it contains a raw join token, which must not
-persist anywhere.
+Pass: `participant_ref` is a 32-hex opaque reference — **never** an email, name
+or user id; `ttl_seconds` is `0 < ttl <= 300`; `expires_at` is no further out
+than the TTL allows; `room_ref` and `join_token` are both present. The script
+writes a REDACTED copy to evidence and DELETES `/tmp/cred.json`-equivalents at
+the end of S7: a raw join token must not persist anywhere.
 
-### 3. FORCED-TURN smoke test (the one that matters) — UNEXECUTED
+### S4 two-browser join smoke — UNEXECUTED
 
-The negative control: block the direct media path at the network layer and show
-the call still connects, via the relay.
+Driver: `infra/video/scripts/livekit_two_browser_smoke.mjs` (two real Chromium
+contexts, fake camera/mic devices, the real `livekit-client` SDK).
 
-```bash
-# a. Confirm the SFU media ports are not published at all.
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  port livekit 7882/udp; echo "exit=$?"
-#    Expected: no address printed, non-zero exit.
+Pass: the two participants receive **different** tokens for the **same**
+`room_ref`; both connect; each SEES at least one remote participant and at least
+one subscribed remote track; and the selected ICE candidate pair of both is
+captured to `s4-candidate-pair.json` — which is what S9 then judges. The SFU log
+shows one `participant_joined` per participant whose identity is the 32-hex
+opaque `participant_ref`.
 
-# b. Make the direct path impossible even inside the network, from the client host.
-sudo iptables -I OUTPUT -p udp --dport 7882 -j DROP
-sudo iptables -I OUTPUT -p tcp --dport 7881 -j DROP
+### S5 camera and microphone denial — UNEXECUTED
 
-# c. Join from a browser and read the selected candidate pair.
-#    chrome://webrtc-internals -> the PeerConnection -> "Stats" ->
-#    candidate-pair with state=succeeded and nominated=true.
-#    Expected: local candidate type = "relay"; the relay address is
-#    TURN_EXTERNAL_IP with a port inside 20500-20549; media flows both ways
-#    (bytesReceived and bytesSent both climbing).
+Pass: with camera AND microphone permission denied, the participant still
+**joins** (a participant who cannot publish is still a participant), publishes
+**zero** tracks, the capture attempt raises a denial error rather than hanging,
+and `enumerateDevices()` exposes **no device labels** to the page.
 
-# d. Confirm from the relay's own side.
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  logs coturn | grep -E 'new allocation|realm'
-#    Expected: one "new allocation" per participant, relay port in 20500-20549,
-#    peer address 172.29.30.10 and NOTHING else (the peer ACL allows only the SFU).
-
-# e. Clean up.
-sudo iptables -D OUTPUT -p udp --dport 7882 -j DROP
-sudo iptables -D OUTPUT -p tcp --dport 7881 -j DROP
-```
-
-Pass criteria, all four: (a) no published media port, (c) selected local
-candidate type `relay` with bytes flowing, (d) exactly one allocation per
-participant with peer `172.29.30.10`, and audio/video actually usable in the
-browser. Any one of these failing means forced-TURN is not in effect.
-
-### 4. Restart / reconnect — UNEXECUTED
-
-```bash
-# With a call up:
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  --profile video restart coturn
-#    Expected: brief media freeze, then recovery WITHOUT a new join credential;
-#    coturn logs a fresh allocation per participant.
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  --profile video restart livekit
-#    Expected: clients report Reconnecting then Reconnected, reusing the SAME
-#    token while it is inside its TTL. The room is NOT finished (departure_timeout
-#    300 > restart time), so no grant is revoked.
-# Kill the relay for longer than a credential TTL (>300s), then rejoin:
-#    Expected: the client must re-issue; the response carries "superseded": 1 and
-#    the previous grant is revoked. The OLD token now fails validation.
-```
-
-### 5. Provider-unreachable behaviour — UNEXECUTED
+### S6 reconnect — UNEXECUTED
 
 ```bash
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  --profile video stop livekit
-curl -sS -o /dev/stderr -w '%{http_code}\n' -X POST \
-  http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials -H "$AUTH_HEADER"
+  --profile video restart coturn      # relayed flows re-allocate
+docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+  --profile video restart livekit     # all participants reconnect
 ```
 
-Expected: an error envelope whose code is `PROVIDER_UNAVAILABLE` (never a 500,
-never a minted token), and **no new row** in `video_session_grants`:
+Pass: with a call up, both clients report `Reconnecting` then settle at
+`connected`, **reusing the SAME token** while it is inside its TTL. The room is
+NOT finished (`departure_timeout` 300 > restart time), so no grant is revoked and
+no re-issue is needed. Restarting `coturn` produces a brief media freeze and a
+fresh allocation per participant, again with no new credential.
+
+### S7 token expiry and revocation — UNEXECUTED
 
 ```bash
-docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
-  "select count(*) from video_session_grants where session_id = '$SESSION_ID';"
+curl -fsS -X POST http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
+  -H "$AUTH_HEADER" -o /tmp/cred2.json
+lk room join --url "${LIVEKIT_URL/http/ws}" --token "$OLD_TOKEN" "$OLD_ROOM"
 ```
 
-### 6. Webhook signature validation, end to end — UNEXECUTED
+Pass: the re-issue reports `superseded >= 1` and returns a DIFFERENT raw token,
+and the SUPERSEDED token is then **refused** by the SFU (`lk room join` exits
+non-zero — the sense of this check is inverted on purpose). Kill the relay for
+longer than a credential TTL (>300s) and rejoin: the client must re-issue, the
+response carries `superseded: 1`, and the old token no longer validates. Both
+credential files are deleted afterwards.
+
+### S8 webhook verification and replay rejection — UNEXECUTED
 
 ```bash
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   logs livekit | grep -i webhook
 docker compose -f docker-compose.yml logs backend | grep -i 'video/webhook'
-```
-
-Expected **now that the transports agree** (§ 0(a)): LiveKit logs
-`sent webhook ... statusCode 200`, the backend logs no `VIDEO_UNVERIFIED`, and a
-`video:participant_joined:<id>` row appears in `session_status_history` for the
-session:
-
-```bash
 docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
   "select reason from session_status_history where reason like 'video:%' order by created_at desc limit 5;"
 ```
 
-Still **UNEXECUTED**, and this is the one item to read carefully: no real LiveKit
-server has ever delivered a webhook to this backend. The adapter is verified
-against LiveKit's *published signing algorithm*
-(`backend/tests/test_wave2_video_webhook_livekit.py` rebuilds the `Authorization`
-JWT from `webhook/url_notifier.go` and drives it through the real route), which is
-a strictly weaker claim than an observed delivery. Record this green only after
-seeing `statusCode 200` from a real server.
+Pass **now that the transports agree** (§ 0(a)): LiveKit logs
+`sent webhook ... statusCode 200`, the backend logs NO `VIDEO_UNVERIFIED`, a
+`video:participant_joined:<id>` row appears in `session_status_history`, and **no
+event id is applied more than once** (the script runs the grouping query that
+proves it).
+
+This is the one item to read carefully: **no real LiveKit server has ever
+delivered a webhook to this backend.** The adapter is verified against LiveKit's
+*published signing algorithm* (`backend/tests/test_wave2_video_webhook_livekit.py`
+rebuilds the `Authorization` JWT from `webhook/url_notifier.go` and drives it
+through the real route), which is a strictly weaker claim than an observed
+delivery. Record this green only after seeing `statusCode 200` from a real
+server.
 
 Failure triage: a `400 VIDEO_UNVERIFIED` here means the token did not verify —
 in practice a `LIVEKIT_API_SECRET`/`LIVEKIT_API_KEY` mismatch between the rendered
@@ -693,7 +693,93 @@ in the server's `keys:` map, or clock skew beyond 5 s between the SFU host and t
 backend host. The refusal is deliberately identical for all of them, so use the
 two sides' *configuration* to tell them apart, not the response body.
 
+### S9 FORCED-TURN smoke test (the media path) — UNEXECUTED
+
+The negative control: block the direct media path and show the call still
+connects, via the relay.
+
+```bash
+# a. Which mode is deployed, and are the SFU media ports really unpublished?
+grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml
+docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+  port livekit 7882/udp; echo "exit=$?"
+
+# b. Make the direct path impossible even inside the network, from the client host.
+sudo iptables -I OUTPUT -p udp --dport 7882 -j DROP
+sudo iptables -I OUTPUT -p tcp --dport 7881 -j DROP
+
+# c. Join (S4) and read the SELECTED candidate pair. The driver reads it from
+#    the live RTCPeerConnection stats; chrome://webrtc-internals shows the same
+#    thing by hand.
+
+# d. Confirm from the relay's own side.
+docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+  logs coturn | grep -E 'new allocation|realm'
+
+# e. Clean up.
+sudo iptables -D OUTPUT -p udp --dport 7882 -j DROP
+sudo iptables -D OUTPUT -p tcp --dport 7881 -j DROP
+```
+
+Pass, all four: (a) mode is `forced-turn` and `port livekit 7882/udp` prints no
+address and exits non-zero; (c) the selected LOCAL candidate type is `relay`, its
+address is `TURN_EXTERNAL_IP`, its port is inside 20500-20549, and both
+`bytesSent` and `bytesReceived` are climbing; (d) one `new allocation` per
+participant with peer `172.29.30.10` and nothing else; and audio/video actually
+usable in the browser. Any one of these failing means forced-TURN is not in
+effect. **Checks (a) is config-level; only (c) and (d) prove anything about live
+media. Do not report a config check as a media result.**
+
+### S10 provider unreachable, fail-closed — UNEXECUTED
+
+```bash
+docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+  --profile video stop livekit
+curl -sS -o /dev/stderr -w '%{http_code}\n' -X POST \
+  http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials -H "$AUTH_HEADER"
+docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
+  "select count(*) from video_session_grants where session_id = '$SESSION_ID';"
+```
+
+Pass: an error envelope whose code is `PROVIDER_UNAVAILABLE` (never a 500, never
+a minted token), and the `video_session_grants` count for that session is
+UNCHANGED across the attempt. The script restarts `livekit` afterwards.
+
+### S11 no raw token, SDP or ICE persisted — UNEXECUTED
+
+```bash
+cd backend && DATABASE_URL=... python scripts/wave2_postgres_gate.py --privacy-only
+```
+
+Pass: zero findings. Every text/JSON column of every Wave 2 table is cast with
+`::text` and matched against the SAME shape list the database gate's assertion
+A7 uses (PAN, CVV/OTP keys, JWT-shaped raw tokens, `join_token`/`api_secret`
+keys, SDP `v=0`/`m=audio`/`a=fingerprint:`, ICE `candidate:`/`typ relay`/
+`a=ice-ufrag:`, and browser device labels). `video_session_grants` may hold a
+`token_hash` and nothing else. One implementation backs both the smoke step and
+the database gate, so the two can never disagree about what counts as a leak.
+
+### Related gate: the Wave 2 database proof
+
+Media is only half of Wave 2's target-runtime story. The other half is
+PostgreSQL 16 + pgvector, and it is also ONE command:
+
+```bash
+DATABASE_URL=postgresql+psycopg://... bash backend/scripts/wave2_db_gate.sh
+bash backend/scripts/wave2_db_gate.sh --list     # the A1..A8 assertion contract
+```
+
+Same honesty contract: it prints the runtime it detected and exits **78
+BLOCKED** rather than reporting a pass it did not earn. It is also wired in as
+the final stage of `backend/scripts/db_gate.sh` and runs in CI on push/PR
+(`.github/workflows/wave2-tutoring-db-gate.yml`, `pgvector/pgvector:pg16`).
+**Status in the authoring sandbox: UNEXECUTED / BLOCKED** — no PostgreSQL binary
+and no reachable server.
+
 ### 7. SBOM / image scanning — UNEXECUTED
+
+Not part of the smoke script (it proves nothing about media), kept here because
+it is the same class of blocked check.
 
 ```bash
 docker buildx imagetools inspect livekit/livekit-server:v1.9.12
@@ -708,8 +794,15 @@ Expected: `imagetools inspect` reports the index digests recorded in `SBOM.md`.
 
 ### What WAS executed in the authoring sandbox
 
-Config-level only, and every one of them is a static assertion:
+Config-level and static-analysis only, plus the two gates' own REFUSALS:
 
+* `bash infra/video/scripts/livekit_turn_smoke.sh` → `BLOCKED: prerequisite
+  runtime absent`, exit 78, listing docker / `lk` / the rendered config /
+  `LIVEKIT_*` / `SMOKE_*` as missing. Nothing about media was proven.
+* `bash backend/scripts/wave2_db_gate.sh` → `BLOCKED: prerequisite runtime
+  absent`, exit 78 (DATABASE_URL unset; and, when pointed at a PostgreSQL URL,
+  "no PostgreSQL server answered"). Nothing about PostgreSQL was proven.
+* `bash -n` on both shell gates and `node --check` on the browser driver.
 * `scripts/render_video_infra_config.py` renders both modes; the output parses as
   YAML with the expected `keys` / `webhook` / `rtc.turn_servers` structure;
   it refuses `--mode direct` without `LIVEKIT_ADVERTISE_IP`; and it refuses the
@@ -729,5 +822,8 @@ Config-level only, and every one of them is a static assertion:
   committed, env var names match `Settings` exactly, the webhook URL matches the
   committed route, and the forced-TURN posture holds (no published media ports,
   hard-coded `node_ip`, single-destination peer ACL).
+* `backend/tests/test_wave2_runtime_gates.py` — the two gate scripts exist, carry
+  the BLOCKED contract and exit code 78, and this section's step ids/titles match
+  the smoke script's `STEP_CONTRACT` exactly.
 
-Neither of those starts a server, joins a room, or moves a byte of media.
+None of those starts a server, joins a room, or moves a byte of media.
