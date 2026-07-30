@@ -21,11 +21,43 @@ Contents: [0. Read first](#0-read-first-two-sharp-edges) ·
 
 ## 0. Read first: two sharp edges
 
-**(a) KNOWN GAP — the webhook signature transports do not match.** This is a real,
-evidenced interoperability defect between the committed adapter and any real
-LiveKit server. It is **fail-closed** (nothing is accepted that should not be),
-so it is not a security hole, but it means room events will not be applied until
-someone owns it.
+**(a) The webhook signature transport is per-adapter. FIXED — was a known gap.**
+Until the SAATHI-451 follow-up, the LiveKit adapter expected a raw hex HMAC in
+`X-Video-Signature` (the *deterministic* adapter's scheme) and therefore refused
+every genuine LiveKit delivery: fail-closed, so never a security hole, but room
+events never reached `join_credentials.handle_event` and event-driven revocation
+never happened. That is no longer the case — `LiveKitCommunityAdapter` now
+verifies what LiveKit actually sends, and each adapter owns its own header:
+
+| adapter | header it verifies | credential |
+| --- | --- | --- |
+| `DeterministicVideoAdapter` (default, dev/test) | `X-Video-Signature` | hex `HMAC-SHA256` of the raw body |
+| `LiveKitCommunityAdapter` | `Authorization` | signed HS256 JWT whose `sha256` claim is the base64 SHA-256 of the raw body |
+
+`POST /api/v1/video/webhook` reads NEITHER name: it forwards the raw body plus the
+delivery's headers, and the configured adapter
+(`VideoSessionProvider.signature_header`) reads the one it signs. So switching
+`VIDEO_PROVIDER` switches the accepted transport with it, and no route change is
+ever needed.
+
+What the LiveKit adapter checks, in order — every failure raises the same
+`SIGNATURE_INVALID`, is **non-retryable**, and reads/writes nothing:
+
+1. a token is present in `Authorization` (a `Bearer ` prefix is tolerated);
+2. it is three base64url segments decoding to JSON objects;
+3. its header says `alg: HS256` — **pinned**, so `alg: none` and an
+   RS256→HS256 confusion attempt are refused before any HMAC is computed;
+4. `HMAC-SHA256(LIVEKIT_API_SECRET, "<header>.<payload>")` matches, compared in
+   constant time;
+5. `iss` is exactly `LIVEKIT_API_KEY` — another project's token is not ours;
+6. `exp` is present and not past, and `nbf` (if present) is not in the future,
+   both within a fixed 5-second skew allowance (not configurable on purpose);
+7. the `sha256` claim equals `base64(SHA-256(raw body))` over the bytes exactly as
+   received, again in constant time.
+
+Implemented with `hmac` + `hashlib` (no JWT dependency exists in
+`backend/requirements.txt`, and one HS256 verification does not justify adding one
+to a fail-closed security path). Evidence for the transport —
 
 * LiveKit signs a webhook by putting a **JWT in the `Authorization` header**,
   where the JWT carries a `sha256` claim holding the base64 SHA-256 of the exact
@@ -48,43 +80,34 @@ someone owns it.
   containing a signed JWT token. The token includes a sha256 hash of the
   payload."*
 
-* The committed code expects a **raw hex HMAC in `X-Video-Signature`**:
-  `backend/app/api/v1/tutoring.py` reads
-  `VIDEO_SIGNATURE_HEADER = "X-Video-Signature"`, and
-  `LiveKitCommunityAdapter.verify_event` computes
-  `hmac.new(api_secret, raw_body, sha256).hexdigest()` and compares it to that
-  header.
+* The verifier: `LiveKitCommunityAdapter._verify_webhook_token` in
+  `backend/app/services/providers/video_provider.py`. Its tests build the
+  `Authorization` JWT independently from the Go source above rather than from the
+  adapter's own code — `backend/tests/test_wave2_video_webhook_livekit.py`.
 
-* Consequence with the config in this directory: LiveKit POSTs to
-  `/api/v1/video/webhook`, the header is absent, `signature == ""`, the adapter
-  raises `SIGNATURE_INVALID`, the route answers **400 `VIDEO_UNVERIFIED`**
-  having read and written nothing, and LiveKit retries and eventually abandons.
-  `room_started` / `participant_joined` / `participant_left` / `room_finished`
-  never reach `join_credentials.handle_event`, so event-driven revocation does
-  not happen. Everything else — issuing credentials, joining rooms, media, TTL
-  expiry, explicit revocation, `close_room`, `revoke_participant` — is
-  unaffected.
+**Still true, and still your problem if you get it wrong:** the signing key in the
+rendered `webhook:` block must be one of the server's `keys:` (LiveKit will not
+start a notifier for a key it does not hold — asserted by
+`test_webhook_signing_key_is_one_of_the_declared_api_keys`), and
+`LIVEKIT_API_SECRET` must be identical on both sides. After a rotation the
+symptom is `400 VIDEO_UNVERIFIED` on every delivery — see § 4.
 
-  Not fixed here **on purpose**: it is an interoperability defect, not a security
-  defect, and rewriting a committed verification path is a decision for the
-  owner of the video seam, not for the infra ticket. It is reported on SAATHI-451
-  with the evidence above. The `webhook:` block in the rendered LiveKit config is
-  still pointed at the correct route with the correct signing key so that the
-  moment the adapter learns LiveKit's transport, no infra change is needed.
+**What is still NOT proven:** no real LiveKit server has delivered a webhook to
+this backend in any environment we control. The transport is verified against the
+upstream algorithm, not against an observed delivery; § 9 item 6 is the live check
+and stays UNEXECUTED until an operator runs it.
 
-  Until then: keep `video_provider=deterministic` in any environment whose tests
-  depend on E2 room events (the deterministic adapter's HMAC-over-body scheme is
-  what the automated business-contract suite exercises), and treat grant
-  lifetime as TTL-driven rather than event-driven when running against LiveKit.
-
-**(b) `LIVEKIT_URL` must be `http://` or `https://`, never `wss://`.** The
-adapter uses it for server-side Twirp calls
+**(b) `LIVEKIT_URL` must be `http://` or `https://`, never `wss://` — now
+enforced.** The adapter uses it for server-side Twirp calls
 (`{LIVEKIT_URL}/twirp/livekit.RoomService/RemoveParticipant`) via `httpx`. A
-`wss://` value passes `Settings` validation and every fail-closed check, then
-fails **every** `revoke_participant` / `close_room` call at runtime with
-`PROVIDER_UNREACHABLE`. Nothing in the codebase enforces the scheme; this
-runbook and `infra/video/.env.example` are the enforcement. The `wss://` URL the
-browser needs is a frontend setting and is not this variable.
+`wss://` value used to pass `Settings` validation and every fail-closed check and
+then fail **every** `revoke_participant` / `close_room` call at runtime with
+`PROVIDER_UNREACHABLE`. It is now a **refusal to boot**: with
+`VIDEO_PROVIDER=livekit`, `Settings` raises `ConfigurationError` naming
+`LIVEKIT_URL` unless the value is an `http`/`https` URL **with a host**
+(`app/core/config.py::_livekit_url_problem`; scheme-less values such as
+`livekit:7880` are refused too). The `wss://` URL the browser needs is a frontend
+setting and is not this variable.
 
 ---
 
@@ -296,8 +319,15 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 docker compose -f docker-compose.yml up -d --force-recreate backend
 ```
 
-Expected impact: participants holding a token minted under the old secret are
-rejected by the SFU and must call
+Expected impact on **webhooks**: between the two restarts, LiveKit signs webhook
+tokens with one secret while the backend verifies with the other, so every
+delivery is refused `400 VIDEO_UNVERIFIED` and LiveKit retries. The refusal is
+fail-closed and non-retryable from the backend's point of view — no event is
+half-applied — but the events delivered inside that window are LOST, not queued.
+This is the second reason to keep the two restarts back to back.
+
+Expected impact on **joins**: participants holding a token minted under the old
+secret are rejected by the SFU and must call
 `POST /api/v1/tutoring/sessions/{id}/join-credentials` again. Because the TTL is
 300s and a re-issue revokes the previous grant, the exposure window is one TTL,
 which is why rotation does not need a dual-key window. Do it between sessions if
@@ -362,10 +392,11 @@ Triage:
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml ps
 curl -fsS http://localhost:1039/ || echo "signalling port down"
 
-# 2. Can the BACKEND reach it? (a wss:// LIVEKIT_URL fails exactly here — § 0b)
+# 2. Can the BACKEND reach it? (a wss:// LIVEKIT_URL can no longer get this far:
+#    the backend refuses to boot naming LIVEKIT_URL — § 0b)
 docker compose -f docker-compose.yml exec backend \
   python -c "import httpx,os;print(httpx.get(os.environ['LIVEKIT_URL'],timeout=5).status_code)"
-# Expect: 200. A protocol error naming 'wss' is sharp edge (b).
+# Expect: 200. A ConfigurationError naming LIVEKIT_URL at startup is sharp edge (b).
 
 # 3. Is the SFU refusing our admin JWT? (key/secret mismatch after a rotation)
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
@@ -418,8 +449,12 @@ What a reconnect looks like end to end:
    `POST /api/v1/tutoring/sessions/{id}/join-credentials` again. That issue
    **revokes the previous grant** (`superseded` in the response), which is
    precisely what stops the old token being replayed.
-4. `participant_left` / `participant_joined` are how the trail is recorded — see
-   § 0(a): those events do not currently land.
+4. `participant_left` / `participant_joined` are how the trail is recorded, and
+   `participant_left` also revokes that participant's grant. Those events land now
+   that the signature transports agree (§ 0(a)) — which also means a `room_finished`
+   during a long relay outage revokes every grant for the session, so keep
+   `room.departure_timeout` comfortably above the join-credential TTL (asserted by
+   `test_departure_timeout_outlives_a_reconnect`).
 
 `restart: unless-stopped` is set on both services. This is a deliberate deviation
 from the root compose file, which sets no restart policy: for a dev database,
@@ -625,7 +660,7 @@ docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
   "select count(*) from video_session_grants where session_id = '$SESSION_ID';"
 ```
 
-### 6. Webhook signature validation, end to end — UNEXECUTED **and expected to fail**
+### 6. Webhook signature validation, end to end — UNEXECUTED
 
 ```bash
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
@@ -633,10 +668,30 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 docker compose -f docker-compose.yml logs backend | grep -i 'video/webhook'
 ```
 
-Expected **today**, because of the gap in § 0(a): LiveKit logs
-`sent webhook ... statusCode 400` and the backend logs a `VIDEO_UNVERIFIED`
-rejection. That is the fail-closed outcome, not a passing test. Do not record
-this item as green until the adapter and LiveKit agree on a signature transport.
+Expected **now that the transports agree** (§ 0(a)): LiveKit logs
+`sent webhook ... statusCode 200`, the backend logs no `VIDEO_UNVERIFIED`, and a
+`video:participant_joined:<id>` row appears in `session_status_history` for the
+session:
+
+```bash
+docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
+  "select reason from session_status_history where reason like 'video:%' order by created_at desc limit 5;"
+```
+
+Still **UNEXECUTED**, and this is the one item to read carefully: no real LiveKit
+server has ever delivered a webhook to this backend. The adapter is verified
+against LiveKit's *published signing algorithm*
+(`backend/tests/test_wave2_video_webhook_livekit.py` rebuilds the `Authorization`
+JWT from `webhook/url_notifier.go` and drives it through the real route), which is
+a strictly weaker claim than an observed delivery. Record this green only after
+seeing `statusCode 200` from a real server.
+
+Failure triage: a `400 VIDEO_UNVERIFIED` here means the token did not verify —
+in practice a `LIVEKIT_API_SECRET`/`LIVEKIT_API_KEY` mismatch between the rendered
+`livekit.yaml` and the backend's environment (§ 4), a `webhook.api_key` that is not
+in the server's `keys:` map, or clock skew beyond 5 s between the SFU host and the
+backend host. The refusal is deliberately identical for all of them, so use the
+two sides' *configuration* to tell them apart, not the response body.
 
 ### 7. SBOM / image scanning — UNEXECUTED
 
@@ -659,6 +714,15 @@ Config-level only, and every one of them is a static assertion:
   YAML with the expected `keys` / `webhook` / `rtc.turn_servers` structure;
   it refuses `--mode direct` without `LIVEKIT_ADVERTISE_IP`; and it refuses the
   placeholder values in `infra/video/.env.example`.
+* `backend/tests/test_wave2_video_webhook_livekit.py` — an `Authorization` JWT
+  rebuilt from LiveKit's own signing algorithm is accepted through the real
+  `POST /api/v1/video/webhook` route and drives the E2 effects, and ~30 near-miss
+  deliveries (no header, malformed JWT, wrong secret, `alg: none`, expired,
+  not-yet-valid, wrong issuer, absent `sha256`, one-byte body mutation, replay)
+  are each refused fail-closed with nothing read or written. This is a claim about
+  BYTES matching the upstream algorithm, not about an observed delivery.
+* `backend/tests/test_wave2_config_failclosed.py` — `VIDEO_PROVIDER=livekit` with a
+  `wss://` or scheme-less `LIVEKIT_URL` refuses to construct `Settings`.
 * `backend/tests/test_wave2_video_infra.py` — compose files parse, images are
   tag+digest pinned with no `latest`, host ports do not collide with the root
   compose file, both services declare a healthcheck, no secret literal is

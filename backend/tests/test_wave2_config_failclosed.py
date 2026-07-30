@@ -44,7 +44,12 @@ from app.services.providers.video_provider import (
 #: point is that NONE of them may ever appear in an error message.
 KEY_ID = "rzp_live_QQ7hV2mNbXk91z"
 KEY_SECRET = "Zt9k4WpLq2sVbN7xYd1RfE"
-LIVEKIT_URL = "wss://livekit.legalsaathi.example"
+#: The scheme matters. ``LiveKitCommunityAdapter._twirp`` POSTs to
+#: ``{livekit_url}/twirp/livekit.RoomService/<Method>`` with httpx, so this fixture
+#: MUST model a value the adapter can actually reach. It used to be
+#: ``wss://livekit.legalsaathi.example``, which is exactly the mistake the gate now
+#: refuses — see ``test_livekit_url_must_be_reachable_over_http``.
+LIVEKIT_URL = "https://livekit.legalsaathi.example"
 LIVEKIT_KEY = "APIabcLiveKeyValue987"
 LIVEKIT_SECRET = "sTvUxYzabcdefGHIJKlmnopQRS"
 SECRETS = (KEY_ID, KEY_SECRET, LIVEKIT_KEY, LIVEKIT_SECRET)
@@ -261,6 +266,108 @@ def test_livekit_requires_url_and_api_key_pair(url, api_key, api_secret, missing
     # A URL is an endpoint, not a credential, but it is still never echoed.
     if url:
         assert url.strip() == "" or url not in message
+
+
+#: Values that are present, non-blank, and completely unusable by the adapter.
+#: ``wss://`` is the one a real operator actually writes (it is the URL the
+#: BROWSER needs), which is what made this defect likely rather than theoretical.
+#: A host token that appears in NO validator message, so "the value was not
+#: echoed back at the operator" is actually falsifiable.
+UNREACHABLE_HOST = "vid7yq.legalsaathi.example"
+UNREACHABLE_LIVEKIT_URLS = (
+    f"wss://{UNREACHABLE_HOST}",           # what an operator actually writes
+    f"ws://{UNREACHABLE_HOST}",
+    UNREACHABLE_HOST,                      # scheme-less host
+    f"{UNREACHABLE_HOST}:7880",            # scheme-less host:port
+    f"//{UNREACHABLE_HOST}",               # protocol-relative
+    f"turn://{UNREACHABLE_HOST}",
+    "http://",                             # a scheme with no host at all
+    "https://",
+)
+
+
+@pytest.mark.parametrize("url", UNREACHABLE_LIVEKIT_URLS)
+def test_livekit_url_must_be_reachable_over_http(url):
+    """A URL the adapter cannot POST to is a refusal to boot, not a runtime 5xx.
+
+    ``LiveKitCommunityAdapter._twirp`` sends
+    ``POST {livekit_url}/twirp/livekit.RoomService/<Method>`` with httpx. Before
+    this rule, a ``wss://`` value satisfied every fail-closed check and the
+    deployment came up healthy — then failed EVERY ``revoke_participant`` /
+    ``close_room`` at runtime as ``PROVIDER_UNREACHABLE``, i.e. exactly the class
+    of misconfiguration this gate exists to prevent.
+    """
+    message = _refuses(
+        names=("livekit_url", "LIVEKIT_URL", "livekit"),
+        secrets=(LIVEKIT_KEY, LIVEKIT_SECRET),
+        video_provider="livekit",
+        livekit_url=url,
+        livekit_api_key=SecretStr(LIVEKIT_KEY),
+        livekit_api_secret=SecretStr(LIVEKIT_SECRET),
+    )
+    # The refusal never echoes the supplied host, nor either credential.
+    assert UNREACHABLE_HOST not in message
+    for secret in SECRETS:
+        assert secret not in message
+    # ...and it does not pretend anything else is missing.
+    assert "livekit_api_key is required" not in message
+    assert "livekit_api_secret is required" not in message
+
+
+def test_the_wss_refusal_explains_the_rule_it_is_enforcing():
+    """The message has to be actionable: an operator sees WHY wss:// is wrong."""
+    message = _refuses(
+        names=("livekit_url", "LIVEKIT_URL"),
+        video_provider="livekit",
+        livekit_url=f"wss://{UNREACHABLE_HOST}",
+        livekit_api_key=SecretStr(LIVEKIT_KEY),
+        livekit_api_secret=SecretStr(LIVEKIT_SECRET),
+    )
+    assert "http://" in message and "https://" in message
+    assert "wss://" in message
+    assert "twirp" in message.lower()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://livekit:7880",
+        "http://localhost:1039",
+        "https://livekit.legalsaathi.example",
+        "https://livekit.legalsaathi.example:443/",
+        "http://172.29.30.10:7880",
+        "  https://livekit.legalsaathi.example  ",
+    ],
+)
+def test_livekit_url_accepts_http_and_https(url):
+    """Both schemes httpx can POST to construct, including the compose-internal one."""
+    configured = _build(
+        video_provider="livekit",
+        livekit_url=url,
+        livekit_api_key=SecretStr(LIVEKIT_KEY),
+        livekit_api_secret=SecretStr(LIVEKIT_SECRET),
+    )
+    assert configured.livekit_url == url
+    # And the adapter that consumes it agrees the value is usable. Surrounding
+    # whitespace is tolerated in both places or in neither — the gate strips
+    # before validating, so the adapter must strip before building a URL.
+    from app.services.providers.video_provider import LiveKitCommunityAdapter
+
+    adapter = LiveKitCommunityAdapter(url, LIVEKIT_KEY, LIVEKIT_SECRET)
+    assert adapter._url.startswith(("http://", "https://"))
+
+
+def test_livekit_url_scheme_is_only_enforced_when_livekit_is_selected():
+    """A stale/leftover URL must not block a deterministic or 'none' deployment.
+
+    Selecting a provider is the explicit deployment act; an unused variable is
+    not a misconfiguration, so the rule is scoped to ``video_provider='livekit'``.
+    """
+    for provider in ("deterministic", "none"):
+        assert _build(
+            video_provider=provider,
+            livekit_url="wss://livekit.legalsaathi.example",
+        ).video_provider == provider
 
 
 def test_livekit_with_full_configuration_constructs():

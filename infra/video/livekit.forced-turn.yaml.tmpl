@@ -32,14 +32,16 @@
 # The client-side belt-and-braces switch (`iceTransportPolicy: 'relay'` in the
 # LiveKit client's rtcConfig) is a FRONTEND concern and is NOT required for the
 # above to hold. See RUNBOOK § "Forced-TURN" for how to prove the relay is in
-# effect, and § "Known gap" before you rely on room events.
+# effect, and § 0(a) for the webhook signature transport (an `Authorization` JWT;
+# the backend verifies it) before you rely on room events.
 # ------------------------------------------------------------------------------
 
 # Signalling + RoomService (Twirp). Published on host 1039.
 # LIVEKIT_URL in the backend's environment must point here with an http:// or
 # https:// scheme — LiveKitCommunityAdapter._twirp POSTs to
-# {LIVEKIT_URL}/twirp/livekit.RoomService/... over httpx. A wss:// value parses
-# fine in Settings and then fails every server-side call at runtime.
+# {LIVEKIT_URL}/twirp/livekit.RoomService/... over httpx. A wss:// value is now
+# REFUSED at startup (ConfigurationError naming LIVEKIT_URL) instead of failing
+# every server-side call at runtime.
 port: 7880
 
 # Prometheus metrics on :6789, published on host 1042. This is the readiness
