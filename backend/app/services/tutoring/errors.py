@@ -29,8 +29,9 @@ PROVIDER_UNAVAILABLE            503     payment/video provider unusable
 
 Supporting codes (same style, needed for a complete surface): NOT_FOUND,
 FORBIDDEN, VALIDATION_ERROR, IDEMPOTENCY_KEY_REUSE, SESSION_NOT_ENDED,
-SESSION_STATE_INVALID, REFUND_NOT_ALLOWED, RESCHEDULE_WINDOW_CLOSED,
-ATTENDANCE_STATE_INVALID, ADMIN_EXCEPTION_UNAUTHORISED.
+SESSION_STATE_INVALID, SESSION_STALE_VERSION, REFUND_NOT_ALLOWED,
+RESCHEDULE_WINDOW_CLOSED, ATTENDANCE_STATE_INVALID, REVIEW_NOT_MODERATABLE,
+ADMIN_EXCEPTION_UNAUTHORISED.
 
 Privacy: an error message may contain ids, codes and counts ONLY. Never an
 email, mobile, name, narrative, token, PAN, CVV or OTP — these messages reach
@@ -150,6 +151,17 @@ class RescheduleWindowClosed(TutoringError):
     status_code = 409
 
 
+class SessionStaleVersion(TutoringError):
+    """Optimistic concurrency on ``tutoring_sessions.version`` failed.
+
+    Distinct from ``ATTENDANCE_STALE_VERSION`` so P3 can tell the caller WHICH
+    aggregate moved under them; the caller re-reads and retries.
+    """
+
+    code = "SESSION_STALE_VERSION"
+    status_code = 409
+
+
 # --------------------------- attendance ---------------------------------------
 class AttendanceTooEarly(TutoringError):
     code = "ATTENDANCE_TOO_EARLY"
@@ -179,6 +191,13 @@ class ReviewDuplicate(TutoringError):
 
 class ReviewEditWindowClosed(TutoringError):
     code = "REVIEW_EDIT_WINDOW_CLOSED"
+    status_code = 409
+
+
+class ReviewNotModeratable(TutoringError):
+    """The review is already decided / soft-deleted, so it cannot be moderated."""
+
+    code = "REVIEW_NOT_MODERATABLE"
     status_code = 409
 
 

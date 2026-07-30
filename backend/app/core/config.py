@@ -1,5 +1,47 @@
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when the process is configured in a way that must not start.
+
+    Same fail-closed philosophy as ``app.core.crypto.CryptoConfigError``: the
+    application refuses to boot rather than silently degrading (pretending an
+    OTP was sent, minting a join credential no provider will honour, or taking a
+    payment through an unconfigured gateway).
+
+    PRIVACY CONTRACT: the message names the missing/invalid SETTING only. It
+    never contains a secret value, and it must never be built by interpolating
+    one — see ``_missing`` below, which takes names, not values.
+    """
+
+
+# Values that are present but are obviously not real credentials. A deployment
+# that ships one of these is misconfigured, not configured.
+_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "", "changeme", "change-me", "change_me", "placeholder", "todo", "tbd",
+        "none", "null", "test", "testing", "secret", "dev", "devkey", "devsecret",
+        "dev-secret", "example", "xxx", "xxxx", "your-key", "your-key-id",
+        "your-secret", "razorpay", "livekit", "rzp_test_key", "key", "api_key",
+    }
+)
+#: Wave 2 provider bindings that the code can actually honour.
+PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
+VIDEO_PROVIDER_CHOICES = ("deterministic", "livekit", "none")
+#: The only reminder offsets ``session_reminder_jobs.offset_kind`` accepts.
+REMINDER_OFFSET_CHOICES = ("7d", "1d", "3h")
+
+
+def _is_placeholder_secret(secret: "SecretStr | str | None") -> bool:
+    """True when a secret is absent or a known non-credential placeholder.
+
+    Only the CLASSIFICATION escapes this function; the value never does.
+    """
+    if secret is None:
+        return True
+    raw = secret.get_secret_value() if isinstance(secret, SecretStr) else str(secret)
+    return raw.strip().lower() in _PLACEHOLDER_SECRETS
 
 
 class Settings(BaseSettings):
@@ -142,6 +184,106 @@ class Settings(BaseSettings):
                 "credential_public_base_url must be an HTTPS URL ending in /verify"
             )
         return normalized
+
+    # ------------------------------------------------------------------ #
+    # Wave 2 fail-closed configuration gate (SAATHI-123 / SAATHI-127)
+    # ------------------------------------------------------------------ #
+    @model_validator(mode="after")
+    def validate_wave2_configuration(self) -> "Settings":
+        """Refuse to construct Settings when Wave 2 could only degrade silently.
+
+        Fail-closed rules, all enforced regardless of ``app_env`` because
+        SELECTING a real provider is an explicit deployment act — a razorpay
+        deployment with no keys must not boot and then answer "payment
+        unavailable" on every checkout, and a livekit deployment with no API
+        secret must not boot and then be unable to mint a join credential:
+
+        * ``payment_provider='razorpay'`` REQUIRES ``razorpay_key_id`` and
+          ``razorpay_key_secret``, both non-placeholder;
+        * ``video_provider='livekit'`` REQUIRES ``livekit_url``,
+          ``livekit_api_key`` and ``livekit_api_secret``, same treatment;
+        * ``booking_hold_minutes``, ``join_credential_ttl_seconds``, the three
+          rate limits and ``refund_free_cancel_hours`` must be STRICTLY POSITIVE
+          integers (a zero TTL would mint dead credentials; a zero hold window
+          would expire every booking instantly);
+        * ``reminder_offsets`` must be a non-empty list drawn from
+          ``REMINDER_OFFSET_CHOICES`` — an unknown offset is rejected here rather
+          than violating ``ck_session_reminder_jobs_offset_kind`` at write time.
+
+        Raises :class:`ConfigurationError` naming ONLY the offending setting.
+        ``ConfigurationError`` is a ``RuntimeError``, so it propagates out of
+        ``Settings(...)`` unwrapped and cannot be mistaken for a field-level
+        validation problem — and no secret VALUE is ever interpolated into it.
+        """
+        problems: list[str] = []
+
+        payment_provider = (self.payment_provider or "").strip().lower()
+        if payment_provider not in PAYMENT_PROVIDER_CHOICES:
+            problems.append(
+                "payment_provider must be one of "
+                f"{', '.join(PAYMENT_PROVIDER_CHOICES)}"
+            )
+        elif payment_provider == "razorpay":
+            for name in ("razorpay_key_id", "razorpay_key_secret"):
+                if _is_placeholder_secret(getattr(self, name)):
+                    problems.append(
+                        f"{name} is required (and must not be a placeholder) "
+                        "when payment_provider='razorpay'"
+                    )
+
+        video_provider = (self.video_provider or "").strip().lower()
+        if video_provider not in VIDEO_PROVIDER_CHOICES:
+            problems.append(
+                f"video_provider must be one of {', '.join(VIDEO_PROVIDER_CHOICES)}"
+            )
+        elif video_provider == "livekit":
+            if not (self.livekit_url or "").strip():
+                problems.append(
+                    "livekit_url is required when video_provider='livekit'"
+                )
+            for name in ("livekit_api_key", "livekit_api_secret"):
+                if _is_placeholder_secret(getattr(self, name)):
+                    problems.append(
+                        f"{name} is required (and must not be a placeholder) "
+                        "when video_provider='livekit'"
+                    )
+
+        for name in (
+            "booking_hold_minutes",
+            "join_credential_ttl_seconds",
+            "rate_limit_tutor_search_per_min",
+            "rate_limit_booking_per_min",
+            "rate_limit_review_per_hour",
+            "refund_free_cancel_hours",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                problems.append(f"{name} must be a strictly positive integer")
+
+        offsets = self.reminder_offsets
+        if not isinstance(offsets, list) or not offsets:
+            problems.append("reminder_offsets must be a non-empty list")
+        else:
+            unknown = sorted(
+                {
+                    str(offset).strip()
+                    for offset in offsets
+                    if str(offset).strip() not in REMINDER_OFFSET_CHOICES
+                }
+            )
+            if unknown:
+                problems.append(
+                    "reminder_offsets contains unknown offsets "
+                    f"({', '.join(unknown)}); allowed: "
+                    f"{', '.join(REMINDER_OFFSET_CHOICES)}"
+                )
+
+        if problems:
+            raise ConfigurationError(
+                "Wave 2 configuration is invalid; refusing to start: "
+                + "; ".join(problems)
+            )
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
