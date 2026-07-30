@@ -42,6 +42,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.wave2 import TutorAvailabilitySlot, TutorProfile, TutorSubject
+from app.services.tutoring import pricing
 from app.services.tutoring.errors import NotFound, ValidationError
 
 DEFAULT_TIMEZONE = "Asia/Kolkata"
@@ -307,6 +308,11 @@ class SlotView:
     start_local: datetime
     end_local: datetime
     duration_minutes: int
+    #: The SERVER-AUTHORITATIVE price of booking this slot, in INTEGER PAISE.
+    #: Published so a checkout screen can RENDER the amount instead of reading a
+    #: deployment env var and guessing; it is never accepted back as an input.
+    price_paise: int = 0
+    currency: str = "INR"
 
     def as_dict(self) -> dict:
         return {
@@ -319,6 +325,8 @@ class SlotView:
             "start_local": self.start_local.isoformat(),
             "end_local": self.end_local.isoformat(),
             "duration_minutes": self.duration_minutes,
+            "price_paise": self.price_paise,
+            "currency": self.currency,
         }
 
 
@@ -363,9 +371,13 @@ def list_slots(
         .limit(limit)
         .offset(offset)
     ).all()
+    # One batched price read for the whole page (never per row), so the amount a
+    # student is shown comes from the same authority the hold will snapshot.
+    prices = pricing.published_prices(session, tuple({row.tutor_id for row in rows}))
     views: list[SlotView] = []
     for row in rows:
         tz_name = display_timezone or row.iana_timezone
+        price = prices.get(row.tutor_id)
         start_utc = row.start_utc if row.start_utc.tzinfo else row.start_utc.replace(tzinfo=timezone.utc)
         end_utc = row.end_utc if row.end_utc.tzinfo else row.end_utc.replace(tzinfo=timezone.utc)
         views.append(
@@ -379,6 +391,8 @@ def list_slots(
                 start_local=to_local(start_utc, tz_name),
                 end_local=to_local(end_utc, tz_name),
                 duration_minutes=int((end_utc - start_utc).total_seconds() // 60),
+                price_paise=(price.amount_paise if price else 0),
+                currency=(price.currency if price else "INR"),
             )
         )
     return tuple(views)

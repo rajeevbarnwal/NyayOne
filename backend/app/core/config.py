@@ -178,6 +178,13 @@ class Settings(BaseSettings):
     rate_limit_tutor_search_per_min: int = 60
     rate_limit_booking_per_min: int = 10
     rate_limit_review_per_hour: int = 5
+    # Default session price, in INTEGER PAISE, stamped onto a tutor profile that
+    # has not published its own. This is the DEPLOYMENT-WIDE fallback for the
+    # server-authoritative price; it is never read from a request and never sent
+    # to a browser as an authority. Strictly positive: zero is not "free
+    # tutoring", it is a mispriced product (a free offering would need its own
+    # explicit product flag, never an inferred 0).
+    tutoring_default_session_price_paise: int = 250_000
     # Reminder offsets scheduled per confirmed session.
     reminder_offsets: list[str] = ["7d", "1d", "3h"]
     # Cancellation window that earns an automatic full refund, in hours.
@@ -247,9 +254,12 @@ class Settings(BaseSettings):
           ``PROVIDER_UNREACHABLE``; that is now a refusal to boot (see
           ``_livekit_url_problem``);
         * ``booking_hold_minutes``, ``join_credential_ttl_seconds``, the three
-          rate limits and ``refund_free_cancel_hours`` must be STRICTLY POSITIVE
+          rate limits, ``refund_free_cancel_hours`` and
+          ``tutoring_default_session_price_paise`` must be STRICTLY POSITIVE
           integers (a zero TTL would mint dead credentials; a zero hold window
-          would expire every booking instantly);
+          would expire every booking instantly; a zero default price would make
+          every unpriced tutor free by accident, which is exactly the
+          client-authoritative-amount defect this gate exists to stop);
         * ``reminder_offsets`` must be a non-empty list drawn from
           ``REMINDER_OFFSET_CHOICES`` — an unknown offset is rejected here rather
           than violating ``ck_session_reminder_jobs_offset_kind`` at write time.
@@ -298,6 +308,7 @@ class Settings(BaseSettings):
             "rate_limit_booking_per_min",
             "rate_limit_review_per_hour",
             "refund_free_cancel_hours",
+            "tutoring_default_session_price_paise",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:

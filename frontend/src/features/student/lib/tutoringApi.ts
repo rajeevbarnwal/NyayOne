@@ -36,6 +36,34 @@ const DEV_ACTOR_CLAIMS = JSON.stringify({
   roles: ['student'],
 });
 
+/**
+ * The AUTHORISED actor a mentor-side call is made as.
+ *
+ * `role` is deliberately narrowed to the two roles the server's
+ * `attendance.RECORDER_ROLES` accepts. There is no `'student'` member, so a
+ * student screen cannot construct one of these, and every call below that
+ * demands a `TutoringActor` is therefore unreachable from the student surface —
+ * the authority rule is expressed in the type system, not in a runtime flag a
+ * screen could forget. The subject is the opaque signed-in id supplied by the
+ * mentor surface's own guard (see `features/mentor/lib/mentorAuth.ts`); the
+ * server re-checks role AND ownership on every call and remains authoritative.
+ */
+export interface TutoringActor {
+  /** Opaque subject id of the signed-in mentor/administrator. */
+  readonly userId: string;
+  readonly role: 'tutor' | 'admin';
+}
+
+/** The dev-stub claims header for an authorised mentor/admin call. */
+export function actorClaimsHeaders(actor: TutoringActor): Record<string, string> {
+  return {
+    [DEV_ACTOR_CLAIMS_HEADER]: JSON.stringify({
+      sub: actor.userId,
+      roles: [actor.role],
+    }),
+  };
+}
+
 /* ========================================================================== *
  * Typed error codes — copied from backend/app/services/tutoring/errors.py.
  * These are contract. A screen branches on the code, never on the message.
@@ -46,6 +74,9 @@ export const HOLD_EXPIRED = 'HOLD_EXPIRED';
 export const HOLD_CONFLICT = 'HOLD_CONFLICT';
 export const PAYMENT_UNVERIFIED = 'PAYMENT_UNVERIFIED';
 export const AMOUNT_MISMATCH = 'AMOUNT_MISMATCH';
+/** The client proposed an amount that is not the server's published price. */
+export const PAYMENT_AMOUNT_MISMATCH = 'PAYMENT_AMOUNT_MISMATCH';
+export const SESSION_PRICE_INVALID = 'SESSION_PRICE_INVALID';
 export const DUPLICATE_EVENT = 'DUPLICATE_EVENT';
 export const REFUND_DUPLICATE = 'REFUND_DUPLICATE';
 export const REFUND_NOT_ALLOWED = 'REFUND_NOT_ALLOWED';
@@ -76,6 +107,7 @@ export const HTTP_FORBIDDEN = 'forbidden';
 /** Every code a Wave 2 tutoring screen may have to render. */
 export const TUTORING_ERROR_CODES = [
   SLOT_UNAVAILABLE, HOLD_EXPIRED, HOLD_CONFLICT, PAYMENT_UNVERIFIED, AMOUNT_MISMATCH,
+  PAYMENT_AMOUNT_MISMATCH, SESSION_PRICE_INVALID,
   DUPLICATE_EVENT, REFUND_DUPLICATE, REFUND_NOT_ALLOWED, IDEMPOTENCY_KEY_REUSE,
   SESSION_STATE_INVALID, SESSION_NOT_ENDED, SESSION_STALE_VERSION, RESCHEDULE_WINDOW_CLOSED,
   ATTENDANCE_TOO_EARLY, ATTENDANCE_STALE_VERSION, ATTENDANCE_STATE_INVALID,
@@ -242,6 +274,13 @@ export interface TutorSummary {
   verifiedIdentity: boolean;
   verifiedCredentials: boolean;
   status: string;
+  /**
+   * The SERVER's published price for one session with this tutor, in INTEGER
+   * PAISE. This — never a build-time env var — is what a screen renders, and it
+   * is read-only: no request this module makes can set or influence it.
+   */
+  sessionPricePaise: number;
+  currency: string;
 }
 
 export interface TutorSubject {
@@ -298,6 +337,8 @@ interface TutorSummaryWire {
   verified_identity: boolean;
   verified_credentials: boolean;
   status: string;
+  session_price_paise: number;
+  currency: string;
 }
 
 interface AggregateWire {
@@ -318,6 +359,9 @@ function mapTutorSummary(wire: TutorSummaryWire): TutorSummary {
     verifiedIdentity: wire.verified_identity,
     verifiedCredentials: wire.verified_credentials,
     status: wire.status,
+    // Integer paise, never divided or re-rounded here.
+    sessionPricePaise: wire.session_price_paise ?? 0,
+    currency: wire.currency ?? 'INR',
   };
 }
 
@@ -400,6 +444,9 @@ export interface AvailabilitySlot {
   startLocal: string;
   endLocal: string;
   durationMinutes: number;
+  /** The server's price for booking this slot, in INTEGER PAISE. Read-only. */
+  pricePaise: number;
+  currency: string;
 }
 
 /** A3: the DST verdict the server applied to a naive local window bound. */
@@ -432,6 +479,8 @@ interface SlotWire {
   start_local: string;
   end_local: string;
   duration_minutes: number;
+  price_paise: number;
+  currency: string;
 }
 
 interface ResolutionWire {
@@ -453,6 +502,8 @@ function mapSlot(wire: SlotWire): AvailabilitySlot {
     startLocal: wire.start_local,
     endLocal: wire.end_local,
     durationMinutes: wire.duration_minutes,
+    pricePaise: wire.price_paise ?? 0,
+    currency: wire.currency ?? 'INR',
   };
 }
 
@@ -534,6 +585,13 @@ export interface BookingHold {
   expiresAt: string | null;
   /** `settings.booking_hold_minutes` — configurable, so it is read, not assumed. */
   holdMinutes: number;
+  /**
+   * The IMMUTABLE price this hold was taken at, in INTEGER PAISE — i.e. exactly
+   * what `createPaymentOrder` will charge. Server-authoritative: the checkout
+   * screen RENDERS this and never computes, configures or proposes an amount.
+   */
+  pricePaise: number;
+  currency: string;
   /** True when an identical idempotency key replayed an existing hold. */
   replayed: boolean;
   /** Only the GET reports this; the server remains authoritative on expiry. */
@@ -546,6 +604,8 @@ interface HoldWire {
   status: string;
   expires_at: string | null;
   hold_minutes: number;
+  price_paise: number;
+  currency: string;
   replayed?: boolean;
   expired?: boolean;
 }
@@ -557,6 +617,8 @@ function mapHold(wire: HoldWire): BookingHold {
     status: wire.status,
     expiresAt: wire.expires_at,
     holdMinutes: wire.hold_minutes,
+    pricePaise: wire.price_paise ?? 0,
+    currency: wire.currency ?? 'INR',
     replayed: Boolean(wire.replayed),
     ...(wire.expired === undefined ? {} : { expired: wire.expired }),
   };
@@ -636,6 +698,13 @@ export class ForbiddenPaymentFieldError extends Error {
 /**
  * Create a payment order against a live hold.
  *
+ * **The amount is NOT this client's to decide.** The server charges the price
+ * it snapshotted onto the hold (`BookingHold.pricePaise`). `amountPaise` is an
+ * OPTIONAL optimistic confirmation — "this is the figure the screen showed" —
+ * and a disagreement comes back as the typed `PAYMENT_AMOUNT_MISMATCH`, which
+ * carries the authoritative `expected_paise` so a stale screen can re-render
+ * rather than guess. Omitting it is the preferred call.
+ *
  * `paymentToken` is optional and, when given, must be a provider token. There
  * is deliberately no parameter for a card number, expiry, security code or
  * authentication code: those fields live inside the provider's hosted frame and
@@ -643,12 +712,13 @@ export class ForbiddenPaymentFieldError extends Error {
  */
 export async function createPaymentOrder(input: {
   holdId: string;
-  amountPaise: number;
+  /** Optimistic confirmation only. Never authoritative. Prefer omitting it. */
+  amountPaise?: number;
   idempotencyKey: string;
   currency?: 'INR';
   paymentToken?: string;
 }): Promise<PaymentOrder> {
-  if (!Number.isInteger(input.amountPaise)) {
+  if (input.amountPaise !== undefined && !Number.isInteger(input.amountPaise)) {
     throw new ForbiddenPaymentFieldError('amount_paise');
   }
   if (input.paymentToken !== undefined && !PAYMENT_TOKEN_PATTERN.test(input.paymentToken)) {
@@ -660,7 +730,7 @@ export async function createPaymentOrder(input: {
     idempotencyKey: input.idempotencyKey,
     body: JSON.stringify({
       hold_id: input.holdId,
-      amount_paise: input.amountPaise,
+      ...(input.amountPaise === undefined ? {} : { amount_paise: input.amountPaise }),
       idempotency_key: input.idempotencyKey,
       currency: input.currency ?? 'INR',
       ...(input.paymentToken ? { payment_token: input.paymentToken } : {}),
@@ -776,13 +846,19 @@ export interface SessionListResult {
   offset: number;
 }
 
+/**
+ * D1. Scoped BY THE SERVER to the caller: a student sees their own sessions, a
+ * tutor sees the ones on their calendar, an admin sees both. Passing an `actor`
+ * makes the call as that authorised mentor/admin; omitting it keeps the student
+ * dev-stub claims.
+ */
 export async function listTutoringSessions(params: {
   status?: string[];
   fromUtc?: string;
   toUtc?: string;
   limit?: number;
   offset?: number;
-} = {}): Promise<SessionListResult> {
+} = {}, actor?: TutoringActor): Promise<SessionListResult> {
   const qs = new URLSearchParams();
   for (const status of params.status ?? []) qs.append('status', status);
   if (params.fromUtc) qs.set('from_utc', params.fromUtc);
@@ -794,7 +870,10 @@ export async function listTutoringSessions(params: {
     role: string;
     limit: number;
     offset: number;
-  }>(`/api/v1/tutoring/sessions?${qs.toString()}`, { method: 'GET' });
+  }>(`/api/v1/tutoring/sessions?${qs.toString()}`, {
+    method: 'GET',
+    ...(actor ? { headers: actorClaimsHeaders(actor) } : {}),
+  });
   return {
     items: (wire.items ?? []).map(mapSession),
     role: wire.role,
@@ -803,10 +882,13 @@ export async function listTutoringSessions(params: {
   };
 }
 
-export async function getTutoringSession(sessionId: string): Promise<TutoringSession> {
+export async function getTutoringSession(
+  sessionId: string,
+  actor?: TutoringActor,
+): Promise<TutoringSession> {
   const wire = await jsonRequest<SessionWire>(
     `/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}`,
-    { method: 'GET' },
+    { method: 'GET', ...(actor ? { headers: actorClaimsHeaders(actor) } : {}) },
   );
   return mapSession(wire);
 }
@@ -932,11 +1014,23 @@ function mapAttendance(wire: AttendanceWire): AttendanceRecord {
   };
 }
 
-/** D4. Tutor or admin only, and only after the scheduled end. */
-export async function completeSession(sessionId: string): Promise<AttendanceRecord> {
+/**
+ * D4. Recording completion is a TUTOR/ADMIN action, and only after the
+ * scheduled end.
+ *
+ * The authorised `actor` is a REQUIRED argument, not an option: a caller that
+ * has no mentor/admin identity cannot form this call at all. That is what stops
+ * the student surface from firing a request the server is bound to refuse — the
+ * server still answers a forged attempt with the typed `FORBIDDEN` (role) or
+ * `NOT_FOUND` (a tutor who does not own the session), with zero mutation.
+ */
+export async function completeSession(
+  sessionId: string,
+  actor: TutoringActor,
+): Promise<AttendanceRecord> {
   return mapAttendance(await jsonRequest<AttendanceWire>(
     `/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}/complete`,
-    { method: 'POST' },
+    { method: 'POST', headers: actorClaimsHeaders(actor) },
   ));
 }
 
@@ -1162,4 +1256,10 @@ export const tutoringKeys = {
   hold: (id: string) => ['tutoring', 'hold', id] as const,
   sessions: (params: { status?: string[] }) => ['tutoring', 'sessions', params] as const,
   session: (id: string) => ['tutoring', 'session', id] as const,
+  /**
+   * The mentor/admin's own session list. Keyed by the opaque subject so one
+   * actor's cache can never be served to another; no secret is ever part of a key.
+   */
+  mentorSessions: (actor: TutoringActor) =>
+    ['tutoring', 'mentor', 'sessions', actor.role, actor.userId] as const,
 };

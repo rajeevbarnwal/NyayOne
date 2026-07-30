@@ -525,6 +525,86 @@ def test_completion_role_and_ownership(ctx):
     assert again.json()["detail"]["code"] == "ATTENDANCE_STATE_INVALID"
 
 
+def test_student_completion_is_forbidden_and_mutates_absolutely_nothing(ctx):
+    """Independent-QA defect D2: recording completion is never a student's call.
+
+    The student surface no longer renders or dispatches this action at all; this
+    pins the server half of the same rule. A direct unauthorised call is refused
+    with the typed FORBIDDEN and leaves the attendance row, the session status,
+    the outbox and the audit trail exactly as they were — and the legitimate
+    recorder can still act afterwards, proving no state was consumed.
+    """
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    refused = ctx.post(f"/api/v1/tutoring/sessions/{session_id}/complete")
+    assert refused.status_code == 403
+    detail = refused.json()["detail"]
+    assert detail["code"] == "FORBIDDEN"
+    # No enumeration: the refusal names the caller's own role and nothing about
+    # the session, its student, its tutor or its price.
+    body = json.dumps(detail)
+    assert str(session_id) not in body
+    assert str(ctx.world.tutor_user_id) not in body
+    assert str(ctx.world.student_id) not in body
+
+    with ctx.fresh() as s:
+        assert s.scalar(select(func.count()).select_from(SessionAttendance)) == 0
+        assert s.get(TutoringSession, session_id).status == "confirmed"
+        assert not W.outbox_rows(s, kind="attendance_recorded")
+        assert not W.audit_rows(s, "tutoring.attendance.recorded")
+        assert not s.scalars(
+            select(SessionStatusHistory).where(
+                SessionStatusHistory.session_id == session_id,
+                SessionStatusHistory.to_status == "completed",
+            )
+        ).all()
+
+    # The authorised actor is unaffected by the refused attempt.
+    tutor = ctx.post(f"/api/v1/tutoring/sessions/{session_id}/complete", **_tutor(ctx))
+    assert tutor.status_code == 200, tutor.text
+    assert tutor.json()["state"] == "recorded"
+    assert tutor.json()["recorded_by_role"] == "tutor"
+
+
+def test_non_owning_tutor_completion_is_non_enumerating_and_mutates_nothing(ctx):
+    """A tutor who does not own the session gets the unknown-session shape."""
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    foreign = ctx.post(
+        f"/api/v1/tutoring/sessions/{session_id}/complete",
+        user=ctx.world.other_tutor_user_id,
+        roles=("tutor",),
+    )
+    unknown = ctx.post(
+        f"/api/v1/tutoring/sessions/{uuid.uuid4()}/complete", **_tutor(ctx)
+    )
+    assert foreign.status_code == unknown.status_code == 404
+    # Byte-identical: "not yours" and "does not exist" are ONE answer.
+    assert foreign.json()["detail"] == unknown.json()["detail"]
+    assert foreign.json()["detail"]["code"] == "NOT_FOUND"
+    with ctx.fresh() as s:
+        assert s.scalar(select(func.count()).select_from(SessionAttendance)) == 0
+        assert s.get(TutoringSession, session_id).status == "confirmed"
+        assert not W.outbox_rows(s, kind="attendance_recorded")
+        assert not W.audit_rows(s, "tutoring.attendance.recorded")
+
+
+def test_admin_may_record_completion_and_the_provenance_says_admin(ctx):
+    """An admin records on a session they do not own; the row remembers who did."""
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    r = ctx.post(f"/api/v1/tutoring/sessions/{session_id}/complete", **_admin(ctx))
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "recorded"
+    assert r.json()["recorded_by_role"] == "admin"
+    assert r.json()["session_status"] == "completed"
+    with ctx.fresh() as s:
+        row = s.scalar(select(SessionAttendance))
+        assert row.recorded_by_role == "admin"
+        assert W.audit_rows(s, "tutoring.attendance.recorded")
+        assert W.outbox_rows(s, kind="attendance_recorded")
+
+
 # --------------------------------------------------------------------------- #
 # D5 — attendance confirm / dispute / resolve
 # --------------------------------------------------------------------------- #

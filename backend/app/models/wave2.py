@@ -6,6 +6,22 @@ indexed with explicit ``ON DELETE`` behaviour, named CHECK constraints on every
 finite domain, unique constraints for idempotency and one-per-aggregate rules,
 and integer ``version`` columns where optimistic concurrency is required.
 
+Money is INTEGER PAISE everywhere; there is no float, and no ``Numeric`` column
+on the money path (``Numeric`` appears only for a rating average and an hours
+delta). The session price is SERVER-AUTHORITATIVE and is expressed by exactly
+two schema facts, added by migration 0009:
+
+* ``tutor_profiles.session_price_paise`` / ``session_currency`` — the tutor's
+  published price. A request may never contribute to it.
+* ``booking_holds.price_paise`` / ``price_currency`` — the IMMUTABLE snapshot
+  taken when the hold is created. ``payment_orders.amount_paise`` is derived
+  from this snapshot, so a client cannot propose an amount and a mid-checkout
+  re-price cannot move a hold already in flight. Both price columns carry a
+  ``> 0`` CHECK: zero is NOT free tutoring, and a free offering would need its
+  own explicit product flag rather than being inferred from a zero amount.
+  (``payment_orders.amount_paise`` keeps its historical ``>= 0`` CHECK; its
+  positivity now comes from the ``> 0`` snapshot it is copied from.)
+
 Payment and video safety rules baked into the schema (not just service code):
 
 * ``payment_orders`` stores NO cardholder data — there is deliberately no
@@ -176,11 +192,30 @@ class TutorProfile(TimestampedBase):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[str] = mapped_column(String(24), default="draft", nullable=False)
+    # ------------------------- server-authoritative price ----------------------
+    # THE price of one session with this tutor, in INTEGER PAISE. This column is
+    # the ONLY authority: no request body, header, query string or browser
+    # setting may contribute to what a student is charged. It lives on the tutor
+    # profile (not on the slot) because a price is a property of the tutor's
+    # offering, while ``tutor_availability_slots`` rows are generated in bulk
+    # from a calendar and carry no commercial data; a hold snapshots the value
+    # so a later re-price cannot move a checkout already in flight.
+    session_price_paise: Mapped[int] = mapped_column(
+        Integer, default=250_000, server_default="250000", nullable=False
+    )
+    session_currency: Mapped[str] = mapped_column(
+        String(3), default="INR", server_default="INR", nullable=False
+    )
 
     __table_args__ = (
         # One tutor profile per user account.
         UniqueConstraint("user_id", name="uq_tutor_profiles_user_id"),
         _in("status", TUTOR_STATUSES, "status"),
+        _in("session_currency", PAYMENT_CURRENCIES, "session_currency"),
+        # STRICTLY positive: 0 is not "free tutoring". A free offering would
+        # need its own explicit product flag and must never be inferred from a
+        # zero amount, so a zero/negative price is unrepresentable here.
+        CheckConstraint("session_price_paise > 0", name="session_price_positive"),
         CheckConstraint("experience_years >= 0", name="experience_nonnegative"),
         CheckConstraint("rating_count >= 0", name="rating_count_nonnegative"),
         CheckConstraint(
@@ -262,11 +297,26 @@ class BookingHold(TimestampedBase):
     active_slot_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True
     )
+    # ------------------------- immutable price snapshot ------------------------
+    # The authoritative price RESOLVED AT HOLD TIME and frozen for this hold.
+    # ``payment_orders.amount_paise`` is derived from here, never from a request,
+    # so re-pricing a tutor mid-checkout cannot change what an in-flight hold
+    # costs and a client cannot propose its own number. Nothing in the service
+    # layer ever UPDATEs these three columns after the INSERT that creates them.
+    price_paise: Mapped[int] = mapped_column(
+        Integer, server_default="250000", nullable=False
+    )
+    price_currency: Mapped[str] = mapped_column(
+        String(3), default="INR", server_default="INR", nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_booking_holds_idempotency_key"),
         UniqueConstraint("active_slot_id", name="uq_booking_holds_active_slot_id"),
         _in("status", HOLD_STATUSES, "status"),
+        _in("price_currency", PAYMENT_CURRENCIES, "price_currency"),
+        # Same rule as tutor_profiles: a hold priced at 0 is unrepresentable.
+        CheckConstraint("price_paise > 0", name="price_positive"),
         CheckConstraint("expires_at > created_at", name="expiry_after_created"),
         # THREE-VALUED LOGIC — do NOT "simplify" the `IS NOT NULL` clause away.
         # A CHECK only rejects a row when its predicate is FALSE; a NULL result

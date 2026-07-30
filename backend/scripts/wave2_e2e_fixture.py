@@ -33,11 +33,35 @@ each an explicit subcommand so nothing happens implicitly:
     attendance — which the server refuses before ``end_utc`` — can be reached
     without a 60 minute wait. Again: a clock shift, declared as one.
 
+``expire-grant`` / ``revoke-grant``
+    Put a live video grant into the ``GRANT_EXPIRED`` / ``GRANT_REVOKED`` state
+    the browser cannot reach in a 5-minute TTL. ``expire-grant`` moves
+    ``expires_at`` into the past and touches nothing else, so the server's own
+    expiry predicate is what refuses the join; ``revoke-grant`` sets
+    ``revoked_at``, which is the same column the domain's ``revoke()`` writes.
+
+``age-review``
+    Move a review's ``edit_deadline_at`` (and ``created_at``) by N seconds, so
+    the 7-day edit boundary can be tested from both sides without waiting a
+    week. The window is DATA on the row, so shifting the row is exactly what a
+    week of real time would do.
+
+``fail-outbox``
+    Mark the newest ``tutoring_outbox`` row for a session as a FAILED delivery
+    attempt (``status='failed'``, ``attempts+1``) without touching any domain
+    row. This is the post-commit dispatch failure the relay is designed to
+    survive; the point of the assertion afterwards is that the DOMAIN mutation
+    is unchanged and the row is still retryable.
+
 Usage (from ``backend/``, with the same ``DATABASE_URL`` the server will use):
 
     python scripts/wave2_e2e_fixture.py seed --extra-tutors 12
     python scripts/wave2_e2e_fixture.py expire-hold <hold_id>
     python scripts/wave2_e2e_fixture.py shift-session <session_id> --minutes -95
+    python scripts/wave2_e2e_fixture.py expire-grant <session_id>
+    python scripts/wave2_e2e_fixture.py revoke-grant <session_id>
+    python scripts/wave2_e2e_fixture.py age-review <review_id> --seconds 604805
+    python scripts/wave2_e2e_fixture.py fail-outbox <session_id>
 """
 from __future__ import annotations
 
@@ -45,6 +69,7 @@ import argparse
 import json
 import sys
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -53,16 +78,21 @@ if str(REPO_BACKEND) not in sys.path:
     sys.path.insert(0, str(REPO_BACKEND))
 
 from sqlalchemy import select  # noqa: E402
+from sqlalchemy import event as sa_event  # noqa: E402
+from sqlalchemy import text as sa_text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.session import get_sessionmaker  # noqa: E402
 from app.models.registration import User  # noqa: E402
 from app.models.wave2 import (  # noqa: E402
     BookingHold,
+    TutoringOutbox,
     TutorAvailabilitySlot,
     TutorProfile,
+    TutorReview,
     TutorSubject,
     TutoringSession,
+    VideoSessionGrant,
 )
 from app.services.tutoring import seed as tutoring_seed  # noqa: E402
 
@@ -74,6 +104,41 @@ RIVAL_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-0000000000b2")
 ADMIN_ACTOR_ID = uuid.UUID("00000000-0000-4000-8000-00000000ad01")
 #: Namespace for the extra pagination tutors. Fixed forever.
 EXTRA_NAMESPACE = uuid.UUID("00000000-0000-4000-8000-000000000128")
+
+
+@contextmanager
+def open_session():
+    """A session whose connection will WAIT for the running server's writes.
+
+    These commands run while a real uvicorn is serving the same SQLite file, so
+    a write can legitimately arrive mid-transaction. Without a busy timeout the
+    driver sees a spurious "database is locked" and reports a PASSING product
+    behaviour as a harness failure. Waiting is correct: the lock is held for
+    milliseconds, and refusing to wait is what makes the gate flaky.
+    """
+    maker = get_sessionmaker()
+    bind = maker.kw.get("bind") if hasattr(maker, "kw") else None
+    if bind is not None and not getattr(bind, "_wave2_busy_timeout", False):
+        # The PRAGMA has to be issued on the RAW connection as it is handed out:
+        # setting it from inside an already-open transaction is too late, which
+        # is exactly why the first attempt at this still saw "database is locked".
+        @sa_event.listens_for(bind, "connect")
+        def _busy_timeout(dbapi_connection, _record):  # pragma: no cover - QA plumbing
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA busy_timeout = 20000")
+            finally:
+                cursor.close()
+
+        bind._wave2_busy_timeout = True
+        # Drop any connection that was already pooled without the pragma.
+        bind.dispose()
+    session = maker()
+    try:
+        session.execute(sa_text("PRAGMA busy_timeout = 20000"))
+        yield session
+    finally:
+        session.close()
 
 
 def _ensure_user(session: Session, user_id: uuid.UUID, role: str) -> int:
@@ -173,8 +238,7 @@ def _slot_rows(session: Session, tutor_ids: list[str], now: datetime) -> list[di
 
 def cmd_seed(args: argparse.Namespace) -> int:
     now = datetime.now(timezone.utc)
-    maker = get_sessionmaker()
-    with maker() as session:
+    with open_session() as session:
         report = tutoring_seed.provision(session, now=now, days=args.days, per_day=args.per_day)
         _ensure_user(session, BROWSER_STUDENT_ID, "student")
         _ensure_user(session, RIVAL_STUDENT_ID, "student")
@@ -212,23 +276,40 @@ def cmd_seed(args: argparse.Namespace) -> int:
 
 
 def cmd_expire_hold(args: argparse.Namespace) -> int:
-    maker = get_sessionmaker()
-    with maker() as session:
+    with open_session() as session:
         hold = session.get(BookingHold, uuid.UUID(args.hold_id))
         if hold is None:
             print(json.dumps({"error": "hold_not_found", "hold_id": args.hold_id}))
             return 3
-        before = hold.expires_at.isoformat()
-        hold.expires_at = datetime.now(timezone.utc) - timedelta(seconds=args.seconds_ago)
+        now = datetime.now(timezone.utc)
+
+        def aware(value: datetime) -> datetime:
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+        created_before = aware(hold.created_at)
+        expires_before = aware(hold.expires_at)
+        # The row carries its own invariant: `ck_booking_holds_expiry_after_created`
+        # requires expires_at > created_at. Moving ONLY expires_at into the past
+        # violates it, so the whole row is shifted back as a unit and the TTL
+        # interval is preserved exactly. That is what the passage of time would
+        # have done, and it leaves the server's own expiry predicate — not this
+        # script — to decide that the hold is expired.
+        ttl = expires_before - created_before
+        hold.expires_at = now - timedelta(seconds=args.seconds_ago)
+        hold.created_at = hold.expires_at - ttl
         session.commit()
         print(
             json.dumps(
                 {
                     "hold_id": args.hold_id,
                     "status": hold.status,
-                    "expires_at_before": before,
-                    "expires_at_after": hold.expires_at.isoformat(),
-                    "mechanism": "clock_shift_on_hold_row",
+                    "ttl_preserved_seconds": ttl.total_seconds(),
+                    "created_at_before": created_before.isoformat(),
+                    "created_at_after": aware(hold.created_at).isoformat(),
+                    "expires_at_before": expires_before.isoformat(),
+                    "expires_at_after": aware(hold.expires_at).isoformat(),
+                    "now_utc": now.isoformat(),
+                    "mechanism": "clock_shift_on_hold_row (whole row moved back, TTL interval preserved)",
                 }
             )
         )
@@ -237,8 +318,7 @@ def cmd_expire_hold(args: argparse.Namespace) -> int:
 
 def cmd_shift_session(args: argparse.Namespace) -> int:
     delta = timedelta(minutes=args.minutes)
-    maker = get_sessionmaker()
-    with maker() as session:
+    with open_session() as session:
         row = session.get(TutoringSession, uuid.UUID(args.session_id))
         if row is None:
             print(json.dumps({"error": "session_not_found", "session_id": args.session_id}))
@@ -247,9 +327,34 @@ def cmd_shift_session(args: argparse.Namespace) -> int:
         row.start_utc = row.start_utc + delta
         row.end_utc = row.end_utc + delta
         slot = session.get(TutorAvailabilitySlot, row.slot_id)
+        slot_shifted = False
+        slot_note = "no slot row"
         if slot is not None:
-            slot.start_utc = slot.start_utc + delta
-            slot.end_utc = slot.end_utc + delta
+            target = slot.start_utc + delta
+            # `uq_tutor_availability_slots_tutor_start` means a tutor cannot have
+            # two slots at the same instant. When several fixture sessions on the
+            # SAME tutor are shifted to the same "just ended" moment, the second
+            # one would collide. The session rows are what the completion and
+            # attendance rules read, so the slot is left alone in that case and
+            # the fact is REPORTED rather than papered over with a silent retry.
+            clash = session.scalars(
+                select(TutorAvailabilitySlot).where(
+                    TutorAvailabilitySlot.tutor_id == slot.tutor_id,
+                    TutorAvailabilitySlot.start_utc == target,
+                    TutorAvailabilitySlot.id != slot.id,
+                )
+            ).first()
+            if clash is None:
+                slot.start_utc = target
+                slot.end_utc = slot.end_utc + delta
+                slot_shifted = True
+                slot_note = "slot moved with the session"
+            else:
+                slot_note = (
+                    f"slot NOT moved: tutor {slot.tutor_id} already has a slot at "
+                    f"{target.isoformat()} (uq_tutor_availability_slots_tutor_start). "
+                    "The session rows carry the times the domain reads."
+                )
         session.commit()
         print(
             json.dumps(
@@ -260,8 +365,180 @@ def cmd_shift_session(args: argparse.Namespace) -> int:
                     "end_before": before[1],
                     "start_after": row.start_utc.isoformat(),
                     "end_after": row.end_utc.isoformat(),
+                    "slot_shifted": slot_shifted,
+                    "slot_note": slot_note,
                     "now_utc": datetime.now(timezone.utc).isoformat(),
                     "mechanism": "clock_shift_on_session_and_slot_rows",
+                }
+            )
+        )
+    return 0
+
+
+def _live_grants(session: Session, session_id: uuid.UUID) -> list[VideoSessionGrant]:
+    return list(
+        session.scalars(
+            select(VideoSessionGrant)
+            .where(VideoSessionGrant.session_id == session_id)
+            .order_by(VideoSessionGrant.issued_at.desc())
+        ).all()
+    )
+
+
+def cmd_expire_grant(args: argparse.Namespace) -> int:
+    """Clock-shift EVERY grant on a session so its TTL has elapsed."""
+    now = datetime.now(timezone.utc)
+    with open_session() as session:
+        grants = _live_grants(session, uuid.UUID(args.session_id))
+        if not grants:
+            print(json.dumps({"error": "no_grants", "session_id": args.session_id}))
+            return 3
+        changed = []
+        for grant in grants:
+            def aware(value: datetime) -> datetime:
+                return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+            issued_before = aware(grant.issued_at)
+            expires_before = aware(grant.expires_at)
+            # Same invariant as the hold: `ck_video_session_grants_expiry_after_issued`
+            # requires expires_at > issued_at. The whole grant is moved back as a
+            # unit with its TTL preserved, so what expires it is the server's own
+            # predicate, not a row this script made self-contradictory.
+            ttl = expires_before - issued_before
+            grant.expires_at = now - timedelta(seconds=args.seconds_ago)
+            grant.issued_at = grant.expires_at - ttl
+            changed.append(
+                {
+                    "grant_id": str(grant.id),
+                    "participant_ref": grant.participant_ref,
+                    "ttl_preserved_seconds": ttl.total_seconds(),
+                    "issued_at_before": issued_before.isoformat(),
+                    "issued_at_after": aware(grant.issued_at).isoformat(),
+                    "expires_at_before": expires_before.isoformat(),
+                    "expires_at_after": aware(grant.expires_at).isoformat(),
+                }
+            )
+        session.commit()
+        print(
+            json.dumps(
+                {
+                    "session_id": args.session_id,
+                    "grants": changed,
+                    "mechanism": "clock_shift_on_video_session_grant_rows",
+                }
+            )
+        )
+    return 0
+
+
+def cmd_revoke_grant(args: argparse.Namespace) -> int:
+    """Set ``revoked_at`` on every un-revoked grant — the domain's own column."""
+    now = datetime.now(timezone.utc)
+    with open_session() as session:
+        grants = _live_grants(session, uuid.UUID(args.session_id))
+        if not grants:
+            print(json.dumps({"error": "no_grants", "session_id": args.session_id}))
+            return 3
+        changed = []
+        for grant in grants:
+            if grant.revoked_at is not None:
+                continue
+            grant.revoked_at = now
+            changed.append(
+                {"grant_id": str(grant.id), "participant_ref": grant.participant_ref}
+            )
+        session.commit()
+        print(
+            json.dumps(
+                {
+                    "session_id": args.session_id,
+                    "revoked": changed,
+                    "revoked_at": now.isoformat(),
+                    "mechanism": "revoked_at_set_on_video_session_grant_rows",
+                }
+            )
+        )
+    return 0
+
+
+def cmd_age_review(args: argparse.Namespace) -> int:
+    """Move a review's edit window. The window is DATA on the row.
+
+    Two modes, because the 7-day boundary has to be testable from both sides:
+
+    ``--seconds N``
+        age the row by N seconds (deadline and created_at both move back).
+
+    ``--deadline-in-seconds N``
+        put the deadline exactly N seconds from NOW — positive for "just inside
+        the window", negative or zero for "just outside". This is the mode the
+        boundary rows use: ageing by *almost* the whole window leaves the
+        deadline a second or two away, and the request itself then takes longer
+        than that, which silently turns an inside-the-window case into an
+        outside-the-window one.
+    """
+    with open_session() as session:
+        review = session.get(TutorReview, uuid.UUID(args.review_id))
+        if review is None:
+            print(json.dumps({"error": "review_not_found", "review_id": args.review_id}))
+            return 3
+        before = review.edit_deadline_at.isoformat()
+        if args.deadline_in_seconds is not None:
+            target = datetime.now(timezone.utc) + timedelta(seconds=args.deadline_in_seconds)
+            delta = (
+                review.edit_deadline_at
+                if review.edit_deadline_at.tzinfo
+                else review.edit_deadline_at.replace(tzinfo=timezone.utc)
+            ) - target
+        else:
+            delta = timedelta(seconds=args.seconds or 0)
+        review.edit_deadline_at = review.edit_deadline_at - delta
+        review.created_at = review.created_at - delta
+        session.commit()
+        print(
+            json.dumps(
+                {
+                    "review_id": args.review_id,
+                    "seconds": args.seconds,
+                    "deadline_in_seconds": args.deadline_in_seconds,
+                    "shift_applied_seconds": delta.total_seconds(),
+                    "edit_deadline_before": before,
+                    "edit_deadline_after": review.edit_deadline_at.isoformat(),
+                    "now_utc": datetime.now(timezone.utc).isoformat(),
+                    "mechanism": "clock_shift_on_tutor_review_row",
+                }
+            )
+        )
+    return 0
+
+
+def cmd_fail_outbox(args: argparse.Namespace) -> int:
+    """Mark the newest outbox row for a session as a failed delivery attempt."""
+    now = datetime.now(timezone.utc)
+    with open_session() as session:
+        row = session.scalars(
+            select(TutoringOutbox)
+            .where(TutoringOutbox.aggregate_id == uuid.UUID(args.session_id))
+            .order_by(TutoringOutbox.created_at.desc())
+        ).first()
+        if row is None:
+            print(json.dumps({"error": "no_outbox_row", "session_id": args.session_id}))
+            return 3
+        before = {"status": row.status, "attempts": row.attempts}
+        row.status = "failed"
+        row.attempts = int(row.attempts or 0) + 1
+        row.last_error = "e2e_injected_dispatch_failure"
+        row.updated_at = now
+        session.commit()
+        print(
+            json.dumps(
+                {
+                    "outbox_id": str(row.id),
+                    "session_id": args.session_id,
+                    "kind": row.kind,
+                    "before": before,
+                    "after": {"status": row.status, "attempts": row.attempts},
+                    "mechanism": "post_commit_dispatch_failure_injected_on_outbox_row",
                 }
             )
         )
@@ -287,6 +564,26 @@ def main(argv: list[str] | None = None) -> int:
     shift_p.add_argument("session_id")
     shift_p.add_argument("--minutes", type=int, required=True)
     shift_p.set_defaults(func=cmd_shift_session)
+
+    exp_g = sub.add_parser("expire-grant", help="clock-shift a session's video grants past their TTL")
+    exp_g.add_argument("session_id")
+    exp_g.add_argument("--seconds-ago", type=int, default=5)
+    exp_g.set_defaults(func=cmd_expire_grant)
+
+    rev_g = sub.add_parser("revoke-grant", help="set revoked_at on a session's video grants")
+    rev_g.add_argument("session_id")
+    rev_g.set_defaults(func=cmd_revoke_grant)
+
+    age_r = sub.add_parser("age-review", help="move a review's 7-day edit deadline by N seconds")
+    age_r.add_argument("review_id")
+    age_r.add_argument("--seconds", type=int, default=None)
+    age_r.add_argument("--deadline-in-seconds", type=int, default=None,
+                       help="put edit_deadline_at exactly N seconds from now (may be negative)")
+    age_r.set_defaults(func=cmd_age_review)
+
+    fail_o = sub.add_parser("fail-outbox", help="mark a session's newest outbox row as a failed dispatch")
+    fail_o.add_argument("session_id")
+    fail_o.set_defaults(func=cmd_fail_outbox)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

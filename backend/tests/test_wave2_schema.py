@@ -61,6 +61,11 @@ MIGRATION_0008 = (
 
 WAVE2_REVISION = "0008_wave2_tutoring"
 PARENT_REVISION = "0007_wave3_credentials"
+#: Current head. 0009 adds the server-authoritative session price columns on top
+#: of 0008 (forward-only), so "the revision an upgrade lands on" is no longer
+#: the same string as "the revision that created the 17 Wave 2 tables". Both are
+#: asserted below; nothing that was proven before is proven less.
+HEAD_REVISION = "0009_wave2_session_pricing"
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently
 # pass because the assertion was derived from the same source as the code.
@@ -828,7 +833,7 @@ def test_alembic_lifecycle_upgrade_check_downgrade_reupgrade(migrated_db, tmp_pa
 
     db = str(tmp_path / "lifecycle.db")
     shutil.copyfile(migrated_db.path, db)
-    assert scalar(db, "SELECT version_num FROM alembic_version") == WAVE2_REVISION
+    assert scalar(db, "SELECT version_num FROM alembic_version") == HEAD_REVISION
     at_head = _live_tables(db)
     assert set(EXPECTED_WAVE2_TABLES) <= at_head
 
@@ -854,7 +859,7 @@ def test_alembic_lifecycle_upgrade_check_downgrade_reupgrade(migrated_db, tmp_pa
     # (d) clean re-upgrade restores exactly the same table set, drift-free.
     up = alembic(db, "upgrade", "head")
     assert up.returncode == 0, up.stderr[-2000:]
-    assert scalar(db, "SELECT version_num FROM alembic_version") == WAVE2_REVISION
+    assert scalar(db, "SELECT version_num FROM alembic_version") == HEAD_REVISION
     assert _live_tables(db) == at_head
     recheck = alembic(db, "check")
     assert recheck.returncode == 0, recheck.stdout[-2000:] + recheck.stderr[-2000:]

@@ -13,6 +13,11 @@ Same contract as ``scripts/seed_e2e_actors`` / ``scripts/seed_wave3_e2e``:
   ``source='seed_fixture'`` so a seeded claim can never be mistaken for a
   verified, provenance-carrying one.
 * **No commit.** The caller owns the transaction, exactly like the services.
+* **Priced.** Every fixture tutor publishes a session price of exactly
+  ``SEED_SESSION_PRICE_PAISE`` = 250000 INTEGER PAISE (Rs 2,500.00), so the
+  automated booking fixture always quotes the same amount and a tampering test
+  has a stable "authoritative" number to compare against. The price is a
+  fixture constant, not a settings read, for exactly that reason.
 
 Instants: slot starts are computed from an explicit UTC anchor and the slot's
 retained IANA zone is stored alongside, matching the frozen time model. The
@@ -31,7 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.models.registration import User
 from app.models.wave2 import TutorAvailabilitySlot, TutorProfile, TutorSubject
-from app.services.tutoring import availability
+from app.services.tutoring import availability, pricing
 
 #: Namespace for derived ids. Fixed forever: changing it renames every row.
 SEED_NAMESPACE = uuid.UUID("00000000-0000-4000-8000-000000000123")
@@ -39,6 +44,13 @@ SEED_NAMESPACE = uuid.UUID("00000000-0000-4000-8000-000000000123")
 DEFAULT_TIMEZONE = availability.DEFAULT_TIMEZONE
 SEED_SOURCE = "seed_fixture"
 SLOT_MINUTES = 60
+#: The frozen fixture session price, in INTEGER PAISE (Rs 2,500.00). Pinned here
+#: rather than read from settings so the automated fixture is STABLE: a browser
+#: journey, a boundary test and a bug report must all quote the same rupee
+#: amount whatever a deployment has configured. Deliberately equal to
+#: ``tests/wave2_helpers.AMOUNT_PAISE``.
+SEED_SESSION_PRICE_PAISE = 250_000
+SEED_CURRENCY = "INR"
 
 
 def _id(name: str) -> uuid.UUID:
@@ -58,6 +70,9 @@ class SeedTutor:
     verified_credentials: bool = True
     status: str = "active"
     iana_timezone: str = DEFAULT_TIMEZONE
+    #: Server-authoritative session price for this fixture tutor, INTEGER PAISE.
+    session_price_paise: int = SEED_SESSION_PRICE_PAISE
+    session_currency: str = SEED_CURRENCY
 
     @property
     def user_id(self) -> uuid.UUID:
@@ -174,6 +189,10 @@ def provision(
                 source=SEED_SOURCE,
                 retrieved_at=now,
                 status=spec.status,
+                session_price_paise=pricing.assert_price_paise(
+                    spec.session_price_paise
+                ),
+                session_currency=pricing.assert_currency(spec.session_currency),
             )
             session.add(profile)
             report.tutors += 1
@@ -187,6 +206,12 @@ def provision(
             profile.retrieved_at = now
             profile.status = spec.status
             profile.deleted_at = None
+            # Reconcile the price too: a drifted fixture price would make the
+            # automated booking journey quote a different rupee amount.
+            profile.session_price_paise = pricing.assert_price_paise(
+                spec.session_price_paise
+            )
+            profile.session_currency = pricing.assert_currency(spec.session_currency)
         session.flush()
 
         for subject, level in spec.subjects:

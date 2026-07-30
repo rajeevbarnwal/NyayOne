@@ -64,28 +64,24 @@ import {
 } from './TutoringPrimitives';
 
 /**
- * FEE — deliberate deviation from the approved frame, stated plainly.
+ * FEE — the amount is the SERVER's, and this screen only renders it.
  *
- * The approved S-31/S-32/S-33 frames show a mentoring fee. P3 publishes NO fee:
- * neither `tutor_profiles` nor `tutor_availability_slots` carries a price, and
- * `POST /payments/orders` takes `amount_paise` from the caller. Rather than put
- * an invented number on a payment screen, the payable amount is read from a
- * deployment setting. When the deployment has not set one, S-33 refuses to
- * guess: it renders the typed `AMOUNT_NOT_PUBLISHED` state, keeps the hold
- * visible with an explicit release action so no slot is stranded, and disables
- * Pay. The fee composition itself (breakdown rows, dock total, integer paise)
- * is the reference's and is exercised as soon as a deployment publishes one.
+ * This used to read `VITE_TUTORING_SESSION_FEE_PAISE` (a build-time deployment
+ * setting) and hand the result to `POST /payments/orders`, because P3 published
+ * no price. That made the price CLIENT-AUTHORITATIVE: a caller could propose
+ * any amount, and a correctly signed provider callback then only proved payment
+ * of the amount the caller chose. Both the env read and the
+ * `AMOUNT_NOT_PUBLISHED` state that depended on it are gone.
+ *
+ * The API now publishes the price — `price_paise` on an availability slot and,
+ * once the slot is reserved, the immutable snapshot on the hold — so this screen
+ * reads `hold.pricePaise` (falling back to the slot's published price while the
+ * hold is still in flight) and renders it. The amount is still forwarded on the
+ * order request, but ONLY as an optimistic confirmation of what was displayed:
+ * the server charges its own number and answers a disagreement with the typed
+ * `PAYMENT_AMOUNT_MISMATCH`. Money stays INTEGER PAISE end to end; `formatPaise`
+ * is the only thing that ever turns paise into rupees.
  */
-export const AMOUNT_NOT_PUBLISHED = 'AMOUNT_NOT_PUBLISHED';
-
-function configuredFeePaise(): number | null {
-  const raw = (import.meta as { env?: Record<string, string | undefined> })
-    .env?.VITE_TUTORING_SESSION_FEE_PAISE;
-  if (!raw) return null;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 ? value : null;
-}
-
 type CheckoutStage = 'holding' | 'summary' | 'authorising' | 'awaiting' | 'confirmed';
 
 /* ========================================================================== *
@@ -119,8 +115,6 @@ export function BookingHoldScreen() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [urgencyAnnounced, setUrgencyAnnounced] = useState(false);
 
-  const feePaise = configuredFeePaise();
-
   /* -------- the slot itself, so the screen can name what is being held ----- */
   const availabilityParams = useMemo(() => ({ limit: 50 }), []);
   const availability = useQuery({
@@ -131,6 +125,14 @@ export function BookingHoldScreen() {
     staleTime: 10_000,
   });
   const slot = availability.data?.slots.find((s) => s.slotId === slotId);
+
+  /**
+   * The payable amount, in INTEGER PAISE, straight from the server. The hold's
+   * snapshot wins once it exists (it is the number the order will be charged
+   * at); the slot's published price fills the moment before that. `null` means
+   * "not loaded yet", never "guess one".
+   */
+  const feePaise: number | null = hold?.pricePaise ?? slot?.pricePaise ?? null;
 
   /* -------------------------------- B1 hold ------------------------------- */
   const holdMutation = useMutation({
@@ -260,7 +262,8 @@ export function BookingHoldScreen() {
           Total payable
         </span>
         <span className="tt-dock__tot">
-          {feePaise === null ? 'Not published' : formatPaise(feePaise)}
+          {/* Server figure or nothing: this screen never invents a total. */}
+          {feePaise === null ? '—' : formatPaise(feePaise)}
         </span>
       </div>
       {stage === 'confirmed' ? (
@@ -370,19 +373,6 @@ export function BookingHoldScreen() {
           error={new TutoringApiError(409, HOLD_EXPIRED, 'hold expired', false)}
           recoveryLabel="Pick another time"
           onRecover={backToProfile}
-        />
-      )}
-
-      {feePaise === null && hold && !expired && (
-        <Banner
-          tone="warn"
-          title="This deployment has not published a session fee"
-          detail={
-            'Your slot is held, but the amount payable is not available from the tutoring API, so '
-            + 'this screen will not guess one. Nothing has been charged. Release the hold or come '
-            + 'back once the fee is published.'
-          }
-          code={AMOUNT_NOT_PUBLISHED}
         />
       )}
 

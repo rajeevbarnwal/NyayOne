@@ -9,6 +9,8 @@ import { useTheme } from '../hooks/useTheme';
 import { studentScreens } from '../features/student/screens';
 import { lawyerRoutes } from '../features/lawyer/screens';
 import { LawyerGuard } from '../features/lawyer/CaseAuthGuard';
+import { mentorRoutes } from '../features/mentor/screens';
+import { MentorGuard } from '../features/mentor/MentorSessionScreens';
 import { authRoutes } from '../features/auth/screens';
 import { PublicCredentialVerification } from '../features/student/credentials/CredentialScreens';
 
@@ -43,6 +45,20 @@ function ShellRoutes() {
               <LawyerGuard stage={r.stage}><Case /></LawyerGuard>
             ) : (
               <Case />
+            );
+            return <Route key={r.path} path={r.path} element={element} />;
+          })}
+          {/*
+            Mentor / administrator routes (SAATHI-66, QA defect D2). The
+            completion action lives here and only here; every route is wrapped in
+            MentorGuard so no unauthorised actor mounts it.
+          */}
+          {mentorRoutes.map((r) => {
+            const Mentor = r.Component;
+            const element = r.guarded ? (
+              <MentorGuard><Mentor /></MentorGuard>
+            ) : (
+              <Mentor />
             );
             return <Route key={r.path} path={r.path} element={element} />;
           })}

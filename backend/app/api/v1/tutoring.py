@@ -21,6 +21,13 @@ Four house rules this module inherits and does not restate per route:
 * **non-enumerating reads.** "does not exist" and "is not yours" are ONE shape.
   The services already collapse them into ``NOT_FOUND``; routes must not
   helpfully turn that back into a 403.
+* **the price is the SERVER's.** No route accepts a session price. The amount
+  is resolved from ``tutor_profiles``, snapshotted onto the booking hold and
+  copied from that snapshot into the payment order; the routes PUBLISH it
+  (``session_price_paise`` on a tutor, ``price_paise`` on a slot and on a hold)
+  so a screen can render it instead of reading a build-time env var. The one
+  remaining ``amount_paise`` input is an optional optimistic confirmation whose
+  disagreement is ``PAYMENT_AMOUNT_MISMATCH`` with zero mutation.
 * **privacy (J1).** No route accepts, echoes, logs or persists a PAN, CVV,
   payment OTP, provider secret, SDP, ICE candidate or device label:
   ``extra="forbid"`` rejects the field outright, the payment surface takes a
@@ -231,6 +238,11 @@ def _tutor_summary(tutor) -> dict:
         "verified_identity": bool(tutor.verified_identity),
         "verified_credentials": bool(tutor.verified_credentials),
         "status": tutor.status,
+        # PUBLISHED so a screen can render the amount instead of reading a build
+        # -time env var and guessing. Integer paise, never formatted here — the
+        # server owns the number, the client owns the rupee rendering.
+        "session_price_paise": int(tutor.session_price_paise),
+        "currency": tutor.session_currency,
     }
 
 
@@ -262,6 +274,11 @@ def _hold_out(hold, *, replayed: bool = False) -> dict:
         "status": hold.status,
         "expires_at": _iso(hold.expires_at),
         "hold_minutes": settings.booking_hold_minutes,
+        # The IMMUTABLE price snapshot this hold was taken at, and therefore the
+        # exact amount ``POST /payments/orders`` will charge. This is what a
+        # checkout screen renders; it is published, never accepted back.
+        "price_paise": int(hold.price_paise),
+        "currency": hold.price_currency,
         "replayed": replayed,
     }
 
@@ -614,14 +631,24 @@ class OrderIn(BaseModel):
     TOKEN shape only, so a PAN pasted into it fails the pattern rather than
     reaching a service, a log or a row. The token is validated and DISCARDED: no
     code path stores it.
+
+    ``amount_paise`` IS NOT THE PRICE. The price is derived server-side from the
+    hold's immutable snapshot (``booking_holds.price_paise``); this field is an
+    OPTIONAL optimistic confirmation of what the checkout screen displayed, and
+    a disagreement is refused with ``PAYMENT_AMOUNT_MISMATCH`` before anything
+    is written or the provider is called. It is retained (rather than deleted)
+    only because it is a frozen wire field that shipped clients already send;
+    omitting it is now the correct and preferred call, and sending a wrong value
+    can no longer under-charge anyone. Same for ``currency``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     hold_id: uuid.UUID
-    amount_paise: StrictInt
     idempotency_key: str = Field(min_length=1, max_length=200)
-    currency: Literal["INR"] = "INR"
+    #: Optimistic confirmation only. Never authoritative. See the class docstring.
+    amount_paise: StrictInt | None = None
+    currency: Literal["INR"] | None = None
     payment_token: str | None = Field(
         default=None, pattern=r"^tok_[A-Za-z0-9_]{3,60}$"
     )
@@ -634,7 +661,12 @@ def create_payment_order(
     actor: ActorContext = Depends(_student),
     session: Session = Depends(get_session),
 ) -> dict:
-    """C1. Order against a LIVE hold; an identical key replays the same order."""
+    """C1. Order against a LIVE hold; an identical key replays the same order.
+
+    The charged amount comes from the hold's server-side price snapshot. The
+    request's ``amount_paise``/``currency``, if present, are forwarded ONLY as
+    optimistic confirmations for the service to compare and discard.
+    """
     _limit(BOOKING, actor)
     try:
         created = payments.create_order(

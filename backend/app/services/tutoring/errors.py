@@ -15,6 +15,11 @@ HOLD_EXPIRED                    409     the 10-minute hold TTL elapsed
 HOLD_CONFLICT                   409     another caller won this slot
 PAYMENT_UNVERIFIED              400     webhook signature did not verify
 AMOUNT_MISMATCH                 422     amount/currency/refund arithmetic wrong
+PAYMENT_AMOUNT_MISMATCH         422     the CLIENT proposed an amount/currency
+                                        that is not the server-authoritative
+                                        price (order creation only)
+SESSION_PRICE_INVALID           422     a non-positive / non-integer session
+                                        price was offered to a pricing seam
 DUPLICATE_EVENT                 409     provider_event_id already applied
 REFUND_DUPLICATE                409     a succeeded refund already exists
 ATTENDANCE_TOO_EARLY            409     recorded before the scheduled end
@@ -112,6 +117,40 @@ class PaymentUnverified(TutoringError):
 
 class AmountMismatch(TutoringError):
     code = "AMOUNT_MISMATCH"
+    status_code = 422
+
+
+class PaymentAmountMismatch(TutoringError):
+    """The caller's OPTIMISTIC amount/currency disagrees with the server price.
+
+    Deliberately DISTINCT from ``AMOUNT_MISMATCH`` (same 422, different seam):
+    ``AMOUNT_MISMATCH`` means "the PROVIDER's event disagrees with the order we
+    created", which is a reconciliation problem; this one means "the CLIENT
+    proposed a price", which is either a stale checkout screen or an attempt to
+    under-pay. An operator reading one log line must be able to tell those apart
+    without correlating anything, and a screen must be able to re-read the
+    published price and retry rather than treating it as a provider outage.
+
+    Raised with ZERO mutation: the comparison happens before any row is written
+    and before the payment provider is called at all.
+    """
+
+    code = "PAYMENT_AMOUNT_MISMATCH"
+    status_code = 422
+
+
+class SessionPriceInvalid(TutoringError):
+    """A pricing seam was offered a price that is not a positive integer paise.
+
+    Zero is NOT free tutoring. A free offering would need its own explicit
+    product flag; inferring it from a 0 is exactly how a tampered order becomes
+    indistinguishable from a legitimate one, so every seam that could WRITE a
+    price refuses 0 and negatives here, and the ``> 0`` CHECK constraints on
+    ``tutor_profiles.session_price_paise`` / ``booking_holds.price_paise``
+    refuse them again at the database.
+    """
+
+    code = "SESSION_PRICE_INVALID"
     status_code = 422
 
 
@@ -241,6 +280,8 @@ ALL_CODES = (
     "HOLD_CONFLICT",
     "PAYMENT_UNVERIFIED",
     "AMOUNT_MISMATCH",
+    "PAYMENT_AMOUNT_MISMATCH",
+    "SESSION_PRICE_INVALID",
     "DUPLICATE_EVENT",
     "REFUND_DUPLICATE",
     "ATTENDANCE_TOO_EARLY",
