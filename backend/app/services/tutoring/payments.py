@@ -341,6 +341,40 @@ def create_order(
     return OrderCreated(order=order)
 
 
+def order_for_hold(
+    session: Session,
+    hold_id: uuid.UUID,
+    *,
+    student_user_id: uuid.UUID | None = None,
+) -> PaymentOrder:
+    """The order that governs a hold: the CAPTURED one if one exists.
+
+    A student may legitimately open more than one order against a hold (an
+    abandoned attempt then a successful one), so "which order does this hold
+    belong to" is a policy question and therefore lives here rather than in the
+    API layer. ``paid`` wins; otherwise the newest attempt is returned.
+
+    Owner scoping is non-enumerating: another student's order is reported as
+    ``NOT_FOUND``, never ``FORBIDDEN``.
+    """
+    rows = list(
+        session.scalars(
+            select(PaymentOrder)
+            .where(PaymentOrder.hold_id == hold_id)
+            # Total order so "the newest attempt" is reproducible.
+            .order_by(PaymentOrder.created_at.desc(), PaymentOrder.id.desc())
+        ).all()
+    )
+    if student_user_id is not None:
+        rows = [row for row in rows if row.student_user_id == student_user_id]
+    if not rows:
+        raise NotFound("payment order not found", resource="payment_order")
+    for row in rows:
+        if row.status == "paid":
+            return row
+    return rows[0]
+
+
 # --------------------------------------------------------------------------- #
 # Webhook application
 # --------------------------------------------------------------------------- #
@@ -356,6 +390,10 @@ class PaymentEventOutcome:
     tutoring_session: object | None = None
     slot_released: bool = False
     intents: list[OutboxIntent] = field(default_factory=list)
+    #: True when a VERIFIED event was recorded but deliberately NOT applied
+    #: because it was superseded by a capture that already landed (see the
+    #: out-of-order guard in :func:`handle_event`).
+    out_of_order: bool = False
 
 
 def handle_event(
@@ -478,6 +516,35 @@ def handle_event(
         order.expiry_year = int(data.expiry_year)
 
     outcome = PaymentEventOutcome(order=order, event=event, event_type=data.event_type)
+
+    # 6a. OUT-OF-ORDER DELIVERY GUARD (matrix C2).
+    #
+    # Providers do not guarantee ordering, so a 'failed' / 'expired' / 'pending'
+    # event can arrive AFTER the capture that superseded it. Without this guard
+    # the branches below would set a CAPTURED order's status to failed/expired/
+    # pending and, for failed/expired, attempt to release a hold that already
+    # backs a confirmed session — leaving the payment ledger contradicting a
+    # live booking and emitting a 'payment_failed' audit trail for money we
+    # actually took. The verified event is still recorded (the ledger row above
+    # is already flushed, so the same delivery can never be applied twice) and
+    # NOTHING else changes.
+    if order.status == "paid" and data.event_type != EVENT_PAID:
+        outcome.out_of_order = True
+        record_audit_event(
+            session,
+            action="tutoring.payment.event_out_of_order",
+            resource_type="payment_order",
+            resource_id=order.id,
+            actor_role="system",
+            after_state={
+                "status": order.status,
+                "ignored_event_type": data.event_type,
+                "provider_event_id": data.provider_event_id,
+                "applied": False,
+            },
+        )
+        session.flush()
+        return outcome
 
     if data.event_type == EVENT_PAID:
         # Local import: sessions imports payments for the refund path.

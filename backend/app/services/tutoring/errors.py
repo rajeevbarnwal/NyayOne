@@ -31,7 +31,7 @@ Supporting codes (same style, needed for a complete surface): NOT_FOUND,
 FORBIDDEN, VALIDATION_ERROR, IDEMPOTENCY_KEY_REUSE, SESSION_NOT_ENDED,
 SESSION_STATE_INVALID, SESSION_STALE_VERSION, REFUND_NOT_ALLOWED,
 RESCHEDULE_WINDOW_CLOSED, ATTENDANCE_STATE_INVALID, REVIEW_NOT_MODERATABLE,
-ADMIN_EXCEPTION_UNAUTHORISED.
+ADMIN_EXCEPTION_UNAUTHORISED, VIDEO_UNVERIFIED.
 
 Privacy: an error message may contain ids, codes and counts ONLY. Never an
 email, mobile, name, narrative, token, PAN, CVV or OTP — these messages reach
@@ -201,7 +201,19 @@ class ReviewNotModeratable(TutoringError):
     status_code = 409
 
 
-# --------------------------- join credentials ---------------------------------
+# --------------------------- video / join credentials -------------------------
+class VideoUnverified(TutoringError):
+    """A video-provider webhook did not verify. Nothing is read or written.
+
+    Deliberately DISTINCT from ``PAYMENT_UNVERIFIED`` (same 400, different
+    surface) so an operator reading a log line or an API body can tell which
+    provider seam rejected the delivery without correlating anything else.
+    """
+
+    code = "VIDEO_UNVERIFIED"
+    status_code = 400
+
+
 class GrantExpired(TutoringError):
     code = "GRANT_EXPIRED"
     status_code = 410
