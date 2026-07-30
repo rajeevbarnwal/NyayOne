@@ -379,10 +379,13 @@ def serialized_file_engine(tmp_path, name: str):
 def api_client(session_local, *, raise_server_exceptions: bool = True):
     """The mounted app + a client, wired to a PRODUCTION-style session dependency.
 
-    The dependency commits on success and rolls back on any exception, exactly
-    like ``app.db.session.get_session``, so a route that forgets to roll back
-    before raising cannot pass by accident. The production exception handlers are
-    registered so every assertion below is made against the REAL typed envelope.
+    The dependency mirrors ``app.db.session.get_session`` EXACTLY: it never
+    commits, and it rolls back whatever is still open when the handler returns
+    or raises. The route is the single transaction owner (see that dependency's
+    docstring), so a route that forgets to roll back before raising — or forgets
+    to commit at all — cannot pass here by accident. The production exception
+    handlers are registered so every assertion below is made against the REAL
+    typed envelope.
     """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -395,10 +398,11 @@ def api_client(session_local, *, raise_server_exceptions: bool = True):
         s = session_local()
         try:
             yield s
-            s.commit()
         except Exception:
             s.rollback()
             raise
+        else:
+            s.rollback()
         finally:
             s.close()
 

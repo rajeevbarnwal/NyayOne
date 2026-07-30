@@ -47,10 +47,16 @@
 #   Environment:
 #     PYTHON           interpreter with backend deps installed. If set it is
 #                      used VERBATIM. If unset, only PROJECT VIRTUALENVS are
-#                      considered (see "python selection" below). Either way the
-#                      chosen interpreter must import every dependency declared
-#                      in backend/requirements.txt or the run stops with a
-#                      prerequisite message naming exactly what is missing.
+#                      considered (see "python selection" below) — never a bare
+#                      python3, never an interpreter under /tmp. Either way the
+#                      chosen interpreter must (a) import every dependency
+#                      declared in backend/requirements.txt and (b) match
+#                      backend/requirements.lock version for version, or the run
+#                      stops BEFORE any service starts with a prerequisite
+#                      message naming exactly what is missing or mismatched.
+#                      The project virtualenv is backend/.venv; build it with
+#                        python3 -m venv backend/.venv
+#                        backend/.venv/bin/python -m pip install -r backend/requirements.lock
 #     LD_LIBRARY_PATH  prepend an arm64 libXdamage stub dir if Chromium needs one
 #
 #   Database isolation (F4.4):
@@ -129,12 +135,14 @@ EOF
     exit 2
   }
 else
+  # NOTE: no /tmp interpreter and no bare `python3`. An interpreter that the
+  # repository does not own and does not declare must never be the DEFAULT —
+  # that is how a gate silently reports on a dependency set nobody chose.
   VENV_CANDIDATES=(
     "${VIRTUAL_ENV:-/nonexistent}/bin/python"
     "$REPO_ROOT/backend/.venv/bin/python"
     "$REPO_ROOT/.venv/bin/python"
     "$REPO_ROOT/venv/bin/python"
-    "/tmp/lsvenv/bin/python"
   )
   for cand in "${VENV_CANDIDATES[@]}"; do
     if [[ -x "$cand" ]]; then PYTHON="$cand"; PYTHON_SOURCE="project virtualenv"; break; fi
@@ -213,6 +221,20 @@ PY_VERSION="$("$PYTHON" -c 'import sys; print(sys.version.split()[0])')"
 printf 'python: %s (%s, %s) — all backend/requirements.txt imports resolve\n' \
   "$PYTHON" "$PYTHON_SOURCE" "$PY_VERSION"
 
+# ---- and it must MATCH backend/requirements.lock, version by version (F2.5) --
+# "It imports" is not "it is the tested set". This runs BEFORE the database, the
+# migration, the backend and the frontend, so a mismatched interpreter cannot
+# produce one line of gate evidence.
+LOCK_FILE="$REPO_ROOT/backend/requirements.lock"
+LOCK_REPORT="$("$PYTHON" "$REPO_ROOT/backend/scripts/check_runtime_lock.py" \
+  --header --lock "$LOCK_FILE" 2>&1)"
+LOCK_RC=$?
+printf '%s\n' "$LOCK_REPORT"
+if [[ $LOCK_RC -ne 0 ]]; then
+  echo "refusing to boot the gate against an interpreter outside the lock" >&2
+  exit 2
+fi
+
 # --------------------------------------------- F4.3: ATOMIC port allocation
 #
 # Both listening sockets are bound SIMULTANEOUSLY inside one process, so the
@@ -281,6 +303,24 @@ FIXTURE="$WORK/fixture.json"
 API_LOG="$OUT/logs/backend_uvicorn.log"
 WEB_LOG="$OUT/logs/frontend_preview.log"
 
+# ------------------------------------------------- F2.4: provenance in the logs
+# The interpreter and the RESOLVED version of every pinned package are stamped
+# into each raw log this run appends to, so a log read on its own still names
+# the dependency set that produced it. Appended (never truncating), because the
+# chained 45s shells of one logical run share these files.
+RUNTIME_HEADER="$(
+  printf '==== runtime provenance (%s) ====\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'interpreter: %s (%s, %s)\n' "$PYTHON" "$PYTHON_SOURCE" "$PY_VERSION"
+  printf 'runtime lock: %s\n' "$LOCK_FILE"
+  printf '%s\n' "$LOCK_REPORT"
+  printf '==== end runtime provenance ====\n'
+)"
+printf '%s\n' "$RUNTIME_HEADER" | tee "$OUT/logs/runtime_versions.log" \
+  >> "$API_LOG"
+printf '%s\n' "$RUNTIME_HEADER" >> "$WEB_LOG"
+printf '%s\n' "$RUNTIME_HEADER" >> "$OUT/logs/alembic.log"
+printf '%s\n' "$RUNTIME_HEADER" >> "$OUT/logs/vite_build.log"
+
 export DATABASE_URL="sqlite+pysqlite:///$DB_FILE"
 export PAYMENT_PROVIDER=deterministic
 export VIDEO_PROVIDER=deterministic
@@ -335,7 +375,7 @@ if [[ "$KEEP_DB" == "0" ]]; then
   # a stale verdict cannot be mistaken for this run's evidence.
   rm -f "$DB_FILE" "$DB_FILE-wal" "$DB_FILE-shm"
   rm -f "$WORK/state.json" "$OUT/journeys.json"
-  (cd backend && "$PYTHON" -m alembic upgrade head) > "$OUT/logs/alembic.log" 2>&1 \
+  (cd backend && "$PYTHON" -m alembic upgrade head) >> "$OUT/logs/alembic.log" 2>&1 \
     || { echo "alembic upgrade failed; see $OUT/logs/alembic.log" >&2; exit 3; }
   tail -1 "$OUT/logs/alembic.log"
 
@@ -378,7 +418,7 @@ if [[ "$DO_BUILD" == "1" ]]; then
   step "frontend: production bundle (vite build) pointed at http://127.0.0.1:$API_PORT"
   # No fee variable is injected: the bundle reads the price from the API.
   (cd frontend && VITE_API_BASE_URL="http://127.0.0.1:$API_PORT" npx vite build) \
-     > "$OUT/logs/vite_build.log" 2>&1 \
+     >> "$OUT/logs/vite_build.log" 2>&1 \
      || { echo "vite build failed; see $OUT/logs/vite_build.log" >&2; exit 3; }
   grep -E "built in|dist/assets/index-.*\.js" "$OUT/logs/vite_build.log" | tail -3
 else
