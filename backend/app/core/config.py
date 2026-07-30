@@ -78,6 +78,31 @@ class Settings(BaseSettings):
     retention_days_credential_audit: int | None = None
     retention_days_credential_evidence: int | None = None
 
+    # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
+    # Booking hold TTL: how long a slot stays reserved while the student pays.
+    booking_hold_minutes: int = 10
+    # Payment provider binding. "deterministic" is the in-process, no-network
+    # adapter used by dev/test; "razorpay" requires the key pair below.
+    payment_provider: str = "deterministic"
+    razorpay_key_id: SecretStr | None = None
+    razorpay_key_secret: SecretStr | None = None
+    # Video provider binding. "deterministic" issues local, hashed join grants;
+    # "livekit" requires the URL + API key pair below.
+    video_provider: str = "deterministic"
+    livekit_url: str | None = None
+    livekit_api_key: SecretStr | None = None
+    livekit_api_secret: SecretStr | None = None
+    # Join credential lifetime. Short-lived by design; only the hash is stored.
+    join_credential_ttl_seconds: int = 300
+    # Abuse limits (per identity) for the Wave 2 surfaces.
+    rate_limit_tutor_search_per_min: int = 60
+    rate_limit_booking_per_min: int = 10
+    rate_limit_review_per_hour: int = 5
+    # Reminder offsets scheduled per confirmed session.
+    reminder_offsets: list[str] = ["7d", "1d", "3h"]
+    # Cancellation window that earns an automatic full refund, in hours.
+    refund_free_cancel_hours: int = 24
+
     # OTP delivery must be explicitly enabled + provider-bound in a deployment;
     # otherwise the API fails closed rather than pretending an OTP was sent.
     otp_delivery_enabled: bool = False
