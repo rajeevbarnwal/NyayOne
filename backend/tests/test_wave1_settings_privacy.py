@@ -23,6 +23,10 @@ from app.services.registration_service import register_student
 
 from datetime import datetime, timedelta, timezone
 
+# Test-suite plumbing: create_all-equivalent schema copies + a module-scoped
+# route-materialised app (see tests/dbtemplate.py, tests/apptemplate.py).
+from tests import apptemplate, dbtemplate
+
 NOW = datetime(2026, 7, 27, 9, 0, tzinfo=timezone.utc)
 
 
@@ -30,10 +34,17 @@ def _claims(user_id, roles=("student",)):
     return {"X-Actor-Claims": json.dumps({"sub": str(user_id), "roles": list(roles)})}
 
 
+@pytest.fixture(scope="module")
+def _mounted():
+    """App + client built and route-materialised once per module; ``ctx``
+    re-points every dependency override per test. See tests/apptemplate.py."""
+    return apptemplate.mounted_app()
+
+
 @pytest.fixture()
-def ctx():
+def ctx(_mounted):
     engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():
@@ -47,10 +58,9 @@ def ctx():
         finally:
             s.close()
 
-    app = FastAPI()
-    app.include_router(api_router, prefix="/api/v1")
+    app, client = _mounted
+    apptemplate.fresh(app, client)
     app.dependency_overrides[get_session] = prod_session
-    client = TestClient(app)
     with SessionLocal() as s:
         reg = register_student(s, StudentRegisterRequest(
             first_name="Aditi", last_name="Nair", mobile="9876543210", dob="2004-03-14",
@@ -58,7 +68,10 @@ def ctx():
         s.commit()
         uid, rid = reg.user_id, reg.id
     yield client, SessionLocal, uid, rid
-    Base.metadata.drop_all(engine)
+    # Per-test engine: dispose() is the cleanup that matters. The old
+    # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
+    # that was about to be discarded anyway.
+    engine.dispose()
 
 
 def test_anonymous_and_wrong_role_rejected(ctx):
@@ -300,9 +313,17 @@ def test_f2_db_check_rejects_noncanonical_language(ctx):
         s.add(UserSettings(user_id=u.id, language="hi")); s.flush(); s.rollback()
 
 
-def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
+def test_f2_migration_maps_legacy_and_guards_unknown(alembic_db):
     """Upgrade 0004 -> insert legacy rows -> upgrade head maps them; unknown
-    values abort the migration with an explicit report."""
+    values abort the migration with an explicit report.
+
+    The two 0004 starting databases come from ``alembic_db`` (a copy of the
+    session-scoped snapshot that a real alembic ``upgrade 0004_wave1_foundation``
+    produced), instead of re-running that identical upgrade twice here. Every
+    step this test actually asserts on — ``upgrade head``, ``downgrade
+    0004_wave1_foundation``, the clean re-upgrade, and the must-fail upgrade on
+    the unmapped value — is still a real ``python -m alembic`` invocation.
+    """
     import os
     import subprocess
     import sys
@@ -323,8 +344,7 @@ def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
         c.commit(); c.close()
 
     # Case A: legacy labels map to canonical codes.
-    db_a = str(tmp_path / "a.db")
-    assert alembic(db_a, "upgrade", "0004_wave1_foundation").returncode == 0
+    db_a = alembic_db("0004_wave1_foundation", name="a")
     insert(db_a, "English"); insert(db_a, "हिन्दी (Hindi)")
     up = alembic(db_a, "upgrade", "head")
     assert up.returncode == 0, up.stderr[-500:]
@@ -338,8 +358,7 @@ def test_f2_migration_maps_legacy_and_guards_unknown(tmp_path):
     assert alembic(db_a, "upgrade", "head").returncode == 0
 
     # Case B: unknown value aborts loudly (no silent coercion).
-    db_b = str(tmp_path / "b.db")
-    assert alembic(db_b, "upgrade", "0004_wave1_foundation").returncode == 0
+    db_b = alembic_db("0004_wave1_foundation", name="b")
     insert(db_b, "Klingon")
     bad = alembic(db_b, "upgrade", "head")
     assert bad.returncode != 0 and "unmapped legacy language values" in (bad.stderr + bad.stdout)

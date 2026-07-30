@@ -30,6 +30,9 @@ from app.services.providers.payment_provider import (
 )
 from app.services.tutoring import booking, outbox_relay, payments, sessions
 
+# Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
+from tests import dbtemplate
+
 #: Fixed anchor so every assertion about windows/DST is reproducible.
 T0 = datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc)
 AMOUNT_PAISE = 250_000  # Rs 2,500.00 as INTEGER paise. Never a float.
@@ -340,7 +343,7 @@ def memory_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     return engine
 
 
@@ -369,7 +372,7 @@ def serialized_file_engine(tmp_path, name: str):
     def _begin_immediate(conn):
         conn.exec_driver_sql("BEGIN IMMEDIATE")
 
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     return engine
 
 
