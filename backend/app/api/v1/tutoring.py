@@ -77,7 +77,12 @@ router = APIRouter(tags=["tutoring"])
 #: malformed/hostile delivery from being parsed at all.
 MAX_WEBHOOK_BYTES = 64 * 1024
 PAYMENT_SIGNATURE_HEADER = "X-Payment-Signature"
-VIDEO_SIGNATURE_HEADER = "X-Video-Signature"
+#: There is deliberately NO ``VIDEO_SIGNATURE_HEADER`` here. The video adapters
+#: disagree about the transport (the deterministic one signs a hex HMAC into
+#: ``X-Video-Signature``; a real LiveKit server signs a JWT into ``Authorization``),
+#: so each adapter declares its own ``signature_header`` and this route forwards
+#: the delivery's headers untouched — see
+#: ``app.services.providers.video_provider`` and ``join_credentials.handle_event``.
 
 
 # --------------------------------------------------------------------------- #
@@ -1064,14 +1069,21 @@ async def video_webhook(
     and a join announced with an expired/revoked/superseded grant is
     ``GRANT_EXPIRED``/``GRANT_REVOKED`` (410). Media-plane data (SDP, ICE,
     device labels) is refused by the provider adapter before this code sees it.
+
+    This handler makes exactly TWO decisions — the body is not absurdly large,
+    and the transaction is committed only if the domain succeeded. It does not
+    know, and must not know, WHICH header carries the signature: it forwards the
+    RAW body (re-serialising would break LiveKit's body digest) plus the headers
+    as received, and the configured adapter reads the one it signs. Every
+    business rule, including "is this delivery authentic", stays in the
+    provider/service layer.
     """
     raw = await request.body()
     if len(raw) > MAX_WEBHOOK_BYTES:
         raise _error(413, "payload_too_large", "Webhook body is too large")
-    signature = request.headers.get(VIDEO_SIGNATURE_HEADER, "")
     try:
         outcome = join_credentials.handle_event(
-            session, signature=signature, raw_body=raw
+            session, raw_body=raw, headers=dict(request.headers)
         )
     except TutoringError as exc:
         raise _typed(session, exc) from exc

@@ -26,9 +26,11 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   --profile video up -d coturn livekit
 ```
 
-Then read `RUNBOOK.md` § 0 — there are two sharp edges (the LiveKit webhook
-signature transport does not match the committed adapter's, and `LIVEKIT_URL`
-must not be a `wss://` URL) that will cost you an afternoon if you meet them
-by surprise.
+Then read `RUNBOOK.md` § 0 — two sharp edges, both now enforced in code rather
+than by convention: the webhook signature transport is **per adapter** (LiveKit
+signs an `Authorization` JWT; the deterministic dev adapter signs
+`X-Video-Signature`, and the route reads neither name itself), and `LIVEKIT_URL`
+must be an `http://`/`https://` URL with a host — a `wss://` value is refused at
+startup. Both will still cost you an afternoon if you meet them by surprise.
 
 Validation that runs in CI: `backend/tests/test_wave2_video_infra.py`.

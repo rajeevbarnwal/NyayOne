@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -42,6 +44,42 @@ def _is_placeholder_secret(secret: "SecretStr | str | None") -> bool:
         return True
     raw = secret.get_secret_value() if isinstance(secret, SecretStr) else str(secret)
     return raw.strip().lower() in _PLACEHOLDER_SECRETS
+
+
+#: Schemes ``LIVEKIT_URL`` may use. NOT a style preference: the adapter POSTs to
+#: ``{livekit_url}/twirp/livekit.RoomService/<Method>`` with httpx, so anything
+#: else — ``wss://`` above all — is a value that passes every fail-closed check
+#: and then fails every ``revoke_participant`` / ``close_room`` at runtime.
+LIVEKIT_URL_SCHEMES = ("http", "https")
+
+
+def _livekit_url_problem(url: "str | None") -> str | None:
+    """Classify ``livekit_url`` for the fail-closed gate, or ``None`` if usable.
+
+    Returns a message naming the SETTING and describing the RULE. The supplied
+    value is never interpolated: a URL is an endpoint rather than a credential,
+    but it can still carry ``user:password@`` userinfo, and this validator's
+    privacy contract is that nothing an operator supplied is echoed back.
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return "livekit_url is required when video_provider='livekit'"
+    parsed = urlsplit(raw)
+    if parsed.scheme.lower() not in LIVEKIT_URL_SCHEMES:
+        return (
+            "livekit_url (env LIVEKIT_URL) must be an "
+            f"{' or '.join(s + '://' for s in LIVEKIT_URL_SCHEMES)} URL when "
+            "video_provider='livekit'; the adapter POSTs to "
+            "{livekit_url}/twirp/livekit.RoomService/<Method>, so a wss:// or "
+            "scheme-less value fails every server-side call at runtime. The "
+            "wss:// URL browsers connect to is a separate frontend setting"
+        )
+    if not parsed.hostname:
+        return (
+            "livekit_url (env LIVEKIT_URL) must include a host when "
+            "video_provider='livekit'"
+        )
+    return None
 
 
 class Settings(BaseSettings):
@@ -201,7 +239,13 @@ class Settings(BaseSettings):
         * ``payment_provider='razorpay'`` REQUIRES ``razorpay_key_id`` and
           ``razorpay_key_secret``, both non-placeholder;
         * ``video_provider='livekit'`` REQUIRES ``livekit_url``,
-          ``livekit_api_key`` and ``livekit_api_secret``, same treatment;
+          ``livekit_api_key`` and ``livekit_api_secret``, same treatment — and
+          ``livekit_url`` must be an ``http://``/``https://`` URL WITH A HOST,
+          because the adapter reaches the room service over HTTP. A ``wss://``
+          value used to satisfy every check here and then fail every
+          ``revoke_participant``/``close_room`` at runtime as
+          ``PROVIDER_UNREACHABLE``; that is now a refusal to boot (see
+          ``_livekit_url_problem``);
         * ``booking_hold_minutes``, ``join_credential_ttl_seconds``, the three
           rate limits and ``refund_free_cancel_hours`` must be STRICTLY POSITIVE
           integers (a zero TTL would mint dead credentials; a zero hold window
@@ -237,10 +281,9 @@ class Settings(BaseSettings):
                 f"video_provider must be one of {', '.join(VIDEO_PROVIDER_CHOICES)}"
             )
         elif video_provider == "livekit":
-            if not (self.livekit_url or "").strip():
-                problems.append(
-                    "livekit_url is required when video_provider='livekit'"
-                )
+            url_problem = _livekit_url_problem(self.livekit_url)
+            if url_problem is not None:
+                problems.append(url_problem)
             for name in ("livekit_api_key", "livekit_api_secret"):
                 if _is_placeholder_secret(getattr(self, name)):
                     problems.append(

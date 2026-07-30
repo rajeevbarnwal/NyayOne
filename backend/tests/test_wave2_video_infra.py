@@ -510,15 +510,15 @@ def test_webhook_is_filtered_to_the_event_types_the_adapter_maps():
 
 
 def test_livekit_adapter_still_fails_closed_on_an_unsigned_delivery():
-    """Locks in the SAFE half of the webhook path.
+    """Locks in the SAFE half of the webhook path — unchanged by the transport fix.
 
-    A real LiveKit server signs with a JWT in the ``Authorization`` header, not
-    the hex HMAC in ``X-Video-Signature`` this adapter reads — see
-    ``infra/video/RUNBOOK.md`` § 0(a). That mismatch is an interoperability
-    defect and is reported, not silently patched here. What this test pins is the
-    property that makes the mismatch harmless rather than dangerous: an absent or
-    wrong signature is REFUSED, never accepted, so the gap can only ever cost us
-    events — it can never let an unverified event through.
+    The adapter now verifies what a real LiveKit server actually sends (a signed
+    JWT in ``Authorization``; see
+    ``LiveKitCommunityAdapter._verify_webhook_token`` and
+    ``tests/test_wave2_video_webhook_livekit.py`` for the positive case). This test
+    keeps pinning the property that must hold whatever the transport is: a
+    delivery presenting no credential, or garbage in place of one, is REFUSED —
+    fail-closed and non-retryable — so an unverified event can never be admitted.
     """
     adapter = LiveKitCommunityAdapter(
         "http://livekit.invalid:7880",
@@ -531,13 +531,37 @@ def test_livekit_adapter_still_fails_closed_on_an_unsigned_delivery():
             adapter.verify_event(signature, body)
         assert excinfo.value.code == "SIGNATURE_INVALID"
         assert not excinfo.value.retryable
+    # ...and with no credential presented by ANY route at all.
+    for headers in (None, {}, {"content-type": "application/webhook+json"}):
+        with pytest.raises(VideoProviderError) as excinfo:
+            adapter.verify_event(raw_body=body, headers=headers)
+        assert excinfo.value.code == "SIGNATURE_INVALID"
+        assert not excinfo.value.retryable
 
 
-def test_signature_header_name_is_documented_where_operators_will_look():
-    from app.api.v1.tutoring import VIDEO_SIGNATURE_HEADER
+def test_signature_header_names_are_documented_where_operators_will_look():
+    """BOTH transports must be documented, because the adapters really differ.
 
-    assert VIDEO_SIGNATURE_HEADER in RUNBOOK.read_text(encoding="utf-8"), (
-        "the runbook must name the header the route actually reads"
+    Previously this asserted one hard-coded route-level header
+    (``tutoring.VIDEO_SIGNATURE_HEADER``). The route no longer picks a header —
+    each adapter declares its own — so the obligation is that the runbook names
+    the header of every adapter an operator can select.
+    """
+    from app.services.providers.video_provider import (
+        DeterministicVideoAdapter,
+        LiveKitCommunityAdapter as _LK,
+    )
+
+    text = RUNBOOK.read_text(encoding="utf-8")
+    for adapter in (DeterministicVideoAdapter, _LK):
+        assert adapter.signature_header in text, (
+            f"the runbook must name the header {adapter.name} verifies"
+        )
+    # The route must not have re-acquired a single hard-coded video header.
+    from app.api.v1 import tutoring as ep
+
+    assert not hasattr(ep, "VIDEO_SIGNATURE_HEADER"), (
+        "the video signature header belongs to the adapter, not the route"
     )
 
 

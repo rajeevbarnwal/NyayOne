@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -430,18 +431,29 @@ def _event_reason(event_type: str, provider_event_id: str) -> str:
 def handle_event(
     session: Session,
     *,
-    signature: str,
+    signature: str | None = None,
     raw_body: bytes,
+    headers: Mapping[str, str] | None = None,
     provider: VideoSessionProvider | None = None,
     now: datetime | None = None,
 ) -> VideoEventOutcome:
-    """Verify, de-duplicate and apply one provider room event. No commit."""
+    """Verify, de-duplicate and apply one provider room event. No commit.
+
+    ``signature`` and ``headers`` are two ways to present the SAME thing: the
+    credential the delivery carries. HTTP callers forward ``headers`` verbatim and
+    let the resolved adapter read the header IT signs (deterministic:
+    ``X-Video-Signature``; LiveKit: ``Authorization``) — deciding that here, or in
+    the route, would hard-code one provider's transport for all of them. In-process
+    callers may still pass ``signature`` directly.
+    """
     now = now or utcnow()
     resolved = _resolve_provider(provider)
 
     # 2. signature FIRST — nothing is read or written before this succeeds.
     try:
-        data: VideoEventData = resolved.verify_event(signature, raw_body)
+        data: VideoEventData = resolved.verify_event(
+            signature, raw_body, headers=headers
+        )
     except VideoProviderError as exc:
         if exc.retryable:
             raise ProviderUnavailable(
