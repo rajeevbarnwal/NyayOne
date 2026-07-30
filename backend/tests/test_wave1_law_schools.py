@@ -24,15 +24,27 @@ from app.models.registration import User
 from app.models.wave1 import ComparisonItem, ComparisonSet, LawSchool, LawSchoolFollow, SavedLawSchool
 from app.services.law_school_service import CompareError, add_comparison_item, seed_law_schools
 
+# Test-suite plumbing: create_all-equivalent schema copies + a module-scoped
+# route-materialised app (see tests/dbtemplate.py, tests/apptemplate.py).
+from tests import apptemplate, dbtemplate
+
 
 def _claims(user_id, roles=("student",)):
     return {"X-Actor-Claims": json.dumps({"sub": str(user_id), "roles": list(roles)})}
 
 
+@pytest.fixture(scope="module")
+def _mounted():
+    """App + client built and route-materialised once per module; ``ctx``
+    re-points every dependency override per test. See tests/apptemplate.py.
+    (The thread-race tests below deliberately keep their own app.)"""
+    return apptemplate.mounted_app()
+
+
 @pytest.fixture()
-def ctx():
+def ctx(_mounted):
     engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():
@@ -46,10 +58,9 @@ def ctx():
         finally:
             s.close()
 
-    app = FastAPI()
-    app.include_router(api_router, prefix="/api/v1")
+    app, client = _mounted
+    apptemplate.fresh(app, client)
     app.dependency_overrides[get_session] = prod_session
-    client = TestClient(app)
     with SessionLocal() as s:
         assert seed_law_schools(s) == 12
         user = User(role="student", status="active")
@@ -58,7 +69,10 @@ def ctx():
         uid = user.id
         ids = [str(x) for x in s.scalars(select(LawSchool.id).order_by(LawSchool.name)).all()]
     yield client, SessionLocal, uid, ids
-    Base.metadata.drop_all(engine)
+    # Per-test engine: dispose() is the cleanup that matters. The old
+    # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
+    # that was about to be discarded anyway.
+    engine.dispose()
 
 
 # ------------------------------- search (TC-63-01) ------------------------------
@@ -166,7 +180,7 @@ def test_concurrent_additions_cannot_exceed_limit(tmp_path):
     from sqlalchemy.pool import NullPool
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path}/conc.db", poolclass=NullPool,
                            connect_args={"timeout": 15})
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
     with SessionLocal() as s:
         seed_law_schools(s)
@@ -278,7 +292,7 @@ def test_concurrent_follow_service_level_single_row_single_audit(tmp_path):
     from app.db.models.audit import AuditEvent
 
     engine = _serialized_file_engine(tmp_path, "conc_follow_service")
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
     with SessionLocal() as s:
         seed_law_schools(s)
@@ -350,7 +364,7 @@ def test_http_concurrent_put_all_200_one_row_one_audit(tmp_path, surface):
     from app.db.models.audit import AuditEvent
 
     engine = _serialized_file_engine(tmp_path, f"conc_{surface}_http")
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():
@@ -416,7 +430,7 @@ def _injection_ctx():
 
     engine = create_engine("sqlite+pysqlite:///:memory:",
                            connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=_CommitFailOnce)
 
     def prod_session():

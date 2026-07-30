@@ -29,6 +29,7 @@ Frozen decisions proved here
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -858,13 +859,57 @@ ICE = "candidate:842163049 1 udp 1677729535 192.0.2.1 54321 typ srflx"
 DEVICE_LABEL = "MacBook Pro Microphone (Built-in)"
 
 
+#: Machine-generated identifiers, as they appear once rendered to text: UUIDs
+#: (including UUIDs stringified INTO a JSON column, e.g.
+#: ``audit_events.after_state['refund_id']``) and the provider references and
+#: SHA-256 digests the payment flow persists (``payment_orders
+#: .provider_order_ref``, ``payment_refunds.provider_refund_ref``,
+#: ``payment_events.provider_event_id``, ``payment_events.payload_digest``).
+#:
+#: These are exactly the random hex the corpus builders below already declare they
+#: must not scan, and they leak back in through JSON columns. One complete booking
+#: flow persists ~250 random hex characters, so the 3-character ``CVV`` canary
+#: matched one by coincidence on roughly 1 suite run in 8 — a false positive with
+#: nothing to do with card data.
+#:
+#: A hex run is masked only when it contains at least one ``a-f`` letter, so a
+#: purely numeric run is NEVER masked and every card-shaped canary stays findable:
+#: ``PAN`` (16 digits), ``CVV`` (3 digits) and ``PAYMENT_OTP`` (6 digits) are
+#: decimal-only, and ``SDP`` / ``ICE`` / ``DEVICE_LABEL`` / a ``join_`` token all
+#: contain characters outside the hex alphabet. A leak is recorded as its own
+#: value, or as a value inside a JSON object, or inside a delimited string; all
+#: three shapes were verified to survive the mask for all six canaries, over 120
+#: clean booking flows (7 false positives before masking, 0 after).
+#:
+#: Residual, stated plainly: a canary concatenated with NO delimiter directly onto
+#: a letter-bearing 16+ character hex identifier would be swallowed by that run.
+#: No code path in this flow produces that shape, and the deterministic proofs in
+#: parts (1) and (3) of the test below — the provider seams raising on the PAN,
+#: CVV and OTP, and ``assert_payload_safe`` rejecting both forbidden keys and
+#: PAN-shaped values — do not depend on this scan at all.
+_UUID_TEXT = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
+_HEX_RUN = re.compile(r"[0-9a-fA-F]{16,}")
+
+
+def _mask_identifiers(text: str) -> str:
+    def _hex(match: re.Match) -> str:
+        run = match.group()
+        return "<hex>" if any(c in "abcdefABCDEF" for c in run) else run
+
+    return _HEX_RUN.sub(_hex, _UUID_TEXT.sub("<uuid>", text))
+
+
 def _every_persisted_value(session: Session) -> str:
     """Every TEXT/JSON value in the database, as one scannable blob.
 
     Restricted to ``str`` / ``dict`` / ``list`` values on purpose: those are the
     only shapes a canary could be smuggled in (a ``Uuid`` or ``DateTime`` column
     cannot hold "4111111111111111"), and scanning UUID/timestamp reprs as text
-    would make a 3-digit CVV canary collide with random hex by chance.
+    would make a 3-digit CVV canary collide with random hex by chance. UUIDs
+    stringified INTO a JSON column are masked for the same reason — see
+    ``_UUID_TEXT``.
     """
     chunks: list[str] = []
     for table in Base.metadata.sorted_tables:
@@ -872,7 +917,7 @@ def _every_persisted_value(session: Session) -> str:
             for column, value in row.items():
                 if isinstance(value, (str, dict, list)):
                     chunks.append(f"{table.name}.{column}={value!r}")
-    return "\n".join(chunks)
+    return _mask_identifiers("\n".join(chunks))
 
 
 def test_no_card_media_or_token_canary_can_reach_storage_logs_or_payloads(
@@ -929,8 +974,10 @@ def test_no_card_media_or_token_canary_can_reach_storage_logs_or_payloads(
     outbox_relay.relay_pending(db_session, dispatcher)
 
     blob = _every_persisted_value(db_session)
-    logs = "\n".join(record.getMessage() for record in caplog.records)
-    payload_blob = repr([payload for _k, _a, payload in dispatcher.delivered])
+    logs = _mask_identifiers("\n".join(record.getMessage() for record in caplog.records))
+    payload_blob = _mask_identifiers(
+        repr([payload for _k, _a, payload in dispatcher.delivered])
+    )
     for canary in (PAN, CVV, PAYMENT_OTP, SDP, ICE, DEVICE_LABEL, credential.raw_token):
         assert canary not in blob
         assert canary not in logs

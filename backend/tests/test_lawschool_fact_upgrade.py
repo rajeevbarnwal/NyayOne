@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -116,13 +117,28 @@ def assert_approved_state(db: str) -> None:
         assert got == expected_facts(s), f"fact mismatch for {s['slug']}"
 
 
+@pytest.fixture(scope="module")
+def _parent_template(alembic_snapshots, tmp_path_factory):
+    """Parent state built ONCE: alembic's own 0005 schema + the old 24-fact seed.
+
+    ``alembic_snapshots["0005_language_check"]`` is produced by a real alembic
+    ``upgrade`` (see ``tests/conftest.py``); this fixture only adds the historical
+    seed on top. Building it once removes three duplicate ``python -m alembic
+    upgrade 0005_language_check`` subprocesses (~0.85 s each) that all produced
+    byte-identical schemas. Each test below still receives its own pristine copy,
+    and the forward migration under test is still run by the real alembic CLI.
+    """
+    template = tmp_path_factory.mktemp("lawschool_parent") / "parent.db"
+    shutil.copyfile(alembic_snapshots["0005_language_check"], template)
+    seed_old_style(str(template))
+    return template
+
+
 @pytest.fixture()
-def parent_db(tmp_path):
+def parent_db(_parent_template, tmp_path):
     """Parent-state DB: schema at 0005 + old-style 24-fact seed."""
     db = str(tmp_path / "parent.db")
-    r = alembic(db, "upgrade", "0005_language_check")
-    assert r.returncode == 0, r.stderr[-800:]
-    seed_old_style(db)
+    shutil.copyfile(_parent_template, db)
     schools, facts, *_ = snapshot(db)
     assert schools == 12 and len(facts) == 24  # genuinely the old state
     return db

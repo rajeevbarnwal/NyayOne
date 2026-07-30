@@ -140,10 +140,20 @@ class MigratedDb(NamedTuple):
 
 
 @pytest.fixture(scope="module")
-def migrated_db(tmp_path_factory) -> MigratedDb:
-    """One real ``alembic upgrade head`` SQLite database for the whole module."""
+def migrated_db(alembic_snapshots, alembic_snapshot_run, tmp_path_factory) -> MigratedDb:
+    """One real ``alembic upgrade head`` SQLite database for the whole module.
+
+    Served from the session-scoped snapshot (``tests/conftest.py``) that a real
+    alembic ``upgrade head`` produced, rather than repeating that same upgrade in
+    a second subprocess. ``.upgrade`` is the genuine ``CompletedProcess`` of that
+    run, so ``test_alembic_lifecycle_upgrade_check_downgrade_reupgrade`` still
+    asserts ``returncode == 0`` against a real invocation, and every other CLI
+    step it makes (``check``, ``downgrade``, re-``upgrade``, re-``check``) is
+    still executed here by ``python -m alembic``.
+    """
     db = str(tmp_path_factory.mktemp("wave2_schema") / "wave2.db")
-    result = alembic(db, "upgrade", "head")
+    shutil.copyfile(alembic_snapshots["head"], db)
+    result = alembic_snapshot_run
     assert result.returncode == 0, result.stderr[-2000:]
     assert scalar(db, "SELECT version_num FROM alembic_version") is not None
     return MigratedDb(path=db, upgrade=result)
