@@ -13,6 +13,7 @@ module                  responsibility
 ``sessions``            session lifecycle: create / read / reschedule / cancel
 ``attendance``          record (after end only) / confirm / dispute / resolve
 ``reviews``             create / edit / delete / moderate / public aggregate
+``join_credentials``    hash-only video join grants + verified room webhooks (P3)
 ``reminders``           7d / 1d / 3h jobs, revocation, due-job enqueue
 ``outbox_relay``        durable transactional outbox + post-commit dispatch
 ``seed``                deterministic local seed (no network, no scraping)
@@ -37,6 +38,7 @@ __all__ = [
     "availability",
     "booking",
     "errors",
+    "join_credentials",
     "outbox_relay",
     "payments",
     "reminders",
