@@ -34,13 +34,37 @@
 #     --stub-lib DIR   dir to PREPEND to LD_LIBRARY_PATH (arm64 libXdamage stub)
 #     --keep-db        reuse the existing database and fixture (stage chaining)
 #     --no-build       reuse frontend/dist as-is (it must already point at --api-port)
-#     --api-port N     backend port                   (default: first free from 1731)
-#     --web-port N     frontend port                  (default: first free from 1730)
-#     --fee-paise N    VITE_TUTORING_SESSION_FEE_PAISE (default: 250000 = INR 2500.00)
+#     --api-port N     backend port                   (default: atomically allocated)
+#     --web-port N     frontend port                  (default: atomically allocated)
+#     --run-id S       isolation key for the database directory (default: derived)
+#     --fee-paise N    the price the DRIVER expects the API to publish
+#                      (default: 250000 = INR 2500.00, which is what
+#                      app/services/tutoring/seed.py seeds). This is an
+#                      ASSERTION, not a setting: the frontend no longer takes a
+#                      fee from the environment — VITE_TUTORING_SESSION_FEE_PAISE
+#                      is gone, and the price comes from the API.
 #
 #   Environment:
-#     PYTHON           interpreter with backend deps installed (auto-detected)
+#     PYTHON           interpreter with backend deps installed. If set it is
+#                      used VERBATIM. If unset, only PROJECT VIRTUALENVS are
+#                      considered (see "python selection" below). Either way the
+#                      chosen interpreter must import every dependency declared
+#                      in backend/requirements.txt or the run stops with a
+#                      prerequisite message naming exactly what is missing.
 #     LD_LIBRARY_PATH  prepend an arm64 libXdamage stub dir if Chromium needs one
+#
+#   Database isolation (F4.4):
+#     Every invocation without --keep-db creates ONE NEW database in a directory
+#     keyed by --run-id, migrates it with the real alembic head and seeds it with
+#     the deterministic fixture. The reset boundaries are exactly:
+#       * RUN boundary   — `--keep-db` absent: the file is deleted and rebuilt
+#                          from alembic head + `wave2_e2e_fixture.py seed`, and
+#                          the driver's state.json/journeys.json are cleared, so
+#                          no row and no verdict survives from a previous run.
+#       * STAGE boundary — `--keep-db` present: NOTHING is reset. The database,
+#                          the fixture id map and the driver state carry across
+#                          the chained 45s shells that make up one logical run.
+#     There is no other reset point: no stage truncates, re-seeds or re-migrates.
 #
 # Nothing here weakens a test, and no production file is written. The two clock
 # shifts the driver asks for (an expired hold, a session moved past its end) are
@@ -61,6 +85,7 @@ FEE_PAISE="250000"
 SEARCH_LIMIT="200"
 BOOKING_LIMIT="400"
 STUB_LIB="${WAVE2_STUB_LIB:-}"
+RUN_ID="${WAVE2_RUN_ID:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -74,36 +99,166 @@ while [[ $# -gt 0 ]]; do
     --search-limit) SEARCH_LIMIT="$2"; shift 2 ;;
     --booking-limit) BOOKING_LIMIT="$2"; shift 2 ;;
     --stub-lib) STUB_LIB="$2"; shift 2 ;;
-    -h|--help) sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --run-id) RUN_ID="$2"; shift 2 ;;
+    -h|--help) sed -n '2,45p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
-if [[ -z "${PYTHON:-}" ]]; then
-  for cand in /tmp/lsvenv/bin/python "$REPO_ROOT/backend/.venv/bin/python" "$REPO_ROOT/.venv/bin/python" python3; do
-    if command -v "$cand" > /dev/null 2>&1; then PYTHON="$cand"; break; fi
+# ------------------------------------------------------- F3: python selection
+#
+# Deterministic, in this order, and NEVER a silent fall-through:
+#
+#   1. an explicit PYTHON= — used verbatim, no search, no substitution;
+#   2. otherwise the first PROJECT VIRTUALENV that exists, from a fixed list.
+#
+# A bare `python3` from PATH is deliberately NOT a candidate: on this host it is
+# a different interpreter with a different fastapi and no psycopg/pgvector, and
+# picking it up silently is precisely how a gate ends up testing the wrong tree.
+# Whatever is chosen is then made to PROVE it can import every dependency
+# declared in backend/requirements.txt before a single server is started.
+PYTHON_SOURCE=""
+if [[ -n "${PYTHON:-}" ]]; then
+  PYTHON_SOURCE="explicit PYTHON= environment variable"
+  [[ -x "$PYTHON" ]] || command -v "$PYTHON" > /dev/null 2>&1 || {
+    cat >&2 <<EOF
+PREREQUISITE NOT MET: PYTHON="$PYTHON" is not an executable interpreter.
+  Point PYTHON= at a python that has the backend dependencies installed, e.g.
+      PYTHON=/path/to/venv/bin/python bash scripts/wave2_tutoring_browser_gate.sh
+EOF
+    exit 2
+  }
+else
+  VENV_CANDIDATES=(
+    "${VIRTUAL_ENV:-/nonexistent}/bin/python"
+    "$REPO_ROOT/backend/.venv/bin/python"
+    "$REPO_ROOT/.venv/bin/python"
+    "$REPO_ROOT/venv/bin/python"
+    "/tmp/lsvenv/bin/python"
+  )
+  for cand in "${VENV_CANDIDATES[@]}"; do
+    if [[ -x "$cand" ]]; then PYTHON="$cand"; PYTHON_SOURCE="project virtualenv"; break; fi
   done
 fi
-[[ -n "${PYTHON:-}" ]] || { echo "no python interpreter found; set PYTHON=" >&2; exit 2; }
+if [[ -z "${PYTHON:-}" ]]; then
+  cat >&2 <<EOF
+PREREQUISITE NOT MET: no project virtualenv found and PYTHON= was not set.
+  Searched (in order):
+$(printf '      %s\n' "${VENV_CANDIDATES[@]}")
+  A system python3 is NOT used as a fallback on purpose: it would silently run
+  the gate against a different interpreter than the backend is installed into.
+  Fix by creating backend/.venv and installing backend/requirements.txt, or by
+  setting PYTHON= explicitly.
+EOF
+  exit 2
+fi
 
-free_port() {
-  "$PYTHON" - "$1" <<'PY'
-import socket, sys
-start = int(sys.argv[1])
-for port in range(start, start + 200):
-    with socket.socket() as s:
-        try:
-            s.bind(("127.0.0.1", port))
-        except OSError:
-            continue
-        print(port)
-        break
-PY
+# ---- the chosen interpreter must import the DECLARED backend dependencies ----
+# The list is read from backend/requirements.txt at run time, so a dependency
+# added to the backend is checked here without anybody remembering to edit this
+# script. Only the distribution->module names that differ are mapped.
+DEP_REPORT="$("$PYTHON" - "$REPO_ROOT/backend/requirements.txt" <<'PY' 2>&1
+import importlib.util, json, re, sys
+
+OVERRIDES = {
+    "pydantic-settings": "pydantic_settings",
+    "python-multipart": "multipart",
+    "uvicorn[standard]": "uvicorn",
+    "psycopg[binary]": "psycopg",
 }
+missing, checked = [], []
+try:
+    lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+except OSError as exc:
+    print(json.dumps({"error": f"cannot read requirements.txt: {exc}"}))
+    raise SystemExit(0)
+for line in lines:
+    line = line.split("#", 1)[0].strip()
+    if not line or line.startswith("-"):
+        continue
+    spec = re.split(r"[<>=!~;]", line, 1)[0].strip()
+    module = OVERRIDES.get(spec, OVERRIDES.get(spec.split("[")[0], spec.split("[")[0]))
+    module = module.replace("-", "_")
+    checked.append(f"{spec} -> import {module}")
+    try:
+        found = importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        found = False
+    if not found:
+        missing.append({"requirement": line, "module": module})
+print(json.dumps({"checked": checked, "missing": missing,
+                  "executable": sys.executable, "version": sys.version.split()[0]}))
+PY
+)"
+DEP_MISSING="$("$PYTHON" -c 'import json,sys; d=json.loads(sys.stdin.read()); print("\n".join("      %s  (missing module: %s)" % (m["requirement"], m["module"]) for m in d.get("missing", [])) or "")' <<< "$DEP_REPORT" 2> /dev/null)"
+if [[ -n "$DEP_MISSING" || "$DEP_REPORT" != *'"missing"'* ]]; then
+  cat >&2 <<EOF
+PREREQUISITE NOT MET: the selected python cannot import the backend's declared
+dependencies, so this gate would test something other than the real backend.
 
-[[ -n "$API_PORT" ]] || API_PORT="$(free_port 1731)"
-[[ -n "$WEB_PORT" ]] || WEB_PORT="$(free_port 1730)"
-[[ -n "$API_PORT" && -n "$WEB_PORT" ]] || { echo "could not find free ports" >&2; exit 2; }
+  interpreter : $PYTHON
+  chosen via  : ${PYTHON_SOURCE:-unknown}
+  declared in : $REPO_ROOT/backend/requirements.txt
+
+  MISSING:
+${DEP_MISSING:-      (the dependency probe itself failed: $DEP_REPORT)}
+
+  Fix by installing them into THAT interpreter:
+      $PYTHON -m pip install -r $REPO_ROOT/backend/requirements.txt
+  or by pointing PYTHON= at an interpreter that already has them.
+EOF
+  exit 2
+fi
+PY_VERSION="$("$PYTHON" -c 'import sys; print(sys.version.split()[0])')"
+printf 'python: %s (%s, %s) — all backend/requirements.txt imports resolve\n' \
+  "$PYTHON" "$PYTHON_SOURCE" "$PY_VERSION"
+
+# --------------------------------------------- F4.3: ATOMIC port allocation
+#
+# Both listening sockets are bound SIMULTANEOUSLY inside one process, so the
+# kernel itself guarantees they are two different, currently-free ports; only
+# then are they released and handed to uvicorn/vite. Allocating them one at a
+# time (bind, close, bind, close) can hand back the same port twice, which is
+# the collision this replaces. An explicitly supplied port is honoured but is
+# still bind-tested, and the two are asserted DISTINCT before anything boots.
+ALLOC="$("$PYTHON" - "${API_PORT:-0}" "${WEB_PORT:-0}" <<'PY'
+import socket, sys
+
+want = [int(sys.argv[1]), int(sys.argv[2])]
+held = []
+try:
+    for wanted in want:
+        s = socket.socket()
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
+        try:
+            s.bind(("127.0.0.1", wanted))
+        except OSError as exc:
+            s.close()
+            print(f"ERROR port {wanted} is not bindable: {exc}")
+            raise SystemExit(0)
+        held.append(s)
+    ports = [s.getsockname()[1] for s in held]
+    if len(set(ports)) != len(ports):
+        print(f"ERROR the kernel returned duplicate ports {ports}")
+        raise SystemExit(0)
+    print(f"OK {ports[0]} {ports[1]}")
+finally:
+    for s in held:
+        s.close()
+PY
+)"
+case "$ALLOC" in
+  OK\ *) read -r _ API_PORT WEB_PORT <<< "$ALLOC" ;;
+  *) echo "port allocation failed: ${ALLOC#ERROR }" >&2; exit 2 ;;
+esac
+if [[ -z "$API_PORT" || -z "$WEB_PORT" ]]; then
+  echo "port allocation produced an empty port (api='$API_PORT' web='$WEB_PORT')" >&2; exit 2
+fi
+if [[ "$API_PORT" == "$WEB_PORT" ]]; then
+  echo "PORT COLLISION: api and frontend were both allocated $API_PORT; refusing to boot" >&2
+  exit 2
+fi
+printf 'ports: api=%s web=%s (allocated atomically, asserted distinct)\n' "$API_PORT" "$WEB_PORT"
 
 mkdir -p "$OUT" "$OUT/shots" "$OUT/logs"
 WORK="$OUT/work"
@@ -111,7 +266,15 @@ mkdir -p "$WORK"
 # The database lives on LOCAL disk, never in --out: an --out on a FUSE/network
 # mount cannot give SQLite the file locks it needs ("disk I/O error" on the very
 # first CREATE TABLE). Artifacts are ordinary writes and stay in --out.
-DB_DIR="${WAVE2_DB_DIR:-${TMPDIR:-/tmp}/wave2_browser_gate}"
+#
+# ONE ISOLATED DATABASE PER RUN (F4.4). The directory is keyed by --run-id, which
+# defaults to a stable hash of --out, so two gates driving two different evidence
+# directories can never share rows, and the chained 45s shells of a single run
+# (which all pass the same --out) deterministically find the same file.
+if [[ -z "$RUN_ID" ]]; then
+  RUN_ID="$("$PYTHON" -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:12])' "$OUT")"
+fi
+DB_DIR="${WAVE2_DB_DIR:-${TMPDIR:-/tmp}/wave2_browser_gate}/$RUN_ID"
 mkdir -p "$DB_DIR"
 DB_FILE="$DB_DIR/wave2_browser_gate.db"
 FIXTURE="$WORK/fixture.json"
@@ -167,14 +330,22 @@ step() { printf '\n=== %s\n' "$*"; }
 
 # ---------------------------------------------------------------- 1. database
 if [[ "$KEEP_DB" == "0" ]]; then
-  step "database: fresh SQLite at $DB_FILE via alembic upgrade head"
-  rm -f "$DB_FILE"
+  step "database: ONE new isolated SQLite at $DB_FILE (run-id $RUN_ID) via alembic upgrade head"
+  # RUN reset boundary. Everything derived from a previous run goes with it, so
+  # a stale verdict cannot be mistaken for this run's evidence.
+  rm -f "$DB_FILE" "$DB_FILE-wal" "$DB_FILE-shm"
+  rm -f "$WORK/state.json" "$OUT/journeys.json"
   (cd backend && "$PYTHON" -m alembic upgrade head) > "$OUT/logs/alembic.log" 2>&1 \
     || { echo "alembic upgrade failed; see $OUT/logs/alembic.log" >&2; exit 3; }
   tail -1 "$OUT/logs/alembic.log"
 
-  step "fixture: seeding tutors, slots and browser actors"
-  (cd backend && "$PYTHON" scripts/wave2_e2e_fixture.py seed --extra-tutors 12) > "$FIXTURE" \
+  step "fixture: seeding tutors, slots and browser actors (deterministic seed)"
+  # --days 20 (not the 3-day default): the negative catalogue books a session per
+  # accepted-review case and per grant/disconnect case, and every one of them
+  # needs its OWN >24h slot. Running out mid-catalogue is a harness failure that
+  # looks exactly like a product failure, so the calendar is sized for the whole
+  # catalogue with headroom.
+  (cd backend && "$PYTHON" scripts/wave2_e2e_fixture.py seed --extra-tutors 12 --days 20) > "$FIXTURE" \
     || { echo "fixture seed failed" >&2; exit 3; }
   "$PYTHON" -c "import json,sys; d=json.load(open(sys.argv[1])); print('tutors=%d slots=%d gt24h=%d lt24h=%d' % (d['tutor_total'], len(d['slots']), len(d['buckets']['gt24h']), len(d['buckets']['lt24h'])))" "$FIXTURE"
 else
@@ -205,8 +376,8 @@ PY
 # ---------------------------------------------------------------- 3. frontend
 if [[ "$DO_BUILD" == "1" ]]; then
   step "frontend: production bundle (vite build) pointed at http://127.0.0.1:$API_PORT"
-  (cd frontend && VITE_API_BASE_URL="http://127.0.0.1:$API_PORT" \
-     VITE_TUTORING_SESSION_FEE_PAISE="$FEE_PAISE" npx vite build) \
+  # No fee variable is injected: the bundle reads the price from the API.
+  (cd frontend && VITE_API_BASE_URL="http://127.0.0.1:$API_PORT" npx vite build) \
      > "$OUT/logs/vite_build.log" 2>&1 \
      || { echo "vite build failed; see $OUT/logs/vite_build.log" >&2; exit 3; }
   grep -E "built in|dist/assets/index-.*\.js" "$OUT/logs/vite_build.log" | tail -3
@@ -240,6 +411,14 @@ E2E_PYTHON="$PYTHON" \
 E2E_REPO_ROOT="$REPO_ROOT" \
 E2E_BACKEND_LOG="$API_LOG" \
 E2E_FEE_PAISE="$FEE_PAISE" \
+E2E_RUN_ID="$RUN_ID" \
+E2E_DB_FILE="$DB_FILE" \
+E2E_SEARCH_LIMIT="$SEARCH_LIMIT" \
+E2E_BOOKING_LIMIT="$BOOKING_LIMIT" \
+E2E_REVIEW_LIMIT_PER_HOUR="$RATE_LIMIT_REVIEW_PER_HOUR" \
+E2E_HOLD_MINUTES="$BOOKING_HOLD_MINUTES" \
+E2E_JOIN_TTL_SECONDS="$JOIN_CREDENTIAL_TTL_SECONDS" \
+E2E_FREE_CANCEL_HOURS="$REFUND_FREE_CANCEL_HOURS" \
   node frontend/scripts/wave2-tutoring-e2e.mjs
 DRIVER_RC=$?
 

@@ -24,6 +24,8 @@ import { StudentScreen } from '../components';
 import {
   ADMIN_EXCEPTION_UNAUTHORISED,
   AMOUNT_MISMATCH,
+  PAYMENT_AMOUNT_MISMATCH,
+  SESSION_PRICE_INVALID,
   ATTENDANCE_STALE_VERSION,
   ATTENDANCE_STATE_INVALID,
   ATTENDANCE_TOO_EARLY,
@@ -355,6 +357,15 @@ export function Modal({
       el.setAttribute('inert', '');
       el.setAttribute('aria-hidden', 'true');
     });
+    /*
+     * A11Y-01 (WCAG 2.4.3 Focus Order): remember what had focus BEFORE the
+     * dialog steals it, so closing can hand focus back to the control that
+     * opened it. Without this the focus lands on <body> and a keyboard or
+     * screen-reader user is dumped at the top of the document, losing their
+     * place — reproduced by the browser oracle, which asserted the opener is
+     * refocused after Escape and after a scrim dismiss.
+     */
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusable = box.current?.querySelector<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
@@ -389,6 +400,12 @@ export function Modal({
         el.removeAttribute('inert');
         el.removeAttribute('aria-hidden');
       });
+      // Return focus to the opener. The inert/aria-hidden attributes are
+      // removed FIRST above, otherwise the opener is still inert and .focus()
+      // is a no-op. Guard on connectedness: the opener can legitimately have
+      // been unmounted by the same state change that closed the dialog, and in
+      // that case the browser's own default placement is the honest outcome.
+      if (opener && opener.isConnected) opener.focus();
     };
   }, [onDismiss]);
   return (
@@ -453,6 +470,20 @@ const ERROR_COPY: Record<string, TypedErrorCopy> = {
     detail:
       'The server rejected the amount for this hold, so nothing was charged. Reopen the booking to get the current total.',
     recovery: 'Reload the total',
+  },
+  [PAYMENT_AMOUNT_MISMATCH]: {
+    tone: 'err',
+    title: 'The price changed while you were paying',
+    detail:
+      'The amount this screen showed is not the price the server holds for this session, so nothing was charged. Reload to see the current total before paying.',
+    recovery: 'Reload the total',
+  },
+  [SESSION_PRICE_INVALID]: {
+    tone: 'err',
+    title: 'This session is not correctly priced yet',
+    detail:
+      'The server does not hold a valid price for this mentor, so it refused to take any money and nothing was charged. Try another mentor, or come back once the price is published.',
+    recovery: 'See other mentors',
   },
   [IDEMPOTENCY_KEY_REUSE]: {
     tone: 'err',

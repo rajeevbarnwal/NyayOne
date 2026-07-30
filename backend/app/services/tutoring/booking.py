@@ -8,6 +8,11 @@ Frozen decisions implemented here
 * Slot allocation is ATOMIC: one winner, every competitor gets a typed
   ``HOLD_CONFLICT``, and a replay of the same idempotency key returns the SAME
   hold rather than a second one.
+* Creating a hold SNAPSHOTS the server-authoritative session price
+  (``pricing.resolve_for_slot``) onto ``booking_holds.price_paise`` /
+  ``price_currency`` inside that same winning INSERT, and the snapshot is
+  IMMUTABLE thereafter. ``create_hold`` takes no price argument at all, so no
+  caller can propose one; ``payments.create_order`` charges the snapshot.
 
 How "exactly one winner" is achieved (three layers, all portable)
 ----------------------------------------------------------------
@@ -41,11 +46,12 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy.types import DateTime, String, Uuid
+from sqlalchemy.types import DateTime, Integer, String, Uuid
 
 from app.core.config import settings
 from app.models.wave2 import BookingEvent, BookingHold, TutorAvailabilitySlot
 from app.services.audit_service import record_audit_event
+from app.services.tutoring import pricing
 from app.services.tutoring.errors import (
     HoldConflict,
     HoldExpired,
@@ -57,6 +63,7 @@ from app.services.tutoring.errors import (
 
 _UUID = Uuid(as_uuid=True)
 _TS = DateTime(timezone=True)
+_INT = Integer()
 
 
 def utcnow() -> datetime:
@@ -235,6 +242,17 @@ def create_hold(
     Exactly one of N concurrent callers gets a hold; the others get
     ``HoldConflict``. Replaying the same ``idempotency_key`` returns the same
     hold object rather than creating a second one. Does not commit.
+
+    **Pricing (SAATHI-123/127 remediation).** Creating a hold SNAPSHOTS the
+    server-authoritative price onto ``booking_holds.price_paise`` /
+    ``price_currency``, inside the same conditional INSERT that wins the slot.
+    The value comes from ``pricing.resolve_for_slot`` — the database — and there
+    is deliberately NO price parameter on this function, so a caller could not
+    propose one if it wanted to. The snapshot is IMMUTABLE: no code path in this
+    package updates those two columns afterwards, a replay returns the original
+    row unchanged, and ``payments.create_order`` charges that number rather than
+    anything a request supplied. A tutor re-pricing mid-checkout therefore
+    cannot change what an in-flight hold costs.
     """
     now = now or utcnow()
     key = (idempotency_key or "").strip()
@@ -266,6 +284,11 @@ def create_hold(
     if start_utc is not None and start_utc <= now:
         raise SlotUnavailable("slot is in the past", slot_id=str(slot_id))
 
+    # Resolve the authoritative price BEFORE the insert, from the slot's tutor.
+    # A refusal here (missing tutor, non-positive stored price) happens with no
+    # row written and no slot moved.
+    price = pricing.resolve_for_slot(session, slot)
+
     hold_id = uuid.uuid4()
     expires_at = now + (ttl or hold_ttl())
 
@@ -294,6 +317,8 @@ def create_hold(
             "expires_at",
             "idempotency_key",
             "active_slot_id",
+            "price_paise",
+            "price_currency",
         ],
         sa.select(
             sa.literal(hold_id, _UUID),
@@ -306,6 +331,11 @@ def create_hold(
             sa.literal(key, String(200)),
             # The marker: equal to slot_id while active, guarded by UNIQUE.
             sa.literal(slot_id, _UUID),
+            # The IMMUTABLE price snapshot, written in the SAME statement that
+            # wins the slot: a hold can never exist without the price it was
+            # taken at, and no later statement rewrites it.
+            sa.literal(price.amount_paise, _INT),
+            sa.literal(price.currency, String(3)),
         ).where(guard_no_active_hold, guard_slot_available),
     )
     try:
@@ -348,6 +378,10 @@ def create_hold(
             "slot_id": str(slot_id),
             "expires_at": expires_at.isoformat(),
             "ttl_minutes": int((expires_at - now).total_seconds() // 60),
+            # Ids, codes and AMOUNTS only — the booking trail is non-PII.
+            "price_paise": price.amount_paise,
+            "currency": price.currency,
+            "price_source": price.source,
         },
         now=now,
     )
@@ -362,6 +396,9 @@ def create_hold(
             "slot_id": str(slot_id),
             "status": "active",
             "expires_at": expires_at.isoformat(),
+            "price_paise": price.amount_paise,
+            "currency": price.currency,
+            "price_source": price.source,
         },
     )
     session.flush()

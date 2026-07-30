@@ -237,6 +237,7 @@ describe('runtime canaries: no forbidden value is ever persisted', () => {
  * ========================================================================== */
 
 const ROOT = join(process.cwd(), 'src', 'features', 'student');
+const MENTOR_ROOT = join(process.cwd(), 'src', 'features', 'mentor');
 const SOURCES = [
   join(ROOT, 'lib', 'tutoringApi.ts'),
   join(ROOT, 'lib', 'tutoringRules.ts'),
@@ -244,6 +245,10 @@ const SOURCES = [
   join(ROOT, 'tutoring', 'TutorDiscoveryScreens.tsx'),
   join(ROOT, 'tutoring', 'BookingScreens.tsx'),
   join(ROOT, 'tutoring', 'SessionScreens.tsx'),
+  // The mentor completion surface (QA defect D2) ships in the same tutoring
+  // module and is held to the same canaries: no storage, no media plane, no log.
+  join(MENTOR_ROOT, 'MentorSessionScreens.tsx'),
+  join(MENTOR_ROOT, 'lib', 'mentorAuth.ts'),
 ];
 
 /** Source with block and line comments removed, so prose cannot pass or fail a gate. */

@@ -32,7 +32,6 @@ import {
   REVIEW_BLOCKED,
   TutoringApiError,
   cancelSession,
-  completeSession,
   confirmAttendance,
   createReview,
   disputeAttendance,
@@ -330,15 +329,6 @@ function ManageView({
     },
   });
 
-  const completeMutation = useMutation({
-    mutationFn: () => completeSession(session.id),
-    retry: tutoringRetry,
-    onSuccess: (record) => {
-      announce(`Completion recorded. Attendance is now ${record.state}.`);
-      onDone();
-    },
-  });
-
   const dock = (
     <Dock>
       {policy.started ? (
@@ -410,22 +400,18 @@ function ManageView({
       </Disclosure>
 
       {policy.started && (
-        <>
-          <button
-            type="button"
-            className="tt-btn tt-btn--block"
-            disabled={completeMutation.isPending}
-            onClick={() => completeMutation.mutate()}
-          >
-            <Ic name="check" />
-            Record completion (mentor or administrator)
-          </button>
-          <p className="tt-p tt-muted">
-            Only your mentor or an administrator may record completion, and only after the
-            scheduled end. If that is not you, the server refuses this and says so.
-          </p>
-          {completeMutation.isError && <TypedErrorState error={completeMutation.error} />}
-        </>
+        /*
+         * D2 (independent QA): there is NO completion control here, in any
+         * session state. Recording completion belongs to the mentor or an
+         * administrator (`attendance.RECORDER_ROLES`), so it lives on the
+         * authorised mentor surface (/mentor/sessions) and nowhere else. A
+         * student screen that rendered it would be offering an action the
+         * server is bound to refuse.
+         */
+        <p className="tt-p tt-muted">
+          Your mentor or an administrator records completion once the session ends. It appears
+          here as soon as they do, and only then can you confirm or dispute it.
+        </p>
       )}
 
       {cancelMutation.isError && (

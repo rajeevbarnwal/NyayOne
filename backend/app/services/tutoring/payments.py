@@ -2,6 +2,15 @@
 
 Frozen decisions implemented here
 ---------------------------------
+* **The price is SERVER-AUTHORITATIVE.** ``payment_orders.amount_paise`` and
+  ``currency`` are DERIVED from ``booking_holds.price_paise`` /
+  ``price_currency`` — the immutable snapshot ``booking.create_hold`` took from
+  the tutor profile — and from nothing else. The request may carry an OPTIONAL
+  ``amount_paise`` as an optimistic confirmation ("this is what the screen
+  showed the student"); it is COMPARED and then discarded, and a disagreement is
+  ``PAYMENT_AMOUNT_MISMATCH`` with zero mutation and no provider call. This is
+  the fix for the defect where a client could open a zero-priced order and a
+  correctly signed callback would then only prove payment of that amount.
 * **INR integer paise only.** No floats anywhere in this module.
 * **Only a signature-VERIFIED provider event converts a hold into a session.**
   :func:`handle_event` verifies the signature FIRST and refuses to touch the
@@ -53,13 +62,14 @@ from app.services.providers.payment_provider import (
     PaymentProviderError,
     build_payment_provider,
 )
-from app.services.tutoring import booking, outbox_relay
+from app.services.tutoring import booking, outbox_relay, pricing
 from app.services.tutoring.errors import (
     AdminExceptionUnauthorised,
     AmountMismatch,
     DuplicateEvent,
     Forbidden,
     NotFound,
+    PaymentAmountMismatch,
     PaymentUnverified,
     ProviderUnavailable,
     RefundDuplicate,
@@ -241,27 +251,58 @@ def create_order(
     *,
     hold_id: uuid.UUID,
     student_user_id: uuid.UUID,
-    amount_paise: int,
     idempotency_key: str,
-    currency: str = "INR",
+    amount_paise: int | None = None,
+    currency: str | None = None,
     provider: PaymentProvider | None = None,
     now: datetime | None = None,
 ) -> OrderCreated:
     """Create a payment order against a LIVE hold. Does not commit.
 
-    The hold's TTL is enforced here (the DB cannot): paying against an expired
-    hold raises ``HOLD_EXPIRED`` rather than silently reviving a released slot.
+    **The amount is not an input.** It is DERIVED from the hold's immutable
+    price snapshot (``booking_holds.price_paise`` / ``price_currency``, written
+    by ``booking.create_hold`` from ``tutor_profiles``). ``amount_paise`` and
+    ``currency`` are OPTIONAL *optimistic confirmations* — "this is the amount
+    the checkout screen displayed" — and are compared, reported on and
+    discarded. They are retained rather than removed only because the field is a
+    frozen P3/P4 wire contract; their MEANING changed from authoritative to
+    advisory, which is the whole point of this remediation. A disagreement
+    raises ``PAYMENT_AMOUNT_MISMATCH`` BEFORE any row is written and BEFORE the
+    provider is called, so a tampered request produces exactly zero mutation:
+    no order, no booking event, no audit row, no outbox row.
+
+    Order of operations, and why:
+
+    1. shape validation of the optimistic values (a non-integer/negative amount
+       or a non-INR currency is ``VALIDATION_ERROR``, decided before any read);
+    2. idempotency replay — an identical key returns the SAME order; a key
+       replayed with DIFFERENT parameters is ``VALIDATION_ERROR`` and stays
+       that, because "you reused a key" is a more precise diagnosis than "your
+       amount is wrong";
+    3. the hold: owner-scoped, TTL-enforced (the DB cannot expire a row, so
+       paying against a dead hold is ``HOLD_EXPIRED``, never a revived slot);
+    4. the SNAPSHOT is read and, only now, the optimistic values are compared
+       against it;
+    5. the provider is called with the SERVER's number, and the row is written
+       with the SERVER's number.
     """
     now = now or utcnow()
-    assert_paise(amount_paise)
-    if currency != "INR":
-        raise ValidationError("only INR is supported", field="currency")
+    # 1. shape only. `assert_paise` rejects bool/float/Decimal/str and negatives.
+    if amount_paise is not None:
+        assert_paise(amount_paise, field_name="amount_paise")
+    if currency is not None:
+        # Domain check only ("is this a currency the product supports at all").
+        # Whether it is THIS session's currency is decided at step 4, against
+        # the snapshot — the two questions have different answers the moment
+        # PAYMENT_CURRENCIES grows a second member.
+        pricing.assert_currency(currency, field_name="currency")
     key = (idempotency_key or "").strip()
     if not key or len(key) > 200:
         raise ValidationError(
             "idempotency_key must be 1..200 chars", field="idempotency_key"
         )
 
+    # 2. idempotency replay.
     existing = session.scalars(
         select(PaymentOrder).where(PaymentOrder.idempotency_key == key)
     ).first()
@@ -269,7 +310,7 @@ def create_order(
         if (
             existing.hold_id != hold_id
             or existing.student_user_id != student_user_id
-            or existing.amount_paise != amount_paise
+            or (amount_paise is not None and existing.amount_paise != amount_paise)
         ):
             raise ValidationError(
                 "idempotency key already used for a different order",
@@ -278,14 +319,36 @@ def create_order(
             )
         return OrderCreated(order=existing, replayed=True)
 
+    # 3. the hold.
     hold = booking.get_hold(
         session, hold_id, student_user_id=student_user_id, now=now, require_live=True
     )
+
+    # 4. THE authority: the hold's immutable snapshot. Nothing below reads
+    #    `amount_paise`/`currency` again except to report the disagreement.
+    price = pricing.snapshot_of_hold(hold)
+    if amount_paise is not None and amount_paise != price.amount_paise:
+        raise PaymentAmountMismatch(
+            "the requested amount is not the price of this session",
+            expected_paise=price.amount_paise,
+            observed_paise=amount_paise,
+            currency=price.currency,
+            hold_id=str(hold.id),
+        )
+    if currency is not None and currency != price.currency:
+        raise PaymentAmountMismatch(
+            "the requested currency is not the currency of this session",
+            expected=price.currency,
+            observed=currency,
+            hold_id=str(hold.id),
+        )
+
+    # 5. from here on the amount is the SERVER's, full stop.
     resolved = _resolve_provider(provider)
     try:
         provider_order = resolved.create_order(
-            amount_paise=amount_paise,
-            currency=currency,
+            amount_paise=price.amount_paise,
+            currency=price.currency,
             idempotency_key=key,
             # Receipt reference: opaque ids only, never a student name.
             reference=f"ls-hold-{hold.id}",
@@ -302,8 +365,8 @@ def create_order(
         student_user_id=student_user_id,
         provider=resolved.name,
         provider_order_ref=provider_order.provider_order_ref,
-        amount_paise=amount_paise,
-        currency=currency,
+        amount_paise=price.amount_paise,
+        currency=price.currency,
         status="created",
         idempotency_key=key,
     )
@@ -316,8 +379,9 @@ def create_order(
         hold_id=hold.id,
         payload={
             "order_id": str(order.id),
-            "amount_paise": amount_paise,
-            "currency": currency,
+            "amount_paise": price.amount_paise,
+            "currency": price.currency,
+            "price_source": price.source,
             "provider": resolved.name,
         },
         now=now,
@@ -331,8 +395,9 @@ def create_order(
         actor_role="student",
         after_state={
             "hold_id": str(hold.id),
-            "amount_paise": amount_paise,
-            "currency": currency,
+            "amount_paise": price.amount_paise,
+            "currency": price.currency,
+            "price_source": price.source,
             "provider": resolved.name,
             "status": "created",
         },
@@ -415,12 +480,18 @@ def handle_event(
     3. resolve the order by ``(provider, provider_order_ref)``,
     4. reject an already-recorded ``provider_event_id`` (``DUPLICATE_EVENT``) —
        no second side effect, ever,
-    5. assert order/user/amount/currency agreement,
-    6. record the ledger row, then apply the state change.
+    5. assert order/user agreement, then assert MONEY agreement in BOTH
+       directions: the event must match the order, and the order must still
+       match the hold's immutable price snapshot it was derived from,
+    6. only then record the ledger row and apply the state change.
 
-    Step 6's ledger row is inserted BEFORE the amount assertion so a caller that
-    chooses to commit on rejection keeps the forensic trail; a caller that rolls
-    back loses it and will reject an identical retry identically.
+    Step 5 runs BEFORE the ledger insert on purpose. A valid signature proves
+    "the provider sent this", never "this is the right amount": if a signed
+    callback carries a different amount or currency — or if the order itself no
+    longer agrees with the price the hold was quoted at — the delivery is
+    refused having written NOTHING AT ALL, not even the forensic row. That is
+    what makes "a signature can never make a mismatched order valid" true at the
+    service seam and not merely at the HTTP boundary's rollback.
     """
     now = now or utcnow()
     resolved = _resolve_provider(provider)
@@ -471,7 +542,43 @@ def handle_event(
     ):
         raise Forbidden("payment event does not belong to this user")
 
-    # 6. ledger row, then assertions, then apply.
+    # 5b. MONEY, both directions, before a single row is written.
+    if data.currency != order.currency:
+        raise AmountMismatch(
+            "event currency does not match the order",
+            expected=order.currency,
+            observed=data.currency,
+        )
+    if data.event_type in (EVENT_PAID, EVENT_PENDING):
+        if data.amount_paise != order.amount_paise:
+            raise AmountMismatch(
+                "event amount does not match the order",
+                expected_paise=order.amount_paise,
+                observed_paise=data.amount_paise,
+            )
+        # ...and the order must still equal the SERVER-DERIVED price it was
+        # built from. Without this a row written past the service (a rogue
+        # UPDATE, a bad backfill, a future code path) could be blessed by a
+        # perfectly valid signature; the hold snapshot is the authority, so it
+        # is what a capture is measured against.
+        hold_row = session.get(booking.BookingHold, order.hold_id)
+        if hold_row is None:  # pragma: no cover - FK RESTRICT prevents this
+            raise NotFound("hold not found", resource="booking_hold")
+        authoritative = pricing.snapshot_of_hold(hold_row)
+        if (
+            order.amount_paise != authoritative.amount_paise
+            or order.currency != authoritative.currency
+        ):
+            raise AmountMismatch(
+                "order amount does not match the authoritative session price",
+                expected_paise=authoritative.amount_paise,
+                observed_paise=order.amount_paise,
+                expected=authoritative.currency,
+                observed=order.currency,
+                order_id=str(order.id),
+            )
+
+    # 6. ledger row, then apply.
     event = PaymentEvent(
         order_id=order.id,
         provider_event_id=data.provider_event_id,
@@ -489,21 +596,6 @@ def handle_event(
             "provider event has already been applied",
             provider_event_id=data.provider_event_id,
         ) from exc
-
-    if data.currency != order.currency:
-        raise AmountMismatch(
-            "event currency does not match the order",
-            expected=order.currency,
-            observed=data.currency,
-        )
-    if data.event_type in (EVENT_PAID, EVENT_PENDING) and (
-        data.amount_paise != order.amount_paise
-    ):
-        raise AmountMismatch(
-            "event amount does not match the order",
-            expected_paise=order.amount_paise,
-            observed_paise=data.amount_paise,
-        )
 
     # Issuer display crumbs only (brand / last four / expiry) — never card data.
     if data.brand:
