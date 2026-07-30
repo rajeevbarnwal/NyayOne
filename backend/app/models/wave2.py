@@ -28,7 +28,10 @@ Two invariants need "at most one row in state X per parent". They are enforced
    in the guarded state and NULL otherwise, plus a plain UNIQUE constraint on
    that column (NULLs are distinct in both PostgreSQL and SQLite, so any number
    of non-guarded rows may exist). A CHECK constraint keeps the marker honest,
-   so the guard cannot be bypassed by writing the wrong marker value:
+   so the guard cannot be bypassed by writing the wrong marker value — and,
+   critically, it spells out ``marker IS NOT NULL`` inside the guarded branch
+   because a CHECK whose predicate evaluates to NULL is ACCEPTED, not rejected
+   (SQL three-valued logic); see the constraint comments below:
    - ``booking_holds.active_slot_id`` + ``uq_booking_holds_active_slot_id``
      + ``ck_booking_holds_active_marker`` => at most ONE 'active' hold per slot.
    - ``payment_refunds.succeeded_order_id``
@@ -265,8 +268,20 @@ class BookingHold(TimestampedBase):
         UniqueConstraint("active_slot_id", name="uq_booking_holds_active_slot_id"),
         _in("status", HOLD_STATUSES, "status"),
         CheckConstraint("expires_at > created_at", name="expiry_after_created"),
+        # THREE-VALUED LOGIC — do NOT "simplify" the `IS NOT NULL` clause away.
+        # A CHECK only rejects a row when its predicate is FALSE; a NULL result
+        # is ACCEPTED. Without `active_slot_id IS NOT NULL`, the row
+        # (status='active', active_slot_id=NULL) makes branch 1 NULL
+        # (`NULL = slot_id` is NULL) and branch 2 FALSE, so the whole predicate
+        # is NULL and the row INSERTs — letting a writer claim 'active' with a
+        # NULL marker and slip past uq_booking_holds_active_slot_id entirely
+        # (NULLs are distinct). The explicit IS NOT NULL / IS NULL tests make
+        # the predicate two-valued for every input, so 'active' always requires
+        # a marker equal to slot_id and every other status requires NULL.
+        # `status` is NOT NULL, so `status = 'active'` is never NULL either.
         CheckConstraint(
-            "(status = 'active' AND active_slot_id = slot_id) "
+            "(status = 'active' AND active_slot_id IS NOT NULL "
+            "AND active_slot_id = slot_id) "
             "OR (status <> 'active' AND active_slot_id IS NULL)",
             name="active_marker",
         ),
@@ -394,8 +409,16 @@ class PaymentRefund(TimestampedBase):
         _in("reason", REFUND_REASONS, "reason"),
         _in("status", REFUND_STATUSES, "status"),
         CheckConstraint("amount_paise >= 0", name="amount_nonnegative"),
+        # THREE-VALUED LOGIC — the `IS NOT NULL` clause is load-bearing; see
+        # ck_booking_holds_active_marker above. A CHECK accepts a NULL result,
+        # so without it (status='succeeded', succeeded_order_id=NULL) would
+        # evaluate to NULL and INSERT cleanly, bypassing
+        # uq_payment_refunds_succeeded_order_id (NULLs are distinct) and
+        # allowing a second full refund on the same order. `status` is NOT NULL,
+        # so the predicate is two-valued for every representable row.
         CheckConstraint(
-            "(status = 'succeeded' AND succeeded_order_id = order_id) "
+            "(status = 'succeeded' AND succeeded_order_id IS NOT NULL "
+            "AND succeeded_order_id = order_id) "
             "OR (status <> 'succeeded' AND succeeded_order_id IS NULL)",
             name="succeeded_marker",
         ),

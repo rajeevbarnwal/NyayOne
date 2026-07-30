@@ -25,7 +25,10 @@ Data-protection invariants encoded in the DDL, not just in service code:
    equals the parent id while the row is in the guarded state and is NULL
    otherwise, plus a plain UNIQUE constraint on that column (NULLs are distinct
    in both PostgreSQL and SQLite). A CHECK constraint keeps the marker honest so
-   it cannot be set to a wrong/stale value:
+   it cannot be set to a wrong/stale value — and it states ``marker IS NOT NULL``
+   explicitly inside the guarded branch, because a CHECK whose predicate
+   evaluates to NULL is ACCEPTED (SQL three-valued logic) and a guarded-status
+   row with a NULL marker would otherwise slip past the marker UNIQUE:
      - booking_holds.active_slot_id + uq_booking_holds_active_slot_id
        + ck_booking_holds_active_marker  => ONE 'active' hold per slot.
      - payment_refunds.succeeded_order_id + uq_payment_refunds_succeeded_order_id
@@ -248,8 +251,19 @@ def upgrade() -> None:
             name="status",
         ),
         sa.CheckConstraint("expires_at > created_at", name="expiry_after_created"),
+        # THREE-VALUED LOGIC — do NOT "simplify" the `IS NOT NULL` clause away.
+        # A CHECK rejects a row only when its predicate is FALSE; a NULL result
+        # is ACCEPTED. Without `active_slot_id IS NOT NULL`, the row
+        # (status='active', active_slot_id=NULL) yields NULL for branch 1
+        # (`NULL = slot_id` is NULL) and FALSE for branch 2, so the predicate is
+        # NULL and the row INSERTs — a writer could claim 'active' with a NULL
+        # marker and escape uq_booking_holds_active_slot_id (NULLs are
+        # distinct), leaving the invariant to the partial index alone. `status`
+        # is NOT NULL, so the predicate is two-valued for every input.
+        # Must stay identical in meaning to app/models/wave2.py.
         sa.CheckConstraint(
-            "(status = 'active' AND active_slot_id = slot_id) "
+            "(status = 'active' AND active_slot_id IS NOT NULL "
+            "AND active_slot_id = slot_id) "
             "OR (status <> 'active' AND active_slot_id IS NULL)",
             name="active_marker",
         ),
@@ -395,8 +409,17 @@ def upgrade() -> None:
             name="status",
         ),
         sa.CheckConstraint("amount_paise >= 0", name="amount_nonnegative"),
+        # THREE-VALUED LOGIC — the `IS NOT NULL` clause is load-bearing (see
+        # ck_booking_holds_active_marker above): a CHECK accepts a NULL
+        # predicate, so without it (status='succeeded', succeeded_order_id=NULL)
+        # would INSERT cleanly and bypass
+        # uq_payment_refunds_succeeded_order_id, permitting a second full refund
+        # on the same order. `status` is NOT NULL, so the predicate is
+        # two-valued for every input. Must stay identical in meaning to
+        # app/models/wave2.py.
         sa.CheckConstraint(
-            "(status = 'succeeded' AND succeeded_order_id = order_id) "
+            "(status = 'succeeded' AND succeeded_order_id IS NOT NULL "
+            "AND succeeded_order_id = order_id) "
             "OR (status <> 'succeeded' AND succeeded_order_id IS NULL)",
             name="succeeded_marker",
         ),
