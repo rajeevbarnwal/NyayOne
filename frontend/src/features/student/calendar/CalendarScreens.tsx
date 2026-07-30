@@ -452,6 +452,7 @@ export function CalendarAdd() {
   const nav = useNavigate();
   const svc = useMemo(() => new CalendarService(STUDENT_ID), []);
   const tz = useMemo(() => svc.getFilters().timezone, [svc]);
+  const todayIso = useMemo(() => localDateKey(new Date().toISOString(), tz), [tz]);
   const [form, setForm] = useState({ title: '', date: '', time: '', type: 'study' as PersonalEventType });
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -466,6 +467,7 @@ export function CalendarAdd() {
       setError(
         code === 'title_required' ? 'Enter a title.'
           : code === 'invalid_date' ? 'Choose a valid date.'
+          : code === 'past_date' ? 'Event date cannot be in the past — please choose today or a future date.'
           : code === 'invalid_time' ? 'Choose a valid time.'
           : code === 'invalid_type' ? 'Choose an event type.'
           : 'Please check the details.',
@@ -489,7 +491,7 @@ export function CalendarAdd() {
             <div style={{ height: 14 }} />
             <div className="cols2">
               <div><label className="lbl" htmlFor="ev-date" style={{ marginBottom: 6 }}>Date</label>
-                <input id="ev-date" className="field" type="date" value={form.date} data-testid="ev-date" onChange={(e) => set('date')(e.target.value)} /></div>
+                <input id="ev-date" className="field" type="date" value={form.date} min={todayIso} data-testid="ev-date" onChange={(e) => set('date')(e.target.value)} /></div>
               <div><label className="lbl" htmlFor="ev-time" style={{ marginBottom: 6 }}>Time</label>
                 <input id="ev-time" className="field" type="time" value={form.time} data-testid="ev-time" onChange={(e) => set('time')(e.target.value)} /></div>
             </div>
