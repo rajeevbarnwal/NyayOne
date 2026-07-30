@@ -259,7 +259,7 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
   });
 
   it('validatePersonalEvent: typed errors for each invalid field', () => {
-    const base: PersonalEventInput = { title: 'Study', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' };
+    const base: PersonalEventInput = { title: 'Study', date: '2026-12-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' };
     const code = (i: PersonalEventInput) => { try { validatePersonalEvent(i); return 'ok'; } catch (e) { return (e as PersonalEventError).code; } };
     expect(code(base)).toBe('ok');
     expect(code({ ...base, title: '  ' })).toBe('title_required');
@@ -271,7 +271,7 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
   it('addPersonalEvent: persists through the service, appears via calendarLoaders, survives reload', () => {
     const store = new InMemoryKvStore();
     const svc = new CalendarService('stu-1', store);
-    svc.addPersonalEvent({ title: 'Revise contracts', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, '2026-07-12T00:00:00Z');
+    svc.addPersonalEvent({ title: 'Revise contracts', date: '2026-12-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, '2026-07-12T00:00:00Z');
     // aggregate via the full loader set for a FRESH service over the same store (reload)
     const reloaded = new CalendarService('stu-1', store);
     const { events } = aggregate(runLoaders(calendarLoaders(reloaded, 'stu-1')));
@@ -284,13 +284,13 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
   it('addPersonalEvent: invalid input throws and persists nothing', () => {
     const store = new InMemoryKvStore();
     const svc = new CalendarService('stu-1', store);
-    expect(() => svc.addPersonalEvent({ title: '', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, 't0')).toThrowError(PersonalEventError);
+    expect(() => svc.addPersonalEvent({ title: '', date: '2026-12-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, 't0')).toThrowError(PersonalEventError);
     expect(svc.listPersonalRaw().length).toBe(0);
   });
 
   it('personal events are user-scoped (not visible to another student)', () => {
     const store = new InMemoryKvStore();
-    new CalendarService('stu-1', store).addPersonalEvent({ title: 'Mine', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'UTC' }, '2026-07-12T00:00:00Z');
+    new CalendarService('stu-1', store).addPersonalEvent({ title: 'Mine', date: '2026-12-20', time: '09:30', type: 'study', timezone: 'UTC' }, '2026-07-12T00:00:00Z');
     expect(new CalendarService('stu-2', store).listPersonalRaw().length).toBe(0);
   });
 
@@ -311,5 +311,19 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     expect(getSavedViewMode()).toBe('week');
     saveViewMode('month');
     expect(getSavedViewMode()).toBe('month');
+  });
+
+  it('validatePersonalEvent: rejects past dates and accepts today or future dates', () => {
+    const fakeNow = new Date('2026-07-30T12:00:00Z');
+    expect(() => validatePersonalEvent({ title: 'Past Task', date: '2026-07-20', time: '10:00', type: 'study', timezone: 'Asia/Kolkata' }, fakeNow)).toThrowError(PersonalEventError);
+    try {
+      validatePersonalEvent({ title: 'Past Task', date: '2026-07-20', time: '10:00', type: 'study', timezone: 'Asia/Kolkata' }, fakeNow);
+    } catch (e: any) {
+      expect(e.code).toBe('past_date');
+    }
+
+    // Today and future dates succeed cleanly
+    expect(() => validatePersonalEvent({ title: 'Today Task', date: '2026-07-30', time: '10:00', type: 'study', timezone: 'Asia/Kolkata' }, fakeNow)).not.toThrow();
+    expect(() => validatePersonalEvent({ title: 'Future Task', date: '2026-08-15', time: '10:00', type: 'study', timezone: 'Asia/Kolkata' }, fakeNow)).not.toThrow();
   });
 });

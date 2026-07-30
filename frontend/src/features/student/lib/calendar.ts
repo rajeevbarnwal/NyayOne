@@ -526,7 +526,7 @@ export interface PersonalEventInput {
   readonly timezone: string;
 }
 
-export type PersonalEventErrorCode = 'title_required' | 'invalid_date' | 'invalid_time' | 'invalid_type' | 'invalid_timezone';
+export type PersonalEventErrorCode = 'title_required' | 'invalid_date' | 'past_date' | 'invalid_time' | 'invalid_type' | 'invalid_timezone';
 export class PersonalEventError extends Error {
   readonly code: PersonalEventErrorCode;
   constructor(code: PersonalEventErrorCode, message?: string) {
@@ -536,7 +536,7 @@ export class PersonalEventError extends Error {
   }
 }
 
-export function validatePersonalEvent(i: PersonalEventInput): void {
+export function validatePersonalEvent(i: PersonalEventInput, now: Date = new Date()): void {
   if (!i.title || !i.title.trim()) throw new PersonalEventError('title_required');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(i.date) || Number.isNaN(Date.parse(`${i.date}T00:00:00Z`))) {
     throw new PersonalEventError('invalid_date');
@@ -544,6 +544,11 @@ export function validatePersonalEvent(i: PersonalEventInput): void {
   if (!/^\d{2}:\d{2}$/.test(i.time)) throw new PersonalEventError('invalid_time');
   if (!(PERSONAL_EVENT_TYPES as readonly string[]).includes(i.type)) throw new PersonalEventError('invalid_type');
   if (!isValidTimezone(i.timezone)) throw new PersonalEventError('invalid_timezone');
+
+  const todayStr = localDateKey(now.toISOString(), i.timezone);
+  if (i.date < todayStr) {
+    throw new PersonalEventError('past_date', 'Event date cannot be in the past — please choose today or a future date.');
+  }
 }
 
 /**
