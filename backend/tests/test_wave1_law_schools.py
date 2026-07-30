@@ -317,11 +317,34 @@ def test_concurrent_follow_service_level_single_row_single_audit(tmp_path):
     Base.metadata.drop_all(engine)
 
 
+def _materialise_routes(app_obj) -> int:
+    """Resolve the app's effective route table ONCE, in the main thread.
+
+    FastAPI >= 0.141 expands ``include_router`` lazily: the first request to an
+    app builds the effective route contexts. Doing that here means the
+    concurrency assertion below measures the DB/idempotency boundary only, and
+    never first-request route construction. Returns the number of resolved
+    routes so a wiring regression (0 routes) fails loudly.
+    """
+    try:
+        from fastapi.routing import iter_route_contexts  # FastAPI >= 0.141
+
+        return len(list(iter_route_contexts(app_obj.routes)))
+    except Exception:  # older FastAPI expands eagerly — nothing to warm
+        return len(app_obj.routes)
+
+
 @pytest.mark.parametrize("surface", ["follow", "saved"])
 def test_http_concurrent_put_all_200_one_row_one_audit(tmp_path, surface):
     """TC-63-04 remediation at the HTTP boundary: 8 parallel PUTs on one
     (user, school) via ThreadPoolExecutor against a production-style session
-    → ALL return 200 (idempotent, never 500), one row, one audit row."""
+    → ALL return 200 (idempotent, never 500), one row, one audit row.
+
+    The 8 callers are released by a ``threading.Barrier`` so they provably
+    enter the endpoint together instead of relying on pool scheduling; the
+    barrier carries a timeout so a lost racer fails the test instead of
+    hanging. This STRENGTHENS the race (all eight must still be 200) — it does
+    not relax it."""
     from concurrent.futures import ThreadPoolExecutor
 
     from app.db.models.audit import AuditEvent
@@ -352,11 +375,17 @@ def test_http_concurrent_put_all_200_one_row_one_audit(tmp_path, surface):
         s.commit()
         uid = user.id
         sid = str(s.scalars(select(LawSchool.id).order_by(LawSchool.name)).first())
+    assert uuid.UUID(sid)  # a missing seed row must fail here, not as a request 404
+    assert _materialise_routes(app) > 0
     h = _claims(uid)
+    gate = threading.Barrier(8, timeout=20)
+
+    def _put(_i):
+        gate.wait()  # all eight callers hit the endpoint together
+        return client.put(f"/api/v1/student/law-schools/{sid}/{surface}", headers=h)
+
     with ThreadPoolExecutor(max_workers=8) as pool:
-        rs = list(pool.map(
-            lambda _i: client.put(f"/api/v1/student/law-schools/{sid}/{surface}", headers=h),
-            range(8)))
+        rs = list(pool.map(_put, range(8)))
     assert [r.status_code for r in rs] == [200] * 8, [(r.status_code, r.text) for r in rs]
     model = LawSchoolFollow if surface == "follow" else SavedLawSchool
     action = "law_school.followed" if surface == "follow" else "law_school.saved"
