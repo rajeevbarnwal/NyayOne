@@ -684,8 +684,13 @@ export async function createPaymentOrder(input: {
  * D1..D5 — sessions
  * ========================================================================== */
 
+/**
+ * The server's own vocabulary (`ATTENDANCE_STATES` in
+ * backend/app/models/wave2.py). The state a tutor's completion writes is
+ * `recorded`; there is no `marked`.
+ */
 export type AttendanceState =
-  | 'pending' | 'marked' | 'confirmed' | 'disputed' | 'resolved' | string;
+  | 'pending' | 'recorded' | 'confirmed' | 'disputed' | 'resolved' | string;
 
 export interface TutoringSession {
   id: string;
