@@ -575,7 +575,11 @@ export function SessionConfirmed() {
 
   const data = session.data;
   const labels = slotTimeLabels(data.startUtc, data.endUtc, data.ianaTimezone);
-  const confirmed = data.status === 'scheduled' || data.status === 'confirmed';
+  // Server vocabulary (`SESSION_STATUSES`): a booked session is `confirmed`, or
+  // `rescheduled` once it has been moved. `scheduled` is not a status the server
+  // has; it is kept only so an older payload cannot regress this receipt.
+  const confirmed =
+    data.status === 'confirmed' || data.status === 'rescheduled' || data.status === 'scheduled';
   const minutes = durationMinutes(data.startUtc, data.endUtc);
   const policy = policyPreview({ startUtcIso: data.startUtc, capturedPaise: 0 });
 

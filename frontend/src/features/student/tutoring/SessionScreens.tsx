@@ -115,8 +115,16 @@ type Go = (next: View, id?: string) => void;
  * D1 — the session list
  * ========================================================================== */
 
+/**
+ * A session that has not happened yet, in the server's own vocabulary
+ * (`SESSION_STATUSES` in backend/app/models/wave2.py). There is no `scheduled`
+ * status: the server refuses an unknown filter with 422 VALIDATION_ERROR, so
+ * naming one here made the default tab of this screen an error banner.
+ */
+const LIVE_STATUSES = ['confirmed', 'pending_provider', 'rescheduled'];
+
 const STATUS_TABS: Array<{ key: string; label: string; statuses?: string[] }> = [
-  { key: 'upcoming', label: 'Upcoming', statuses: ['scheduled'] },
+  { key: 'upcoming', label: 'Upcoming', statuses: LIVE_STATUSES },
   { key: 'finished', label: 'Finished', statuses: ['completed', 'disputed'] },
   { key: 'cancelled', label: 'Cancelled', statuses: ['cancelled'] },
   { key: 'all', label: 'Everything' },
@@ -191,7 +199,7 @@ function SessionRow({ session, go }: { session: TutoringSession; go: Go }) {
     <article className="tt-tut">
       <div className="tt-tut__bd">
         <div className="tt-chiprow">
-          <Chip tone={session.status === 'scheduled' ? 'g' : session.status === 'cancelled' ? 'r' : 'i'}>
+          <Chip tone={LIVE_STATUSES.includes(session.status) ? 'g' : session.status === 'cancelled' ? 'r' : 'i'}>
             {session.status}
           </Chip>
           {session.attendanceState && (
@@ -272,7 +280,7 @@ function SessionHeading({ session }: { session: TutoringSession }) {
   const labels = slotTimeLabels(session.startUtc, session.endUtc, session.ianaTimezone);
   return (
     <div>
-      <Chip tone={session.status === 'scheduled' ? 'g' : 'i'}>{session.status}</Chip>
+      <Chip tone={LIVE_STATUSES.includes(session.status) ? 'g' : 'i'}>{session.status}</Chip>
       <h1 className="tt-h tt-arrival" style={{ marginTop: '8px', fontSize: '19px' }}>
         {labels.sessionZone}
       </h1>
@@ -804,7 +812,7 @@ function AttendanceView({
           title: 'Attendance is not decided yet',
           detail: 'Attendance opens after the scheduled end. Your mentor records it first, then you confirm or dispute it.',
         };
-      case 'marked':
+      case 'recorded':
         return {
           tone: 'info' as const,
           title: 'Your mentor recorded this session as attended',
@@ -842,7 +850,7 @@ function AttendanceView({
       screenId="S-35"
       dock={
         <Dock>
-          {state === 'marked' ? (
+          {state === 'recorded' ? (
             <button
               type="button"
               className="tt-btn tt-btn--jade tt-btn--block"
@@ -863,7 +871,7 @@ function AttendanceView({
               Refresh attendance
             </button>
           )}
-          {state === 'marked' && (
+          {state === 'recorded' && (
             <button
               type="button"
               className="tt-btn tt-btn--block"
