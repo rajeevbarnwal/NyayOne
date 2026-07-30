@@ -1,0 +1,138 @@
+# LiveKit server config TEMPLATE — FORCED-TURN mode (SAATHI-451, matrix row H1).
+#
+# RENDER, DO NOT EDIT THE OUTPUT:
+#   python3 scripts/render_video_infra_config.py --mode forced-turn --env-file .env
+# Output: infra/video/rendered/livekit.yaml (mode 0600, gitignored).
+#
+# Every key below appears in the upstream config-sample.yaml
+# (github.com/livekit/livekit/config-sample.yaml). The server is started WITHOUT
+# --disable-strict-config, so an unknown key here is a hard boot failure rather
+# than a silently ignored line — that is the behaviour we want.
+#
+# ------------------------------------------------------------------------------
+# WHY THIS FILE IS "FORCED TURN"
+# ------------------------------------------------------------------------------
+# Three independent mechanisms, so no single mistake re-opens a direct path:
+#
+# 1. NO BROWSER-REACHABLE SFU CANDIDATE. `use_external_ip: false` plus
+#    `node_ip: 172.29.30.10` makes the SFU advertise only its address on the
+#    private `video` docker network. infra/video/docker-compose.video.yml does
+#    not publish 7881/7882 on the host, so nothing outside the docker network
+#    can open a media socket to the SFU at all. coturn (172.29.30.11) is on that
+#    network and is the only thing that can.
+# 2. NO THIRD-PARTY STUN. `stun_servers` points at our own coturn. LiveKit's
+#    documented default when the list is empty is Google's public STUN servers —
+#    which would both leak client IPs to a third party and hand out srflx
+#    candidates. Never leave this unset.
+# 3. TURN IS THE ADVERTISED PATH. `turn_servers` gives every client the coturn
+#    address plus a shared secret, so LiveKit mints short-lived TURN REST
+#    credentials (RFC 5766 TURN REST API) per client. coturn is configured with
+#    the matching `use-auth-secret` / `--static-auth-secret`.
+#
+# The client-side belt-and-braces switch (`iceTransportPolicy: 'relay'` in the
+# LiveKit client's rtcConfig) is a FRONTEND concern and is NOT required for the
+# above to hold. See RUNBOOK § "Forced-TURN" for how to prove the relay is in
+# effect, and § "Known gap" before you rely on room events.
+# ------------------------------------------------------------------------------
+
+# Signalling + RoomService (Twirp). Published on host 1039.
+# LIVEKIT_URL in the backend's environment must point here with an http:// or
+# https:// scheme — LiveKitCommunityAdapter._twirp POSTs to
+# {LIVEKIT_URL}/twirp/livekit.RoomService/... over httpx. A wss:// value parses
+# fine in Settings and then fails every server-side call at runtime.
+port: 7880
+
+# Prometheus metrics on :6789, published on host 1042. This is the readiness
+# SCRAPE target (num_participants, TURN allocation counts); the container's own
+# readiness gate is the healthcheck in the compose file.
+prometheus_port: 6789
+
+rtc:
+  # ICE/TCP fallback. Reachable only from inside the `video` network in this
+  # mode; a client that needs TCP gets it via TURN-over-TCP on coturn:3478.
+  tcp_port: 7881
+  # Single UDP mux port. `port_range_start`/`port_range_end` MUST stay unset for
+  # udp_port to take effect (upstream constraint).
+  udp_port: 7882
+  # Never STUN out to discover a public address: in this mode the SFU must not
+  # have a publicly routable candidate.
+  use_external_ip: false
+  # MUST equal the livekit service's static address in
+  # infra/video/docker-compose.video.yml. Hard-coded rather than templated on
+  # purpose: an env var here is an env var an operator can use to accidentally
+  # advertise a reachable address and silently lose forced-TURN.
+  node_ip: 172.29.30.10
+  # Our own STUN — see mechanism 2 above.
+  stun_servers:
+    - ${TURN_PUBLIC_HOST}:3478
+  turn_servers:
+    - host: ${TURN_PUBLIC_HOST}
+      port: 3478
+      protocol: udp
+      secret: ${TURN_STATIC_AUTH_SECRET}
+      ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
+    - host: ${TURN_PUBLIC_HOST}
+      port: 3478
+      protocol: tcp
+      secret: ${TURN_STATIC_AUTH_SECRET}
+      ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
+  # Keep the TCP/TURN fallback path enabled: on a restrictive campus network UDP
+  # 3478 is often the thing that is blocked.
+  allow_tcp_fallback: true
+  congestion_control:
+    enabled: true
+
+# The EMBEDDED TURN server stays off — coturn is the relay, and running two
+# would mean two ACLs to get right.
+turn:
+  enabled: false
+
+room:
+  # REQUIRED, not cosmetic. LiveKitCommunityAdapter.ensure_room() is a pure
+  # function of the session id — it derives "ls_<sha256[:28]>" and never calls
+  # the provider. If auto_create were false, every join would fail with a room
+  # that nobody ever created.
+  auto_create: true
+  # Seconds to hold an empty room open before it is finished. Generous on
+  # purpose: the tutor commonly joins before the student.
+  empty_timeout: 300
+  # Seconds to hold the room open after the LAST participant leaves. This one is
+  # load-bearing for the committed revocation semantics: `room_finished` makes
+  # join_credentials.handle_event revoke EVERY grant for the session, so a short
+  # departure timeout would turn a 30-second mobile-network blip into "both
+  # participants must be re-issued credentials". 300s is longer than any
+  # reconnect the client SDK will attempt.
+  departure_timeout: 300
+  # Student + tutor, plus headroom for the moment during a reconnect when a
+  # stale connection has not been reaped yet. NOT 2 — that would make a
+  # reconnect race look like a full room.
+  max_participants: 4
+
+logging:
+  level: info
+  # JSON so the room trail lands in the same Logstash pipeline as the backend.
+  json: true
+
+# API key/secret pair. The webhook `api_key` below MUST be one of these keys —
+# LiveKit refuses to start a webhook notifier for an unknown key
+# (protocol/webhook/notifier.go: "unknown api key in webhook config").
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+webhook:
+  api_key: ${LIVEKIT_API_KEY}
+  urls:
+    # Must be the committed E2 route: POST /api/v1/video/webhook, served by
+    # backend/app/api/v1/tutoring.py::video_webhook.
+    - ${VIDEO_WEBHOOK_URL}
+  # Only the four event types the committed adapter maps
+  # (video_provider.py::LiveKitCommunityAdapter.verify_event). Anything else
+  # would be answered 400 EVENT_TYPE_UNSUPPORTED and retried. If your
+  # livekit-server build rejects `filter_params` at boot, delete this block: the
+  # only cost is that noise in the backend log.
+  filter_params:
+    include_events:
+      - room_started
+      - room_finished
+      - participant_joined
+      - participant_left

@@ -10,6 +10,10 @@
 *.pem
 *.key
 *.crt
+# Rendered video-plane configs (SAATHI-451): generated from infra/video/*.tmpl by
+# scripts/render_video_infra_config.py and they hold real secrets. Templates and
+# infra/video/.env.example ARE tracked; anything rendered never is.
+infra/video/rendered/
 
 # Python
 __pycache__/
