@@ -64,6 +64,7 @@ POSITIVE_INT_SETTINGS = (
 )
 
 _WAVE2_ENV = (
+    "APP_ENV",
     "PAYMENT_PROVIDER",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
@@ -91,7 +92,22 @@ def _hermetic_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _build(**overrides) -> Settings:
+    # Make the intended test environment explicit. CI jobs commonly export
+    # APP_ENV=staging; inheriting that value would make development-only
+    # provider assertions depend on the runner instead of their inputs.
+    overrides.setdefault("app_env", "development")
     return Settings(_env_file=None, **overrides)
+
+
+def test_build_helper_does_not_inherit_ambient_app_env(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("APP_ENV", "staging")
+    fresh = _build(
+        video_calls_enabled=True,
+        video_provider="deterministic",
+    )
+    assert fresh.app_env == "development"
 
 
 def _refuses(*, names: tuple[str, ...], secrets: tuple[str, ...] = (), **overrides):
