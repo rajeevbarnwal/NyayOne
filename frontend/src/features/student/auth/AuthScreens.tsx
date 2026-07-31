@@ -100,47 +100,30 @@ export function AuthGate() {
   const [countryCode, setCountryCode] = useState('+91');
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState<string | undefined>();
-  const [unregisteredError, setUnregisteredError] = useState(false);
-  const [checking, setChecking] = useState(false);
 
-  async function sendOtp() {
+  function sendOtp() {
     const digits = mobile.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit mobile number.');
-      setUnregisteredError(false);
       return;
     }
     setError(undefined);
-    setChecking(true);
-    try {
-      const isRegistered = await checkMobileRegistered(digits);
-      if (!isRegistered) {
-        setError('No account found with this mobile number.');
-        setUnregisteredError(true);
-        return;
-      }
-      setUnregisteredError(false);
-      const fullMobile = `${countryCode}${digits}`;
-      startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
-      setMinor(false, false);
-      const existingServer = loadRegistrationSession();
-      const masked = maskDestination({ channel: 'sms', ref: fullMobile });
-      saveRegistrationSession({
-        ...(existingServer ?? {}),
-        registrationId: 'login-' + digits,
-        destinationMasked: masked,
-        issuedAt: Date.now(),
-        isMinor: false,
-        guardianConsentPending: false,
-        isLoginFlow: true,
-      });
-      nav('/s-06');
-    } finally {
-      setChecking(false);
-    }
+    const fullMobile = `${countryCode}${digits}`;
+    startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
+    setMinor(false, false);
+    const existingServer = loadRegistrationSession();
+    const masked = maskDestination({ channel: 'sms', ref: fullMobile });
+    saveRegistrationSession({
+      ...(existingServer ?? {}),
+      registrationId: 'login-' + digits,
+      destinationMasked: masked,
+      issuedAt: Date.now(),
+      isMinor: false,
+      guardianConsentPending: false,
+      isLoginFlow: true,
+    });
+    nav('/s-06');
   }
-
-  const digits = mobile.replace(/\D/g, '');
 
   return (
     <AuthCard screenId="S-03" kicker="Student module · S1" title="LegalSaathi" brand>
@@ -159,35 +142,16 @@ export function AuthGate() {
             id="login-mobile"
             label="Enter your Mobile Number"
             value={mobile}
-            onChange={(val) => {
-              setMobile(val);
-              if (unregisteredError) {
-                setUnregisteredError(false);
-                setError(undefined);
-              }
-            }}
+            onChange={setMobile}
             countryCode={countryCode}
             onCountryCodeChange={setCountryCode}
             error={error}
             help="We’ll send a 6-digit OTP · 3 attempts"
             placeholder="10-digit mobile number"
           />
-          {unregisteredError && (
-            <div style={{ marginTop: 'var(--space-2)', textAlign: 'center' }}>
-              <button
-                type="button"
-                className="btn btn--primary tap"
-                data-testid="btn-register-handoff"
-                onClick={() => nav('/s-05', { state: { prefillMobile: digits, prefillCountryCode: countryCode } })}
-                style={{ marginTop: 8 }}
-              >
-                Register New Account →
-              </button>
-            </div>
-          )}
           <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={checking}>
-              {checking ? 'Checking…' : 'Send OTP'}
+            <button type="button" className="btn btn--primary tap" onClick={sendOtp}>
+              Send OTP
             </button>
             <button type="button" className="btn tap" onClick={() => nav('/s-04')}>
               Language
