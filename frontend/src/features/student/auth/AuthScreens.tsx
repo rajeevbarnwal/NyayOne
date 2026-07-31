@@ -108,21 +108,20 @@ export function AuthGate() {
       return;
     }
     setError(undefined);
-    startOtp({ channel: 'sms' as OtpChannel, ref: digits }, Date.now());
+    const fullMobile = `${countryCode}${digits}`;
+    startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
     setMinor(false, false);
     const existingServer = loadRegistrationSession();
-    if (existingServer) {
-      saveRegistrationSession({ ...existingServer, isLoginFlow: true });
-    } else {
-      saveRegistrationSession({
-        registrationId: 'login-' + digits,
-        destinationMasked: `${countryCode} ${digits}`,
-        issuedAt: Date.now(),
-        isMinor: false,
-        guardianConsentPending: false,
-        isLoginFlow: true,
-      });
-    }
+    const masked = maskDestination({ channel: 'sms', ref: fullMobile });
+    saveRegistrationSession({
+      ...(existingServer ?? {}),
+      registrationId: 'login-' + digits,
+      destinationMasked: masked,
+      issuedAt: Date.now(),
+      isMinor: false,
+      guardianConsentPending: false,
+      isLoginFlow: true,
+    });
     nav('/s-06');
   }
 
