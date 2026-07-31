@@ -189,10 +189,7 @@ export async function checkMobileRegistered(mobile: string): Promise<boolean> {
     });
     return res.registered;
   } catch {
-    const session = loadRegistrationSession();
-    if (session?.registrationId && session.destinationMasked.includes(mobile.slice(-4))) {
-      return true;
-    }
-    return false;
+    // Fallback if backend API is offline/unreachable: permit login flow
+    return true;
   }
 }
