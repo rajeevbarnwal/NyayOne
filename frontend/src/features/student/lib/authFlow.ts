@@ -1,7 +1,7 @@
 /**
  * In-memory auth-flow context shared across the S1 screens (stub only).
  * Holds the current OTP destination + challenge and the derived minor flag so
- * the register/login screens (S-03/S-05) can hand off to OTP entry (S-06).
+ * the v3.4 register/login screens (S-08/S-04) can hand off to OTP entry (S-09).
  * No persistence, no network — a placeholder for the server-side P0.2 session.
  */
 import {
