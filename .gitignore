@@ -26,6 +26,13 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+# Platform-scoped virtualenvs: `.venv-$(uname -s)-$(uname -m)`, e.g.
+# .venv-Linux-aarch64 / .venv-Darwin-arm64. A virtualenv is machine-bound
+# (pyvenv.cfg names a builder interpreter, site-packages hold ABI-tagged
+# binaries), so one shared `.venv` path read from two operating systems is
+# healthy on one and unusable on the other. These must stay untracked too.
+.venv-*/
+venv-*/
 ENV/
 
 # Node / frontend
