@@ -73,6 +73,7 @@ COMMON_VARS = (
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "TURN_PUBLIC_HOST",
+    "TURN_PUBLIC_PORT",
     "TURN_REALM",
     "TURN_EXTERNAL_IP",
     "TURN_STATIC_AUTH_SECRET",
@@ -185,6 +186,12 @@ def resolve(env_file: Path | None, mode: str) -> dict[str, str]:
     ttl = (merged.get("TURN_CREDENTIAL_TTL_SECONDS") or "").strip()
     if ttl and (not ttl.isdigit() or int(ttl) <= 0):
         problems.append("TURN_CREDENTIAL_TTL_SECONDS must be a positive integer")
+
+    public_port = (merged.get("TURN_PUBLIC_PORT") or "").strip()
+    if public_port and (
+        not public_port.isdigit() or not 1 <= int(public_port) <= 65535
+    ):
+        problems.append("TURN_PUBLIC_PORT must be an integer from 1 to 65535")
 
     if problems:
         raise RenderError("; ".join(problems))

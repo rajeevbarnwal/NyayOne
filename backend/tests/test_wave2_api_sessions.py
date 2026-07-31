@@ -128,6 +128,51 @@ def _end_of(ctx, session_id):
 # --------------------------------------------------------------------------- #
 
 
+def test_video_capability_reports_the_runtime_switch_without_secrets(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "video_calls_enabled", False)
+    monkeypatch.setattr(settings, "video_provider", "livekit")
+    monkeypatch.setattr(settings, "livekit_public_url", "wss://video.example.test")
+    monkeypatch.setattr(settings, "video_ice_transport_policy", "relay")
+    monkeypatch.setattr(settings, "livekit_api_secret", "must-not-escape")
+    disabled = ctx.client.get("/api/v1/tutoring/capabilities")
+    assert disabled.status_code == 200
+    assert disabled.json() == {
+        "video_calls_enabled": False,
+        "video_transport": "none",
+        "video_room_url": None,
+        "video_ice_transport_policy": "relay",
+        "join_credential_ttl_seconds": settings.join_credential_ttl_seconds,
+        "recording_enabled": False,
+    }
+    assert "must-not-escape" not in disabled.text
+
+    monkeypatch.setattr(settings, "video_calls_enabled", True)
+    enabled = ctx.client.get("/api/v1/tutoring/capabilities")
+    assert enabled.status_code == 200
+    assert enabled.json()["video_transport"] == "livekit"
+    assert enabled.json()["video_room_url"] == "wss://video.example.test"
+    assert enabled.json()["video_ice_transport_policy"] == "relay"
+    assert "must-not-escape" not in enabled.text
+
+
+def test_disabled_video_refuses_before_lookup_and_writes_nothing(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "video_calls_enabled", False)
+    session_id, _order = _booked(ctx)
+    with ctx.fresh() as s:
+        before_grants = s.scalar(select(func.count()).select_from(VideoSessionGrant))
+    refused = ctx.post(f"/api/v1/tutoring/sessions/{session_id}/join-credentials")
+    assert refused.status_code == 503
+    assert refused.json()["detail"] == {
+        "code": "VIDEO_CALLS_DISABLED",
+        "message": "video calls are currently unavailable",
+        "retryable": False,
+    }
+    unknown = ctx.post(f"/api/v1/tutoring/sessions/{uuid.uuid4()}/join-credentials")
+    assert unknown.status_code == 503 and unknown.json() == refused.json()
+    with ctx.fresh() as s:
+        assert s.scalar(select(func.count()).select_from(VideoSessionGrant)) == before_grants
+
+
 def test_session_list_and_detail_are_scoped_to_the_caller(ctx):
     mine, _order = _booked(ctx)
     theirs, _o2 = _booked(
