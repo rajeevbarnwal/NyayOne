@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import check_runtime_lock as runtime_lock
 from scripts.check_runtime_lock import (
     EXIT_LOCK_UNREADABLE,
     EXIT_LOCK_VIOLATION,
@@ -173,6 +174,102 @@ def _write_venv(root: Path, *, home: str, version: str, abi: str, libdir: str) -
     return root
 
 
+# -- SIMULATED hosts and SIMULATED venvs, always used in matched PAIRS -------
+#
+# A venv fixture is only "foreign" RELATIVE TO A HOST. A fixture hardcoded to
+# one platform is therefore native on the machines of that platform, and a test
+# that asserts refusal from such a fixture alone asserts something that is only
+# true off that platform — the portability guard would itself not be portable,
+# and would fail on exactly the operating system it exists to protect.
+#
+# So every refusal below names BOTH sides explicitly. `HostFacts` is data, the
+# checker takes it as an argument, and nothing here reads `sys.platform`,
+# `platform.system()` or `sysconfig` — the answers are identical on every
+# machine that runs this suite.
+
+#: The machine that built this repo's `backend/.venv` (see its pyvenv.cfg).
+HOST_LINUX_AARCH64 = HostFacts(
+    executable="/repo/backend/.venv/bin/python",
+    version=(3, 10, 12),
+    system="Linux",
+    machine="aarch64",
+    sysconfig_platform="linux-aarch64",
+    ext_tag="cpython-310-aarch64-linux-gnu",
+    ext_platform="aarch64-linux-gnu",
+)
+#: The machine the incident was REPORTED from: the same checkout, on macOS.
+HOST_MACOS_ARM64 = HostFacts(
+    executable="/Users/dev/repo/backend/.venv/bin/python",
+    version=(3, 9, 6),
+    system="Darwin",
+    machine="arm64",
+    sysconfig_platform="macosx-14.0-arm64",
+    ext_tag="cpython-39-darwin",
+    ext_platform="darwin",
+)
+#: A macOS machine that is NATIVE to ``VENV_DARWIN`` below — the host on which
+#: that fixture proves nothing at all.
+HOST_MACOS_ARM64_PY312 = HostFacts(
+    executable="/Users/dev/.pyenv/versions/3.12.4/bin/python",
+    version=(3, 12, 4),
+    system="Darwin",
+    machine="arm64",
+    sysconfig_platform="macosx-14.0-arm64",
+    ext_tag="cpython-312-darwin",
+    ext_platform="darwin",
+)
+
+#: A venv built on macOS/arm64 by CPython 3.12: foreign to any Linux host.
+VENV_DARWIN = {
+    "version": "3.12.4",
+    "abi": "312-darwin",
+    "libdir": "python3.12",
+    "home": ("Users", "nobody", ".pyenv", "versions", "3.12.4", "bin"),
+}
+#: What `backend/.venv` is in this repository: Linux/aarch64, CPython 3.10,
+#: site-packages full of ELF objects. Foreign to any macOS host.
+VENV_LINUX = {
+    "version": "3.10.12",
+    "abi": "310-aarch64-linux-gnu",
+    "libdir": "python3.10",
+    "home": ("usr", "bin"),
+}
+
+
+def _write_venv_spec(tmp_path: Path, name: str, spec: dict) -> Path:
+    """Materialise one of the venv specs above under ``tmp_path``.
+
+    ``home`` is rooted in a directory that is never created, so "the builder
+    interpreter is not on this machine" is a property of the FIXTURE and not a
+    guess about which paths happen to exist on whoever's laptop.
+    """
+    return _write_venv(
+        tmp_path / name,
+        home=str(tmp_path / "absent-builder" / Path(*spec["home"])),
+        version=spec["version"],
+        abi=spec["abi"],
+        libdir=spec["libdir"],
+    )
+
+
+def _short(spec: dict) -> str:
+    return ".".join(spec["version"].split(".")[:2])
+
+
+#: (host, venv) pairs that MUST be refused, in both directions. Each row states
+#: the whole claim: which host, which venv, which tag each side carries.
+FOREIGN_PAIRS = [
+    pytest.param(
+        HOST_LINUX_AARCH64, VENV_DARWIN, "darwin", "aarch64-linux-gnu",
+        id="linux-host-refuses-darwin-venv",
+    ),
+    pytest.param(
+        HOST_MACOS_ARM64, VENV_LINUX, "aarch64-linux-gnu", "darwin",
+        id="darwin-host-refuses-linux-venv",
+    ),
+]
+
+
 @pytest.mark.parametrize(
     "filename,expected",
     [
@@ -201,15 +298,15 @@ def test_platform_check_passes_for_the_venv_running_this_suite(capsys):
 
 
 def test_platform_check_fails_for_a_foreign_platform_venv(tmp_path, capsys):
-    """A venv built elsewhere is REFUSED, with its own exit status and wording."""
-    fake = _write_venv(
-        tmp_path / "foreign",
-        home="/Users/nobody/.pyenv/versions/3.12.4/bin",
-        version="3.12.4",
-        abi="312-darwin",
-        libdir="python3.12",
-    )
-    rc = main(["--platform-only", "--venv", str(fake)])
+    """A venv built elsewhere is REFUSED, with its own exit status and wording.
+
+    "Elsewhere" is stated, not assumed: a macOS venv judged by the Linux host
+    that this repo's own `backend/.venv` was built by. Both sides of the
+    comparison are fixture data, so the exit status and every word of the
+    refusal are the same on Linux, on macOS and anywhere else.
+    """
+    fake = _write_venv_spec(tmp_path, "foreign", VENV_DARWIN)
+    rc = main(["--platform-only", "--venv", str(fake)], host=HOST_LINUX_AARCH64)
     assert rc == EXIT_PLATFORM_MISMATCH
     captured = capsys.readouterr()
     assert "platform-check=MISMATCH" in captured.out
@@ -236,15 +333,7 @@ def test_the_exact_incident_is_detected_a_linux_venv_read_from_macos(tmp_path):
         abi="310-aarch64-linux-gnu",
         libdir="python3.10",
     )
-    macos_host = HostFacts(
-        executable="/Users/dev/repo/backend/.venv/bin/python",
-        version=(3, 9, 6),
-        system="Darwin",
-        machine="arm64",
-        sysconfig_platform="macosx-14.0-arm64",
-        ext_tag="cpython-39-darwin",
-        ext_platform="darwin",
-    )
+    macos_host = HOST_MACOS_ARM64
     report = platform_report(linux_venv, host=macos_host)
     assert not report.ok
     joined = "\n".join(report.problems)
@@ -254,15 +343,7 @@ def test_the_exact_incident_is_detected_a_linux_venv_read_from_macos(tmp_path):
     assert "lib/python3.10" in joined
     assert report.venv_platform == "aarch64-linux-gnu"
     # And the SAME directory is healthy for the Linux host that built it.
-    linux_host = HostFacts(
-        executable="/repo/backend/.venv/bin/python",
-        version=(3, 10, 12),
-        system="Linux",
-        machine="aarch64",
-        sysconfig_platform="linux-aarch64",
-        ext_tag="cpython-310-aarch64-linux-gnu",
-        ext_platform="aarch64-linux-gnu",
-    )
+    linux_host = HOST_LINUX_AARCH64
     # `home = /usr/bin` really does hold python3.10 on the Linux host; on a
     # machine where it does not, that alone is the finding — which is the point.
     same = platform_report(linux_venv, host=linux_host)
@@ -270,19 +351,148 @@ def test_the_exact_incident_is_detected_a_linux_venv_read_from_macos(tmp_path):
     assert not [p for p in same.problems if "declares version" in p]
 
 
+# ---------------------------------------------------------------------------
+# The refusal must be the SAME on both operating systems — including the
+# operating system the suite is currently running on, whichever that is.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("host,venv_spec,venv_tag,host_tag", FOREIGN_PAIRS)
+def test_a_foreign_venv_is_refused_in_both_directions(
+    host, venv_spec, venv_tag, host_tag, tmp_path, capsys
+):
+    """Linux host + macOS venv, and macOS host + Linux venv — same verdict.
+
+    Both rows run on every machine and neither row's expectations are derived
+    from the machine: the host is fixture data, the venv is fixture data, and
+    the four signals asserted below are properties of that PAIR.
+    """
+    fake = _write_venv_spec(tmp_path, "foreign", venv_spec)
+    rc = main(["--platform-only", "--venv", str(fake)], host=host)
+    assert rc == EXIT_PLATFORM_MISMATCH
+    captured = capsys.readouterr()
+    assert "platform-check=MISMATCH" in captured.out
+    err = captured.err
+    assert "PLATFORM MISMATCH (exit 5)" in err
+    assert f"compiled extension(s) are tagged for platform '{venv_tag}'" in err
+    assert f"can only load '{host_tag}'" in err
+    assert f"pyvenv.cfg declares version {venv_spec['version']}" in err
+    assert "does not exist on this machine" in err
+    assert f"lib/python{_short(venv_spec)}" in err
+    assert f"host-platform={host.system}/{host.machine}" in captured.out
+
+
+def _signals(report) -> set[str]:
+    """The KINDS of problem found, independent of the platform names in them."""
+    kinds = set()
+    for problem in report.problems:
+        if "tagged for platform" in problem:
+            kinds.add("compiled-extension-platform")
+        elif "declares version" in problem:
+            kinds.add("declared-version")
+        elif "does not exist on this machine" in problem:
+            kinds.add("builder-interpreter-absent")
+        elif "never imports from" in problem:
+            kinds.add("incompatible-lib-tree")
+        else:  # pragma: no cover - a new signal must be named here on purpose
+            kinds.add(f"unclassified: {problem}")
+    return kinds
+
+
+def test_both_directions_produce_the_same_verdict_on_any_machine(tmp_path, monkeypatch):
+    """The two directions agree, and NEITHER measures the local machine.
+
+    ``current_host`` is replaced by a landmine: if any part of the refusal
+    reached for the platform of whoever is running pytest, this test would blow
+    up instead of quietly reporting a different answer on macOS than on Linux.
+    That is the defect this file is guarding against — a portability guard that
+    was itself not portable.
+    """
+
+    def _landmine():  # pragma: no cover - it must never be called
+        raise AssertionError(
+            "the platform refusal consulted the machine running pytest; its "
+            "verdict must come only from the HostFacts it was given"
+        )
+
+    monkeypatch.setattr(runtime_lock, "current_host", _landmine)
+
+    verdicts = {}
+    for host, spec, name in (
+        (HOST_LINUX_AARCH64, VENV_DARWIN, "linux-host-darwin-venv"),
+        (HOST_MACOS_ARM64, VENV_LINUX, "darwin-host-linux-venv"),
+    ):
+        fake = _write_venv_spec(tmp_path, name, spec)
+        report = platform_report(fake, host=host)
+        verdicts[name] = (report.ok, _signals(report))
+        assert main(["--platform-only", "--venv", str(fake)], host=host) == (
+            EXIT_PLATFORM_MISMATCH
+        )
+
+    expected = {
+        "compiled-extension-platform",
+        "declared-version",
+        "builder-interpreter-absent",
+        "incompatible-lib-tree",
+    }
+    assert verdicts["linux-host-darwin-venv"] == (False, expected)
+    assert verdicts["darwin-host-linux-venv"] == (False, expected)
+    # Same verdict, opposite platforms: the answer is a fact about the pair.
+    assert verdicts["linux-host-darwin-venv"] == verdicts["darwin-host-linux-venv"]
+
+
+def test_a_venv_native_to_its_host_raises_no_platform_signal(tmp_path):
+    """Why a hardcoded fixture cannot prove the refusal on its own platform.
+
+    The macOS venv fixture above, read by a macOS host, is not foreign at all:
+    the compiled extensions load, the declared version matches, the lib tree is
+    the right one. Asserting those three signals from that fixture alone is an
+    assertion that only holds off macOS — which is precisely how this suite
+    passed on Linux and failed on the Mac it was written to protect.
+    """
+    native = _write_venv_spec(tmp_path, "native", VENV_DARWIN)
+    report = platform_report(native, host=HOST_MACOS_ARM64_PY312)
+    assert _signals(report) == {"builder-interpreter-absent"}, report.problems
+    # The one surviving problem is about a missing directory, not about a
+    # platform, so it can never distinguish the two operating systems.
+    assert "darwin" not in "\n".join(report.problems)
+
+
+def test_the_real_shared_venv_is_refused_by_the_other_operating_system():
+    """The production incident, against the REAL `backend/.venv`.
+
+    `backend/.venv` is ONE path shared by every machine that checks this repo
+    out, and it can only ever have been built by one of them. Whichever that
+    was, the OTHER operating system must refuse it — and which one is "the
+    other" is read out of the venv's own binaries, never out of the machine
+    running pytest.
+    """
+    shared = BACKEND / ".venv"
+    if not shared.is_dir():  # no venv checked out here; nothing to judge
+        return
+    built_for = platform_report(shared, host=HOST_LINUX_AARCH64).venv_platform
+    # Pick the host that CANNOT be the builder, from the venv's binaries alone.
+    other = HOST_MACOS_ARM64 if "linux" in built_for else HOST_LINUX_AARCH64
+    report = platform_report(shared, host=other)
+    assert not report.ok, (
+        f"the shared venv (built for {built_for}) was accepted by "
+        f"{other.describe()} — the cross-platform trap is no longer detected"
+    )
+    assert any("tagged for platform" in p for p in report.problems), report.problems
+    assert f"can only load '{other.ext_platform}'" in "\n".join(report.problems)
+
+
 def test_platform_mismatch_is_not_confusable_with_a_missing_package(tmp_path, capsys):
     """Distinct exit status AND distinct wording from ``MISSING``/``MISMATCH``."""
-    fake = _write_venv(
-        tmp_path / "foreign",
-        home="/nowhere/at/all/bin",
-        version="3.12.4",
-        abi="312-darwin",
-        libdir="python3.12",
-    )
+    fake = _write_venv_spec(tmp_path, "foreign", VENV_DARWIN)
     assert EXIT_PLATFORM_MISMATCH not in (EXIT_LOCK_VIOLATION, EXIT_LOCK_UNREADABLE)
     # The platform question is answered BEFORE the lock is even opened, so a
-    # foreign venv cannot be reported as "you are missing alembic".
-    rc = main(["--venv", str(fake), "--lock", str(tmp_path / "does-not-exist.lock")])
+    # foreign venv cannot be reported as "you are missing alembic". The host is
+    # named so the venv is foreign on every machine, not only off macOS.
+    rc = main(
+        ["--venv", str(fake), "--lock", str(tmp_path / "does-not-exist.lock")],
+        host=HOST_LINUX_AARCH64,
+    )
     assert rc == EXIT_PLATFORM_MISMATCH, "the lock error won the race"
     err = capsys.readouterr().err
     assert "NOT INSTALLED" not in err
