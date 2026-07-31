@@ -160,7 +160,12 @@ export function AuthGate() {
           </div>
         </>
       )}
-      <DpdpFootnote>Privacy notice shown before registration · no PII in analytics</DpdpFootnote>
+      <p className="auth-legal-notice" style={{ textAlign: 'center', fontSize: '11.5px', color: 'var(--text3)', margin: '14px 0 0', lineHeight: 1.4 }}>
+        By continuing, you agree to LegalSaathi’s{' '}
+        <button type="button" className="link-btn" onClick={() => nav('/terms')} data-testid="link-terms" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Terms & Conditions</button>{' '}
+        and{' '}
+        <button type="button" className="link-btn" onClick={() => nav('/privacy')} data-testid="link-privacy" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Privacy Policy</button>.
+      </p>
     </AuthCard>
   );
 }
