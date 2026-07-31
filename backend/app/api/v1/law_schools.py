@@ -163,6 +163,16 @@ def _idempotent_insert(session: Session, model, values: dict) -> bool:
     a unique-constraint IntegrityError from a racing/replayed writer is rolled
     back and treated as "row already exists". Callers write the audit event
     ONLY when this returns True, so replay/race never duplicates audit rows.
+
+    Do NOT "improve" the non-PostgreSQL branch into ``with
+    session.begin_nested():`` (SAVEPOINT). pysqlite does not open a transaction
+    for a SAVEPOINT statement, so ``RELEASE SAVEPOINT`` durably commits the row
+    on its own; a later failure of the surrounding request commit can then no
+    longer undo it. That was measured against
+    ``test_commit_failure_put_follow_rolls_back_and_retries``, which failed with
+    1 persisted follow row where 0 are required. The full-transaction rollback
+    below is safe here precisely because callers perform no write before this
+    call — the audit row is added only on the True branch.
     """
     if session.get_bind().dialect.name == "postgresql":
         from sqlalchemy.dialects.postgresql import insert as pg_insert

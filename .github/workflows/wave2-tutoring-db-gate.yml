@@ -1,0 +1,121 @@
+name: Wave 2 tutoring PostgreSQL gate
+
+# Wave 2 gets the same target-runtime coverage every earlier wave has: the
+# pgvector/pgvector:pg16 service image this repo already uses, on push AND on
+# pull_request, for every path that can move the Wave 2 schema, its pricing
+# authority, its services or the gate itself.
+on:
+  push:
+    paths:
+      - "backend/app/models/wave2.py"
+      - "backend/app/services/tutoring/**"
+      - "backend/app/db/migrations/versions/**"
+      - "backend/scripts/wave2_postgres_gate.py"
+      - "backend/scripts/wave2_db_gate.sh"
+      - "backend/scripts/db_gate.sh"
+      - "backend/tests/test_wave2_*.py"
+      - "infra/video/**"
+      - ".github/workflows/wave2-tutoring-db-gate.yml"
+  pull_request:
+    paths:
+      - "backend/app/models/wave2.py"
+      - "backend/app/services/tutoring/**"
+      - "backend/app/db/migrations/versions/**"
+      - "backend/scripts/wave2_postgres_gate.py"
+      - "backend/scripts/wave2_db_gate.sh"
+      - "backend/scripts/db_gate.sh"
+      - "backend/tests/test_wave2_*.py"
+      - "infra/video/**"
+      - ".github/workflows/wave2-tutoring-db-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  wave2-postgres-16-pgvector:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: legalsaathi
+          POSTGRES_PASSWORD: legalsaathi
+          POSTGRES_DB: legalsaathi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalsaathi -d legalsaathi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi
+      APP_ENV: test
+      REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
+      REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Enable pgvector
+        run: |
+          PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Complete backend suite (SQLite oracle, ONE invocation)
+        run: env -u DATABASE_URL python -m pytest -q
+
+      - name: Wave 2 target-runtime gate (PostgreSQL 16 + pgvector)
+        # ONE command. It detects the runtime itself and exits 78 BLOCKED rather
+        # than reporting a pass it did not earn; on a runner with the service
+        # above, 78 would itself be a red build, which is the point.
+        run: PYTHON=python bash scripts/wave2_db_gate.sh --output "$GITHUB_WORKSPACE/test-results/wave2-db-gate/summary.json"
+
+      - name: Assert the gate actually EXECUTED (never accept BLOCKED here)
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          path = os.path.join(
+              os.environ["GITHUB_WORKSPACE"], "test-results", "wave2-db-gate", "summary.json"
+          )
+          summary = json.load(open(path))
+          print(json.dumps({k: summary.get(k) for k in ("status", "executed", "failed_assertions")}, indent=2))
+          if summary.get("status") != "PASS" or not summary.get("executed"):
+              sys.exit("the Wave 2 PostgreSQL gate did not execute to a PASS on a runner that HAS PostgreSQL 16 + pgvector")
+          PY
+
+      - name: LiveKit / TURN smoke — contract only (no media plane in CI)
+        # CI has no LiveKit, no coturn and no browser media stack, so this step
+        # asserts the honest thing: the smoke script refuses, loudly, with 78.
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-results"
+          set +e
+          bash infra/video/scripts/livekit_turn_smoke.sh --out "$GITHUB_WORKSPACE/test-results/livekit-smoke" \
+            | tee "$GITHUB_WORKSPACE/test-results/livekit-smoke-blocked.txt"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" != "78" ]; then
+            echo "expected the LiveKit smoke to exit 78 BLOCKED in CI, got $rc"
+            exit 1
+          fi
+          grep -q "BLOCKED: prerequisite runtime absent" "$GITHUB_WORKSPACE/test-results/livekit-smoke-blocked.txt"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave2-tutoring-db-gate-evidence
+          path: test-results
+          if-no-files-found: warn

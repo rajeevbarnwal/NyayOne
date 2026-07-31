@@ -1,0 +1,86 @@
+# coturn TURN relay config TEMPLATE (SAATHI-451, matrix row H1).
+#
+# RENDER, DO NOT EDIT THE OUTPUT:
+#   python3 scripts/render_video_infra_config.py --env-file .env
+# Output: infra/video/rendered/turnserver.conf (mode 0644 — see below).
+#
+# THIS FILE IS IDENTICAL IN BOTH MODES. Forced-TURN vs direct is decided by what
+# LiveKit advertises and what docker publishes, never by weakening the relay.
+#
+# WHY 0644 AND NOT 0600: the coturn image runs as `nobody:nogroup`
+# (coturn/coturn Dockerfile: `USER nobody:nogroup`), so a 0600 file owned by the
+# operator would be unreadable inside the container. It is safe at 0644 because
+# this file contains NO SECRET: the shared secret arrives on the command line
+# from infra/video/docker-compose.video.yml (coturn does not expand environment
+# variables inside turnserver.conf). LIVEKIT_API_SECRET, by contrast, does live
+# in a rendered file and that one is 0600, readable because the livekit image
+# runs as root.
+
+# --- listeners -----------------------------------------------------------------
+# Published on host 1043 (both tcp and udp). The STUN Binding responder on this
+# same port is what the compose healthcheck probes with turnutils_stunclient.
+listening-port=3478
+# TURN over TLS. RESERVED on host 1044 and deliberately NOT enabled: it needs a
+# real certificate for ${TURN_REALM} and there is no credible way to ship one in
+# a repo. Enabling it is a documented, separate step — RUNBOOK § "TURN over TLS".
+no-tls
+no-dtls
+
+# The address clients must be told to send relayed media to. In a container the
+# process only sees the private docker address, so this has to be supplied.
+external-ip=${TURN_EXTERNAL_IP}
+
+# --- authentication ------------------------------------------------------------
+# TURN REST API (time-limited credentials): username is "<expiry>:<name>" and
+# the password is base64(HMAC-SHA1(secret, username)). LiveKit mints these per
+# client from the SAME shared secret it is given in rtc.turn_servers[].secret, so
+# no long-lived TURN username/password exists anywhere.
+use-auth-secret
+# static-auth-secret is NOT here on purpose — see the header note.
+realm=${TURN_REALM}
+# Reject a replayed nonce after 10 minutes.
+stale-nonce=600
+
+# --- relay ---------------------------------------------------------------------
+# One UDP port per allocation. Must match the published range in
+# infra/video/docker-compose.video.yml exactly (20500-20549/udp).
+min-port=20500
+max-port=20549
+# We relay UDP media to the SFU only; TURN-TCP *allocations* (RFC 6062) are a
+# different feature and are not needed. TURN-over-TCP for the client side still
+# works — that is the transport to 3478/tcp, not a TCP relay allocation.
+no-tcp-relay
+
+# --- peer ACL: the relay can forward to the SFU AND NOTHING ELSE ---------------
+# Rules are evaluated in order and the last match wins, so the blanket deny comes
+# first and the single exception second. The effect is that this TURN server is
+# not a general-purpose relay at all: it is a one-destination tunnel to the
+# LiveKit SFU. That is what makes it uninteresting to abuse, and it is why no
+# amount of leaked credential turns it into an open proxy.
+denied-peer-ip=0.0.0.0-255.255.255.255
+# MUST equal the livekit service's static address in
+# infra/video/docker-compose.video.yml.
+allowed-peer-ip=172.29.30.10
+no-multicast-peers
+
+# --- quotas --------------------------------------------------------------------
+# 50 relay ports is 50 concurrent allocations; a 1:1 tutoring session uses two.
+# The quotas below stop one misbehaving client from taking the whole block.
+total-quota=48
+user-quota=4
+
+# --- hardening / operations ----------------------------------------------------
+fingerprint
+# The telnet admin CLI is a remote-management surface we have no use for.
+no-cli
+# `nobody` cannot write /var/run; /var/lib/coturn is the image's VOLUME and is
+# chowned to nobody by the upstream Dockerfile.
+pidfile=/var/lib/coturn/turnserver.pid
+# stdout so the container log is the log, like every other service here.
+log-file=stdout
+# One line per event, no rotation logic inside the container.
+simple-log
+# NOTE, deliberately: `verbose` / `Verbose` are NOT set and must never be added
+# to a deployment. coturn's verbose modes log per-session transport detail
+# (peer addresses, allocation lifetimes) — exactly the media-plane data frozen
+# decision 21 forbids us from persisting or logging.

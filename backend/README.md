@@ -81,4 +81,28 @@ cd backend && python -m alembic upgrade head
 - SQLite is a test-portability convenience only — production/dev must use Postgres+pgvector.
 - Dev credentials in `docker-compose.yml` are for local use only; never reuse in production.
 
+## Target-runtime gates (ONE command each)
+
+The suite's oracle is SQLite. Some claims cannot be made there at all — real row
+locking, partial-index predicates, `pg_constraint`, pgvector, TOASTed JSON. Those
+live in gates that run against the approved runtime and that **refuse rather than
+pretend** when the runtime is absent.
+
+| Gate | Command | What it proves |
+|---|---|---|
+| Whole-repo database gate | `DATABASE_URL=… bash scripts/db_gate.sh` | suite + alembic + live schema + earlier-wave runtime gate, then the Wave 2 stage below |
+| Wave 2 PostgreSQL 16 + pgvector | `DATABASE_URL=… bash scripts/wave2_db_gate.sh` | assertions A1..A8 — migration paths, drift, reversibility, schema surface, PRICE AUTHORITY, real-connection concurrency, raw-storage privacy, seed determinism. `--list` prints the contract. |
+| Wave 2 media plane | `bash ../infra/video/scripts/livekit_turn_smoke.sh` | steps S1..S11 — health, room, join grant, two-browser join, camera/mic denial, reconnect, expiry/revocation, webhook + replay, forced-TURN, provider-unreachable, no raw token/SDP/ICE persisted. `--list` prints the contract. |
+
+Every one of them prints the runtime it detected first and exits **78** with
+`BLOCKED: prerequisite runtime absent` if that runtime is not there. **78 is not a
+pass and not a failure — it means nothing was proven.** 0 is a pass, 1 is a real
+failure.
+
+CI runs the PostgreSQL gate on push and pull request against
+`pgvector/pgvector:pg16` (`.github/workflows/wave2-tutoring-db-gate.yml`) and
+fails the build if it reports BLOCKED there, because on a runner that HAS the
+database, blocked means broken. The media smoke has no runtime in CI; CI asserts
+that it refuses with 78, which is the only honest thing to assert.
+
 

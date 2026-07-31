@@ -2,6 +2,15 @@
 # Reserved: frontend 1030, backend 1031, Postgres 1032, Valkey 1033,
 # SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037,
 # Logstash monitoring API 1038.
+# Wave 2 video plane (SAATHI-451), defined in the OVERLAY
+# infra/video/docker-compose.video.yml and brought up with `--profile video`:
+#   LiveKit signalling/Twirp 1039, LiveKit RTC/TCP 1040 and RTC/UDP 1041 (both
+#   published only by the opt-in docker-compose.video.direct.yml overlay),
+#   LiveKit Prometheus 1042, coturn STUN/TURN 1043 (tcp+udp),
+#   coturn TURN/TLS 1044 (reserved, not published — needs certificates).
+# Plus 20500-20549/udp for coturn relay allocations: a TURN relay needs one
+# contiguous UDP port per allocation, which cannot fit inside the 20-port dev
+# range, so that block is reserved here alongside everything else.
 services:
   postgres:
     image: pgvector/pgvector:pg16
