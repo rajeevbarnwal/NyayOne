@@ -26,8 +26,11 @@ listening-port=3478
 no-tls
 no-dtls
 
-# The address clients must be told to send relayed media to. In a container the
-# process only sees the private docker address, so this has to be supplied.
+# The address clients must be told to send relayed media to. Coturn discovers
+# and binds its sole real container interface (172.29.30.11) automatically;
+# forcing a public/private mapping under Docker Desktop prevents allocations
+# from reaching the host-published UDP range. Only advertise the host-reachable
+# address here and retain coturn's discovered private relay socket.
 external-ip=${TURN_EXTERNAL_IP}
 
 # --- authentication ------------------------------------------------------------
@@ -52,9 +55,9 @@ max-port=20549
 no-tcp-relay
 
 # --- peer ACL: the relay can forward to the SFU AND NOTHING ELSE ---------------
-# Rules are evaluated in order and the last match wins, so the blanket deny comes
-# first and the single exception second. The effect is that this TURN server is
-# not a general-purpose relay at all: it is a one-destination tunnel to the
+# The explicit allow rule overrides the blanket deny for the one SFU peer. The
+# effect is that this TURN server is not a general-purpose relay at all: it is a
+# one-destination tunnel to the
 # LiveKit SFU. That is what makes it uninteresting to abuse, and it is why no
 # amount of leaked credential turns it into an open proxy.
 denied-peer-ip=0.0.0.0-255.255.255.255

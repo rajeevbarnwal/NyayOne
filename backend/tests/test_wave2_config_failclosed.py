@@ -439,6 +439,20 @@ def test_livekit_with_full_configuration_constructs():
     assert LIVEKIT_SECRET not in repr(configured)
 
 
+@pytest.mark.parametrize("policy", ["all", "relay", " ALL ", " Relay "])
+def test_video_ice_transport_policy_accepts_only_the_two_browser_policies(policy):
+    assert _build(video_ice_transport_policy=policy).video_ice_transport_policy == policy
+
+
+@pytest.mark.parametrize("policy", ["", "direct", "turn", "relay-only", "unknown"])
+def test_unknown_video_ice_transport_policy_fails_closed(policy):
+    message = _refuses(
+        names=("video_ice_transport_policy",),
+        video_ice_transport_policy=policy,
+    )
+    assert "all, relay" in message
+
+
 # --------------------------------------------------------------------------- #
 # Unknown provider bindings
 # --------------------------------------------------------------------------- #

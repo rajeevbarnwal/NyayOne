@@ -132,6 +132,7 @@ def test_video_capability_reports_the_runtime_switch_without_secrets(ctx, monkey
     monkeypatch.setattr(settings, "video_calls_enabled", False)
     monkeypatch.setattr(settings, "video_provider", "livekit")
     monkeypatch.setattr(settings, "livekit_public_url", "wss://video.example.test")
+    monkeypatch.setattr(settings, "video_ice_transport_policy", "relay")
     monkeypatch.setattr(settings, "livekit_api_secret", "must-not-escape")
     disabled = ctx.client.get("/api/v1/tutoring/capabilities")
     assert disabled.status_code == 200
@@ -139,6 +140,7 @@ def test_video_capability_reports_the_runtime_switch_without_secrets(ctx, monkey
         "video_calls_enabled": False,
         "video_transport": "none",
         "video_room_url": None,
+        "video_ice_transport_policy": "relay",
         "join_credential_ttl_seconds": settings.join_credential_ttl_seconds,
         "recording_enabled": False,
     }
@@ -149,6 +151,7 @@ def test_video_capability_reports_the_runtime_switch_without_secrets(ctx, monkey
     assert enabled.status_code == 200
     assert enabled.json()["video_transport"] == "livekit"
     assert enabled.json()["video_room_url"] == "wss://video.example.test"
+    assert enabled.json()["video_ice_transport_policy"] == "relay"
     assert "must-not-escape" not in enabled.text
 
 

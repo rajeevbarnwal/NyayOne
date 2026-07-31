@@ -1846,6 +1846,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
         participantRef: issued.participantRef,
         permissions: issued.permissions,
         serverUrl: issued.videoRoomUrl ?? videoCapability.data.videoRoomUrl,
+        iceTransportPolicy: issued.videoIceTransportPolicy,
         localStream: local,
         devices: want,
         publishAudio: !!local?.getAudioTracks().length,

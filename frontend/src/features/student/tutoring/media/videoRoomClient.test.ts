@@ -43,6 +43,7 @@ import {
 import { DETERMINISTIC_COUNTERPART, createDeterministicVideoRoom } from './fakeVideoRoomClient';
 import {
   createLiveKitVideoRoomClient,
+  liveKitConnectOptions,
   mapLiveKitConnectError,
   mapLiveKitConnectionState,
   mapLiveKitDisconnectReason,
@@ -381,6 +382,17 @@ describe('runtime adapter selection', () => {
  * ========================================================================== */
 
 describe('the LiveKit adapter', () => {
+  it('passes the server-authoritative ICE policy to the browser transport', () => {
+    expect(liveKitConnectOptions('relay')).toEqual({
+      rtcConfig: { iceTransportPolicy: 'relay' },
+    });
+    expect(liveKitConnectOptions('all')).toEqual({
+      rtcConfig: { iceTransportPolicy: 'all' },
+    });
+    expect(liveKitConnectOptions(undefined)).toEqual({
+      rtcConfig: { iceTransportPolicy: 'all' },
+    });
+  });
   it('maps the backend video kill-switch to a named non-reissuable failure', () => {
     expect(videoRoomFailureFromServerCode('VIDEO_CALLS_DISABLED')).toEqual({
       code: 'VIDEO_CALLS_DISABLED', terminal: true, reissuable: false,

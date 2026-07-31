@@ -36,7 +36,18 @@
 // once, from LIVEKIT_CLIENT_BUNDLE, and injected into an about:blank page.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
+
+import { redactMediaRuntimeMessage } from './runtime_redaction.mjs';
+
+// Playwright is a frontend development dependency. Bare ESM resolution starts
+// at this script under infra/video and therefore cannot see frontend/
+// node_modules even though the prerequisite check found it. Resolve from the
+// owning package explicitly so the runtime check and the import use one source.
+const requireFromFrontend = createRequire(
+  new URL('../../../frontend/package.json', import.meta.url),
+);
 
 const BLOCKED_EXIT = 78;
 const OUT = process.env.SMOKE_OUT || 'test-results/livekit-smoke';
@@ -58,6 +69,9 @@ const WS_URL = (process.env.LIVEKIT_URL || '').replace(/^http/, 'ws');
 // access" is how the next REAL secret gets committed. The raw value is never
 // logged, never written to evidence and never held in a named constant.
 const JOIN_FIELD = 'join_token';
+const ICE_POLICY_FIELD = 'video_ice_transport_policy';
+const EXPECTED_ICE_POLICY = process.env.SMOKE_EXPECT_ICE_POLICY || '';
+const TEST_ORIGIN = new URL('.', BUNDLE_URL).href;
 
 const want = (id) => STEPS.includes(id);
 let failed = false;
@@ -111,25 +125,86 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      process.stderr.write(`[${label}] console.error ${message.text()}\n`);
+      process.stderr.write(
+        `[${label}] console.error ${redactMediaRuntimeMessage(message.text())}\n`,
+      );
     }
   });
-  await page.goto('about:blank');
+  // about:blank has an opaque, insecure origin. Chromium's Private Network
+  // Access checks correctly block it from opening a loopback WebSocket. A
+  // localhost/HTTPS SDK origin is potentially trustworthy and exercises the
+  // same policy the real application uses.
+  await page.goto(TEST_ORIGIN);
   await page.addScriptTag({ content: bundle });
   const joined = await page.evaluate(
-    async ({ url, joinJwt, canPublish }) => {
+    async ({ url, joinJwt, canPublish, icePolicy }) => {
       const LK = window.LivekitClient || window.LiveKitClient;
       if (!LK) return { ok: false, error: 'the livekit-client UMD bundle did not expose a global' };
-      const room = new LK.Room({ adaptiveStream: false, dynacast: false });
+      const NativePeerConnection = window.RTCPeerConnection;
+      window.__rtcConfigs = [];
+      window.RTCPeerConnection = function RecordedPeerConnection(config, ...args) {
+        window.__rtcConfigs.push({
+          phase: 'construct',
+          iceTransportPolicy: config?.iceTransportPolicy,
+          iceUrls: (config?.iceServers || []).flatMap((server) =>
+            Array.isArray(server.urls) ? server.urls : [server.urls].filter(Boolean),
+          ),
+        });
+        const peerConnection = new NativePeerConnection(config, ...args);
+        const nativeSetConfiguration = peerConnection.setConfiguration.bind(peerConnection);
+        peerConnection.setConfiguration = (nextConfig) => {
+          window.__rtcConfigs.push({
+            phase: 'setConfiguration',
+            iceTransportPolicy: nextConfig?.iceTransportPolicy,
+            iceUrls: (nextConfig?.iceServers || []).flatMap((server) =>
+              Array.isArray(server.urls) ? server.urls : [server.urls].filter(Boolean),
+            ),
+          });
+          return nativeSetConfiguration(nextConfig);
+        };
+        return peerConnection;
+      };
+      window.RTCPeerConnection.prototype = NativePeerConnection.prototype;
+      const room = new LK.Room({
+        adaptiveStream: false,
+        dynacast: false,
+      });
       window.__room = room;
       window.__events = [];
       for (const name of ['reconnecting', 'reconnected', 'connected', 'disconnected']) {
         room.on(name, () => window.__events.push(name));
       }
       try {
-        await room.connect(url, joinJwt);
+        await room.connect(url, joinJwt, {
+          rtcConfig: { iceTransportPolicy: icePolicy },
+        });
       } catch (error) {
-        return { ok: false, error: String(error && error.message ? error.message : error) };
+        const pc =
+          room.engine?.pcManager?.publisher?._pc ||
+          room.engine?.publisher?.pc ||
+          room.engine?.pcManager?.subscriber?._pc ||
+          null;
+        const pcConfig = pc?.getConfiguration?.() || {};
+        const joinIceServers = room.engine?.latestJoinResponse?.iceServers || [];
+        return {
+          ok: false,
+          error: String(error && error.message ? error.message : error),
+          // URLs and policy are safe diagnostics; never expose the TURN
+          // username/credential fields that accompany these servers.
+          iceUrls: (pcConfig.iceServers || room.engine?.rtcConfig?.iceServers || []).flatMap((server) =>
+            Array.isArray(server.urls) ? server.urls : [server.urls].filter(Boolean),
+          ),
+          icePolicy:
+            pcConfig.iceTransportPolicy ||
+            room.engine?.rtcConfig?.iceTransportPolicy ||
+            icePolicy,
+          // This is deliberately limited to URLs and counts. TURN usernames
+          // and credentials are short-lived secrets and must never enter the
+          // release evidence even when connection establishment fails.
+          joinIceServerCount: joinIceServers.length,
+          joinIceUrls: joinIceServers.flatMap((server) => server.urls || []),
+          rtcConfigs: window.__rtcConfigs,
+        };
       }
       let published = 0;
       let publishError = null;
@@ -149,7 +224,12 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
         state: room.state,
       };
     },
-    { url: WS_URL, joinJwt: grant[JOIN_FIELD], canPublish: permissions.length > 0 },
+    {
+      url: WS_URL,
+      joinJwt: grant[JOIN_FIELD],
+      canPublish: permissions.length > 0,
+      icePolicy: grant[ICE_POLICY_FIELD] || 'all',
+    },
   );
   return { context, page, joined, grant, label };
 }
@@ -180,12 +260,30 @@ async function selectedCandidatePair(page, label) {
     });
     if (!pair) return { participant, error: 'no succeeded/nominated candidate pair' };
     const local = candidates.get(pair.localCandidateId) || {};
+    const remote = candidates.get(pair.remoteCandidateId) || {};
+    const iceUrls = (pc.getConfiguration().iceServers || []).flatMap((server) =>
+      Array.isArray(server.urls) ? server.urls : [server.urls].filter(Boolean),
+    );
+    const localCandidates = Array.from(candidates.values())
+      .filter((candidate) => candidate.type === 'local-candidate')
+      .map((candidate) => ({
+        candidateType: candidate.candidateType || null,
+        address: candidate.address || candidate.ip || null,
+        port: candidate.port || null,
+        protocol: candidate.protocol || null,
+      }));
     return {
       participant,
+      iceTransportPolicy: pc.getConfiguration().iceTransportPolicy || 'all',
+      localCandidates,
       localCandidateType: local.candidateType || null,
       localAddress: local.address || local.ip || null,
       localPort: local.port || null,
+      remoteCandidateType: remote.candidateType || null,
+      remoteAddress: remote.address || remote.ip || null,
+      remotePort: remote.port || null,
       protocol: local.protocol || null,
+      iceUrls,
       bytesSent: pair.bytesSent || 0,
       bytesReceived: pair.bytesReceived || 0,
     };
@@ -200,7 +298,7 @@ async function main() {
 
   let chromium;
   try {
-    ({ chromium } = await import('playwright'));
+    ({ chromium } = requireFromFrontend('playwright'));
   } catch (error) {
     blocked(`playwright is not installed (${error.message})`);
   }
@@ -238,6 +336,18 @@ async function main() {
         if (studentCred.room_ref !== tutorCred.room_ref) {
           throw new Error('the two participants were sent to DIFFERENT rooms');
         }
+        for (const [grant, label] of [[studentCred, 'student'], [tutorCred, 'tutor']]) {
+          const policy = grant[ICE_POLICY_FIELD] || 'all';
+          if (!['all', 'relay'].includes(policy)) {
+            throw new Error(`${label} received invalid ICE policy ${String(policy)}`);
+          }
+          if (EXPECTED_ICE_POLICY && policy !== EXPECTED_ICE_POLICY) {
+            throw new Error(
+              `${label} received ICE policy ${policy}; expected server-authoritative ` +
+                EXPECTED_ICE_POLICY,
+            );
+          }
+        }
         for (const [grant, label] of [
           [studentCred, 'student'],
           [tutorCred, 'tutor'],
@@ -246,17 +356,36 @@ async function main() {
             bundle,
             grant,
             label,
-            permissions: ['camera', 'microphone'],
+            // The local release rig advertises coturn on the Mac's LAN address.
+            // Chromium treats loopback-to-LAN WebRTC as Private Network Access;
+            // grant that permission explicitly so the gate measures TURN/media,
+            // not a browser permission prompt. Production uses public TLS hosts.
+            permissions: ['camera', 'microphone', 'local-network-access'],
           });
           if (!participant.joined.ok) {
-            throw new Error(`${label} could not join: ${participant.joined.error}`);
+            throw new Error(
+              `${label} could not join: ${participant.joined.error}; ` +
+                `policy=${participant.joined.icePolicy}; ICE URLs=` +
+                `${participant.joined.iceUrls?.join(', ') || '<none>'}; ` +
+                `join ICE count=${participant.joined.joinIceServerCount ?? 0}; ` +
+                `join ICE URLs=${participant.joined.joinIceUrls?.join(', ') || '<none>'}; ` +
+                `constructed=${JSON.stringify(participant.joined.rtcConfigs || [])}`,
+            );
           }
           participants.push(participant);
         }
-        // Each must SEE the other. A join that publishes into the void is not
-        // a call.
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        // Each must SEE the other. Wait on the observable instead of sleeping:
+        // a slow media path must not become a false negative, and an absent
+        // remote track must not become a false positive after 5 seconds.
         for (const participant of participants) {
+          await participant.page.waitForFunction(() => {
+            const room = window.__room;
+            const peers = room.remoteParticipants || room.participants;
+            return (
+              peers?.size >= 1 &&
+              Array.from(peers.values()).some((peer) => peer.trackPublications.size >= 1)
+            );
+          }, null, { timeout: 30_000 });
           const remote = await participant.page.evaluate(() => {
             const room = window.__room;
             return {
@@ -289,42 +418,116 @@ async function main() {
       }
     }
 
-    // ---------------------------------------------------------------- S5 ---
-    if (want('S5')) {
+    // S5 runs after S6 when both are requested. Reusing the student's identity
+    // while the S4 student is still connected triggers LiveKit's duplicate-
+    // identity replacement policy and tests the wrong failure mode.
+    const runS5 = async () => {
       try {
         const grant = await issueCredential(STUDENT_HEADER, 'student-denied');
-        const context = await browser.newContext({ permissions: [] });
-        await context.clearPermissions();
+        // The S4 browser deliberately auto-grants fake devices. Launch a
+        // separate browser without --use-fake-ui-for-media-stream so S5 proves
+        // the real denial path rather than overriding it at process level.
+        const deniedBrowser = await chromium.launch({
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--autoplay-policy=no-user-gesture-required',
+          ],
+        });
+        // Chromium's loopback WebRTC connection is permission-gated separately
+        // from media capture. Establish the provider transport first, then
+        // revoke camera/microphone before capture. This reproduces the real
+        // browser journey where a user denies or revokes device access on the
+        // pre-join screen without turning the provider check into a false ICE
+        // failure.
+        const context = await deniedBrowser.newContext({
+          permissions: ['camera', 'microphone', 'local-network-access'],
+        });
+        await context.grantPermissions(
+          ['camera', 'microphone', 'local-network-access'],
+          {
+            origin: new URL(TEST_ORIGIN).origin,
+          },
+        );
         const page = await context.newPage();
-        await page.goto('about:blank');
+        page.on('console', (message) => {
+          if (message.type() === 'error') {
+            process.stderr.write(
+              `[student-denied] console.error ${redactMediaRuntimeMessage(message.text())}\n`,
+            );
+          }
+        });
+        await page.goto(TEST_ORIGIN);
         await page.addScriptTag({ content: bundle });
         const outcome = await page.evaluate(
-          async ({ url, joinJwt }) => {
+          async ({ url, joinJwt, icePolicy }) => {
             const LK = window.LivekitClient || window.LiveKitClient;
             const room = new LK.Room();
-            const result = { connected: false, published: 0, denial: null, deviceLabels: [] };
-            await room.connect(url, joinJwt);
-            result.connected = true;
+            window.__room = room;
+            const result = {
+              connected: false,
+              connectionError: null,
+              iceUrls: [],
+              published: 0,
+              denial: null,
+              deviceLabels: [],
+            };
+            try {
+              await room.connect(url, joinJwt, {
+                rtcConfig: { iceTransportPolicy: icePolicy },
+              });
+              result.connected = true;
+            } catch (error) {
+              result.connectionError = String(
+                error && error.message ? error.message : error,
+              );
+              result.iceUrls = (room.engine?.rtcConfig?.iceServers || []).flatMap(
+                (server) =>
+                  Array.isArray(server.urls) ? server.urls : [server.urls].filter(Boolean),
+              );
+            }
+            return result;
+          },
+          {
+            url: WS_URL,
+            joinJwt: grant[JOIN_FIELD],
+            icePolicy: grant[ICE_POLICY_FIELD] || 'all',
+          },
+        );
+        if (outcome.connected) {
+          await context.clearPermissions();
+          await context.grantPermissions(['local-network-access'], {
+            origin: new URL(TEST_ORIGIN).origin,
+          });
+          const capture = await page.evaluate(async () => {
+            const room = window.__room;
+            let denial = null;
             try {
               await room.localParticipant.enableCameraAndMicrophone();
             } catch (error) {
-              result.denial = String(error && error.name ? error.name : error);
+              denial = String(error && error.name ? error.name : error);
             }
-            result.published = room.localParticipant.trackPublications.size;
+            let deviceLabels = [];
             try {
               const devices = await navigator.mediaDevices.enumerateDevices();
-              result.deviceLabels = devices.map((device) => device.label).filter(Boolean);
+              deviceLabels = devices.map((device) => device.label).filter(Boolean);
             } catch {
-              result.deviceLabels = [];
+              deviceLabels = [];
             }
+            const published = room.localParticipant.trackPublications.size;
             await room.disconnect();
-            return result;
-          },
-          { url: WS_URL, joinJwt: grant[JOIN_FIELD] },
-        );
+            return { denial, deviceLabels, published };
+          });
+          Object.assign(outcome, capture);
+        }
         await context.close();
+        await deniedBrowser.close();
         const problems = [];
-        if (!outcome.connected) problems.push('the denied participant could not join at all');
+        if (!outcome.connected) {
+          problems.push(
+            `the denied participant could not join (${outcome.connectionError}); ` +
+              `ICE URLs: ${outcome.iceUrls.join(', ') || '<none>'}`,
+          );
+        }
         if (outcome.published !== 0) {
           problems.push(`published ${outcome.published} track(s) despite denied permissions`);
         }
@@ -342,34 +545,57 @@ async function main() {
         if (!failed) report('S5', false, error.message);
         throw error;
       }
-    }
+    };
 
     // ---------------------------------------------------------------- S6 ---
     if (want('S6')) {
+      let livekitStopped = false;
       try {
         if (!participants.length) {
           throw new Error('S6 needs the S4 participants; run S4 in the same invocation');
         }
         const { execFileSync } = await import('node:child_process');
-        // RUNBOOK § 9 item 4's own command.
+        const composeArgs = [
+          'compose',
+          '-f',
+          'docker-compose.yml',
+          '-f',
+          'infra/video/docker-compose.video.yml',
+          '--profile',
+          'video',
+        ];
+        // Stop first and wait for both real clients to OBSERVE the outage.
+        // `docker compose restart` could finish before Chromium dispatched the
+        // Reconnecting event, making this gate a race between the container
+        // runtime and the browser event loop rather than a reconnect proof.
         execFileSync(
           'docker',
-          [
-            'compose',
-            '-f',
-            'docker-compose.yml',
-            '-f',
-            'infra/video/docker-compose.video.yml',
-            '--profile',
-            'video',
-            'restart',
-            'livekit',
-          ],
+          [...composeArgs, 'stop', 'livekit'],
           { stdio: 'pipe' },
         );
-        await new Promise((resolve) => setTimeout(resolve, 25000));
+        livekitStopped = true;
+        await Promise.all(
+          participants.map((participant) =>
+            participant.page.waitForFunction(
+              () => window.__events.includes('reconnecting'),
+              null,
+              { timeout: 20_000 },
+            ),
+          ),
+        );
+        execFileSync('docker', [...composeArgs, 'up', '-d', 'livekit'], {
+          stdio: 'pipe',
+        });
+        livekitStopped = false;
         const problems = [];
         for (const participant of participants) {
+          await participant.page.waitForFunction(
+            () =>
+              window.__events.includes('reconnecting') &&
+              window.__room.state === 'connected',
+            null,
+            { timeout: 60_000 },
+          );
           const state = await participant.page.evaluate(() => ({
             events: window.__events,
             state: window.__room.state,
@@ -391,9 +617,69 @@ async function main() {
         );
         if (problems.length) throw new Error(problems.join('; '));
       } catch (error) {
+        // A failed gate must not leave the shared local media service stopped.
+        if (livekitStopped) {
+          try {
+            const { execFileSync } = await import('node:child_process');
+            execFileSync(
+              'docker',
+              [
+                'compose',
+                '-f',
+                'docker-compose.yml',
+                '-f',
+                'infra/video/docker-compose.video.yml',
+                '--profile',
+                'video',
+                'up',
+                '-d',
+                'livekit',
+              ],
+              { stdio: 'pipe' },
+            );
+          } catch {
+            // Preserve the original reconnect failure as the gate result.
+          }
+        }
+        const states = await Promise.all(
+          participants.map(async (participant) => ({
+            label: participant.label,
+            ...(await participant.page
+              .evaluate(() => ({
+                events: window.__events,
+                state: window.__room?.state,
+              }))
+              .catch(() => ({ events: [], state: 'page-unavailable' }))),
+          })),
+        );
+        process.stderr.write(
+          `S6 reconnect diagnostics ${JSON.stringify(states)}\n`,
+        );
         if (!failed) report('S6', false, error.message);
         throw error;
       }
+    }
+
+    // ---------------------------------------------------------------- S5 ---
+    if (want('S5')) {
+      const activeStudentIndex = participants.findIndex(
+        (participant) => participant.label === 'student',
+      );
+      if (activeStudentIndex >= 0) {
+        await participants[activeStudentIndex].page.evaluate(() =>
+          window.__room.disconnect(true),
+        );
+        await participants[activeStudentIndex].context.close();
+        participants.splice(activeStudentIndex, 1);
+        const remainingPeer = participants[0];
+        if (remainingPeer) {
+          await remainingPeer.page.waitForFunction(() => {
+            const peers = window.__room.remoteParticipants || window.__room.participants;
+            return peers?.size === 0;
+          }, null, { timeout: 15_000 });
+        }
+      }
+      await runS5();
     }
   } catch {
     // Every step reports its own verdict before rethrowing; nothing to add.

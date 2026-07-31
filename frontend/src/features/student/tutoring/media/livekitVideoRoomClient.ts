@@ -52,6 +52,13 @@ import {
 
 type LiveKitModule = typeof import('livekit-client');
 
+/** Secret-free Room RTC options derived from the server-authoritative policy. */
+export function liveKitConnectOptions(
+  policy: VideoRoomConnectOptions['iceTransportPolicy'],
+): { rtcConfig: RTCConfiguration } {
+  return { rtcConfig: { iceTransportPolicy: policy ?? 'all' } };
+}
+
 /* ========================================================================== *
  * Vendor -> product mappings, kept as pure functions so they are testable
  * ========================================================================== */
@@ -164,11 +171,14 @@ class LiveKitVideoRoomClient implements VideoRoomClient {
       const livekit = await import('livekit-client');
       if (this.left) return;
       this.livekit = livekit;
-      const room = new livekit.Room({ adaptiveStream: true, dynacast: true });
+      const room = new livekit.Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
       this.room = room;
       this.bind(room, livekit);
       // The raw credential is passed through and not retained by this object.
-      await room.connect(url, options.token);
+      await room.connect(url, options.token, liveKitConnectOptions(options.iceTransportPolicy));
       if (this.left) {
         await room.disconnect();
         return;

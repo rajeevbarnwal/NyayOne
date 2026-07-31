@@ -628,6 +628,7 @@ describe('E1 join credentials', () => {
     ttl_seconds: 300,
     superseded: true,
     video_room_url: 'wss://video.example.test',
+    video_ice_transport_policy: 'relay',
   };
 
   it('maps the one-time credential, including that it superseded the previous grant', async () => {
@@ -638,6 +639,7 @@ describe('E1 join credentials', () => {
     expect(issued.superseded).toBe(true);
     expect(issued.joinToken).toBe('jointoken-TEST-do-not-log');
     expect(issued.videoRoomUrl).toBe('wss://video.example.test');
+    expect(issued.videoIceTransportPolicy).toBe('relay');
   });
 
   it('redacts the raw token for any rendered or logged projection', async () => {
@@ -677,6 +679,7 @@ describe('runtime tutoring capabilities', () => {
       video_calls_enabled: true,
       video_transport: 'livekit',
       video_room_url: 'wss://video.example.test',
+      video_ice_transport_policy: 'relay',
       join_credential_ttl_seconds: 300,
       recording_enabled: false,
     }));
@@ -684,6 +687,7 @@ describe('runtime tutoring capabilities', () => {
       videoCallsEnabled: true,
       videoTransport: 'livekit',
       videoRoomUrl: 'wss://video.example.test',
+      videoIceTransportPolicy: 'relay',
       joinCredentialTtlSeconds: 300,
       recordingEnabled: false,
     });
@@ -694,6 +698,7 @@ describe('runtime tutoring capabilities', () => {
       video_calls_enabled: false,
       video_transport: 'none',
       video_room_url: null,
+      video_ice_transport_policy: 'all',
       join_credential_ttl_seconds: 300,
       recording_enabled: false,
     }));
@@ -701,6 +706,7 @@ describe('runtime tutoring capabilities', () => {
     expect(result.videoCallsEnabled).toBe(false);
     expect(result.videoTransport).toBe('none');
     expect(result.videoRoomUrl).toBeNull();
+    expect(result.videoIceTransportPolicy).toBe('all');
   });
 });
 

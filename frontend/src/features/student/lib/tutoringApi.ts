@@ -1108,6 +1108,8 @@ export interface JoinCredential {
   superseded: boolean;
   /** Browser-facing signalling URL; never the backend's internal Twirp URL. */
   videoRoomUrl: string | null;
+  /** Server-authoritative ICE policy; relay is required for forced-TURN deployments. */
+  videoIceTransportPolicy: 'all' | 'relay';
 }
 
 /** A credential with the secret removed, safe to render or log. */
@@ -1138,6 +1140,7 @@ export async function issueJoinCredentials(sessionId: string): Promise<JoinCrede
     ttl_seconds: number;
     superseded: boolean;
     video_room_url: string | null;
+    video_ice_transport_policy: 'all' | 'relay';
   }>(`/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}/join-credentials`, {
     method: 'POST',
   });
@@ -1153,6 +1156,7 @@ export async function issueJoinCredentials(sessionId: string): Promise<JoinCrede
     ttlSeconds: wire.ttl_seconds,
     superseded: Boolean(wire.superseded),
     videoRoomUrl: wire.video_room_url ?? null,
+    videoIceTransportPolicy: wire.video_ice_transport_policy,
   };
 }
 
@@ -1161,6 +1165,7 @@ export interface TutoringCapabilities {
   videoCallsEnabled: boolean;
   videoTransport: 'none' | 'deterministic' | 'livekit' | string;
   videoRoomUrl: string | null;
+  videoIceTransportPolicy: 'all' | 'relay';
   joinCredentialTtlSeconds: number;
   recordingEnabled: boolean;
 }
@@ -1170,6 +1175,7 @@ export async function getTutoringCapabilities(): Promise<TutoringCapabilities> {
     video_calls_enabled: boolean;
     video_transport: string;
     video_room_url: string | null;
+    video_ice_transport_policy: 'all' | 'relay';
     join_credential_ttl_seconds: number;
     recording_enabled: boolean;
   }>('/api/v1/tutoring/capabilities', { method: 'GET' });
@@ -1177,6 +1183,7 @@ export async function getTutoringCapabilities(): Promise<TutoringCapabilities> {
     videoCallsEnabled: Boolean(wire.video_calls_enabled),
     videoTransport: wire.video_transport,
     videoRoomUrl: wire.video_room_url ?? null,
+    videoIceTransportPolicy: wire.video_ice_transport_policy,
     joinCredentialTtlSeconds: wire.join_credential_ttl_seconds,
     recordingEnabled: Boolean(wire.recording_enabled),
   };

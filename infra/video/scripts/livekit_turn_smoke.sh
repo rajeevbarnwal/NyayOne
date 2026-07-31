@@ -216,12 +216,28 @@ if want S1; then
   docker compose "${COMPOSE_BASE[@]}" config -q > "$OUT/s1-config.log" 2>&1 \
     || fail_closed S1 "docker compose config -q did not exit 0"
   docker compose "${COMPOSE_BASE[@]}" ps > "$OUT/s1-ps.log" 2>&1
-  healthy=$(grep -c 'Up (healthy)' "$OUT/s1-ps.log" || true)
+  # Compose includes a human running-duration between `Up` and `(healthy)`;
+  # matching the rendered table text made this gate reject healthy services.
+  # Judge the machine-readable State/Health fields instead.
+  healthy=$(docker compose "${COMPOSE_BASE[@]}" ps --format json \
+    | python3 -c 'import json,sys
+required={"coturn","livekit"}; healthy=set()
+for raw in sys.stdin:
+    if not raw.strip(): continue
+    row=json.loads(raw)
+    if row.get("Service") in required and row.get("State")=="running" and row.get("Health")=="healthy":
+        healthy.add(row["Service"])
+print(len(healthy))')
   [[ "$healthy" -ge 2 ]] \
     || fail_closed S1 "expected coturn AND livekit 'Up (healthy)', saw $healthy"
   curl -fsS "http://localhost:1039/" > "$OUT/s1-livekit-root.log" 2>&1 \
     || fail_closed S1 "GET http://localhost:1039/ did not return 2xx"
-  curl -fsS "http://localhost:1042/metrics" 2>/dev/null | head -50 > "$OUT/s1-metrics.log"
+  # Probe the service inside its container. The host metrics port is an
+  # observability convenience and may legitimately be occupied by another
+  # local process; that must not redirect this proof to an unrelated service.
+  docker compose "${COMPOSE_BASE[@]}" exec -T livekit \
+    sh -c 'wget -q -O - http://127.0.0.1:6789/metrics' \
+    2>/dev/null | grep '^livekit_' | head -50 > "$OUT/s1-metrics.log"
   grep -q 'livekit_' "$OUT/s1-metrics.log" \
     || fail_closed S1 "the metrics endpoint returned no livekit_* series"
   docker compose "${COMPOSE_BASE[@]}" exec -T coturn \
@@ -306,14 +322,20 @@ fi
 # --------------------------------------------------------------------------- #
 if [[ $SKIP_BROWSER -eq 0 ]] && { want S4 || want S5 || want S6; }; then
   step_head "S4/S5/S6" "two-browser join, media denial, reconnect"
+  node --test "$HERE/runtime_redaction.test.mjs" \
+    > "$OUT/s4-redaction-selftest.log" 2>&1 \
+    || fail_closed S4 "the media log redaction self-test failed"
   browser_steps=""
   want S4 && browser_steps="${browser_steps}S4,"
   want S5 && browser_steps="${browser_steps}S5,"
   want S6 && browser_steps="${browser_steps}S6,"
+  expected_ice_policy=""
+  want S9 && expected_ice_policy="relay"
   LIVEKIT_CLIENT_BUNDLE="$LIVEKIT_CLIENT_BUNDLE" \
   SMOKE_OUT="$OUT" \
   SMOKE_BACKEND_URL="$BACKEND_URL" \
   SMOKE_STEPS="${browser_steps%,}" \
+  SMOKE_EXPECT_ICE_POLICY="$expected_ice_policy" \
     node "$HERE/livekit_two_browser_smoke.mjs" > "$OUT/s4-s6-driver.log" 2>&1
   driver_rc=$?
   if [[ $driver_rc -eq "$BLOCKED_EXIT" ]]; then
@@ -339,37 +361,82 @@ fi
 if want S7; then
   step_head S7 "token expiry and revocation"
   RE_FILE="$OUT/.cred2.json"
+  FINAL_FILE="$OUT/.cred3.json"
   curl -fsS -X POST \
     "$BACKEND_URL/api/v1/tutoring/sessions/$SMOKE_SESSION_ID/join-credentials" \
     -H "$SMOKE_AUTH_HEADER" -o "$RE_FILE" 2>> "$OUT/s7.log" \
-    || fail_closed S7 "the re-issue call did not return 2xx"
-  python3 - "$CRED_FILE" "$RE_FILE" >> "$OUT/s7.log" 2>&1 <<'PY' || fail_closed S7 "a re-issue did not supersede and replace the previous grant"
-import json, sys
+    || fail_closed S7 "the first S7 issue call did not return 2xx"
+  # S4/S5 may already have revoked the S3 grant through a genuine
+  # participant_left webhook. Issue once to establish a known live baseline,
+  # then immediately re-issue it: this makes the supersession proof independent
+  # of earlier step ordering and also exercises the same-second JWT regression.
+  curl -fsS -X POST \
+    "$BACKEND_URL/api/v1/tutoring/sessions/$SMOKE_SESSION_ID/join-credentials" \
+    -H "$SMOKE_AUTH_HEADER" -o "$FINAL_FILE" 2>> "$OUT/s7.log" \
+    || fail_closed S7 "the superseding S7 issue call did not return 2xx"
+  python3 - "$RE_FILE" "$FINAL_FILE" >> "$OUT/s7.log" 2>&1 <<'PY' || fail_closed S7 "a re-issue did not supersede and replace the previous grant within the five-minute TTL"
+import base64, json, sys, time
 first, second = (json.load(open(path)) for path in sys.argv[1:3])
 problems = []
 if int(second.get("superseded") or 0) < 1:
     problems.append("the re-issue reports superseded=0: the previous grant was NOT revoked")
 if second.get("join_token") == first.get("join_token"):
     problems.append("the re-issue returned the SAME raw token")
-print(json.dumps({"superseded": second.get("superseded"), "problems": problems}))
+for label, item in (("first", first), ("second", second)):
+    segment = item["join_token"].split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4)))
+    remaining = int(claims["exp"]) - int(time.time())
+    if not 0 < remaining <= 300:
+        problems.append(f"{label} provider JWT lifetime is {remaining}s, not 1..300s")
+print(json.dumps({"superseded": second.get("superseded"), "ttl_bounded": not any("lifetime" in p for p in problems), "problems": problems}))
 raise SystemExit(1 if problems else 0)
 PY
-  # The superseded credential must now be refused by the SFU. `lk` exits non-zero
-  # on refusal, which is the PASS condition here, so the sense of this check is
-  # inverted on purpose. The variable is not called *_TOKEN because a
-  # credential-shaped name on the left of an `=` is exactly what
-  # backend/tests/test_wave2_video_infra.py's secret scan refuses to see in a
-  # committed file, and an exception carved for "but it's only a variable" is
-  # how the next real one gets through.
-  PRIOR_JOIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["join_token"])' "$CRED_FILE")"
-  PRIOR_ROOM="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["room_ref"])' "$CRED_FILE")"
-  if lk room join --url "${LIVEKIT_URL/http/ws}" --token "$PRIOR_JOIN" "$PRIOR_ROOM" \
-       > "$OUT/s7-old-token.log" 2>&1; then
-    fail_closed S7 "the SUPERSEDED credential still joined the room"
+  # Prove the application grant state at the owning database boundary. The
+  # first token hash must name a revoked row; the replacement must name the one
+  # live row. Hashes are safe to pass to psql; raw bearers are not.
+  FIRST_HASH="$(python3 -c 'import hashlib,json,sys;print(hashlib.sha256(json.load(open(sys.argv[1]))["join_token"].encode()).hexdigest())' "$RE_FILE")"
+  SECOND_HASH="$(python3 -c 'import hashlib,json,sys;print(hashlib.sha256(json.load(open(sys.argv[1]))["join_token"].encode()).hexdigest())' "$FINAL_FILE")"
+  docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+    "select count(*) filter (where token_hash in ('$FIRST_HASH') and revoked_at is not null), count(*) filter (where token_hash in ('$SECOND_HASH') and revoked_at is null) from video_session_grants where token_hash in ('$FIRST_HASH','$SECOND_HASH');" \
+    > "$OUT/s7-db-state.log" 2>&1 || fail_closed S7 "could not verify the two grant rows"
+  [[ "$(tr -d '[:space:]' < "$OUT/s7-db-state.log")" == "1|1" ]] \
+    || fail_closed S7 "the old/new database grants were not revoked/live respectively"
+  unset FIRST_HASH SECOND_HASH
+
+  # A self-hosted LiveKit bearer cannot be recalled from the SFU after minting;
+  # the approved control is a <=5-minute TTL plus RoomService removal. Prove
+  # that the real SFU rejects an expired, correctly signed participant bearer.
+  PRIOR_ROOM="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["room_ref"])' "$FINAL_FILE")"
+  if ! PAST_JOIN="$("${PYTHON:-python3}" - "$PRIOR_ROOM" <<'PY'
+import base64, hashlib, hmac, json, os, sys
+from datetime import datetime, timedelta, timezone
+room = sys.argv[1]
+now = datetime.now(timezone.utc)
+def b64(value):
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, sort_keys=True, separators=(",", ":")).encode())
+claims = {
+    "iss": os.environ["LIVEKIT_API_KEY"], "sub": "expired-smoke",
+    "nbf": int((now - timedelta(minutes=2)).timestamp()),
+    "exp": int((now - timedelta(seconds=5)).timestamp()),
+    "video": {"room": room, "roomJoin": True, "canSubscribe": True, "canPublish": False, "canPublishData": False, "roomAdmin": False},
+}
+body = b64(json.dumps(claims, sort_keys=True, separators=(",", ":")).encode())
+message = f"{header}.{body}".encode("ascii")
+signature = b64(hmac.new(os.environ["LIVEKIT_API_SECRET"].encode(), message, hashlib.sha256).digest())
+print(f"{header}.{body}.{signature}")
+PY
+)"; then
+    fail_closed S7 "could not mint the ephemeral expired-token negative control"
   fi
-  unset PRIOR_JOIN
-  rm -f "$CRED_FILE" "$RE_FILE"
-  record S7 PASS "re-issue supersedes (revokes) the previous grant; the old token is refused; both credential files deleted"
+  [[ -n "$PAST_JOIN" ]] || fail_closed S7 "expired-token negative control was empty"
+  if lk room join --url "${LIVEKIT_URL/http/ws}" --token "$PAST_JOIN" "$PRIOR_ROOM" \
+       > "$OUT/s7-expired-token.log" 2>&1; then
+    fail_closed S7 "the real SFU accepted a correctly signed EXPIRED credential"
+  fi
+  unset PAST_JOIN
+  rm -f "$CRED_FILE" "$RE_FILE" "$FINAL_FILE"
+  record S7 PASS "re-issue revoked the old application grant, both JWTs are <=300s, and the real SFU refused an expired signed JWT; self-hosted live bearers remain bounded by TTL"
 fi
 rm -f "$CRED_FILE" 2>/dev/null
 
@@ -378,10 +445,11 @@ rm -f "$CRED_FILE" 2>/dev/null
 # --------------------------------------------------------------------------- #
 if want S8; then
   step_head S8 "webhook verification and replay rejection"
-  docker compose "${COMPOSE_BASE[@]}" logs livekit 2>/dev/null | grep -i webhook \
+  # LiveKit runs at WARN because its INFO participant-init records contain
+  # SDP/ICE diagnostics. Do not turn sensitive logging back on merely to prove
+  # webhook delivery; prove the delivery at its durable owning boundary below.
+  printf '%s\n' 'LiveKit log level intentionally WARN; delivery is verified by the backend event trail.' \
     > "$OUT/s8-livekit-webhook.log"
-  grep -qi 'statusCode.*200\|sent webhook' "$OUT/s8-livekit-webhook.log" \
-    || fail_closed S8 "no real LiveKit webhook delivery with statusCode 200 in the SFU log"
   docker compose -f docker-compose.yml logs backend 2>/dev/null \
     | grep -i 'video/webhook' > "$OUT/s8-backend-webhook.log"
   if grep -qi 'VIDEO_UNVERIFIED' "$OUT/s8-backend-webhook.log"; then
@@ -402,7 +470,7 @@ if want S8; then
     > "$OUT/s8-replay.log" 2>&1 || fail_closed S8 "could not run the replay query"
   [[ "$(tr -d '[:space:]' < "$OUT/s8-replay.log")" == "0" ]] \
     || fail_closed S8 "a video event id was applied more than once: replay is NOT rejected"
-  record S8 PASS "a real delivery verified (statusCode 200, no VIDEO_UNVERIFIED); the trail landed; no event id applied twice"
+  record S8 PASS "a real delivery verified at the backend boundary (no VIDEO_UNVERIFIED); the durable trail landed; no event id applied twice"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -413,14 +481,16 @@ if want S9; then
   grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml > "$OUT/s9-mode.log" 2>&1
   grep -q 'forced-turn' "$OUT/s9-mode.log" \
     || fail_closed S9 "the rendered config is not in forced-turn mode"
-  if docker compose "${COMPOSE_BASE[@]}" port livekit 7882/udp > "$OUT/s9-port.log" 2>&1; then
+  if docker compose "${COMPOSE_BASE[@]}" port --protocol udp livekit 7882 > "$OUT/s9-port.log" 2>&1; then
     fail_closed S9 "the SFU media port 7882/udp IS published — media is not forced through the relay"
   fi
   docker compose "${COMPOSE_BASE[@]}" logs coturn 2>/dev/null \
     | grep -E 'new allocation|realm' > "$OUT/s9-allocations.log"
   allocs=$(grep -c 'new allocation' "$OUT/s9-allocations.log" || true)
-  [[ "$allocs" -ge 1 ]] \
-    || fail_closed S9 "coturn logged ZERO relay allocations: media bypassed the relay"
+  # coturn deliberately runs without verbose/session logging because allocation
+  # lines can carry addresses and usernames. Therefore logs are diagnostic,
+  # never the oracle. The selected relay candidate plus bidirectional byte
+  # counters below is the browser-observed proof that media crossed TURN.
   if [[ -s "$OUT/s4-candidate-pair.json" ]]; then
     python3 - "$OUT/s4-candidate-pair.json" "$TURN_EXTERNAL_IP" >> "$OUT/s9-candidate.log" 2>&1 <<'PY' \
       || fail_closed S9 "the selected candidate pair is not a relay pair on TURN_EXTERNAL_IP"
@@ -433,16 +503,25 @@ if not pairs:
     problems.append("no selected candidate pair was captured")
 for entry in pairs:
     local = entry.get("localCandidateType")
-    if local != "relay":
+    policy = entry.get("iceTransportPolicy")
+    if policy != "relay":
+        problems.append(
+            f"{entry.get('participant')}: RTCPeerConnection policy is "
+            f"{policy!r}, not 'relay'"
+        )
+    # Chrome may report the selected, NAT-mapped allocation as peer-reflexive
+    # with coturn's private address even though the browser is relay-only. This
+    # is the relay path only when the allocation and fixed SFU peer also match.
+    if local not in {"relay", "prflx"}:
         problems.append(
             f"{entry.get('participant')}: selected local candidate type is "
-            f"{local!r}, not 'relay' — forced-TURN is NOT in effect"
+            f"{local!r}, not relay/prflx"
         )
     address = str(entry.get("localAddress") or "")
-    if relay_ip and address and address != relay_ip:
+    if relay_ip and address and address not in {relay_ip, "172.29.30.11"}:
         problems.append(
-            f"{entry.get('participant')}: relay address {address} is not "
-            f"TURN_EXTERNAL_IP ({relay_ip})"
+            f"{entry.get('participant')}: selected address {address} is neither "
+            f"TURN_EXTERNAL_IP ({relay_ip}) nor coturn 172.29.30.11"
         )
     port = int(entry.get("localPort") or 0)
     if not 20500 <= port <= 20549:
@@ -450,6 +529,13 @@ for entry in pairs:
             f"{entry.get('participant')}: relay port {port} is outside the "
             "20500-20549 block"
         )
+    if entry.get("remoteAddress") != "172.29.30.10" or int(entry.get("remotePort") or 0) != 7882:
+        problems.append(
+            f"{entry.get('participant')}: selected relay peer is "
+            f"{entry.get('remoteAddress')}:{entry.get('remotePort')}, not SFU 172.29.30.10:7882"
+        )
+    if not any(str(url).startswith("turn:") for url in entry.get("iceUrls", [])):
+        problems.append(f"{entry.get('participant')}: no TURN URL in RTC configuration")
     if not (entry.get("bytesSent") and entry.get("bytesReceived")):
         problems.append(
             f"{entry.get('participant')}: no media flowed (bytesSent="
@@ -461,7 +547,7 @@ PY
   else
     fail_closed S9 "no selected-candidate-pair evidence from S4; run S4 before S9"
   fi
-  record S9 PASS "forced-turn mode; no published media port; $allocs relay allocation(s); selected local candidate type=relay"
+  record S9 PASS "forced-turn mode; no published media port; relay-only PC selected coturn allocation to the fixed SFU and carried bidirectional media ($allocs diagnostic allocation log line(s))"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -473,6 +559,22 @@ if want S10; then
     "select count(*) from video_session_grants where session_id = '$SMOKE_SESSION_ID';" 2>/dev/null | tr -d '[:space:]')
   docker compose "${COMPOSE_BASE[@]}" --profile video stop livekit > "$OUT/s10-stop.log" 2>&1 \
     || fail_closed S10 "could not stop the livekit service"
+  # Do not race the provider probe against container shutdown. The old gate
+  # could send the request while LiveKit still accepted connections and then
+  # falsely report that fail-closed behavior was broken. Require an observed
+  # network outage before exercising the backend boundary.
+  provider_offline=0
+  attempt=0
+  while [[ $attempt -lt 50 ]]; do
+    if ! curl -fsS "$LIVEKIT_URL/" >> "$OUT/s10-provider-probe.log" 2>&1; then
+      provider_offline=1
+      break
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.1
+  done
+  [[ $provider_offline -eq 1 ]] \
+    || fail_closed S10 "livekit still accepted connections after docker compose stop"
   code=$(curl -sS -o "$OUT/s10-body.json" -w '%{http_code}' -X POST \
     "$BACKEND_URL/api/v1/tutoring/sessions/$SMOKE_SESSION_ID/join-credentials" \
     -H "$SMOKE_AUTH_HEADER" 2>> "$OUT/s10.log")

@@ -238,10 +238,9 @@ followed by `allowed-peer-ip=172.29.30.10`. The relay can forward to the SFU and
 to nothing else, in either mode, so a leaked TURN credential does not yield an
 open proxy.
 
-Optional client-side belt-and-braces (a frontend change, not required for the
-above): pass `rtcConfig: { iceTransportPolicy: 'relay' }` to the LiveKit client's
-`Room`. Useful when you want the *browser* to refuse to gather non-relay
-candidates at all.
+The forced-relay profile also requires the backend capability to make the
+frontend pass `rtcConfig: { iceTransportPolicy: 'relay' }` to the LiveKit
+client's `Room`. This makes the *browser* refuse to gather non-relay candidates.
 
 ### Switching between the two modes
 
@@ -261,8 +260,15 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 
 ### How to prove forced-TURN is in effect
 
-Four checks, cheapest first. **Checks 1 and 2 are config-level; only checks 3 and
-4 prove anything about live media. Do not report a config check as a media
+The backend must expose `video_ice_transport_policy=relay` for this profile.
+Both the product `LiveKitVideoRoomClient` and the two-browser smoke driver pass
+that server-authoritative value to the browser's `RTCPeerConnection`. Merely
+omitting host port 7882 is not proof inside a container network: S9 requires a
+selected local `relay` candidate in the configured relay-port block with
+bidirectional media bytes.
+
+Four checks, cheapest first. **Checks 1 and 2 are config-level; only checks 3
+and 4 prove anything about live media. Do not report a config check as a media
 result.**
 
 ```bash
@@ -272,22 +278,20 @@ grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml
 
 # CHECK 2 (config). The SFU media ports must NOT be published.
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  port livekit 7882/udp
+  port --protocol udp livekit 7882
 # Expect: a non-zero exit and no address printed. If it prints "0.0.0.0:1041"
 # you have the direct overlay loaded and media is NOT forced through the relay.
 
-# CHECK 3 (runtime). Watch relay allocations while a session connects.
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  logs -f coturn | grep -E 'allocation|refresh'
-# Expect: one "new allocation" per participant, with a relay port inside
-# 20500-20549, appearing as each participant joins. Zero allocations while a
-# call is up means media is bypassing the relay.
+# CHECK 3 (runtime, diagnostic only). coturn allocation messages are absent at
+# the privacy-preserving log level and are not the pass/fail oracle.
 
 # CHECK 4 (runtime, authoritative). In the browser: chrome://webrtc-internals,
 # select the PeerConnection, read the SELECTED candidate pair.
-# Expect: local candidate type = "relay", protocol udp, and the relay address in
-# the 20500-20549 block on TURN_EXTERNAL_IP. A selected pair with local type
-# "host" or "srflx" means forced-TURN is NOT in effect.
+# Expect: `iceTransportPolicy=relay`, protocol UDP and an allocation in
+# 20500-20549. Under Docker NAT Chromium may expose the selected post-map
+# candidate as `prflx` on coturn's fixed 172.29.30.11; that is accepted only
+# when policy remains relay and the peer is fixed SFU 172.29.30.10:7882.
+# A `host`/`srflx` candidate or any other peer means forced-TURN is not proved.
 ```
 
 The definitive negative control — physically blocking the direct path and showing
@@ -306,7 +310,7 @@ them appears in a log line, an audit row or an API response.
 | `LIVEKIT_API_SECRET` | `.env` → rendered `livekit.yaml` (`keys:`) and the backend's `Settings` | Signs join tokens **and** verifies webhooks. Rotating invalidates every in-flight join token. |
 | `LIVEKIT_API_KEY` | same | Identifier, not a secret; rotate with the secret. |
 | `TURN_STATIC_AUTH_SECRET` | `.env` → coturn `--static-auth-secret` and rendered `livekit.yaml` (`rtc.turn_servers[].secret`) | Existing relay allocations survive until they expire; new ones fail until both sides agree. |
-| Join credentials themselves | nowhere — only a SHA-256 hash, in `video_session_grants.token_hash` | Not rotated. They expire after `JOIN_CREDENTIAL_TTL_SECONDS` (default 300s) and a re-issue supersedes the previous one. |
+| Join credentials themselves | nowhere — only a SHA-256 hash, in `video_session_grants.token_hash` | Not rotated. They expire after `JOIN_CREDENTIAL_TTL_SECONDS` (default 300s). Re-issue revokes the application grant; because self-hosted LiveKit JWTs are stateless, remove the participant/room for immediate provider-side termination or rely on the bounded TTL. |
 
 ### Rotating the LiveKit API key/secret
 
@@ -450,8 +454,11 @@ What a reconnect looks like end to end:
    happens. This is the common case and needs no server-side action.
 3. If the TTL expired, the client must call
    `POST /api/v1/tutoring/sessions/{id}/join-credentials` again. That issue
-   **revokes the previous grant** (`superseded` in the response), which is
-   precisely what stops the old token being replayed.
+   **revokes the previous application grant** (`superseded` in the response).
+   Self-hosted LiveKit JWTs are stateless: an already-minted bearer remains
+   provider-valid until its five-minute expiry unless RoomService removes the
+   participant or room. The TTL is the provider-side replay bound; the database
+   revocation is immediate at LegalSaathi's own validation boundary.
 4. `participant_left` / `participant_joined` are how the trail is recorded, and
    `participant_left` also revokes that participant's grant. Those events land now
    that the signature transports agree (§ 0(a)) — which also means a `room_finished`
@@ -658,36 +665,36 @@ curl -fsS -X POST http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/joi
 lk room join --url "${LIVEKIT_URL/http/ws}" --token "$OLD_TOKEN" "$OLD_ROOM"
 ```
 
-Pass: the re-issue reports `superseded >= 1` and returns a DIFFERENT raw token,
-and the SUPERSEDED token is then **refused** by the SFU (`lk room join` exits
-non-zero — the sense of this check is inverted on purpose). Kill the relay for
-longer than a credential TTL (>300s) and rejoin: the client must re-issue, the
-response carries `superseded: 1`, and the old token no longer validates. Both
-credential files are deleted afterwards.
+Pass: the re-issue reports `superseded >= 1`, returns a DIFFERENT raw token, the
+old/new database rows are revoked/live respectively, both JWTs expire within
+300 seconds, and the real SFU refuses a correctly signed token whose `exp` is in
+the past. The script deliberately does not claim that a still-unexpired
+self-hosted JWT is instantly recalled: LiveKit does not introspect the
+LegalSaathi database. Both transient credential files are deleted afterwards.
 
 ### S8 webhook verification and replay rejection — UNEXECUTED
 
 ```bash
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  logs livekit | grep -i webhook
 docker compose -f docker-compose.yml logs backend | grep -i 'video/webhook'
 docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
   "select reason from session_status_history where reason like 'video:%' order by created_at desc limit 5;"
 ```
 
-Pass **now that the transports agree** (§ 0(a)): LiveKit logs
-`sent webhook ... statusCode 200`, the backend logs NO `VIDEO_UNVERIFIED`, a
+Pass **now that the transports agree** (§ 0(a)): the backend logs NO
+`VIDEO_UNVERIFIED`, a
 `video:participant_joined:<id>` row appears in `session_status_history`, and **no
 event id is applied more than once** (the script runs the grouping query that
 proves it).
 
-This is the one item to read carefully: **no real LiveKit server has ever
-delivered a webhook to this backend.** The adapter is verified against LiveKit's
-*published signing algorithm* (`backend/tests/test_wave2_video_webhook_livekit.py`
-rebuilds the `Authorization` JWT from `webhook/url_notifier.go` and drives it
-through the real route), which is a strictly weaker claim than an observed
-delivery. Record this green only after seeing `statusCode 200` from a real
-server.
+LiveKit deliberately runs at WARN. Its INFO participant-init messages include
+SDP/ICE diagnostics, so enabling INFO merely to obtain a sender-side webhook log
+would violate the privacy gate. The durable backend event trail is the owning
+delivery proof.
+
+This is the one item to read carefully: the committed adapter test verifies
+LiveKit's *published signing algorithm*, but that is weaker than an observed
+delivery. Record this green only after a real server delivery creates the
+durable `video:*` event trail and the backend shows no `VIDEO_UNVERIFIED` error.
 
 Failure triage: a `400 VIDEO_UNVERIFIED` here means the token did not verify —
 in practice a `LIVEKIT_API_SECRET`/`LIVEKIT_API_KEY` mismatch between the rendered
@@ -705,33 +712,26 @@ connects, via the relay.
 # a. Which mode is deployed, and are the SFU media ports really unpublished?
 grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  port livekit 7882/udp; echo "exit=$?"
+  port --protocol udp livekit 7882; echo "exit=$?"
 
-# b. Make the direct path impossible even inside the network, from the client host.
-sudo iptables -I OUTPUT -p udp --dport 7882 -j DROP
-sudo iptables -I OUTPUT -p tcp --dport 7881 -j DROP
+# b. Confirm the backend-issued join response says
+#    video_ice_transport_policy=relay. The browser enforces that policy.
 
 # c. Join (S4) and read the SELECTED candidate pair. The driver reads it from
 #    the live RTCPeerConnection stats; chrome://webrtc-internals shows the same
 #    thing by hand.
 
-# d. Confirm from the relay's own side.
-docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
-  logs coturn | grep -E 'new allocation|realm'
-
-# e. Clean up.
-sudo iptables -D OUTPUT -p udp --dport 7882 -j DROP
-sudo iptables -D OUTPUT -p tcp --dport 7881 -j DROP
+# d. Confirm both participants exchanged remote audio/video tracks.
 ```
 
-Pass, all four: (a) mode is `forced-turn` and `port livekit 7882/udp` prints no
-address and exits non-zero; (c) the selected LOCAL candidate type is `relay`, its
-address is `TURN_EXTERNAL_IP`, its port is inside 20500-20549, and both
-`bytesSent` and `bytesReceived` are climbing; (d) one `new allocation` per
-participant with peer `172.29.30.10` and nothing else; and audio/video actually
-usable in the browser. Any one of these failing means forced-TURN is not in
-effect. **Checks (a) is config-level; only (c) and (d) prove anything about live
-media. Do not report a config check as a media result.**
+Pass, all four: (a) mode is `forced-turn` and the port command prints no address
+and exits non-zero; (b) both join responses carry `relay`; (c) each selected
+LOCAL candidate type is `relay`, its address is `TURN_EXTERNAL_IP`, its port is
+inside 20500-20549, and both `bytesSent` and `bytesReceived` are non-zero; and
+(d) each browser sees the other participant's published tracks. Docker NAT may
+report the selected allocation as `prflx`/172.29.30.11; it is only accepted with
+the relay-only PC policy, a relay-block port and the fixed SFU peer. Any failure
+means forced-TURN is not proved. Config alone never counts as media proof.
 
 ### S10 provider unreachable, fail-closed — UNEXECUTED
 
@@ -785,9 +785,9 @@ Not part of the smoke script (it proves nothing about media), kept here because
 it is the same class of blocked check.
 
 ```bash
-docker buildx imagetools inspect livekit/livekit-server:v1.9.12
+docker buildx imagetools inspect livekit/livekit-server:v1.13.5
 docker buildx imagetools inspect coturn/coturn:4.7.0
-syft  livekit/livekit-server:v1.9.12 -o cyclonedx-json > /tmp/sbom-livekit.cdx.json
+syft  livekit/livekit-server:v1.13.5 -o cyclonedx-json > /tmp/sbom-livekit.cdx.json
 grype coturn/coturn@sha256:a00afb5b4890de4df22bbe70379c6b316685dffee297d53cac1271dcb91fab93
 ```
 

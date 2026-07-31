@@ -72,6 +72,7 @@ BACKEND_ENV_NAMES = (
     "VIDEO_PROVIDER",
     "LIVEKIT_URL",
     "LIVEKIT_PUBLIC_URL",
+    "VIDEO_ICE_TRANSPORT_POLICY",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "JOIN_CREDENTIAL_TTL_SECONDS",
@@ -80,6 +81,7 @@ BACKEND_ENV_NAMES = (
 #: believes the application honours them.
 INFRA_ONLY_ENV_NAMES = (
     "TURN_PUBLIC_HOST",
+    "TURN_PUBLIC_PORT",
     "TURN_REALM",
     "TURN_EXTERNAL_IP",
     "TURN_STATIC_AUTH_SECRET",
@@ -122,6 +124,22 @@ def test_backend_image_copies_the_lockfile_required_by_requirements_txt():
         re.MULTILINE,
     )
     assert "RUN pip install --no-cache-dir -r requirements.txt" in dockerfile
+
+
+def test_video_config_mounts_are_root_compose_relative_files_not_directories():
+    """Compose resolves relative bind paths from the first/root compose file."""
+    compose = _load(BASE_COMPOSE)
+    livekit_volumes = compose["services"]["livekit"]["volumes"]
+    coturn_volumes = compose["services"]["coturn"]["volumes"]
+    assert any(
+        str(v).startswith("./infra/video/rendered/livekit.yaml:")
+        for v in livekit_volumes
+    )
+    assert any(
+        str(v).startswith("./infra/video/rendered/turnserver.conf:")
+        for v in coturn_volumes
+    )
+    assert not any(str(v).startswith("./rendered/") for v in livekit_volumes + coturn_volumes)
 
 
 def _renderer():
@@ -180,6 +198,7 @@ def _base_env(**overrides: str) -> dict[str, str]:
         "LIVEKIT_API_KEY": "APIunitTestKeyValue",
         "LIVEKIT_API_SECRET": "0123456789abcdef0123456789abcdef",
         "TURN_PUBLIC_HOST": "turn.unit-test.invalid",
+        "TURN_PUBLIC_PORT": "1043",
         "TURN_REALM": "turn.unit-test.invalid",
         "TURN_EXTERNAL_IP": "203.0.113.10",
         "TURN_STATIC_AUTH_SECRET": "fedcba9876543210fedcba9876543210",
@@ -356,7 +375,7 @@ def test_base_overlay_publishes_no_sfu_media_port():
 
 def test_direct_overlay_is_the_only_thing_that_opens_direct_media():
     entries = [str(p) for p in _load(DIRECT_COMPOSE)["services"]["livekit"]["ports"]]
-    assert entries == ["1040:7881", "1041:7882/udp"]
+    assert entries == ["1040:1040", "1041:1041/udp"]
 
 
 def test_forced_turn_template_hardcodes_the_internal_node_ip():
@@ -390,8 +409,18 @@ def test_turn_peer_acl_allows_the_sfu_and_nothing_else():
     allowed = [line for line in lines if line.startswith("allowed-peer-ip=")]
     assert denied == ["denied-peer-ip=0.0.0.0-255.255.255.255"]
     assert allowed == [f"allowed-peer-ip={SFU_STATIC_IP}"]
-    # Order matters: coturn applies rules in order and the last match wins.
-    assert lines.index(denied[0]) < lines.index(allowed[0])
+    # coturn's explicit allow rule overrides the blanket deny for this SFU peer.
+
+
+def test_coturn_advertises_the_operator_supplied_relay_address():
+    """Browser candidate is public; coturn discovers its private relay socket."""
+    lines = {
+        line.strip()
+        for line in _render("forced-turn")["coturn_text"].splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    assert f"external-ip={_base_env()['TURN_EXTERNAL_IP']}" in lines
+    assert not any(line.startswith("relay-ip=") for line in lines)
 
 
 def test_turn_uses_rest_credentials_and_holds_no_static_secret():
@@ -567,6 +596,64 @@ def test_livekit_adapter_still_fails_closed_on_an_unsigned_delivery():
         assert not excinfo.value.retryable
 
 
+def test_livekit_reissue_in_the_same_second_mints_a_distinct_bearer(monkeypatch):
+    """A superseding grant must not hand the caller the same raw JWT again."""
+    import uuid
+    from datetime import datetime, timezone
+
+    adapter = LiveKitCommunityAdapter(
+        "http://livekit.invalid:7880",
+        "APIunitTestKeyValue",
+        "0123456789abcdef0123456789abcdef",
+    )
+    probes = []
+    monkeypatch.setattr(
+        adapter,
+        "_twirp",
+        lambda method, payload: probes.append((method, payload)) or {"rooms": []},
+    )
+    session_id = uuid.uuid4()
+    now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+    first = adapter.issue_credential(
+        session_id, "participant-opaque", "publish,subscribe", 300, now=now
+    )
+    second = adapter.issue_credential(
+        session_id, "participant-opaque", "publish,subscribe", 300, now=now
+    )
+    assert first.raw_token != second.raw_token
+    assert first.token_hash != second.token_hash
+    assert first.room_ref == second.room_ref
+    assert first.participant_ref == second.participant_ref
+    assert first.permissions == second.permissions
+    assert first.expires_at == second.expires_at
+    assert probes == [
+        ("ListRooms", {"names": [first.room_ref]}),
+        ("ListRooms", {"names": [second.room_ref]}),
+    ]
+
+
+def test_livekit_refuses_to_mint_a_bearer_when_the_sfu_is_unreachable(monkeypatch):
+    import httpx
+    import uuid
+
+    adapter = LiveKitCommunityAdapter(
+        "http://livekit.invalid:7880",
+        "APIunitTestKeyValue",
+        "0123456789abcdef0123456789abcdef",
+    )
+
+    def offline(*_args, **_kwargs):
+        raise httpx.ConnectError("provider is deliberately offline")
+
+    monkeypatch.setattr(httpx, "post", offline)
+    with pytest.raises(VideoProviderError) as excinfo:
+        adapter.issue_credential(
+            uuid.uuid4(), "participant-opaque", "publish,subscribe", 300
+        )
+    assert excinfo.value.code == "PROVIDER_UNREACHABLE"
+    assert excinfo.value.retryable is True
+
+
 def test_signature_header_names_are_documented_where_operators_will_look():
     """BOTH transports must be documented, because the adapters really differ.
 
@@ -732,7 +819,11 @@ def test_renderer_produces_parseable_configs_for_both_modes():
         assert f"LEGALSAATHI-VIDEO-MODE: {mode}" in out["coturn_text"]
         config = out["livekit"]
         assert config["port"] == 7880
-        assert config["rtc"]["udp_port"] == 7882
+        # INFO participant-init records contain SDP/ICE diagnostics. A normal
+        # deployment must not place those media credentials in application
+        # logs merely to obtain verbose provider traces.
+        assert config["logging"]["level"] == "warn"
+        assert config["rtc"]["udp_port"] == (1041 if mode == "direct" else 7882)
         # port_range_* must stay unset for udp_port to take effect upstream.
         assert "port_range_start" not in config["rtc"]
         assert "port_range_end" not in config["rtc"]
@@ -741,7 +832,7 @@ def test_renderer_produces_parseable_configs_for_both_modes():
         assert protocols == {"udp", "tcp"}
         for server in config["rtc"]["turn_servers"]:
             assert server["host"] == _base_env()["TURN_PUBLIC_HOST"]
-            assert server["port"] == 3478
+            assert server["port"] == int(_base_env()["TURN_PUBLIC_PORT"])
             assert server["ttl"] == 3600
 
 
@@ -803,6 +894,12 @@ def test_renderer_url_and_key_rules(monkeypatch):
     with pytest.raises(module.RenderError) as excinfo:
         module.resolve(None, "forced-turn")
     assert "16" in str(excinfo.value)
+
+    monkeypatch.setenv("LIVEKIT_API_SECRET", _base_env()["LIVEKIT_API_SECRET"])
+    monkeypatch.setenv("TURN_PUBLIC_PORT", "70000")
+    with pytest.raises(module.RenderError) as excinfo:
+        module.resolve(None, "forced-turn")
+    assert "TURN_PUBLIC_PORT" in str(excinfo.value)
 
 
 def test_renderer_writes_the_secret_file_private_and_the_other_readable(tmp_path):

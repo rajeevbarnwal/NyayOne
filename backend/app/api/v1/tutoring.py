@@ -1069,6 +1069,7 @@ def tutoring_capabilities() -> dict:
             if enabled and provider == "livekit" and settings.livekit_public_url
             else None
         ),
+        "video_ice_transport_policy": settings.video_ice_transport_policy.strip().lower(),
         "join_credential_ttl_seconds": settings.join_credential_ttl_seconds,
         "recording_enabled": False,
     }
@@ -1085,8 +1086,10 @@ def issue_join_credentials(
     It appears in this response body and nowhere else: the grant row stores a
     SHA-256 hash, the audit row stores neither the token nor its hash, and no
     outbox row is written at all. Issuing supersedes (revokes) the caller's
-    previous grant, so the token handed out before this call stops working —
-    that is what makes a replayed credential fail.
+    previous APPLICATION grant. Self-hosted LiveKit JWTs are stateless and may
+    remain provider-valid until their five-minute expiry unless the participant
+    is explicitly removed; the application therefore never presents an old
+    grant again and bounds that residual provider lifetime with the TTL.
     """
     try:
         issued = join_credentials.issue(
@@ -1115,6 +1118,7 @@ def issue_join_credentials(
             and settings.livekit_public_url
             else None
         ),
+        "video_ice_transport_policy": settings.video_ice_transport_policy.strip().lower(),
     }
 
 
