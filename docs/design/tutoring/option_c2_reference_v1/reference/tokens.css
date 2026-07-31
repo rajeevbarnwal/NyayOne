@@ -1,0 +1,65 @@
+/* ============================================================================
+   Option C2 reference tokens — v1
+   PRODUCT_APPROVED: colour ramps, radii, type families and shadow are copied
+   verbatim from the approved package
+   docs/design/tutoring_option_c2_mobile_gate_2026-07-29/C2_MOBILE_GATE.html.
+   PROPOSED: the --t-* spacing/target/motion tokens below are named additions.
+   They only give stable names to values already present in the approved CSS;
+   no approved value is changed.
+   ========================================================================== */
+
+:root[data-theme=light]{
+  --bg:#fbf7f0;--card:#fff;--soft:#f4ece0;--ink:#211609;--ink2:#4d4234;--mut:#6f6248;
+  --line:#ead9c2;--line2:#d3bd9e;
+  --jade:#0f6b47;--jade-ink:#fff;--jadeq:#e3f1e9;
+  --terra:#a8410c;--terra-ink:#fff;--terraq:#fdeadd;
+  --indigo:#3f4796;--indigoq:#eceefb;
+  --gold:#8a6108;--goldq:#faf0d6;
+  --risk:#98281d;--riskq:#fae9e5;
+  --studio:#120d07;--studio2:#1e160d;--studiotx:#f6efe2;--studiomut:#ad9c80;
+  --shadow:0 18px 40px -26px rgba(33,22,9,.4);
+  --studio-line:#2c2113;--studio-line2:#3d2f1a;--studio-leave:#8a4133;--studio-leave-ink:#ef9c8b;
+  /* SAATHI-129 a11y: studio surfaces are theme-invariant, so these two inks are
+     identical in both themes, exactly like --studio-line/--studio-leave above.
+     --studio-leave-edge  destructive dock boundary, >=3:1 on the dock surface (1.4.11)
+     --studio-focus       keyboard focus ring on the dark studio surfaces (1.4.11/2.4.7) */
+  --studio-leave-edge:#a4503f;--studio-focus:#f2986a;
+}
+:root[data-theme=dark]{
+  --bg:#140e06;--card:#1f170d;--soft:#291f12;--ink:#f7f0e2;--ink2:#dbcdb7;--mut:#ad9d81;
+  --line:#3a2d1b;--line2:#50402a;
+  --jade:#5fcb9c;--jade-ink:#06180f;--jadeq:#162d20;
+  --terra:#f2986a;--terra-ink:#211609;--terraq:#37200f;
+  --indigo:#a4abf5;--indigoq:#23264a;
+  --gold:#e6bf6a;--goldq:#332612;
+  --risk:#ef9c8b;--riskq:#361d17;
+  --studio:#0c0803;--studio2:#191207;--studiotx:#f6efe2;--studiomut:#ad9c80;
+  --shadow:0 18px 40px -26px rgba(0,0,0,.8);
+  --studio-line:#2c2113;--studio-line2:#3d2f1a;--studio-leave:#8a4133;--studio-leave-ink:#ef9c8b;
+  --studio-leave-edge:#a4503f;--studio-focus:#f2986a;
+}
+
+:root{
+  /* type */
+  --font-display:'Newsreader',Georgia,'Times New Roman',serif;
+  --font-body:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'DejaVu Sans Mono',monospace;
+  /* spacing scale (named from approved values) */
+  --t-1:4px;--t-2:6px;--t-3:8px;--t-4:10px;--t-5:12px;--t-6:14px;--t-7:18px;--t-8:22px;
+  /* radii */
+  --r-sm:11px;--r-md:14px;--r-lg:18px;--r-xl:20px;--r-pill:24px;--r-round:50%;
+  /* interaction */
+  --target-min:44px;      /* WCAG 2.2 AA 2.5.8 floor, binding */
+  --target-primary:48px;  /* approved primary control height */
+  /* motion */
+  --motion-fast:.12s;--motion-base:.22s;--motion-ease:ease;
+  /* safe area */
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+}
+
+@media (prefers-reduced-motion: reduce){
+  :root{--motion-fast:0s;--motion-base:0s}
+}

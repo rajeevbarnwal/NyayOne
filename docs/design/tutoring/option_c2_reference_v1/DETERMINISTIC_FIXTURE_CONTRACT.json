@@ -1,0 +1,58 @@
+{
+  "schema": "legalsaathi.tutoring.fixture-contract/1",
+  "provenance": "PRODUCT_APPROVED (values frozen by the Wave 2 brief and the approved C2 package)",
+  "package": "docs/design/tutoring/option_c2_reference_v1",
+  "checksumAlgorithm": "FNV-1a 64-bit over the key-sorted canonical JSON form of the fixture object; identical in Node and the browser",
+  "checksum": "d45aa35d5614afe2",
+  "checksumExposedAs": [
+    "window.__C2_FIXTURE_CHECKSUM",
+    "window.__C2.fixtureChecksum",
+    "the fixtureChecksum field of every __C2_READY descriptor"
+  ],
+  "checksumAssertion": "tools/measure.mjs and tools/run_negative_matrix.mjs compare the browser checksum with the Node checksum before every capture and every negative case; a mismatch aborts the run.",
+  "frozenValues": {
+    "tutor": "Adv. Meera Krishnan",
+    "practiceArea": "Arbitration & ADR",
+    "slotId": "slt_0805_1830",
+    "slotLabel": "Wed, 5 Aug 2026 · 6:30–7:15 PM",
+    "slotStartIso": "2026-08-05T18:30:00+05:30",
+    "slotEndIso": "2026-08-05T19:15:00+05:30",
+    "timezone": "Asia/Kolkata",
+    "moneyUnit": "integer paise",
+    "feePaise": 89900,
+    "taxPaise": 16182,
+    "discountPaise": -10000,
+    "totalPaise": 96082,
+    "totalRendered": "₹960.82",
+    "reconciliation": "89900 + 16182 + (-10000) = 96082",
+    "holdTtlSeconds": 600,
+    "holdUrgentAtSeconds": 120
+  },
+  "testOnlyReferences": {
+    "note": "All references are test-only literals. No production identifier, PAN, CVV, payment OTP or PII appears in this package.",
+    "booking": "LS-TUT-TEST-20260805-0042",
+    "payment": "pay_TEST_8f3k2Q",
+    "refund": "rfnd_TEST_2m9x1L",
+    "idempotency": "idem_TEST_7c41e9",
+    "audit": "AUD-TEST-2026-000481",
+    "joinToken": "join_TEST_do-not-log"
+  },
+  "dynamicRegionsExcludedFromVisualComparison": [
+    "the hold countdown value in s33-hold (pinned to 07:12 in every other s33 state)",
+    "the session elapsed clock in the live-room header (pinned to 12:04 / 45:00)",
+    "the generatedAtUtc date field of MEASURED_GEOMETRY_RESULTS.json"
+  ],
+  "privacy": {
+    "canaries": [
+      "CANARY-PAN-4111111111111111",
+      "CANARY-CVV-737",
+      "CANARY-OTP-419273",
+      "CANARY-JOINTOKEN-do-not-log",
+      "CANARY-NARRATIVE-private-matter"
+    ],
+    "rule": "No canary may appear in location.href, document.cookie, localStorage, sessionStorage or the rendered DOM. Asserted by NEG-PRIV-01..04.",
+    "storageWritten": "none — the reference writes no cookie and no web storage at all",
+    "networkRequests": "none — fonts are embedded, all assets are relative file:// paths"
+  },
+  "fixtureIds": "fx.<stateId> for all 82 states; see STATE_INVENTORY.json"
+}

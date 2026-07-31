@@ -9,7 +9,10 @@ import { useTheme } from '../hooks/useTheme';
 import { studentScreens } from '../features/student/screens';
 import { lawyerRoutes } from '../features/lawyer/screens';
 import { LawyerGuard } from '../features/lawyer/CaseAuthGuard';
+import { mentorRoutes } from '../features/mentor/screens';
+import { MentorGuard } from '../features/mentor/MentorSessionScreens';
 import { authRoutes } from '../features/auth/screens';
+import { PublicCredentialVerification } from '../features/student/credentials/CredentialScreens';
 
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; implemented S-01..S-19 screens (student module) render
@@ -49,6 +52,20 @@ function ShellRoutes() {
             );
             return <Route key={r.path} path={r.path} element={element} />;
           })}
+          {/*
+            Mentor / administrator routes (SAATHI-66, QA defect D2). The
+            completion action lives here and only here; every route is wrapped in
+            MentorGuard so no unauthorised actor mounts it.
+          */}
+          {mentorRoutes.map((r) => {
+            const Mentor = r.Component;
+            const element = r.guarded ? (
+              <MentorGuard><Mentor /></MentorGuard>
+            ) : (
+              <Mentor />
+            );
+            return <Route key={r.path} path={r.path} element={element} />;
+          })}
           {authRoutes.map((r) => {
             const Auth = r.Component;
             return <Route key={r.path} path={r.path} element={<Auth />} />;
@@ -60,6 +77,22 @@ function ShellRoutes() {
   );
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/verify/:token" element={<PublicVerificationRoute />} />
+      <Route path="*" element={<ShellRoutes />} />
+    </Routes>
+  );
+}
+
+function PublicVerificationRoute() {
+  // Apply the same stored/system theme tokens without rendering authenticated
+  // navigation around the anonymous verification surface.
+  useTheme();
+  return <PublicCredentialVerification />;
+}
+
 export function App() {
   // Reactive auth: derives the live state from the persisted, secret-free lawyer
   // session snapshot and updates immediately on P0.1 create/update/clear/expiry.
@@ -68,7 +101,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider value={auth}>
         <BrowserRouter>
-          <ShellRoutes />
+          <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>

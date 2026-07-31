@@ -1,0 +1,422 @@
+/* ============================================================================
+   Option C2 reference composition CSS — v1
+   Provenance per block:
+     [C2] copied/adapted from the approved C2 mobile-gate composition
+     [C2-REPAIR] live-room repair mandated by
+       QA/wave2_tutoring_design_2026-07-29/OPTION_C2_MOBILE_GATE_INDEPENDENT_PRODUCT_UX_REVIEW.md
+     [NEW] S-32 profile family (controlled adaptation of Option C S-32 structure)
+   ========================================================================== */
+
+/* ---------- reset / page shell [C2] ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--font-body);font-size:14px;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+button,input,select,textarea{font-family:inherit}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:3px solid var(--terra);outline-offset:2px;border-radius:6px}
+/* 1.4.11 / 2.4.7: inside the dark studio surfaces the light-theme --terra ring only
+   reached 2.91:1 against the self-view tile. The studio rows get a studio-specific
+   ring token; the sheet and the leave dialog keep the global --terra ring because
+   they are painted on the light card surface. */
+.room>.lh :focus-visible,.room>.stage :focus-visible,.room>.lctrl :focus-visible,
+.live>.lh :focus-visible,.live>.stage :focus-visible,.live>.lctrl :focus-visible{outline-color:var(--studio-focus)}
+img,svg{max-width:100%}
+
+/* ---------- route root ---------- */
+.route{min-height:100dvh;display:flex;flex-direction:column;position:relative;
+  padding-left:var(--safe-l);padding-right:var(--safe-r)}
+
+/* ---------- top bar [C2] ---------- */
+.tbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);
+  padding:8px 14px;padding-top:calc(8px + var(--safe-t));display:flex;gap:10px;align-items:center;min-height:52px}
+.tbar .wm{font-family:var(--font-display);font-size:15px;font-weight:600;white-space:nowrap}
+.tbar .wm i{color:var(--jade);font-style:normal}
+.tbar .sid{font-family:var(--font-mono);font-size:9.5px;color:var(--mut);white-space:nowrap}
+
+.body{padding:14px 14px 18px;display:flex;flex-direction:column;gap:12px;flex:1}
+/* fallback reservation; app.js replaces it with the measured dock height so the
+   sticky dock can never bury the final content on any viewport */
+.body.hasdock{padding-bottom:calc(160px + var(--safe-b))}
+
+/* ---------- type [C2] ---------- */
+h1.m{font-family:var(--font-display);font-size:23px;font-weight:600;line-height:1.12;letter-spacing:-.02em;margin:0}
+h2.m{font-family:var(--font-display);font-size:19px;font-weight:600;line-height:1.15;margin:0}
+h3.m{font-family:var(--font-display);font-size:16px;font-weight:600;line-height:1.2;margin:0}
+p.m{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink2)}
+/* unbroken user-supplied strings (names, references, pasted text) must never
+   force horizontal overflow at any viewport */
+h1.m,h2.m,h3.m,p.m,.banner .bt,.banner .bd2,.chip,.steps h4,.steps p,.edu p,.muted{overflow-wrap:anywhere}
+.mono{font-family:var(--font-mono)}
+.eyebrow{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--terra);font-weight:600}
+.muted{color:var(--mut);font-size:12px}
+
+/* ---------- icons [C2] ---------- */
+.ic{width:20px;height:20px;flex:none;vertical-align:-4px}
+.ic .s{stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ic .f{fill:var(--terra);stroke:none;opacity:.3}
+
+/* ---------- chips [C2] ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);border-radius:16px;
+  padding:5px 10px;font-size:11px;font-weight:800;background:var(--card);max-width:100%}
+.chip .d{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.chip.g{border-color:var(--jade);color:var(--jade);background:var(--jadeq)}
+.chip.t{border-color:var(--terra);color:var(--terra);background:var(--terraq)}
+.chip.t .d{border-radius:2px;transform:rotate(45deg)}
+.chip.i{border-color:var(--indigo);color:var(--indigo);background:var(--indigoq)}
+.chip.i .d{border-radius:2px}
+.chip.gd{border-color:var(--gold);color:var(--gold);background:var(--goldq)}
+.chip.r{border-color:var(--risk);color:var(--risk);background:var(--riskq)}
+.chip.r .d{border-radius:2px}
+
+/* ---------- buttons [C2] ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  min-height:var(--target-primary);min-width:var(--target-min);padding:0 16px;
+  border:2px solid var(--line2);background:var(--card);color:var(--ink);
+  font-size:14px;font-weight:800;border-radius:var(--r-pill);cursor:pointer;text-decoration:none;text-align:center}
+.btn.jade{background:var(--jade);border-color:var(--jade);color:var(--jade-ink)}
+.btn.terra{background:var(--terra);border-color:var(--terra);color:var(--terra-ink)}
+.btn.block{width:100%}
+.btn[disabled],.btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}
+.ib{min-width:var(--target-min);min-height:var(--target-min);border:2px solid var(--line2);border-radius:50%;
+  background:var(--card);color:var(--ink2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.ib[aria-pressed=true]{background:var(--ink);color:var(--card);border-color:var(--ink)}
+
+/* ---------- banner (typed state / error surface) [NEW, C2 tokens] ---------- */
+.banner{display:flex;gap:10px;align-items:flex-start;border-radius:var(--r-md);
+  border:1.5px solid var(--line2);background:var(--soft);padding:11px 12px}
+.banner .bt{font-size:13px;font-weight:800;line-height:1.3}
+.banner .bd2{font-size:12.5px;color:var(--ink2);line-height:1.5;margin-top:3px}
+.banner .code{font-family:var(--font-mono);font-size:10.5px;color:var(--mut);letter-spacing:.04em;margin-top:5px;display:block;word-break:break-all}
+.banner.ok{border-color:var(--jade);background:var(--jadeq)}
+.banner.warn{border-color:var(--terra);background:var(--terraq)}
+.banner.err{border-color:var(--risk);background:var(--riskq)}
+.banner.info{border-color:var(--indigo);background:var(--indigoq)}
+
+/* ---------- search head (S-31) [C2] ---------- */
+.shead{position:sticky;top:52px;z-index:19;background:var(--bg);padding:8px 14px 10px;margin:0 -14px;
+  border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.spill{display:flex;gap:8px;align-items:center;background:var(--card);border:2px solid var(--jade);
+  border-radius:26px;padding:4px 4px 4px 14px}
+.spill input{flex:1;min-width:0;min-height:var(--target-min);border:none;background:none;font:inherit;font-size:14px;color:inherit;outline:none}
+.spill .go{min-width:var(--target-min);min-height:var(--target-min);border-radius:50%;background:var(--jade);
+  color:var(--jade-ink);border:none;display:grid;place-items:center;cursor:pointer;flex:none}
+.railwrap{position:relative}
+.rails{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.rails::-webkit-scrollbar{display:none}
+/* non-blocking refinement from the independent review: make the clip read as navigation */
+.railwrap::after{content:'';position:absolute;right:0;top:0;bottom:2px;width:26px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--bg))}
+.rail{display:inline-flex;align-items:center;gap:7px;min-height:var(--target-min);padding:0 13px;border-radius:22px;
+  border:2px solid var(--line2);background:var(--card);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none}
+.rail i{width:9px;height:9px;border-radius:3px;flex:none}
+.rail[aria-pressed=true]{border-color:currentColor}
+
+/* ---------- tutor card [C2] ---------- */
+.tut{border:1.5px solid var(--line2);border-radius:var(--r-xl);background:var(--card);overflow:hidden}
+.tut .idb{padding:12px 14px;display:flex;gap:11px;align-items:center;color:#fff}
+.tut .por{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.95);overflow:hidden;flex:none}
+.tut .por svg{width:100%;height:100%;display:block}
+.tut .nm{font-family:var(--font-display);font-size:17px;font-weight:600;line-height:1.12;overflow-wrap:anywhere}
+.tut .rl{font-size:11px;font-weight:700;opacity:.94;overflow-wrap:anywhere}
+.tut .bd{padding:12px 14px 14px;display:flex;flex-direction:column;gap:9px}
+.tut .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.fee{font-family:var(--font-mono);font-size:17px;font-weight:500}
+
+/* ---------- disclosure [C2] ---------- */
+.dis{border:1.5px solid var(--line);border-radius:var(--r-md);background:var(--card);overflow:hidden}
+.dis>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;min-height:var(--target-primary);
+  padding:0 14px;font-size:13px;font-weight:800;color:var(--ink)}
+.dis>summary::-webkit-details-marker{display:none}
+.dis>summary .cv{margin-left:auto}
+.dis[open]>summary .cv{transform:rotate(180deg)}
+.dis .dbody{padding:2px 14px 14px;font-size:13px;color:var(--ink2);line-height:1.55;display:flex;flex-direction:column;gap:9px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv b{font-weight:800;text-align:right;overflow-wrap:anywhere}
+
+/* ---------- sticky dock [C2] ---------- */
+.dock{position:sticky;bottom:0;z-index:22;background:var(--card);border-top:1.5px solid var(--line2);
+  padding:10px 14px;padding-bottom:calc(10px + var(--safe-b));display:flex;flex-direction:column;gap:8px;
+  box-shadow:0 -10px 24px -18px rgba(0,0,0,.35)}
+.dock .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.dock .tot{font-family:var(--font-mono);font-size:19px;font-weight:500}
+.dockrow{display:flex;gap:8px}
+.dockrow>.btn{flex:1;min-height:var(--target-min)}
+
+/* ---------- hold [C2] ---------- */
+.hold{display:flex;gap:10px;align-items:center;background:var(--terraq);border:1.5px solid var(--terra);
+  border-radius:var(--r-md);padding:9px 12px}
+.hold .t{font-family:var(--font-mono);font-size:19px;font-weight:500;color:var(--terra)}
+.hold[data-urgent="1"]{border-width:3px;background:var(--riskq);border-color:var(--risk)}
+.hold[data-urgent="1"] .t{color:var(--risk);text-decoration:underline;text-underline-offset:3px}
+.holdsticky{position:sticky;top:52px;z-index:19;margin:0 -14px;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
+
+/* ---------- fields [C2] ---------- */
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.in{min-height:var(--target-primary);border:2px solid var(--line2);border-radius:var(--r-md);background:var(--soft);
+  display:flex;align-items:center;justify-content:space-between;padding:0 13px;font-family:var(--font-mono);font-size:14px;
+  color:var(--ink);width:100%}
+.in.hosted::after{content:'HOSTED';font-size:7.5px;letter-spacing:.11em;color:var(--mut)}
+.in[data-invalid="1"]{border-color:var(--risk);background:var(--riskq)}
+.err{font-size:12px;font-weight:800;color:var(--risk);display:flex;gap:6px;align-items:center}
+input.in{font-family:var(--font-mono)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ---------- confirmation [C2] ---------- */
+.seal{width:46px;height:46px;border-radius:50%;background:var(--jade);color:#fff;display:grid;place-items:center;flex:none}
+.band{border-radius:var(--r-lg);padding:14px;background:linear-gradient(120deg,var(--goldq),var(--jadeq));
+  border:1.5px solid var(--line2);display:flex;gap:12px;align-items:center}
+
+/* ---------- refund [C2] ---------- */
+.amt{border:2px solid var(--jade);border-radius:var(--r-xl);background:linear-gradient(170deg,var(--jadeq),var(--card));
+  padding:16px;display:flex;flex-direction:column;gap:8px}
+.amt .big{font-family:var(--font-display);font-size:38px;font-weight:600;color:var(--jade);line-height:1;letter-spacing:-.02em}
+.prog{display:flex;gap:6px;align-items:center;font-size:11.5px;font-weight:800;color:var(--mut)}
+.prog i{height:6px;border-radius:3px;background:var(--line2);flex:1}
+.prog i.on{background:var(--jade)}
+.steps .s{display:grid;grid-template-columns:26px 1fr;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+.steps .s:last-child{border-bottom:none}
+.steps .n{width:24px;height:24px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;
+  font-family:var(--font-mono);font-size:10.5px;color:var(--mut)}
+.steps .s[data-done="1"] .n{background:var(--jade);border-color:var(--jade);color:#fff}
+.steps .s[data-now="1"] .n{border-color:var(--terra);color:var(--terra)}
+.steps h4{margin:0 0 2px;font-size:13.5px;font-weight:800}
+.steps p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.5}
+
+/* ---------- S-32 profile [NEW: Option C S-32 structure, C2 tokens] ---------- */
+.phead{border:1.5px solid var(--line2);border-radius:var(--r-xl);background:var(--card);overflow:hidden}
+.phead .idb{padding:14px;display:flex;gap:12px;align-items:center;color:#fff;
+  background:linear-gradient(135deg,var(--jade),#0a4a32)}
+.phead .por{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.95);overflow:hidden;flex:none}
+.phead .por svg{width:100%;height:100%;display:block}
+.phead h1{font-family:var(--font-display);font-size:21px;font-weight:600;line-height:1.1;margin:0;overflow-wrap:anywhere}
+.phead .sub{font-size:11.5px;font-weight:700;opacity:.94;overflow-wrap:anywhere}
+.phead .bd{padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.feebox{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:10px}
+.slots{display:flex;flex-direction:column;gap:8px}
+.slotbtn{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;
+  min-height:var(--target-primary);padding:0 13px;border:2px solid var(--line2);border-radius:var(--r-md);
+  background:var(--card);color:var(--ink);font-size:13px;font-weight:800;cursor:pointer;text-align:left}
+.slotbtn[disabled]{opacity:.6;cursor:not-allowed;background:var(--soft)}
+.slotbtn .sl{font-family:var(--font-mono);font-size:12.5px;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.edu{border-left:3px solid var(--indigo);background:var(--indigoq);border-radius:0 var(--r-sm) var(--r-sm) 0;padding:10px 12px}
+.edu h4{margin:0 0 3px;font-size:12.5px;font-weight:800;color:var(--indigo)}
+.edu p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink2)}
+.svr{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--mut);
+  border-top:1px dashed var(--line2);padding-top:8px;overflow-wrap:anywhere}
+
+/* ---------- pre-join / device check family [NEW, C2 tokens] ---------- */
+.preview{border-radius:var(--r-lg);overflow:hidden;background:var(--studio);border:1.5px solid var(--line2);
+  aspect-ratio:4/3;display:grid;place-items:center;position:relative;max-height:38dvh}
+.preview svg{width:100%;height:100%;display:block;object-fit:cover}
+.preview .off{position:absolute;inset:0;display:grid;place-items:center;background:var(--studio);color:var(--studiomut);
+  font-size:12.5px;font-weight:800;text-align:center;padding:16px}
+.devrow{display:flex;flex-direction:column;gap:6px}
+.sel{min-height:var(--target-primary);border:2px solid var(--line2);border-radius:var(--r-md);background:var(--card);
+  color:var(--ink);font-size:13px;font-weight:700;padding:0 12px;width:100%}
+
+/* ============================================================================
+   [C2-REPAIR] LIVE ROOM — repaired composition
+   Independent review defects fixed here:
+     D1 unwanted page scroll 308-330px  -> room root is exactly 100dvh, page scroll
+        disabled on this route, and the details sheet is position:fixed inside the
+        room's own containing block so it can never add to document height.
+     D2 minimum target 40px (header info) and 30px (self-view Move/Minimise)
+        -> every room control is >= var(--target-min).
+     D3 landscape lost the control dock -> dock is a grid row, never removed.
+   ========================================================================== */
+html[data-family=room],body[data-family=room]{height:100%;max-height:100%;overflow:hidden;overscroll-behavior:none}
+
+/* [ADDENDUM RC-2] Complete percentage height chain html -> body -> #app -> .live-host -> .live.
+   Root cause: the rig's .app declared only min-height:100%, so the chain was broken
+   and viewport units resolved against the outer browser, not the simulated device. */
+body[data-family=room] #app{height:100%;min-height:0;overflow:hidden}
+
+/* [ADDENDUM RC-1] Route host. The 100vh FALLBACK IS DECLARED FIRST so that a
+   supporting engine applies 100dvh last and dynamic-viewport sizing wins. The
+   defective order (100dvh then 100vh) let 100vh override and defeat dvh. */
+.live-host{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+
+/* [ADDENDUM RC-2] Offline device rig: constrain the SIMULATED device rather than
+   letting viewport units measure the outer browser. Exercised by ?rig=vp&device=WxH. */
+.vp{position:relative;margin:0 auto;overflow:hidden}
+.vp[data-screen="s35live"],.vp[data-screen="s35land"]{overflow:hidden}
+.vp[data-screen="s35live"]>.app,.vp[data-screen="s35land"]>.app{height:100%;min-height:0;overflow:hidden}
+.vp[data-screen="s35live"] .live-host,.vp[data-screen="s35land"] .live-host{height:100%}
+/* every room row must be allowed to shrink: without min-width:0 the auto grid column
+   sizes to max-content and the header/dock silently overflow behind overflow:hidden */
+.room>.lh,.room>.stage,.room>.lctrl{min-width:0}
+/* [ADDENDUM RC-6] Explicit positioned, constrained three-row layout. Height is
+   100% of .live-host (which owns the 100vh -> 100dvh cascade), so the room can
+   never be taller than the available viewport. */
+.route.room,.live{
+  position:relative;height:100%;min-height:0;max-height:100%;overflow:hidden;
+  display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  background:var(--studio);color:var(--studiotx);
+  isolation:isolate;
+  padding-left:var(--safe-l);padding-right:var(--safe-r);
+}
+/* [ADDENDUM RC-6] Every interactive surface inside the room is >= 44x44. */
+.live button,.live [role="button"]{min-width:var(--target-min);min-height:var(--target-min)}
+.room .lh{display:flex;gap:9px;align-items:center;padding:6px 12px;padding-top:calc(6px + var(--safe-t));
+  border-bottom:1px solid var(--studio-line);min-height:56px;
+  background:linear-gradient(90deg,rgba(15,107,71,.35),transparent)}
+.room .lh .t{font-family:var(--font-display);font-size:14.5px;font-weight:600;line-height:1.15;
+  flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room .lh .m{font-family:var(--font-mono);font-size:9.5px;color:var(--studiomut);white-space:nowrap;flex:none}
+.room .lh>.chip{flex:none}
+.room .stage,.live .stage{position:relative;min-height:0;min-width:0;overflow:hidden;padding:8px 12px;display:grid;
+  grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:hidden;contain:strict}
+.room .mtile{position:relative;min-width:0;min-height:0;border-radius:var(--r-lg);overflow:hidden;
+  background:var(--studio2);border:1px solid #33270f;outline:3px solid var(--jade);outline-offset:-3px}
+/* [D-1] `>svg` scopes the tile fill to the mentor-tile SVG only. The old descendant
+   selector also matched the room banner's 20px status icon (and any icon nested
+   anywhere in the tile), inflating it to the tile box and collapsing the banner
+   title/detail column to 0px width. Nested icons keep their own `.ic` 20x20 box. */
+.room .mtile>svg{width:100%;height:100%;display:block;object-fit:cover}
+.room .mtile .nm{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.62);border-radius:var(--r-sm);
+  padding:5px 10px;font-size:11px;font-weight:800;display:flex;gap:7px;align-items:center;max-width:calc(100% - 20px)}
+.room .mtile .stateveil{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+  background:rgba(12,8,3,.82);padding:18px;gap:8px;align-content:center}
+.room .mtile .stateveil b{font-family:var(--font-display);font-size:17px;font-weight:600}
+.room .mtile .stateveil span{font-size:12.5px;color:var(--studiomut);line-height:1.5;max-width:34ch}
+
+/* self-view: contained in the stage, controls >=44px, cannot expand the stage */
+/* [ADDENDUM RC-5] The self-view now CONTAINS its Move and Minimise controls and is
+   large enough to hold two independent 44x44 targets (44 + 6 gap + 44 = 94 px plus
+   4 px padding each side = 102 px) without the two controls overlapping. The old
+   96x128 portrait / 72x54 landscape tile with 30x30 controls could not. */
+.room .self{position:absolute;width:112px;height:140px;border-radius:var(--r-md);overflow:hidden;
+  border:2px solid var(--studio-line2);background:var(--studio2);right:14px;bottom:14px;z-index:3;
+  max-width:46%;max-height:46%;contain:layout size}
+/* `>svg` scopes the tile fill so control icons keep their own 20px box */
+.room .self>svg{width:100%;height:100%;display:block}
+.room .self .nm2{position:absolute;left:5px;bottom:5px;font-size:9px;font-weight:800;background:rgba(0,0,0,.6);
+  padding:3px 6px;border-radius:7px}
+/* [ADDENDUM RC-3 sibling rule] the self-view control row never wraps either */
+.room .selfctl{position:absolute;left:0;right:0;top:0;z-index:4;display:flex;gap:6px;
+  justify-content:flex-end;padding:4px;flex:0 0 auto;flex-wrap:nowrap}
+.room .sb,.room .self .mini,.room .self .selfmove{
+  min-width:var(--target-min);min-height:var(--target-min);width:var(--target-min);height:var(--target-min);
+  border-radius:50%;background:rgba(0,0,0,.72);flex:0 0 auto;
+  color:#fff;border:1.5px solid var(--studio-line2);display:grid;place-items:center;cursor:pointer}
+/* [ADDENDUM RC-5] Minimised state exposes exactly ONE non-overlapping 44x44 restore
+   control. The addendum's `.self[data-min="1"] svg` is applied as `>svg` so the tile
+   is hidden but the restore control keeps its icon — the behaviour is not weakened. */
+.room .self[data-min="1"]{width:var(--target-min);height:var(--target-min);border-radius:50%}
+.room .self[data-min="1"]>svg,
+.room .self[data-min="1"] .nm2,
+.room .self[data-min="1"] .selfmove{display:none}
+.room .self[data-min="1"] .selfctl{inset:0;padding:0;justify-content:center;align-items:center}
+
+/* control dock: always present, safe-area aware, never scrolled away */
+.room .lctrl{display:flex;gap:8px;align-items:center;justify-content:center;
+  padding:8px 12px;padding-bottom:calc(8px + var(--safe-b));
+  border-top:1px solid var(--studio-line);background:rgba(0,0,0,.35);min-width:0;
+  /* [ADDENDUM RC-3] the persistent dock is a single fixed row: it may not wrap into
+     multiple rows and may not flex-grow or shrink out of the layout. */
+  flex:0 0 auto;flex-wrap:nowrap}
+.room .cb{min-width:var(--target-min);min-height:var(--target-min);border-radius:50%;border:2px solid var(--studio-line2);
+  background:var(--studio2);color:var(--studiotx);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.room .cb[aria-pressed=true]{background:var(--studiotx);color:var(--studio)}
+.room .cb.leave{width:auto;border-radius:var(--r-pill);padding:0 15px;gap:8px;font-size:13px;font-weight:800;
+  /* 1.4.11: the tinted edge is the only visual feature separating the destructive
+     control from the neutral dock controls, and at <=360px the visible label is
+     clipped, so the edge must itself reach 3:1 on the dock surface. */
+  border-color:var(--studio-leave-edge);color:var(--studio-leave-ink);white-space:nowrap;flex:0 1 auto;min-width:var(--target-min)}
+.room .lh .cb{min-width:var(--target-min);min-height:var(--target-min);border-width:1.5px;flex:none}
+
+/* details sheet: fixed to the room, cannot change document height */
+.room .sheet{position:fixed;left:var(--safe-l);right:var(--safe-r);bottom:0;z-index:30;
+  background:var(--card);color:var(--ink);border-radius:var(--r-xl) var(--r-xl) 0 0;border-top:1.5px solid var(--line2);
+  transform:translateY(101%);max-height:70dvh;overflow:auto;visibility:hidden;
+  padding:10px 14px;padding-bottom:calc(16px + var(--safe-b))}
+.room .sheet[data-open="1"]{transform:translateY(0);visibility:visible}
+@media (prefers-reduced-motion: no-preference){
+  .room .sheet{transition:transform var(--motion-base) var(--motion-ease),visibility 0s linear var(--motion-base)}
+  .room .sheet[data-open="1"]{transition:transform var(--motion-base) var(--motion-ease),visibility 0s}
+}
+.room .sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--line2);margin:2px auto 10px}
+.room .scrim{position:fixed;inset:0;z-index:29;background:rgba(0,0,0,.45);display:none}
+.room .sheet[data-open="1"]~.scrim,.room .scrim[data-open="1"]{display:block}
+
+/* room banner (typed video states) sits inside the stage, never changes room height */
+.room .rbanner{position:absolute;left:12px;right:12px;top:12px;z-index:5;display:flex;gap:9px;align-items:flex-start;
+  background:rgba(12,8,3,.9);border:1.5px solid var(--studio-line2);border-radius:var(--r-md);padding:9px 11px}
+.room .rbanner.warn{border-color:var(--terra)}
+.room .rbanner.err{border-color:var(--studio-leave);
+  /* the global .err utility paints --risk, which is a LIGHT-surface ink; on the
+     dark studio banner it measured 2.50:1 in the light theme. The studio banner is
+     theme-invariant, so it uses the studio leave ink in both themes (dark already
+     resolved to this exact value). */
+  color:var(--studio-leave-ink)}
+/* [D-1] The message column is the flexible track of the banner: it takes every
+   pixel the 20px status icon does not need, so a collapsed or shrink-wrapped
+   text column is a layout error rather than an accepted rendering. Glyph
+   positions are unchanged for the approved strings (they already fit on one
+   line); only the box the oracle measures becomes the real message column. */
+.room .rbanner>div{flex:1 1 auto;min-width:0}
+.room .rbanner .bt{font-size:12.5px;font-weight:800}
+.room .rbanner .bd2{font-size:11.5px;color:var(--studiomut);line-height:1.45;margin-top:2px}
+
+/* landscape compaction: shorter header, smaller self-view, dock kept */
+@media (orientation:landscape) and (max-height:520px){
+  .route.room{grid-template-rows:auto minmax(0,1fr) auto}
+  .room .lh{min-height:44px;padding:3px 10px;padding-top:calc(3px + var(--safe-t));gap:7px}
+  .room .lh .t{font-size:13px}
+  .room .stage{padding:6px 10px}
+  /* [ADDENDUM RC-5] landscape self-view enlarged from 72x54 (78x58 in the approved
+     source) so that it contains two independent 44x44 controls without overlap. */
+  .room .self{width:116px;height:100px;right:10px;bottom:10px}
+  .room .lctrl{padding:5px 10px;padding-bottom:calc(5px + var(--safe-b));gap:7px}
+  .room .cb.leave{padding:0 12px;font-size:12px}
+  .room .sheet{max-height:88dvh}
+}
+
+.actrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ---------- modal dialog ---------- */
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9100;
+  width:min(320px,calc(100vw - 28px));max-height:calc(100dvh - 24px);overflow:auto;
+  background:var(--card);color:var(--ink);border:2px solid var(--line2);border-radius:18px;
+  padding:16px;display:flex;flex-direction:column;gap:10px}
+.scrim[data-open="1"]{display:block}
+[inert]{pointer-events:none}
+
+/* ---------- reviewer chrome (excluded from all measurement) ---------- */
+#reviewer{position:fixed;left:0;right:0;bottom:0;z-index:9000;background:var(--card);border-top:1px solid var(--line);
+  padding:6px 10px;display:none;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;max-height:40dvh;overflow:auto}
+body[data-chrome="1"] #reviewer{display:flex}
+
+/* ---------- 200% zoom / large-font reflow (WCAG 2.2 1.4.10) ----------
+   At a 195 CSS-px viewport (200% browser zoom on a 390 px phone) the composition
+   reflows: rows wrap and secondary *informational* text is moved into the details
+   sheet. No interactive control is ever removed — mic, camera, devices and Leave
+   stay in the dock, and the room stays exactly 100dvh with the stage absorbing the
+   extra dock row. */
+@media (max-width:360px){
+  .grid2{grid-template-columns:1fr}
+  .dockrow{flex-direction:column}
+  .kv{flex-wrap:wrap}
+  .kv b{text-align:left}
+  .tut .row,.feebox,.dock .top{flex-wrap:wrap}
+  .slotbtn{flex-wrap:wrap;padding:8px 10px;min-height:var(--target-primary)}
+  .band,.banner{flex-wrap:wrap}
+  .tbar .sid{display:none}
+  /* room: wrap the dock instead of dropping controls; move the clock into the sheet */
+  .room .lctrl{flex-wrap:wrap;gap:6px;padding-left:6px;padding-right:6px}
+  .room .lh{gap:6px;padding-left:8px;padding-right:8px}
+  .room .lh .m{display:none}
+  .room .cb.leave{padding:0 10px}
+  .room .cb.leave span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+}
+@media (max-width:280px){
+  .room .lh>.chip{display:none}
+}
