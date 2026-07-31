@@ -49,6 +49,26 @@ export const EMPTY_PROFILE: ProfileDraft = {
 
 /** Full institutional email (must have a dotted domain). "aditi@nlsiu" fails. */
 export const INSTITUTIONAL_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export const INSTITUTIONAL_EMAIL_MAX_LENGTH = 254;
+export const INSTITUTIONAL_EMAIL_ERROR =
+  'Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in';
+
+/**
+ * Shared S-10/S-15 validation boundary. Keeping this as a function (rather
+ * than relying on input[type=email]) also protects button-driven flows and
+ * pasted values that never pass through native form submission.
+ */
+export function institutionalEmailError(value: string): string | undefined {
+  const email = value.trim();
+  if (
+    !email
+    || email.length > INSTITUTIONAL_EMAIL_MAX_LENGTH
+    || !INSTITUTIONAL_EMAIL_RE.test(email)
+  ) {
+    return INSTITUTIONAL_EMAIL_ERROR;
+  }
+  return undefined;
+}
 /** Enrolment format: state code / roll / year, e.g. "KA/1234/2023". */
 export const ENROLMENT_RE = /^[A-Za-z]{2}\/\d+\/\d{4}$/;
 
@@ -70,8 +90,8 @@ export function validateStep2(d: ProfileDraft): FieldErrors {
   if (!d.yearOfStudy.trim()) e.yearOfStudy = 'Select your year of study.';
   if (!ENROLMENT_RE.test(d.enrolmentNumber.trim()))
     e.enrolmentNumber = 'Format: state code / roll / year.';
-  if (!INSTITUTIONAL_EMAIL_RE.test(d.institutionalEmail.trim()))
-    e.institutionalEmail = 'Enter your full institutional email — e.g. aditi.nair@nls.ac.in';
+  const emailError = institutionalEmailError(d.institutionalEmail);
+  if (emailError) e.institutionalEmail = emailError;
   // barEnrolmentNumber is optional & private — never required, never validated as public.
   return e;
 }

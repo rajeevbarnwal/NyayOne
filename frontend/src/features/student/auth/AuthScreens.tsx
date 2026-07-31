@@ -18,6 +18,7 @@ import {
 import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
 import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
 import { updateProfileDraft } from '../lib/profileStore';
+import { institutionalEmailError } from '../lib/profile';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
@@ -29,6 +30,7 @@ import {
   verifyRecovery,
   verifyStudentOtp,
   completeRecovery,
+  requestInstitutionalEmailVerification,
 } from '../lib/registrationApi';
 
 /* -------------------------------------------------------------------------- */
@@ -596,6 +598,50 @@ export function EmailVerify() {
   const nav = useNavigate();
   const [email, setEmail] = useState('aditi.nair@nls.ac.in');
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const [submitting, setSubmitting] = useState(false);
+
+  function changeEmail(value: string) {
+    setEmail(value);
+    setError(undefined);
+    setSent(false);
+  }
+
+  async function sendVerificationLink() {
+    const validationError = institutionalEmailError(email);
+    if (validationError) {
+      setError(validationError);
+      setSent(false);
+      return;
+    }
+    const registration = loadRegistrationSession();
+    if (!registration) {
+      setError('Your registration session expired. Return to registration and verify your mobile again.');
+      setSent(false);
+      return;
+    }
+    setSubmitting(true);
+    setError(undefined);
+    setSent(false);
+    try {
+      await requestInstitutionalEmailVerification(
+        registration.registrationId,
+        email,
+      );
+      setSent(true);
+    } catch (cause) {
+      if (
+        cause instanceof RegistrationApiError
+        && cause.field === 'institutional_email'
+      ) {
+        setError('Use the institutional email saved in your academic profile.');
+      } else {
+        setError('Verification could not be requested. Please retry.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
   return (
     <AuthCard
       screenId="S-15"
@@ -604,7 +650,7 @@ export function EmailVerify() {
       meta={<StatusBadge status="warn" label="Verification pending" />}
       sub="Confirm from your NLU inbox to unlock verified-student features. Manual review if the domain is unrecognised."
     >
-      <TextField id="inst-email" label="Institutional email" value={email} onChange={setEmail} type="email" inputMode="email" />
+      <TextField id="inst-email" label="Institutional email" value={email} onChange={changeEmail} type="email" inputMode="email" error={error} />
       {sent && (
         <div className="ui-banner ui-banner--warn" role="status">
           <span className="ui-banner__mark" aria-hidden>
@@ -617,8 +663,8 @@ export function EmailVerify() {
         <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
           Back to dashboard
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={() => setSent(true)}>
-          Send verification link
+        <button type="button" className="btn btn--primary tap" onClick={sendVerificationLink} disabled={submitting}>
+          {submitting ? 'Requesting…' : 'Send verification link'}
         </button>
       </div>
     </AuthCard>
