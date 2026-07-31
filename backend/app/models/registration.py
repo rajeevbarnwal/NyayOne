@@ -91,6 +91,8 @@ class StudentProfile(TimestampedBase):
     institutional_email_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     bar_enrolment_ct: Mapped[str | None] = mapped_column(String(600), nullable=True)
     bar_enrolment_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    interests: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    career_goal: Mapped[str | None] = mapped_column(String(160), nullable=True)
     key_version: Mapped[str] = mapped_column(String(8), default="v1", nullable=False)
     registration: Mapped[StudentRegistration] = relationship(back_populates="profile")
     __table_args__ = (

@@ -21,12 +21,19 @@ function migrateName(parsed: Partial<ProfileDraft>): Partial<ProfileDraft> {
 
 let draft: ProfileDraft = { ...EMPTY_PROFILE, interests: [] };
 
+import { composeDisplayName } from './registration';
+
 export function getProfileDraft(): ProfileDraft {
   return draft;
 }
 
 export function updateProfileDraft(patch: Partial<ProfileDraft>): ProfileDraft {
-  draft = { ...draft, ...migrateName(patch) };
+  const migrated = migrateName(patch);
+  const fn = migrated.firstName ?? draft.firstName;
+  const mn = migrated.middleName ?? draft.middleName;
+  const ln = migrated.lastName ?? draft.lastName;
+  const computedFull = migrated.fullName ?? (fn || ln ? composeDisplayName(fn, mn, ln) : draft.fullName);
+  draft = { ...draft, ...migrated, fullName: computedFull };
   return draft;
 }
 

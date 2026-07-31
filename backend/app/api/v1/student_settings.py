@@ -125,12 +125,22 @@ class ProfilePatch(BaseModel):
 
 def _profile_payload(session: Session, reg: StudentRegistration) -> dict:
     prof = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
-    mobile = decrypt(reg.mobile_ct)
+    mobile = decrypt(reg.mobile_ct) if reg.mobile_ct else ""
+    enrol = decrypt(prof.enrolment_ct) if (prof and prof.enrolment_ct) else None
+    email = decrypt(prof.institutional_email_ct) if (prof and prof.institutional_email_ct) else None
+    bar = decrypt(prof.bar_enrolment_ct) if (prof and prof.bar_enrolment_ct) else None
     return {
-        "first_name": reg.first_name, "middle_name": reg.middle_name, "last_name": reg.last_name,
-        "college": canonical_college(prof.college) if prof else None,
-        "year_of_study": canonical_year(prof.year_of_study) if prof else None,
-        "masked_mobile": f"******{mobile[-4:]}",
+        "first_name": reg.first_name,
+        "middle_name": reg.middle_name or "",
+        "last_name": reg.last_name,
+        "college": prof.college if prof else None,
+        "year_of_study": prof.year_of_study if prof else None,
+        "enrolment_number": enrol,
+        "institutional_email": email,
+        "bar_enrolment_number": bar,
+        "interests": prof.interests if prof else None,
+        "career_goal": prof.career_goal if prof else None,
+        "masked_mobile": f"******{mobile[-4:]}" if len(mobile) >= 4 else "",
     }
 
 

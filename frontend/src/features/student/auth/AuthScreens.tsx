@@ -22,6 +22,7 @@ import { updateProfileDraft, getProfileDraft } from '../lib/profileStore';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
+  checkMobileRegistered,
   loadRegistrationSession,
   registerStudent,
   resendStudentOtp,
@@ -100,29 +101,87 @@ export function AuthGate() {
   const [countryCode, setCountryCode] = useState('+91');
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState<string | undefined>();
+  const [checkingMobile, setCheckingMobile] = useState(false);
+  const [notRegistered, setNotRegistered] = useState(false);
 
-  function sendOtp() {
+  async function sendOtp() {
     const digits = mobile.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit mobile number.');
+      setNotRegistered(false);
       return;
     }
     setError(undefined);
-    const fullMobile = `${countryCode}${digits}`;
-    startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
-    setMinor(false, false);
-    const existingServer = loadRegistrationSession();
-    const masked = maskDestination({ channel: 'sms', ref: fullMobile });
-    saveRegistrationSession({
-      ...(existingServer ?? {}),
-      registrationId: '00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12),
-      destinationMasked: masked,
-      issuedAt: Date.now(),
-      isMinor: false,
-      guardianConsentPending: false,
-      isLoginFlow: true,
-    });
-    nav('/s-06');
+    setNotRegistered(false);
+    setCheckingMobile(true);
+
+    try {
+      const checkRes = await checkMobileRegistered(digits);
+      if (!checkRes.exists) {
+        // Scenario 3: Entry NOT found in DB
+        setNotRegistered(true);
+        setError('This mobile number is not registered. Please enter a registered number or register with us.');
+        return;
+      }
+      // Scenario 1 & 2: Entry EXISTS in DB (otp_pending or otp_verified)
+      if (checkRes.firstName || checkRes.lastName) {
+        const fn = checkRes.firstName ?? '';
+        const mn = checkRes.middleName ?? '';
+        const ln = checkRes.lastName ?? '';
+        const full = [fn, mn, ln].filter(Boolean).join(' ');
+        const interestsArr = checkRes.interests ? checkRes.interests.split(',').map((s) => s.trim()).filter(Boolean) : [];
+        updateProfileDraft({
+          firstName: fn,
+          middleName: mn,
+          lastName: ln,
+          fullName: full,
+          dateOfBirth: checkRes.dateOfBirth ?? '',
+          preferredLanguage: checkRes.preferredLanguage ?? 'en',
+          college: checkRes.college ?? '',
+          yearOfStudy: checkRes.yearOfStudy ?? '',
+          enrolmentNumber: checkRes.enrolmentNumber ?? '',
+          institutionalEmail: checkRes.institutionalEmail ?? '',
+          barEnrolmentNumber: checkRes.barEnrolmentNumber ?? '',
+          interests: interestsArr,
+          careerGoal: checkRes.careerGoal ?? '',
+        });
+      }
+      const fullMobile = `${countryCode}${digits}`;
+      startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
+      setMinor(false, false);
+      const existingServer = loadRegistrationSession();
+      const masked = maskDestination({ channel: 'sms', ref: fullMobile });
+      saveRegistrationSession({
+        ...(existingServer ?? {}),
+        registrationId: checkRes.registrationId || ('00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12)),
+        destinationMasked: masked,
+        issuedAt: Date.now(),
+        isMinor: false,
+        guardianConsentPending: Boolean(checkRes.guardianConsentPending),
+        isLoginFlow: true,
+        isProfileComplete: checkRes.isProfileComplete,
+      });
+      nav('/s-06');
+    } catch {
+      // Offline fallback: allow OTP attempt
+      const fullMobile = `${countryCode}${digits}`;
+      startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
+      setMinor(false, false);
+      const existingServer = loadRegistrationSession();
+      const masked = maskDestination({ channel: 'sms', ref: fullMobile });
+      saveRegistrationSession({
+        ...(existingServer ?? {}),
+        registrationId: '00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12),
+        destinationMasked: masked,
+        issuedAt: Date.now(),
+        isMinor: false,
+        guardianConsentPending: false,
+        isLoginFlow: true,
+      });
+      nav('/s-06');
+    } finally {
+      setCheckingMobile(false);
+    }
   }
 
   return (
@@ -142,7 +201,11 @@ export function AuthGate() {
             id="login-mobile"
             label="Enter your Mobile Number"
             value={mobile}
-            onChange={setMobile}
+            onChange={(v) => {
+              setMobile(v);
+              if (error) setError(undefined);
+              if (notRegistered) setNotRegistered(false);
+            }}
             countryCode={countryCode}
             onCountryCodeChange={setCountryCode}
             error={error}
@@ -150,13 +213,24 @@ export function AuthGate() {
             placeholder="10-digit mobile number"
           />
           <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={sendOtp}>
-              Send OTP
+            <button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={checkingMobile}>
+              {checkingMobile ? 'Checking…' : 'Send OTP'}
             </button>
             <button type="button" className="btn tap" onClick={() => nav('/s-04')}>
               Language
             </button>
           </div>
+          {notRegistered && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="btn btn--primary tap"
+                onClick={() => nav('/s-05', { state: { prefillMobile: mobile.replace(/\D/g, ''), prefillCountryCode: countryCode } })}
+              >
+                Register with this number
+              </button>
+            </div>
+          )}
         </>
       )}
       <p className="auth-legal-notice" style={{ textAlign: 'center', fontSize: '11.5px', color: 'var(--text3)', margin: '14px 0 0', lineHeight: 1.4 }}>
@@ -294,7 +368,7 @@ export function Register() {
       const message = error instanceof RegistrationApiError
         ? error.code === 'mobile_already_registered'
           ? 'This mobile number is already registered.'
-          : error.code === 'otp_delivery_unavailable'
+          : error.code === 'otp_delivery_unavailable' || error.code === 'otp_delivery_failed'
             ? 'OTP delivery is temporarily unavailable. Please try again later.'
             : 'Registration could not be completed. Please check your details and retry.'
         : 'Registration service is unavailable. Please try again.';
@@ -365,8 +439,68 @@ export function Register() {
         error={errors.dob}
         help="Used only to confirm eligibility · not shown publicly"
       />
-      <Checkbox id="reg-terms" checked={terms} onChange={setTerms} label="I accept the Terms of Use." />
-      <Checkbox id="reg-privacy" checked={privacy} onChange={setPrivacy} label="I have read the Privacy notice (DPDP Act, 2023)." />
+      <Checkbox
+        id="reg-terms"
+        checked={terms}
+        onChange={setTerms}
+        label={
+          <>
+            I accept the{' '}
+            <button
+              type="button"
+              className="link-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                nav('/terms');
+              }}
+              data-testid="link-reg-terms"
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                color: 'var(--accent)',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                font: 'inherit',
+              }}
+            >
+              Terms of Use
+            </button>
+            .
+          </>
+        }
+      />
+      <Checkbox
+        id="reg-privacy"
+        checked={privacy}
+        onChange={setPrivacy}
+        label={
+          <>
+            I have read the{' '}
+            <button
+              type="button"
+              className="link-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                nav('/privacy');
+              }}
+              data-testid="link-reg-privacy"
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                color: 'var(--accent)',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                font: 'inherit',
+              }}
+            >
+              Privacy notice (DPDP Act, 2023)
+            </button>
+            .
+          </>
+        }
+      />
       <Checkbox
         id="reg-law"
         checked={lawDecl}
@@ -426,29 +560,30 @@ export function OtpVerify() {
     }
     const draft = getProfileDraft();
     const isProfileDone = isProfileComplete(draft) || Boolean(server?.isProfileComplete);
-    const isReturningUser = Boolean(server?.isLoginFlow) || isProfileDone;
 
     if (server) {
       setBusy(true);
       try {
-        await verifyStudentOtp(server.registrationId, code);
+        const verifyRes = await verifyStudentOtp(server.registrationId, code);
         setStatus('verified');
+        const done = Boolean(verifyRes?.isProfileComplete) && isProfileComplete(getProfileDraft());
         if (server.guardianConsentPending) {
           nav('/s-16');
-        } else if (isReturningUser) {
+        } else if (done) {
           nav('/s-14');
         } else {
-          nav('/s-09');
+          nav('/s-13');
         }
       } catch (error) {
         if (code === '631023' || code === '429016' || (challenge && verify(challenge, code, Date.now()).status === 'verified')) {
           setStatus('verified');
+          const done = isProfileComplete(getProfileDraft());
           if (server.guardianConsentPending) {
             nav('/s-16');
-          } else if (isReturningUser) {
+          } else if (done) {
             nav('/s-14');
           } else {
-            nav('/s-09');
+            nav('/s-13');
           }
           return;
         }
@@ -477,10 +612,10 @@ export function OtpVerify() {
       setStatus('verified');
       if (flow.guardianConsentPending) {
         nav('/s-16');
-      } else if (isReturningUser) {
+      } else if (isProfileDone) {
         nav('/s-14');
       } else {
-        nav('/s-09');
+        nav('/s-13');
       }
     } else if (res.status === 'expired') nav('/s-07');
     else if (res.status === 'locked') nav('/s-08');
