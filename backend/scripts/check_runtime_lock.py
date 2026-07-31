@@ -6,12 +6,31 @@ Both runners (``backend/scripts/full_suite.sh`` and
 service, a migration or a test process, so a run can never get far enough to
 produce evidence against an interpreter nobody declared.
 
-It answers three questions, in this order, and the ORDER is the point:
+It answers four questions, in this order, and the ORDER is the point:
 
 0. does this virtualenv even BELONG to the operating system and CPU now running
    it?  -> ``PLATFORM MISMATCH`` (exit 5)
-1. is every pinned distribution installed at all?  -> ``MISSING`` (exit 3)
-2. is the installed version the pinned one? -> ``MISMATCH`` (exit 3)
+1. does each pinned requirement APPLY to this environment at all? A PEP 508
+   marker (``exceptiongroup==1.3.1 ; python_version < "3.11"``) says a
+   stdlib-backport is needed only below 3.11, so on 3.11+ it must NOT be
+   installed -> ``SKIPPED / NOT APPLICABLE`` (not a failure, and never queried
+   from installed metadata)
+2. is every APPLICABLE pinned distribution installed at all? -> ``MISSING``
+   (exit 3)
+3. is the installed version the pinned one? -> ``MISMATCH`` (exit 3)
+
+Why question 1 exists
+---------------------
+The first version of this checker read a lock line with
+``line.partition("==")`` and ``version.split(" ")[0]``, which parsed
+``exceptiongroup==1.3.1 ; python_version < "3.11"`` as an UNCONDITIONAL pin: the
+marker was silently thrown away. On CPython 3.12 that made the checker demand
+two stdlib backports (``exceptiongroup``, ``tomli``) that 3.12 must not have,
+report them MISSING, and refuse to start the suite — a gate failing because of
+its own parser. Lock lines are therefore parsed by
+:class:`packaging.requirements.Requirement` and their markers evaluated against
+a real PEP 508 environment. There is no string surgery and no regex anywhere
+near a marker.
 
 and prints the resolved version of each pin either way, so the raw log of every
 gate carries the executable and the versions the evidence was produced with.
@@ -39,7 +58,8 @@ Usage:
     python backend/scripts/check_runtime_lock.py --platform-only --venv DIR
 
 Exit codes: 0 = every check satisfied, 3 = at least one MISSING/MISMATCH,
-4 = the lock file itself could not be read, 5 = PLATFORM MISMATCH (this
+4 = the lock file itself could not be read (absent, unparseable, or carrying a
+requirement that is not an exact ``==`` pin), 5 = PLATFORM MISMATCH (this
 virtualenv was built for a different OS/CPU than the interpreter running it).
 """
 from __future__ import annotations
@@ -51,9 +71,13 @@ import re
 import subprocess
 import sys
 import sysconfig
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
+
+from packaging.markers import default_environment
+from packaging.requirements import InvalidRequirement, Requirement
 
 DEFAULT_LOCK = Path(__file__).resolve().parents[1] / "requirements.lock"
 
@@ -73,21 +97,149 @@ def normalise(name: str) -> str:
     return _NORMALISE.sub("-", name).lower()
 
 
-def read_pins(lock_path: Path) -> list[tuple[str, str]]:
-    """``[(distribution, exact version), ...]`` in lock-file order."""
-    pins: list[tuple[str, str]] = []
+class LockFileError(Exception):
+    """The lock file itself cannot be trusted — reported as exit 4.
+
+    Raised for a line that is not a valid PEP 508 requirement at all, and for a
+    line that is a valid requirement but not an EXACT ``==`` pin. Both are
+    "the lock is unreadable", not "the environment is wrong": nothing was
+    measured, so nothing can be concluded about the interpreter.
+    """
+
+
+def marker_environment(overrides: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The PEP 508 marker environment to evaluate lock markers against.
+
+    Defaults to :func:`packaging.markers.default_environment` — the interpreter
+    that is DOING the checking, described in the standard's own variable names
+    (``python_version``, ``sys_platform``, ``platform_machine``, ...).
+
+    ``overrides`` is the injection seam, and it is deliberately the same shape
+    as the ``HostFacts`` seam :func:`platform_report` and :func:`main` already
+    take: a test states "given a Python 3.12 environment" as DATA and gets the
+    same verdict on every machine, instead of needing a 3.12 interpreter to be
+    installed before the 3.12 behaviour can be asserted at all.
+    """
+    environment = dict(default_environment())
+    if overrides:
+        environment.update({str(k): str(v) for k, v in overrides.items()})
+    return environment
+
+
+@dataclass(frozen=True)
+class LockEntry:
+    """One lock line, parsed by ``packaging`` — never by string surgery.
+
+    The old parser did ``line.partition("==")`` and then
+    ``version.strip().split(" ")[0]``, which SILENTLY DISCARDED any PEP 508
+    marker: ``exceptiongroup==1.3.1 ; python_version < "3.11"`` was read as an
+    unconditional pin, so a Python 3.12 interpreter — which must not have that
+    stdlib backport installed — was reported MISSING and the gate refused to
+    run. A marker is part of the requirement, so it is parsed and EVALUATED,
+    and every field of the requirement survives into this record: the name as
+    written, its PEP 503 normalisation, the exact pin, the extras and the
+    complete marker expression.
+    """
+
+    name: str  # exactly as written in the lock file
+    key: str  # PEP 503 normalised, the form metadata is matched on
+    version: str  # the exact `==` pin
+    extras: tuple[str, ...] = ()
+    marker: str = ""  # the COMPLETE marker expression, "" when there is none
+    applicable: bool = True  # marker absent, or marker true for the environment
+
+    @property
+    def display(self) -> str:
+        """``psycopg[binary]`` — the name plus its extras, as pinned."""
+        if not self.extras:
+            return self.name
+        return f"{self.name}[{','.join(self.extras)}]"
+
+    def requirement_line(self) -> str:
+        """The requirement this entry came from, rebuilt in canonical form."""
+        line = f"{self.display}=={self.version}"
+        return f"{line} ; {self.marker}" if self.marker else line
+
+
+def parse_requirement(line: str, *, lock_path: Path | None = None) -> Requirement:
+    """One lock line -> :class:`packaging.requirements.Requirement`.
+
+    Fails CLOSED: an unparseable line is a :class:`LockFileError`, never a line
+    that is skipped or half-understood.
+    """
+    try:
+        return Requirement(line)
+    except InvalidRequirement as exc:
+        where = f"{lock_path}: " if lock_path is not None else ""
+        raise LockFileError(
+            f"{where}{line!r} is not a valid PEP 508 requirement: {exc}"
+        ) from exc
+
+
+def exact_version(requirement: Requirement, *, lock_path: Path | None = None) -> str:
+    """The single ``==`` version a lock entry must carry, or refuse.
+
+    A lock file states WHICH version was executed. ``>=``, ``~=``, a range, a
+    wildcard ``==1.2.*`` or a direct URL reference all mean "some version", so
+    they are refused rather than resolved to whatever happens to be installed.
+    """
+    where = f"{lock_path}: " if lock_path is not None else ""
+    if requirement.url:
+        raise LockFileError(
+            f"{where}'{requirement}' is a direct reference, not an EXACT pin; a "
+            f"lock file may only contain 'name==version' requirements"
+        )
+    specifiers = list(requirement.specifier)
+    if len(specifiers) != 1 or specifiers[0].operator != "==" or (
+        specifiers[0].version.endswith(".*")
+    ):
+        raise LockFileError(
+            f"{where}'{requirement}' is not an EXACT pin; a lock file may only "
+            f"contain 'name==version' requirements"
+        )
+    return specifiers[0].version
+
+
+def read_lock(
+    lock_path: Path, *, environment: Mapping[str, str] | None = None
+) -> list[LockEntry]:
+    """Every lock entry, parsed and marker-EVALUATED, in lock-file order.
+
+    ``environment`` is passed through to :func:`marker_environment`; ``None``
+    means "this interpreter". Entries whose marker is false are returned with
+    ``applicable=False`` rather than dropped, so the report can SAY they were
+    skipped instead of quietly shrinking.
+    """
+    env = marker_environment(environment)
+    entries: list[LockEntry] = []
     for raw in lock_path.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line or line.startswith("-"):
             continue
-        if "==" not in line:
-            raise SystemExit(
-                f"{lock_path}: '{line}' is not an EXACT pin; a lock file may "
-                f"only contain 'name==version' lines"
+        requirement = parse_requirement(line, lock_path=lock_path)
+        version = exact_version(requirement, lock_path=lock_path)
+        marker = requirement.marker
+        entries.append(
+            LockEntry(
+                name=requirement.name,
+                key=normalise(requirement.name),
+                version=version,
+                extras=tuple(sorted(requirement.extras)),
+                marker=str(marker) if marker is not None else "",
+                applicable=True if marker is None else bool(marker.evaluate(env)),
             )
-        name, _, version = line.partition("==")
-        pins.append((name.strip(), version.strip().split(" ")[0]))
-    return pins
+        )
+    return entries
+
+
+def read_pins(lock_path: Path) -> list[tuple[str, str]]:
+    """``[(distribution, exact version), ...]`` in lock-file order.
+
+    The FILE-level view: every entry, applicable or not, because "what does the
+    lock pin" is a question about the file and not about any one interpreter.
+    Applicability lives on :class:`LockEntry` (see :func:`read_lock`).
+    """
+    return [(entry.name, entry.version) for entry in read_lock(lock_path)]
 
 
 def installed_versions() -> dict[str, str]:
@@ -98,6 +250,32 @@ def installed_versions() -> dict[str, str]:
             continue
         found[normalise(name)] = dist.version
     return found
+
+
+class InstalledIndex:
+    """Installed-distribution metadata, read LAZILY and asked per name.
+
+    Laziness is a correctness property here, not a micro-optimisation: a
+    requirement whose marker is false describes a dependency this interpreter
+    must NOT have, so asking the metadata about it — and reporting whatever
+    comes back — is exactly the bug. Nothing installed is inspected until an
+    APPLICABLE entry needs an answer, and a test proves it by replacing
+    :func:`installed_versions` with a landmine that raises when called.
+    """
+
+    def __init__(self) -> None:
+        self._table: dict[str, str] | None = None
+
+    @property
+    def loaded(self) -> bool:
+        return self._table is not None
+
+    def version(self, key: str) -> str | None:
+        if self._table is None:
+            # Resolved through the module global on purpose: that is the seam a
+            # test replaces.
+            self._table = installed_versions()
+        return self._table.get(key)
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +631,12 @@ def format_platform_failure(report: PlatformReport, *, lock_path: Path) -> str:
     )
 
 
-def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    host: HostFacts | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> int:
     """``host`` is the SAME seam :func:`platform_report` already exposes.
 
     A real invocation never passes it (and then this is byte-for-byte the old
@@ -461,6 +644,11 @@ def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int
     it so it can state "given a Darwin host and a Linux venv" and get the same
     exit status, stdout and stderr on every machine — the platform-refusal
     evidence is about the host under test, not about whoever ran pytest.
+
+    ``environment`` is the same idea for PEP 508 markers: ``None`` measures
+    this interpreter with :func:`packaging.markers.default_environment`, and a
+    test injects ``{"python_version": "3.12", ...}`` to assert what a 3.12 run
+    does without a 3.12 interpreter having to exist on the machine.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lock", default=str(DEFAULT_LOCK))
@@ -521,11 +709,15 @@ def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int
     if not lock_path.is_file():
         print(f"RUNTIME LOCK MISSING: {lock_path} does not exist", file=sys.stderr)
         return EXIT_LOCK_UNREADABLE
-    pins = read_pins(lock_path)
+    try:
+        entries = read_lock(lock_path, environment=environment)
+    except LockFileError as exc:
+        print(f"RUNTIME LOCK ERROR: {exc}", file=sys.stderr)
+        return EXIT_LOCK_UNREADABLE
     wanted = {normalise(n) for n in args.only.split(",") if n.strip()}
     if wanted:
-        pins = [p for p in pins if normalise(p[0]) in wanted]
-        unknown = wanted - {normalise(p[0]) for p in pins}
+        entries = [e for e in entries if e.key in wanted]
+        unknown = wanted - {e.key for e in entries}
         if unknown:
             print(
                 f"RUNTIME LOCK ERROR: {sorted(unknown)} are not pinned in {lock_path}",
@@ -533,22 +725,37 @@ def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int
             )
             return EXIT_LOCK_UNREADABLE
 
-    found = installed_versions()
+    installed = InstalledIndex()
     problems: list[str] = []
-    width = max((len(name) for name, _ in pins), default=10)
-    for name, pinned in pins:
-        actual = found.get(normalise(name))
+    skipped: list[LockEntry] = []
+    width = max((len(e.display) for e in entries), default=10)
+    for entry in entries:
+        if not entry.applicable:
+            # NOT queried from installed metadata, on purpose: this requirement
+            # does not apply to this environment, so what is or is not installed
+            # under that name is not evidence about anything.
+            skipped.append(entry)
+            print(
+                f"  {entry.display:<{width}}  pinned={entry.version:<12} "
+                f"installed={'(not queried)':<12} SKIPPED / NOT APPLICABLE "
+                f"(marker `{entry.marker}` is false for this environment)"
+            )
+            continue
+        actual = installed.version(entry.key)
         if actual is None:
             state, problems = "MISSING", problems + [
-                f"      {name}=={pinned}  -> NOT INSTALLED"
+                f"      {entry.requirement_line()}  -> NOT INSTALLED"
             ]
             actual = "-"
-        elif actual != pinned:
+        elif actual != entry.version:
             state = "MISMATCH"
-            problems.append(f"      {name}=={pinned}  -> found {actual}")
+            problems.append(f"      {entry.requirement_line()}  -> found {actual}")
         else:
             state = "ok"
-        print(f"  {name:<{width}}  pinned={pinned:<12} installed={actual:<12} {state}")
+        print(
+            f"  {entry.display:<{width}}  pinned={entry.version:<12} "
+            f"installed={actual:<12} {state}"
+        )
 
     if problems:
         print(
@@ -567,7 +774,16 @@ def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int
             file=sys.stderr,
         )
         return EXIT_LOCK_VIOLATION
-    print(f"runtime lock: {len(pins)} pinned distribution(s) satisfied exactly")
+    tail = (
+        f" ({len(skipped)} SKIPPED / NOT APPLICABLE to this environment: "
+        f"{', '.join(e.display for e in skipped)})"
+        if skipped
+        else ""
+    )
+    print(
+        f"runtime lock: {len(entries) - len(skipped)} pinned distribution(s) "
+        f"satisfied exactly{tail}"
+    )
     return 0
 
 
