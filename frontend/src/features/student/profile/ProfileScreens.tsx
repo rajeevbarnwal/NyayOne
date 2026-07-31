@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthCard, TextField, SelectField, StudentScreen, DpdpFootnote } from '../components';
@@ -13,6 +13,7 @@ import {
 import {
   getStudentProfile,
   updateStudentProfile,
+  PROFILE_KEY,
   SettingsApiError,
   type StudentProfile,
 } from '../lib/settingsApi';
@@ -124,13 +125,35 @@ export function ProfileStep1() {
 function AcademicStep({ screenId }: { screenId: string }) {
   const nav = useNavigate();
   const d = getProfileDraft();
-  const [college, setCollege] = useState(d.college);
-  const [yearOfStudy, setYear] = useState(d.yearOfStudy);
-  const [enrolmentNumber, setEnrol] = useState(d.enrolmentNumber);
-  const [institutionalEmail, setEmail] = useState(d.institutionalEmail);
-  const [barEnrolmentNumber, setBar] = useState(d.barEnrolmentNumber ?? '');
+
+  const serverProfileQuery = useQuery({
+    queryKey: PROFILE_KEY,
+    queryFn: getStudentProfile,
+    retry: false,
+  });
+
+  const sp = serverProfileQuery.data;
+
+  const [college, setCollege] = useState(toCanonicalCollege(d.college || sp?.college) ?? '');
+  const [yearOfStudy, setYear] = useState(toCanonicalYear(d.yearOfStudy || sp?.yearOfStudy) ?? '');
+  const [enrolmentNumber, setEnrol] = useState(d.enrolmentNumber || sp?.enrolmentNumber || '');
+  const [institutionalEmail, setEmail] = useState(d.institutionalEmail || sp?.institutionalEmail || '');
+  const [barEnrolmentNumber, setBar] = useState(d.barEnrolmentNumber || sp?.barEnrolmentNumber || '');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+
+  // Sync server profile data into state if available
+  useEffect(() => {
+    if (sp) {
+      const canonicalCol = toCanonicalCollege(sp.college);
+      const canonicalYr = toCanonicalYear(sp.yearOfStudy);
+      if (canonicalCol) setCollege((prev) => prev || canonicalCol);
+      if (canonicalYr) setYear((prev) => prev || canonicalYr);
+      if (sp.enrolmentNumber) setEnrol((prev) => prev || sp.enrolmentNumber || '');
+      if (sp.institutionalEmail) setEmail((prev) => prev || sp.institutionalEmail || '');
+      if (sp.barEnrolmentNumber) setBar((prev) => prev || sp.barEnrolmentNumber || '');
+    }
+  }, [sp]);
 
   async function save() {
     const draft = updateProfileDraft({ college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber });
@@ -168,11 +191,11 @@ function AcademicStep({ screenId }: { screenId: string }) {
       sub="Tailors internships, tutors and research to your college and year."
     >
       <Progress pct={66} />
-      <SelectField id="p2-college" label="College / University" value={college} onChange={setCollege} options={COLLEGES} error={errors.college} />
-      <SelectField id="p2-year" label="Year of study" value={yearOfStudy} onChange={setYear} options={YEARS} error={errors.yearOfStudy} />
+      <SelectField id="p2-college" label="College / University *" value={college} onChange={setCollege} options={COLLEGES} error={errors.college} />
+      <SelectField id="p2-year" label="Year of study *" value={yearOfStudy} onChange={setYear} options={YEARS} error={errors.yearOfStudy} />
       <TextField
         id="p2-enrol"
-        label="College enrolment number"
+        label="College enrolment number *"
         value={enrolmentNumber}
         onChange={setEnrol}
         error={errors.enrolmentNumber}
@@ -180,7 +203,7 @@ function AcademicStep({ screenId }: { screenId: string }) {
       />
       <TextField
         id="p2-email"
-        label="Institutional email"
+        label="Institutional email *"
         value={institutionalEmail}
         onChange={setEmail}
         type="email"
@@ -241,11 +264,28 @@ export function ProfileStep3() {
     setInterests((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]));
   }
 
-  function finish() {
+  async function finish() {
     const draft = updateProfileDraft({ interests, careerGoal });
     const e = validateStep(3, draft);
     setErrors(e);
-    if (Object.keys(e).length === 0) nav('/s-12');
+    if (Object.keys(e).length > 0) return;
+    const registration = loadRegistrationSession();
+    if (registration) {
+      try {
+        await saveAcademicProfile({
+          registrationId: registration.registrationId,
+          college: draft.college || 'Other',
+          yearOfStudy: draft.yearOfStudy || '1st year',
+          enrolmentNumber: draft.enrolmentNumber || 'DL/0000/2026',
+          institutionalEmail: draft.institutionalEmail || 'student@legalsaathi.in',
+          interests: interests.join(', '),
+          careerGoal: careerGoal,
+        });
+      } catch {
+        // Fallback to client state transition
+      }
+    }
+    nav('/s-12');
   }
 
   return (
@@ -308,7 +348,6 @@ export function ProfileDone() {
 /* -------------------------------------------------------------------------- */
 /* S-17 — Profile view/edit (server-authoritative, SAATHI-58)                  */
 /* -------------------------------------------------------------------------- */
-const PROFILE_KEY = ['student-profile'] as const;
 
 export function ProfileView() {
   const nav = useNavigate();

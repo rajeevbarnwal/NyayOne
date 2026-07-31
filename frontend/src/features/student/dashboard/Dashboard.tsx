@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { StudentScreen, DpdpFootnote } from '../components';
 import { StatusBadge } from '../../../components/ui/primitives';
 import {
@@ -10,6 +11,7 @@ import {
 } from '../lib/dashboard';
 import { profileTier, TIER_LABELS } from '../lib/profile';
 import { getProfileDraft } from '../lib/profileStore';
+import { getStudentProfile, PROFILE_KEY } from '../lib/settingsApi';
 import { aggregate, localDateDisplay, localDateKey, localTime, resolveEventBadge, sampleSourceResults, SOURCE_LABELS } from '../lib/calendar';
 import { SAMPLE_ENTRIES, totalHours } from '../lib/clinical';
 
@@ -19,7 +21,14 @@ export function Dashboard() {
   const nav = useNavigate();
   const profile = getProfileDraft();
   const tier = profileTier(profile);
-  const firstName = profile.fullName.trim().split(/\s+/)[0] || 'Student';
+
+  const profileQuery = useQuery({
+    queryKey: PROFILE_KEY,
+    queryFn: getStudentProfile,
+    retry: false,
+  });
+  const serverFirstName = profileQuery.data?.firstName;
+  const firstName = serverFirstName || profile.firstName?.trim() || profile.fullName?.trim()?.split(/\s+/)[0] || 'Student';
   const live = availableModules(CURRENT_RELEASE);
   const soon = upcomingModules(CURRENT_RELEASE);
   const events = aggregate(sampleSourceResults()).events;

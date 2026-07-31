@@ -133,42 +133,63 @@ def register_student(
             return RegistrationResult(registration=existing, delivery=None)
 
     mobile_hash = keyed_hash(req.mobile)
-    if session.scalar(select(StudentRegistration).where(StudentRegistration.mobile_hash == mobile_hash)):
-        raise RegistrationError(409, "mobile_already_registered", "mobile")
-
+    existing_reg = session.scalar(select(StudentRegistration).where(StudentRegistration.mobile_hash == mobile_hash))
     minor = _is_minor(req.dob)
     key_version = active_key_version()
-    user = User(role="student", status="pending")
-    session.add(user)
-    session.flush()
 
-    reg = StudentRegistration(
-        user_id=user.id,
-        first_name=req.first_name,
-        middle_name=req.middle_name,
-        last_name=req.last_name,
-        mobile_hash=mobile_hash,
-        mobile_ct=encrypt(req.mobile),
-        dob_hash=keyed_hash(req.dob.isoformat()),
-        dob_ct=encrypt(req.dob.isoformat()),
-        key_version=key_version,
-        institution_ref=req.college,
-        status="otp_pending",
-        is_minor=minor,
-        idempotency_key=idempotency_key,
-    )
-    session.add(reg)
-    session.flush()
+    if existing_reg is not None:
+        if existing_reg.status in {"otp_verified", "active"}:
+            raise RegistrationError(409, "mobile_already_registered", "mobile")
+        # Update pending unverified registration
+        existing_reg.first_name = req.first_name
+        existing_reg.middle_name = req.middle_name
+        existing_reg.last_name = req.last_name
+        existing_reg.mobile_ct = encrypt(req.mobile)
+        existing_reg.dob_hash = keyed_hash(req.dob.isoformat())
+        existing_reg.dob_ct = encrypt(req.dob.isoformat())
+        existing_reg.key_version = key_version
+        existing_reg.institution_ref = req.college
+        existing_reg.is_minor = minor
+        existing_reg.idempotency_key = idempotency_key
+        session.flush()
+        reg = existing_reg
+    else:
+        user = User(role="student", status="pending")
+        session.add(user)
+        session.flush()
 
-    session.add(
-        Consent(
-            registration_id=reg.id,
-            purpose="registration",
-            accepted=True,
-            policy_version=req.consent.policy_version,
-            accepted_at=now,
+        reg = StudentRegistration(
+            user_id=user.id,
+            first_name=req.first_name,
+            middle_name=req.middle_name,
+            last_name=req.last_name,
+            mobile_hash=mobile_hash,
+            mobile_ct=encrypt(req.mobile),
+            dob_hash=keyed_hash(req.dob.isoformat()),
+            dob_ct=encrypt(req.dob.isoformat()),
+            key_version=key_version,
+            institution_ref=req.college,
+            status="otp_pending",
+            is_minor=minor,
+            idempotency_key=idempotency_key,
         )
-    )
+        session.add(reg)
+        session.flush()
+
+    existing_consent = session.scalar(select(Consent).where(Consent.registration_id == reg.id))
+    if existing_consent is not None:
+        existing_consent.accepted = req.consent.accepted
+        existing_consent.policy_version = req.consent.policy_version
+        existing_consent.accepted_at = now
+    else:
+        session.add(
+            Consent(
+                registration_id=reg.id,
+                accepted=req.consent.accepted,
+                policy_version=req.consent.policy_version,
+                accepted_at=now,
+            )
+        )
 
     # OTP challenge via the shared lifecycle service (persists a keyed verifier
     # plus a pending outbox row with a short-lived encrypted delivery payload).
@@ -181,21 +202,28 @@ def register_student(
 
     # Academic profile (SAATHI-421) — encrypted + keyed hash for sensitive
     # identifiers; plain college/year for display; version-stamped.
-    session.add(
-        StudentProfile(
-            registration_id=reg.id,
-            college=req.college,
-            year_of_study=req.year_of_study,
-            key_version=key_version,
-            enrolment_ct=encrypt(req.enrolment_number) if req.enrolment_number else None,
-            enrolment_hash=keyed_hash(req.enrolment_number) if req.enrolment_number else None,
-            institutional_email_ct=encrypt(req.institutional_email) if req.institutional_email else None,
-            institutional_email_hash=keyed_hash(req.institutional_email, lower=True) if req.institutional_email else None,
-            bar_enrolment_ct=encrypt(req.bar_enrolment_number) if req.bar_enrolment_number else None,
-            bar_enrolment_hash=keyed_hash(req.bar_enrolment_number) if req.bar_enrolment_number else None,
+    existing_profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
+    if existing_profile is not None:
+        if req.college: existing_profile.college = req.college
+        if req.year_of_study: existing_profile.year_of_study = req.year_of_study
+    else:
+        session.add(
+            StudentProfile(
+                registration_id=reg.id,
+                college=req.college,
+                year_of_study=req.year_of_study,
+                key_version=key_version,
+                enrolment_ct=encrypt(req.enrolment_number) if req.enrolment_number else None,
+                enrolment_hash=keyed_hash(req.enrolment_number) if req.enrolment_number else None,
+                institutional_email_ct=encrypt(req.institutional_email) if req.institutional_email else None,
+                institutional_email_hash=keyed_hash(req.institutional_email, lower=True) if req.institutional_email else None,
+                bar_enrolment_ct=encrypt(req.bar_enrolment_number) if req.bar_enrolment_number else None,
+                bar_enrolment_hash=keyed_hash(req.bar_enrolment_number) if req.bar_enrolment_number else None,
+            )
         )
-    )
-    session.add(StudentVerification(registration_id=reg.id, method="institutional_email", status="pending"))
+
+    if not session.scalar(select(StudentVerification).where(StudentVerification.registration_id == reg.id)):
+        session.add(StudentVerification(registration_id=reg.id, method="institutional_email", status="pending"))
 
     # Redacted, non-PII audit snapshot on the shared audit_events table.
     session.add(
