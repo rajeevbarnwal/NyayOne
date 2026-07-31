@@ -18,11 +18,22 @@
  * MEDIA AND CREDENTIAL PRIVACY (matrix J1). The raw join token lives in a ref
  * for the lifetime of the room and nowhere else: not in React Query's cache, not
  * in a query key, not in the URL, not in storage, not in a log. Only the
- * REDACTED projection is ever put in render state. Device enumeration keeps
- * `deviceId` in memory to open a track and never reads or renders `label`, so no
- * device name exists to leak. There is no peer connection here, so no SDP and no
- * ICE candidate is ever produced — the video-provider seam (W2-9) is still
- * Product-pending and the room says so rather than pretending otherwise.
+ * REDACTED projection is ever put in render state, and the raw value leaves the
+ * ref exactly once — as the `token` argument of `VideoRoomClient.connect`, which
+ * has no matching getter, so nothing can read it back out. Device enumeration
+ * keeps `deviceId` in memory to open a track and never reads or renders `label`,
+ * so no device name exists to leak.
+ *
+ * THE MEDIA TRANSPORT (W2-9). The room owns a real `VideoRoomClient` — the
+ * provider-neutral contract in `./media/videoRoomClient` — and renders its
+ * state machine (disconnected / connecting / connected / reconnecting /
+ * reconnected / terminal failure) as named states rather than a spinner. Two
+ * adapters implement it: the production LiveKit one over the lockfile-pinned
+ * `livekit-client` package, and a deterministic one selected at runtime so the
+ * negative journey can drive a drop and a recovery without a live server. No
+ * SDP, ICE candidate or device label is ever read, rendered, stored or logged
+ * on either path; the peer connection lives inside the vendor adapter and its
+ * signalling data never crosses this boundary.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -61,6 +72,24 @@ import {
   slotTimeLabels,
   validateReview,
 } from '../lib/tutoringRules';
+import {
+  clearPreferredDevices,
+  createVideoRoomClient,
+  enumerateVideoRoomDevices,
+  getPreferredDevices,
+  setPreferredDevices,
+  videoRoomDeviceName,
+  videoRoomFailureFromServerCode,
+  type VideoRoomClient,
+  type VideoRoomDevice,
+  type VideoRoomDeviceChoice,
+  type VideoRoomDeviceKind,
+  type VideoRoomFailure,
+  type VideoRoomFailureCode,
+  type VideoRoomParticipant,
+  type VideoRoomState,
+  type VideoRoomTransport,
+} from './media/videoRoomClient';
 import {
   Banner,
   Chip,
@@ -1173,23 +1202,77 @@ const MEDIA_COPY: Record<MediaProblem, { title: string; detail: string; recovery
 };
 
 /**
- * Local media handle. Deliberately narrow: counts and ids only.
- * `label` is NEVER read from `enumerateDevices()`, so no device name exists in
- * this process to leak into state, a log or the DOM.
+ * The device list this screen holds. Ids and ORDINALS only — the enumeration
+ * goes through `enumerateVideoRoomDevices`, which never reads `label`, so no
+ * device name exists in this process to leak into state, a log or the DOM. The
+ * chips below are a count, and the selects below are named "Camera 1" /
+ * "Microphone 2" from the ordinal.
  */
-interface DeviceCensus {
-  cameras: number;
-  microphones: number;
+function countKind(devices: readonly VideoRoomDevice[], kind: VideoRoomDeviceKind): number {
+  return devices.filter((d) => d.kind === kind).length;
+}
+
+/**
+ * Capture-device selection. Every option is named from its ORDINAL, so the
+ * control can be operated without the hardware's own name ever being read.
+ */
+function DevicePicker({
+  devices,
+  chosen,
+  onChoose,
+}: {
+  devices: readonly VideoRoomDevice[];
+  chosen: VideoRoomDeviceChoice;
+  onChoose: (kind: VideoRoomDeviceKind, deviceId: string) => void;
+}) {
+  /*
+   * `heading`, not `label`: the privacy canary refuses ANY `.label` read in
+   * the tutoring sources, and that rule is worth more than the nicer name.
+   */
+  const groups: Array<{ kind: VideoRoomDeviceKind; id: string; heading: string }> = [
+    { kind: 'videoinput', id: 'tt-dev-cam', heading: 'Camera' },
+    { kind: 'audioinput', id: 'tt-dev-mic', heading: 'Microphone' },
+  ];
+  return (
+    <>
+      {groups.map((group) => {
+        const options = devices.filter((device) => device.kind === group.kind);
+        if (options.length === 0) return null;
+        return (
+          <div className="tt-fld" key={group.kind}>
+            <label htmlFor={group.id}>{group.heading}</label>
+            <select
+              id={group.id}
+              className="tt-in tt-sel"
+              value={chosen[group.kind] ?? options[0].deviceId}
+              onChange={(event) => onChoose(group.kind, event.target.value)}
+            >
+              {options.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {videoRoomDeviceName(device)}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
   const [announceRegion, announce] = useAnnouncer();
   const [problem, setProblem] = useState<MediaProblem | null>(null);
   const [tested, setTested] = useState(false);
-  const [census, setCensus] = useState<DeviceCensus>({ cameras: 0, microphones: 0 });
+  const [devices, setDevices] = useState<readonly VideoRoomDevice[]>([]);
+  const [chosen, setChosen] = useState(getPreferredDevices);
   const [camOn, setCamOn] = useState(true);
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
+  const census = {
+    cameras: countKind(devices, 'videoinput'),
+    microphones: countKind(devices, 'audioinput'),
+  };
 
   const release = useCallback(() => {
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -1208,7 +1291,7 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
     if (video.current && stream.current) video.current.srcObject = stream.current;
   }, [camOn, tested]);
 
-  const test = useCallback(async (audioOnly: boolean) => {
+  const test = useCallback(async (audioOnly: boolean, want = chosen) => {
     setProblem(null);
     if (typeof window === 'undefined' || !window.isSecureContext) {
       setProblem('insecure');
@@ -1221,25 +1304,38 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
     release();
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: audioOnly ? false : true,
+        // A chosen device is asked for by its OPAQUE id. No name is involved on
+        // either side of this call.
+        audio: want.audioinput ? { deviceId: { exact: want.audioinput } } : true,
+        video: audioOnly ? false : (want.videoinput ? { deviceId: { exact: want.videoinput } } : true),
       });
       stream.current = media;
       if (video.current && !audioOnly) video.current.srcObject = media;
       setCamOn(!audioOnly);
       setTested(true);
-      // Count only. `device.label` is intentionally not read.
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setCensus({
-        cameras: devices.filter((d) => d.kind === 'videoinput').length,
-        microphones: devices.filter((d) => d.kind === 'audioinput').length,
-      });
+      // Ids and ordinals only. `device.label` is never read.
+      setDevices(await enumerateVideoRoomDevices());
       announce(audioOnly ? 'Microphone ready. Camera off.' : 'Camera and microphone ready.');
     } catch (error) {
       setProblem(classifyMediaError(error));
       announce('The device test did not complete.');
     }
-  }, [announce, release]);
+  }, [announce, release, chosen]);
+
+  /**
+   * Choose a capture device. The choice is carried into the room in memory
+   * (`setPreferredDevices`) — never through the URL, which would publish a
+   * stable hardware identifier into history, and never through storage, which
+   * this surface does not touch at all.
+   */
+  const choose = useCallback((kind: VideoRoomDeviceKind, deviceId: string) => {
+    const want = { ...chosen, [kind]: deviceId };
+    setChosen(want);
+    setPreferredDevices({ [kind]: deviceId });
+    const device = devices.find((d) => d.deviceId === deviceId);
+    announce(device ? `${videoRoomDeviceName(device)} selected` : 'Device selected');
+    void test(false, want);
+  }, [announce, chosen, devices, test]);
 
   const copy = problem ? MEDIA_COPY[problem] : null;
   const labels = slotTimeLabels(session.startUtc, session.endUtc, session.ianaTimezone);
@@ -1318,9 +1414,15 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
         </div>
       )}
 
+      {tested && devices.length > 0 && (
+        <DevicePicker devices={devices} chosen={chosen} onChoose={choose} />
+      )}
+
       <p className="tt-p tt-muted">
         No media, device name or join credential is written to the address bar, this
-        browser&apos;s storage, a cookie or any log.
+        browser&apos;s storage, a cookie or any log. Your devices are listed by position —
+        &ldquo;Camera 1&rdquo;, &ldquo;Microphone 2&rdquo; — because the hardware&apos;s own name is
+        never read.
       </p>
 
       <p className="tt-svr">
@@ -1342,6 +1444,180 @@ const POSITION_WORDS: Record<SelfPosition, string> = {
   tr: 'top right',
 };
 
+/**
+ * THE TRANSPORT IS A NAMED STATE, NEVER A SPINNER.
+ *
+ * Every member of `VideoRoomState` has a chip, a tone and a sentence. A room
+ * that only ever showed a turning circle would be telling a participant nothing
+ * about whether their session is recoverable, which is exactly the moment they
+ * most need to know.
+ */
+const TRANSPORT_LABEL: Record<VideoRoomState, string> = {
+  disconnected: 'Disconnected',
+  connecting: 'Connecting',
+  connected: 'Live',
+  reconnecting: 'Reconnecting',
+  reconnected: 'Reconnected',
+  failed: 'Media failed',
+};
+
+const TRANSPORT_TONE: Record<VideoRoomState, 'g' | 't' | 'i' | 'r'> = {
+  disconnected: 'i',
+  connecting: 'i',
+  connected: 'g',
+  reconnecting: 't',
+  reconnected: 'g',
+  failed: 'r',
+};
+
+const TRANSPORT_COPY: Record<VideoRoomState, { title: string; detail: string }> = {
+  disconnected: {
+    title: 'The media connection is closed',
+    detail: 'Nothing is being sent or received. Your camera and microphone are yours alone until the room connects.',
+  },
+  connecting: {
+    title: 'Opening the media connection',
+    detail: 'Your entry is authorised. The room is now dialling the media provider with the credential the server issued.',
+  },
+  connected: {
+    title: 'You are connected',
+    detail: 'Audio and video are flowing. Nothing is recorded here.',
+  },
+  reconnecting: {
+    title: 'Reconnecting',
+    detail: 'The media connection dropped and the room is re-establishing it. Your session is not over, so stay on this screen.',
+  },
+  reconnected: {
+    title: 'Reconnected',
+    detail: 'The media connection came back and your streams have resumed.',
+  },
+  failed: {
+    title: 'The media connection failed',
+    detail: 'The room stopped trying. The reason is named below, and nothing was recorded.',
+  },
+};
+
+/**
+ * The typed refusals, in the participant's language. Each one says what
+ * happened, what it means for the session and what — if anything — can be done,
+ * because "something went wrong" is not a state.
+ */
+const FAILURE_COPY: Record<VideoRoomFailureCode, { title: string; detail: string }> = {
+  CREDENTIAL_EXPIRED: {
+    title: 'Your entry credential expired',
+    detail: 'Entry credentials are deliberately short-lived. Ask for a new one and you will be let straight back in.',
+  },
+  CREDENTIAL_REVOKED: {
+    title: 'Your entry credential was withdrawn',
+    detail: 'This usually means the room was opened somewhere else, which supersedes the older credential. Ask for a new one here.',
+  },
+  WRONG_PARTICIPANT: {
+    title: 'This credential is not yours',
+    detail: 'The room is bound to one participant and one session. Nothing was sent. Open the session from your own sessions list.',
+  },
+  SESSION_CANCELLED: {
+    title: 'This session is no longer running',
+    detail: 'The room was closed, so there is nothing to join. Check the session for its cancellation or reschedule.',
+  },
+  NOT_ADMITTED: {
+    title: 'The media provider refused the credential',
+    detail: 'No room was opened and no media was sent. Ask the server for entry again; if it keeps refusing, your session state has changed.',
+  },
+  PROVIDER_NOT_CONFIGURED: {
+    title: 'No media provider is configured for this build',
+    detail: 'Your entry is authorised and your camera is open locally, but this build has no media server to dial, so nothing is being sent or received. That is a deployment setting, not a fault in your session.',
+  },
+  PROVIDER_UNAVAILABLE: {
+    title: 'The media provider could not be reached',
+    detail: 'The room could not be dialled. Your session and your payment are untouched. Try entering again in a moment.',
+  },
+  TRANSPORT_LOST: {
+    title: 'The media connection was lost',
+    detail: 'The room dropped and could not be re-established. Try entering again; your session is still yours.',
+  },
+  MEDIA_REFUSED: {
+    title: 'Your camera or microphone could not be published',
+    detail: 'The connection is open but your media was refused. Check the device settings and try again.',
+  },
+  UNKNOWN: {
+    title: 'The media connection stopped for an unrecognised reason',
+    detail: 'Nothing was recorded and nothing was stored. Try entering again.',
+  },
+};
+
+/**
+ * A video surface bound to a live `MediaStream`.
+ *
+ * The element is ALWAYS mounted so the ref exists at the moment a track
+ * arrives; an absent stream is an overlay, never a swapped element.
+ */
+function RoomVideo({
+  stream,
+  ariaLabel,
+  remote,
+}: {
+  stream: MediaStream | null;
+  ariaLabel: string;
+  remote: boolean;
+}) {
+  const element = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const node = element.current;
+    if (!node) return;
+    node.srcObject = stream;
+    return () => { node.srcObject = null; };
+  }, [stream]);
+  return (
+    <video
+      ref={element}
+      autoPlay
+      playsInline
+      muted={!remote}
+      aria-label={ariaLabel}
+      data-tt-remote={remote ? '1' : '0'}
+    />
+  );
+}
+
+/** One rendered tile: a participant's camera, or their screen share. */
+interface RoomTile {
+  key: string;
+  kind: 'camera' | 'screen';
+  stream: MediaStream | null;
+}
+
+function remoteTiles(participants: readonly VideoRoomParticipant[]): RoomTile[] {
+  const tiles: RoomTile[] = [];
+  for (const participant of participants) {
+    if (participant.local) {
+      // The local camera is the self-view; only a local SCREEN share earns a
+      // tile of its own, because a participant sharing needs to see what the
+      // room sees.
+      if (participant.screenStream) {
+        tiles.push({
+          key: `${participant.participantRef}:screen`,
+          kind: 'screen',
+          stream: participant.screenStream,
+        });
+      }
+      continue;
+    }
+    tiles.push({
+      key: `${participant.participantRef}:camera`,
+      kind: 'camera',
+      stream: participant.cameraStream,
+    });
+    if (participant.screenStream) {
+      tiles.push({
+        key: `${participant.participantRef}:screen`,
+        kind: 'screen',
+        stream: participant.screenStream,
+      });
+    }
+  }
+  return tiles;
+}
+
 function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
   const [announceRegion, announce] = useAnnouncer();
 
@@ -1349,18 +1625,31 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
    * THE RAW CREDENTIAL LIVES HERE AND ONLY HERE.
    * A ref, not React state and not a query cache entry, so it is never part of
    * a serialisable render tree, never a query key and never persisted. Render
-   * state gets the redacted projection instead.
+   * state gets the redacted projection instead. Its one and only use is the
+   * `token` argument of `client.connect(...)`, and `VideoRoomClient` has no
+   * getter that could hand it back.
    */
   const rawCredential = useRef<JoinCredential | null>(null);
   const [credential, setCredential] = useState<RedactedJoinCredential | null>(null);
   const [issueError, setIssueError] = useState<unknown>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [screenOn, setScreenOn] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selfMin, setSelfMin] = useState(false);
   const [selfPos, setSelfPos] = useState<SelfPosition>('br');
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+
+  /* ------------------------- the media transport ------------------------- */
+  const [transport, setTransport] = useState<VideoRoomTransport | null>(null);
+  const [roomState, setRoomState] = useState<VideoRoomState>('disconnected');
+  const [failure, setFailure] = useState<VideoRoomFailure | null>(null);
+  const [participants, setParticipants] = useState<readonly VideoRoomParticipant[]>([]);
+  const [devices, setDevices] = useState<readonly VideoRoomDevice[]>([]);
+  const [chosen, setChosen] = useState<VideoRoomDeviceChoice>(getPreferredDevices);
+  const client = useRef<VideoRoomClient | null>(null);
 
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -1393,50 +1682,107 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     if (video.current) video.current.srcObject = null;
   }, []);
 
+  /**
+   * ENTRY, IN ONE SEQUENCE, because the three steps are genuinely ordered:
+   * open local capture, ask the SERVER for a credential, then hand that
+   * credential to the media client. Splitting them across effects raced — the
+   * client could be asked to publish a stream that had not arrived yet.
+   *
+   * The cleanup IS the teardown: unsubscribe, leave the room (which releases
+   * every device the client holds), stop the local capture and drop the secret.
+   */
   useEffect(() => {
     let cancelled = false;
-    const open = async (): Promise<void> => {
-      if (!navigator.mediaDevices?.getUserMedia) return;
-      try {
-        const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        if (cancelled) {
-          media.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        stream.current = media;
-        if (video.current) video.current.srcObject = media;
-      } catch {
-        // The pre-join check already explains every refusal; the room simply
-        // shows the camera-off tile rather than repeating the diagnosis.
-        setCamOn(false);
-      }
-    };
-    void open();
-    return () => { cancelled = true; releaseMedia(); };
-  }, [releaseMedia]);
+    const offs: Array<() => void> = [];
 
-  /* ------------------------ E1: ask for the credential -------------------- */
-  useEffect(() => {
-    let cancelled = false;
-    const issue = async (): Promise<void> => {
-      try {
-        const issued = await issueJoinCredentials(sessionId);
-        if (cancelled) return;
-        rawCredential.current = issued;
-        setCredential(redactJoinCredential(issued));
-        setIssueError(null);
-        announce('You are in the room.');
-      } catch (error) {
-        if (!cancelled) setIssueError(error);
+    const enter = async (): Promise<void> => {
+      // 1. local capture for the self-view, honouring the pre-join choice.
+      let local: MediaStream | null = null;
+      const want = getPreferredDevices();
+      if (navigator.mediaDevices?.getUserMedia) {
+        try {
+          local = await navigator.mediaDevices.getUserMedia({
+            audio: want.audioinput ? { deviceId: { exact: want.audioinput } } : true,
+            video: want.videoinput ? { deviceId: { exact: want.videoinput } } : true,
+          });
+        } catch {
+          // The pre-join check already explains every refusal; the room shows
+          // the camera-off tile rather than repeating the diagnosis.
+          local = null;
+        }
       }
+      if (cancelled) {
+        local?.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      stream.current = local;
+      if (video.current) video.current.srcObject = local;
+      setCamOn(!!local?.getVideoTracks().length);
+      setMicOn(!!local?.getAudioTracks().length);
+
+      // 2. the SERVER decides entry. No credential, no room.
+      let issued: JoinCredential;
+      try {
+        issued = await issueJoinCredentials(sessionId);
+      } catch (error) {
+        if (cancelled) return;
+        setIssueError(error);
+        setRoomState('failed');
+        setFailure(videoRoomFailureFromServerCode(
+          error instanceof TutoringApiError ? error.code : 'UNKNOWN',
+        ));
+        announce('You were not admitted to this room.');
+        return;
+      }
+      if (cancelled) return;
+      rawCredential.current = issued;
+      setCredential(redactJoinCredential(issued));
+      setIssueError(null);
+      announce('You are in the room.');
+
+      // 3. the media client, behind the provider-neutral contract.
+      const built = await createVideoRoomClient();
+      if (cancelled) {
+        await built.leave();
+        return;
+      }
+      client.current = built;
+      setTransport(built.transport);
+      offs.push(built.on('state', (next, why) => {
+        setRoomState(next);
+        setFailure(why);
+        announce(why && why.terminal
+          ? `${TRANSPORT_LABEL[next]}. ${FAILURE_COPY[why.code].title}.`
+          : TRANSPORT_COPY[next].title);
+      }));
+      offs.push(built.on('participants', (list) => setParticipants(list)));
+      offs.push(built.on('devices', (list) => setDevices(list)));
+      await built.connect({
+        // The ONE place the raw secret is read, and it is read straight out of
+        // the ref into an argument; it is never copied into a local first.
+        token: rawCredential.current?.joinToken ?? '',
+        roomRef: issued.roomRef,
+        participantRef: issued.participantRef,
+        permissions: issued.permissions,
+        localStream: local,
+        devices: want,
+        publishAudio: !!local?.getAudioTracks().length,
+        publishVideo: !!local?.getVideoTracks().length,
+      });
     };
-    void issue();
+
+    void enter();
     return () => {
       cancelled = true;
+      for (const off of offs) off();
+      const built = client.current;
+      client.current = null;
+      void built?.leave();
+      releaseMedia();
       // Drop the secret the moment the room goes away.
       rawCredential.current = null;
     };
-  }, [sessionId, announce]);
+  }, [sessionId, attempt, announce, releaseMedia]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
@@ -1447,15 +1793,34 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     const next = !micOn;
     setMicOn(next);
     stream.current?.getAudioTracks().forEach((track) => { track.enabled = next; });
+    void client.current?.setMicrophoneEnabled(next);
     announce(next ? 'Microphone on' : 'Microphone muted');
   };
 
   const toggleCam = (): void => {
     const next = !camOn;
     setCamOn(next);
-    // Stopping the track is what actually releases the device indicator.
+    // Disabling stops the frames; stopping the track is what releases the
+    // device, and that is reserved for leaving.
     stream.current?.getVideoTracks().forEach((track) => { track.enabled = next; });
+    void client.current?.setCameraEnabled(next);
     announce(next ? 'Camera on' : 'Camera off');
+  };
+
+  const toggleScreen = (): void => {
+    const next = !screenOn;
+    setScreenOn(next);
+    void client.current?.setScreenShareEnabled(next).catch(() => setScreenOn(false));
+    announce(next ? 'Sharing your screen' : 'Screen sharing stopped');
+  };
+
+  const chooseDevice = (kind: VideoRoomDeviceKind, deviceId: string): void => {
+    const next = { ...chosen, [kind]: deviceId };
+    setChosen(next);
+    setPreferredDevices({ [kind]: deviceId });
+    void client.current?.selectDevice(kind, deviceId);
+    const device = devices.find((entry) => entry.deviceId === deviceId);
+    announce(device ? `${videoRoomDeviceName(device)} selected` : 'Device selected');
   };
 
   const openSheet = (): void => {
@@ -1481,11 +1846,24 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
   }, [sheetOpen]);
 
   const leave = (): void => {
+    void client.current?.leave();
+    client.current = null;
     releaseMedia();
+    clearPreferredDevices();
     rawCredential.current = null;
     setCredential(null);
     setLeaveOpen(false);
     go('attendance');
+  };
+
+  /** A real retry: a NEW server credential and a NEW connection attempt. */
+  const retryEntry = (): void => {
+    setIssueError(null);
+    setFailure(null);
+    setRoomState('connecting');
+    setParticipants([]);
+    setAttempt((value) => value + 1);
+    announce('Asking the server for entry again');
   };
 
   const moveSelf = (): void => {
@@ -1500,13 +1878,30 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     ? slotTimeLabels(session.data.startUtc, session.data.endUtc, session.data.ianaTimezone)
     : null;
 
+  const tiles = remoteTiles(participants);
+  const flowing = roomState === 'connected' || roomState === 'reconnected';
+  const failureCopy = failure ? FAILURE_COPY[failure.code] : null;
+  const stateCopy = TRANSPORT_COPY[roomState];
+  const withMedia = tiles.filter((tile) => tile.stream).length;
+
   return (
     <TutoringScreen screenId="S-35" bare>
       {announceRegion}
       <div className="tt-live-host">
-        <main className="tt-live" data-family="room">
+        <main className="tt-live" data-family="room" data-tt-transport={roomState}>
           <div className="tt-lh">
-            <Chip tone="g">{issueError ? 'Not admitted' : credential ? 'In the room' : 'Joining'}</Chip>
+            {/*
+              ADMISSION and TRANSPORT are two different facts and are reported
+              in two different places. This chip is admission — the SERVER's
+              decision about whether this participant may be in this room. The
+              media transport's own state has its own persistent indicator on
+              the stage, because putting a second chip here squeezed the
+              session title into an ellipsis at the product viewport, which is
+              a WCAG 1.4.4 content loss.
+            */}
+            <Chip tone={issueError ? 'r' : credential ? 'g' : 'i'}>
+              {issueError ? 'Not admitted' : credential ? 'In the room' : 'Joining'}
+            </Chip>
             <span className="t">Mentoring session</span>
             <span className="tt-grow" />
             <span className="m">{clock}</span>
@@ -1523,68 +1918,122 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
           </div>
 
           <div className="tt-stage">
-            <div className="tt-mtile">
-              <svg viewBox="0 0 420 830" preserveAspectRatio="xMidYMid slice" aria-hidden focusable="false">
-                <defs>
-                  <linearGradient id="tt-room-bg" x1="0" y1="0" x2=".3" y2="1">
-                    <stop offset="0" stopColor="var(--tt-room-1)" />
-                    <stop offset=".55" stopColor="var(--tt-room-2)" />
-                    <stop offset="1" stopColor="var(--tt-room-3)" />
-                  </linearGradient>
-                </defs>
-                <rect width="420" height="830" fill="url(#tt-room-bg)" />
-              </svg>
+            {/*
+              The media transport's state, always on screen and always in
+              words. This is the answer to "is my session still there?", so it
+              is never a spinner and never disappears — every one of the six
+              states names itself here, and the banner below adds the detail
+              when there is something to act on.
+            */}
+            <span className={`tt-tstate tt-tstate--${TRANSPORT_TONE[roomState]}`} data-tt-transport-pill={roomState}>
+              <i aria-hidden />
+              {TRANSPORT_LABEL[roomState]}
+            </span>
 
-              {issueError ? (
-                <div className="tt-veil">
-                  <b>You are not admitted to this room</b>
-                  <span>
-                    The server refused the entry credential, so no room was opened and no media was
-                    sent. The reason is below.
-                  </span>
-                </div>
-              ) : !credential ? (
-                <div className="tt-veil">
-                  <b>Asking the server for entry</b>
-                  <span>
-                    Entry is a server decision. Your camera and microphone are open locally only
-                    until it answers.
-                  </span>
-                </div>
-              ) : (
-                <div className="tt-veil">
-                  <b>Waiting for your mentor&apos;s stream</b>
-                  <span>
-                    Your entry is authorised for room {credential.roomRef}. The media transport
-                    itself is not contracted yet, so no remote stream is claimed here.
-                  </span>
-                </div>
-              )}
+            <div className="tt-mgrid" data-tt-tiles={tiles.length}>
+              {(tiles.length ? tiles : [null]).map((tile, index) => (
+                <div className="tt-mtile" key={tile ? tile.key : 'placeholder'}>
+                  {tile ? (
+                    <RoomVideo
+                      stream={tile.stream}
+                      remote
+                      ariaLabel={tile.kind === 'screen'
+                        ? `Shared screen from participant ${index + 1}`
+                        : `Video from participant ${index + 1}`}
+                    />
+                  ) : (
+                    <svg viewBox="0 0 420 830" preserveAspectRatio="xMidYMid slice" aria-hidden focusable="false">
+                      <defs>
+                        <linearGradient id="tt-room-bg" x1="0" y1="0" x2=".3" y2="1">
+                          <stop offset="0" stopColor="var(--tt-room-1)" />
+                          <stop offset=".55" stopColor="var(--tt-room-2)" />
+                          <stop offset="1" stopColor="var(--tt-room-3)" />
+                        </linearGradient>
+                      </defs>
+                      <rect width="420" height="830" fill="url(#tt-room-bg)" />
+                    </svg>
+                  )}
 
-              {issueError ? (
-                <div className="tt-rbanner tt-rbanner--err" role="alert">
-                  <Ic name="warn" />
-                  <div>
-                    <div className="tt-banner__t">
-                      {issueError instanceof TutoringApiError ? issueError.code : 'ENTRY_REFUSED'}
+                  {!tile?.stream && (
+                    <div className="tt-veil">
+                      {issueError ? (
+                        <>
+                          <b>You are not admitted to this room</b>
+                          <span>
+                            The server refused the entry credential, so no room was opened and no
+                            media was sent. The reason is below.
+                          </span>
+                        </>
+                      ) : !credential ? (
+                        <>
+                          <b>Asking the server for entry</b>
+                          <span>
+                            Entry is a server decision. Your camera and microphone are open locally
+                            only until it answers.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <b>{stateCopy.title}</b>
+                          <span>{stateCopy.detail}</span>
+                        </>
+                      )}
                     </div>
-                    <div className="tt-banner__d">
-                      {issueError instanceof TutoringApiError
-                        ? issueError.serverMessage
-                        : 'The request did not reach LegalSaathi.'}
-                    </div>
+                  )}
+
+                  <div className="tt-nm">
+                    {tile?.kind === 'screen' ? 'Shared screen' : 'Mentor'}
+                    <span
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: flowing && tile?.stream ? 'var(--tt-jade)' : 'var(--tt-studiomut)',
+                      }}
+                      aria-hidden
+                    />
                   </div>
                 </div>
-              ) : null}
-
-              <div className="tt-nm">
-                Mentor
-                <span
-                  style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--tt-jade)' }}
-                  aria-hidden
-                />
-              </div>
+              ))}
             </div>
+
+            {/* One banner at a time: an entry refusal has its own, below. */}
+            {!issueError && (failure || roomState === 'reconnecting' || roomState === 'reconnected') && (
+              <div
+                className={`tt-rbanner ${failure?.terminal ? 'tt-rbanner--err' : 'tt-rbanner--warn'}`}
+                role={failure?.terminal ? 'alert' : 'status'}
+                data-tt-state={roomState}
+              >
+                <Ic name={failure?.terminal ? 'warn' : 'clock'} />
+                <div>
+                  <div className="tt-banner__t">
+                    {failure?.terminal && failureCopy ? failureCopy.title : stateCopy.title}
+                  </div>
+                  <div className="tt-banner__d">
+                    {failure?.terminal && failureCopy ? failureCopy.detail : stateCopy.detail}
+                  </div>
+                  <div className="tt-banner__d tt-mono" data-tt-code="1">
+                    {failure ? failure.code : roomState.toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {issueError ? (
+              <div className="tt-rbanner tt-rbanner--err" role="alert">
+                <Ic name="warn" />
+                <div>
+                  <div className="tt-banner__t">
+                    {issueError instanceof TutoringApiError ? issueError.code : 'ENTRY_REFUSED'}
+                  </div>
+                  <div className="tt-banner__d">
+                    {issueError instanceof TutoringApiError
+                      ? issueError.serverMessage
+                      : 'The request did not reach LegalSaathi.'}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="tt-self" data-min={selfMin ? '1' : '0'} data-pos={selfPos}>
               {/* Always mounted so the ref exists when a track arrives; the
@@ -1648,14 +2097,16 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
             <button
               type="button"
               className="tt-cb"
-              aria-label="Device settings"
-              onClick={() => { releaseMedia(); go('prejoin'); }}
+              aria-pressed={screenOn}
+              aria-label={screenOn ? 'Stop sharing your screen' : 'Share your screen'}
+              onClick={toggleScreen}
             >
               <Ic name="dev" />
             </button>
             <button
               type="button"
               className="tt-cb tt-cb--leave"
+              aria-label="Leave the session"
               onClick={() => setLeaveOpen(true)}
             >
               <Ic name="leave" />
@@ -1688,6 +2139,28 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
             {labels && <div className="tt-kv"><span>Scheduled</span><b>{labels.sessionZone}</b></div>}
             {labels && <div className="tt-kv"><span>Session timezone</span><b>{labels.sessionZoneLabel}</b></div>}
             {minutes !== null && <div className="tt-kv"><span>Length</span><b>{minutes} minutes</b></div>}
+            <div className="tt-kv">
+              <span>Media connection</span>
+              <b data-tt-sheet-state="1">{TRANSPORT_LABEL[roomState]}</b>
+            </div>
+            {failure && (
+              <div className="tt-kv">
+                <span>Reason</span>
+                <b className="tt-mono" style={{ fontSize: '12px' }}>{failure.code}</b>
+              </div>
+            )}
+            <div className="tt-kv">
+              <span>Media transport</span>
+              <b className="tt-mono" style={{ fontSize: '12px' }}>{transport ?? 'not started'}</b>
+            </div>
+            <div className="tt-kv">
+              <span>Remote streams flowing</span>
+              <b data-tt-flowing="1">{withMedia}</b>
+            </div>
+            <div className="tt-kv">
+              <span>Screen share</span>
+              <b>{screenOn ? 'You are sharing' : 'Off'}</b>
+            </div>
             {credential && (
               <>
                 <div className="tt-kv">
@@ -1712,6 +2185,30 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
                 </div>
               </>
             )}
+
+            {devices.length > 0 && (
+              <DevicePicker devices={devices} chosen={chosen} onChoose={chooseDevice} />
+            )}
+
+            {failure?.terminal && (
+              <button
+                type="button"
+                className="tt-btn tt-btn--jade tt-btn--block"
+                onClick={failure.reissuable ? retryEntry : () => go('manage')}
+              >
+                <Ic name={failure.reissuable ? 'join' : 'back'} />
+                {failure.reissuable ? 'Ask for entry again' : 'Back to the session'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="tt-btn tt-btn--block"
+              onClick={() => { releaseMedia(); go('prejoin'); }}
+            >
+              <Ic name="dev" />
+              Re-test my devices
+            </button>
+
             <p className="tt-p tt-muted" style={{ marginTop: '8px' }}>
               No media, device name or join credential is kept in this browser. Leaving releases
               your camera and microphone.

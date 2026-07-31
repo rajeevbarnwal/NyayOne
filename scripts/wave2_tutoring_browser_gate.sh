@@ -26,7 +26,9 @@
 #                      a=discovery b=detail c=book+pay+confirm e=live-room
 #                      d1=reschedule d2=policy/cancel/refund
 #                      d3=completion+attendance d4=attendance confirm+review
-#                      neg=negative states rl=rate limit
+#                      neg=negative states (includes n45) rl=rate limit
+#                      n45=media-plane disconnect/reconnect on the production
+#                          live room, over its real VideoRoomClient boundary
 #                      geo=I2 geometry/a11y priv=J1 privacy
 #                      none=boot the servers, run no browser work
 #     --search-limit N RATE_LIMIT_TUTOR_SEARCH_PER_MIN (default: 200)
@@ -303,6 +305,30 @@ FIXTURE="$WORK/fixture.json"
 API_LOG="$OUT/logs/backend_uvicorn.log"
 WEB_LOG="$OUT/logs/frontend_preview.log"
 
+# --------------------------------------------- F3: the commit under judgement
+# Stamped into every evidence row by the driver so a result produced at another
+# commit cannot pass as this run's. Read-only; the worktree is never touched.
+COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2> /dev/null || echo '')"
+if [[ -z "$COMMIT_SHA" ]]; then
+  echo "PREREQUISITE NOT MET: cannot read the commit under test (git rev-parse HEAD failed)." >&2
+  echo "  Evidence that cannot name its commit is not evidence; refusing to boot." >&2
+  exit 2
+fi
+printf 'commit under test: %s\n' "$COMMIT_SHA"
+
+# --------------------------------------- F3: RUN boundary for the raw logs
+# The byte offset the backend-log oracle uses to judge each stage on the region
+# IT produced lives in the driver's state.json. On a RUN boundary state.json is
+# deleted, so the offset restarts at 0 — which means the log has to restart at 0
+# too, or the new run would re-read the PREVIOUS run's bytes and attribute them
+# to its own first stage. The previous file is kept as `.prev`, never discarded.
+# On a STAGE boundary (--keep-db) nothing is rotated: offset and log both carry.
+if [[ "$KEEP_DB" == "0" ]]; then
+  for f in "$OUT/logs/backend_uvicorn.log" "$OUT/logs/frontend_preview.log"; do
+    [[ -f "$f" ]] && mv -f "$f" "$f.prev"
+  done
+fi
+
 # ------------------------------------------------- F2.4: provenance in the logs
 # The interpreter and the RESOLVED version of every pinned package are stamped
 # into each raw log this run appends to, so a log read on its own still names
@@ -450,6 +476,8 @@ E2E_STAGES="$STAGES" \
 E2E_PYTHON="$PYTHON" \
 E2E_REPO_ROOT="$REPO_ROOT" \
 E2E_BACKEND_LOG="$API_LOG" \
+E2E_BACKEND_PID="$API_PID" \
+E2E_COMMIT="$COMMIT_SHA" \
 E2E_FEE_PAISE="$FEE_PAISE" \
 E2E_RUN_ID="$RUN_ID" \
 E2E_DB_FILE="$DB_FILE" \
@@ -462,5 +490,102 @@ E2E_FREE_CANCEL_HOURS="$REFUND_FREE_CANCEL_HOURS" \
   node frontend/scripts/wave2-tutoring-e2e.mjs
 DRIVER_RC=$?
 
-step "result: driver exit $DRIVER_RC · artifacts in $OUT"
+# ---------------------------------------- 5. F3: the log tail nobody else sees
+#
+# The driver judges the backend log as disjoint byte regions and stops at its
+# own final harvest. Everything the backend writes AFTER that — a background
+# task that blows up once the browser is gone, a shutdown handler that raises —
+# is outside every region the driver owns, so this shell scans the remainder
+# with the SAME pattern set before it tears anything down. The starting offset
+# is the driver's own, read out of state.json, so the two scans meet exactly and
+# neither re-reads the other's bytes.
+TAIL_SCAN="$("$PYTHON" - "$API_LOG" "$WORK/state.json" <<'PY'
+import json, re, sys
+
+PATTERNS = [
+    ("level_error", re.compile(r"(?:^|[^A-Za-z_])ERROR(?:[^A-Za-z_]|$)")),
+    ("level_critical", re.compile(r"(?:^|[^A-Za-z_])CRITICAL(?:[^A-Za-z_]|$)")),
+    ("traceback", re.compile(r"Traceback \(most recent call last\)")),
+    ("unhandled_exception", re.compile(r"unhandled_exception")),
+    ("asgi_exception", re.compile(r"Exception in ASGI application")),
+    ("cannot_commit", re.compile(r"cannot commit", re.I)),
+    ("index_error", re.compile(r"\bIndexError\b")),
+]
+log, state = sys.argv[1], sys.argv[2]
+try:
+    offset = int(json.load(open(state, encoding="utf-8")).get("backendLogOffset", 0))
+except Exception:
+    offset = 0
+try:
+    with open(log, "rb") as fh:
+        fh.seek(offset)
+        text = fh.read().decode("utf-8", "replace")
+except OSError as exc:
+    print(f"FAIL cannot read the backend log tail: {exc}")
+    raise SystemExit(0)
+hits = [
+    f"[{','.join(i for i, p in PATTERNS if p.search(line))}] {line[:240]}"
+    for line in text.splitlines()
+    if any(p.search(line) for _, p in PATTERNS)
+]
+if hits:
+    print("FAIL " + str(len(hits)) + " finding(s) after byte " + str(offset))
+    for h in hits[:10]:
+        print("    " + h)
+else:
+    print(f"OK no runtime-error line in the {len(text)} byte(s) written after the driver's final region (from byte {offset})")
+PY
+)"
+printf 'backend log tail: %s\n' "${TAIL_SCAN%%$'\n'*}"
+if [[ "$TAIL_SCAN" == FAIL* ]]; then
+  echo "FAIL-CLOSED: the backend wrote a runtime error AFTER the driver stopped watching:" >&2
+  printf '%s\n' "$TAIL_SCAN" >&2
+  [[ "$DRIVER_RC" == "0" ]] && DRIVER_RC=5
+fi
+printf '%s\n' "$TAIL_SCAN" > "$OUT/logs/backend_log_tail_scan.txt"
+
+# ------------------------------------------- 6. F3: backend liveness + EXIT CODE
+#
+# The driver checks liveness from the outside (pid + /proc state + /health) but
+# it can never learn the backend's EXIT CODE: uvicorn is this shell's child, not
+# the driver's, so only this shell can reap it. A backend that died or exited
+# non-zero fails the run REGARDLESS of what the browser managed to assert before
+# it went — a green stage list on top of a dead server is precisely the false
+# pass this gate exists to prevent.
+BACK_STATE="alive"
+if [[ -r "/proc/$API_PID/stat" ]]; then
+  # field 3 of /proc/<pid>/stat, read after the ")" so a comm with spaces or
+  # parentheses cannot shift the columns.
+  BACK_STATE="$(awk '{ s=$0; sub(/^.*\) /, "", s); split(s, f, " "); print f[1] }' "/proc/$API_PID/stat" 2> /dev/null || echo GONE)"
+  [[ "$BACK_STATE" == "Z" || "$BACK_STATE" == "X" ]] && BACK_STATE="dead"
+  [[ "$BACK_STATE" != "dead" && "$BACK_STATE" != "GONE" ]] && BACK_STATE="alive"
+elif ! kill -0 "$API_PID" 2> /dev/null; then
+  BACK_STATE="dead"
+fi
+BACK_RC=""
+if [[ "$BACK_STATE" != "alive" ]]; then
+  wait "$API_PID" 2> /dev/null
+  BACK_RC=$?
+fi
+printf '{ "pid": %s, "state": "%s", "exitCode": %s, "driverExit": %s, "verdict": "%s" }\n' \
+  "$API_PID" "$BACK_STATE" "${BACK_RC:-null}" "$DRIVER_RC" \
+  "$([[ "$BACK_STATE" == "alive" ]] && echo 'backend survived the run' || echo 'BACKEND DIED DURING THE RUN')" \
+  > "$OUT/logs/backend_exit.json"
+if [[ "$BACK_STATE" != "alive" ]]; then
+  cat >&2 <<EOF
+
+FAIL-CLOSED: the backend process (pid $API_PID) did NOT survive the run.
+  state     : $BACK_STATE
+  exit code : ${BACK_RC:-unknown}
+  last log  :
+$(tail -12 "$API_LOG" 2> /dev/null | sed 's/^/      /')
+  Recorded in $OUT/logs/backend_exit.json. The run FAILS whatever the driver said.
+EOF
+  [[ "$DRIVER_RC" == "0" ]] && DRIVER_RC=4
+elif [[ -n "$BACK_RC" && "$BACK_RC" != "0" ]]; then
+  echo "FAIL-CLOSED: the backend exited non-zero ($BACK_RC)." >&2
+  [[ "$DRIVER_RC" == "0" ]] && DRIVER_RC=4
+fi
+
+step "result: driver exit $DRIVER_RC · backend $BACK_STATE${BACK_RC:+ (exit $BACK_RC)} · artifacts in $OUT"
 exit $DRIVER_RC
