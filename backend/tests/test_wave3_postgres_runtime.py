@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select, text
@@ -82,6 +84,18 @@ WAVE3_DELETE_ORDER = (
     "credentials",
     "credential_issuers",
 )
+BACKEND = Path(__file__).resolve().parents[1]
+
+
+def _repository_migration_head() -> str:
+    """Read the authoritative head instead of freezing a later wave at 0007."""
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(BACKEND / "app" / "db" / "migrations")
+    )
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert head is not None
+    return head
 
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
@@ -147,9 +161,9 @@ def test_postgres_16_pgvector_schema_constraints_and_fk_indexes(pg_ctx):
         assert connection.scalar(
             text("SELECT extversion FROM pg_extension WHERE extname='vector'")
         )
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0007_wave3_credentials"
-        )
+        assert connection.scalar(
+            text("SELECT version_num FROM alembic_version")
+        ) == _repository_migration_head()
     tables = set(inspector.get_table_names())
     assert WAVE3_TABLES <= tables
 
@@ -480,8 +494,14 @@ def test_postgres_concurrent_idempotency_and_privacy(pg_ctx):
                 )
                 assert count == 0, f"plaintext fixture leaked in {table}"
 
+        # This is the Wave 3 privacy gate.  The fixture deliberately preserves
+        # prior-wave rows for shared seed reuse, so audit inspection must use
+        # the same credential ownership boundary as the rest of this test.
         audit_rows = connection.execute(
-            text("SELECT before_state, after_state FROM audit_events")
+            text(
+                "SELECT before_state, after_state FROM audit_events "
+                "WHERE resource_type = 'credential'"
+            )
         ).all()
         forbidden_audit_keys = {
             "identifier",
