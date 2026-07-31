@@ -453,7 +453,15 @@ def format_platform_failure(report: PlatformReport, *, lock_path: Path) -> str:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, host: HostFacts | None = None) -> int:
+    """``host`` is the SAME seam :func:`platform_report` already exposes.
+
+    A real invocation never passes it (and then this is byte-for-byte the old
+    behaviour: the host is measured with :func:`current_host`). A test passes
+    it so it can state "given a Darwin host and a Linux venv" and get the same
+    exit status, stdout and stderr on every machine — the platform-refusal
+    evidence is about the host under test, not about whoever ran pytest.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lock", default=str(DEFAULT_LOCK))
     parser.add_argument(
@@ -485,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
     # every pin looks MISSING, and answering "you are missing alembic" to "you
     # are on the wrong operating system" is the exact wrong answer that made
     # this check necessary.
-    plat = platform_report(Path(args.venv) if args.venv else None)
+    plat = platform_report(Path(args.venv) if args.venv else None, host=host)
     if args.header:
         print(
             f"python={sys.executable} version={sys.version.split()[0]} "
