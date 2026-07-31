@@ -41,6 +41,7 @@ from app.services.providers.video_provider import (
 REPO = Path(__file__).resolve().parents[2]
 INFRA = REPO / "infra" / "video"
 ROOT_COMPOSE = REPO / "docker-compose.yml"
+BACKEND_DOCKERFILE = REPO / "docker" / "backend.Dockerfile"
 BASE_COMPOSE = INFRA / "docker-compose.video.yml"
 DIRECT_COMPOSE = INFRA / "docker-compose.video.direct.yml"
 ENV_EXAMPLE = INFRA / ".env.example"
@@ -103,6 +104,24 @@ _SECRETISH_ASSIGNMENT = re.compile(
 def _load(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         return yaml.safe_load(handle)
+
+
+def test_backend_image_copies_the_lockfile_required_by_requirements_txt():
+    """A clean container build must not depend on a host-only lockfile.
+
+    ``requirements.txt`` includes ``-r requirements.lock``. Copying only the
+    first file makes Docker fail before the application can start, which in
+    turn makes every LiveKit/TURN runtime check impossible.
+    """
+    requirements = (REPO / "backend" / "requirements.txt").read_text(encoding="utf-8")
+    dockerfile = BACKEND_DOCKERFILE.read_text(encoding="utf-8")
+    assert "requirements.lock" in requirements
+    assert re.search(
+        r"^COPY\s+backend/requirements\.txt\s+backend/requirements\.lock\s+\./$",
+        dockerfile,
+        re.MULTILINE,
+    )
+    assert "RUN pip install --no-cache-dir -r requirements.txt" in dockerfile
 
 
 def _renderer():
