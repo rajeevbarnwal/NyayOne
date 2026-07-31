@@ -17,6 +17,9 @@ from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.models.registration import OtpChallenge, OtpOutbox
 
+# Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
+from tests import dbtemplate
+
 
 class Capturing:
     def __init__(self):
@@ -28,7 +31,7 @@ class Capturing:
 
 def _app_ctx():
     engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():

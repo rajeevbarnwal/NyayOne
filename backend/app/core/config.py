@@ -1,5 +1,85 @@
-from pydantic import SecretStr
+from urllib.parse import urlsplit
+
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when the process is configured in a way that must not start.
+
+    Same fail-closed philosophy as ``app.core.crypto.CryptoConfigError``: the
+    application refuses to boot rather than silently degrading (pretending an
+    OTP was sent, minting a join credential no provider will honour, or taking a
+    payment through an unconfigured gateway).
+
+    PRIVACY CONTRACT: the message names the missing/invalid SETTING only. It
+    never contains a secret value, and it must never be built by interpolating
+    one — see ``_missing`` below, which takes names, not values.
+    """
+
+
+# Values that are present but are obviously not real credentials. A deployment
+# that ships one of these is misconfigured, not configured.
+_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "", "changeme", "change-me", "change_me", "placeholder", "todo", "tbd",
+        "none", "null", "test", "testing", "secret", "dev", "devkey", "devsecret",
+        "dev-secret", "example", "xxx", "xxxx", "your-key", "your-key-id",
+        "your-secret", "razorpay", "livekit", "rzp_test_key", "key", "api_key",
+    }
+)
+#: Wave 2 provider bindings that the code can actually honour.
+PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
+VIDEO_PROVIDER_CHOICES = ("deterministic", "livekit", "none")
+#: The only reminder offsets ``session_reminder_jobs.offset_kind`` accepts.
+REMINDER_OFFSET_CHOICES = ("7d", "1d", "3h")
+
+
+def _is_placeholder_secret(secret: "SecretStr | str | None") -> bool:
+    """True when a secret is absent or a known non-credential placeholder.
+
+    Only the CLASSIFICATION escapes this function; the value never does.
+    """
+    if secret is None:
+        return True
+    raw = secret.get_secret_value() if isinstance(secret, SecretStr) else str(secret)
+    return raw.strip().lower() in _PLACEHOLDER_SECRETS
+
+
+#: Schemes ``LIVEKIT_URL`` may use. NOT a style preference: the adapter POSTs to
+#: ``{livekit_url}/twirp/livekit.RoomService/<Method>`` with httpx, so anything
+#: else — ``wss://`` above all — is a value that passes every fail-closed check
+#: and then fails every ``revoke_participant`` / ``close_room`` at runtime.
+LIVEKIT_URL_SCHEMES = ("http", "https")
+
+
+def _livekit_url_problem(url: "str | None") -> str | None:
+    """Classify ``livekit_url`` for the fail-closed gate, or ``None`` if usable.
+
+    Returns a message naming the SETTING and describing the RULE. The supplied
+    value is never interpolated: a URL is an endpoint rather than a credential,
+    but it can still carry ``user:password@`` userinfo, and this validator's
+    privacy contract is that nothing an operator supplied is echoed back.
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return "livekit_url is required when video_provider='livekit'"
+    parsed = urlsplit(raw)
+    if parsed.scheme.lower() not in LIVEKIT_URL_SCHEMES:
+        return (
+            "livekit_url (env LIVEKIT_URL) must be an "
+            f"{' or '.join(s + '://' for s in LIVEKIT_URL_SCHEMES)} URL when "
+            "video_provider='livekit'; the adapter POSTs to "
+            "{livekit_url}/twirp/livekit.RoomService/<Method>, so a wss:// or "
+            "scheme-less value fails every server-side call at runtime. The "
+            "wss:// URL browsers connect to is a separate frontend setting"
+        )
+    if not parsed.hostname:
+        return (
+            "livekit_url (env LIVEKIT_URL) must include a host when "
+            "video_provider='livekit'"
+        )
+    return None
 
 
 class Settings(BaseSettings):
@@ -67,6 +147,49 @@ class Settings(BaseSettings):
     compare_max_schools: int = 4
     compare_min_schools: int = 2
 
+    # --- Wave 3 credential trust (SAATHI-253/258) --------------------------
+    credential_max_file_bytes: int = 10 * 1024 * 1024
+    credential_max_evidence_files: int = 5
+    credential_token_lifetime_days: int = 90
+    credential_public_rate_per_minute: int = 30
+    credential_storage_root: str = "/tmp/legalsaathi_credential_storage"
+    credential_scanner_provider: str = "deterministic"
+    credential_public_base_url: str = "https://localhost:1030/verify"
+    retention_days_credential_audit: int | None = None
+    retention_days_credential_evidence: int | None = None
+
+    # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
+    # Booking hold TTL: how long a slot stays reserved while the student pays.
+    booking_hold_minutes: int = 10
+    # Payment provider binding. "deterministic" is the in-process, no-network
+    # adapter used by dev/test; "razorpay" requires the key pair below.
+    payment_provider: str = "deterministic"
+    razorpay_key_id: SecretStr | None = None
+    razorpay_key_secret: SecretStr | None = None
+    # Video provider binding. "deterministic" issues local, hashed join grants;
+    # "livekit" requires the URL + API key pair below.
+    video_provider: str = "deterministic"
+    livekit_url: str | None = None
+    livekit_api_key: SecretStr | None = None
+    livekit_api_secret: SecretStr | None = None
+    # Join credential lifetime. Short-lived by design; only the hash is stored.
+    join_credential_ttl_seconds: int = 300
+    # Abuse limits (per identity) for the Wave 2 surfaces.
+    rate_limit_tutor_search_per_min: int = 60
+    rate_limit_booking_per_min: int = 10
+    rate_limit_review_per_hour: int = 5
+    # Default session price, in INTEGER PAISE, stamped onto a tutor profile that
+    # has not published its own. This is the DEPLOYMENT-WIDE fallback for the
+    # server-authoritative price; it is never read from a request and never sent
+    # to a browser as an authority. Strictly positive: zero is not "free
+    # tutoring", it is a mispriced product (a free offering would need its own
+    # explicit product flag, never an inferred 0).
+    tutoring_default_session_price_paise: int = 250_000
+    # Reminder offsets scheduled per confirmed session.
+    reminder_offsets: list[str] = ["7d", "1d", "3h"]
+    # Cancellation window that earns an automatic full refund, in hours.
+    refund_free_cancel_hours: int = 24
+
     # OTP delivery must be explicitly enabled + provider-bound in a deployment;
     # otherwise the API fails closed rather than pretending an OTP was sent.
     otp_delivery_enabled: bool = False
@@ -96,6 +219,125 @@ class Settings(BaseSettings):
     jira_board_id: int = 2
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+
+    @field_validator("credential_public_base_url")
+    @classmethod
+    def validate_credential_public_base_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if not normalized.startswith("https://") or not normalized.endswith("/verify"):
+            raise ValueError(
+                "credential_public_base_url must be an HTTPS URL ending in /verify"
+            )
+        return normalized
+
+    # ------------------------------------------------------------------ #
+    # Wave 2 fail-closed configuration gate (SAATHI-123 / SAATHI-127)
+    # ------------------------------------------------------------------ #
+    @model_validator(mode="after")
+    def validate_wave2_configuration(self) -> "Settings":
+        """Refuse to construct Settings when Wave 2 could only degrade silently.
+
+        Fail-closed rules, all enforced regardless of ``app_env`` because
+        SELECTING a real provider is an explicit deployment act — a razorpay
+        deployment with no keys must not boot and then answer "payment
+        unavailable" on every checkout, and a livekit deployment with no API
+        secret must not boot and then be unable to mint a join credential:
+
+        * ``payment_provider='razorpay'`` REQUIRES ``razorpay_key_id`` and
+          ``razorpay_key_secret``, both non-placeholder;
+        * ``video_provider='livekit'`` REQUIRES ``livekit_url``,
+          ``livekit_api_key`` and ``livekit_api_secret``, same treatment — and
+          ``livekit_url`` must be an ``http://``/``https://`` URL WITH A HOST,
+          because the adapter reaches the room service over HTTP. A ``wss://``
+          value used to satisfy every check here and then fail every
+          ``revoke_participant``/``close_room`` at runtime as
+          ``PROVIDER_UNREACHABLE``; that is now a refusal to boot (see
+          ``_livekit_url_problem``);
+        * ``booking_hold_minutes``, ``join_credential_ttl_seconds``, the three
+          rate limits, ``refund_free_cancel_hours`` and
+          ``tutoring_default_session_price_paise`` must be STRICTLY POSITIVE
+          integers (a zero TTL would mint dead credentials; a zero hold window
+          would expire every booking instantly; a zero default price would make
+          every unpriced tutor free by accident, which is exactly the
+          client-authoritative-amount defect this gate exists to stop);
+        * ``reminder_offsets`` must be a non-empty list drawn from
+          ``REMINDER_OFFSET_CHOICES`` — an unknown offset is rejected here rather
+          than violating ``ck_session_reminder_jobs_offset_kind`` at write time.
+
+        Raises :class:`ConfigurationError` naming ONLY the offending setting.
+        ``ConfigurationError`` is a ``RuntimeError``, so it propagates out of
+        ``Settings(...)`` unwrapped and cannot be mistaken for a field-level
+        validation problem — and no secret VALUE is ever interpolated into it.
+        """
+        problems: list[str] = []
+
+        payment_provider = (self.payment_provider or "").strip().lower()
+        if payment_provider not in PAYMENT_PROVIDER_CHOICES:
+            problems.append(
+                "payment_provider must be one of "
+                f"{', '.join(PAYMENT_PROVIDER_CHOICES)}"
+            )
+        elif payment_provider == "razorpay":
+            for name in ("razorpay_key_id", "razorpay_key_secret"):
+                if _is_placeholder_secret(getattr(self, name)):
+                    problems.append(
+                        f"{name} is required (and must not be a placeholder) "
+                        "when payment_provider='razorpay'"
+                    )
+
+        video_provider = (self.video_provider or "").strip().lower()
+        if video_provider not in VIDEO_PROVIDER_CHOICES:
+            problems.append(
+                f"video_provider must be one of {', '.join(VIDEO_PROVIDER_CHOICES)}"
+            )
+        elif video_provider == "livekit":
+            url_problem = _livekit_url_problem(self.livekit_url)
+            if url_problem is not None:
+                problems.append(url_problem)
+            for name in ("livekit_api_key", "livekit_api_secret"):
+                if _is_placeholder_secret(getattr(self, name)):
+                    problems.append(
+                        f"{name} is required (and must not be a placeholder) "
+                        "when video_provider='livekit'"
+                    )
+
+        for name in (
+            "booking_hold_minutes",
+            "join_credential_ttl_seconds",
+            "rate_limit_tutor_search_per_min",
+            "rate_limit_booking_per_min",
+            "rate_limit_review_per_hour",
+            "refund_free_cancel_hours",
+            "tutoring_default_session_price_paise",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                problems.append(f"{name} must be a strictly positive integer")
+
+        offsets = self.reminder_offsets
+        if not isinstance(offsets, list) or not offsets:
+            problems.append("reminder_offsets must be a non-empty list")
+        else:
+            unknown = sorted(
+                {
+                    str(offset).strip()
+                    for offset in offsets
+                    if str(offset).strip() not in REMINDER_OFFSET_CHOICES
+                }
+            )
+            if unknown:
+                problems.append(
+                    "reminder_offsets contains unknown offsets "
+                    f"({', '.join(unknown)}); allowed: "
+                    f"{', '.join(REMINDER_OFFSET_CHOICES)}"
+                )
+
+        if problems:
+            raise ConfigurationError(
+                "Wave 2 configuration is invalid; refusing to start: "
+                + "; ".join(problems)
+            )
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

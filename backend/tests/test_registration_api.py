@@ -23,6 +23,9 @@ from app.db.session import get_session
 from app.models.registration import OtpChallenge, StudentRegistration
 from app.services.otp_sender import OtpSendError
 
+# Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
+from tests import dbtemplate
+
 
 class Capturing:
     def __init__(self) -> None:
@@ -42,7 +45,7 @@ def ctx():
     engine = create_engine(
         "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():  # mirrors app.db.session.get_session
@@ -65,7 +68,10 @@ def ctx():
     app.dependency_overrides[ep.get_outbox_session_factory] = lambda: SessionLocal
     client = TestClient(app)
     yield client, engine, SessionLocal, sender, app
-    Base.metadata.drop_all(engine)
+    # Per-test engine: dispose() is the cleanup that matters. The old
+    # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
+    # that was about to be discarded anyway.
+    engine.dispose()
 
 
 def _fresh(SessionLocal):

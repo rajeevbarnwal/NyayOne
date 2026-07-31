@@ -25,12 +25,22 @@ export const TOTAL_SCREENS = 99;
 /**
  * Feature-state labels for implemented tranches (placeholder label otherwise).
  * S5 law schools (SAATHI-63): S-27..S-30.
+ * S6 Wave 2 tutoring (SAATHI-65 owns S-31..S-34, SAATHI-66 owns S-35).
  */
 const FEATURE_STATE_LABELS: Record<string, string> = {
   'S-27': 'schools/search',
   'S-28': 'schools/detail',
   'S-29': 'schools/compare',
   'S-30': 'schools/saved-followed',
+  'S-31': 'tutoring/search',
+  'S-32': 'tutoring/detail',
+  'S-33': 'tutoring/hold',
+  'S-34': 'tutoring/detail',
+  'S-35': 'tutoring/session',
+  'S-82': 'wallet/list',
+  'S-83': 'wallet/add',
+  'S-84': 'wallet/pending',
+  'S-85': 'wallet/share',
 };
 
 /** Generates the S-01 … S-99 canonical route registry. */

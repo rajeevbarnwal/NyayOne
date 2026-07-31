@@ -33,6 +33,9 @@ from app.services import otp_outbox
 from app.services.otp_sender import OtpSendError
 from app.workers.otp_outbox_relay import relay_pending
 
+# Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
+from tests import dbtemplate
+
 
 class Capturing:
     def __init__(self) -> None:
@@ -63,7 +66,7 @@ def _make_ctx(session_class=Session, sender=None, raise_server_exceptions=True):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=session_class)
 
     def prod_session():
@@ -91,7 +94,10 @@ def _make_ctx(session_class=Session, sender=None, raise_server_exceptions=True):
 def ctx():
     client, engine, SessionLocal, sender, app = _make_ctx()
     yield client, engine, SessionLocal, sender, app
-    Base.metadata.drop_all(engine)
+    # Per-test engine: dispose() is the cleanup that matters. The old
+    # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
+    # that was about to be discarded anyway.
+    engine.dispose()
 
 
 def _fresh(SessionLocal):

@@ -1,0 +1,34 @@
+# DIRECT-MEDIA overlay — opt in ONLY when you want media to be allowed to skip
+# the TURN relay (SAATHI-451, matrix row H1).
+#
+# infra/video/docker-compose.video.yml is forced-TURN by construction: it does
+# not publish LiveKit's RTC ports, so a browser has no route to the SFU except
+# coturn's relay. Adding this file publishes them, which lets a client that has
+# an unobstructed path use a host/srflx candidate pair instead.
+#
+# Why the inversion (forced-TURN is the base, direct is the overlay)? Because
+# the failure it protects against is the silent one. Forgetting to ADD a
+# hardening file is invisible until a corporate NAT breaks a paid session in
+# production; forgetting to add this file is loud and immediate (media works but
+# every session is relayed, which is measurable on the coturn metrics).
+#
+# Compose merges `ports` by appending, so this file can only ADD publications —
+# it can never quietly remove the relay path.
+#
+#   python3 scripts/render_video_infra_config.py --mode direct --env-file .env
+#   docker compose -f docker-compose.yml \
+#     -f infra/video/docker-compose.video.yml \
+#     -f infra/video/docker-compose.video.direct.yml \
+#     --profile video up -d coturn livekit
+#
+# LIVEKIT_ADVERTISE_IP becomes REQUIRED in this mode: it is the address the SFU
+# puts in its ICE candidates, and it must be an address the client can actually
+# reach (the host's LAN address for a local smoke test, the node's public
+# address in staging). The renderer refuses to produce a direct-mode config
+# without it, because a direct-mode config that advertises a docker-internal
+# address fails at ICE time with no useful error.
+services:
+  livekit:
+    ports:
+      - "1040:7881"
+      - "1041:7882/udp"

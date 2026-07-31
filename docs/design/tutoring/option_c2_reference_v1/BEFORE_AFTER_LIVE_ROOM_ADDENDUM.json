@@ -1,0 +1,4610 @@
+{
+  "contract": "S35_LIVE_ROOM_GEOMETRY_CLOSURE_ADDENDUM.md",
+  "note": "BEFORE is commit 647aa76 reference/ measured unmodified; AFTER is this commit. Both measured in the same real headless Chromium with the same harness. The BEFORE container-geometry side is CARRIED FORWARD unchanged from the previous artifact (the commit it describes was not modified); the AFTER side and every D-1 banner rectangle below were measured fresh on this commit.",
+  "rootCauses": [
+    {
+      "id": "RC-1",
+      "defect": ".live declared height:100dvh then height:100vh, so 100vh won and defeated dvh",
+      "fix": ".live-host declares the 100vh FALLBACK FIRST, then 100dvh; .live is height:100%"
+    },
+    {
+      "id": "RC-2",
+      "defect": "the rig .app used only min-height:100%, breaking the percentage height chain so viewport units measured the outer browser",
+      "fix": "body[data-family=room] #app{height:100%}, .live-host, and .vp[data-screen=s35live|s35land]>.app{height:100%;min-height:0;overflow:hidden}; rig exercised by ?rig=vp&device=WxH"
+    },
+    {
+      "id": "RC-3",
+      "defect": ".lctrl permitted flex-wrap:wrap so the persistent dock could become multiple rows",
+      "fix": ".lctrl{flex:0 0 auto;flex-wrap:nowrap}; the only remaining wrap is the documented WCAG 2.2 1.4.10 reflow exception below 361px"
+    },
+    {
+      "id": "RC-4",
+      "defect": "session-details and sheet-close carried inline 40x40 minimums",
+      "fix": "no inline minimums remain; .live button,.live [role=button]{min-width:44px;min-height:44px} is the floor"
+    },
+    {
+      "id": "RC-5",
+      "defect": "self-view move/minimise were 30x30 and the landscape self-view was 78x58, too small for two 44x44 controls",
+      "fix": "controls moved inside the self-view; portrait 112x140 and landscape 116x100 contain two 44x44 targets without overlap; minimised hides .selfmove, the tile >svg and .nm2, leaving exactly one 44x44 restore control"
+    },
+    {
+      "id": "RC-6",
+      "defect": "the live container did not establish the explicit positioned constrained three-row layout",
+      "fix": ".live{position:relative;height:100%;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto} with .stage{min-width:0;min-height:0;overflow:hidden}"
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "390x844__light",
+      "viewport": "390x844",
+      "orientation": "portrait",
+      "theme": "light",
+      "before": {
+        "rootHeight": 844,
+        "viewportHeight": 844,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 726px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 390,
+            "h": 726,
+            "top": 57,
+            "left": 0,
+            "right": 390,
+            "bottom": 783
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 783,
+            "w": 390,
+            "h": 61,
+            "top": 783,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "selfView": {
+            "x": 280,
+            "y": 641,
+            "w": 96,
+            "h": 128,
+            "top": 641,
+            "left": 280,
+            "right": 376,
+            "bottom": 769
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 366,
+            "h": 710,
+            "top": 65,
+            "left": 12,
+            "right": 378,
+            "bottom": 775
+          },
+          "sheet": {
+            "x": 0,
+            "y": 846.8,
+            "w": 390,
+            "h": 280.5,
+            "top": 846.8,
+            "left": 0,
+            "right": 390,
+            "bottom": 1127.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 726,
+            "clientH": 726,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 844,
+        "viewportHeight": 844,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 726px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 390,
+            "h": 726,
+            "top": 57,
+            "left": 0,
+            "right": 390,
+            "bottom": 783
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 783,
+            "w": 390,
+            "h": 61,
+            "top": 783,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "selfView": {
+            "x": 264,
+            "y": 629,
+            "w": 112,
+            "h": 140,
+            "top": 629,
+            "left": 264,
+            "right": 376,
+            "bottom": 769
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 366,
+            "h": 710,
+            "top": 65,
+            "left": 12,
+            "right": 378,
+            "bottom": 775
+          },
+          "sheet": {
+            "x": 0,
+            "y": 846.8,
+            "w": 390,
+            "h": 280.5,
+            "top": 846.8,
+            "left": 0,
+            "right": 390,
+            "bottom": 1127.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 726,
+            "clientH": 726,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "390x844__dark",
+      "viewport": "390x844",
+      "orientation": "portrait",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 844,
+        "viewportHeight": 844,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 726px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 390,
+            "h": 726,
+            "top": 57,
+            "left": 0,
+            "right": 390,
+            "bottom": 783
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 783,
+            "w": 390,
+            "h": 61,
+            "top": 783,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "selfView": {
+            "x": 280,
+            "y": 641,
+            "w": 96,
+            "h": 128,
+            "top": 641,
+            "left": 280,
+            "right": 376,
+            "bottom": 769
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 366,
+            "h": 710,
+            "top": 65,
+            "left": 12,
+            "right": 378,
+            "bottom": 775
+          },
+          "sheet": {
+            "x": 0,
+            "y": 846.8,
+            "w": 390,
+            "h": 280.5,
+            "top": 846.8,
+            "left": 0,
+            "right": 390,
+            "bottom": 1127.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 726,
+            "clientH": 726,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 844,
+        "viewportHeight": 844,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 726px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 844,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 390,
+            "h": 726,
+            "top": 57,
+            "left": 0,
+            "right": 390,
+            "bottom": 783
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 390,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 390,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 783,
+            "w": 390,
+            "h": 61,
+            "top": 783,
+            "left": 0,
+            "right": 390,
+            "bottom": 844
+          },
+          "selfView": {
+            "x": 264,
+            "y": 629,
+            "w": 112,
+            "h": 140,
+            "top": 629,
+            "left": 264,
+            "right": 376,
+            "bottom": 769
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 366,
+            "h": 710,
+            "top": 65,
+            "left": 12,
+            "right": 378,
+            "bottom": 775
+          },
+          "sheet": {
+            "x": 0,
+            "y": 846.8,
+            "w": 390,
+            "h": 280.5,
+            "top": 846.8,
+            "left": 0,
+            "right": 390,
+            "bottom": 1127.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 844,
+            "clientH": 844,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 726,
+            "clientH": 726,
+            "scrollW": 390,
+            "clientW": 390,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 287,
+          "detailW": 287,
+          "columnW": 287,
+          "bannerW": 340,
+          "requiredColumnW": 136,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "430x932__light",
+      "viewport": "430x932",
+      "orientation": "portrait",
+      "theme": "light",
+      "before": {
+        "rootHeight": 932,
+        "viewportHeight": 932,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 814px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 430,
+            "h": 814,
+            "top": 57,
+            "left": 0,
+            "right": 430,
+            "bottom": 871
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 871,
+            "w": 430,
+            "h": 61,
+            "top": 871,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "selfView": {
+            "x": 320,
+            "y": 729,
+            "w": 96,
+            "h": 128,
+            "top": 729,
+            "left": 320,
+            "right": 416,
+            "bottom": 857
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 406,
+            "h": 798,
+            "top": 65,
+            "left": 12,
+            "right": 418,
+            "bottom": 863
+          },
+          "sheet": {
+            "x": 0,
+            "y": 934.8,
+            "w": 430,
+            "h": 280.5,
+            "top": 934.8,
+            "left": 0,
+            "right": 430,
+            "bottom": 1215.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 814,
+            "clientH": 814,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 932,
+        "viewportHeight": 932,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 814px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 430,
+            "h": 814,
+            "top": 57,
+            "left": 0,
+            "right": 430,
+            "bottom": 871
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 871,
+            "w": 430,
+            "h": 61,
+            "top": 871,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "selfView": {
+            "x": 304,
+            "y": 717,
+            "w": 112,
+            "h": 140,
+            "top": 717,
+            "left": 304,
+            "right": 416,
+            "bottom": 857
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 406,
+            "h": 798,
+            "top": 65,
+            "left": 12,
+            "right": 418,
+            "bottom": 863
+          },
+          "sheet": {
+            "x": 0,
+            "y": 934.8,
+            "w": 430,
+            "h": 280.5,
+            "top": 934.8,
+            "left": 0,
+            "right": 430,
+            "bottom": 1215.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 814,
+            "clientH": 814,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "430x932__dark",
+      "viewport": "430x932",
+      "orientation": "portrait",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 932,
+        "viewportHeight": 932,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 814px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 430,
+            "h": 814,
+            "top": 57,
+            "left": 0,
+            "right": 430,
+            "bottom": 871
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 871,
+            "w": 430,
+            "h": 61,
+            "top": 871,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "selfView": {
+            "x": 320,
+            "y": 729,
+            "w": 96,
+            "h": 128,
+            "top": 729,
+            "left": 320,
+            "right": 416,
+            "bottom": 857
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 406,
+            "h": 798,
+            "top": 65,
+            "left": 12,
+            "right": 418,
+            "bottom": 863
+          },
+          "sheet": {
+            "x": 0,
+            "y": 934.8,
+            "w": 430,
+            "h": 280.5,
+            "top": 934.8,
+            "left": 0,
+            "right": 430,
+            "bottom": 1215.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 814,
+            "clientH": 814,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 932,
+        "viewportHeight": 932,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 814px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 932,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 430,
+            "h": 814,
+            "top": 57,
+            "left": 0,
+            "right": 430,
+            "bottom": 871
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 430,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 430,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 871,
+            "w": 430,
+            "h": 61,
+            "top": 871,
+            "left": 0,
+            "right": 430,
+            "bottom": 932
+          },
+          "selfView": {
+            "x": 304,
+            "y": 717,
+            "w": 112,
+            "h": 140,
+            "top": 717,
+            "left": 304,
+            "right": 416,
+            "bottom": 857
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 406,
+            "h": 798,
+            "top": 65,
+            "left": 12,
+            "right": 418,
+            "bottom": 863
+          },
+          "sheet": {
+            "x": 0,
+            "y": 934.8,
+            "w": 430,
+            "h": 280.5,
+            "top": 934.8,
+            "left": 0,
+            "right": 430,
+            "bottom": 1215.3
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 932,
+            "clientH": 932,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 814,
+            "clientH": 814,
+            "scrollW": 430,
+            "clientW": 430,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 327,
+          "detailW": 327,
+          "columnW": 327,
+          "bannerW": 380,
+          "requiredColumnW": 152,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "768x1024__light",
+      "viewport": "768x1024",
+      "orientation": "portrait",
+      "theme": "light",
+      "before": {
+        "rootHeight": 1024,
+        "viewportHeight": 1024,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 906px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 768,
+            "h": 906,
+            "top": 57,
+            "left": 0,
+            "right": 768,
+            "bottom": 963
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 963,
+            "w": 768,
+            "h": 61,
+            "top": 963,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "selfView": {
+            "x": 658,
+            "y": 821,
+            "w": 96,
+            "h": 128,
+            "top": 821,
+            "left": 658,
+            "right": 754,
+            "bottom": 949
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 744,
+            "h": 890,
+            "top": 65,
+            "left": 12,
+            "right": 756,
+            "bottom": 955
+          },
+          "sheet": {
+            "x": 0,
+            "y": 1026.6,
+            "w": 768,
+            "h": 260.25,
+            "top": 1026.6,
+            "left": 0,
+            "right": 768,
+            "bottom": 1286.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 906,
+            "clientH": 906,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 1024,
+        "viewportHeight": 1024,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 906px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 768,
+            "h": 906,
+            "top": 57,
+            "left": 0,
+            "right": 768,
+            "bottom": 963
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 963,
+            "w": 768,
+            "h": 61,
+            "top": 963,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "selfView": {
+            "x": 642,
+            "y": 809,
+            "w": 112,
+            "h": 140,
+            "top": 809,
+            "left": 642,
+            "right": 754,
+            "bottom": 949
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 744,
+            "h": 890,
+            "top": 65,
+            "left": 12,
+            "right": 756,
+            "bottom": 955
+          },
+          "sheet": {
+            "x": 0,
+            "y": 1026.6,
+            "w": 768,
+            "h": 260.25,
+            "top": 1026.6,
+            "left": 0,
+            "right": 768,
+            "bottom": 1286.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 906,
+            "clientH": 906,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "768x1024__dark",
+      "viewport": "768x1024",
+      "orientation": "portrait",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 1024,
+        "viewportHeight": 1024,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 906px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 768,
+            "h": 906,
+            "top": 57,
+            "left": 0,
+            "right": 768,
+            "bottom": 963
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 963,
+            "w": 768,
+            "h": 61,
+            "top": 963,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "selfView": {
+            "x": 658,
+            "y": 821,
+            "w": 96,
+            "h": 128,
+            "top": 821,
+            "left": 658,
+            "right": 754,
+            "bottom": 949
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 744,
+            "h": 890,
+            "top": 65,
+            "left": 12,
+            "right": 756,
+            "bottom": 955
+          },
+          "sheet": {
+            "x": 0,
+            "y": 1026.6,
+            "w": 768,
+            "h": 260.25,
+            "top": 1026.6,
+            "left": 0,
+            "right": 768,
+            "bottom": 1286.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 906,
+            "clientH": 906,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 1024,
+        "viewportHeight": 1024,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 906px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 1024,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 768,
+            "h": 906,
+            "top": 57,
+            "left": 0,
+            "right": 768,
+            "bottom": 963
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 768,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 768,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 963,
+            "w": 768,
+            "h": 61,
+            "top": 963,
+            "left": 0,
+            "right": 768,
+            "bottom": 1024
+          },
+          "selfView": {
+            "x": 642,
+            "y": 809,
+            "w": 112,
+            "h": 140,
+            "top": 809,
+            "left": 642,
+            "right": 754,
+            "bottom": 949
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 744,
+            "h": 890,
+            "top": 65,
+            "left": 12,
+            "right": 756,
+            "bottom": 955
+          },
+          "sheet": {
+            "x": 0,
+            "y": 1026.6,
+            "w": 768,
+            "h": 260.25,
+            "top": 1026.6,
+            "left": 0,
+            "right": 768,
+            "bottom": 1286.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 1024,
+            "clientH": 1024,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 906,
+            "clientH": 906,
+            "scrollW": 768,
+            "clientW": 768,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 665,
+          "detailW": 665,
+          "columnW": 665,
+          "bannerW": 718,
+          "requiredColumnW": 287.2,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "844x390__light",
+      "viewport": "844x390",
+      "orientation": "landscape",
+      "theme": "light",
+      "before": {
+        "rootHeight": 390,
+        "viewportHeight": 390,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 284px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 844,
+            "h": 284,
+            "top": 51,
+            "left": 0,
+            "right": 844,
+            "bottom": 335
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 335,
+            "w": 844,
+            "h": 55,
+            "top": 335,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "selfView": {
+            "x": 762,
+            "y": 271,
+            "w": 72,
+            "h": 54,
+            "top": 271,
+            "left": 762,
+            "right": 834,
+            "bottom": 325
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 824,
+            "h": 272,
+            "top": 57,
+            "left": 10,
+            "right": 834,
+            "bottom": 329
+          },
+          "sheet": {
+            "x": 0,
+            "y": 392.6,
+            "w": 844,
+            "h": 260.25,
+            "top": 392.6,
+            "left": 0,
+            "right": 844,
+            "bottom": 652.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 284,
+            "clientH": 284,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 390,
+        "viewportHeight": 390,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 284px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 844,
+            "h": 284,
+            "top": 51,
+            "left": 0,
+            "right": 844,
+            "bottom": 335
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 335,
+            "w": 844,
+            "h": 55,
+            "top": 335,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "selfView": {
+            "x": 718,
+            "y": 225,
+            "w": 116,
+            "h": 100,
+            "top": 225,
+            "left": 718,
+            "right": 834,
+            "bottom": 325
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 824,
+            "h": 272,
+            "top": 57,
+            "left": 10,
+            "right": 834,
+            "bottom": 329
+          },
+          "sheet": {
+            "x": 0,
+            "y": 392.6,
+            "w": 844,
+            "h": 260.25,
+            "top": 392.6,
+            "left": 0,
+            "right": 844,
+            "bottom": 652.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 284,
+            "clientH": 284,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "844x390__dark",
+      "viewport": "844x390",
+      "orientation": "landscape",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 390,
+        "viewportHeight": 390,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 284px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 844,
+            "h": 284,
+            "top": 51,
+            "left": 0,
+            "right": 844,
+            "bottom": 335
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 335,
+            "w": 844,
+            "h": 55,
+            "top": 335,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "selfView": {
+            "x": 762,
+            "y": 271,
+            "w": 72,
+            "h": 54,
+            "top": 271,
+            "left": 762,
+            "right": 834,
+            "bottom": 325
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 824,
+            "h": 272,
+            "top": 57,
+            "left": 10,
+            "right": 834,
+            "bottom": 329
+          },
+          "sheet": {
+            "x": 0,
+            "y": 392.6,
+            "w": 844,
+            "h": 260.25,
+            "top": 392.6,
+            "left": 0,
+            "right": 844,
+            "bottom": 652.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 284,
+            "clientH": 284,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 390,
+        "viewportHeight": 390,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 284px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 390,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 844,
+            "h": 284,
+            "top": 51,
+            "left": 0,
+            "right": 844,
+            "bottom": 335
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 844,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 844,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 335,
+            "w": 844,
+            "h": 55,
+            "top": 335,
+            "left": 0,
+            "right": 844,
+            "bottom": 390
+          },
+          "selfView": {
+            "x": 718,
+            "y": 225,
+            "w": 116,
+            "h": 100,
+            "top": 225,
+            "left": 718,
+            "right": 834,
+            "bottom": 325
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 824,
+            "h": 272,
+            "top": 57,
+            "left": 10,
+            "right": 834,
+            "bottom": 329
+          },
+          "sheet": {
+            "x": 0,
+            "y": 392.6,
+            "w": 844,
+            "h": 260.25,
+            "top": 392.6,
+            "left": 0,
+            "right": 844,
+            "bottom": 652.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 390,
+            "clientH": 390,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 284,
+            "clientH": 284,
+            "scrollW": 844,
+            "clientW": 844,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 745,
+          "detailW": 745,
+          "columnW": 745,
+          "bannerW": 798,
+          "requiredColumnW": 319.2,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "932x430__light",
+      "viewport": "932x430",
+      "orientation": "landscape",
+      "theme": "light",
+      "before": {
+        "rootHeight": 430,
+        "viewportHeight": 430,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 324px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 932,
+            "h": 324,
+            "top": 51,
+            "left": 0,
+            "right": 932,
+            "bottom": 375
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 375,
+            "w": 932,
+            "h": 55,
+            "top": 375,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "selfView": {
+            "x": 850,
+            "y": 311,
+            "w": 72,
+            "h": 54,
+            "top": 311,
+            "left": 850,
+            "right": 922,
+            "bottom": 365
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 912,
+            "h": 312,
+            "top": 57,
+            "left": 10,
+            "right": 922,
+            "bottom": 369
+          },
+          "sheet": {
+            "x": 0,
+            "y": 432.6,
+            "w": 932,
+            "h": 260.25,
+            "top": 432.6,
+            "left": 0,
+            "right": 932,
+            "bottom": 692.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 324,
+            "clientH": 324,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 430,
+        "viewportHeight": 430,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 324px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 932,
+            "h": 324,
+            "top": 51,
+            "left": 0,
+            "right": 932,
+            "bottom": 375
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 375,
+            "w": 932,
+            "h": 55,
+            "top": 375,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "selfView": {
+            "x": 806,
+            "y": 265,
+            "w": 116,
+            "h": 100,
+            "top": 265,
+            "left": 806,
+            "right": 922,
+            "bottom": 365
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 912,
+            "h": 312,
+            "top": 57,
+            "left": 10,
+            "right": 922,
+            "bottom": 369
+          },
+          "sheet": {
+            "x": 0,
+            "y": 432.6,
+            "w": 932,
+            "h": 260.25,
+            "top": 432.6,
+            "left": 0,
+            "right": 932,
+            "bottom": 692.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 324,
+            "clientH": 324,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "932x430__dark",
+      "viewport": "932x430",
+      "orientation": "landscape",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 430,
+        "viewportHeight": 430,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 324px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 932,
+            "h": 324,
+            "top": 51,
+            "left": 0,
+            "right": 932,
+            "bottom": 375
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 375,
+            "w": 932,
+            "h": 55,
+            "top": 375,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "selfView": {
+            "x": 850,
+            "y": 311,
+            "w": 72,
+            "h": 54,
+            "top": 311,
+            "left": 850,
+            "right": 922,
+            "bottom": 365
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 912,
+            "h": 312,
+            "top": 57,
+            "left": 10,
+            "right": 922,
+            "bottom": 369
+          },
+          "sheet": {
+            "x": 0,
+            "y": 432.6,
+            "w": 932,
+            "h": 260.25,
+            "top": 432.6,
+            "left": 0,
+            "right": 932,
+            "bottom": 692.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 324,
+            "clientH": 324,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 430,
+        "viewportHeight": 430,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "51px 324px 55px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 430,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 51,
+            "w": 932,
+            "h": 324,
+            "top": 51,
+            "left": 0,
+            "right": 932,
+            "bottom": 375
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 932,
+            "h": 51,
+            "top": 0,
+            "left": 0,
+            "right": 932,
+            "bottom": 51
+          },
+          "dock": {
+            "x": 0,
+            "y": 375,
+            "w": 932,
+            "h": 55,
+            "top": 375,
+            "left": 0,
+            "right": 932,
+            "bottom": 430
+          },
+          "selfView": {
+            "x": 806,
+            "y": 265,
+            "w": 116,
+            "h": 100,
+            "top": 265,
+            "left": 806,
+            "right": 922,
+            "bottom": 365
+          },
+          "mentorTile": {
+            "x": 10,
+            "y": 57,
+            "w": 912,
+            "h": 312,
+            "top": 57,
+            "left": 10,
+            "right": 922,
+            "bottom": 369
+          },
+          "sheet": {
+            "x": 0,
+            "y": 432.6,
+            "w": 932,
+            "h": 260.25,
+            "top": 432.6,
+            "left": 0,
+            "right": 932,
+            "bottom": 692.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 430,
+            "clientH": 430,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 324,
+            "clientH": 324,
+            "scrollW": 932,
+            "clientW": 932,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 833,
+          "detailW": 833,
+          "columnW": 833,
+          "bannerW": 886,
+          "requiredColumnW": 354.4,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "1024x768__light",
+      "viewport": "1024x768",
+      "orientation": "landscape",
+      "theme": "light",
+      "before": {
+        "rootHeight": 768,
+        "viewportHeight": 768,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 650px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 1024,
+            "h": 650,
+            "top": 57,
+            "left": 0,
+            "right": 1024,
+            "bottom": 707
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 707,
+            "w": 1024,
+            "h": 61,
+            "top": 707,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "selfView": {
+            "x": 914,
+            "y": 565,
+            "w": 96,
+            "h": 128,
+            "top": 565,
+            "left": 914,
+            "right": 1010,
+            "bottom": 693
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 1000,
+            "h": 634,
+            "top": 65,
+            "left": 12,
+            "right": 1012,
+            "bottom": 699
+          },
+          "sheet": {
+            "x": 0,
+            "y": 770.6,
+            "w": 1024,
+            "h": 260.25,
+            "top": 770.6,
+            "left": 0,
+            "right": 1024,
+            "bottom": 1030.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 650,
+            "clientH": 650,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 768,
+        "viewportHeight": 768,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 650px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 1024,
+            "h": 650,
+            "top": 57,
+            "left": 0,
+            "right": 1024,
+            "bottom": 707
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 707,
+            "w": 1024,
+            "h": 61,
+            "top": 707,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "selfView": {
+            "x": 898,
+            "y": 553,
+            "w": 112,
+            "h": 140,
+            "top": 553,
+            "left": 898,
+            "right": 1010,
+            "bottom": 693
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 1000,
+            "h": 634,
+            "top": 65,
+            "left": 12,
+            "right": 1012,
+            "bottom": 699
+          },
+          "sheet": {
+            "x": 0,
+            "y": 770.6,
+            "w": 1024,
+            "h": 260.25,
+            "top": 770.6,
+            "left": 0,
+            "right": 1024,
+            "bottom": 1030.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 650,
+            "clientH": 650,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        }
+      ]
+    },
+    {
+      "pair": "1024x768__dark",
+      "viewport": "1024x768",
+      "orientation": "landscape",
+      "theme": "dark",
+      "before": {
+        "rootHeight": 768,
+        "viewportHeight": 768,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 650px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": null,
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 1024,
+            "h": 650,
+            "top": 57,
+            "left": 0,
+            "right": 1024,
+            "bottom": 707
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 707,
+            "w": 1024,
+            "h": 61,
+            "top": 707,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "selfView": {
+            "x": 914,
+            "y": 565,
+            "w": 96,
+            "h": 128,
+            "top": 565,
+            "left": 914,
+            "right": 1010,
+            "bottom": 693
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 1000,
+            "h": 634,
+            "top": 65,
+            "left": 12,
+            "right": 1012,
+            "bottom": 699
+          },
+          "sheet": {
+            "x": 0,
+            "y": 770.6,
+            "w": 1024,
+            "h": 260.25,
+            "top": 770.6,
+            "left": 0,
+            "right": 1024,
+            "bottom": 1030.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 650,
+            "clientH": 650,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "window.__C2_READY (legacy fallback)",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": false,
+          "r8_sheet": false,
+          "r9_keyboard": true,
+          "r10_console": true,
+          "r12_ready": false,
+          "r11_states": true
+        },
+        "pass": false
+      },
+      "after": {
+        "rootHeight": 768,
+        "viewportHeight": 768,
+        "rootHeightDelta": 0,
+        "maxScrollOverflowY": 0,
+        "maxScrollOverflowX": 0,
+        "gridRows": "57px 650px 61px",
+        "rowTracks": 3,
+        "smallestControl": {
+          "name": "Session, connection and privacy details",
+          "w": 44,
+          "h": 44
+        },
+        "undersizedControls": [],
+        "overlapViolations": 0,
+        "rects": {
+          "liveHost": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "liveRoot": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "deviceVp": null,
+          "stage": {
+            "x": 0,
+            "y": 57,
+            "w": 1024,
+            "h": 650,
+            "top": 57,
+            "left": 0,
+            "right": 1024,
+            "bottom": 707
+          },
+          "header": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 57,
+            "top": 0,
+            "left": 0,
+            "right": 1024,
+            "bottom": 57
+          },
+          "dock": {
+            "x": 0,
+            "y": 707,
+            "w": 1024,
+            "h": 61,
+            "top": 707,
+            "left": 0,
+            "right": 1024,
+            "bottom": 768
+          },
+          "selfView": {
+            "x": 898,
+            "y": 553,
+            "w": 112,
+            "h": 140,
+            "top": 553,
+            "left": 898,
+            "right": 1010,
+            "bottom": 693
+          },
+          "mentorTile": {
+            "x": 12,
+            "y": 65,
+            "w": 1000,
+            "h": 634,
+            "top": 65,
+            "left": 12,
+            "right": 1012,
+            "bottom": 699
+          },
+          "sheet": {
+            "x": 0,
+            "y": 770.6,
+            "w": 1024,
+            "h": 260.25,
+            "top": 770.6,
+            "left": 0,
+            "right": 1024,
+            "bottom": 1030.85
+          }
+        },
+        "scrollByContainer": [
+          {
+            "container": "page (documentElement)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "body",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "app container (#app)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live host (.live-host)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "live root (.live/.room)",
+            "scrollH": 768,
+            "clientH": 768,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          },
+          {
+            "container": "stage (.stage)",
+            "scrollH": 650,
+            "clientH": 650,
+            "scrollW": 1024,
+            "clientW": 1024,
+            "overflowY": 0,
+            "overflowX": 0
+          }
+        ],
+        "readySignal": "data-live-room-ready",
+        "verdict": {
+          "r1_rootHeight": true,
+          "r2_noScroll": true,
+          "r3_threeRows": true,
+          "r4_dockVisible": true,
+          "r5_targets": true,
+          "r6_noOverlap": true,
+          "r7_selfView": true,
+          "r8_sheet": true,
+          "r9_keyboard": true,
+          "r11_states": true,
+          "r13_bannerContent": true,
+          "r10_console": true,
+          "r12_ready": true
+        },
+        "pass": true
+      },
+      "bannerContentAfter": [
+        {
+          "state": "s35-autoplay",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-degraded",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-reconnecting",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        },
+        {
+          "state": "s35-icefail",
+          "pass": true,
+          "iconW": 20,
+          "iconH": 20,
+          "titleW": 921,
+          "detailW": 921,
+          "columnW": 921,
+          "bannerW": 974,
+          "requiredColumnW": 389.6,
+          "readyAttr": "true"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,697 @@
+{
+  "artifact": "OPTION_C_PLUS_GUIDED_CONFIDENCE.html",
+  "generated": "2026-07-27",
+  "requirements": {
+    "baseline_mode": "append &baseline=1 to the hash query (e.g. #/s28?id=nlsiu&baseline=1) or set body[data-baseline=\"1\"] — hides all reviewer tooling",
+    "raster_rule": "raster px = viewport × DPR; record actual innerWidth/innerHeight/DPR",
+    "frame_simulation": "reviewer frame-width presets are design-preview-only and must never be baseline evidence"
+  },
+  "playwright_recipe": [
+    "const ctx=await browser.newContext({viewport:{width:W,height:H},deviceScaleFactor:DPR,colorScheme:THEME});",
+    "const p=await ctx.newPage();await p.goto(fileUrl+ROUTE+'&baseline=1');",
+    "await p.evaluate(s=>window.__opt.apply(s),STATE); // optional non-URL states",
+    "await p.screenshot({path:OUT,fullPage:true}); // record sha256, console, scrollWidth, min target rect"
+  ],
+  "entries": [
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s27-390x844-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "light",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s27-430x932-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s27-768x1024-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "light",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s27-1024x768-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s27-1440x900-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s28-390x844-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "light",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s28-430x932-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s28-768x1024-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "light",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s28-1024x768-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s28-1440x900-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s29-390x844-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "light",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s29-430x932-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s29-768x1024-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "light",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s29-1024x768-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s29-1440x900-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s30-390x844-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "light",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s30-430x932-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s30-768x1024-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "light",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s30-1024x768-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s30-1440x900-light.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s27-390x844-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "dark",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s27-430x932-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s27-768x1024-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "dark",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s27-1024x768-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S27",
+      "route": "#/s27",
+      "state": "s27-default",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s27-1440x900-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s28-390x844-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "dark",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s28-430x932-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s28-768x1024-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "dark",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s28-1024x768-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S28",
+      "route": "#/s28?id=nlsiu",
+      "state": "s28-detail",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s28-1440x900-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s29-390x844-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "dark",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s29-430x932-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s29-768x1024-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "dark",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s29-1024x768-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S29",
+      "route": "#/s29?cmp=nlsiu,nalsar,nlud,gnlu",
+      "state": "s29-4",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s29-1440x900-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 2,
+      "file": "captures/s30-390x844-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "dark",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "dpr": 2,
+      "file": "captures/s30-430x932-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 2,
+      "file": "captures/s30-768x1024-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "dark",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 2,
+      "file": "captures/s30-1024x768-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    },
+    {
+      "screen": "S30",
+      "route": "#/s30",
+      "state": "s30-both",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 2,
+      "file": "captures/s30-1440x900-dark.png",
+      "status": "pending_native_rig",
+      "sha256": null,
+      "console_errors": null,
+      "doc_scroll_width": null,
+      "min_target_px": null
+    }
+  ]
+}

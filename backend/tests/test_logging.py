@@ -22,3 +22,9 @@ def test_configure_logging_writes_jsonl_file_with_request_id(tmp_path) -> None:
     assert event["logger"] == "legalsaathi.test"
     assert event["message"] == "logstash_probe"
     assert event["request_id"] == "req-test-123"
+
+
+def test_configure_logging_disables_raw_uvicorn_access_targets(tmp_path) -> None:
+    configure_logging("INFO", str(tmp_path / "backend.jsonl"))
+
+    assert logging.getLogger("uvicorn.access").disabled is True
