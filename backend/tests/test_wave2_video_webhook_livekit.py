@@ -191,15 +191,21 @@ def ctx(monkeypatch, rig):
 
     ``build_video_provider()`` is left alone: pointing the real selector at
     obviously-fake credentials is what makes this an end-to-end test of the
-    configured path rather than of an injected double. Nothing in the flow
-    exercised here touches the network — ``ensure_room`` derives a name locally
-    and revocation is a local write (both asserted in ``test_wave2_video_infra``).
+    configured path rather than of an injected double. The provider transport
+    seam is stubbed because this file owns webhook signature semantics, not SFU
+    availability. Separate provider-down and live-runtime tests prove that the
+    production reachability probe fails closed.
     """
     context = rig.context(monkeypatch, now=T0)
     monkeypatch.setattr(settings, "video_provider", "livekit")
     monkeypatch.setattr(settings, "livekit_url", LIVEKIT_URL)
     monkeypatch.setattr(settings, "livekit_api_key", SecretStr(API_KEY))
     monkeypatch.setattr(settings, "livekit_api_secret", SecretStr(API_SECRET))
+    monkeypatch.setattr(
+        LiveKitCommunityAdapter,
+        "_twirp",
+        lambda _self, _method, _payload: {"rooms": []},
+    )
     yield context
     rate_limit.reset()
 

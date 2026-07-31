@@ -31,6 +31,7 @@ _PLACEHOLDER_SECRETS = frozenset(
 #: Wave 2 provider bindings that the code can actually honour.
 PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
 VIDEO_PROVIDER_CHOICES = ("deterministic", "livekit", "none")
+VIDEO_ICE_TRANSPORT_POLICY_CHOICES = ("all", "relay")
 #: The only reminder offsets ``session_reminder_jobs.offset_kind`` accepts.
 REMINDER_OFFSET_CHOICES = ("7d", "1d", "3h")
 
@@ -201,6 +202,11 @@ class Settings(BaseSettings):
     livekit_url: str | None = None
     # Browser-facing signalling URL. This is NOT the server-side Twirp URL.
     livekit_public_url: str | None = None
+    # Browser ICE selection is server-authoritative. ``all`` permits the best
+    # direct path and falls back to TURN; ``relay`` proves/forces that media
+    # traverses the configured TURN service on restrictive networks. This is
+    # safe to expose to browsers and contains no provider credential.
+    video_ice_transport_policy: str = "all"
     livekit_api_key: SecretStr | None = None
     livekit_api_secret: SecretStr | None = None
     # Join credential lifetime. Short-lived by design; only the hash is stored.
@@ -348,6 +354,13 @@ class Settings(BaseSettings):
             problems.append(
                 "video_provider must be deterministic or livekit when "
                 "video_calls_enabled=true"
+            )
+
+        ice_policy = (self.video_ice_transport_policy or "").strip().lower()
+        if ice_policy not in VIDEO_ICE_TRANSPORT_POLICY_CHOICES:
+            problems.append(
+                "video_ice_transport_policy must be one of "
+                f"{', '.join(VIDEO_ICE_TRANSPORT_POLICY_CHOICES)}"
             )
 
         for name in (

@@ -29,9 +29,9 @@
 #    credentials (RFC 5766 TURN REST API) per client. coturn is configured with
 #    the matching `use-auth-secret` / `--static-auth-secret`.
 #
-# The client-side belt-and-braces switch (`iceTransportPolicy: 'relay'` in the
-# LiveKit client's rtcConfig) is a FRONTEND concern and is NOT required for the
-# above to hold. See RUNBOOK § "Forced-TURN" for how to prove the relay is in
+# The server-authoritative capability also makes the LiveKit client use
+# `iceTransportPolicy: 'relay'`; the forced-relay release gate requires both
+# sides. See RUNBOOK § "Forced-TURN" for how to prove the relay is in
 # effect, and § 0(a) for the webhook signature transport (an `Authorization` JWT;
 # the backend verifies it) before you rely on room events.
 # ------------------------------------------------------------------------------
@@ -66,15 +66,15 @@ rtc:
   node_ip: 172.29.30.10
   # Our own STUN — see mechanism 2 above.
   stun_servers:
-    - ${TURN_PUBLIC_HOST}:3478
+    - ${TURN_PUBLIC_HOST}:${TURN_PUBLIC_PORT}
   turn_servers:
     - host: ${TURN_PUBLIC_HOST}
-      port: 3478
+      port: ${TURN_PUBLIC_PORT}
       protocol: udp
       secret: ${TURN_STATIC_AUTH_SECRET}
       ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
     - host: ${TURN_PUBLIC_HOST}
-      port: 3478
+      port: ${TURN_PUBLIC_PORT}
       protocol: tcp
       secret: ${TURN_STATIC_AUTH_SECRET}
       ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
@@ -111,7 +111,10 @@ room:
   max_participants: 4
 
 logging:
-  level: info
+  # Info-level participant-init records include SDP/ICE diagnostics. Those are
+  # operationally useful, but they are forbidden sensitive media metadata in
+  # LegalSaathi's log boundary. Keep the normal runtime at warning or above.
+  level: warn
   # JSON so the room trail lands in the same Logstash pipeline as the backend.
   json: true
 

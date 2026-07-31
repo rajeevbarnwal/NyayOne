@@ -10,7 +10,8 @@
 # proven the relay works and want the lower latency.
 #
 # It must be paired with infra/video/docker-compose.video.direct.yml, which is
-# what publishes the RTC media ports (1040 -> 7881/tcp, 1041 -> 7882/udp).
+# what publishes the RTC media ports (1040/tcp and 1041/udp unchanged through
+# Docker NAT, so the advertised ICE candidates remain truthful).
 # Rendering this template without that overlay produces a server that advertises
 # a candidate address nothing can reach.
 #
@@ -20,8 +21,11 @@ port: 7880
 prometheus_port: 6789
 
 rtc:
-  tcp_port: 7881
-  udp_port: 7882
+  # DIRECT MODE: these are deliberately identical inside and outside Docker.
+  # LiveKit advertises candidate ports in SDP; a 1041:7882 mapping would expose
+  # one port while advertising another and the browser could never reach it.
+  tcp_port: 1040
+  udp_port: 1041
   # DIRECT MODE (1/2): the advertised address must be one the CLIENT can reach —
   # the host's LAN address for a local smoke test, the node's public address in
   # staging. The renderer refuses to build a direct-mode config without it.
@@ -31,15 +35,15 @@ rtc:
   # unset makes LiveKit clients fall back to Google's public STUN servers, which
   # sends every participant's IP to a third party for no benefit.
   stun_servers:
-    - ${TURN_PUBLIC_HOST}:3478
+    - ${TURN_PUBLIC_HOST}:${TURN_PUBLIC_PORT}
   turn_servers:
     - host: ${TURN_PUBLIC_HOST}
-      port: 3478
+      port: ${TURN_PUBLIC_PORT}
       protocol: udp
       secret: ${TURN_STATIC_AUTH_SECRET}
       ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
     - host: ${TURN_PUBLIC_HOST}
-      port: 3478
+      port: ${TURN_PUBLIC_PORT}
       protocol: tcp
       secret: ${TURN_STATIC_AUTH_SECRET}
       ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
@@ -60,7 +64,10 @@ room:
   max_participants: 4
 
 logging:
-  level: info
+  # Info-level participant-init records include SDP/ICE diagnostics. Those are
+  # operationally useful, but they are forbidden sensitive media metadata in
+  # LegalSaathi's log boundary. Keep the normal runtime at warning or above.
+  level: warn
   json: true
 
 keys:

@@ -201,6 +201,8 @@ export interface VideoRoomConnectOptions {
   readonly permissions: readonly string[];
   /** Runtime browser endpoint returned by the backend capability/credential. */
   readonly serverUrl?: string | null;
+  /** Server-authoritative ICE path. ``relay`` forces TURN; ``all`` permits direct fallback. */
+  readonly iceTransportPolicy?: 'all' | 'relay';
   /**
    * Local capture the room already opened for its self-view. Ownership passes
    * to the client: `leave()` stops every track on it.
