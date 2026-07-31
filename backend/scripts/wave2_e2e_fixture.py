@@ -13,6 +13,14 @@ each an explicit subcommand so nothing happens implicitly:
       ``frontend/src/features/student/lib/tutoringApi.ts``) — the packaged seed
       creates its own student, which no browser can act as;
     * a rival student used to prove the one-winner slot race in the browser;
+    * a DEDICATED review-rate-limit student
+      (``00000000-0000-4000-8000-000000004400``) whose ONLY purpose is to
+      measure the ``RATE_LIMIT_REVIEW_PER_HOUR`` boundary in N44. It exists
+      because the boundary must be measured on an UNSPENT budget: N44 used to
+      reuse the rival student, whom N34/N35 had already charged two review
+      mutations, so the run reported "last admitted 198, first rejected 199"
+      against a configured limit of 200 — a wrong number that still looks
+      plausible. No other case may spend this actor's review budget;
     * an admin actor (``review_moderation`` / ``session_cancellations`` carry
       FKs to ``users``);
     * ``--extra-tutors N`` additional published profiles, because S-31 pages at
@@ -100,6 +108,14 @@ from app.services.tutoring import seed as tutoring_seed  # noqa: E402
 BROWSER_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-0000000000de")
 #: A second student, so "someone else won the slot" is a real second actor.
 RIVAL_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-0000000000b2")
+#: The DEDICATED review-rate-limit actor (N44) — single purpose, and the purpose
+#: is in the name. ``rate_limit_review_per_hour`` buckets per user id, so the
+#: only way to measure the boundary honestly is from an identity whose bucket
+#: NOTHING else has touched. The rival student cannot be that identity: N34/N35
+#: charge it two ``PATCH /tutoring/reviews/{id}`` calls, which is precisely why
+#: N44 reported 198/199 against a configured 200. Nothing but N44 may issue a
+#: review mutation as this id.
+REVIEW_LIMIT_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-000000004400")
 #: Admin actor for moderation / audited exception rows.
 ADMIN_ACTOR_ID = uuid.UUID("00000000-0000-4000-8000-00000000ad01")
 #: Namespace for the extra pagination tutors. Fixed forever.
@@ -242,6 +258,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         report = tutoring_seed.provision(session, now=now, days=args.days, per_day=args.per_day)
         _ensure_user(session, BROWSER_STUDENT_ID, "student")
         _ensure_user(session, RIVAL_STUDENT_ID, "student")
+        _ensure_user(session, REVIEW_LIMIT_STUDENT_ID, "student")
         _ensure_user(session, ADMIN_ACTOR_ID, "student")
         extra = _extra_tutors(session, args.extra_tutors, now)
         session.commit()
@@ -255,6 +272,10 @@ def cmd_seed(args: argparse.Namespace) -> int:
         "actors": {
             "browser_student": str(BROWSER_STUDENT_ID),
             "rival_student": str(RIVAL_STUDENT_ID),
+            # Named, not derived: the driver REFUSES to run N44 if this key is
+            # absent, so an old fixture cannot silently send it back to the
+            # rival student and back to measuring 198 instead of 200.
+            "review_rate_limit_student": str(REVIEW_LIMIT_STUDENT_ID),
             "admin": str(ADMIN_ACTOR_ID),
             "seed_student": str(tutoring_seed.SEED_STUDENT_ID),
             "tutor_user_ids": {

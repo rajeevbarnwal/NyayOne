@@ -74,6 +74,25 @@ const VIDEO_SIG_HEADER = 'X-Video-Signature';
 const STUDENT = '00000000-0000-4000-8000-0000000000de';
 const RIVAL = '00000000-0000-4000-8000-0000000000b2';
 /**
+ * The DEDICATED review-rate-limit actor (N44). Seeded by
+ * `backend/scripts/wave2_e2e_fixture.py` as `review_rate_limit_student`, and
+ * used by N44 and NOTHING else.
+ *
+ * `RATE_LIMIT_REVIEW_PER_HOUR` buckets per user id, so a boundary measured on
+ * an identity some earlier case already spent is a boundary measured short.
+ * N44 used to reuse RIVAL, which N34/N35 charge two `PATCH
+ * /tutoring/reviews/{id}` calls; the full run therefore reported "last admitted
+ * 198, first rejected 199" against a configured limit of 200 — off by exactly
+ * the two calls, and plausible enough to be believed. The oracle was
+ * contaminated, not the limiter.
+ *
+ * This is not a convention anybody has to remember: `api()` keeps a LEDGER of
+ * every request that reaches a review-limited route, per actor, and N44 asserts
+ * this actor's ledger reads ZERO before it measures anything (see
+ * `reviewLimiterLedger` / `assertUnspentReviewBudget`).
+ */
+const REVIEW_LIMIT_ACTOR = '00000000-0000-4000-8000-000000004400';
+/**
  * The admin actor. `session_cancellations` / `review_moderation` carry FKs to
  * `users`, and the completion-authority row (F6) has to prove that ADMIN is a
  * recorder role alongside `tutor` — so this id is used, not merely declared.
@@ -109,6 +128,15 @@ const ADMIN = '00000000-0000-4000-8000-00000000ad01';
  *   E2E_INJECT=backend-kill       SIGKILL the backend process mid-run
  *   E2E_INJECT=stale-commit       carry evidence in from a DIFFERENT commit
  *   E2E_INJECT=skip-stage         silently drop a PLANNED stage from the run
+ *   E2E_INJECT=n44-contaminated-actor
+ *                                 run N44 as RIVAL — the actor N34/N35 have
+ *                                 already charged two review mutations — which
+ *                                 is EXACTLY the defect this stage used to
+ *                                 have (it reported 198/199 against a
+ *                                 configured 200). N44's zero-prior-use
+ *                                 precondition must catch it and FAIL, and the
+ *                                 proof that it does is captured evidence, not
+ *                                 a claim.
  */
 const INJECT = new Set((process.env.E2E_INJECT || '').split(',').map((s) => s.trim()).filter(Boolean));
 const injected = (name) => INJECT.has(name);
@@ -856,7 +884,69 @@ function claims(sub, roles = ['student']) {
   return JSON.stringify({ sub, roles });
 }
 
+/* ------------------------- the review-limiter LEDGER (N44's oracle guard) - */
+
+/**
+ * The routes `app/api/v1/tutoring.py` guards with `_limit(REVIEW, actor)`.
+ *
+ * Read off the production source, not guessed: `create_review`, `edit_review`
+ * and `delete_review` each call it; `moderate_review` deliberately does NOT
+ * (capping a moderator at the student limit would cap the queue). If a fourth
+ * review-limited route is ever added and is not listed here, N44's precondition
+ * stops being a proof — so the backend test
+ * `test_review_limited_routes_match_the_e2e_ledger` fails the moment the two
+ * lists disagree.
+ */
+const REVIEW_LIMITED_ROUTES = [
+  { method: 'POST', pattern: /^\/api\/v1\/tutoring\/sessions\/[^/?]+\/review(?:\?|$)/ },
+  { method: 'PATCH', pattern: /^\/api\/v1\/tutoring\/reviews\/[^/?]+(?:\?|$)/ },
+  { method: 'DELETE', pattern: /^\/api\/v1\/tutoring\/reviews\/[^/?]+(?:\?|$)/ },
+];
+
+function isReviewLimited(method, urlPath) {
+  return REVIEW_LIMITED_ROUTES.some(
+    (r) => r.method === String(method).toUpperCase() && r.pattern.test(urlPath),
+  );
+}
+
+/**
+ * Per-actor count of review-limiter calls THIS RUN has made, recorded at the
+ * moment each request is issued — an observation, not an assumption.
+ *
+ * It lives in `state.json`, so it accumulates across the chained shells of one
+ * logical run and is cleared only on the RUN boundary (`--keep-db` absent),
+ * exactly like every other cross-stage fact this driver carries. It is
+ * deliberately CONSERVATIVE: the backend process restarts between chained
+ * shells and its in-memory buckets restart with it, so the ledger can only ever
+ * over-count, never under-count. A ledger of zero therefore proves an unspent
+ * bucket on any shell layout, which is the direction that has to be sound.
+ */
+function reviewLimiterLedger() {
+  if (!STATE.reviewLimiter || typeof STATE.reviewLimiter !== 'object') {
+    STATE.reviewLimiter = { counts: {}, log: [] };
+  }
+  if (!STATE.reviewLimiter.counts) STATE.reviewLimiter.counts = {};
+  if (!Array.isArray(STATE.reviewLimiter.log)) STATE.reviewLimiter.log = [];
+  return STATE.reviewLimiter;
+}
+
+function reviewLimiterCalls(sub) {
+  return Number(reviewLimiterLedger().counts[sub] || 0);
+}
+
+function recordReviewLimiterCall(method, urlPath, sub) {
+  const ledger = reviewLimiterLedger();
+  ledger.counts[sub] = reviewLimiterCalls(sub) + 1;
+  // The first calls are the interesting ones (they are what contaminates a
+  // budget); the 200-call measurement loop must not bloat state.json.
+  if (ledger.log.length < 60) {
+    ledger.log.push({ sub, method, path: urlPath, at: new Date().toISOString() });
+  }
+  saveState();
+}
+
 async function api(method, urlPath, { sub = STUDENT, roles = ['student'], body, headers = {}, raw } = {}) {
+  if (sub && isReviewLimited(method, urlPath)) recordReviewLimiterCall(method, urlPath, sub);
   const init = { method, headers: { ...headers } };
   if (sub) init.headers['X-Actor-Claims'] = claims(sub, roles);
   if (raw !== undefined) {
@@ -3909,9 +3999,20 @@ async function stageNeg3() {
 
 /* ------------- neg4: atomicity, outbox, timezone/DST, rate limits --------- */
 
+/**
+ * Declared as its OWN required assertion, not folded into N44's prose: a
+ * contaminated oracle and a broken limiter are different findings and must be
+ * separately visible in the evidence. It is in `required`, so it cannot quietly
+ * not run — an unexecuted required assertion is a FAIL.
+ */
+const N44_PRECONDITION = 'N44 review-limiter oracle is uncontaminated: the measuring actor has ZERO prior review-limiter calls this run';
+
 async function stageNeg4(page) {
   const ids = ['N38', 'N39', 'N40', 'N41', 'N42', 'N43', 'N44'];
-  const chk = newChecks('I1-neg4-integrity-timezone-ratelimit', ids.map((i) => `${i} ${NEGATIVE_ROWS.find((r) => r[0] === i)[1]}`));
+  const chk = newChecks('I1-neg4-integrity-timezone-ratelimit', [
+    ...ids.map((i) => `${i} ${NEGATIVE_ROWS.find((r) => r[0] === i)[1]}`),
+    N44_PRECONDITION,
+  ]);
   const arts = [];
   const findings = {};
   const counts = () => dbQuery(`SELECT
@@ -4055,25 +4156,100 @@ async function stageNeg4(page) {
   }
 
   // --- N44 configured review rate-limit boundary ---------------------------
+  //
+  // The measurement is only worth the paper it is printed on if the identity it
+  // measures started the run with its FULL budget. It previously did not: N44
+  // reused RIVAL, whom N34/N35 charge two `PATCH /tutoring/reviews/{id}` calls,
+  // so the full run reported "last admitted 198, first rejected 199" against a
+  // configured 200. Nothing was wrong with the limiter — the oracle was
+  // contaminated, and by a number small enough to look like a real product
+  // quirk.
+  //
+  // The fix is an actor and a proof, not a reset and not a smaller number:
+  //
+  //   * REVIEW_LIMIT_ACTOR is seeded for this one purpose and used by nothing
+  //     else in the catalogue;
+  //   * `api()` LEDGERS every request that reaches a review-limited route, per
+  //     actor, at the moment it is issued;
+  //   * this stage ASSERTS that ledger reads zero for REVIEW_LIMIT_ACTOR before
+  //     it sends its first call, and FAILS N44 outright if it does not.
+  //
+  // That last assertion is the regression guard: `E2E_INJECT=n44-contaminated-actor`
+  // points N44 back at RIVAL and the row must go RED with the prior calls named.
   try {
     const limit = REVIEW_LIMIT;
-    let firstRejectAt = null;
-    let lastAcceptAt = 0;
-    const unknown = '00000000-0000-4000-8000-00000badbeef';
-    for (let i = 1; i <= limit + 5 && firstRejectAt === null; i++) {
-      // Every call is refused on its MERITS (404) until the limiter refuses it
-      // first, so the boundary is the limiter's and nothing else's.
-      const r = await api('POST', `/api/v1/tutoring/sessions/${unknown}/review`, { sub: RIVAL, body: { rating: 5 } });
-      if (r.status === 429) firstRejectAt = i;
-      else lastAcceptAt = i;
+    // The dedicated actor must actually EXIST in the fixture. Falling back to
+    // "some student" if the key is missing is how this regresses silently, so a
+    // fixture that predates the actor is a hard failure with a named cause.
+    const seededLimitActor = FIXTURE.actors?.review_rate_limit_student || null;
+    const contaminate = injected('n44-contaminated-actor');
+    const actor = contaminate ? RIVAL : REVIEW_LIMIT_ACTOR;
+    const actorName = contaminate
+      ? 'RIVAL (E2E_INJECT=n44-contaminated-actor — the pre-fix actor, deliberately spent)'
+      : 'the dedicated review_rate_limit_student';
+    // PROVE the budget is unspent. This is an observation of every request this
+    // run actually issued, read back from the ledger — not a convention, not a
+    // comment, and not an inference from the answer we are about to measure.
+    const priorCalls = reviewLimiterCalls(actor);
+    const priorDetail = reviewLimiterLedger().log
+      .filter((e) => e.sub === actor)
+      .map((e) => `${e.method} ${e.path}`);
+    const ledgerAcrossActors = Object.fromEntries(
+      Object.entries(reviewLimiterLedger().counts).sort((a, b) => b[1] - a[1]),
+    );
+    findings.reviewLimiterPrecondition = {
+      actor,
+      actorName,
+      seededInFixture: seededLimitActor,
+      priorReviewLimiterCalls: priorCalls,
+      priorCallDetail: priorDetail,
+      ledgerAcrossActors,
+      contaminationInjected: contaminate,
+    };
+    if (!seededLimitActor || seededLimitActor !== REVIEW_LIMIT_ACTOR) {
+      neg('N44', {
+        expected: `the fixture seeds a DEDICATED review-rate-limit actor ${REVIEW_LIMIT_ACTOR} (actors.review_rate_limit_student)`,
+        actual: `fixture reports actors.review_rate_limit_student=${JSON.stringify(seededLimitActor)}`,
+        pass: false,
+        mechanism: 'fixture contract check before any measurement',
+      });
+    } else if (priorCalls !== 0) {
+      // THE REGRESSION ASSERTION. N44 measured on a spent budget reports the
+      // limit MINUS whatever was already spent; that is a wrong number that
+      // looks right, so the row fails here rather than reporting it.
+      neg('N44', {
+        expected: `N44 must measure RATE_LIMIT_REVIEW_PER_HOUR=${limit} on an actor with an UNSPENT budget: zero prior review-limiter calls by ${actor} in this run`,
+        actual: `CONTAMINATED ORACLE: ${actor} (${actorName}) had already made ${priorCalls} review-limiter call(s) before N44 started — ${priorDetail.join(' | ') || '(detail truncated)'}. Measuring here would report last-admitted ${limit - priorCalls} / first-rejected ${limit - priorCalls + 1} and blame the limiter for the harness. Ledger this run: ${JSON.stringify(ledgerAcrossActors)}`,
+        pass: false,
+        mechanism: 'per-actor review-limiter ledger recorded by api() at issue time',
+      });
+    } else {
+      let firstRejectAt = null;
+      let lastAcceptAt = 0;
+      const unknown = '00000000-0000-4000-8000-00000badbeef';
+      for (let i = 1; i <= limit + 5 && firstRejectAt === null; i++) {
+        // Every call is refused on its MERITS (404) until the limiter refuses it
+        // first, so the boundary is the limiter's and nothing else's.
+        const r = await api('POST', `/api/v1/tutoring/sessions/${unknown}/review`, { sub: actor, body: { rating: 5 } });
+        if (r.status === 429) firstRejectAt = i;
+        else lastAcceptAt = i;
+      }
+      const spentByN44 = reviewLimiterCalls(actor);
+      findings.reviewRateLimit = {
+        configuredLimit: limit,
+        actor,
+        priorReviewLimiterCalls: priorCalls,
+        lastAcceptAt,
+        firstRejectAt,
+        callsIssuedByN44: spentByN44,
+      };
+      neg('N44', {
+        expected: `with RATE_LIMIT_REVIEW_PER_HOUR=${limit}, measured on ${actorName} whose review budget this run had provably not touched (0 prior review-limiter calls): the limiter admits exactly ${limit} calls and refuses number ${limit + 1} with 429`,
+        actual: `prior review-limiter calls by ${actor}: ${priorCalls} (proved from the ledger, not assumed); last admitted at ${lastAcceptAt}; first 429 at ${firstRejectAt}`,
+        pass: priorCalls === 0 && firstRejectAt === limit + 1 && lastAcceptAt === limit,
+        mechanism: 'server_leg as a DEDICATED review-rate-limit student, with a per-actor review-limiter ledger asserting zero prior use before the first call',
+      });
     }
-    findings.reviewRateLimit = { configuredLimit: limit, lastAcceptAt, firstRejectAt };
-    neg('N44', {
-      expected: `with RATE_LIMIT_REVIEW_PER_HOUR=${limit}: the limiter admits exactly ${limit} calls and refuses number ${limit + 1} with 429`,
-      actual: `last admitted at ${lastAcceptAt}; first 429 at ${firstRejectAt}`,
-      pass: firstRejectAt === limit + 1 && lastAcceptAt === limit,
-      mechanism: 'server_leg as a second student, so the browsing student\'s own budget is untouched',
-    });
   } catch (err) {
     neg('N44', { expected: 'the configured review limit boundary', actual: `threw: ${String(err).slice(0, 200)}`, pass: false });
   }
@@ -4082,8 +4258,20 @@ async function stageNeg4(page) {
     RATE_LIMIT_TUTOR_SEARCH_PER_MIN: SEARCH_LIMIT,
     RATE_LIMIT_BOOKING_PER_MIN: BOOKING_LIMIT,
     RATE_LIMIT_REVIEW_PER_HOUR: REVIEW_LIMIT,
-    note: `The booking limiter is deliberately raised to ${BOOKING_LIMIT}/min for this run because the journeys legitimately perform far more than the production default of 10 booking mutations a minute; the boundary evidence is produced from the SEARCH and REVIEW limiters, which are left where the browser can reach them exactly.`,
+    note: `The booking limiter is deliberately raised to ${BOOKING_LIMIT}/min for this run because the journeys legitimately perform far more than the production default of 10 booking mutations a minute; the boundary evidence is produced from the SEARCH and REVIEW limiters, which are left where the browser can reach them exactly. RATE_LIMIT_REVIEW_PER_HOUR is the PRODUCTION value and is neither raised nor reset for N44; what changed is that N44 measures it on a dedicated, provably unspent actor.`,
   };
+  const pre = findings.reviewLimiterPrecondition;
+  chk.assert(
+    N44_PRECONDITION,
+    `the per-actor review-limiter ledger reads 0 for the dedicated actor ${REVIEW_LIMIT_ACTOR} at the instant N44 issues its first call, and N44 uses that actor`,
+    pre
+      ? `actor=${pre.actor} (${pre.actorName}); priorReviewLimiterCalls=${pre.priorReviewLimiterCalls}${pre.priorCallDetail.length ? ` [${pre.priorCallDetail.join(' | ')}]` : ''}; ledger this run=${JSON.stringify(pre.ledgerAcrossActors)}`
+      : undefined,
+    !!pre
+      && pre.actor === REVIEW_LIMIT_ACTOR
+      && pre.seededInFixture === REVIEW_LIMIT_ACTOR
+      && pre.priorReviewLimiterCalls === 0,
+  );
   foldNegatives(chk, ids);
   recordChecks(chk, {
     stage: 'neg4',

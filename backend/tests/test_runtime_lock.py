@@ -8,13 +8,26 @@ evidence about a dependency set nobody chose.
 """
 from __future__ import annotations
 
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 
 import pytest
 
-from scripts.check_runtime_lock import main, normalise, read_pins
+from scripts.check_runtime_lock import (
+    EXIT_LOCK_UNREADABLE,
+    EXIT_LOCK_VIOLATION,
+    EXIT_PLATFORM_MISMATCH,
+    HostFacts,
+    current_host,
+    extension_abi,
+    main,
+    normalise,
+    platform_report,
+    read_pins,
+)
 
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parent
@@ -128,3 +141,313 @@ def test_running_interpreter_is_not_the_undeclared_tmp_venv():
     if "/tmp/" in sys.executable:
         pytest.skip(f"explicitly-selected interpreter {sys.executable}")
     assert Path(sys.executable).exists()
+
+
+# ---------------------------------------------------------------------------
+# F5 — the CROSS-PLATFORM venv trap.
+#
+# `backend/.venv` is ONE path shared by every machine that checks this repo
+# out, and a virtualenv is not portable. The incident these guards exist for:
+# a venv built on Linux/aarch64 (pyvenv.cfg `home = /usr/bin`, version 3.10.12,
+# site-packages full of `*.cpython-310-aarch64-linux-gnu.so` ELF objects) was
+# read from macOS. The version-only lock check PASSED on the Linux side and the
+# macOS side got "MISSING alembic/psycopg/pgvector" — a completely wrong
+# diagnosis of "wrong operating system", and one that sends somebody off to
+# reinstall packages into a directory that can never work on their machine.
+# ---------------------------------------------------------------------------
+
+
+def _write_venv(root: Path, *, home: str, version: str, abi: str, libdir: str) -> Path:
+    """Synthesise a virtualenv-shaped directory. The REAL venv is never touched."""
+    site = root / "lib" / libdir / "site-packages"
+    (site / "pkg").mkdir(parents=True)
+    (root / "pyvenv.cfg").write_text(
+        f"home = {home}\ninclude-system-site-packages = false\nversion = {version}\n",
+        encoding="utf-8",
+    )
+    (site / f"_cffi_backend.cpython-{abi}.so").write_bytes(b"\x7fELF-not-a-real-object")
+    (site / "pkg" / f"_speedups.cpython-{abi}.so").write_bytes(b"not-a-real-object")
+    # Untagged and stable-ABI files must be SKIPPED, not guessed at.
+    (site / "pkg" / "_plain.so").write_bytes(b"")
+    (site / "pkg" / "_rust.abi3.so").write_bytes(b"")
+    return root
+
+
+@pytest.mark.parametrize(
+    "filename,expected",
+    [
+        ("_cffi_backend.cpython-310-aarch64-linux-gnu.so", ("310", "aarch64-linux-gnu")),
+        ("_speedups.cpython-312-darwin.so", ("312", "darwin")),
+        ("resultproxy.cpython-311-x86_64-linux-gnu.so", ("311", "x86_64-linux-gnu")),
+        ("_rust.cp310-win_amd64.pyd", ("310", "win_amd64")),
+        # No judgeable tag: an absent tag is not evidence, so it is skipped.
+        ("_rust.abi3.so", None),
+        ("_plain.so", None),
+        ("notanextension.py", None),
+    ],
+)
+def test_extension_abi_tag_parsing(filename, expected):
+    assert extension_abi(filename) == expected
+
+
+def test_platform_check_passes_for_the_venv_running_this_suite(capsys):
+    """The venv the suite is IN belongs to the machine the suite is ON."""
+    assert main(["--platform-only"]) == 0
+    out = capsys.readouterr().out
+    assert "platform-check=OK" in out
+    report = platform_report()
+    assert report.ok, report.problems
+    assert report.host.system and report.host.machine
+
+
+def test_platform_check_fails_for_a_foreign_platform_venv(tmp_path, capsys):
+    """A venv built elsewhere is REFUSED, with its own exit status and wording."""
+    fake = _write_venv(
+        tmp_path / "foreign",
+        home="/Users/nobody/.pyenv/versions/3.12.4/bin",
+        version="3.12.4",
+        abi="312-darwin",
+        libdir="python3.12",
+    )
+    rc = main(["--platform-only", "--venv", str(fake)])
+    assert rc == EXIT_PLATFORM_MISMATCH
+    captured = capsys.readouterr()
+    assert "platform-check=MISMATCH" in captured.out
+    err = captured.err
+    assert "PLATFORM MISMATCH (exit 5)" in err
+    # Every independent signal fired, not just the easiest one.
+    assert "compiled extension(s) are tagged for platform 'darwin'" in err
+    assert "pyvenv.cfg declares version 3.12.4" in err
+    assert "does not exist on this machine" in err
+    assert "lib/python3.12" in err
+
+
+def test_the_exact_incident_is_detected_a_linux_venv_read_from_macos(tmp_path):
+    """The REAL trap: this repo's Linux venv, opened by a macOS interpreter.
+
+    The venv is byte-for-byte what `backend/.venv` looks like here (``home =
+    /usr/bin``, ``version = 3.10.12``, aarch64 ELF extensions); only the HOST
+    is simulated, because the test cannot be run from macOS.
+    """
+    linux_venv = _write_venv(
+        tmp_path / "dotvenv",
+        home="/usr/bin",
+        version="3.10.12",
+        abi="310-aarch64-linux-gnu",
+        libdir="python3.10",
+    )
+    macos_host = HostFacts(
+        executable="/Users/dev/repo/backend/.venv/bin/python",
+        version=(3, 9, 6),
+        system="Darwin",
+        machine="arm64",
+        sysconfig_platform="macosx-14.0-arm64",
+        ext_tag="cpython-39-darwin",
+        ext_platform="darwin",
+    )
+    report = platform_report(linux_venv, host=macos_host)
+    assert not report.ok
+    joined = "\n".join(report.problems)
+    assert "tagged for platform 'aarch64-linux-gnu'" in joined
+    assert "can only load 'darwin'" in joined
+    assert "pyvenv.cfg declares version 3.10.12" in joined
+    assert "lib/python3.10" in joined
+    assert report.venv_platform == "aarch64-linux-gnu"
+    # And the SAME directory is healthy for the Linux host that built it.
+    linux_host = HostFacts(
+        executable="/repo/backend/.venv/bin/python",
+        version=(3, 10, 12),
+        system="Linux",
+        machine="aarch64",
+        sysconfig_platform="linux-aarch64",
+        ext_tag="cpython-310-aarch64-linux-gnu",
+        ext_platform="aarch64-linux-gnu",
+    )
+    # `home = /usr/bin` really does hold python3.10 on the Linux host; on a
+    # machine where it does not, that alone is the finding — which is the point.
+    same = platform_report(linux_venv, host=linux_host)
+    assert not [p for p in same.problems if "tagged for platform" in p]
+    assert not [p for p in same.problems if "declares version" in p]
+
+
+def test_platform_mismatch_is_not_confusable_with_a_missing_package(tmp_path, capsys):
+    """Distinct exit status AND distinct wording from ``MISSING``/``MISMATCH``."""
+    fake = _write_venv(
+        tmp_path / "foreign",
+        home="/nowhere/at/all/bin",
+        version="3.12.4",
+        abi="312-darwin",
+        libdir="python3.12",
+    )
+    assert EXIT_PLATFORM_MISMATCH not in (EXIT_LOCK_VIOLATION, EXIT_LOCK_UNREADABLE)
+    # The platform question is answered BEFORE the lock is even opened, so a
+    # foreign venv cannot be reported as "you are missing alembic".
+    rc = main(["--venv", str(fake), "--lock", str(tmp_path / "does-not-exist.lock")])
+    assert rc == EXIT_PLATFORM_MISMATCH, "the lock error won the race"
+    err = capsys.readouterr().err
+    assert "NOT INSTALLED" not in err
+    assert "MISSING" not in err
+    assert "This is NOT a missing package" in err
+
+
+def test_platform_failure_names_the_exact_rebuild_command(tmp_path, capsys):
+    fake = _write_venv(
+        tmp_path / "proj" / ".venv",
+        home="/nowhere/at/all/bin",
+        version="3.12.4",
+        abi="312-darwin",
+        libdir="python3.12",
+    )
+    assert main(["--platform-only", "--venv", str(fake)]) == EXIT_PLATFORM_MISMATCH
+    err = capsys.readouterr().err
+    host = current_host()
+    scoped = f".venv-{host.system}-{host.machine}"
+    assert scoped == host.venv_dir_name
+    assert f"python3 -m venv {tmp_path / 'proj' / scoped}" in err
+    assert f"{tmp_path / 'proj' / scoped}/bin/python -m pip install -r " in err
+    assert ".venv-$(uname -s)-$(uname -m)" in err
+
+
+def test_pyvenv_cfg_home_without_any_interpreter_is_detected(tmp_path):
+    empty_home = tmp_path / "emptyhome"
+    empty_home.mkdir()
+    host = current_host()
+    venv = _write_venv(
+        tmp_path / "v",
+        home=str(empty_home),
+        version=".".join(str(p) for p in host.version),
+        abi=host.ext_tag.replace("cpython-", ""),
+        libdir=f"python{host.short_version}",
+    )
+    report = platform_report(venv, host=host)
+    assert any("contains no interpreter" in p for p in report.problems), report.problems
+
+
+def test_pyvenv_cfg_home_interpreter_of_the_wrong_version_is_detected(tmp_path):
+    """`home` exists and holds a python — but not the one that built the venv."""
+    home = tmp_path / "wronghome"
+    home.mkdir()
+    shim = home / "python3"
+    shim.write_text("#!/bin/sh\necho '3 7 17'\n", encoding="utf-8")
+    shim.chmod(shim.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    host = current_host()
+    venv = _write_venv(
+        tmp_path / "v",
+        home=str(home),
+        version=".".join(str(p) for p in host.version),
+        abi=host.ext_tag.replace("cpython-", ""),
+        libdir=f"python{host.short_version}",
+    )
+    report = platform_report(venv, host=host)
+    assert any(
+        "which is Python 3.7.17" in p and "not the" in p for p in report.problems
+    ), report.problems
+
+
+def test_a_venv_with_no_pyvenv_cfg_is_refused(tmp_path):
+    bare = tmp_path / "bare"
+    (bare / "lib").mkdir(parents=True)
+    report = platform_report(bare)
+    assert not report.ok
+    assert any("pyvenv.cfg" in p for p in report.problems), report.problems
+
+
+@pytest.mark.parametrize("runner", [FULL_SUITE, BROWSER_GATE], ids=["suite", "gate"])
+def test_runners_prefer_a_platform_scoped_venv_before_the_shared_one(runner: Path):
+    source = runner.read_text(encoding="utf-8")
+    body = "\n".join(
+        line for line in source.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert 'PLATFORM_VENV=".venv-$(uname -s)-$(uname -m)"' in body, (
+        f"{runner.name} does not derive a platform-scoped virtualenv name"
+    )
+    candidates = re.search(r"VENV_CANDIDATES=\((.*?)\n\s*\)", body, re.S)
+    assert candidates, f"{runner.name} has no explicit VENV_CANDIDATES list"
+    listed = [c.strip() for c in candidates.group(1).splitlines() if c.strip()]
+    scoped = [i for i, c in enumerate(listed) if "$PLATFORM_VENV" in c]
+    shared = [i for i, c in enumerate(listed) if re.search(r"/\.venv/bin/python", c)]
+    assert scoped, f"{runner.name} never offers the platform-scoped virtualenv"
+    assert shared, f"{runner.name} dropped the shared .venv fallback entirely"
+    assert min(scoped) < min(shared), (
+        f"{runner.name} must try the platform-scoped venv BEFORE the shared "
+        f"one; got {listed}"
+    )
+    # And the shared one is only ACCEPTED if it proves it belongs here.
+    assert "--platform-only" in body, (
+        f"{runner.name} selects a virtualenv without running the platform check"
+    )
+    assert re.search(r"check_runtime_lock\.py\"? --platform-only", body), (
+        f"{runner.name} does not gate candidate selection on the platform check"
+    )
+
+
+@pytest.mark.parametrize("runner", [FULL_SUITE, BROWSER_GATE], ids=["suite", "gate"])
+def test_runners_still_refuse_a_bare_python3_after_the_platform_change(runner: Path):
+    """The F2 rule survives F5: no bare python3, no /tmp interpreter, ever."""
+    source = runner.read_text(encoding="utf-8")
+    body = "\n".join(
+        line for line in source.splitlines() if not line.lstrip().startswith("#")
+    )
+    candidates = re.search(r"VENV_CANDIDATES=\((.*?)\n\s*\)", body, re.S)
+    assert candidates
+    listed = candidates.group(1)
+    assert "/tmp/" not in listed
+    assert not re.search(r"(^|[\s\"])python3?([\s\"]|$)", listed), listed
+    assert not re.search(r"for cand in[^\n]*\bpython3\b", body)
+    # A candidate that fails the platform check must be SKIPPED, never used
+    # with a warning: the loop body has no `else PYTHON=` escape hatch.
+    assert not re.search(r"PYTHON=\"?\$\{?cand\}?\"?\s*;?\s*#?\s*fallback", body)
+    # `PYTHON=` set explicitly still wins verbatim.
+    assert 'if [[ -n "${PYTHON:-}" ]]' in body
+
+
+def test_platform_scoped_venv_directories_are_gitignored():
+    ignore = [
+        line.strip()
+        for line in (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(line in {".venv/", ".venv"} for line in ignore)
+    assert ".venv-*/" in ignore, (
+        "add '.venv-*/' to .gitignore — the platform-scoped virtualenvs "
+        "(.venv-Linux-aarch64, .venv-Darwin-arm64, ...) must stay untracked"
+    )
+    assert "venv-*/" in ignore
+
+
+def test_the_platform_and_venv_platform_reach_the_gate_log_header(capsys):
+    """F5.4: every gate log's runtime header names BOTH platforms."""
+    assert main(["--header", "--only", "fastapi", "--lock", str(LOCK)]) == 0
+    out = capsys.readouterr().out
+    header = out.splitlines()
+    assert header[0].startswith("python=")
+    assert header[1].startswith("host-platform="), header[:2]
+    assert "venv-platform=" in header[1]
+    host = current_host()
+    assert f"{host.system}/{host.machine}" in header[1]
+    # And both runners really do put that report into the file they append to.
+    for runner, needle in (
+        (FULL_SUITE, "RUNTIME_HEADER"),
+        (BROWSER_GATE, "RUNTIME_HEADER"),
+    ):
+        body = runner.read_text(encoding="utf-8")
+        assert needle in body
+        assert "host platform:" in body, f"{runner.name} header omits the host platform"
+        assert '"$LOCK_REPORT"' in body, (
+            f"{runner.name} does not stamp the platform-bearing lock report into "
+            "its raw log"
+        )
+
+
+def test_platform_check_is_bounded_and_does_not_follow_the_real_venv(tmp_path):
+    """The scan is a walk of a synthesised tree; the real venv is never written."""
+    before = os.stat(BACKEND / ".venv").st_mtime if (BACKEND / ".venv").exists() else None
+    fake = _write_venv(
+        tmp_path / "v",
+        home="/nowhere/bin",
+        version="9.9.9",
+        abi="999-plan9-fake",
+        libdir="python9.9",
+    )
+    assert platform_report(fake).ok is False
+    if before is not None:
+        assert os.stat(BACKEND / ".venv").st_mtime == before

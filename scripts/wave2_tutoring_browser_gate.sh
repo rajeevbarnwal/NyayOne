@@ -140,25 +140,52 @@ else
   # NOTE: no /tmp interpreter and no bare `python3`. An interpreter that the
   # repository does not own and does not declare must never be the DEFAULT —
   # that is how a gate silently reports on a dependency set nobody chose.
+  #
+  # PLATFORM-SCOPED FIRST. `backend/.venv` is a single path shared by every
+  # machine that checks this repo out, and a virtualenv is machine-bound: its
+  # pyvenv.cfg names a builder interpreter and its site-packages hold ABI-tagged
+  # binaries (`*.cpython-310-aarch64-linux-gnu.so` is a Linux/arm64 ELF object).
+  # Built on Linux and read on macOS, the SAME directory is healthy on one host
+  # and unusable on the other, and the version-only lock check cannot say so.
+  # `.venv-$(uname -s)-$(uname -m)` is a name two operating systems cannot
+  # collide in; the shared `.venv` is still accepted, but ONLY after it proves
+  # it belongs to this machine (check_runtime_lock.py --platform-only).
+  PLATFORM_VENV=".venv-$(uname -s)-$(uname -m)"
   VENV_CANDIDATES=(
     "${VIRTUAL_ENV:-/nonexistent}/bin/python"
+    "$REPO_ROOT/backend/$PLATFORM_VENV/bin/python"
+    "$REPO_ROOT/$PLATFORM_VENV/bin/python"
     "$REPO_ROOT/backend/.venv/bin/python"
     "$REPO_ROOT/.venv/bin/python"
     "$REPO_ROOT/venv/bin/python"
   )
+  PLATFORM_REJECTED=""
   for cand in "${VENV_CANDIDATES[@]}"; do
-    if [[ -x "$cand" ]]; then PYTHON="$cand"; PYTHON_SOURCE="project virtualenv"; break; fi
+    [[ -x "$cand" ]] || continue
+    if PLAT_REPORT="$("$cand" "$REPO_ROOT/backend/scripts/check_runtime_lock.py" --platform-only 2>&1)"; then
+      PYTHON="$cand"
+      PYTHON_SOURCE="project virtualenv (platform-verified)"
+      break
+    fi
+    PLATFORM_REJECTED+="  REJECTED $cand"$'\n'"$(printf '%s\n' "$PLAT_REPORT" | sed 's/^/  | /')"$'\n'
   done
 fi
 if [[ -z "${PYTHON:-}" ]]; then
   cat >&2 <<EOF
-PREREQUISITE NOT MET: no project virtualenv found and PYTHON= was not set.
+PREREQUISITE NOT MET: no project virtualenv for THIS platform ($(uname -s)/$(uname -m))
+was found, and PYTHON= was not set.
   Searched (in order):
 $(printf '      %s\n' "${VENV_CANDIDATES[@]}")
+${PLATFORM_REJECTED:+
+  A candidate existed but does not belong to this machine:
+$PLATFORM_REJECTED}
   A system python3 is NOT used as a fallback on purpose: it would silently run
   the gate against a different interpreter than the backend is installed into.
-  Fix by creating backend/.venv and installing backend/requirements.txt, or by
-  setting PYTHON= explicitly.
+  Fix by creating the PLATFORM-SCOPED virtualenv and installing the lock into
+  it (do NOT reuse a .venv another operating system built):
+      python3 -m venv $REPO_ROOT/backend/${PLATFORM_VENV:-.venv}
+      $REPO_ROOT/backend/${PLATFORM_VENV:-.venv}/bin/python -m pip install -r $REPO_ROOT/backend/requirements.lock
+  or by setting PYTHON= explicitly.
 EOF
   exit 2
 fi
@@ -222,6 +249,9 @@ fi
 PY_VERSION="$("$PYTHON" -c 'import sys; print(sys.version.split()[0])')"
 printf 'python: %s (%s, %s) — all backend/requirements.txt imports resolve\n' \
   "$PYTHON" "$PYTHON_SOURCE" "$PY_VERSION"
+HOST_PLATFORM="$(uname -s)/$(uname -m)"
+printf 'platform: %s  platform-scoped venv: %s\n' \
+  "$HOST_PLATFORM" "${PLATFORM_VENV:-<not searched: explicit PYTHON=>}"
 
 # ---- and it must MATCH backend/requirements.lock, version by version (F2.5) --
 # "It imports" is not "it is the tested set". This runs BEFORE the database, the
@@ -337,6 +367,8 @@ fi
 RUNTIME_HEADER="$(
   printf '==== runtime provenance (%s) ====\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'interpreter: %s (%s, %s)\n' "$PYTHON" "$PYTHON_SOURCE" "$PY_VERSION"
+  printf 'host platform: %s  platform-scoped venv: %s\n' \
+    "$HOST_PLATFORM" "${PLATFORM_VENV:-<not searched: explicit PYTHON=>}"
   printf 'runtime lock: %s\n' "$LOCK_FILE"
   printf '%s\n' "$LOCK_REPORT"
   printf '==== end runtime provenance ====\n'

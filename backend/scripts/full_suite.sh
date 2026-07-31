@@ -34,6 +34,17 @@
 # different fastapi (0.139.0 vs the pinned 0.141.1) and fails intermittently —
 # see docs/product/wave2/FULL_SUITE_FLAKE_DIAGNOSIS.md.
 #
+# PLATFORM-SCOPED FIRST. `backend/.venv` is one path shared by every machine
+# that checks this repo out, and a virtualenv is NOT portable: its pyvenv.cfg
+# names a builder interpreter and its site-packages hold ABI-tagged binaries.
+# Built on Linux and read on macOS, that ONE directory is healthy on one host
+# and unusable on the other — and the version-only lock check passed on the
+# Linux side while macOS got "MISSING alembic/psycopg/pgvector", which is a
+# completely wrong diagnosis of "wrong operating system". So the search now
+# prefers `.venv-$(uname -s)-$(uname -m)`, which two operating systems cannot
+# collide in, and the shared `.venv` is accepted ONLY if it passes the platform
+# check (check_runtime_lock.py --platform-only, exit 5 on mismatch).
+#
 # Whatever is chosen must then MATCH backend/requirements.lock exactly, package
 # by package, before a single test process starts.
 set -uo pipefail
@@ -52,26 +63,48 @@ if [[ -n "${PYTHON:-}" ]]; then
     exit 2
   fi
 else
+  # The platform-scoped name is exactly `.venv-$(uname -s)-$(uname -m)`, e.g.
+  # `.venv-Linux-aarch64` / `.venv-Darwin-arm64`, so two operating systems
+  # sharing this checkout cannot land in the same directory.
+  PLATFORM_VENV=".venv-$(uname -s)-$(uname -m)"
   VENV_CANDIDATES=(
     "${VIRTUAL_ENV:-/nonexistent}/bin/python"
+    "$BACKEND_ROOT/$PLATFORM_VENV/bin/python"
+    "$BACKEND_ROOT/../$PLATFORM_VENV/bin/python"
     "$BACKEND_ROOT/.venv/bin/python"
     "$BACKEND_ROOT/../.venv/bin/python"
     "$BACKEND_ROOT/../venv/bin/python"
   )
+  # Every candidate has to PROVE it belongs to this machine before it is
+  # chosen. A candidate that fails is skipped, not used with a warning, and its
+  # refusal is kept so the final error can show WHY the obvious directory was
+  # passed over instead of silently vanishing.
+  PLATFORM_REJECTED=""
   for cand in "${VENV_CANDIDATES[@]}"; do
-    if [[ -x "$cand" ]]; then PYTHON="$cand"; PYTHON_SOURCE="project virtualenv"; break; fi
+    [[ -x "$cand" ]] || continue
+    if PLAT_REPORT="$("$cand" "$BACKEND_ROOT/scripts/check_runtime_lock.py" --platform-only 2>&1)"; then
+      PYTHON="$cand"
+      PYTHON_SOURCE="project virtualenv (platform-verified)"
+      break
+    fi
+    PLATFORM_REJECTED+="  REJECTED $cand"$'\n'"$(printf '%s\n' "$PLAT_REPORT" | sed 's/^/  | /')"$'\n'
   done
 fi
 if [[ -z "${PYTHON:-}" ]]; then
   cat >&2 <<EOF
-PREREQUISITE NOT MET: no project virtualenv found and PYTHON= was not set.
+PREREQUISITE NOT MET: no project virtualenv for THIS platform ($(uname -s)/$(uname -m))
+was found, and PYTHON= was not set.
   Searched (in order):
 $(printf '      %s\n' "${VENV_CANDIDATES[@]}")
+${PLATFORM_REJECTED:+
+  A candidate existed but does not belong to this machine:
+$PLATFORM_REJECTED}
   A system python3 is NOT a fallback on purpose: it would silently run the
   suite against a different interpreter than the backend is installed into.
-  Fix by creating the project virtualenv from the repository lock:
-      python3 -m venv $BACKEND_ROOT/.venv
-      $BACKEND_ROOT/.venv/bin/python -m pip install -r $LOCK_FILE
+  Fix by creating the PLATFORM-SCOPED project virtualenv from the repository
+  lock (do NOT reuse a .venv another operating system built):
+      python3 -m venv $BACKEND_ROOT/${PLATFORM_VENV:-.venv}
+      $BACKEND_ROOT/${PLATFORM_VENV:-.venv}/bin/python -m pip install -r $LOCK_FILE
 EOF
   exit 2
 fi
@@ -101,6 +134,7 @@ fi
 [[ -n "$EVID" ]] && mkdir -p "$EVID"
 echo "commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
 echo "python: $PYTHON  ($PYTHON_SOURCE)"
+echo "platform: $(uname -s)/$(uname -m)  platform-scoped venv: ${PLATFORM_VENV:-<not searched: explicit PYTHON=>}"
 echo "temproot: ${PYTEST_DEBUG_TEMPROOT:-<pytest default>}  runs: $RUNS"
 # Proof that each run below really is the WHOLE suite in one invocation.
 echo "collected: $("$PYTHON" -m pytest -p no:cacheprovider --co -q 2>/dev/null \
@@ -110,6 +144,8 @@ echo "collected: $("$PYTHON" -m pytest -p no:cacheprovider --co -q 2>/dev/null \
 # this terminal, so a log read on its own still names what produced it.
 RUNTIME_HEADER="$(
   printf 'interpreter: %s (%s)\n' "$PYTHON" "$PYTHON_SOURCE"
+  printf 'host platform: %s/%s  platform-scoped venv: %s\n' \
+    "$(uname -s)" "$(uname -m)" "${PLATFORM_VENV:-<not searched: explicit PYTHON=>}"
   printf 'runtime lock: %s\n' "$LOCK_FILE"
   printf '%s\n' "$LOCK_REPORT"
   printf -- '---- pytest output follows ----\n'
