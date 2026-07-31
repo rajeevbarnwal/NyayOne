@@ -10,6 +10,10 @@
 *.pem
 *.key
 *.crt
+# Rendered video-plane configs (SAATHI-451): generated from infra/video/*.tmpl by
+# scripts/render_video_infra_config.py and they hold real secrets. Templates and
+# infra/video/.env.example ARE tracked; anything rendered never is.
+infra/video/rendered/
 
 # Python
 __pycache__/
@@ -22,6 +26,13 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+# Platform-scoped virtualenvs: `.venv-$(uname -s)-$(uname -m)`, e.g.
+# .venv-Linux-aarch64 / .venv-Darwin-arm64. A virtualenv is machine-bound
+# (pyvenv.cfg names a builder interpreter, site-packages hold ABI-tagged
+# binaries), so one shared `.venv` path read from two operating systems is
+# healthy on one and unusable on the other. These must stay untracked too.
+.venv-*/
+venv-*/
 ENV/
 
 # Node / frontend
@@ -82,3 +93,6 @@ storage/vectorstore/*
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Generated browser-gate evidence: never enters a production commit.
+test-results/

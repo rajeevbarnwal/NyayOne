@@ -1,0 +1,78 @@
+# LiveKit server config TEMPLATE — DIRECT-MEDIA mode (SAATHI-451, matrix row H1).
+#
+# RENDER, DO NOT EDIT THE OUTPUT:
+#   python3 scripts/render_video_infra_config.py --mode direct --env-file .env
+# Output: infra/video/rendered/livekit.yaml (mode 0600, gitignored).
+#
+# This is the RELAXED posture. Media is ALLOWED to reach the SFU directly; TURN
+# stays configured as a fallback for clients that cannot. Use it when you are
+# deliberately measuring the direct path, or on a network where you have already
+# proven the relay works and want the lower latency.
+#
+# It must be paired with infra/video/docker-compose.video.direct.yml, which is
+# what publishes the RTC media ports (1040 -> 7881/tcp, 1041 -> 7882/udp).
+# Rendering this template without that overlay produces a server that advertises
+# a candidate address nothing can reach.
+#
+# The ONLY differences from livekit.forced-turn.yaml.tmpl are the three ICE lines
+# marked "DIRECT MODE" below. Diff the two templates before changing either.
+port: 7880
+prometheus_port: 6789
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # DIRECT MODE (1/2): the advertised address must be one the CLIENT can reach —
+  # the host's LAN address for a local smoke test, the node's public address in
+  # staging. The renderer refuses to build a direct-mode config without it.
+  use_external_ip: false
+  node_ip: ${LIVEKIT_ADVERTISE_IP}
+  # DIRECT MODE (2/2): still our own STUN, never Google's. Leaving `stun_servers`
+  # unset makes LiveKit clients fall back to Google's public STUN servers, which
+  # sends every participant's IP to a third party for no benefit.
+  stun_servers:
+    - ${TURN_PUBLIC_HOST}:3478
+  turn_servers:
+    - host: ${TURN_PUBLIC_HOST}
+      port: 3478
+      protocol: udp
+      secret: ${TURN_STATIC_AUTH_SECRET}
+      ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
+    - host: ${TURN_PUBLIC_HOST}
+      port: 3478
+      protocol: tcp
+      secret: ${TURN_STATIC_AUTH_SECRET}
+      ttl: ${TURN_CREDENTIAL_TTL_SECONDS}
+  allow_tcp_fallback: true
+  congestion_control:
+    enabled: true
+
+turn:
+  enabled: false
+
+room:
+  # See the forced-turn template for why each of these four values is what it is;
+  # they are identical in both modes and must stay that way — they encode the
+  # committed revocation semantics, not a network preference.
+  auto_create: true
+  empty_timeout: 300
+  departure_timeout: 300
+  max_participants: 4
+
+logging:
+  level: info
+  json: true
+
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+webhook:
+  api_key: ${LIVEKIT_API_KEY}
+  urls:
+    - ${VIDEO_WEBHOOK_URL}
+  filter_params:
+    include_events:
+      - room_started
+      - room_finished
+      - participant_joined
+      - participant_left

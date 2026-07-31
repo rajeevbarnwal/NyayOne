@@ -1,0 +1,140 @@
+# LegalSaathi Wave 2 — self-hosted video plane (SAATHI-451, frozen matrix row H1).
+#
+# WHAT THIS IS. A self-hosted LiveKit SFU plus a coturn TURN relay, sitting behind
+# the already-committed `VideoSessionProvider` seam
+# (backend/app/services/providers/video_provider.py::LiveKitCommunityAdapter).
+# Nothing in here is a new product surface: the backend still only ever sees
+# VideoCredential / VideoEventData, and this file only makes the LiveKit adapter
+# a deployable option instead of a config choice with nothing behind it.
+#
+# THIS FILE IS AN OVERLAY, NOT A REPLACEMENT. LiveKit has to POST room events to
+# the backend by service name, so it must share the root compose project:
+#
+#   # 1. render the config (no secret is ever committed — see below)
+#   python3 scripts/render_video_infra_config.py --env-file .env
+#   # 2. bring the video plane up alongside the rest of the stack
+#   docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
+#     --profile video up -d coturn livekit
+#
+# FORCED-TURN IS THE DEFAULT POSTURE OF THIS FILE. It does NOT publish LiveKit's
+# RTC media ports on the host, so the only route a browser has to the SFU is
+# coturn's relay. Direct (host/srflx) media is an OPT-IN extra overlay,
+# infra/video/docker-compose.video.direct.yml. Rationale and proof procedure:
+# infra/video/RUNBOOK.md § "Forced-TURN".
+#
+# HOST PORT ALLOCATION. The repo standardises local dev on 1030-1049 (see the
+# header of ../../docker-compose.yml, which is the single source of truth and has
+# been updated to record these). Allocated here:
+#
+#   1039  ->  livekit 7880/tcp   signalling + RoomService (Twirp) + health probe
+#   1042  ->  livekit 6789/tcp   prometheus metrics (readiness scrape target)
+#   1043  ->  coturn  3478/tcp   TURN over TCP  (also the STUN responder)
+#   1043  ->  coturn  3478/udp   TURN over UDP
+#   1040  ->  livekit 7881/tcp   ICE/TCP fallback   — DIRECT overlay only
+#   1041  ->  livekit 7882/udp   RTC UDP mux        — DIRECT overlay only
+#   1044      coturn  5349/tcp   TURN/TLS — RESERVED, deliberately NOT published
+#                                (needs certs; see RUNBOOK § "TURN over TLS")
+#   20500-20549/udp  coturn relay allocations. This block canNOT live inside
+#                    1030-1049: a TURN relay needs one contiguous UDP port per
+#                    allocation and the whole dev range is only 20 ports wide.
+#                    20500-20549 is therefore reserved for the media plane and
+#                    recorded in ../../docker-compose.yml with the rest.
+#
+# NO SECRET IS COMMITTED. Both config files are RENDERED from
+# infra/video/*.tmpl by scripts/render_video_infra_config.py, which reads every
+# secret from the environment and writes into infra/video/rendered/ (gitignored).
+# infra/video/.env.example carries placeholder NAMES only, and its placeholder
+# values are ones the fail-closed validator in backend/app/core/config.py
+# actively rejects, so a copied-but-unedited template cannot boot.
+#
+# The one secret that reaches a process argument rather than a file is coturn's
+# `--static-auth-secret`: coturn does not expand environment variables inside
+# turnserver.conf, and keeping it on the command line means the committed
+# template stays secret-free AND world-readable (coturn runs as `nobody`).
+# That is an accepted trade-off for this particular value — the TURN shared
+# secret exists to be turned into short-lived credentials that are handed to
+# every client anyway. It is NOT acceptable for LIVEKIT_API_SECRET, which is why
+# that one goes into a 0600 rendered file instead.
+services:
+  coturn:
+    # Pinned by tag AND digest. See infra/video/SBOM.md for provenance.
+    image: coturn/coturn:4.7.0@sha256:a00afb5b4890de4df22bbe70379c6b316685dffee297d53cac1271dcb91fab93
+    profiles: ["video"]
+    # Opt-in: `docker compose ... --profile video up` leaves the rest of the dev
+    # stack behaving exactly as it does today.
+    restart: unless-stopped
+    # Deliberate deviation from the root compose file (which sets no restart
+    # policy): a media plane that stays down after a crash turns every live
+    # tutoring session into an outage. See RUNBOOK § "Restart and reconnect".
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      # Not in the config file on purpose — see the header note above.
+      - "--static-auth-secret=${TURN_STATIC_AUTH_SECRET:?TURN_STATIC_AUTH_SECRET is required; see infra/video/.env.example}"
+    volumes:
+      - ./rendered/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - coturn_state:/var/lib/coturn
+    ports:
+      - "1043:3478/tcp"
+      - "1043:3478/udp"
+      - "20500-20549:20500-20549/udp"
+    healthcheck:
+      # A real STUN Binding transaction against the listener, not a port poke:
+      # turnutils_stunclient ships in the coturn image and exits non-zero when
+      # the server does not answer. Same knobs as the postgres healthcheck in
+      # the root compose file.
+      test: ["CMD-SHELL", "turnutils_stunclient -p 3478 127.0.0.1 2>&1 | grep -q 'reflexive addr'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      video:
+        ipv4_address: 172.29.30.11
+
+  livekit:
+    image: livekit/livekit-server:v1.9.12@sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576
+    profiles: ["video"]
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit/livekit.yaml"]
+    volumes:
+      - ./rendered/livekit.yaml:/etc/livekit/livekit.yaml:ro
+    ports:
+      - "1039:7880"
+      - "1042:6789"
+    healthcheck:
+      # LiveKit's own liveness/readiness surface: GET / on the signalling port.
+      # This is exactly what the upstream Helm chart probes
+      # (livekit-helm/livekit-server/templates/deployment.yaml -> httpGet path: /
+      # port: http). Body-agnostic on purpose: a non-2xx makes wget exit non-zero.
+      # `wget` is busybox wget — the image is FROM alpine.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:7880/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      # Do not advertise a TURN server that is not answering yet: LiveKit hands
+      # the TURN address to every client in the JoinResponse.
+      coturn:
+        condition: service_healthy
+    networks:
+      video:
+        ipv4_address: 172.29.30.10
+      # `default` is the root compose project's network: this is how the backend
+      # reaches LiveKit for Twirp RoomService calls (LiveKitCommunityAdapter.
+      # _twirp) and how LiveKit reaches the backend to POST room events.
+      default: {}
+
+volumes:
+  coturn_state:
+
+networks:
+  video:
+    # An explicit, fixed subnet is not decoration: coturn's peer ACL and
+    # LiveKit's advertised ICE candidate address are both pinned to
+    # 172.29.30.10, which is what makes "the relay can only ever forward to the
+    # SFU" and "the SFU has no browser-reachable candidate" assertable rather
+    # than aspirational. Change the subnet in ONE place and re-render.
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.30.0/24

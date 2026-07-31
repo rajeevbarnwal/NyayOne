@@ -41,6 +41,10 @@ from app.services.credential_storage import (
 )
 from app.workers.credential_outbox_relay import relay_credential_outbox
 
+# Test-suite plumbing: create_all-equivalent schema copies + a module-scoped
+# route-materialised app (see tests/dbtemplate.py, tests/apptemplate.py).
+from tests import apptemplate, dbtemplate
+
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
     return {
@@ -50,14 +54,24 @@ def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
     }
 
 
+@pytest.fixture(scope="module")
+def _mounted():
+    """The mounted app + client, built and route-materialised once per module.
+
+    Nothing test-specific lives on it: ``ctx`` re-points every dependency
+    override per test. See ``tests/apptemplate.py``.
+    """
+    return apptemplate.mounted_app(exception_handlers=True, raise_server_exceptions=False)
+
+
 @pytest.fixture()
-def ctx(tmp_path):
+def ctx(tmp_path, _mounted):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def prod_session():
@@ -72,12 +86,10 @@ def ctx(tmp_path):
             session.close()
 
     storage = FilesystemStorageAdapter(tmp_path / "objects")
-    app = FastAPI()
-    register_exception_handlers(app)
-    app.include_router(api_router, prefix="/api/v1")
+    app, client = _mounted
+    apptemplate.fresh(app, client)
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[get_credential_storage] = lambda: storage
-    client = TestClient(app, raise_server_exceptions=False)
 
     with SessionLocal() as session:
         student = User(role="student", status="active")
@@ -126,7 +138,8 @@ def ctx(tmp_path):
             "issuer": issuer.id,
         }
     yield client, SessionLocal, storage, ids
-    Base.metadata.drop_all(engine)
+    # Per-test engine: dispose() below is the cleanup that matters; the old
+    # drop_all re-walked all 53 tables (~10 ms) to demolish a discarded database.
     engine.dispose()
 
 
@@ -567,8 +580,20 @@ def test_tampered_unknown_malformed_expired_are_minimal(ctx):
         "/api/v1/public/credential-verifications/"
         + ("A" * 43)
     )
+    # A REAL single-character mutation of the issued token. Appending a fixed "A"
+    # was a no-op whenever the token already ended in "A", and it ends in "A"
+    # about 1 token in 16: the token is `urlsafe_b64encode(32-byte digest)` with
+    # padding stripped, so its final character carries only 4 significant bits and
+    # comes from a 16-character alphabet. When that happened the "tampered" token
+    # WAS the valid token and this assertion saw 200 — the intermittent failure of
+    # this exact test recorded in docs/product/wave2/FULL_SUITE_FLAKE_DIAGNOSIS.md.
+    # Lookup is `keyed_hash(token)` over the raw ASCII string, so changing any one
+    # character is a genuine tamper; the case is unchanged, it is now guaranteed to
+    # actually happen.
+    tampered_token = token["token"][:-1] + ("B" if token["token"][-1] == "A" else "A")
+    assert tampered_token != token["token"]  # a no-op mutation would prove nothing
     tampered = client.get(
-        f"/api/v1/public/credential-verifications/{token['token'][:-1]}A"
+        f"/api/v1/public/credential-verifications/{tampered_token}"
     )
     for response in (malformed, unknown, tampered):
         assert response.status_code == 404

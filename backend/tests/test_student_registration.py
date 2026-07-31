@@ -24,6 +24,9 @@ from app.models.registration import (
 from app.schemas.registration import StudentRegisterRequest
 from app.services.registration_service import RegistrationError, register_student
 
+# Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
+from tests import dbtemplate
+
 
 def _req(**over):
     base = dict(
@@ -162,7 +165,7 @@ def test_unknown_field_rejected():
 # ---- HTTP status codes -----------------------------------------------------
 @pytest.fixture()
 def client(engine):
-    Base.metadata.create_all(engine)
+    dbtemplate.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
     def _override():
@@ -186,7 +189,9 @@ def client(engine):
 
     app.dependency_overrides[_ep.get_otp_sender] = lambda: _Cap()
     yield TestClient(app)
-    Base.metadata.drop_all(engine)
+    # The shared session engine is reset to an empty schema at the START of
+    # every fixture that uses it (conftest.db_session and this fixture), so
+    # demolishing it here proved nothing and cost ~10 ms per test.
 
 
 def test_http_201_and_422_and_409(client):

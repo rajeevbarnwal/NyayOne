@@ -16,6 +16,13 @@ from app.models.registration import (  # noqa: F401
     StudentVerification,
     User,
 )
+from app.models.wave2 import (  # noqa: F401
+    BookingEvent, BookingHold, PaymentEvent, PaymentOrder, PaymentRefund,
+    ReviewModeration, SessionAttendance, SessionCancellation,
+    SessionReminderJob, SessionStatusHistory, TutorAvailabilitySlot,
+    TutorProfile, TutorReview, TutorSubject, TutoringOutbox, TutoringSession,
+    VideoSessionGrant,
+)
 from app.models.credentials import (  # noqa: F401
     Credential, CredentialEvidence, CredentialEvidenceScanEvent,
     CredentialIssuer, CredentialOutbox, CredentialReminderJob,
@@ -48,4 +55,22 @@ __all__ = [
     "VerificationToken",
     "CredentialRevocation",
     "VerificationAccessLog",
+    # Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127)
+    "TutorProfile",
+    "TutorSubject",
+    "TutorAvailabilitySlot",
+    "BookingHold",
+    "PaymentOrder",
+    "PaymentEvent",
+    "PaymentRefund",
+    "TutoringSession",
+    "BookingEvent",
+    "SessionStatusHistory",
+    "SessionAttendance",
+    "SessionCancellation",
+    "TutorReview",
+    "ReviewModeration",
+    "TutoringOutbox",
+    "SessionReminderJob",
+    "VideoSessionGrant",
 ]

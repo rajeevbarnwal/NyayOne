@@ -44,6 +44,9 @@ import {
   SchoolCompare,
   SchoolSavedFollowed,
 } from './schools/SchoolScreens';
+import { TutorSearch, TutorDetail } from './tutoring/TutorDiscoveryScreens';
+import { BookingHoldScreen, SessionConfirmed } from './tutoring/BookingScreens';
+import { SessionLifecycle } from './tutoring/SessionScreens';
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
 import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
 import { CalendarMonth, CalendarAdd } from './calendar/CalendarScreens';
@@ -98,6 +101,13 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-28': SchoolDetail,
   'S-29': SchoolCompare,
   'S-30': SchoolSavedFollowed,
+  // S6 Wave 2 tutoring: tutoring/search, tutoring/detail, tutoring/hold,
+  // tutoring/detail (session), tutoring/session (SAATHI-65 + SAATHI-66)
+  'S-31': TutorSearch,
+  'S-32': TutorDetail,
+  'S-33': BookingHoldScreen,
+  'S-34': SessionConfirmed,
+  'S-35': SessionLifecycle,
   // S10 community (SAATHI-74)
   'S-50': CommunityFeed,
   'S-51': CommunityPost,
