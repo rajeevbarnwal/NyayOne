@@ -121,6 +121,20 @@ def register(
     return StudentRegisterResponse(registration_id=reg.id, status=reg.status)
 
 
+class CheckMobileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mobile: str
+
+
+@router.post("/check-mobile")
+def check_mobile(payload: CheckMobileRequest, session: Session = Depends(get_session)) -> dict[str, bool]:
+    digits = "".join(c for c in payload.mobile if c.isdigit())
+    if len(digits) > 10:
+        digits = digits[-10:]
+    reg = registration_service.find_by_mobile(session, digits)
+    return {"registered": reg is not None}
+
+
 # --------------------------------------------------------------------------- #
 # OTP verify / resend                                                         #
 # --------------------------------------------------------------------------- #
