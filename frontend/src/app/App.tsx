@@ -18,6 +18,8 @@ const ScreenPlaceholder = lazy(() => import('../features/ScreenPlaceholder'));
 // Internal token/theme verification route (not part of the S-01..S-99 registry).
 const TokenShowcase = lazy(() => import('../features/TokenShowcase'));
 
+import { TermsScreen, PrivacyScreen } from '../features/student/legal/LegalScreens';
+
 function ShellRoutes() {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -25,6 +27,8 @@ function ShellRoutes() {
       <Suspense fallback={<div className="route-loading">Loading…</div>}>
         <Routes>
           <Route path="/" element={<Navigate to="/s-03" replace />} />
+          <Route path="/terms" element={<TermsScreen theme={theme} toggleTheme={toggleTheme} />} />
+          <Route path="/privacy" element={<PrivacyScreen theme={theme} toggleTheme={toggleTheme} />} />
           <Route path="/__tokens" element={<TokenShowcase theme={theme} toggleTheme={toggleTheme} />} />
           {screenRoutes.map((r) => {
             const Screen = studentScreens[r.id];
