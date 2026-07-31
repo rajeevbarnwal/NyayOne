@@ -86,3 +86,6 @@ storage/vectorstore/*
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Generated browser-gate evidence: never enters a production commit.
+test-results/

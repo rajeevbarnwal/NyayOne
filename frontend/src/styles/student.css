@@ -2281,12 +2281,21 @@ html[data-tt-room='1'], body[data-tt-room='1'] {
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   overflow: hidden; contain: strict;
 }
+/* Remote tiles. One participant is the ordinary tutoring case and gets the
+   whole stage; a second stream (a screen share, or a third party) splits it
+   into equal rows. Every track is minmax(0, 1fr) with min-width/min-height 0,
+   so a tile can never push the contained stage wider than its column. */
+.tt-live .tt-mgrid {
+  display: grid; min-width: 0; min-height: 0; gap: 8px;
+  grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr);
+}
 .tt-live .tt-mtile {
   position: relative; min-width: 0; min-height: 0; border-radius: var(--tt-r-lg); overflow: hidden;
   background: var(--tt-studio2); border: 1px solid var(--tt-mtile-edge);
   outline: 3px solid var(--tt-jade); outline-offset: -3px;
 }
-.tt-live .tt-mtile > svg { width: 100%; height: 100%; display: block; object-fit: cover; }
+.tt-live .tt-mtile > svg,
+.tt-live .tt-mtile > video { width: 100%; height: 100%; display: block; object-fit: cover; }
 .tt-live .tt-mtile .tt-nm {
   position: absolute; left: 10px; bottom: 10px; background: rgba(0, 0, 0, .62);
   border-radius: var(--tt-r-sm); padding: 5px 10px; font-size: 11px; font-weight: 800;
@@ -2368,8 +2377,27 @@ html[data-tt-room='1'], body[data-tt-room='1'] {
 .st-tutoring .tt-live .tt-sheet-scrim {
   position: fixed; inset: 0; z-index: 429; background: rgba(0, 0, 0, .45); border: none;
 }
+/* The transport-state pill. Lives on the stage rather than in the header so
+   it never competes for the header's width: a second header chip squeezed the
+   session title into an ellipsis at 390 CSS px, which is a 1.4.4 content loss.
+   No overflow:hidden, so its text can never be silently clipped either. */
+.tt-live .tt-tstate {
+  position: absolute; left: 20px; top: 16px; z-index: 6;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--tt-r-pill);
+  background: rgba(12, 8, 3, .82); border: 1.5px solid var(--tt-studio-line2);
+  font-size: 11px; font-weight: 800; color: var(--tt-studiotx); white-space: nowrap;
+}
+.tt-live .tt-tstate > i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.tt-live .tt-tstate--g { color: var(--tt-jade); border-color: var(--tt-jade); }
+.tt-live .tt-tstate--t { color: var(--tt-terra); border-color: var(--tt-terra); }
+.tt-live .tt-tstate--t > i { border-radius: 2px; transform: rotate(45deg); }
+.tt-live .tt-tstate--i { color: var(--tt-studiomut); border-color: var(--tt-studio-line2); }
+.tt-live .tt-tstate--i > i { border-radius: 2px; }
+.tt-live .tt-tstate--r { color: var(--tt-studio-leave-ink); border-color: var(--tt-studio-leave); }
+.tt-live .tt-tstate--r > i { border-radius: 2px; }
 .tt-live .tt-rbanner {
-  position: absolute; left: 12px; right: 12px; top: 12px; z-index: 5; display: flex; gap: 9px;
+  position: absolute; left: 12px; right: 12px; top: 46px; z-index: 5; display: flex; gap: 9px;
   align-items: flex-start; background: rgba(12, 8, 3, .9);
   border: 1.5px solid var(--tt-studio-line2); border-radius: var(--tt-r-md); padding: 9px 11px;
 }

@@ -27,6 +27,9 @@
  *   d3   completion after scheduled end, attendance state, review gate
  *   d4   attendance confirm -> review allowed; dispute -> review blocked
  *   neg  hold expiry, slot conflict, payment failure, refused room entry
+ *   n45  media-plane disconnect/reconnect on the PRODUCTION live room, over its
+ *        real VideoRoomClient boundary with the deterministic adapter selected
+ *        at runtime (part of `neg`; also runnable on its own)
  *   rl   rate limit rendered in the browser
  *   priv J1 privacy scan over everything captured on disk
  */
@@ -46,6 +49,15 @@ const STAGES = (process.env.E2E_STAGES || 'a').split(',').map((s) => s.trim()).f
 const PYTHON = process.env.E2E_PYTHON || 'python3';
 const REPO_ROOT = process.env.E2E_REPO_ROOT || process.cwd();
 const BACKEND_LOG = process.env.E2E_BACKEND_LOG || '';
+/**
+ * The pid of the uvicorn process the runner started, and the commit the whole
+ * run is being judged at. Both are REQUIRED: a driver that cannot see the
+ * backend process cannot tell "no errors" from "no backend", and evidence that
+ * does not name its commit cannot be told apart from evidence of another one.
+ * Their absence is a FAIL, never a silent skip (see `backendOracle`).
+ */
+const BACKEND_PID = Number(process.env.E2E_BACKEND_PID || '0') || 0;
+const COMMIT = process.env.E2E_COMMIT || '';
 const FEE_PAISE = Number(process.env.E2E_FEE_PAISE || '250000');
 const RUN_ID = process.env.E2E_RUN_ID || 'adhoc';
 const SEARCH_LIMIT = Number(process.env.E2E_SEARCH_LIMIT || '200');
@@ -81,6 +93,22 @@ const ADMIN = '00000000-0000-4000-8000-00000000ad01';
  *   E2E_INJECT=port-collision     point the driver's web+api at one port
  *   E2E_INJECT=media-never-ready  make getUserMedia hang forever
  *   E2E_INJECT=privacy-canary     plant a real secret in browser storage
+ *
+ * F3 — the backend-log / liveness / evidence-provenance oracle. Each of these
+ * must produce a NON-ZERO exit, and each is data rather than a patch, so the
+ * clean run is provably the same bytes:
+ *
+ *   E2E_INJECT=log-unhandled      write a real `unhandled_exception` ERROR line
+ *                                 into logs/backend_uvicorn.log
+ *   E2E_INJECT=log-asgi-traceback write an "Exception in ASGI application"
+ *                                 traceback (with an IndexError) into that log
+ *   E2E_INJECT=unexpected-404     rewrite the browser's OWN session fetch onto a
+ *                                 session id that does not exist, so the REAL
+ *                                 backend answers 404 for a session the screen
+ *                                 believes it owns — nobody declared it
+ *   E2E_INJECT=backend-kill       SIGKILL the backend process mid-run
+ *   E2E_INJECT=stale-commit       carry evidence in from a DIFFERENT commit
+ *   E2E_INJECT=skip-stage         silently drop a PLANNED stage from the run
  */
 const INJECT = new Set((process.env.E2E_INJECT || '').split(',').map((s) => s.trim()).filter(Boolean));
 const injected = (name) => INJECT.has(name);
@@ -117,7 +145,9 @@ function saveResults() {
 }
 function record(entry) {
   const idx = RESULTS.findIndex((r) => r.id === entry.id);
-  const row = { ...entry, at: new Date().toISOString() };
+  // Every row names the commit it was produced from, so evidence carried into
+  // this directory from another one cannot pass as this run's (F3).
+  const row = { ...entry, commit: COMMIT || null, at: new Date().toISOString() };
   if (idx >= 0) RESULTS[idx] = row;
   else RESULTS.push(row);
   saveResults();
@@ -237,12 +267,18 @@ function newChecks(id, required) {
 }
 
 function recordChecks(chk, { stage, matrix, summary, observed, artifacts = [], mechanism }) {
+  // F3. Judge the BACKEND's own log region for this row before draining, so a
+  // server-side error raised by the very request this row asserts on is owned
+  // by this row and not by whatever runs next.
+  const region = BACKEND.harvest(chk.id);
   const gateProblems = GATE.drain(chk.id);
-  if (gateProblems.length) {
+  const browserProblems = gateProblems.filter((p) => p.kind !== 'backendlog');
+  const logProblems = gateProblems.filter((p) => p.kind === 'backendlog');
+  if (browserProblems.length) {
     chk.assert(
       'no unexpected console error, page error, failed request or unexpected 4xx/5xx',
       'zero unattributed browser problems during this stage',
-      gateProblems.map((p) => `${p.kind}: ${p.detail}`),
+      browserProblems.map((p) => `${p.kind}: ${p.detail}`),
       false,
     );
   } else {
@@ -253,6 +289,14 @@ function recordChecks(chk, { stage, matrix, summary, observed, artifacts = [], m
       true,
     );
   }
+  chk.assert(
+    'no ERROR/CRITICAL/Traceback/unhandled_exception/ASGI exception/cannot commit/IndexError in the BACKEND log region this row produced',
+    `zero matching lines in bytes [${region.from},${region.to}) of the backend log`,
+    logProblems.length
+      ? logProblems.map((p) => String(p.detail).slice(0, 300))
+      : `zero across ${region.lines} new line(s) / ${region.bytes} byte(s)`,
+    logProblems.length === 0 && !region.error,
+  );
   record({
     id: chk.id,
     stage,
@@ -314,8 +358,23 @@ function routeMatches(spec, pathname) {
  */
 const NETWORK_ECHO = /^error: Failed to load resource: the server responded with a status of (\d{3})/;
 
+/**
+ * A 5xx is NEVER attributable.
+ *
+ * `expecting()` exists to scope an error a case deliberately provokes — an
+ * expired hold answering 409 HOLD_EXPIRED, a rival student answering 403. A
+ * server fault is a different animal: there is no product behaviour a 5xx is
+ * the correct answer to, so allowing a case to declare one would be a global
+ * allowlist wearing a scope's clothes. Any 5xx therefore skips attribution
+ * entirely and fails the stage that produced it and the run.
+ */
+function isNeverAttributable(kind, info) {
+  return kind === 'http' && Number(info.status) >= 500;
+}
+
 /** Try to hand a problem to an open scope. Returns the spec that took it. */
 function attribute(kind, info) {
+  if (isNeverAttributable(kind, info)) return null;
   if (kind === 'console') {
     const echo = NETWORK_ECHO.exec(info.detail || '');
     if (echo) {
@@ -342,6 +401,16 @@ function attribute(kind, info) {
         if (!spec.text.test(info.detail)) continue;
       } else if (kind === 'requestfailed') {
         if (!routeMatches(spec.route, info.pathname)) continue;
+      } else if (kind === 'backendlog') {
+        // A backend-log expectation has to name the exact line AND its typed
+        // code; `{ kind: 'backendlog' }` on its own matches nothing. No stage
+        // in this driver declares one, so the effective allowlist is EMPTY and
+        // every ERROR/CRITICAL/traceback line fails the stage that produced it.
+        if (!(spec.text instanceof RegExp) || spec.code === undefined) continue;
+        if (!spec.text.test(info.detail)) continue;
+        if (spec.code !== info.code) continue;
+        if (spec.logger !== undefined && spec.logger !== info.logger) continue;
+        if (spec.level !== undefined && spec.level !== info.level) continue;
       }
       spec.count += 1;
       spec.observed.push(info);
@@ -390,6 +459,10 @@ async function expecting(specs, fn) {
     thrown = err;
   }
   await settleCaptures();
+  // The backend log region this case produced is harvested while the case's
+  // scope is still OPEN, so a line the case legitimately declared can be
+  // attributed to it and anything else falls through to the stage.
+  BACKEND.harvest(`expecting(${specs.map((s) => s.kind).join('+')})`);
   GATE.scopes.pop();
   const report = scope.specs.map((s) => ({
     kind: s.kind,
@@ -409,6 +482,372 @@ async function expecting(specs, fn) {
     satisfied: report.every((r) => r.satisfied),
     unmet: report.filter((r) => !r.satisfied).map((r) => `${r.method || r.kind} ${r.route} -> ${r.status} ${r.code || ''}`.trim()),
   };
+}
+
+/* ============================ F3: the fail-closed BACKEND-LOG oracle ======= */
+
+/**
+ * A browser gate that only watches the BROWSER is half a gate. Every screen in
+ * this journey is one HTTP hop from a FastAPI process, and the failures that
+ * matter most — an unhandled exception swallowed into a 500 body the screen
+ * renders as a friendly banner, a session that "cannot commit", a worker that
+ * died between two stages — are visible in the backend's own log and in the
+ * backend's own process table, and NOWHERE in the DOM.
+ *
+ * So this oracle asserts three things for EVERY stage, and again at the end:
+ *
+ *   1. the region of logs/backend_uvicorn.log that THIS stage produced
+ *      contains no ERROR, no CRITICAL, no Traceback, no `unhandled_exception`,
+ *      no `Exception in ASGI application`, no `cannot commit` and no
+ *      `IndexError`;
+ *   2. the backend process is still ALIVE (not merely un-reaped: a zombie is a
+ *      dead backend), and still answers /health;
+ *   3. no 5xx and no failed request reached the browser (that half lives in
+ *      `GATE`, and 5xx is deliberately unattributable — see
+ *      `isNeverAttributable`).
+ *
+ * PER-STAGE BYTE OFFSET. The log is read as a REGION, never as a whole file:
+ * `BACKEND.offset` is the byte position immediately after the last line already
+ * judged, it advances monotonically, and it is persisted in state.json so it
+ * survives the chained 45-second shells that make up one logical run. That
+ * matters twice over:
+ *
+ *   * a line a stage legitimately produced cannot mask a later real one — the
+ *     earlier region has already been consumed and cannot be re-read as
+ *     "context" for the later stage;
+ *   * a stage is judged on what IT produced, so an error is attributed to the
+ *     stage that caused it rather than to whichever stage happens to run last.
+ *
+ * If the file ever SHRINKS below the recorded offset the log was rotated or
+ * truncated underneath a live run: the region boundary is then unknowable, and
+ * that is a FAIL, not a reset.
+ */
+
+const BACKEND_LOG_PATTERNS = [
+  { id: 'level_error', re: /(?:^|[^A-Za-z_])ERROR(?:[^A-Za-z_]|$)/, what: 'an ERROR-level backend log line' },
+  { id: 'level_critical', re: /(?:^|[^A-Za-z_])CRITICAL(?:[^A-Za-z_]|$)/, what: 'a CRITICAL-level backend log line' },
+  { id: 'traceback', re: /Traceback \(most recent call last\)/, what: 'a Python traceback' },
+  { id: 'unhandled_exception', re: /unhandled_exception/, what: 'the app-level unhandled exception handler firing' },
+  { id: 'asgi_exception', re: /Exception in ASGI application/, what: 'an exception escaping into the ASGI layer' },
+  { id: 'cannot_commit', re: /cannot commit/i, what: 'a transaction that could not be committed' },
+  { id: 'index_error', re: /\bIndexError\b/, what: 'an IndexError' },
+];
+
+const BACKEND = {
+  /** byte offset immediately after the last log region already judged */
+  offset: Number.isFinite(Number(STATE.backendLogOffset)) ? Number(STATE.backendLogOffset) : 0,
+  /** one entry per harvest: which owner consumed which byte range */
+  regions: [],
+  /** every matching line ever seen, for the evidence */
+  findings: [],
+  /** liveness/health samples */
+  samples: [],
+};
+
+function backendLogSize() {
+  try {
+    return fs.statSync(BACKEND_LOG).size;
+  } catch {
+    return -1;
+  }
+}
+
+/** Parse one backend log line. The app logs JSON; uvicorn logs plain text. */
+function parseLogLine(line) {
+  if (line.startsWith('{')) {
+    try {
+      const j = JSON.parse(line);
+      return { level: j.level ?? null, logger: j.logger ?? null, code: j.message ?? null, requestId: j.request_id ?? null };
+    } catch { /* fall through to plain text */ }
+  }
+  const m = /^(CRITICAL|ERROR|WARNING|INFO|DEBUG):\s+(.*)$/.exec(line);
+  if (m) return { level: m[1], logger: 'uvicorn', code: m[2].slice(0, 120), requestId: null };
+  return { level: null, logger: null, code: null, requestId: null };
+}
+
+/**
+ * Read and JUDGE the log region produced since the last harvest. Every matching
+ * line goes through `problem()`, so an open `expecting()` scope may claim it
+ * (it must name the exact line pattern AND its typed code) and anything
+ * unclaimed lands in `GATE.problems` and fails the stage that drains it.
+ *
+ * Synchronous on purpose: it is called from `recordChecks`, which is the single
+ * funnel every stage verdict passes through.
+ */
+BACKEND.harvest = function harvest(owner) {
+  const region = { owner, from: this.offset, to: this.offset, bytes: 0, lines: 0, findings: 0, at: new Date().toISOString() };
+  if (!BACKEND_LOG) {
+    region.error = 'E2E_BACKEND_LOG was not provided — the backend log cannot be scanned';
+    this.regions.push(region);
+    problem('backendlog', `FAIL-CLOSED: no backend log path was handed to the driver, so "${owner}" was judged without one`, {
+      pathname: '(no log)', level: null, logger: null, code: null, pattern: 'missing_log', owner,
+    });
+    return region;
+  }
+  const size = backendLogSize();
+  if (size < 0) {
+    region.error = `backend log ${BACKEND_LOG} does not exist`;
+    this.regions.push(region);
+    problem('backendlog', `FAIL-CLOSED: backend log ${BACKEND_LOG} does not exist, so "${owner}" was judged without one`, {
+      pathname: BACKEND_LOG, level: null, logger: null, code: null, pattern: 'missing_log', owner,
+    });
+    return region;
+  }
+  if (size < this.offset) {
+    region.error = `backend log SHRANK from ${this.offset} to ${size} bytes — it was rotated or truncated under a live run`;
+    this.regions.push(region);
+    problem('backendlog', `FAIL-CLOSED: ${region.error}; the region boundary for "${owner}" is unknowable`, {
+      pathname: BACKEND_LOG, level: null, logger: null, code: null, pattern: 'log_truncated', owner,
+    });
+    this.offset = size;
+    STATE.backendLogOffset = this.offset;
+    saveState();
+    return region;
+  }
+  let text = '';
+  if (size > this.offset) {
+    const fd = fs.openSync(BACKEND_LOG, 'r');
+    try {
+      const buf = Buffer.alloc(size - this.offset);
+      fs.readSync(fd, buf, 0, buf.length, this.offset);
+      text = buf.toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  // Only WHOLE lines are judged; a half-written trailing line stays in the
+  // region for the next harvest rather than being scanned twice or dropped.
+  const lastNl = text.lastIndexOf('\n');
+  const consumed = lastNl >= 0 ? lastNl + 1 : 0;
+  const body = text.slice(0, consumed);
+  region.to = this.offset + consumed;
+  region.bytes = consumed;
+
+  const lines = body.length ? body.split('\n').filter((l) => l.length) : [];
+  region.lines = lines.length;
+  for (const line of lines) {
+    const matched = BACKEND_LOG_PATTERNS.filter((p) => p.re.test(line));
+    if (!matched.length) continue;
+    const meta = parseLogLine(line);
+    const finding = {
+      owner,
+      patterns: matched.map((p) => p.id),
+      what: matched.map((p) => p.what).join('; '),
+      level: meta.level,
+      logger: meta.logger,
+      code: meta.code,
+      requestId: meta.requestId,
+      line: line.slice(0, 500),
+      offset: region.from,
+    };
+    this.findings.push(finding);
+    region.findings += 1;
+    problem('backendlog', `backend log [${matched.map((p) => p.id).join(',')}] ${line.slice(0, 300)}`, {
+      pathname: BACKEND_LOG,
+      level: meta.level,
+      logger: meta.logger,
+      code: meta.code,
+      requestId: meta.requestId,
+      pattern: matched[0].id,
+      owner,
+    });
+  }
+  this.offset = region.to;
+  STATE.backendLogOffset = this.offset;
+  saveState();
+  this.regions.push(region);
+  return region;
+};
+
+/**
+ * Is the backend process alive? A pid that `kill(pid, 0)` accepts is NOT
+ * enough: a uvicorn that crashed is still an un-reaped child of the runner
+ * shell until the shell waits for it, and `kill(pid, 0)` succeeds against a
+ * zombie. The Linux process state is read directly so "exited, not yet reaped"
+ * is reported as DEAD, which is what it is.
+ */
+function backendProcessState() {
+  if (!BACKEND_PID) return { pid: null, alive: false, state: null, why: 'E2E_BACKEND_PID was not provided; process liveness cannot be verified' };
+  try {
+    process.kill(BACKEND_PID, 0);
+  } catch (err) {
+    return { pid: BACKEND_PID, alive: false, state: null, why: `kill(${BACKEND_PID}, 0) failed: ${err.code || String(err)}` };
+  }
+  let state;
+  try {
+    const stat = fs.readFileSync(`/proc/${BACKEND_PID}/stat`, 'utf8');
+    state = (stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[0]) || null;
+  } catch {
+    state = null;
+  }
+  if (state === 'Z') return { pid: BACKEND_PID, alive: false, state, why: 'the backend process has EXITED (zombie, awaiting reap by the runner)' };
+  if (state === 'X') return { pid: BACKEND_PID, alive: false, state, why: 'the backend process is dead' };
+  return { pid: BACKEND_PID, alive: true, state, why: null };
+}
+
+/** Does it still SERVE? A wedged process is alive and useless. */
+async function backendHealth() {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const res = await fetch(`${API}/health`, { signal: ctl.signal });
+    const body = (await res.text()).slice(0, 200);
+    return { ok: res.status === 200, status: res.status, body };
+  } catch (err) {
+    return { ok: false, status: null, body: null, error: String(err).slice(0, 200) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * The per-stage verdict row. Called after EVERY stage (including one that
+ * threw) and once more at finalisation. It fails the run on a dirty log
+ * region, on a dead/zombie backend and on a backend that stopped serving.
+ */
+async function backendOracle(owner, { final = false } = {}) {
+  // Give a line that the just-finished request wrote a moment to reach the
+  // file. This is a flush allowance measured in milliseconds, not a readiness
+  // sleep: a line that arrives later is still caught by the NEXT region, which
+  // still fails the run — it would only be attributed to the following stage.
+  await new Promise((r) => setTimeout(r, 120));
+  const region = BACKEND.harvest(`stage:${owner}`);
+  const unowned = GATE.drain(`BACKEND-oracle-${owner}`);
+  const proc = backendProcessState();
+  const health = await backendHealth();
+  BACKEND.samples.push({ owner, at: new Date().toISOString(), proc, health, region });
+
+  const chk = newChecks(`BACKEND-oracle-${owner}`, [
+    'the backend log region this stage produced is free of ERROR/CRITICAL/Traceback/unhandled_exception/ASGI exception/cannot commit/IndexError',
+    'the backend process is ALIVE (not exited, not a zombie)',
+    'the backend still answers /health with 200',
+    'no unattributed browser problem (5xx, failed request, console error, page error) is outstanding for this stage',
+  ]);
+
+  const logProblems = unowned.filter((p) => p.kind === 'backendlog');
+  const otherProblems = unowned.filter((p) => p.kind !== 'backendlog');
+  chk.ok(
+    'the backend log region this stage produced is free of ERROR/CRITICAL/Traceback/unhandled_exception/ASGI exception/cannot commit/IndexError',
+    `zero matching lines in bytes [${region.from},${region.to}) of ${BACKEND_LOG || '(no log path)'}`,
+    logProblems.length
+      ? logProblems.map((p) => p.detail.slice(0, 300))
+      : `zero matching lines across ${region.lines} line(s) / ${region.bytes} byte(s) in bytes [${region.from},${region.to})`,
+    () => logProblems.length === 0 && !region.error,
+  );
+  chk.ok(
+    'the backend process is ALIVE (not exited, not a zombie)',
+    'the pid the runner started is running',
+    proc.alive ? `pid ${proc.pid} running (state ${proc.state || 'unknown'})` : `DEAD: ${proc.why}`,
+    () => proc.alive === true,
+  );
+  chk.ok(
+    'the backend still answers /health with 200',
+    'GET /health -> 200',
+    health.ok ? `200 ${health.body}` : `NOT SERVING: status=${health.status} ${health.error || health.body || ''}`,
+    () => health.ok === true,
+  );
+  chk.ok(
+    'no unattributed browser problem (5xx, failed request, console error, page error) is outstanding for this stage',
+    'zero',
+    otherProblems.length ? otherProblems.map((p) => `${p.kind}: ${String(p.detail).slice(0, 200)}`) : 'zero',
+    () => otherProblems.length === 0,
+  );
+
+  record({
+    id: `BACKEND-oracle-${owner}`,
+    stage: owner,
+    matrix: 'F3',
+    outcome: chk.verdict,
+    summary: `${final ? 'FINAL ' : ''}backend oracle for "${owner}": ${region.lines} new log line(s) / ${region.bytes} byte(s) judged in [${region.from},${region.to}), ${logProblems.length} log finding(s), process ${proc.alive ? 'alive' : 'DEAD'}, health ${health.ok ? 'ok' : 'FAILING'} — ${chk.summary()}`,
+    assertions: chk.table,
+    ...(chk.failed.length || chk.unexecuted.length ? { failedAssertions: [...chk.failed, ...chk.unexecuted] } : {}),
+    observed: { region, proc, health, logFindings: logProblems, otherProblems },
+    artifacts: [],
+  });
+  return chk.verdict === 'pass';
+}
+
+/* ------------------------------- F3: evidence provenance & stage completeness */
+
+/**
+ * Evidence is only evidence OF something if it names what it was produced from.
+ * Every recorded row carries the commit; the run refuses to start if the
+ * evidence directory it is appending to was produced at a DIFFERENT one, and
+ * refuses to finish if any row disagrees with the commit under test.
+ */
+function assertCommitProvenance({ final = false } = {}) {
+  const chk = newChecks(final ? 'EVIDENCE-commit-consistency-final' : 'EVIDENCE-commit-provenance', [
+    'the driver was told which commit it is judging',
+    'every result already in this evidence directory was produced at THAT commit',
+  ]);
+  chk.ok(
+    'the driver was told which commit it is judging',
+    'a 40-character commit sha in E2E_COMMIT',
+    COMMIT || '(E2E_COMMIT was empty)',
+    (v) => /^[0-9a-f]{40}$/.test(String(v)),
+  );
+  const carried = STATE.commit && STATE.commit !== COMMIT
+    ? [`state.json was written at ${STATE.commit}`]
+    : [];
+  const foreignRows = RESULTS
+    .filter((r) => r.commit && r.commit !== COMMIT)
+    .map((r) => `${r.id} was produced at ${r.commit}`);
+  const stale = [...carried, ...foreignRows];
+  chk.ok(
+    'every result already in this evidence directory was produced at THAT commit',
+    `every carried-over row and state.json stamped ${COMMIT || '(unknown)'}`,
+    stale.length ? stale.slice(0, 10) : `zero stale rows across ${RESULTS.length} carried result(s)`,
+    () => stale.length === 0,
+  );
+  record({
+    id: chk.id,
+    stage: final ? 'final' : 'precheck',
+    matrix: 'F3',
+    outcome: chk.verdict,
+    summary: `evidence provenance: commit=${COMMIT || 'MISSING'}, ${stale.length} stale row(s) — ${chk.summary()}`,
+    assertions: chk.table,
+    observed: { commit: COMMIT, stateCommit: STATE.commit ?? null, stale },
+    artifacts: [],
+  });
+  if (chk.verdict === 'pass') {
+    STATE.commit = COMMIT;
+    saveState();
+  }
+  return chk.verdict === 'pass';
+}
+
+/**
+ * A stage that was PLANNED and produced nothing is a FAIL, not an omission.
+ * The plan is captured before any injection can shorten it, so dropping a stage
+ * is caught by the absence of its rows rather than by trusting the loop.
+ */
+function assertStageCompleteness(plan, executed) {
+  const chk = newChecks('EVIDENCE-stage-completeness', [
+    'every PLANNED stage was executed',
+    'every PLANNED stage recorded at least one result row',
+    'no recorded row left a mandatory assertion unexecuted',
+  ]);
+  const notExecuted = plan.filter((s) => !executed.includes(s));
+  // The oracle's OWN per-stage row does not count as the stage having produced
+  // evidence, or a stage whose body recorded nothing would look complete.
+  const silent = plan.filter((s) => !RESULTS.some((r) => r.stage === s && !String(r.id).startsWith('BACKEND-oracle-')));
+  const incomplete = RESULTS
+    .filter((r) => Array.isArray(r.assertions) && r.assertions.some((a) => typeof a.actual === 'string' && a.actual.startsWith('NOT EXECUTED')))
+    .map((r) => r.id);
+  chk.eq('every PLANNED stage was executed', [], notExecuted);
+  chk.eq('every PLANNED stage recorded at least one result row', [], silent);
+  chk.eq('no recorded row left a mandatory assertion unexecuted', [], incomplete);
+  record({
+    id: chk.id,
+    stage: 'final',
+    matrix: 'F3',
+    outcome: chk.verdict,
+    summary: `stage completeness: planned=[${plan.join(',')}] executed=[${executed.join(',')}] — ${notExecuted.length} never ran, ${silent.length} recorded nothing, ${incomplete.length} row(s) incomplete — ${chk.summary()}`,
+    assertions: chk.table,
+    observed: { plan, executed, notExecuted, silent, incomplete },
+    artifacts: [],
+  });
+  return chk.verdict === 'pass';
 }
 
 /* --------------------------------------------------------------- api client */
@@ -567,6 +1006,21 @@ function track(promise) {
 const FATAL_CONSOLE = new Set(['error', 'warning']);
 
 function attachCapture(page) {
+  if (injected('unexpected-404')) {
+    // Fail-closed proof: an unexpected 404 on an EXISTING OWNED session. The
+    // screen asks for the session it owns; the request is re-pointed at a
+    // session id that does not exist, so the REAL backend answers a REAL 404
+    // for a route the screen legitimately fetched. Nobody declared it with
+    // `expecting()`, and there is no blanket 404 allowance, so it must fail the
+    // stage that produced it. Installed here rather than on one context so it
+    // reaches EVERY page the driver opens, including the live-room contexts.
+    page.route(/\/api\/v1\/tutoring\/sessions\/[0-9a-fA-F-]{32,36}(\?|$)/, (route) => {
+      if (route.request().method() !== 'GET') return route.continue().catch(() => {});
+      const url = new URL(route.request().url());
+      url.pathname = url.pathname.replace(/\/sessions\/[0-9a-fA-F-]{32,36}$/, '/sessions/00000000-0000-4000-8000-0000deadbe0f');
+      return route.continue({ url: url.toString() }).catch(() => route.continue().catch(() => {}));
+    }).catch(() => {});
+  }
   page.on('request', (req) => {
     let post;
     try {
@@ -778,9 +1232,28 @@ function seedTutorWithSlots() {
   return slot ? slot.tutor_id : FIXTURE.slots[0]?.tutor_id;
 }
 
+/**
+ * The fixture's `status` is a SNAPSHOT taken when the calendar was seeded, and
+ * `STATE.usedSlots` only knows about slots this driver explicitly TOOK. Neither
+ * knows about a slot consumed by a RESCHEDULE — d1 moves a session onto a slot
+ * chosen from the browser's own availability list, which the fixture snapshot
+ * still calls "available". Handing that slot out again later produces a real
+ * `409 SLOT_UNAVAILABLE` from a correct server, i.e. a harness collision that
+ * looks exactly like a product defect.
+ *
+ * So the LIVE table is the authority. This is bookkeeping, not tolerance: the
+ * 409 is still a failure if it ever happens, nothing is allowlisted, and no
+ * assertion is relaxed — the driver simply stops asking for a slot the database
+ * has already given away.
+ */
 function freeSlots(bucket = 'gt24h') {
   const used = new Set(STATE.usedSlots || []);
-  return FIXTURE.slots.filter((s) => s.bucket === bucket && s.status === 'available' && !used.has(s.slot_id));
+  const candidates = FIXTURE.slots.filter((s) => s.bucket === bucket && s.status === 'available' && !used.has(s.slot_id));
+  if (!candidates.length) return candidates;
+  const live = new Set(
+    dbQuery("SELECT id FROM tutor_availability_slots WHERE status = 'available'").map((r) => String(r.id)),
+  );
+  return candidates.filter((s) => live.has(hex(s.slot_id)) || live.has(s.slot_id));
 }
 
 function takeSlot(bucket = 'gt24h') {
@@ -2422,7 +2895,7 @@ const NEGATIVE_ROWS = [
   ['N14', 'microphone denied', 'neg2b'],
   ['N15', 'media / device readiness failure', 'neg2b'],
   ['N16', 'disconnect and reconnect (app transport)', 'neg2b'],
-  ['N45', 'disconnect and reconnect (media-plane peer connection)', 'neg2b'],
+  ['N45', 'disconnect and reconnect (media-plane peer connection)', 'n45'],
   ['N17', 'tutor/admin completion authority', 'd3'],
   ['N18', 'student confirms attendance', 'd4'],
   ['N19', 'student disputes attendance', 'd4'],
@@ -2789,7 +3262,7 @@ async function stageNeg2(page) {
 /* ------------------- neg2b: media permission and readiness negatives ------ */
 
 async function stageNeg2b(page, browser) {
-  const ids = ['N13', 'N14', 'N15', 'N16', 'N45'];
+  const ids = ['N13', 'N14', 'N15', 'N16'];
   const chk = newChecks('I1-neg2b-media-and-connection-negatives', ids.map((i) => `${i} ${NEGATIVE_ROWS.find((r) => r[0] === i)[1]}`));
   const arts = [];
   const findings = {};
@@ -2932,13 +3405,12 @@ async function stageNeg2b(page, browser) {
   //        needs the server is attempted, the screen's failure state is
   //        observed, the transport is restored and recovery is observed.
   //
-  //   N45  the MEDIA-PLANE PEER CONNECTION. This build's live room has no peer
-  //        connection at all (SessionScreens.tsx: "There is no peer connection
-  //        here, so no SDP and no ICE"), and the LiveKit runtime is unavailable
-  //        in this environment. There is therefore nothing to disconnect and
-  //        nothing to reconnect, and no honest measurement is possible. It is
-  //        reported BLOCKED rather than quietly passed on the app-transport
-  //        evidence, which would be a different claim than the one required.
+  //   N45  the MEDIA-PLANE connection, which the live room now really owns
+  //        through its `VideoRoomClient` boundary. It has its own stage
+  //        (`stageN45`) because it needs its own browser context with the
+  //        deterministic transport selected before the app boots. Reporting the
+  //        app-transport result against that row would be a different claim
+  //        than the one required, so the two are never folded together.
   try {
     const live = await bookAsServerLeg(STUDENT);
     STATE.disconnectSession = live.sessionId;
@@ -3035,13 +3507,6 @@ async function stageNeg2b(page, browser) {
     neg('N16', { expected: 'an app-transport disconnect state and recovery on reconnect', actual: `threw: ${String(err).slice(0, 220)}`, pass: false });
   }
 
-  neg('N45', {
-    expected: 'the media-plane peer connection drops and re-establishes, with the room reporting reconnecting and then reconnected',
-    actual: 'BLOCKED — not executable in this environment or this build. The live room holds NO peer connection (frontend/src/features/student/tutoring/SessionScreens.tsx states "There is no peer connection here, so no SDP and no ICE"), and the LiveKit runtime is unavailable here, so there is no transport to drop. Reporting the app-transport result (N16) against this row would be a different claim than the one required, so it is left BLOCKED.',
-    pass: false,
-    mechanism: 'not executed',
-  });
-
   foldNegatives(chk, ids);
   recordChecks(chk, {
     stage: 'neg2b',
@@ -3049,6 +3514,259 @@ async function stageNeg2b(page, browser) {
     summary: `media/connection negatives: ${ids.map((i) => `${i}=${NEG[i]?.result || 'MISSING'}`).join(' ')}`,
     observed: findings,
     mechanism: { media: 'platform-seam DOMException injection (see the comment on why context permissions cannot be used under --use-fake-ui-for-media-stream)', disconnect: 'browser transport cut via context.setOffline' },
+    artifacts: arts,
+  });
+}
+
+/* ------------- n45: the MEDIA-PLANE disconnect and reconnect -------------- */
+
+/**
+ * N45 — the media plane drops and comes back, measured on the PRODUCTION S-35
+ * room, through its REAL adapter boundary.
+ *
+ * WHAT IS UNDER TEST. The bytes driven here are the shipped screen
+ * (`SessionScreens.tsx` -> `LiveRoom`), the shipped provider-neutral contract
+ * (`media/videoRoomClient.ts`) and the shipped rendering of every connection
+ * state. The screen creates its own client through `createVideoRoomClient()`
+ * and never learns which adapter it got. Nothing is injected into the screen,
+ * no component is replaced, and no test-only page is loaded.
+ *
+ * WHAT MAKES IT DETERMINISTIC. A single global,
+ * `window.__legalsaathiVideoTransport = 'deterministic'`, is installed BEFORE
+ * the app boots. That is the one runtime switch the product ships, and it
+ * selects the deterministic adapter behind the same interface. The adapter then
+ * exposes a driver (`window.__legalsaathiVideoRoom`) with no timers at all:
+ * `dropTransport`, `restoreTransport` and `settle` are three separate steps, so
+ * `reconnecting` and `reconnected` can each be OBSERVED rendered rather than
+ * raced against a timeout.
+ *
+ * WHAT THIS DOES NOT PROVE, and is never reported as proving: that LiveKit
+ * itself reconnects, that an ICE restart succeeds, or that two real browsers
+ * exchange media. There is no self-hosted LiveKit or TURN runtime in this
+ * environment (no docker, no livekit-server, no turnserver, no egress), so the
+ * REAL-LiveKit two-browser variant of this case is BLOCKED and says so in its
+ * own row text. The production adapter is compiled, typechecked, bundled as its
+ * own chunk from the lockfile-pinned `livekit-client`, and unit-tested on its
+ * pure mappings and its fail-closed path — and that is the whole of the claim.
+ */
+async function stageN45(browser) {
+  const ids = ['N45'];
+  const chk = newChecks('I1-n45-media-plane-disconnect-reconnect', [
+    'the PRODUCTION S-35 room reaches CONNECTED over its real VideoRoomClient boundary',
+    'remote media is flowing at connected (a decoded frame, not a claim)',
+    'a provider drop renders RECONNECTING as a named state and stops the remote media',
+    'the recovery renders RECONNECTED as a named state',
+    'settling returns the room to CONNECTED with remote media flowing again',
+    'a terminal provider failure renders a NAMED terminal state with its typed code',
+    'the evidence records which transport produced it, so it cannot be mistaken for LiveKit',
+  ]);
+  const arts = [];
+  const findings = {};
+
+  /** Everything the room is currently SAYING about its media connection. */
+  const readRoom = (p) => p.evaluate(() => {
+    const live = document.querySelector('main.tt-live');
+    const pill = document.querySelector('.tt-tstate');
+    const banner = document.querySelector('.tt-rbanner');
+    const v = document.querySelector('video[data-tt-remote="1"]');
+    return {
+      transportAttr: live ? live.dataset.ttTransport || null : null,
+      pill: pill ? pill.textContent.trim() : null,
+      headerChip: document.querySelector('div.tt-lh span.tt-chip')?.textContent.trim() || null,
+      banner: banner ? {
+        role: banner.getAttribute('role'),
+        title: banner.querySelector('.tt-banner__t')?.textContent.trim() || null,
+        detail: (banner.querySelector('.tt-banner__d')?.textContent || '').trim().slice(0, 120),
+        code: banner.querySelector('[data-tt-code]')?.textContent.trim() || null,
+      } : null,
+      remote: v ? {
+        bound: !!v.srcObject,
+        readyState: v.readyState,
+        w: v.videoWidth,
+        h: v.videoHeight,
+      } : null,
+      // A room that showed nothing but a turning circle would answer null to
+      // every question above; that is exactly what this row exists to refuse.
+      namedState: !!pill,
+    };
+  });
+
+  const waitState = (p, want) =>
+    p.waitForSelector(`main.tt-live[data-tt-transport="${want}"]`, { timeout: 25000 });
+
+  const live = await bookAsServerLeg(STUDENT);
+  STATE.mediaPlaneSession = live.sessionId;
+  saveState();
+
+  const ctx = await browser.newContext({
+    viewport: MOBILE,
+    colorScheme: 'light',
+    permissions: ['camera', 'microphone'],
+  });
+  // The ONE switch, installed before the app boots. It selects an adapter; it
+  // does not replace, patch or stub any part of the screen.
+  await ctx.addInitScript(() => {
+    window.__legalsaathiVideoTransport = 'deterministic';
+  });
+  const p = await ctx.newPage();
+  attachCapture(p);
+
+  try {
+    await p.goto(`${WEB}/s-35?session=${live.sessionId}&view=room`, { waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('main.tt-live', { timeout: 25000 });
+    await waitState(p, 'connected');
+    // Readiness, not a sleep: the remote tile has decoded a frame.
+    await p.waitForFunction(() => {
+      const v = document.querySelector('video[data-tt-remote="1"]');
+      return !!v && v.readyState >= 2 && v.videoWidth > 0;
+    }, undefined, { timeout: 25000 }).catch(() => null);
+    await settled(p);
+    const connected = await readRoom(p);
+    arts.push(await shot(p, 'n45_1_media_connected', { fullPage: false }));
+
+    // ---- the provider drops --------------------------------------------- //
+    await p.evaluate(() => window.__legalsaathiVideoRoom.dropTransport());
+    await waitState(p, 'reconnecting');
+    await settled(p);
+    const reconnecting = await readRoom(p);
+    arts.push(await shot(p, 'n45_2_media_reconnecting', { fullPage: false }));
+
+    // ---- the provider comes back ---------------------------------------- //
+    await p.evaluate(() => window.__legalsaathiVideoRoom.restoreTransport());
+    await waitState(p, 'reconnected');
+    await settled(p);
+    const reconnected = await readRoom(p);
+    arts.push(await shot(p, 'n45_3_media_reconnected', { fullPage: false }));
+
+    // ---- and settles back to connected, with media flowing again --------- //
+    await p.evaluate(() => window.__legalsaathiVideoRoom.settle());
+    await waitState(p, 'connected');
+    await p.waitForFunction(() => {
+      const v = document.querySelector('video[data-tt-remote="1"]');
+      return !!v && v.readyState >= 2 && v.videoWidth > 0;
+    }, undefined, { timeout: 25000 }).catch(() => null);
+    await settled(p);
+    const recovered = await readRoom(p);
+    arts.push(await shot(p, 'n45_4_media_flowing_again', { fullPage: false }));
+
+    // ---- which transport produced this evidence -------------------------- //
+    await p.locator('button.tt-cb[aria-label="Session, connection and privacy details"]').click();
+    await p.waitForSelector('div.tt-sheet[data-open="1"]', { timeout: 10000 });
+    await settled(p);
+    const sheet = await p.$$eval('div.tt-sheet .tt-kv', (els) => els.map((e) => e.textContent.trim()));
+    const declaredTransport = (sheet.find((row) => /^Media transport/.test(row)) || '').replace(/^Media transport/, '').trim();
+    arts.push(await shot(p, 'n45_5_transport_declared', { fullPage: false }));
+    await p.keyboard.press('Escape');
+
+    // ---- the terminal failure path --------------------------------------- //
+    await p.evaluate(() => window.__legalsaathiVideoRoom.failTerminally('TRANSPORT_LOST'));
+    await waitState(p, 'failed');
+    await settled(p);
+    const failed = await readRoom(p);
+    arts.push(await shot(p, 'n45_6_media_terminal_failure', { fullPage: false }));
+
+    findings.sessionId = live.sessionId;
+    findings.declaredTransport = declaredTransport;
+    findings.sequence = { connected, reconnecting, reconnected, recovered, failed };
+
+    const flowing = (s) => !!s.remote && s.remote.bound && s.remote.readyState >= 2 && s.remote.w > 0;
+
+    chk.ok(
+      'the PRODUCTION S-35 room reaches CONNECTED over its real VideoRoomClient boundary',
+      'main.tt-live[data-tt-transport="connected"] with the header still reporting the SERVER admission',
+      { transport: connected.transportAttr, pill: connected.pill, headerChip: connected.headerChip },
+      (v) => v.transport === 'connected' && v.pill === 'Live' && /In the room/.test(v.headerChip || ''),
+    );
+    chk.ok(
+      'remote media is flowing at connected (a decoded frame, not a claim)',
+      'a remote <video> bound to a stream with readyState>=2 and non-zero dimensions',
+      connected.remote,
+      () => flowing(connected),
+    );
+    chk.ok(
+      'a provider drop renders RECONNECTING as a named state and stops the remote media',
+      'data-tt-transport="reconnecting", the pill reads "Reconnecting", a status banner names it, and the remote video has no bound stream',
+      { transport: reconnecting.transportAttr, pill: reconnecting.pill, banner: reconnecting.banner, remote: reconnecting.remote },
+      (v) => v.transport === 'reconnecting'
+        && v.pill === 'Reconnecting'
+        && /Reconnecting/i.test(v.banner?.title || '')
+        && v.banner?.code === 'TRANSPORT_LOST'
+        && v.remote?.bound === false,
+    );
+    chk.ok(
+      'the recovery renders RECONNECTED as a named state',
+      'data-tt-transport="reconnected" with the pill and the banner both reading "Reconnected"',
+      { transport: reconnected.transportAttr, pill: reconnected.pill, banner: reconnected.banner },
+      (v) => v.transport === 'reconnected' && v.pill === 'Reconnected' && /Reconnected/i.test(v.banner?.title || ''),
+    );
+    chk.ok(
+      'settling returns the room to CONNECTED with remote media flowing again',
+      'data-tt-transport="connected" and a remote <video> decoding again',
+      { transport: recovered.transportAttr, pill: recovered.pill, remote: recovered.remote },
+      (v) => v.transport === 'connected' && v.pill === 'Live' && flowing(recovered),
+    );
+    chk.ok(
+      'a terminal provider failure renders a NAMED terminal state with its typed code',
+      'data-tt-transport="failed", the pill reads "Media failed", and an alert banner carries the typed code',
+      { transport: failed.transportAttr, pill: failed.pill, banner: failed.banner },
+      (v) => v.transport === 'failed'
+        && v.pill === 'Media failed'
+        && v.banner?.role === 'alert'
+        && v.banner?.code === 'TRANSPORT_LOST'
+        && (v.banner?.title || '').length > 0,
+    );
+    chk.eq(
+      'the evidence records which transport produced it, so it cannot be mistaken for LiveKit',
+      'deterministic',
+      declaredTransport,
+    );
+
+    const ok = connected.transportAttr === 'connected'
+      && flowing(connected)
+      && reconnecting.transportAttr === 'reconnecting'
+      && reconnecting.remote?.bound === false
+      && reconnected.transportAttr === 'reconnected'
+      && recovered.transportAttr === 'connected'
+      && flowing(recovered)
+      && failed.transportAttr === 'failed'
+      && declaredTransport === 'deterministic';
+
+    neg('N45', {
+      expected: 'the media-plane connection of the PRODUCTION S-35 room drops and re-establishes across its real VideoRoomClient boundary, with the room rendering connected -> reconnecting -> reconnected -> connected as NAMED states (never a bare spinner), remote media stopping while reconnecting and flowing again afterwards, and a separate terminal failure rendering a named state with its typed code',
+      actual: `EXECUTED against the production screen with the DETERMINISTIC adapter selected at runtime (window.__legalsaathiVideoTransport, the switch the product ships). Observed sequence: `
+        + `connected[pill="${connected.pill}", remote readyState=${connected.remote?.readyState} ${connected.remote?.w}x${connected.remote?.h}] -> `
+        + `reconnecting[pill="${reconnecting.pill}", banner "${reconnecting.banner?.title}" code=${reconnecting.banner?.code}, remote stream bound=${reconnecting.remote?.bound}] -> `
+        + `reconnected[pill="${reconnected.pill}", banner "${reconnected.banner?.title}"] -> `
+        + `connected[pill="${recovered.pill}", remote readyState=${recovered.remote?.readyState} ${recovered.remote?.w}x${recovered.remote?.h}] ; `
+        + `terminal path: failed[pill="${failed.pill}", role=${failed.banner?.role}, code=${failed.banner?.code}, title "${failed.banner?.title}"]. `
+        + `The room reported its transport as "${declaredTransport}" throughout. `
+        + `WHAT REMAINS BLOCKED: the REAL-LiveKit TWO-BROWSER variant of this case is NOT executed and NOT claimed. `
+        + `No self-hosted LiveKit or TURN runtime exists in this environment (no docker, no livekit-server, no turnserver, no egress), so a genuine publish/subscribe drop and ICE re-establishment between two browsers cannot be produced here. `
+        + `The production adapter (frontend/src/features/student/tutoring/media/livekitVideoRoomClient.ts, over the declared and lockfile-pinned livekit-client) is compiled, typechecked, bundled as its own chunk and unit-tested on its state/disconnect/refusal mappings and its fail-closed path only.`,
+      pass: ok,
+      mechanism: 'browser + the PRODUCTION S-35 screen with the DETERMINISTIC VideoRoomClient adapter selected at runtime; no component replaced, no script injected into the screen, no CDN bundle',
+      evidence: 'n45_1_media_connected.png / n45_2_media_reconnecting.png / n45_3_media_reconnected.png / n45_4_media_flowing_again.png / n45_5_transport_declared.png / n45_6_media_terminal_failure.png',
+    });
+  } catch (err) {
+    neg('N45', {
+      expected: 'a media-plane drop and recovery rendered as named states by the production room',
+      actual: `threw: ${String(err).slice(0, 240)}`,
+      pass: false,
+    });
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+
+  foldNegatives(chk, ids);
+  recordChecks(chk, {
+    stage: 'n45',
+    matrix: 'I1',
+    summary: `media-plane disconnect/reconnect on the production room: N45=${NEG.N45?.result || 'MISSING'} (transport=${findings.declaredTransport || 'unknown'}); the REAL-LiveKit two-browser variant remains BLOCKED — no LiveKit/TURN runtime in this environment`,
+    observed: findings,
+    mechanism: {
+      transport: 'the product\'s own runtime adapter switch (window.__legalsaathiVideoTransport) selecting the DETERMINISTIC VideoRoomClient; the screen, the contract and every rendered state are the shipped ones',
+      blocked: 'REAL LiveKit two-browser publish/subscribe: no livekit-server, no TURN, no docker and no network egress here',
+    },
     artifacts: arts,
   });
 }
@@ -3785,16 +4503,69 @@ function assertDistinctPorts() {
   return true;
 }
 
+/**
+ * The two log injections write a REAL line, in the backend's real format, into
+ * the real log file the oracle reads. The oracle is a log reader: proving it
+ * fails closed means proving that this line, in that file, in the region of a
+ * stage, ends the run — which is exactly what these produce.
+ */
+function injectBackendLogFaults() {
+  if (!BACKEND_LOG) return;
+  const ts = new Date().toISOString();
+  const lines = [];
+  if (injected('log-unhandled')) {
+    lines.push(JSON.stringify({
+      ts, level: 'ERROR', logger: 'legalsaathi.app', message: 'unhandled_exception', request_id: 'injected0000000000000000000000000',
+      exc_info: 'Traceback (most recent call last):\n  File "app/api/v1/tutoring.py", line 1, in list_sessions\n    raise RuntimeError("INJECTED fail-closed proof")\nRuntimeError: INJECTED fail-closed proof',
+    }));
+  }
+  if (injected('log-asgi-traceback')) {
+    lines.push('ERROR:    Exception in ASGI application');
+    lines.push('Traceback (most recent call last):');
+    lines.push('  File "uvicorn/protocols/http/httptools_impl.py", line 435, in run_asgi');
+    lines.push('    result = await app(self.scope, self.receive, self.send)');
+    lines.push('  File "app/api/v1/tutoring.py", line 512, in list_slots');
+    lines.push('    return slots[0]');
+    lines.push('IndexError: list index out of range');
+  }
+  if (!lines.length) return;
+  fs.appendFileSync(BACKEND_LOG, `${lines.join('\n')}\n`);
+  console.log(`!! INJECTED: ${lines.length} fault line(s) appended to ${BACKEND_LOG}`);
+}
+
 async function main() {
   if (STAGES.length === 1 && STAGES[0] === 'none') {
     console.log('stages=none — servers verified, no browser work requested');
-    return assertDistinctPorts() ? 0 : 1;
+    const ports = assertDistinctPorts();
+    const provenance = assertCommitProvenance();
+    const oracle = await backendOracle('boot');
+    return ports && provenance && oracle ? 0 : 1;
   }
   if (!assertDistinctPorts()) {
     console.error('\nFAIL-CLOSED: frontend and API share a port. Nothing was driven.');
     return 1;
   }
   if (INJECT.size) console.log(`!! FAULT INJECTION ACTIVE: ${[...INJECT].join(',')}`);
+
+  // Fail-closed proof (h): evidence carried in from a DIFFERENT commit. The
+  // switch rewrites the carried-over provenance, exactly as a stale evidence
+  // directory would present it.
+  if (injected('stale-commit')) {
+    STATE.commit = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    saveState();
+    if (RESULTS.length) RESULTS[0].commit = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    else RESULTS.push({ id: 'STALE-carried-row', stage: 'a', outcome: 'pass', summary: 'a result carried in from another commit', commit: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', assertions: [], observed: {}, artifacts: [] });
+    saveResults();
+    console.log('!! INJECTED: this evidence directory now claims commit deadbeef… while the run is at ' + COMMIT);
+  }
+
+  // Provenance FIRST: a run that cannot prove which commit it is judging must
+  // not be allowed to produce a stage result at all.
+  if (!assertCommitProvenance()) {
+    console.error('\nFAIL-CLOSED: this evidence directory was not produced at the commit under test. Nothing was driven.');
+    return 1;
+  }
+  injectBackendLogFaults();
 
   const browser = await chromium.launch({
     args: [
@@ -3844,16 +4615,49 @@ async function main() {
   }
 
   const ALIASES = {
-    neg: ['neg1', 'neg2', 'neg2b', 'neg3', 'neg4'],
+    // `n45` is part of the negative catalogue, so a full `neg` run answers it;
+    // it is a stage of its own because it needs a browser context with the
+    // deterministic media transport selected before the app boots.
+    neg: ['neg1', 'neg2', 'neg2b', 'n45', 'neg3', 'neg4'],
+    // The rate-limit journey lives inside neg4 (N43 search, N44 review). The
+    // documented `rl` name resolves to it instead of falling into the
+    // "unknown stage" branch.
+    rl: ['neg4'],
   };
+  /**
+   * The PLAN is captured here, before anything can shorten it, and the
+   * completeness check at the end is made against the PLAN — not against the
+   * list the loop actually walked. That is the only ordering in which a stage
+   * silently removed from the run is still detectable.
+   */
   const plan = STAGES.flatMap((s) => ALIASES[s] || [s]);
   // Fail-closed proof (a): drop a REQUIRED negative case from the run.
-  const dropped = injected('missing-negative') ? plan.filter((s) => s !== 'neg2') : plan;
+  let dropped = injected('missing-negative') ? plan.filter((s) => s !== 'neg2') : plan;
   if (injected('missing-negative')) console.log('!! INJECTED: stage neg2 removed from the plan (its required rows N08..N12 will go unanswered)');
+  // Fail-closed proof (i): a PLANNED stage that silently never runs. No notice
+  // is printed into the evidence beyond this line — the completeness check has
+  // to notice it on its own.
+  if (injected('skip-stage') && dropped.length) {
+    dropped = dropped.slice(0, -1);
+    console.log(`!! INJECTED: the last planned stage was dropped from the run without recording anything`);
+  }
 
   let failures = 0;
+  const executed = [];
   for (const stage of dropped) {
     console.log(`\n--- stage ${stage}`);
+    executed.push(stage);
+    // Fail-closed proof (g): the backend dies mid-run. SIGKILL, so there is no
+    // graceful shutdown line and no exit handler — the process is simply gone,
+    // which is the case a "did the log stay clean?" scan alone cannot see.
+    if (injected('backend-kill') && BACKEND_PID && stage === dropped[Math.min(1, dropped.length - 1)]) {
+      try {
+        process.kill(BACKEND_PID, 'SIGKILL');
+        console.log(`!! INJECTED: SIGKILL sent to the backend (pid ${BACKEND_PID}) before stage ${stage}`);
+      } catch (err) {
+        console.log(`!! INJECTED backend-kill could not signal pid ${BACKEND_PID}: ${err.code || err}`);
+      }
+    }
     try {
       if (stage === 'a') await stageA(page);
       else if (stage === 'b') await stageB(page);
@@ -3867,6 +4671,7 @@ async function main() {
       else if (stage === 'neg1') await stageNeg1(page);
       else if (stage === 'neg2') await stageNeg2(page);
       else if (stage === 'neg2b') await stageNeg2b(page, browser);
+      else if (stage === 'n45') await stageN45(browser);
       else if (stage === 'neg3') await stageNeg3();
       else if (stage === 'neg4') await stageNeg4(page);
       else if (stage === 'rollup') await stageRollup();
@@ -3891,6 +4696,9 @@ async function main() {
         artifacts,
       });
     }
+    // F3 — EVERY stage, pass or fail, is followed by the backend oracle over
+    // the log region IT produced, plus process liveness and /health.
+    if (!(await backendOracle(stage))) failures += 1;
   }
 
   if (ctx) {
@@ -3915,8 +4723,30 @@ async function main() {
     });
   }
 
+  /* ---- F3 finalisation ---------------------------------------------------- */
+  // One more scan of everything the backend wrote after the last stage (a
+  // shutdown traceback, a background task blowing up during teardown), one more
+  // liveness/health reading, and the two evidence-integrity judgements.
+  if (!(await backendOracle('final', { final: true }))) failures += 1;
+  if (!assertStageCompleteness(plan, executed)) failures += 1;
+  if (!assertCommitProvenance({ final: true })) failures += 1;
+
+  fs.writeFileSync(path.join(OUT, 'backend_log_oracle.json'), JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    runId: RUN_ID,
+    commit: COMMIT || null,
+    logPath: BACKEND_LOG || null,
+    backendPid: BACKEND_PID || null,
+    rule: 'The backend log is judged as a sequence of DISJOINT byte regions, one per owner, in the order they were produced. The offset advances monotonically and is persisted in state.json, so (a) a line already judged can never be re-read as context for a later stage, and (b) each stage is judged only on the bytes IT produced. Any ERROR/CRITICAL/Traceback/unhandled_exception/"Exception in ASGI application"/"cannot commit"/IndexError line fails the owning stage AND the run. A backend-log expectation must name an exact line pattern AND a typed code; no stage declares one, so the allowlist is empty.',
+    patterns: BACKEND_LOG_PATTERNS.map((p) => ({ id: p.id, pattern: String(p.re), what: p.what })),
+    finalOffset: BACKEND.offset,
+    regions: BACKEND.regions,
+    findings: BACKEND.findings,
+    livenessSamples: BACKEND.samples.map((s) => ({ owner: s.owner, at: s.at, proc: s.proc, health: s.health })),
+  }, null, 2));
+
   const bad = RESULTS.filter((r) => r.outcome !== 'pass');
-  fs.writeFileSync(path.join(OUT, 'gate_events.json'), JSON.stringify({ generatedAt: new Date().toISOString(), runId: RUN_ID, rule: 'Every console error/warning, page error, failed request and 4xx/5xx the browser produced. `attributed: true` means a case declared it with an exact method/route/status/code; `false` means it failed the run.', events: GATE.seen }, null, 2));
+  fs.writeFileSync(path.join(OUT, 'gate_events.json'), JSON.stringify({ generatedAt: new Date().toISOString(), runId: RUN_ID, rule: 'Every console error/warning, page error, failed request and 4xx/5xx the browser produced, plus every backend-log line that matched a runtime-error pattern. `attributed: true` means a case declared it with an exact method/route/status/code; `false` means it failed the run. A 5xx is never attributable.', events: GATE.seen }, null, 2));
   console.log(`\nresults: ${RESULTS.length} recorded · not-pass=${bad.length}${bad.length ? ` (${bad.map((r) => r.id).join(', ')})` : ''}`);
   return failures || bad.length ? 1 : 0;
 }

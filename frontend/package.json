@@ -32,6 +32,7 @@
     "@capacitor/status-bar": "latest",
     "@tanstack/react-query": "latest",
     "@vitejs/plugin-react": "latest",
+    "livekit-client": "2.21.0",
     "lucide-react": "latest",
     "qrcode": "^1.5.4",
     "react": "latest",

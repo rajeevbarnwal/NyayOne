@@ -238,6 +238,10 @@ describe('runtime canaries: no forbidden value is ever persisted', () => {
 
 const ROOT = join(process.cwd(), 'src', 'features', 'student');
 const MENTOR_ROOT = join(process.cwd(), 'src', 'features', 'mentor');
+const MEDIA_ROOT = join(ROOT, 'tutoring', 'media');
+const VIDEO_CONTRACT = join(MEDIA_ROOT, 'videoRoomClient.ts');
+const LIVEKIT_ADAPTER = join(MEDIA_ROOT, 'livekitVideoRoomClient.ts');
+const FAKE_ADAPTER = join(MEDIA_ROOT, 'fakeVideoRoomClient.ts');
 const SOURCES = [
   join(ROOT, 'lib', 'tutoringApi.ts'),
   join(ROOT, 'lib', 'tutoringRules.ts'),
@@ -249,6 +253,12 @@ const SOURCES = [
   // module and is held to the same canaries: no storage, no media plane, no log.
   join(MENTOR_ROOT, 'MentorSessionScreens.tsx'),
   join(MENTOR_ROOT, 'lib', 'mentorAuth.ts'),
+  // The live-room media client and BOTH adapters. The production room now holds
+  // a real peer connection, so these are exactly the files a signalling leak
+  // would appear in and they are held to every rule above.
+  VIDEO_CONTRACT,
+  LIVEKIT_ADAPTER,
+  FAKE_ADAPTER,
 ];
 
 /** Source with block and line comments removed, so prose cannot pass or fail a gate. */
@@ -275,6 +285,14 @@ describe('static canaries over the shipped tutoring sources', () => {
     }
   });
 
+  /*
+   * The product now HAS a peer connection: the LiveKit adapter owns one, inside
+   * the vendor package. What this canary enforces is the boundary — no LegalSaathi
+   * source touches the RTC API itself, so no SDP, ICE candidate or signalling
+   * payload can be constructed, held, rendered, stored or logged by our code.
+   * If a future change reaches past the adapter and starts handling signalling
+   * directly, this assertion is what stops it.
+   */
   it('contains no media-plane API, so no SDP or ICE candidate can exist', () => {
     for (const path of SOURCES) {
       const source = code(path);
@@ -341,5 +359,89 @@ describe('static canaries over the shipped tutoring sources', () => {
     // The raw token is never handed to render state or a query cache.
     expect(room).not.toMatch(/setCredential\(\s*issued\s*\)/);
     expect(room).not.toMatch(/setQueryData\([^)]*credential/i);
+  });
+});
+
+/* ========================================================================== *
+ * Static canaries over the live-room media client
+ * ========================================================================== */
+
+describe('static canaries over the live-room media client', () => {
+  it('reads every media source it claims to check', () => {
+    for (const path of [VIDEO_CONTRACT, LIVEKIT_ADAPTER, FAKE_ADAPTER]) {
+      expect(code(path).length).toBeGreaterThan(500);
+    }
+  });
+
+  it('offers no way to read the raw credential back out of the client', () => {
+    const contract = code(VIDEO_CONTRACT);
+    // The credential is an ARGUMENT of connect and appears nowhere else in the
+    // interface: no getter, no event payload, no participant field.
+    expect(contract).toMatch(/readonly token: string;/);
+    expect(contract).not.toMatch(/getToken|getCredential|joinToken|readToken/);
+    // The event map may only carry state, participants and devices.
+    const events = contract.match(/interface VideoRoomEventMap \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(events).not.toMatch(/token/i);
+  });
+
+  it('never retains the credential in either adapter', () => {
+    for (const path of [LIVEKIT_ADAPTER, FAKE_ADAPTER]) {
+      const source = code(path);
+      // No field of the adapter may hold it...
+      expect(source, `${path} must not store a token on itself`)
+        .not.toMatch(/this\.\w*[Tt]oken/);
+      // ...and it may not be copied into a module-scoped variable either.
+      expect(source, `${path} must not hoist a token`)
+        .not.toMatch(/^(let|var|const)\s+\w*[Tt]oken/m);
+    }
+  });
+
+  it('reads the raw token in exactly one place, as the connect argument', () => {
+    const room = code(join(ROOT, 'tutoring', 'SessionScreens.tsx'));
+    const rawReads = [...room.matchAll(/[\w.?]*rawCredential\.current[^\n]*joinToken/g)];
+    expect(rawReads).toHaveLength(1);
+    expect(room).toMatch(/token: rawCredential\.current\?\.joinToken \?\? '',/);
+    // The only other mention is the REDACTED projection's own field, which
+    // carries the literal "[redacted]".
+    expect([...room.matchAll(/joinToken/g)]).toHaveLength(2);
+    // It is never interpolated into a URL, a query key or an attribute.
+    expect(room).not.toMatch(/[?&]\w+=\$\{[^}]*joinToken/);
+    expect(room).not.toMatch(/data-[\w-]+=\{[^}]*joinToken/);
+  });
+
+  it('never reads a device label on the media path either', () => {
+    const ALLOWED_RECEIVERS = new Set<string>([]);
+    for (const path of [VIDEO_CONTRACT, LIVEKIT_ADAPTER, FAKE_ADAPTER]) {
+      const receivers = [...code(path).matchAll(/([A-Za-z_$][\w$]*)\s*\.label\b/g)]
+        .map((match) => match[1]);
+      for (const receiver of receivers) {
+        expect(ALLOWED_RECEIVERS, `${path} reads .label on ${receiver}`).toContain(receiver);
+      }
+    }
+  });
+
+  it('keeps the deterministic adapter opt-in, never the default', () => {
+    const contract = code(VIDEO_CONTRACT);
+    // A build with nothing asking for it gets the production transport.
+    expect(contract).toMatch(/\?\?\s*fromEnv\)\s*===\s*'deterministic'\s*\?\s*'deterministic'\s*:\s*'livekit'/);
+  });
+
+  it('declares the vendor by module specifier, never by CDN script tag', () => {
+    const adapter = code(LIVEKIT_ADAPTER);
+    expect(adapter).toMatch(/from 'livekit-client'/);
+    expect(adapter).toMatch(/import\('livekit-client'\)/);
+    for (const forbidden of [
+      'createElement(\'script\')', 'unpkg.com', 'jsdelivr', 'cdn.', 'document.head.append',
+      'LivekitClient', 'window.LiveKit',
+    ]) {
+      expect(adapter, `${LIVEKIT_ADAPTER} must not use ${forbidden}`).not.toContain(forbidden);
+    }
+    // The dependency is DECLARED and PINNED, not floating.
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    expect(manifest.dependencies['livekit-client']).toMatch(/^\d+\.\d+\.\d+$/);
+    const lock = JSON.parse(readFileSync(join(process.cwd(), 'package-lock.json'), 'utf8'));
+    const locked = lock.packages['node_modules/livekit-client'];
+    expect(locked.version).toBe(manifest.dependencies['livekit-client']);
+    expect(locked.integrity).toMatch(/^sha512-/);
   });
 });
