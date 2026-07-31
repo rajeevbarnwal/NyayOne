@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { railItems, splitBottomNav } from './navItems';
 import type { ThemeMode } from '../../hooks/useTheme';
 
@@ -18,6 +18,13 @@ export function AppShell({
   theme: ThemeMode;
   toggleTheme: () => void;
 }) {
+  const location = useLocation();
+  // v3.4 S-01…S-10 own their responsive auth/app shell. Rendering the legacy
+  // global shell around them would duplicate navigation and invalidate the
+  // approved 900px single-shell contract.
+  if (/^\/s-(?:0[1-9]|10)$/.test(location.pathname)) {
+    return <main className="ls-v34-content" id="main-content">{children}</main>;
+  }
   return (
     <div className="ls-shell">
       {/* Desktop chambers rail */}
