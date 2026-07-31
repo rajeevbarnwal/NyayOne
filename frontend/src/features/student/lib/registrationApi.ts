@@ -180,3 +180,19 @@ export function clearRegistrationSession(): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(SESSION_KEY);
 }
+
+export async function checkMobileRegistered(mobile: string): Promise<boolean> {
+  try {
+    const res = await jsonRequest<{ registered: boolean }>('/api/v1/auth/student/check-mobile', {
+      method: 'POST',
+      body: JSON.stringify({ mobile }),
+    });
+    return res.registered;
+  } catch {
+    const session = loadRegistrationSession();
+    if (session?.registrationId && session.destinationMasked.includes(mobile.slice(-4))) {
+      return true;
+    }
+    return false;
+  }
+}
