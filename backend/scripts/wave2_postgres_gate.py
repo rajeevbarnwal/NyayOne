@@ -480,17 +480,29 @@ def run_alembic(args: list[str], url: str) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr)[-4000:]
 
 
-def scratch_url(base_url: str, name: str) -> str:
+def database_url_for_name(base_url: str, name: str) -> str:
+    """Return an executable URL for ``name`` without losing credentials.
+
+    ``str(URL)`` deliberately hides passwords as ``***``.  That representation
+    is appropriate for diagnostics, but passing it to ``create_engine`` makes
+    the mask the literal PostgreSQL password.  Connection URLs therefore use
+    SQLAlchemy's explicit non-redacted renderer and must never be logged.
+    """
     from sqlalchemy.engine import make_url
 
-    return str(make_url(base_url).set(database=name))
+    return make_url(base_url).set(database=name).render_as_string(
+        hide_password=False
+    )
+
+
+def scratch_url(base_url: str, name: str) -> str:
+    return database_url_for_name(base_url, name)
 
 
 def admin_execute(base_url: str, statement: str) -> None:
     from sqlalchemy import create_engine, text
-    from sqlalchemy.engine import make_url
 
-    admin = str(make_url(base_url).set(database="postgres"))
+    admin = database_url_for_name(base_url, "postgres")
     engine = create_engine(admin, isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
