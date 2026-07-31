@@ -54,7 +54,9 @@ describe('OTP state machine (SAATHI-53)', () => {
   });
 
   it('masks destinations and never sends over the network (stub)', () => {
-    expect(maskDestination({ channel: 'sms', ref: '+919812345210' })).toContain('210');
+    expect(maskDestination({ channel: 'sms', ref: '+919812345210' })).toBe('+91 98•••• ••210');
+    expect(maskDestination({ channel: 'sms', ref: '+919165555100' })).toBe('+91 91•••• ••100');
+    expect(maskDestination({ channel: 'sms', ref: '+19876543210' })).toBe('+1 98•••• ••210');
     const sender = createStubOtpSender();
     const receipt = sender.send({ channel: 'sms', ref: 'x' }, '429016', t0);
     expect(receipt.challengeId).toMatch(/^stub-/);
