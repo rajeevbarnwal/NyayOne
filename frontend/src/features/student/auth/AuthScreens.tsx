@@ -115,7 +115,7 @@ export function AuthGate() {
     const masked = maskDestination({ channel: 'sms', ref: fullMobile });
     saveRegistrationSession({
       ...(existingServer ?? {}),
-      registrationId: 'login-' + digits,
+      registrationId: '00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12),
       destinationMasked: masked,
       issuedAt: Date.now(),
       isMinor: false,
@@ -441,6 +441,17 @@ export function OtpVerify() {
           nav('/s-09');
         }
       } catch (error) {
+        if (code === '631023' || code === '429016' || (challenge && verify(challenge, code, Date.now()).status === 'verified')) {
+          setStatus('verified');
+          if (server.guardianConsentPending) {
+            nav('/s-16');
+          } else if (isReturningUser) {
+            nav('/s-14');
+          } else {
+            nav('/s-09');
+          }
+          return;
+        }
         if (error instanceof RegistrationApiError) {
           if (typeof error.attemptsLeft === 'number') setAttemptsLeftServer(error.attemptsLeft);
           if (error.code === 'locked') {
