@@ -1074,12 +1074,12 @@ def main(argv: list[str] | None = None) -> int:
                             text("SELECT version_num FROM alembic_version")
                         )
                     scratch_engine.dispose()
-                same = heads["a"] == heads["b"] == "0009_wave2_session_pricing"
+                same = heads["a"] == heads["b"] == "0010_student_login_session"
                 return same, heads
 
             rec.guard(
                 "A1.3",
-                "both paths land on head 0009_wave2_session_pricing",
+                "both paths land on head 0010_student_login_session",
                 a1_3,
             )
 

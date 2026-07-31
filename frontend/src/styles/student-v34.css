@@ -81,7 +81,7 @@
 .v34-brand b { display: block; font: 700 17px var(--v34-display); letter-spacing: -.02em; }
 .v34-brand small { display: block; color: var(--v34-muted); font: 600 10px var(--v34-display); letter-spacing: .14em; }
 .v34-mobilebrand { display: flex; align-items: center; justify-content: space-between; }
-.v34-theme { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--v34-line); border-radius: 12px; background: var(--v34-surface); }
+.v34-theme { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border: 1px solid var(--v34-line); border-radius: 12px; background: var(--v34-surface); }
 
 .v34-aside { display: none; }
 .v34-panehead { min-height: 66px; display: flex; align-items: center; gap: 14px; padding: 11px 22px; border-bottom: 1px solid var(--v34-line); }
