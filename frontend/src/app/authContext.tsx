@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { defaultKvStore, type KvStore } from '../lib/kvStore';
 import { loadAuthSnapshot, clearAuthSnapshot, subscribeAuthChange } from '../features/auth/lib/authPersistence';
+import {
+  getStudentSession,
+  STUDENT_AUTH_CHANGED_EVENT,
+  type StudentSessionActor,
+} from '../features/student/lib/registrationApi';
 
 /**
  * Frontend auth-context + route-guard scaffolding (SAATHI-337 / SAATHI-368).
@@ -123,13 +128,47 @@ export function deriveAuthState(store: KvStore = defaultKvStore(), now: number =
   };
 }
 
+function studentActorToAuth(actor: StudentSessionActor): AuthState {
+  const allowedRoles: Role[] = ['student', 'tutor', 'lawyer', 'admin', 'moderator'];
+  return {
+    isAuthenticated: true,
+    userId: actor.sub,
+    roles: actor.roles.filter((role): role is Role => allowedRoles.includes(role as Role)),
+    studentVerification: actor.student_verification,
+    lawyerVerification: 'draft',
+    filingRole: null,
+    isMinor: actor.is_minor,
+  };
+}
+
 /**
  * Reactive auth state: re-derives immediately on P0.1 snapshot create / update /
  * clear (in-tab event) and on cross-tab storage changes — no full reload needed.
  */
 export function useDerivedAuth(): AuthState {
   const [auth, setAuth] = useState<AuthState>(() => deriveAuthState());
-  useEffect(() => subscribeAuthChange(() => setAuth(deriveAuthState())), []);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const actor = await getStudentSession();
+        if (active) setAuth(actor ? studentActorToAuth(actor) : deriveAuthState());
+      } catch {
+        // The server is authoritative. No cookie/session means anonymous unless
+        // the separate verified-lawyer snapshot is present.
+        if (active) setAuth(deriveAuthState());
+      }
+    };
+    void refresh();
+    const unsubscribe = subscribeAuthChange(() => { void refresh(); });
+    const onStudentAuthChanged = () => { void refresh(); };
+    window.addEventListener(STUDENT_AUTH_CHANGED_EVENT, onStudentAuthChanged);
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener(STUDENT_AUTH_CHANGED_EVENT, onStudentAuthChanged);
+    };
+  }, []);
   return auth;
 }
 

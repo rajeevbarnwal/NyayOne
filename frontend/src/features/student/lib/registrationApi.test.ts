@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   loadRegistrationSession,
+  getStudentSession,
+  logoutStudent,
   registerStudent,
   saveAcademicProfile,
   saveRegistrationSession,
+  startLoginOtp,
+  verifyLoginOtp,
 } from './registrationApi';
 
 afterEach(() => {
@@ -122,5 +126,54 @@ describe('server-authoritative student registration API', () => {
       code: 'validation_error',
       field: 'mobile',
     }));
+  });
+
+  it('uses the real cookie-backed login/session/logout endpoints without exposing a token', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ login_id: 'a'.repeat(32) }), {
+        status: 202, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'authenticated' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        authenticated: true,
+        actor: {
+          sub: 'opaque-user-id', roles: ['student'], student_profile_id: null,
+          student_verification: 'draft', is_minor: false, consent_state: ['registration'],
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'logged_out' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const loginId = await startLoginOtp('9876543210');
+    await verifyLoginOtp(loginId, '123456');
+    const actor = await getStudentSession();
+    await logoutStudent();
+
+    expect(loginId).toBe('a'.repeat(32));
+    expect(actor?.sub).toBe('opaque-user-id');
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/api/v1/auth/student/login/otp/start'),
+      expect.stringContaining('/api/v1/auth/student/login/otp/verify'),
+      expect.stringContaining('/api/v1/auth/student/session'),
+      expect.stringContaining('/api/v1/auth/student/logout'),
+    ]);
+    for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(init.credentials).toBe('include');
+      expect(String(init.body ?? '')).not.toContain('session_token');
+    }
+  });
+
+  it('maps the non-error anonymous session probe to no actor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      authenticated: false,
+      actor: null,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(getStudentSession()).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });

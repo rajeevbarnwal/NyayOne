@@ -4,6 +4,9 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 
 const base = process.env.V34_BASE_URL ?? 'http://127.0.0.1:4174';
+const apiBase = process.env.V34_API_BASE_URL ?? base;
+const captureBase = process.env.V34_OTP_CAPTURE_URL ?? 'http://127.0.0.1:1099';
+const loginMobile = process.env.V34_LOGIN_MOBILE ?? '9000000042';
 const evidenceDir = resolve(process.env.V34_EVIDENCE_DIR ?? 'test-results/v34-s01-s10');
 const screenshotsDir = resolve(evidenceDir, 'screenshots');
 await mkdir(screenshotsDir, { recursive: true });
@@ -11,6 +14,44 @@ await mkdir(screenshotsDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const rows = [];
 const record = (area, expected, actual, pass, detail = '') => rows.push({ area, expected, actual, pass, detail });
+const resetOtp = async () => {
+  const response = await fetch(`${captureBase}/reset`, { method: 'POST' });
+  if (!response.ok) throw new Error(`OTP capture reset failed: ${response.status}`);
+};
+const latestOtp = async () => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const response = await fetch(`${captureBase}/latest`);
+    const payload = await response.json();
+    if (payload.to === loginMobile && /^\d{6}$/.test(payload.code ?? '')) return payload.code;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+  throw new Error('OTP capture did not receive the expected login code');
+};
+const provisionLoginStudent = async () => {
+  await resetOtp();
+  const response = await fetch(`${apiBase}/api/v1/auth/student/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `v34-login-e2e-${loginMobile}` },
+    body: JSON.stringify({
+      first_name: 'Aditi',
+      middle_name: null,
+      last_name: 'Nair',
+      mobile: loginMobile,
+      dob: '2004-03-14',
+      consent: { accepted: true, policy_version: 'v34-login-e2e' },
+    }),
+  });
+  if (response.status === 409) return;
+  if (response.status !== 201) throw new Error(`login fixture registration failed: ${response.status}`);
+  const registration = await response.json();
+  const code = await latestOtp();
+  const verified = await fetch(`${apiBase}/api/v1/auth/student/otp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ registration_id: registration.registration_id, code }),
+  });
+  if (!verified.ok) throw new Error(`login fixture OTP verification failed: ${verified.status}`);
+};
 
 try {
   for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }]) {
@@ -136,15 +177,49 @@ try {
   const iconContract = await page.evaluate(() => [...document.querySelectorAll('.v34-iconbtn')].map((button) => ({ aria: button.getAttribute('aria-label'), tip: button.getAttribute('data-tip'), svg: button.querySelectorAll('svg').length })));
   record('icon_tooltip_contract', 'every icon CTA has SVG, aria-label and visible-tooltip text', iconContract, iconContract.length > 0 && iconContract.every((item) => item.aria && item.tip === item.aria && item.svg === 1));
 
+  await provisionLoginStudent();
+  await resetOtp();
+  const loginCalls = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/v1/auth/student/')) {
+      loginCalls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+  });
   await page.goto(`${base}/s-04`);
   await page.getByRole('button', { name: 'Use a one time code' }).click();
-  await page.getByLabel('MOBILE NUMBER').fill('9876543210');
+  await page.getByLabel('MOBILE NUMBER').fill(loginMobile);
   await page.getByRole('button', { name: 'Send one time code' }).click();
-  const loginStorage = await page.evaluate(() => ({ ...localStorage, ...sessionStorage }));
-  record('no_login_otp_stub', 'no simulated login success or browser OTP challenge', { alert: await page.getByRole('alert').innerText(), path: new URL(page.url()).pathname, loginStorage },
-    await page.getByText(/one time code sign-in is not available yet/i).isVisible()
-      && new URL(page.url()).pathname === '/s-04'
-      && !JSON.stringify(loginStorage).includes('429016'));
+  await page.waitForURL('**/s-09');
+  const loginCode = await latestOtp();
+  await page.getByLabel('Six digit code').fill(loginCode);
+  await page.getByRole('button', { name: 'Verify and continue' }).click();
+  await page.waitForURL('**/s-07');
+  const authenticated = await page.evaluate(async (sessionUrl) => {
+    const response = await fetch(sessionUrl, { credentials: 'include' });
+    return { status: response.status, body: await response.json() };
+  }, `${apiBase}/api/v1/auth/student/session`);
+  const loginBrowserState = await page.evaluate(() => ({
+    local: JSON.stringify(localStorage),
+    session: JSON.stringify(sessionStorage),
+    visibleCookies: document.cookie,
+  }));
+  record('login_otp_server_lifecycle', 'real start + verify + cookie session endpoints', { loginCalls, authenticated },
+    loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/start'))
+      && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/verify'))
+      && authenticated.status === 200
+      && authenticated.body?.actor?.roles?.includes('student'));
+  record('login_secret_storage_privacy', 'no raw mobile, OTP, or session cookie visible to JavaScript storage', loginBrowserState,
+    !JSON.stringify(loginBrowserState).includes(loginMobile)
+      && !JSON.stringify(loginBrowserState).includes(loginCode)
+      && !loginBrowserState.visibleCookies.includes('legalsaathi_session'));
+  await page.screenshot({ path: resolve(screenshotsDir, 'S-07__login-authenticated__mobile__light.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.waitForURL('**/s-03');
+  const afterLogout = await page.evaluate(async (sessionUrl) => (
+    await fetch(sessionUrl, { credentials: 'include' })
+  ).status, `${apiBase}/api/v1/auth/student/session`);
+  record('logout_revokes_session', 'S-03 and anonymous session probe after logout', { path: new URL(page.url()).pathname, status: afterLogout },
+    new URL(page.url()).pathname === '/s-03' && afterLogout === 200);
   await context.close();
 } finally {
   await browser.close();

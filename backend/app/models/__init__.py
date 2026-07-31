@@ -7,7 +7,9 @@ from app.models.wave1 import (  # noqa: F401
 )
 from app.models.registration import (  # noqa: F401
     Consent,
+    AuthSession,
     GuardianConsent,
+    LoginAttempt,
     OtpChallenge,
     OtpOutbox,
     RecoverySession,
@@ -33,6 +35,8 @@ from app.models.credentials import (  # noqa: F401
 
 __all__ = [
     "User",
+    "AuthSession",
+    "LoginAttempt",
     "StudentRegistration",
     "StudentProfile",
     "OtpChallenge",

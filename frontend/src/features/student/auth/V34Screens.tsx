@@ -20,10 +20,14 @@ import {
   registerStudent,
   resendStudentOtp,
   saveRegistrationSession,
+  startLoginOtp,
   startRecovery,
+  verifyLoginOtp,
   verifyRecovery,
   completeRecovery,
   verifyStudentOtp,
+  logoutStudent,
+  notifyStudentAuthChanged,
 } from '../lib/registrationApi';
 import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
@@ -207,15 +211,30 @@ export function V34Login() {
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'password' | 'otp'>('password');
+  const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  function submit() {
+  async function submit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR;
     if (mode === 'password' && (password.length < 8 || password.length > 128)) next.password = 'Password must be between 8 and 128 characters.';
     setErrors(next);
     if (Object.keys(next).length) return;
-    if (mode === 'password') { nav('/s-05', { state: { mobile } }); return; }
-    setErrors({ submit: 'One time code sign-in is not available yet. Use password recovery or create a student account.' });
+    if (mode === 'password') { nav('/s-05'); return; }
+    setBusy(true);
+    try {
+      const loginId = await startLoginOtp(mobile);
+      nav('/s-09', {
+        state: {
+          loginId,
+          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
+          issuedAt: Date.now(),
+        },
+      });
+    } catch {
+      setErrors({ submit: 'A one time code could not be requested. Please retry.' });
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <Screen id="S-04" aside={<AuthAside title="Welcome back." copy="Sign in with the mobile number on your account. A one time code is available instead of a password."/>}>
@@ -224,20 +243,18 @@ export function V34Login() {
           <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15}/>
           {mode === 'password' && <Field id="v34-login-password" label="PASSWORD" value={password} onChange={setPassword} type="password" autoComplete="current-password" error={errors.password} maxLength={128}/>} 
         </div>{errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}<div className="v34-inlineactions"><button className="v34-hit v34-linkbtn" onClick={() => { setErrors({}); setMode((value) => value === 'password' ? 'otp' : 'password'); }}>{mode === 'password' ? 'Use a one time code' : 'Use password'}</button><button className="v34-hit" onClick={() => nav('/s-06')}>Forgot password</button></div><span className="v34-grow"/>
-      </main><Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}><IconAction label={mode === 'otp' ? 'Send one time code' : 'Sign in'} icon={mode === 'otp' ? 'send' : 'key'} onClick={submit}/></Footer></Pane>
+      </main><Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}><IconAction label={mode === 'otp' ? 'Send one time code' : 'Sign in'} icon={mode === 'otp' ? 'send' : 'key'} onClick={submit} disabled={busy}/></Footer></Pane>
     </Screen>
   );
 }
 
 export function V34LoginFailure() {
   const nav = useNavigate();
-  const location = useLocation();
-  const state = location.state as { mobile?: string } | null;
   return (
     <Screen id="S-05" aside={<AuthAside title="Welcome back." copy="Five failed attempts lock sign in for 15 minutes. A one time code remains available."/>}>
       <Pane><PaneHead id="S-05 · ERROR" back={() => nav('/s-04')}/><main className="v34-main">
         <h1 id="S-05-title" className="v34-title">Sign in</h1><div className="v34-banner" role="alert"><b>TWO ATTEMPTS LEFT</b><span>That number and password do not match. We do not disclose whether an account exists.</span></div>
-        <div className="v34-fieldset"><Field id="v34-error-mobile" label="MOBILE NUMBER" value={state?.mobile ?? ''} onChange={() => undefined} type="tel" prefix="+91"/><Field id="v34-error-password" label="PASSWORD" value="" onChange={() => undefined} type="password" error="Check your password or use a one time code."/></div>
+        <div className="v34-fieldset"><Field id="v34-error-mobile" label="MOBILE NUMBER" value="" onChange={() => undefined} type="tel" prefix="+91" placeholder="Re-enter on the sign-in screen"/><Field id="v34-error-password" label="PASSWORD" value="" onChange={() => undefined} type="password" error="Check your password or use a one time code."/></div>
         <button className="v34-hit v34-linkbtn" onClick={() => nav('/s-04')}>Send a one time code instead</button><span className="v34-grow"/>
       </main><Footer hint={<>Locked out? <button className="v34-textlink" onClick={() => nav('/s-06')}>Reset your password</button></>}><IconAction label="Try again" icon="retry" onClick={() => nav('/s-04')}/></Footer></Pane>
     </Screen>
@@ -283,9 +300,15 @@ export function V34PasswordReset() {
 const HOME_NAV = ['Home', 'Ask', 'Calendar', 'Exam Prep', 'Case Digests', 'Moot Court', 'Drafting Lab', 'Internships', 'Career & Jobs', 'Clinical Hours', 'Community', 'Profile & Settings'];
 export function V34VerifiedHome(props: ScreenProps) {
   const nav = useNavigate();
+  async function signOut() {
+    try { await logoutStudent(); } finally {
+      notifyStudentAuthChanged();
+      nav('/s-03', { replace: true });
+    }
+  }
   return (
     <Screen id="S-07" variant="app" aside={<nav className="v34-sidenav" aria-label="Main"><Brand/>{HOME_NAV.map((label, index) => <button type="button" key={label} className={index === 0 ? 'is-on' : ''} onClick={() => index === 11 ? nav('/s-17') : undefined}><span aria-hidden="true">{index === 0 ? '⌂' : '·'}</span>{label}</button>)}<span className="v34-grow"/><small>TIER 2 · Bar enrolment is optional and private.</small></nav>}>
-      <Pane><header className="v34-appbar"><Brand/><button type="button" className="v34-command">Ask a question or search…</button><ThemeButton {...props}/></header><main className="v34-main">
+      <Pane><header className="v34-appbar"><Brand/><button type="button" className="v34-command">Ask a question or search…</button><button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button><ThemeButton {...props}/></header><main className="v34-main">
         <span className="v34-mono">THURSDAY · 30 JULY</span><h1 id="S-07-title" className="v34-display">Good morning, Aditi.</h1><p className="v34-lede">Three useful things are close: a moot deadline, a tutor session and your next digest.</p>
         <div className="v34-homegrid"><section><h2>On your docket</h2>{[['TODAY', 'Memorial draft due', 'Constitutional law moot'], ['SAT', 'Tutor session', 'Adv. Priya Raman · 60 minutes']].map(([day, title, detail]) => <article key={title} className="v34-docket"><b>{day}</b><span><strong>{title}</strong><small>{detail}</small></span></article>)}</section><aside><div className="v34-card"><b className="v34-stat">82%</b><span>profile complete</span></div><div className="v34-card"><span>Applications open</span><b>2</b></div><div className="v34-card"><span>Digests due</span><b>12</b></div></aside></div><span className="v34-grow"/>
       </main><nav className="v34-tabbar" aria-label="Main mobile">{['Home', 'Calendar', 'Prep', 'Career', 'Community'].map((label) => <button key={label} className={label === 'Home' ? 'is-on' : ''}>{label}</button>)}</nav></Pane>
@@ -334,11 +357,13 @@ export function V34Register(props: ScreenProps) {
 }
 
 export function V34OtpVerify() {
-  const nav = useNavigate(); const [now, setNow] = useState(Date.now()); const [code, setCode] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false); const [attempts, setAttempts] = useState(5);
-  const server = loadRegistrationSession();
+  const nav = useNavigate(); const location = useLocation(); const [now, setNow] = useState(Date.now()); const [code, setCode] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false); const [attempts, setAttempts] = useState(3);
+  const login = location.state as { loginId?: string; destinationMasked?: string; issuedAt?: number } | null;
+  const server = login?.loginId ? null : loadRegistrationSession();
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const expires = server ? Math.max(0, 600 - Math.floor((now - server.issuedAt) / 1000)) : 0;
-  const resend = server ? Math.max(0, 30 - Math.floor((now - server.issuedAt) / 1000)) : 0;
+  const issuedAt = login?.issuedAt ?? server?.issuedAt;
+  const expires = issuedAt ? Math.max(0, 600 - Math.floor((now - issuedAt) / 1000)) : 0;
+  const resend = issuedAt ? Math.max(0, 30 - Math.floor((now - issuedAt) / 1000)) : 0;
   async function submit() {
     if (!isValidOtpFormat(code)) { setStatus('Enter all six digits.'); return; } setBusy(true);
     if (server) {
@@ -346,20 +371,32 @@ export function V34OtpVerify() {
       catch (caught) { if (caught instanceof RegistrationApiError && typeof caught.attemptsLeft === 'number') setAttempts(caught.attemptsLeft); setStatus('That code could not be verified. Check all six digits.'); }
       finally { setBusy(false); } return;
     }
-    setStatus('Start registration before entering a code.');
+    if (login?.loginId) {
+      try {
+        await verifyLoginOtp(login.loginId, code);
+        notifyStudentAuthChanged();
+        nav('/s-07', { replace: true });
+      } catch {
+        setAttempts((value) => Math.max(0, value - 1));
+        setStatus('That code could not be verified. Check all six digits or request a new code.');
+      } finally { setBusy(false); }
+      return;
+    }
+    setStatus('Start registration or sign in before entering a code.');
     setBusy(false);
   }
   async function resendCode() {
     if (resend > 0) return;
     if (server) { try { await resendStudentOtp(server.registrationId); saveRegistrationSession({ ...server, issuedAt: Date.now() }); setNow(Date.now()); setCode(''); setStatus('A new code was sent.'); } catch { setStatus('A new code could not be sent yet.'); } }
-    else setStatus('Start registration before requesting another code.');
+    else if (login?.loginId) nav('/s-04', { replace: true });
+    else setStatus('Start registration or sign in before requesting another code.');
   }
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? '');
   return (
     <Screen id="S-09" aside={<AuthAside title="One code, then you are in." copy="Codes are short-lived. Repeated wrong entries trigger a temporary lock."/>}>
       <Pane><PaneHead id="S-09 · STEP 2 OF 2" back={() => nav(server ? '/s-08' : '/s-04')}/><main className="v34-main">
-        <div><h1 id="S-09-title" className="v34-title">Enter the code</h1><p className="v34-lede">Six digits, sent to {server?.destinationMasked ?? 'your mobile'}.</p></div>
-        <label className="v34-otp" aria-label="Six digit code">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}/></label>
+        <div><h1 id="S-09-title" className="v34-title">Enter the code</h1><p className="v34-lede">Six digits, sent to {login?.destinationMasked ?? server?.destinationMasked ?? 'your mobile'}.</p></div>
+        <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}/></label>
         {status && <div className="v34-banner" role="alert">{status}</div>}<div className="v34-card v34-kv"><span>Code expires in <b>{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend available in <button className="v34-textlink" disabled={resend > 0} onClick={resendCode}>{resend > 0 ? `00:${String(resend).padStart(2, '0')}` : 'Resend now'}</button></span><span>Tries left <b>{attempts}</b></span></div><span className="v34-grow"/>
       </main><Footer hint="Enter all six digits to verify."><IconAction label="Verify and continue" icon="verify" onClick={submit} disabled={busy || code.length !== 6}/></Footer></Pane>
     </Screen>

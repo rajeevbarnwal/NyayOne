@@ -137,7 +137,7 @@ export function maskDestination(dest: OtpDestination): string {
   if (dest.channel === 'sms') {
     const digits = dest.ref.replace(/\D/g, '');
     const tail = digits.slice(-3);
-    return `+91 98••• ••${tail || '210'}`;
+    return `+91 ••••• ••${tail || '•••'}`;
   }
   const [user, domain] = dest.ref.split('@');
   const head = user ? user.slice(0, 2) : 'aa';

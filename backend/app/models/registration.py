@@ -29,11 +29,13 @@ from app.db.base import TimestampedBase
 USER_ROLES = ("student", "lawyer", "admin")
 USER_STATUSES = ("pending", "active", "suspended", "deleted")
 REGISTRATION_STATUSES = ("otp_pending", "otp_verified", "active", "suspended", "deleted")
-OTP_PURPOSES = ("signup", "recovery")
+OTP_PURPOSES = ("signup", "recovery", "login")
 VERIFICATION_METHODS = ("institutional_email", "college_id", "manual")
 VERIFICATION_STATUSES = ("pending", "in_review", "verified", "rejected")
 GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
 RECOVERY_STATUSES = ("pending", "verified", "consumed", "expired")
+LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired")
+AUTH_SESSION_STATUSES = ("active", "revoked", "expired")
 
 
 def _in(column: str, allowed: tuple[str, ...], name: str) -> CheckConstraint:
@@ -141,6 +143,62 @@ class RecoverySession(TimestampedBase):
     __table_args__ = (
         UniqueConstraint("opaque_id", name="uq_recovery_sessions_opaque_id"),
         _in("status", RECOVERY_STATUSES, "status"),
+    )
+
+
+class LoginAttempt(TimestampedBase):
+    """Opaque, non-enumerating OTP-login attempt.
+
+    Unknown mobiles receive an indistinguishable row with null registration and
+    challenge references. Raw mobiles and OTPs are never stored here.
+    """
+
+    __tablename__ = "login_attempts"
+    opaque_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    lookup_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    registration_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("student_registrations.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    challenge_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("otp_challenges.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("opaque_id", name="uq_login_attempts_opaque_id"),
+        _in("status", LOGIN_ATTEMPT_STATUSES, "status"),
+    )
+
+
+class AuthSession(TimestampedBase):
+    """Server-authoritative authenticated session.
+
+    The browser receives a random opaque token only in an HttpOnly cookie. The
+    database stores its keyed hash, never the bearer token itself.
+    """
+
+    __tablename__ = "auth_sessions"
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_auth_sessions_token_hash"),
+        _in("status", AUTH_SESSION_STATUSES, "status"),
     )
 
 
