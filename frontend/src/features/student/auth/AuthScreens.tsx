@@ -6,7 +6,7 @@ import {
   isRegistrableDob, DOB_ERROR, todayLocalISO,
   validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName,
 } from '../lib/registration';
-import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
+import { RestrictedState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
 import {
   isValidOtpFormat,
   verify,
@@ -157,9 +157,6 @@ export function AuthGate() {
             <button type="button" className="btn tap" onClick={() => nav('/s-04')}>
               Language
             </button>
-          </div>
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <PendingVerificationState kind="student" />
           </div>
         </>
       )}
