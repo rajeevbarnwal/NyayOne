@@ -146,7 +146,7 @@ class LiveKitVideoRoomClient implements VideoRoomClient {
 
   async connect(options: VideoRoomConnectOptions): Promise<void> {
     if (this.left) return;
-    const url = videoRoomServerUrl();
+    const url = options.serverUrl?.trim() || videoRoomServerUrl();
     this.participantRef = options.participantRef;
     this.ownedStream = options.localStream ?? null;
     if (!url) {

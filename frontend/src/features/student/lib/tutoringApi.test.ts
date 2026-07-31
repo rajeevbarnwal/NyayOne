@@ -24,6 +24,7 @@ import {
   editReview,
   getAvailability,
   getBookingHold,
+  getTutoringCapabilities,
   getTutor,
   getTutoringSession,
   isRetryableTutoringError,
@@ -626,6 +627,7 @@ describe('E1 join credentials', () => {
     expires_at: '2026-08-05T13:05:00+00:00',
     ttl_seconds: 300,
     superseded: true,
+    video_room_url: 'wss://video.example.test',
   };
 
   it('maps the one-time credential, including that it superseded the previous grant', async () => {
@@ -635,6 +637,7 @@ describe('E1 join credentials', () => {
     expect(issued.ttlSeconds).toBe(300);
     expect(issued.superseded).toBe(true);
     expect(issued.joinToken).toBe('jointoken-TEST-do-not-log');
+    expect(issued.videoRoomUrl).toBe('wss://video.example.test');
   });
 
   it('redacts the raw token for any rendered or logged projection', async () => {
@@ -665,6 +668,39 @@ describe('E1 join credentials', () => {
       }
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('runtime tutoring capabilities', () => {
+  it('maps the independent video switch and browser endpoint', async () => {
+    stubFetch(jsonResponse({
+      video_calls_enabled: true,
+      video_transport: 'livekit',
+      video_room_url: 'wss://video.example.test',
+      join_credential_ttl_seconds: 300,
+      recording_enabled: false,
+    }));
+    await expect(getTutoringCapabilities()).resolves.toEqual({
+      videoCallsEnabled: true,
+      videoTransport: 'livekit',
+      videoRoomUrl: 'wss://video.example.test',
+      joinCredentialTtlSeconds: 300,
+      recordingEnabled: false,
+    });
+  });
+
+  it('maps the disabled state without inventing a provider URL', async () => {
+    stubFetch(jsonResponse({
+      video_calls_enabled: false,
+      video_transport: 'none',
+      video_room_url: null,
+      join_credential_ttl_seconds: 300,
+      recording_enabled: false,
+    }));
+    const result = await getTutoringCapabilities();
+    expect(result.videoCallsEnabled).toBe(false);
+    expect(result.videoTransport).toBe('none');
+    expect(result.videoRoomUrl).toBeNull();
   });
 });
 
