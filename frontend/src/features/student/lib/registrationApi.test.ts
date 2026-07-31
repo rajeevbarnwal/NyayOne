@@ -3,6 +3,7 @@ import {
   loadRegistrationSession,
   registerStudent,
   saveAcademicProfile,
+  requestInstitutionalEmailVerification,
   saveRegistrationSession,
 } from './registrationApi';
 
@@ -64,6 +65,27 @@ describe('server-authoritative student registration API', () => {
       enrolment_number: 'KA/1234/2023',
       institutional_email: 'aditi@nls.ac.in',
       bar_enrolment_number: 'D/1234/2024',
+    });
+  });
+
+  it('posts the S-15 email request to the typed server boundary', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ status: 'pending' }),
+      { status: 202, headers: { 'Content-Type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(requestInstitutionalEmailVerification(
+      'opaque-registration-id',
+      '  aditi@nls.ac.in  ',
+    )).resolves.toEqual({ status: 'pending' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/auth/student/verification/email/request');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      registration_id: 'opaque-registration-id',
+      institutional_email: 'aditi@nls.ac.in',
     });
   });
 
