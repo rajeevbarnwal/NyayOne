@@ -96,16 +96,26 @@ export async function verifyStudentOtp(
   registrationId: string,
   code: string,
 ): Promise<void> {
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationId);
+  const validId = isValidUuid
+    ? registrationId
+    : '00000000-0000-4000-8000-' + registrationId.replace(/\D/g, '').padStart(12, '0').slice(-12);
+
   await jsonRequest('/api/v1/auth/student/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId, code }),
+    body: JSON.stringify({ registration_id: validId, code }),
   });
 }
 
 export async function resendStudentOtp(registrationId: string): Promise<void> {
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationId);
+  const validId = isValidUuid
+    ? registrationId
+    : '00000000-0000-4000-8000-' + registrationId.replace(/\D/g, '').padStart(12, '0').slice(-12);
+
   await jsonRequest('/api/v1/auth/student/otp/resend', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId }),
+    body: JSON.stringify({ registration_id: validId }),
   });
 }
 
