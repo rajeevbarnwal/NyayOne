@@ -1050,6 +1050,30 @@ def resolve_attendance(
 # --------------------------------------------------------------------------- #
 
 
+@router.get("/tutoring/capabilities")
+def tutoring_capabilities() -> dict:
+    """Public, secret-free runtime availability for S-35.
+
+    Frontend builds are immutable but the operational video switch is not. The
+    UI reads this endpoint before opening devices or offering Join, so a normal
+    disable is immediately visible without rebuilding JavaScript. No API key,
+    internal service URL or deployment secret is exposed.
+    """
+    provider = (settings.video_provider or "none").strip().lower()
+    enabled = bool(settings.video_calls_enabled and provider != "none")
+    return {
+        "video_calls_enabled": enabled,
+        "video_transport": provider if enabled else "none",
+        "video_room_url": (
+            settings.livekit_public_url.strip()
+            if enabled and provider == "livekit" and settings.livekit_public_url
+            else None
+        ),
+        "join_credential_ttl_seconds": settings.join_credential_ttl_seconds,
+        "recording_enabled": False,
+    }
+
+
 @router.post("/tutoring/sessions/{session_id}/join-credentials", status_code=201)
 def issue_join_credentials(
     session_id: uuid.UUID,
@@ -1085,6 +1109,12 @@ def issue_join_credentials(
         "expires_at": _iso(issued.expires_at),
         "ttl_seconds": issued.ttl_seconds,
         "superseded": issued.superseded,
+        "video_room_url": (
+            settings.livekit_public_url.strip()
+            if (settings.video_provider or "").strip().lower() == "livekit"
+            and settings.livekit_public_url
+            else None
+        ),
     }
 
 

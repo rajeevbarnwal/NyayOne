@@ -406,7 +406,9 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 
 Degradation policy, in order of preference:
 
-1. **Provider outage, sessions must continue** → set `VIDEO_PROVIDER=deterministic`
+1. **Provider outage, sessions must continue** → set `VIDEO_CALLS_ENABLED=false`.
+   This blocks new grants with `VIDEO_CALLS_DISABLED` while already-connected
+   calls drain normally. Never switch production to the deterministic adapter.
    and restart the backend (§ 7). Credentials are issued and the domain stays
    fully functional; there is simply no real media plane behind them. Appropriate
    for a staging environment, **not** for production sessions people paid for.
@@ -483,7 +485,8 @@ Rollback is deliberately boring, and there are two independent levers.
 **Lever 1 — take the application off LiveKit (seconds, no media plane change).**
 
 ```bash
-# In .env:  VIDEO_PROVIDER=deterministic
+# In .env:  VIDEO_CALLS_ENABLED=false
+#           VIDEO_PROVIDER=livekit
 docker compose -f docker-compose.yml up -d --force-recreate backend
 # Verify: the seam resolves to the deterministic adapter.
 docker compose -f docker-compose.yml exec backend python -c \

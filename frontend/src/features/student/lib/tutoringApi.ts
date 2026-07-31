@@ -1106,6 +1106,8 @@ export interface JoinCredential {
   ttlSeconds: number;
   /** True when issuing revoked the caller's previous grant. */
   superseded: boolean;
+  /** Browser-facing signalling URL; never the backend's internal Twirp URL. */
+  videoRoomUrl: string | null;
 }
 
 /** A credential with the secret removed, safe to render or log. */
@@ -1135,6 +1137,7 @@ export async function issueJoinCredentials(sessionId: string): Promise<JoinCrede
     expires_at: string | null;
     ttl_seconds: number;
     superseded: boolean;
+    video_room_url: string | null;
   }>(`/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}/join-credentials`, {
     method: 'POST',
   });
@@ -1149,6 +1152,33 @@ export async function issueJoinCredentials(sessionId: string): Promise<JoinCrede
     expiresAt: wire.expires_at,
     ttlSeconds: wire.ttl_seconds,
     superseded: Boolean(wire.superseded),
+    videoRoomUrl: wire.video_room_url ?? null,
+  };
+}
+
+/** Secret-free operational switches read at runtime, not baked into the build. */
+export interface TutoringCapabilities {
+  videoCallsEnabled: boolean;
+  videoTransport: 'none' | 'deterministic' | 'livekit' | string;
+  videoRoomUrl: string | null;
+  joinCredentialTtlSeconds: number;
+  recordingEnabled: boolean;
+}
+
+export async function getTutoringCapabilities(): Promise<TutoringCapabilities> {
+  const wire = await jsonRequest<{
+    video_calls_enabled: boolean;
+    video_transport: string;
+    video_room_url: string | null;
+    join_credential_ttl_seconds: number;
+    recording_enabled: boolean;
+  }>('/api/v1/tutoring/capabilities', { method: 'GET' });
+  return {
+    videoCallsEnabled: Boolean(wire.video_calls_enabled),
+    videoTransport: wire.video_transport,
+    videoRoomUrl: wire.video_room_url ?? null,
+    joinCredentialTtlSeconds: wire.join_credential_ttl_seconds,
+    recordingEnabled: Boolean(wire.recording_enabled),
   };
 }
 
@@ -1249,6 +1279,7 @@ export async function deleteReview(reviewId: string): Promise<TutorReview> {
  * ========================================================================== */
 
 export const tutoringKeys = {
+  capabilities: ['tutoring', 'capabilities'] as const,
   tutors: (params: TutorSearchParams) => ['tutoring', 'tutors', params] as const,
   tutor: (id: string) => ['tutoring', 'tutor', id] as const,
   availability: (id: string, params: AvailabilityParams) =>

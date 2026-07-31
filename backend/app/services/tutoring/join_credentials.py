@@ -81,6 +81,7 @@ from app.services.tutoring.errors import (
     SessionStateInvalid,
     ValidationError,
     VideoUnverified,
+    VideoCallsDisabled,
 )
 
 #: Only a session PARTICIPANT may hold a join credential. An admin is not a
@@ -117,6 +118,20 @@ def _resolve_provider(
     if resolved is None:
         raise ProviderUnavailable("video provider is not configured", retryable=False)
     return resolved
+
+
+def assert_video_calls_enabled() -> None:
+    """Refuse new grants when the independently controlled feature is off.
+
+    This check happens before session lookup, payment lookup, grant revocation,
+    provider calls or audit writes. Turning the normal switch off therefore
+    drains already-connected rooms while making every new admission a typed,
+    non-retryable, zero-mutation refusal.
+    """
+    if not settings.video_calls_enabled:
+        raise VideoCallsDisabled(
+            "video calls are currently unavailable",
+        )
 
 
 def participant_ref(session_id: uuid.UUID, user_id: uuid.UUID) -> str:
@@ -263,6 +278,7 @@ def issue(
     when the provider is unusable (``PROVIDER_UNAVAILABLE``, never a 500).
     """
     now = now or utcnow()
+    assert_video_calls_enabled()
     if actor_role not in PARTICIPANT_ROLES:
         raise Forbidden(
             "join credentials are issued to session participants only",

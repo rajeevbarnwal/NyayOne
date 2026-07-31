@@ -67,8 +67,10 @@ DIRECT_HOST_PORTS = {1040, 1041}
 #: Names the BACKEND reads. Uppercased ``Settings`` field names — pydantic-settings
 #: maps them 1:1, so a typo here is a setting that silently keeps its default.
 BACKEND_ENV_NAMES = (
+    "VIDEO_CALLS_ENABLED",
     "VIDEO_PROVIDER",
     "LIVEKIT_URL",
+    "LIVEKIT_PUBLIC_URL",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "JOIN_CREDENTIAL_TTL_SECONDS",
@@ -452,7 +454,14 @@ def test_env_example_secrets_are_placeholders_the_app_actively_rejects():
 
 def test_env_example_cannot_switch_a_deployment_onto_livekit_by_accident():
     values = _env_example()
-    assert values["VIDEO_PROVIDER"] == "deterministic"
+    assert values["VIDEO_CALLS_ENABLED"] == "false"
+    assert values["VIDEO_PROVIDER"] == "none"
+
+
+def test_env_example_separates_server_and_browser_livekit_urls():
+    values = _env_example()
+    assert values["LIVEKIT_URL"].startswith(("http://", "https://"))
+    assert values["LIVEKIT_PUBLIC_URL"].startswith(("ws://", "wss://"))
 
 
 def test_env_example_livekit_url_uses_a_scheme_httpx_can_post_to():

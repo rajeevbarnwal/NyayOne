@@ -381,6 +381,11 @@ describe('runtime adapter selection', () => {
  * ========================================================================== */
 
 describe('the LiveKit adapter', () => {
+  it('maps the backend video kill-switch to a named non-reissuable failure', () => {
+    expect(videoRoomFailureFromServerCode('VIDEO_CALLS_DISABLED')).toEqual({
+      code: 'VIDEO_CALLS_DISABLED', terminal: true, reissuable: false,
+    });
+  });
   it('maps every LiveKit connection state, and an unknown one to failed', () => {
     expect(mapLiveKitConnectionState('disconnected')).toBe('disconnected');
     expect(mapLiveKitConnectionState('connecting')).toBe('connecting');
