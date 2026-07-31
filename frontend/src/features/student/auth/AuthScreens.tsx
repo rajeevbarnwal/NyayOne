@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip } from '../components';
+import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip, MobileInputField } from '../components';
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, DOB_ERROR, todayLocalISO,
@@ -97,6 +97,7 @@ export function Onboarding() {
 export function AuthGate() {
   const nav = useNavigate();
   const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [countryCode, setCountryCode] = useState('+91');
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState<string | undefined>();
 
@@ -115,7 +116,7 @@ export function AuthGate() {
     } else {
       saveRegistrationSession({
         registrationId: 'login-' + digits,
-        destinationMasked: '+91 ' + digits,
+        destinationMasked: `${countryCode} ${digits}`,
         issuedAt: Date.now(),
         isMinor: false,
         guardianConsentPending: false,
@@ -138,17 +139,16 @@ export function AuthGate() {
 
       {tab === 'login' && (
         <>
-          <TextField
+          <MobileInputField
             id="login-mobile"
             label="Enter your Mobile Number"
             value={mobile}
             onChange={setMobile}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="+91 ‑ 10 digit mobile"
+            countryCode={countryCode}
+            onCountryCodeChange={setCountryCode}
             error={error}
             help="We’ll send a 6-digit OTP · 3 attempts"
+            placeholder="10-digit mobile number"
           />
           <div className="st-actions">
             <button type="button" className="btn btn--primary tap" onClick={sendOtp}>
@@ -218,6 +218,7 @@ const NAME_CONSENT_INFO =
 
 export function Register() {
   const nav = useNavigate();
+  const [countryCode, setCountryCode] = useState('+91');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -343,14 +344,13 @@ export function Register() {
           autoComplete="family-name"
         />
       </fieldset>
-      <TextField
+      <MobileInputField
         id="reg-mobile"
         label="Mobile number"
         value={mobile}
         onChange={setMobile}
-        type="text"
-        inputMode="numeric"
-        autoComplete="tel"
+        countryCode={countryCode}
+        onCountryCodeChange={setCountryCode}
         error={errors.mobile}
         help="10-digit mobile number"
       />
