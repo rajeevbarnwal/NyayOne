@@ -9,21 +9,21 @@ Format: a human-readable table plus the exact commands to regenerate machine
 formats. There is no pre-existing SBOM in this repository to match, so this file
 sets the shape: **one row per image, tag AND digest, no `latest` anywhere.**
 
-Resolved against Docker Hub on **2026-07-30**. Every digest below was read from
+Resolved against Docker Hub on **2026-07-31**. Every digest below was read from
 the registry, not transcribed from memory.
 
 ## Pinned images
 
 | Component | Image reference (as committed) | Multi-arch index digest | Upstream release | Base | Licence | Role |
 |---|---|---|---|---|---|---|
-| LiveKit server (community) | `livekit/livekit-server:v1.9.12` | `sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576` | v1.9.12, pushed 2026-03-05 | `alpine` (static `CGO_ENABLED=0` Go binary, no extra apk packages) | Apache-2.0 | SFU + signalling + RoomService (Twirp) + webhook notifier |
+| LiveKit server (community) | `livekit/livekit-server:v1.13.5` | `sha256:3497163e15c48fef6e7830c78716f9e9d5edc28abf7aa90b61c86e93bbc306b1` | v1.13.5, released 2026-07-31 | `alpine` (static `CGO_ENABLED=0` Go binary, no extra apk packages) | Apache-2.0 | SFU + signalling + RoomService (Twirp) + webhook notifier |
 | coturn | `coturn/coturn:4.7.0` | `sha256:a00afb5b4890de4df22bbe70379c6b316685dffee297d53cac1271dcb91fab93` | 4.7.0, pushed 2025-12-18 | `debian:trixie-slim` | BSD-3-Clause | STUN responder + TURN relay |
 
 Per-architecture manifest digests (what actually gets pulled on a given host):
 
 | Image | linux/amd64 | linux/arm64 |
 |---|---|---|
-| `livekit/livekit-server:v1.9.12` | `sha256:051ac3adcce0f4901e03269f97eb5f3423154456215a5c2927754c1450a6134c` | `sha256:eeb9bedb1d029ee45cf78c5a47d002ba363d419ccdfd6068d06086b1451f1d56` |
+| `livekit/livekit-server:v1.13.5` | `sha256:d0d1cfdbe95617647bbe91630454526c2cdd88cec83f41114b3495b444918b9a` | `sha256:804b0d2cfffb5b8f95a9cc5aa47a7b715605d1a527095f45dcc8e94b9cf9920e` |
 | `coturn/coturn:4.7.0` | `sha256:94f732f319463c94769b30b5cca1c02baa2d106fe3d3210159840c1372b162de` | `sha256:2ee13c79236cb51570121390b805e30625dad858afa46c2c53e115e6055636a3` |
 
 The compose file pins the **index** digest (`image: repo:tag@sha256:<index>`), so
@@ -38,11 +38,11 @@ the digests there.
 Recorded because these are the parts a CVE feed will name, and because two of
 them (OpenSSL, libevent) are on coturn's network-facing path.
 
-* `livekit/livekit-server:v1.9.12` — a single statically linked Go binary
+* `livekit/livekit-server:v1.13.5` — a single statically linked Go binary
   (`/livekit-server`, `ENTRYPOINT`) on an unmodified `alpine` base. No package
   manager layers are added by the upstream Dockerfile, so the image's attack
   surface is busybox + the Go binary. Go module inventory:
-  `go list -m all` in `github.com/livekit/livekit@v1.9.12`.
+  `go list -m all` in `github.com/livekit/livekit@v1.13.5`.
 * `coturn/coturn:4.7.0` — coturn built from source with
   `--prefix=/usr --sysconfdir=/etc/coturn`, running as `nobody:nogroup`, against
   the Debian runtime libraries: `libssl3t64` (OpenSSL 3), `libevent-2.1-7t64`
@@ -57,18 +57,18 @@ them (OpenSSL, libevent) are on coturn's network-facing path.
 
 ```bash
 # Confirm the committed digest is still what the tag resolves to.
-docker buildx imagetools inspect livekit/livekit-server:v1.9.12
+docker buildx imagetools inspect livekit/livekit-server:v1.13.5
 docker buildx imagetools inspect coturn/coturn:4.7.0
 # Expected: "Digest:" matches the index digest in the table above. If it does
 # NOT, upstream has re-pushed the tag — investigate before re-pinning; a moving
 # version tag is exactly what the digest pin exists to catch.
 
 # Machine-readable SBOM per image (CycloneDX and SPDX).
-syft livekit/livekit-server:v1.9.12 -o cyclonedx-json > /tmp/sbom-livekit.cdx.json
+syft livekit/livekit-server:v1.13.5 -o cyclonedx-json > /tmp/sbom-livekit.cdx.json
 syft coturn/coturn:4.7.0            -o spdx-json     > /tmp/sbom-coturn.spdx.json
 
 # Vulnerability scan against the pinned digests, not the tags.
-grype livekit/livekit-server@sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576
+grype livekit/livekit-server@sha256:3497163e15c48fef6e7830c78716f9e9d5edc28abf7aa90b61c86e93bbc306b1
 grype coturn/coturn@sha256:a00afb5b4890de4df22bbe70379c6b316685dffee297d53cac1271dcb91fab93
 ```
 

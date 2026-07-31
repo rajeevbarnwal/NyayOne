@@ -630,6 +630,13 @@ class LiveKitCommunityAdapter:
         ref = _assert_participant(participant_ref)
         perms = normalise_permissions(permissions)
         room_ref = self.ensure_room(session_id)
+        # Token signing is local, but handing out a syntactically valid bearer
+        # while the configured SFU is unreachable would make the API report a
+        # false 201 and strand the participant on the join screen. A cheap,
+        # read-only RoomService probe proves the provider and credentials are
+        # live before any bearer leaves the backend. Room creation remains lazy
+        # (``room.auto_create``), so the probe has no provider-side mutation.
+        self._twirp("ListRooms", {"names": [room_ref]})
         issued = now or datetime.now(timezone.utc)
         expires_at = issued + timedelta(seconds=ttl)
         raw_token = self._jwt(
@@ -640,7 +647,12 @@ class LiveKitCommunityAdapter:
                 "name": ref,
                 "nbf": int(issued.timestamp()) - 5,
                 "exp": int(expires_at.timestamp()),
-                "jti": f"{room_ref}:{ref}:{int(issued.timestamp())}",
+                # ``exp``/``nbf`` have second precision. Without a per-issue
+                # nonce, two legitimate re-issues in the same second produced
+                # byte-identical bearer JWTs even though the database correctly
+                # superseded the first row. The nonce is opaque and is never
+                # persisted or logged.
+                "jti": f"{room_ref}:{ref}:{uuid.uuid4().hex}",
                 "video": self._video_grant(room_ref, perms),
             }
         )

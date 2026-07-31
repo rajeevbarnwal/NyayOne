@@ -3,8 +3,9 @@
 Infrastructure-as-code for the LiveKit SFU and the coturn TURN relay that sit
 behind the committed `VideoSessionProvider` seam. No application code lives here
 and none is changed by it: the backend still only ever sees `VideoCredential` /
-`VideoEventData`, and `VIDEO_PROVIDER=deterministic` remains the mandatory
-adapter for automated business-contract testing.
+`VideoEventData`. Production defaults to `VIDEO_CALLS_ENABLED=false` and
+`VIDEO_PROVIDER=none`; the deterministic adapter is selected explicitly by
+automated development/test gates and is never a production fallback.
 
 | File | What it is |
 |---|---|

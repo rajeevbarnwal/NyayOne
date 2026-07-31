@@ -381,6 +381,7 @@ printf '%s\n' "$RUNTIME_HEADER" >> "$OUT/logs/vite_build.log"
 
 export DATABASE_URL="sqlite+pysqlite:///$DB_FILE"
 export PAYMENT_PROVIDER=deterministic
+export VIDEO_CALLS_ENABLED=true
 export VIDEO_PROVIDER=deterministic
 export BOOKING_HOLD_MINUTES=10
 export REFUND_FREE_CANCEL_HOURS=24

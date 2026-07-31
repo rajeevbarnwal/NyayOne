@@ -1872,6 +1872,13 @@ async function stageE(page) {
   };
   page.on('response', onResponse);
   try {
+    // This application-contract stage deliberately selects the deterministic
+    // adapter and proves that fact in the DOM. Real LiveKit/TURN proof belongs
+    // exclusively to infra/video/scripts/livekit_turn_smoke.sh S1-S11; neither
+    // result may be relabelled as the other.
+    await page.addInitScript(() => {
+      window.__legalsaathiVideoTransport = 'deterministic';
+    });
     await go(page, `${WEB}/s-35?session=${sessionId}&view=prejoin`, 'div.tt-preview');
     arts.push(await shot(page, 'e1_s35_prejoin'));
     await page.locator('button', { hasText: /Test camera and microphone/ }).click();
@@ -1891,7 +1898,12 @@ async function stageE(page) {
       () => page.locator('button', { hasText: /^Enter the room$/ }).click(),
     );
     await page.waitForSelector('main.tt-live', { timeout: 20000 });
-    await page.waitForFunction(() => /In the room|Not admitted/.test(document.querySelector('div.tt-lh')?.textContent || ''), { timeout: 25000 });
+    await page.waitForSelector('main.tt-live[data-tt-transport="connected"]', { timeout: 25000 });
+    await page.waitForFunction(() => {
+      const header = document.querySelector('div.tt-lh')?.textContent || '';
+      const pill = document.querySelector('[data-tt-transport-pill="connected"]')?.textContent || '';
+      return /In the room/.test(header) && /Live/.test(pill);
+    }, { timeout: 25000 });
     await settled(page);
     arts.push(await shot(page, 'e3_s35_live_room', { fullPage: false }));
     const headChip = await page.$eval('div.tt-lh span.tt-chip', (e) => e.textContent.trim());
@@ -1934,7 +1946,19 @@ async function stageE(page) {
 
     const redacted = sheet.some((r) => /redacted/i.test(r) && /in memory only/i.test(r));
     chk.ok('the server issued a join credential', 'POST .../join-credentials -> 201 with a room_ref and a TTL', { status: cred?.status, roomRef: cred?.json?.room_ref, ttl: cred?.json?.ttl_seconds }, (v) => v.status === 201 && !!v.roomRef && v.ttl === JOIN_TTL);
-    chk.ok('the room header reports the participant is in the room', 'a header chip matching /In the room/', headChip, (v) => /In the room/.test(v));
+    const transport = await page.$eval('main.tt-live', (e) => ({
+      state: e.getAttribute('data-tt-transport'),
+      adapter: window.__legalsaathiVideoTransport || null,
+      pill: document.querySelector('[data-tt-transport-pill]')?.textContent?.trim() || '',
+      alerts: [...document.querySelectorAll('[role="alert"]')].map((n) => n.textContent || ''),
+    }));
+    chk.ok(
+      'the room reports admission only after the selected media transport connects',
+      'header In the room + transport connected + pill Live + explicit deterministic adapter + zero terminal alert',
+      { headChip, ...transport },
+      (v) => /In the room/.test(v.headChip) && v.state === 'connected' && v.pill === 'Live'
+        && v.adapter === 'deterministic' && v.alerts.length === 0,
+    );
     chk.ok('a grant row exists and stores only a token HASH', 'at least one video_session_grants row with a 64-char sha256 hash', grants.map((g) => g.hash_len), (v) => v.length > 0 && v.every((n) => n === 64));
     chk.eq('the details sheet declares the credential redacted and in-memory only', true, redacted);
     chk.ok('the raw join token never reaches DOM, storage, cookie or URL', 'false on every surface', leak, (v) => v && Object.values(v).every((x) => x === false));

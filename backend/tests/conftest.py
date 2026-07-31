@@ -52,6 +52,20 @@ def _crypto_test_key():
         override_keyring(None)
 
 
+@pytest.fixture(autouse=True)
+def _explicit_test_video_enablement(monkeypatch: pytest.MonkeyPatch):
+    """Unit/HTTP tests opt into the deterministic media seam explicitly.
+
+    Runtime defaults are intentionally disabled/none. Existing service tests
+    exercise the enabled contract unless a test overrides this switch to prove
+    the disabled path.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "video_calls_enabled", True)
+    monkeypatch.setattr(settings, "video_provider", "deterministic")
+
+
 @pytest.fixture(scope="session")
 def engine() -> Engine:
     return create_engine(

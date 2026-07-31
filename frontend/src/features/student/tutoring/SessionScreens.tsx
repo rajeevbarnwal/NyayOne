@@ -47,6 +47,7 @@ import {
   createReview,
   disputeAttendance,
   getAvailability,
+  getTutoringCapabilities,
   getTutoringSession,
   issueJoinCredentials,
   listTutoringSessions,
@@ -60,6 +61,7 @@ import {
   type JoinCredential,
   type RedactedJoinCredential,
   type TutoringSession,
+  type TutoringCapabilities,
 } from '../lib/tutoringApi';
 import {
   REVIEW_MAX_BODY,
@@ -79,6 +81,7 @@ import {
   getPreferredDevices,
   setPreferredDevices,
   videoRoomDeviceName,
+  videoRoomFailure,
   videoRoomFailureFromServerCode,
   type VideoRoomClient,
   type VideoRoomDevice,
@@ -138,6 +141,29 @@ export function SessionLifecycle() {
 }
 
 type Go = (next: View, id?: string) => void;
+
+function useVideoCapabilities() {
+  return useQuery({
+    queryKey: tutoringKeys.capabilities,
+    queryFn: getTutoringCapabilities,
+    retry: tutoringRetry,
+    staleTime: 15_000,
+  });
+}
+
+function VideoUnavailable({ capability }: { capability?: TutoringCapabilities }) {
+  const disabled = capability?.videoCallsEnabled === false;
+  return (
+    <Banner
+      tone="warn"
+      title="Video calls are temporarily unavailable"
+      detail={disabled
+        ? 'New room entry is paused by LegalSaathi. Your booking, payment, reschedule, cancellation and attendance options remain available.'
+        : 'LegalSaathi could not confirm video availability. Try again before opening your camera or microphone.'}
+      code={disabled ? 'VIDEO_CALLS_DISABLED' : 'PROVIDER_UNAVAILABLE'}
+    />
+  );
+}
 
 /* ========================================================================== *
  * D1 — the session list
@@ -336,6 +362,8 @@ function ManageView({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelled, setCancelled] = useState<CancelResult | null>(null);
   const policy = policyPreview({ startUtcIso: session.startUtc, capturedPaise: 0 });
+  const videoCapability = useVideoCapabilities();
+  const videoEnabled = videoCapability.isSuccess && videoCapability.data.videoCallsEnabled;
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelSession({
@@ -366,9 +394,16 @@ function ManageView({
           Go to attendance
         </button>
       ) : (
-        <button type="button" className="tt-btn tt-btn--jade tt-btn--block" onClick={() => go('prejoin')}>
+        <button
+          type="button"
+          className="tt-btn tt-btn--jade tt-btn--block"
+          disabled={!videoEnabled}
+          aria-disabled={!videoEnabled}
+          aria-describedby={!videoEnabled ? 'tt-video-unavailable' : undefined}
+          onClick={() => videoEnabled && go('prejoin')}
+        >
           <Ic name="join" />
-          Enter the room
+          {videoCapability.isPending ? 'Checking video availability' : 'Enter the room'}
         </button>
       )}
       <div className="tt-dockrow">
@@ -392,6 +427,12 @@ function ManageView({
         All sessions
       </button>
       <SessionHeading session={session} />
+
+      {!policy.started && !videoEnabled && !videoCapability.isPending && (
+        <div id="tt-video-unavailable">
+          <VideoUnavailable capability={videoCapability.data} />
+        </div>
+      )}
 
       {cancelled ? (
         <RefundOutcome result={cancelled} />
@@ -1267,6 +1308,7 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
   const [devices, setDevices] = useState<readonly VideoRoomDevice[]>([]);
   const [chosen, setChosen] = useState(getPreferredDevices);
   const [camOn, setCamOn] = useState(true);
+  const videoCapability = useVideoCapabilities();
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const census = {
@@ -1339,6 +1381,20 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
 
   const copy = problem ? MEDIA_COPY[problem] : null;
   const labels = slotTimeLabels(session.startUtc, session.endUtc, session.ianaTimezone);
+
+  if (videoCapability.isPending) {
+    return <TutoringScreen screenId="S-35"><LoadingState what="video availability" /></TutoringScreen>;
+  }
+  if (videoCapability.isError || !videoCapability.data.videoCallsEnabled) {
+    return (
+      <TutoringScreen screenId="S-35">
+        <button type="button" className="tt-btn" onClick={() => go('manage')}>
+          <Ic name="back" /> Back to the session
+        </button>
+        <VideoUnavailable capability={videoCapability.data} />
+      </TutoringScreen>
+    );
+  }
 
   return (
     <TutoringScreen
@@ -1523,6 +1579,10 @@ const FAILURE_COPY: Record<VideoRoomFailureCode, { title: string; detail: string
     title: 'The media provider refused the credential',
     detail: 'No room was opened and no media was sent. Ask the server for entry again; if it keeps refusing, your session state has changed.',
   },
+  VIDEO_CALLS_DISABLED: {
+    title: 'Video calls are temporarily unavailable',
+    detail: 'LegalSaathi has paused new room entry. Your session, payment and other session actions are unchanged.',
+  },
   PROVIDER_NOT_CONFIGURED: {
     title: 'No media provider is configured for this build',
     detail: 'Your entry is authorised and your camera is open locally, but this build has no media server to dial, so nothing is being sent or received. That is a deployment setting, not a fault in your session.',
@@ -1641,6 +1701,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  const videoCapability = useVideoCapabilities();
 
   /* ------------------------- the media transport ------------------------- */
   const [transport, setTransport] = useState<VideoRoomTransport | null>(null);
@@ -1696,6 +1757,26 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     const offs: Array<() => void> = [];
 
     const enter = async (): Promise<void> => {
+      if (videoCapability.isPending) return;
+      if (videoCapability.isError) {
+        setIssueError(videoCapability.error);
+        setRoomState('failed');
+        setFailure(videoRoomFailure('PROVIDER_UNAVAILABLE'));
+        announce('Video availability could not be confirmed.');
+        return;
+      }
+      if (!videoCapability.data.videoCallsEnabled) {
+        setIssueError(new TutoringApiError(
+          503,
+          'VIDEO_CALLS_DISABLED',
+          'video calls are currently unavailable',
+          false,
+        ));
+        setRoomState('failed');
+        setFailure(videoRoomFailureFromServerCode('VIDEO_CALLS_DISABLED'));
+        announce('Video calls are temporarily unavailable.');
+        return;
+      }
       // 1. local capture for the self-view, honouring the pre-join choice.
       let local: MediaStream | null = null;
       const want = getPreferredDevices();
@@ -1738,7 +1819,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
       rawCredential.current = issued;
       setCredential(redactJoinCredential(issued));
       setIssueError(null);
-      announce('You are in the room.');
+      announce('Entry authorised. Connecting media.');
 
       // 3. the media client, behind the provider-neutral contract.
       const built = await createVideoRoomClient();
@@ -1764,6 +1845,8 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
         roomRef: issued.roomRef,
         participantRef: issued.participantRef,
         permissions: issued.permissions,
+        serverUrl: issued.videoRoomUrl ?? videoCapability.data.videoRoomUrl,
+        iceTransportPolicy: issued.videoIceTransportPolicy,
         localStream: local,
         devices: want,
         publishAudio: !!local?.getAudioTracks().length,
@@ -1782,7 +1865,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
       // Drop the secret the moment the room goes away.
       rawCredential.current = null;
     };
-  }, [sessionId, attempt, announce, releaseMedia]);
+  }, [sessionId, attempt, announce, releaseMedia, videoCapability.isSuccess, videoCapability.data]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
@@ -1899,8 +1982,8 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
               session title into an ellipsis at the product viewport, which is
               a WCAG 1.4.4 content loss.
             */}
-            <Chip tone={issueError ? 'r' : credential ? 'g' : 'i'}>
-              {issueError ? 'Not admitted' : credential ? 'In the room' : 'Joining'}
+            <Chip tone={issueError ? 'r' : flowing ? 'g' : credential ? 'i' : 'i'}>
+              {issueError ? 'Not admitted' : flowing ? 'In the room' : credential ? 'Entry authorised' : 'Joining'}
             </Chip>
             <span className="t">Mentoring session</span>
             <span className="tt-grow" />
