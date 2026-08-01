@@ -104,6 +104,40 @@ export async function registerStudent(
   });
 }
 
+export interface CheckMobileResult {
+  exists: boolean;
+  registered: boolean;
+  status?: string;
+  registrationId?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+}
+
+export async function checkMobile(mobile: string): Promise<CheckMobileResult> {
+  const result = await jsonRequest<{
+    exists: boolean;
+    registered: boolean;
+    status?: string;
+    registration_id?: string;
+    first_name?: string;
+    middle_name?: string;
+    last_name?: string;
+  }>('/api/v1/auth/student/check-mobile', {
+    method: 'POST',
+    body: JSON.stringify({ mobile }),
+  });
+  return {
+    exists: result.exists,
+    registered: result.registered,
+    status: result.status,
+    registrationId: result.registration_id,
+    firstName: result.first_name,
+    middleName: result.middle_name,
+    lastName: result.last_name,
+  };
+}
+
 export interface VerifyStudentOtpResult {
   status: string;
   isProfileComplete: boolean;
