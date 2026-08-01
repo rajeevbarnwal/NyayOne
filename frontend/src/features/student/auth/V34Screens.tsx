@@ -684,44 +684,192 @@ export function V34LoginFailure() {
 
 export function V34PasswordReset() {
   const nav = useNavigate();
+  const [step, setStep] = useState<'mobile' | 'otp' | 'password'>('mobile');
   const [mobile, setMobile] = useState('');
   const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  async function send() {
-    if (!isValidMobile(mobile)) { setError(MOBILE_ERROR); return; }
+
+  async function handleSend() {
+    if (!isValidMobile(mobile)) {
+      setError(MOBILE_ERROR);
+      return;
+    }
     setError('');
-    try { setRecoveryId(await startRecovery(mobile)); } catch { /* non-enumerating response intentionally remains identical */ }
-    setMessage('If an account matches, a six digit recovery code has been sent.');
-  }
-  async function verifyCode() {
-    if (!/^\d{6}$/.test(code)) { setError('Enter the complete 6-digit recovery code.'); return; }
+    setBusy(true);
     try {
-      await verifyRecovery(recoveryId, code);
-      await completeRecovery(recoveryId);
-      setError('');
-      setMessage('Recovery verified. You may now sign in again.');
+      const id = await startRecovery(mobile);
+      setRecoveryId(id);
+      setStep('otp');
+      setMessage('If an account matches, a six digit recovery code has been sent.');
     } catch {
-      setError('Recovery could not be verified. Check the code or request a new one.');
+      /* non-enumerating response intentionally remains identical */
+      setMessage('If an account matches, a six digit recovery code has been sent.');
+      setStep('otp');
+    } finally {
+      setBusy(false);
     }
   }
+
+  async function handleVerifyCode() {
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the complete 6-digit recovery code.');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    try {
+      await verifyRecovery(recoveryId, code);
+      setStep('password');
+      setMessage('Recovery code verified. Create your new password below.');
+    } catch {
+      setError('Recovery could not be verified. Check the code or request a new one.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSavePassword() {
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      setError('Password must be between 8 and 128 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match. Re-enter confirm password.');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    try {
+      await completeRecovery(recoveryId);
+      notifyStudentAuthChanged();
+      nav('/s-14');
+    } catch {
+      setError('Could not update password. Please retry.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Screen id="S-06" aside={<AuthAside title="Reset your password." copy="The response stays identical whether or not the number is registered."/>}>
-      <Pane><PaneHead id="S-06 · RESET" back={() => nav('/s-04')}/><main className="v34-main">
-        <h1 id="S-06-title" className="v34-title">Reset your password</h1><p className="v34-lede">Tell us the mobile number on the account. We will send a six digit code.</p>
-        <Field id="v34-reset-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" prefix="+91" placeholder="10 digit number" maxLength={15} error={error}/>
-        {recoveryId && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>} 
-        {message && <div className="v34-well" role="status">{message}</div>}<div className="v34-rule"/><div><span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span><p className="v34-copy">The same confirmation protects your identity from anyone probing mobile numbers.</p></div><span className="v34-grow"/>
-        <button
-          type="button"
-          className="v34-submit-btn"
-          onClick={recoveryId ? verifyCode : send}
-          style={{ marginBottom: '16px' }}
+    <Screen
+      id="S-06"
+      aside={
+        <AuthAside
+          title="Reset your password."
+          copy="The response stays identical whether or not the number is registered."
+        />
+      }
+    >
+      <Pane>
+        <PaneHead id="S-06 · RESET" back={() => nav('/s-04')} />
+        <main className="v34-main">
+          <h1 id="S-06-title" className="v34-title">
+            Reset your password
+          </h1>
+          <p className="v34-lede">
+            {step === 'mobile'
+              ? 'Tell us the mobile number on the account. We will send a six digit code.'
+              : step === 'otp'
+              ? `Six digit recovery code sent to ${mobile ? maskDestination({ channel: 'sms', ref: mobile }) : 'your mobile'}.`
+              : 'Choose a strong password with at least 8 characters.'}
+          </p>
+
+          <div className="v34-fieldset">
+            <Field
+              id="v34-reset-mobile"
+              label="MOBILE NUMBER"
+              value={mobile}
+              onChange={setMobile}
+              type="tel"
+              inputMode="numeric"
+              prefix="+91"
+              placeholder="10 digit number"
+              maxLength={15}
+              disabled={step !== 'mobile'}
+            />
+
+            {step === 'otp' && (
+              <Field
+                id="v34-recovery-code"
+                label="6-DIGIT RECOVERY CODE"
+                value={code}
+                onChange={(val) => setCode(val.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="Enter 6-digit code"
+              />
+            )}
+
+            {step === 'password' && (
+              <>
+                <Field
+                  id="v34-new-password"
+                  label="NEW PASSWORD"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  maxLength={128}
+                />
+                <Field
+                  id="v34-confirm-password"
+                  label="CONFIRM NEW PASSWORD"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Re-enter new password"
+                  maxLength={128}
+                />
+              </>
+            )}
+          </div>
+
+          {error && <span className="v34-field__error" role="alert">{error}</span>}
+          {message && !error && <div className="v34-well" role="status">{message}</div>}
+
+          <div className="v34-rule" />
+          <div>
+            <span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span>
+            <p className="v34-copy">
+              The same confirmation protects your identity from anyone probing mobile numbers.
+            </p>
+          </div>
+          <span className="v34-grow" />
+
+          <button
+            type="button"
+            className="v34-submit-btn"
+            disabled={busy}
+            onClick={step === 'mobile' ? handleSend : step === 'otp' ? handleVerifyCode : handleSavePassword}
+            style={{ marginBottom: '16px' }}
+          >
+            {step === 'mobile'
+              ? 'Send OTP'
+              : step === 'otp'
+              ? 'Verify Recovery Code'
+              : 'Save Password & Sign In'}
+          </button>
+        </main>
+        <Footer
+          hint={
+            step === 'mobile'
+              ? 'We will text a six digit code to that number.'
+              : step === 'otp'
+              ? 'Use the latest recovery code. It can only be consumed once.'
+              : 'Create a new secure password for your account.'
+          }
         >
-          {recoveryId ? 'Verify Recovery Code' : 'Send OTP'}
-        </button>
-      </main><Footer hint={recoveryId ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><span /></Footer></Pane>
+          <span />
+        </Footer>
+      </Pane>
     </Screen>
   );
 }
