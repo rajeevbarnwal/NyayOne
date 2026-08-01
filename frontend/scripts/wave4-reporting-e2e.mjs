@@ -29,6 +29,36 @@ function assert(name, condition, expected, actual, extra) {
   if (!condition) throw new Error(`${name}: expected ${expected}; actual ${actual}`);
 }
 
+function embeddedEicarPdf() {
+  const eicar = Buffer.from(
+    'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
+    'ascii',
+  );
+  const objects = [
+    Buffer.from('<< /Type /Catalog /Pages 4 0 R /Names << /EmbeddedFiles << /Names [(eicar.com) 2 0 R] >> >> >>', 'ascii'),
+    Buffer.from('<< /Type /Filespec /F (eicar.com) /UF (eicar.com) /EF << /F 3 0 R /UF 3 0 R >> >>', 'ascii'),
+    Buffer.concat([
+      Buffer.from(`<< /Type /EmbeddedFile /Length ${eicar.length} >>\nstream\n`, 'ascii'),
+      eicar,
+      Buffer.from('\nendstream', 'ascii'),
+    ]),
+    Buffer.from('<< /Type /Pages /Kids [] /Count 0 >>', 'ascii'),
+  ];
+  const chunks = [Buffer.from('%PDF-1.7\n', 'ascii')];
+  const offsets = [];
+  for (const [index, body] of objects.entries()) {
+    offsets.push(chunks.reduce((total, chunk) => total + chunk.length, 0));
+    chunks.push(Buffer.from(`${index + 1} 0 obj\n`, 'ascii'), body, Buffer.from('\nendobj\n', 'ascii'));
+  }
+  const xrefOffset = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  chunks.push(Buffer.from(
+    `xref\n0 5\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}`
+      + `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+    'ascii',
+  ));
+  return Buffer.concat(chunks);
+}
+
 async function apiCase(request, { name, method = 'post', route = '', headers = claims(), data, multipart, status, code, contains }) {
   const response = await request[method](`${API}/api/v1/internship-reports${route}`, { headers, data, multipart });
   const body = await response.json().catch(() => ({}));
@@ -80,9 +110,7 @@ async function negativeApiMatrix(request) {
     data: {},
     status: 201,
   });
-  const eicar = Buffer.from(
-    '%PDF-1.7\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
-  );
+  const eicar = embeddedEicarPdf();
   await apiCase(request, {
     name: 'malware evidence rejected',
     route: `/${infectedDraft.id}/evidence`,

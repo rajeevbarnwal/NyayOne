@@ -74,12 +74,38 @@ jobs:
               b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-"
               b"ANTIVIRUS-TEST-FILE!$H+H*"
           )
+          objects = [
+              b"<< /Type /Catalog /Pages 4 0 R /Names << /EmbeddedFiles "
+              b"<< /Names [(eicar.com) 2 0 R] >> >> >>",
+              b"<< /Type /Filespec /F (eicar.com) /UF (eicar.com) "
+              b"/EF << /F 3 0 R /UF 3 0 R >> >>",
+              (
+                  f"<< /Type /EmbeddedFile /Length {len(eicar)} >>\nstream\n".encode()
+                  + eicar
+                  + b"\nendstream"
+              ),
+              b"<< /Type /Pages /Kids [] /Count 0 >>",
+          ]
+          chunks = [b"%PDF-1.7\n"]
+          offsets = []
+          for number, body in enumerate(objects, 1):
+              offsets.append(sum(map(len, chunks)))
+              chunks.extend([f"{number} 0 obj\n".encode(), body, b"\nendobj\n"])
+          xref_offset = sum(map(len, chunks))
+          xref = (
+              b"xref\n0 5\n0000000000 65535 f \n"
+              + b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+              + b"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n"
+              + str(xref_offset).encode()
+              + b"\n%%EOF\n"
+          )
+          infected_pdf = b"".join(chunks + [xref])
           for attempt in range(120):
               try:
                   with socket.create_connection(("127.0.0.1", 3310), timeout=2) as sock:
                       sock.settimeout(2)
                       sock.sendall(b"zINSTREAM\0")
-                      sock.sendall(struct.pack("!I", len(eicar)) + eicar)
+                      sock.sendall(struct.pack("!I", len(infected_pdf)) + infected_pdf)
                       sock.sendall(struct.pack("!I", 0))
                       verdict = sock.recv(4096).rstrip(b"\0\r\n")
                       if verdict.endswith(b" FOUND"):
