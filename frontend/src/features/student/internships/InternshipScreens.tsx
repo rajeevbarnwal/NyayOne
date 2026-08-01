@@ -10,8 +10,12 @@ import {
   statusChip,
   newApplicationRef,
   validateApplicationPdf,
+  validateCoverNote,
   saveSubmittedApplication,
   loadSubmittedApplications,
+  loadLatestSubmittedApplication,
+  loadSavedListingIds,
+  saveSavedListingIds,
   APPLICATION_STAGES,
   SAMPLE_LISTINGS,
   SAMPLE_APPLICATIONS,
@@ -37,8 +41,29 @@ export function InternshipBrowse() {
   const [query, setQuery] = useState('');
   const [stipend, setStipend] = useState<StipendFilter>('any');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [saved, setSaved] = useState<string[]>([]);
+  const [saved, setSaved] = useState<string[]>(() => loadSavedListingIds() ?? SAMPLE_LISTINGS.filter((listing) => listing.verified).map((listing) => listing.id));
   const results = useMemo(() => filterListings(SAMPLE_LISTINGS, { query, stipend, verifiedOnly }), [query, stipend, verifiedOnly]);
+  const listingRow = (l: (typeof SAMPLE_LISTINGS)[number]) => (
+    <li className="st-item" key={l.id}>
+      <div>
+        <div>{l.role} — {l.org}</div>
+        <div className="st-item__meta">
+          {l.location} · <span className="st-price">{stipendText(l)}</span> · deadline {l.deadline}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <StatusBadge status={l.verified ? 'ok' : 'info'} label={l.verified ? 'Verified listing' : 'Open'} />
+        <button type="button" className="btn tap" aria-pressed={saved.includes(l.id)} onClick={() => setSaved((current) => {
+          const next = toggleSave(current, l.id);
+          saveSavedListingIds(next);
+          return next;
+        })}>
+          {saved.includes(l.id) ? 'Saved' : 'Save'}
+        </button>
+        <button type="button" className="btn tap" onClick={() => nav('/s-21')}>View</button>
+      </div>
+    </li>
+  );
 
   return (
     <StudentScreen screenId="S-20">
@@ -71,29 +96,15 @@ export function InternshipBrowse() {
           {results.length === 0 ? (
             <EmptyState title="No matching listings" hint="Try clearing filters or a different search." />
           ) : (
-            <ul className="st-list">
-              {results.map((l) => (
-                <li className="st-item" key={l.id}>
-                  <div>
-                    <div>
-                      {l.role} — {l.org}
-                    </div>
-                    <div className="st-item__meta">
-                      {l.location} · <span className="st-price">{stipendText(l)}</span> · deadline {l.deadline}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <StatusBadge status={l.verified ? 'ok' : 'info'} label={l.verified ? 'Verified listing' : 'Open'} />
-                    <button type="button" className="btn tap" aria-pressed={saved.includes(l.id)} onClick={() => setSaved((s) => toggleSave(s, l.id))}>
-                      {saved.includes(l.id) ? 'Saved' : 'Save'}
-                    </button>
-                    <button type="button" className="btn tap" onClick={() => nav('/s-21')}>
-                      View
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="st-list">{results.slice(0, 1).map(listingRow)}</ul>
+              {results.length > 1 && (
+                <details className="v34c-mobile-disclosure">
+                  <summary>More listings <span>{results.length - 1} more</span></summary>
+                  <ul className="st-list">{results.slice(1).map(listingRow)}</ul>
+                </details>
+              )}
+            </>
           )}
         </section>
         <DpdpFootnote>Source: firm career pages · unverified · not affiliated</DpdpFootnote>
@@ -154,20 +165,39 @@ export function InternshipDetail() {
 /* -------------------------------------------------------------------------- */
 export function InternshipApply() {
   const nav = useNavigate();
-  const [cover, setCover] = useState('I am a 4th-year student at NLSIU focused on disputes…');
+  const [stage, setStage] = useState<'answers' | 'documents' | 'review'>('answers');
+  const [cover, setCover] = useState('I am a 4th-year student at NLSIU focused on disputes, with a moot and legal-aid clinic behind me.');
   const [resume, setResume] = useState<File | null>(null);
   const [transcript, setTranscript] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  function submit() {
+  function validateAnswers(): boolean {
+    const coverError = validateCoverNote(cover);
+    setErrors((current) => ({ ...current, cover: coverError ?? '' }));
+    return coverError === null;
+  }
+
+  function validateDocuments(): boolean {
     const nextErrors: Record<string, string> = {};
     const resumeError = validateApplicationPdf(resume, 'Résumé');
     const transcriptError = validateApplicationPdf(transcript, 'Transcript');
     if (resumeError) nextErrors.resume = resumeError;
     if (transcriptError) nextErrors.transcript = transcriptError;
-    if (!cover.trim()) nextErrors.cover = 'Cover note is required.';
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
+    setErrors((current) => ({ ...current, resume: nextErrors.resume ?? '', transcript: nextErrors.transcript ?? '' }));
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function goTo(next: 'answers' | 'documents' | 'review'): void {
+    if (next === 'answers') { setStage(next); return; }
+    if (!validateAnswers()) { setStage('answers'); return; }
+    if (next === 'review' && !validateDocuments()) { setStage('documents'); return; }
+    setStage(next);
+  }
+
+  function submit() {
+    const coverOk = validateAnswers();
+    const documentsOk = validateDocuments();
+    if (!coverOk || !documentsOk) { setStage(!coverOk ? 'answers' : 'documents'); return; }
     const ref = newApplicationRef();
     saveSubmittedApplication({
       id: ref,
@@ -183,32 +213,55 @@ export function InternshipApply() {
   return (
     <StudentScreen screenId="S-22">
       <div className="st-stack">
-        <ModuleHead eyebrow="Internships · S4" title="Apply — CAM Summer Associate" />
-        <section className="st-panel">
-          <h2 className="st-panel__title">Your application</h2>
-          <label className="st-field" htmlFor="app-resume">
-            <span className="st-field__label">Résumé (PDF)</span>
-            <input id="app-resume" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => setResume(e.target.files?.[0] ?? null)} aria-describedby={errors.resume ? 'app-resume-error' : undefined} />
-            <span className="st-field__help">PDF only · maximum 5 MB.</span>
-            {errors.resume && <span id="app-resume-error"><ValidationState message={errors.resume} /></span>}
-          </label>
-          <label className="st-field" htmlFor="app-cover">
-            <span className="st-field__label">Cover note</span>
-            <textarea id="app-cover" className="st-input" style={{ minHeight: 96, padding: 'var(--space-3)' }} value={cover} onChange={(e) => setCover(e.target.value)} />
-            {errors.cover && <ValidationState message={errors.cover} />}
-          </label>
-          <label className="st-field" htmlFor="app-transcript">
-            <span className="st-field__label">Transcript (PDF)</span>
-            <input id="app-transcript" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => setTranscript(e.target.files?.[0] ?? null)} aria-describedby={errors.transcript ? 'app-transcript-error' : undefined} />
-            <span className="st-field__help">PDF only · maximum 5 MB.</span>
-            {errors.transcript && <span id="app-transcript-error"><ValidationState message={errors.transcript} /></span>}
-          </label>
-          <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={submit}>
-              Submit application
+        <ModuleHead eyebrow="Cyril Amarchand Mangaldas · Summer Associate" title="Resume, transcript, cover note" sub="Three deliberate steps · nothing leaves LegalSaathi until review and send" />
+        <div className="v34c-stages" role="tablist" aria-label="Application steps">
+          {(['answers', 'documents', 'review'] as const).map((name, index) => (
+            <button key={name} type="button" role="tab" aria-selected={stage === name} onClick={() => goTo(name)}>
+              {index + 1} · {name === 'answers' ? 'Answers' : name === 'documents' ? 'Documents' : 'Review'}
+              {name === 'documents' && (!resume || !transcript) && <small>files required</small>}
             </button>
-          </div>
-        </section>
+          ))}
+        </div>
+        {stage === 'answers' && (
+          <section className="st-panel" aria-label="Application answers">
+            <h2 className="st-panel__title">Why this role</h2>
+            <label className="st-field" htmlFor="app-cover">
+              <span className="st-field__label">Cover note</span>
+              <textarea id="app-cover" className="st-input" style={{ minHeight: 132 }} value={cover} maxLength={251} onChange={(e) => { setCover(e.target.value); setErrors((current) => ({ ...current, cover: '' })); }} aria-describedby={errors.cover ? 'app-cover-error app-cover-count' : 'app-cover-count'} />
+              <span className="st-field__help" id="app-cover-count">{cover.trim().length} / 250 · minimum 50 characters</span>
+              {errors.cover && <span id="app-cover-error"><ValidationState message={errors.cover} /></span>}
+            </label>
+            <div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => goTo('documents')}>Continue to documents</button></div>
+          </section>
+        )}
+        {stage === 'documents' && (
+          <section className="st-panel" aria-label="Application documents">
+            <h2 className="st-panel__title">Documents</h2>
+            <p className="st-item__meta">PDF metadata is checked here. The server must still content-inspect every upload before submission.</p>
+            <label className="st-field" htmlFor="app-resume">
+              <span className="st-field__label">Résumé (PDF)</span>
+              <input id="app-resume" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => { setResume(e.target.files?.[0] ?? null); setErrors((current) => ({ ...current, resume: '' })); }} aria-describedby={errors.resume ? 'app-resume-error' : undefined} />
+              <span className="st-field__help">PDF only · non-empty · maximum 5 MB.</span>
+              {errors.resume && <span id="app-resume-error"><ValidationState message={errors.resume} /></span>}
+            </label>
+            <label className="st-field" htmlFor="app-transcript">
+              <span className="st-field__label">Transcript (PDF)</span>
+              <input id="app-transcript" className="st-input" type="file" accept="application/pdf,.pdf" onChange={(e) => { setTranscript(e.target.files?.[0] ?? null); setErrors((current) => ({ ...current, transcript: '' })); }} aria-describedby={errors.transcript ? 'app-transcript-error' : undefined} />
+              <span className="st-field__help">PDF only · non-empty · maximum 5 MB.</span>
+              {errors.transcript && <span id="app-transcript-error"><ValidationState message={errors.transcript} /></span>}
+            </label>
+            <div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => setStage('answers')}>Back to answers</button><button type="button" className="btn btn--primary tap" onClick={() => goTo('review')}>Review application</button></div>
+          </section>
+        )}
+        {stage === 'review' && (
+          <section className="st-panel" aria-label="Review application">
+            <h2 className="st-panel__title">Review before sending</h2>
+            <div className="st-setrow"><div><div className="st-setrow__label">Cover note</div><div className="st-setrow__sub">{cover.trim().length} characters · ready</div></div></div>
+            <div className="st-setrow"><div><div className="st-setrow__label">Résumé</div><div className="st-setrow__sub">{resume?.name ?? 'Missing'}</div></div></div>
+            <div className="st-setrow"><div><div className="st-setrow__label">Transcript</div><div className="st-setrow__sub">{transcript?.name ?? 'Missing'}</div></div></div>
+            <div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => setStage('documents')}>Back to documents</button><button type="button" className="btn btn--primary tap" onClick={submit}>Submit application</button></div>
+          </section>
+        )}
         <DpdpFootnote>Documents leave LegalSaathi only when you submit</DpdpFootnote>
       </div>
     </StudentScreen>
@@ -220,7 +273,8 @@ export function InternshipApply() {
 /* -------------------------------------------------------------------------- */
 export function InternshipConfirm() {
   const nav = useNavigate();
-  const ref = useMemo(() => newApplicationRef(), []);
+  const submitted = useMemo(() => loadLatestSubmittedApplication(), []);
+  const ref = submitted?.id ?? 'Pending reference';
   return (
     <StudentScreen screenId="S-23" className="st-authwrap">
       <div className="st-card">
@@ -265,6 +319,20 @@ function Stepper({ current }: { current: number }) {
 export function InternshipTracker() {
   const nav = useNavigate();
   const apps = [...loadSubmittedApplications(), ...SAMPLE_APPLICATIONS];
+  const applicationRow = (a: Application) => {
+    const chip = statusChip(a.status);
+    return (
+      <li className={`st-item${a.status === 'closed' ? ' st-item--dim' : ''}`} key={a.id}>
+        <div>
+          <div>{a.org}</div>
+          <div className="st-item__meta">{a.role} · {a.meta}</div>
+          <Stepper current={stepForStatus(a.status)} />
+          {a.note && <div className="st-item__meta">{a.note}</div>}
+        </div>
+        <StatusBadge status={chip.kind} label={a.status === 'action_needed' ? 'Upload transcript' : chip.label} />
+      </li>
+    );
+  };
   return (
     <StudentScreen screenId="S-24">
       <div className="st-stack">
@@ -276,24 +344,13 @@ export function InternshipTracker() {
         </div>
         <section className="st-panel" aria-label="Your applications">
           <h2 className="st-panel__title">Your applications</h2>
-          <ul className="st-list">
-            {apps.map((a: Application) => {
-              const chip = statusChip(a.status);
-              return (
-                <li className={`st-item${a.status === 'closed' ? ' st-item--dim' : ''}`} key={a.id}>
-                  <div>
-                    <div>{a.org}</div>
-                    <div className="st-item__meta">
-                      {a.role} · {a.meta}
-                    </div>
-                    <Stepper current={stepForStatus(a.status)} />
-                    {a.note && <div className="st-item__meta">{a.note}</div>}
-                  </div>
-                  <StatusBadge status={chip.kind} label={a.status === 'action_needed' ? 'Upload transcript' : chip.label} />
-                </li>
-              );
-            })}
-          </ul>
+          <ul className="st-list">{apps.slice(0, 1).map(applicationRow)}</ul>
+          {apps.length > 1 && (
+            <details className="v34c-mobile-disclosure">
+              <summary>Earlier applications <span>{apps.length - 1} more</span></summary>
+              <ul className="st-list">{apps.slice(1).map(applicationRow)}</ul>
+            </details>
+          )}
         </section>
         <DpdpFootnote>Source: firm career pages · external listings, unverified · not affiliated. Applications leave only when you submit</DpdpFootnote>
       </div>
@@ -306,25 +363,30 @@ export function InternshipTracker() {
 /* -------------------------------------------------------------------------- */
 export function InternshipSaved() {
   const nav = useNavigate();
-  // Demonstrates the saved list; empty variant is S-26.
-  const saved = SAMPLE_LISTINGS.filter((l) => l.verified);
+  const [savedIds, setSavedIds] = useState<string[]>(() => loadSavedListingIds() ?? SAMPLE_LISTINGS.filter((listing) => listing.verified).map((listing) => listing.id));
+  const saved = SAMPLE_LISTINGS.filter((listing) => savedIds.includes(listing.id));
+  function remove(id: string): void {
+    const next = savedIds.filter((savedId) => savedId !== id);
+    setSavedIds(next);
+    saveSavedListingIds(next);
+  }
   return (
     <StudentScreen screenId="S-25">
       <div className="st-stack">
         <ModuleHead eyebrow="Internships · S4" title="Saved internships" sub="synced to your account" />
         <section className="st-panel">
           <h2 className="st-panel__title">Saved</h2>
-          <ul className="st-list">
+          {saved.length === 0 ? <EmptyState title="No saved internships yet" hint="Browse listings and save the ones you like." /> : <ul className="st-list">
             {saved.map((l) => (
               <li className="st-item" key={l.id}>
                 <div>
                   <div>{l.role} — {l.org}</div>
                   <div className="st-item__meta">{l.location} · <span className="st-price">{stipendText(l)}</span></div>
                 </div>
-                <button type="button" className="btn tap" onClick={() => nav('/s-21')}>View</button>
+                <div className="st-actions"><button type="button" className="btn tap" onClick={() => remove(l.id)}>Remove</button><button type="button" className="btn tap" onClick={() => nav('/s-21')}>View</button></div>
               </li>
             ))}
-          </ul>
+          </ul>}
         </section>
         <div className="st-actions">
           <button type="button" className="btn tap" onClick={() => nav('/s-26')}>See empty state</button>

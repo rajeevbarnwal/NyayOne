@@ -107,8 +107,8 @@ def test_email_length_boundary_is_exactly_254():
 
 @pytest.mark.parametrize(
     "invalid_email",
-    ["", "not-an-email", f"{'a' * 250}@nls.ac.in"],
-    ids=["empty", "malformed", "overlength"],
+    ["", "not-an-email", f"{'a' * 250}@nls.ac.in", "student@gmail.com"],
+    ids=["empty", "malformed", "overlength", "consumer-domain"],
 )
 def test_invalid_email_is_typed_422_with_zero_mutation(ctx, invalid_email: str):
     client, factory, sender = ctx

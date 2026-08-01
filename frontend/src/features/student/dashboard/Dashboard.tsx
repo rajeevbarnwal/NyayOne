@@ -46,42 +46,49 @@ export function Dashboard() {
   return (
     <StudentScreen screenId="S-14" className="st-dash">
       <div className="st-dash__head">
-        <h1>
-          Good evening, {firstName}. <span className="st-muted">— your week, one place.</span>
-        </h1>
+        <div>
+          <p className="st-eyebrow">Saturday · your week, one place</p>
+          <h1>Good evening, {firstName}.</h1>
+          <p className="st-metatag" style={{ marginTop: 8 }}>Your deadlines, sessions and applications stay together without exposing private activity.</p>
+        </div>
         <span className="st-badge">
           <span aria-hidden>✓</span> {TIER_LABELS[tier]}
         </span>
       </div>
 
       {/* Unified calendar strip */}
-      <section className="st-panel" aria-label="Unified calendar this week">
-        <div className="st-panel__head">
-          <h2 className="st-panel__title">Calendar · this week</h2>
-          <button type="button" className="btn tap" onClick={() => nav('/s-90')}>
-            Open calendar
-          </button>
-        </div>
-        <div className="st-week">
-          {week.map((d) => (
-            <div className="st-week__day" key={d.dow}>
-              <div className="st-week__dow">
-                {d.dow} {d.date}
+      <details className="v34c-mobile-disclosure">
+        <summary>Calendar · this week <span>7 days</span></summary>
+        <section className="st-panel" aria-label="Unified calendar this week">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Calendar · this week</h2>
+            <button type="button" className="btn tap" onClick={() => nav('/s-90')}>
+              Open calendar
+            </button>
+          </div>
+          <div className="st-week">
+            {week.map((d) => (
+              <div className="st-week__day" key={d.dow}>
+                <div className="st-week__dow">
+                  {d.dow} {d.date}
+                </div>
+                {d.event && <div>{d.event}</div>}
               </div>
-              {d.event && <div>{d.event}</div>}
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      </details>
 
-      <div className="st-grid">
+      <details className="v34c-mobile-disclosure">
+        <summary>Actions &amp; momentum <span>{nextActions.length} actions</span></summary>
+        <div className="st-grid">
         {/* Next actions across modules */}
         <section className="st-panel" aria-label="Next actions across modules">
           <div className="st-panel__head">
             <h2 className="st-panel__title">Next actions · across modules</h2>
           </div>
           <ul className="st-list">
-            {nextActions.map((a) => (
+            {nextActions.slice(0, 2).map((a) => (
               <li className="st-item" key={a.title}>
                 <div>
                   <div>{a.title}</div>
@@ -91,6 +98,19 @@ export function Dashboard() {
               </li>
             ))}
           </ul>
+          {nextActions.length > 2 && (
+            <details className="v34c-disclosure">
+              <summary>The week ahead <span>{nextActions.length - 2} more</span></summary>
+              <ul className="st-list">
+                {nextActions.slice(2).map((a) => (
+                  <li className="st-item" key={a.title}>
+                    <div><div>{a.title}</div><div className="st-item__meta">{a.meta}</div></div>
+                    <StatusBadge status={a.status} label={a.chip} />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
 
         {/* Momentum */}
@@ -118,35 +138,39 @@ export function Dashboard() {
             </div>
           </div>
         </section>
-      </div>
+        </div>
+      </details>
 
       {/* Explore modules — graceful degradation for unreleased tranches */}
-      <section className="st-panel" aria-label="Explore modules">
-        <div className="st-panel__head">
-          <h2 className="st-panel__title">Explore</h2>
-        </div>
-        <div className="st-grid">
-          {live.map((m) => (
-            <button key={m.id} type="button" className="btn tap" style={{ justifyContent: 'flex-start' }} onClick={() => nav(m.route)}>
-              {m.label}
-            </button>
-          ))}
-          {soon.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className="btn tap"
-              disabled
-              aria-disabled="true"
-              title={`${m.label} — ${COMING_SOON_LABEL} (${m.release})`}
-              style={{ justifyContent: 'space-between', opacity: 0.7 }}
-            >
-              <span>{m.label}</span>
-              <span className="st-item__meta">{COMING_SOON_LABEL}</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <details className="v34c-mobile-disclosure">
+        <summary>Explore modules <span>{live.length} available</span></summary>
+        <section className="st-panel" aria-label="Explore modules">
+          <div className="st-panel__head">
+            <h2 className="st-panel__title">Explore</h2>
+          </div>
+          <div className="st-grid">
+            {live.map((m) => (
+              <button key={m.id} type="button" className="btn tap" style={{ justifyContent: 'flex-start' }} onClick={() => nav(m.route)}>
+                {m.label}
+              </button>
+            ))}
+            {soon.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="btn tap"
+                disabled
+                aria-disabled="true"
+                title={`${m.label} — ${COMING_SOON_LABEL} (${m.release})`}
+                style={{ justifyContent: 'space-between', opacity: 0.7 }}
+              >
+                <span>{m.label}</span>
+                <span className="st-item__meta">{COMING_SOON_LABEL}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </details>
 
       <DpdpFootnote>Data minimised — your calendar &amp; activity stay private to you</DpdpFootnote>
     </StudentScreen>
