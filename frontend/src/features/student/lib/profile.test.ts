@@ -7,6 +7,8 @@ import {
   isProfileComplete,
   profileTier,
   INSTITUTIONAL_EMAIL_RE,
+  INSTITUTIONAL_EMAIL_MAX_LENGTH,
+  institutionalEmailError,
   ENROLMENT_RE,
   type ProfileDraft,
 } from './profile';
@@ -32,6 +34,16 @@ describe('profile validation + completeness (SAATHI-55)', () => {
     expect(INSTITUTIONAL_EMAIL_RE.test('aditi.nair@nls.ac.in')).toBe(true);
     expect(ENROLMENT_RE.test('1234')).toBe(false);
     expect(ENROLMENT_RE.test('KA/1234/2023')).toBe(true);
+  });
+
+  it('rejects the exact S-15 empty, malformed and over-length boundaries', () => {
+    const suffix = '@nls.ac.in';
+    const atLimit = `${'a'.repeat(INSTITUTIONAL_EMAIL_MAX_LENGTH - suffix.length)}${suffix}`;
+    expect(institutionalEmailError('')).toBeTruthy();
+    expect(institutionalEmailError('not-an-email')).toBeTruthy();
+    expect(institutionalEmailError(atLimit)).toBeUndefined();
+    expect(institutionalEmailError(`a${atLimit}`)).toContain('254 characters or fewer');
+    expect(institutionalEmailError('aditi.nair@nls.ac.in')).toBeUndefined();
   });
 
   it('rejects a future profile date of birth', () => {
