@@ -47,7 +47,11 @@ class CommitFailSession(Session):
         return super().commit()
 
 
-def _context(session_class: type[Session] = Session):
+def _context(
+    session_class: type[Session] = Session,
+    *,
+    base_url: str = "http://testserver",
+):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -78,7 +82,16 @@ def _context(session_class: type[Session] = Session):
     app.dependency_overrides[get_session] = request_session
     app.dependency_overrides[auth_student.get_otp_sender] = lambda: sender
     app.dependency_overrides[auth_student.get_outbox_session_factory] = lambda: factory
-    return TestClient(app, raise_server_exceptions=False), engine, factory, sender
+    return (
+        TestClient(
+            app,
+            base_url=base_url,
+            raise_server_exceptions=False,
+        ),
+        engine,
+        factory,
+        sender,
+    )
 
 
 @pytest.fixture()
@@ -197,18 +210,27 @@ def test_success_sets_hardened_cookie_stores_only_hash_and_authenticates(ctx):
         assert row.status == "active"
 
 
-def test_non_local_cookie_is_secure(ctx, monkeypatch):
-    client, _, _, sender = ctx
-    _create_account(client, sender)
-    login_id, code = _start_login(client, sender)
+def test_non_local_cookie_is_secure_and_authenticates_over_https(monkeypatch):
     monkeypatch.setattr(settings, "app_env", "production")
-    response = client.post(
-        "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
-    )
-    assert response.status_code == 200
-    assert "Secure" in response.headers["set-cookie"]
-    assert "HttpOnly" in response.headers["set-cookie"]
+    client, engine, _, sender = _context(base_url="https://testserver")
+    try:
+        _create_account(client, sender)
+        login_id, code = _start_login(client, sender)
+        response = client.post(
+            "/api/v1/auth/student/login/otp/verify",
+            json={"login_id": login_id, "code": code},
+        )
+        assert response.status_code == 200
+        assert "Secure" in response.headers["set-cookie"]
+        assert "HttpOnly" in response.headers["set-cookie"]
+
+        session_response = client.get("/api/v1/auth/student/session")
+        assert session_response.status_code == 200
+        assert session_response.json()["authenticated"] is True
+        assert session_response.json()["actor"]["roles"] == ["student"]
+    finally:
+        client.close()
+        engine.dispose()
 
 
 def test_non_local_environment_never_trusts_dev_claims_header(ctx, monkeypatch):

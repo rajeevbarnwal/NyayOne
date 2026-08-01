@@ -53,6 +53,21 @@ def _crypto_test_key():
 
 
 @pytest.fixture(autouse=True)
+def _explicit_test_application_environment(monkeypatch: pytest.MonkeyPatch):
+    """Keep deterministic auth seams independent of the deployment shell.
+
+    PostgreSQL CI deliberately runs with ``APP_ENV=staging`` to exercise
+    fail-closed runtime configuration.  Unit and HTTP-contract tests still need
+    the explicit test-only ``X-Actor-Claims`` seam, and their loopback
+    ``TestClient`` must not accidentally inherit staging cookie policy.  Tests
+    that exercise the non-local boundary override this value themselves.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "app_env", "testing")
+
+
+@pytest.fixture(autouse=True)
 def _explicit_test_video_enablement(monkeypatch: pytest.MonkeyPatch):
     """Unit/HTTP tests opt into the deterministic media seam explicitly.
 
