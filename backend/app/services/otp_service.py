@@ -7,8 +7,8 @@ after successful delivery. Raw OTP values are never persisted, returned or
 logged. All time comparisons use timezone-aware values supplied by the caller
 (deterministic + testable).
 
-Challenges are scoped by ``purpose`` ("signup" | "recovery") so a recovery OTP
-never supersedes the active signup challenge and vice-versa.
+Challenges are scoped by ``purpose`` ("signup" | "recovery" | "login") so a
+code issued for one security boundary can never authenticate another.
 """
 from __future__ import annotations
 
@@ -54,6 +54,7 @@ def _active(
     registration_id: uuid.UUID,
     purpose: str = "signup",
     *,
+    challenge_id: uuid.UUID | None = None,
     for_update: bool = False,
 ) -> OtpChallenge | None:
     statement = (
@@ -65,6 +66,8 @@ def _active(
         )
         .order_by(OtpChallenge.expires_at.desc())
     )
+    if challenge_id is not None:
+        statement = statement.where(OtpChallenge.id == challenge_id)
     if for_update:
         # PostgreSQL serialises concurrent verification attempts for the same
         # challenge, preventing lost attempt increments / lockout bypass.
@@ -123,10 +126,23 @@ def issue_challenge(
 
 
 def verify(
-    session: Session, registration_id: uuid.UUID, code: str, now: datetime, *, purpose: str = "signup"
+    session: Session,
+    registration_id: uuid.UUID,
+    code: str,
+    now: datetime,
+    *,
+    purpose: str = "signup",
+    challenge_id: uuid.UUID | None = None,
+    commit_on_success: bool = True,
 ) -> OtpChallenge:
     now = _as_utc(now)
-    ch = _active(session, registration_id, purpose, for_update=True)
+    ch = _active(
+        session,
+        registration_id,
+        purpose,
+        challenge_id=challenge_id,
+        for_update=True,
+    )
     if ch is None:
         raise OtpError(404, "no_active_challenge")
     if ch.locked_until is not None and _as_utc(ch.locked_until) > now:
@@ -139,7 +155,8 @@ def verify(
         reg = session.get(StudentRegistration, registration_id)
         if reg is not None and reg.status == "otp_pending" and purpose == "signup":
             reg.status = "otp_verified"
-        session.commit()
+        if commit_on_success:
+            session.commit()
         return ch
     # Persist the failed attempt / lockout ATOMICALLY before signalling the
     # error — the HTTP layer returns an error status and its request-scoped

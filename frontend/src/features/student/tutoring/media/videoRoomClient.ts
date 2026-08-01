@@ -71,6 +71,7 @@ export const VIDEO_ROOM_FAILURE_CODES = [
   'WRONG_PARTICIPANT',
   'SESSION_CANCELLED',
   'NOT_ADMITTED',
+  'VIDEO_CALLS_DISABLED',
   'PROVIDER_NOT_CONFIGURED',
   'PROVIDER_UNAVAILABLE',
   'TRANSPORT_LOST',
@@ -129,6 +130,8 @@ export function videoRoomFailureFromServerCode(code: string): VideoRoomFailure {
       return videoRoomFailure('WRONG_PARTICIPANT');
     case 'SESSION_STATE_INVALID':
       return videoRoomFailure('SESSION_CANCELLED');
+    case 'VIDEO_CALLS_DISABLED':
+      return videoRoomFailure('VIDEO_CALLS_DISABLED');
     case 'PROVIDER_UNAVAILABLE':
       return videoRoomFailure('PROVIDER_UNAVAILABLE');
     case 'AUTHENTICATION_REQUIRED':
@@ -196,6 +199,10 @@ export interface VideoRoomConnectOptions {
   readonly roomRef: string;
   readonly participantRef: string;
   readonly permissions: readonly string[];
+  /** Runtime browser endpoint returned by the backend capability/credential. */
+  readonly serverUrl?: string | null;
+  /** Server-authoritative ICE path. ``relay`` forces TURN; ``all`` permits direct fallback. */
+  readonly iceTransportPolicy?: 'all' | 'relay';
   /**
    * Local capture the room already opened for its self-view. Ownership passes
    * to the client: `leave()` stops every track on it.

@@ -1,20 +1,22 @@
 import type { ComponentType } from 'react';
 import type { ThemeMode } from '../../hooks/useTheme';
 import {
-  Splash,
-  Onboarding,
-  AuthGate,
-  LanguageSelect,
-  Register,
-  OtpVerify,
-  OtpExpired,
-  Lockout,
   EmailVerify,
   RestrictedDashboard,
 } from './auth/AuthScreens';
 import {
-  ProfileStep1,
-  ProfileStep2,
+  V34Splash,
+  V34Onboarding,
+  V34AuthGate,
+  V34Login,
+  V34LoginFailure,
+  V34PasswordReset,
+  V34VerifiedHome,
+  V34Register,
+  V34OtpVerify,
+  V34ProfileStep1,
+} from './auth/V34Screens';
+import {
   ProfileStep3,
   ProfileDone,
   ProfileResume,
@@ -65,21 +67,23 @@ export interface StudentScreenProps {
 }
 
 /**
- * Canonical v3.2 screen-ID → implemented component map (S-01…S-19).
+ * Canonical screen-ID → implemented component map. S-01…S-10 use the
+ * approved v3.4 Saffron Slate handoff; later screens retain their existing
+ * contracts until Product supplies their corresponding v3.4 references.
  * App renders the real component for a mapped ID and falls back to the
  * foundation ScreenPlaceholder for every other ID in the S-01…S-99 registry.
  */
 export const studentScreens: Record<string, ComponentType<StudentScreenProps>> = {
-  'S-01': Splash,
-  'S-02': Onboarding,
-  'S-03': AuthGate,
-  'S-04': LanguageSelect,
-  'S-05': Register,
-  'S-06': OtpVerify,
-  'S-07': OtpExpired,
-  'S-08': Lockout,
-  'S-09': ProfileStep1,
-  'S-10': ProfileStep2,
+  'S-01': V34Splash,
+  'S-02': V34Onboarding,
+  'S-03': V34AuthGate,
+  'S-04': V34Login,
+  'S-05': V34LoginFailure,
+  'S-06': V34PasswordReset,
+  'S-07': V34VerifiedHome,
+  'S-08': V34Register,
+  'S-09': V34OtpVerify,
+  'S-10': V34ProfileStep1,
   'S-11': ProfileStep3,
   'S-12': ProfileDone,
   'S-13': ProfileResume,

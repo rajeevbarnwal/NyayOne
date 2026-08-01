@@ -31,6 +31,7 @@ _PLACEHOLDER_SECRETS = frozenset(
 #: Wave 2 provider bindings that the code can actually honour.
 PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
 VIDEO_PROVIDER_CHOICES = ("deterministic", "livekit", "none")
+VIDEO_ICE_TRANSPORT_POLICY_CHOICES = ("all", "relay")
 #: The only reminder offsets ``session_reminder_jobs.offset_kind`` accepts.
 REMINDER_OFFSET_CHOICES = ("7d", "1d", "3h")
 
@@ -79,6 +80,31 @@ def _livekit_url_problem(url: "str | None") -> str | None:
             "livekit_url (env LIVEKIT_URL) must include a host when "
             "video_provider='livekit'"
         )
+    return None
+
+
+def _livekit_public_url_problem(url: "str | None", *, production: bool) -> str | None:
+    """Classify the browser-facing LiveKit WebSocket URL without echoing it.
+
+    ``LIVEKIT_URL`` is the server-to-server HTTP endpoint. Browsers need a
+    distinct ``ws://``/``wss://`` endpoint, because the compose-internal host
+    (``http://livekit:7880``) is deliberately not browser-addressable. Local
+    development may use plain ``ws://localhost``; staging/production must use
+    trusted TLS and therefore ``wss://``.
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return (
+            "livekit_public_url is required when video calls use "
+            "video_provider='livekit'"
+        )
+    parsed = urlsplit(raw)
+    allowed = ("wss",) if production else ("ws", "wss")
+    if parsed.scheme.lower() not in allowed or not parsed.hostname:
+        scheme = "wss://" if production else "ws:// or wss://"
+        return f"livekit_public_url must be a {scheme} URL with a host"
+    if parsed.username or parsed.password:
+        return "livekit_public_url must not contain userinfo"
     return None
 
 
@@ -166,10 +192,21 @@ class Settings(BaseSettings):
     payment_provider: str = "deterministic"
     razorpay_key_id: SecretStr | None = None
     razorpay_key_secret: SecretStr | None = None
-    # Video provider binding. "deterministic" issues local, hashed join grants;
-    # "livekit" requires the URL + API key pair below.
-    video_provider: str = "deterministic"
+    # Product enablement and provider selection are deliberately separate.
+    # Production defaults fail closed: no call is offered and no deterministic
+    # adapter is selected accidentally. Tests/development opt in explicitly.
+    video_calls_enabled: bool = False
+    # "deterministic" is test/development only; "livekit" is the production
+    # adapter; "none" is the safe default.
+    video_provider: str = "none"
     livekit_url: str | None = None
+    # Browser-facing signalling URL. This is NOT the server-side Twirp URL.
+    livekit_public_url: str | None = None
+    # Browser ICE selection is server-authoritative. ``all`` permits the best
+    # direct path and falls back to TURN; ``relay`` proves/forces that media
+    # traverses the configured TURN service on restrictive networks. This is
+    # safe to expose to browsers and contains no provider credential.
+    video_ice_transport_policy: str = "all"
     livekit_api_key: SecretStr | None = None
     livekit_api_secret: SecretStr | None = None
     # Join credential lifetime. Short-lived by design; only the hash is stored.
@@ -199,6 +236,13 @@ class Settings(BaseSettings):
     otp_provider_url: str | None = None
     otp_provider_token: SecretStr | None = None
     otp_provider_timeout_s: float = 10.0
+
+    # --- Student OTP login + cookie session --------------------------------
+    # Login challenges remain separate from signup/recovery challenges. The
+    # browser receives only an HttpOnly cookie; the database stores its hash.
+    auth_session_cookie_name: str = "legalsaathi_session"
+    auth_session_ttl_seconds: int = 7 * 24 * 60 * 60
+    login_attempt_ttl_seconds: int = 10 * 60
 
     # --- DPDP retention / deletion (SAATHI-366 C5) -------------------------
     # Config-driven retention windows per data category, in days. NO statutory
@@ -286,6 +330,7 @@ class Settings(BaseSettings):
                     )
 
         video_provider = (self.video_provider or "").strip().lower()
+        environment = (self.app_env or "").strip().lower()
         if video_provider not in VIDEO_PROVIDER_CHOICES:
             problems.append(
                 f"video_provider must be one of {', '.join(VIDEO_PROVIDER_CHOICES)}"
@@ -300,6 +345,30 @@ class Settings(BaseSettings):
                         f"{name} is required (and must not be a placeholder) "
                         "when video_provider='livekit'"
                     )
+            if self.video_calls_enabled:
+                public_problem = _livekit_public_url_problem(
+                    self.livekit_public_url,
+                    production=environment in {"staging", "production"},
+                )
+                if public_problem is not None:
+                    problems.append(public_problem)
+        elif video_provider == "deterministic" and environment in {"staging", "production"}:
+            problems.append(
+                "video_provider='deterministic' is forbidden in staging/production"
+            )
+
+        if self.video_calls_enabled and video_provider == "none":
+            problems.append(
+                "video_provider must be deterministic or livekit when "
+                "video_calls_enabled=true"
+            )
+
+        ice_policy = (self.video_ice_transport_policy or "").strip().lower()
+        if ice_policy not in VIDEO_ICE_TRANSPORT_POLICY_CHOICES:
+            problems.append(
+                "video_ice_transport_policy must be one of "
+                f"{', '.join(VIDEO_ICE_TRANSPORT_POLICY_CHOICES)}"
+            )
 
         for name in (
             "booking_hold_minutes",

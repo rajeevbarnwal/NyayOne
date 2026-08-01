@@ -24,7 +24,10 @@ export async function apiFetch(path: string, opts: ApiOptions = {}): Promise<Res
   if (!headers.has(REQUEST_ID_HEADER)) headers.set(REQUEST_ID_HEADER, requestId);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
-  return fetch(url, { ...opts, headers });
+  // The student session is an HttpOnly cookie. Include it for same-site local
+  // development and cross-origin API calls explicitly; JavaScript never reads
+  // or persists the bearer value.
+  return fetch(url, { ...opts, credentials: opts.credentials ?? 'include', headers });
 }
 
 export { API_BASE };
