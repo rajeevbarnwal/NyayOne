@@ -18,6 +18,7 @@
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",
     "qa:lawschool": "node scripts/lawschool-e2e.mjs",
     "qa:credentials": "node scripts/credential-e2e.mjs",
+    "qa:wave4-reporting": "node scripts/wave4-reporting-e2e.mjs",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",

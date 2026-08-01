@@ -32,6 +32,17 @@ from app.models.credentials import (  # noqa: F401
     CredentialVerificationEvent, IssuerAuthorisation, VerificationAccessLog,
     VerificationToken,
 )
+from app.models.wave4 import (  # noqa: F401
+    InternshipReport,
+    InternshipReportCategory,
+    InternshipReportConsent,
+    InternshipReportEvidence,
+    InternshipReportingOutbox,
+    ModerationHandoff,
+    ReporterIdentityAccessApproval,
+    ReporterIdentityAccessRequest,
+    ReporterIdentityVault,
+)
 
 __all__ = [
     "User",
@@ -77,4 +88,14 @@ __all__ = [
     "TutoringOutbox",
     "SessionReminderJob",
     "VideoSessionGrant",
+    # Wave 4 private internship reporting (SAATHI-269 / SAATHI-450)
+    "InternshipReport",
+    "InternshipReportCategory",
+    "InternshipReportConsent",
+    "InternshipReportEvidence",
+    "ReporterIdentityVault",
+    "ReporterIdentityAccessRequest",
+    "ReporterIdentityAccessApproval",
+    "ModerationHandoff",
+    "InternshipReportingOutbox",
 ]
