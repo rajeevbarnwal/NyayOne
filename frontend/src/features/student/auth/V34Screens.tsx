@@ -373,19 +373,29 @@ export function V34AuthGate(props: ScreenProps) {
                   maxLength={128}
                 />
               )}
+              {loginMode === 'otp' && !loginOtpSent && (
+                <div className="v34-well" style={{ marginBottom: '12px' }}>
+                  Enter your mobile number and click <strong>Send One-Time OTP Code</strong> to receive your 6-digit verification code via SMS.
+                </div>
+              )}
               {loginMode === 'otp' && loginOtpSent && (
-                <Field
-                  id="s03-login-otp"
-                  label="6-DIGIT ONE-TIME CODE *"
-                  value={loginOtpCode}
-                  onChange={(val) => setLoginOtpCode(val.replace(/\D/g, '').slice(0, 6))}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  error={loginErrors.otp}
-                  maxLength={6}
-                  placeholder="Enter 6-digit OTP code"
-                />
+                <>
+                  <div className="v34-well" style={{ marginBottom: '12px' }}>
+                    Six-digit code sent via SMS to {loginMobile ? maskDestination({ channel: 'sms', ref: loginMobile }) : 'your mobile'}. Enter your code below to sign in.
+                  </div>
+                  <Field
+                    id="s03-login-otp"
+                    label="6-DIGIT ONE-TIME CODE *"
+                    value={loginOtpCode}
+                    onChange={(val) => setLoginOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    error={loginErrors.otp}
+                    maxLength={6}
+                    placeholder="Enter 6-digit OTP code"
+                  />
+                </>
               )}
               {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
               <div className="v34-inlineactions">
