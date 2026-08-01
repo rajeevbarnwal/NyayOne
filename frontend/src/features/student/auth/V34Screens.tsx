@@ -229,7 +229,8 @@ export function V34AuthGate(props: ScreenProps) {
     if (Object.keys(next).length) return;
 
     if (loginMode === 'password') {
-      nav('/s-04');
+      notifyStudentAuthChanged();
+      nav('/s-14', { state: { mobile: loginMobile } });
       return;
     }
 
@@ -526,8 +527,10 @@ export function V34AuthGate(props: ScreenProps) {
 
 export function V34Login() {
   const nav = useNavigate();
-  const [mobile, setMobile] = useState('');
-  const [password, setPassword] = useState('');
+  const location = useLocation();
+  const locationState = (location.state as { mobile?: string; password?: string } | null);
+  const [mobile, setMobile] = useState(locationState?.mobile || '');
+  const [password, setPassword] = useState(locationState?.password || '');
   const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [otpSent, setOtpSent] = useState(false);
   const [otpId, setOtpId] = useState('');
@@ -548,7 +551,8 @@ export function V34Login() {
     if (Object.keys(next).length) return;
 
     if (mode === 'password') {
-      nav('/s-05');
+      notifyStudentAuthChanged();
+      nav('/s-14');
       return;
     }
 
