@@ -237,6 +237,13 @@ class Settings(BaseSettings):
     otp_provider_token: SecretStr | None = None
     otp_provider_timeout_s: float = 10.0
 
+    # --- Student OTP login + cookie session --------------------------------
+    # Login challenges remain separate from signup/recovery challenges. The
+    # browser receives only an HttpOnly cookie; the database stores its hash.
+    auth_session_cookie_name: str = "legalsaathi_session"
+    auth_session_ttl_seconds: int = 7 * 24 * 60 * 60
+    login_attempt_ttl_seconds: int = 10 * 60
+
     # --- DPDP retention / deletion (SAATHI-366 C5) -------------------------
     # Config-driven retention windows per data category, in days. NO statutory
     # duration is hard-coded: unset (None) means "retain until explicit erasure"

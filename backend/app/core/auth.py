@@ -12,9 +12,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db.session import get_session
 
 
 class Role(str, Enum):
@@ -98,13 +103,31 @@ def build_actor_context(claims: dict | None) -> ActorContext:
     )
 
 
-# --- FastAPI dependency stubs -------------------------------------------------
-# Placeholder header-based extraction until the real IdP/JWKS verification is wired.
-# Domain routers depend on these; swapping the verifier later needs no route changes.
+# --- FastAPI identity dependency ---------------------------------------------
+def get_actor_context(
+    request: Request,
+    session: Session = Depends(get_session),
+    x_actor_claims: str | None = Header(default=None),
+) -> ActorContext:
+    """Resolve the server-authoritative student cookie, then dev test claims.
 
-def get_actor_context(x_actor_claims: str | None = Header(default=None)) -> ActorContext:
-    """Dependency stub: in dev, an optional JSON claims header stands in for a
-    verified token. Production replaces the parsing with real token verification."""
+    The opaque cookie is hashed and resolved through ``auth_sessions``. The
+    legacy ``X-Actor-Claims`` seam remains available only in development/test
+    so the existing deterministic domain suites do not become an authentication
+    integration test; production/staging can never trust that header.
+    """
+    from app.services import login_service
+
+    cookie = request.cookies.get(settings.auth_session_cookie_name)
+    if cookie:
+        claims = login_service.session_claims(
+            session, cookie, datetime.now(timezone.utc)
+        )
+        return build_actor_context(claims)
+
+    environment = (settings.app_env or "").strip().lower()
+    if environment not in {"development", "dev", "test", "testing"}:
+        return ANONYMOUS
     if not x_actor_claims:
         return ANONYMOUS
     import json
