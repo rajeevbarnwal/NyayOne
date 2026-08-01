@@ -745,7 +745,7 @@ export function V34PasswordReset() {
     setError('');
     setBusy(true);
     try {
-      await completeRecovery(recoveryId);
+      await completeRecovery(recoveryId, newPassword);
       notifyStudentAuthChanged();
       nav('/s-14');
     } catch {

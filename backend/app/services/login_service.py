@@ -252,7 +252,7 @@ def session_claims(
         .where(StudentRegistration.user_id == user.id)
         .order_by(StudentRegistration.created_at.desc())
     )
-    if registration is None or registration.status != "active":
+    if registration is None or registration.status not in {"otp_verified", "active"}:
         return None
     profile = session.scalar(
         select(StudentProfile).where(StudentProfile.registration_id == registration.id)
