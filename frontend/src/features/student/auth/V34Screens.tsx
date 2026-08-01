@@ -34,6 +34,16 @@ import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
 import { ProfileStep2 } from '../profile/ProfileScreens';
+import { COLLEGE_OPTIONS } from '../lib/catalog';
+
+function formatDDMMYYYY(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+}
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 type IconName = 'add' | 'back' | 'check' | 'forward' | 'key' | 'moon' | 'retry' | 'save' | 'send' | 'sun' | 'verify';
@@ -1416,11 +1426,11 @@ export function V34ProfileStep1() {
                   <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PROFILE SUMMARY</span>
                   <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
                     <div><strong>Name:</strong> {preferredName || draft.firstName || 'Student'} {draft.lastName}</div>
-                    <div><strong>Date of Birth:</strong> {dateOfBirth || draft.dateOfBirth || 'Specified'}</div>
+                    <div><strong>Date of Birth:</strong> {formatDDMMYYYY(dateOfBirth || draft.dateOfBirth || '')}</div>
                     <div><strong>City:</strong> {city || draft.city || 'Bengaluru'}</div>
-                    <div><strong>College:</strong> {college || 'Law School'}</div>
-                    <div><strong>Year of Study:</strong> {yearOfStudy || '1'}st Year</div>
-                    <div><strong>Practice Interests:</strong> {selectedInterests.join(', ')}</div>
+                    <div><strong>College:</strong> {COLLEGE_OPTIONS.find(c => c.value === college || c.value === draft.college)?.label || college || draft.college || 'Recognized Law College'}</div>
+                    <div><strong>Year of Study:</strong> {yearOfStudy || draft.yearOfStudy || '1'}{/^\d+$/.test(yearOfStudy || draft.yearOfStudy || '1') ? (yearOfStudy === '1' ? 'st Year' : yearOfStudy === '2' ? 'nd Year' : yearOfStudy === '3' ? 'rd Year' : 'th Year') : ''}</div>
+                    <div><strong>Practice Interests:</strong> {selectedInterests.join(', ') || 'General Law'}</div>
                   </div>
                 </div>
 
@@ -1428,7 +1438,10 @@ export function V34ProfileStep1() {
                   type="button"
                   className="v34-submit-btn"
                   style={{ width: 'auto', padding: '12px 36px', fontSize: '15px', display: 'inline-block' }}
-                  onClick={() => nav('/s-14')}
+                  onClick={() => {
+                    notifyStudentAuthChanged();
+                    nav('/s-14', { replace: true });
+                  }}
                 >
                   Go to Dashboard
                 </button>

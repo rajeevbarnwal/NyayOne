@@ -28,7 +28,7 @@ export function Dashboard() {
     retry: false,
   });
   const serverFirstName = profileQuery.data?.firstName;
-  const firstName = serverFirstName || profile.firstName?.trim() || profile.fullName?.trim()?.split(/\s+/)[0] || 'Student';
+  const firstName = profile.firstName?.trim() || profile.fullName?.trim()?.split(/\s+/)[0] || serverFirstName || 'Student';
   const live = availableModules(CURRENT_RELEASE);
   const soon = upcomingModules(CURRENT_RELEASE);
   const events = aggregate(sampleSourceResults()).events;
