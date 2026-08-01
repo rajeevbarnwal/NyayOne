@@ -1,0 +1,114 @@
+name: Wave 4 private reporting gate
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/wave4-private-reporting-gate.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/wave4-private-reporting-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  private-reporting-postgres-browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: legalsaathi
+          POSTGRES_PASSWORD: legalsaathi
+          POSTGRES_DB: legalsaathi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalsaathi -d legalsaathi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+    env:
+      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi
+      APP_ENV: test
+      REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
+      REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
+      INTERNSHIP_REPORT_STORAGE_ROOT: ${{ github.workspace }}/test-results/report-evidence
+      INTERNSHIP_REPORT_SCANNER_PROVIDER: clamav
+      INTERNSHIP_REPORT_CLAMAV_HOST: 127.0.0.1
+      INTERNSHIP_REPORT_CLAMAV_PORT: 3310
+      CORS_ORIGINS: '["http://127.0.0.1:1260","http://localhost:1260"]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: pip install -r requirements.txt pytest
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Enable pgvector
+        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi -c "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: Require a live ClamAV engine
+        run: |
+          python - <<'PY'
+          import socket, sys, time
+          for attempt in range(120):
+              try:
+                  with socket.create_connection(("127.0.0.1", 3310), timeout=2) as sock:
+                      sock.sendall(b"zPING\0")
+                      if sock.recv(32).rstrip(b"\0\r\n") == b"PONG":
+                          print("clamd ready")
+                          break
+              except OSError:
+                  pass
+              time.sleep(2)
+          else:
+              sys.exit("ClamAV did not become ready; malware screening cannot be claimed")
+          PY
+      - name: Native regression gates
+        run: |
+          (cd backend && env -u DATABASE_URL python -m pytest -q)
+          (cd frontend && npm run typecheck && npm run lint && npm run test:run && npm run build)
+      - name: PostgreSQL 16 + pgvector Wave 4 gate
+        working-directory: backend
+        run: PYTHON=python bash scripts/wave4_db_gate.sh "$GITHUB_WORKSPACE/test-results/wave4-postgres/summary.json"
+      - name: Seed actors and start app
+        run: |
+          (cd backend && python scripts/seed_e2e_actors.py)
+          (cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 1261 > ../test-results/wave4-backend.log 2>&1 &)
+          (cd frontend && VITE_API_BASE_URL=http://127.0.0.1:1261 npm run dev -- --host 127.0.0.1 --port 1260 > ../test-results/wave4-frontend.log 2>&1 &)
+          for url in http://127.0.0.1:1261/health http://127.0.0.1:1260/s-86; do
+            for attempt in {1..60}; do curl --fail --silent "$url" >/dev/null && break; test "$attempt" = 60 && exit 1; sleep 1; done
+          done
+      - name: S-86/S-87 Chromium and negative matrix
+        working-directory: frontend
+        env:
+          E2E_WEB_URL: http://127.0.0.1:1260
+          E2E_API_URL: http://127.0.0.1:1261
+          E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave4-browser
+        run: npm run qa:wave4-reporting
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave4-private-reporting-evidence
+          path: test-results
+          if-no-files-found: error
