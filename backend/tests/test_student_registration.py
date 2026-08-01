@@ -96,7 +96,9 @@ def test_missing_consent_rejected(db_session: Session):
 
 
 def test_mobile_conflict(db_session: Session):
-    _reg(db_session)
+    reg = _reg(db_session)
+    reg.status = "otp_verified"
+    db_session.commit()
     with pytest.raises(RegistrationError) as e:
         register_student(db_session, _req())
     assert e.value.status_code == 409
@@ -194,13 +196,18 @@ def client(engine):
     # demolishing it here proved nothing and cost ~10 ms per test.
 
 
-def test_http_201_and_422_and_409(client):
+def test_http_201_and_422_and_409(client, engine):
     ok = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "9876543210",
         "dob": "2004-03-14", "consent": {"accepted": True},
     })
     assert ok.status_code == 201
-    assert uuid.UUID(ok.json()["registration_id"])
+    reg_id = uuid.UUID(ok.json()["registration_id"])
+    with Session(engine) as s:
+        reg = s.get(StudentRegistration, reg_id)
+        if reg:
+            reg.status = "otp_verified"
+            s.commit()
 
     bad = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "98765",

@@ -123,18 +123,41 @@ class ProfilePatch(BaseModel):
         return v
 
 
+COLLEGE_CANONICAL = {
+    "NLSIU": "National Law School of India University",
+    "NALSAR": "NALSAR University of Law",
+    "WBNUJS": "West Bengal National University of Juridical Sciences",
+    "NLUJ": "National Law University, Jodhpur",
+    "NLIU": "National Law Institute University, Bhopal",
+    "GNLU": "Gujarat National Law University",
+}
+
+YEAR_CANONICAL = {
+    "1st year": "1st",
+    "2nd year": "2nd",
+    "3rd year": "3rd",
+    "4th year": "4th",
+    "5th year": "5th",
+    "LLM / Postgrad": "llm",
+}
+
+
 def _profile_payload(session: Session, reg: StudentRegistration) -> dict:
     prof = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
     mobile = decrypt(reg.mobile_ct) if reg.mobile_ct else ""
     enrol = decrypt(prof.enrolment_ct) if (prof and prof.enrolment_ct) else None
     email = decrypt(prof.institutional_email_ct) if (prof and prof.institutional_email_ct) else None
     bar = decrypt(prof.bar_enrolment_ct) if (prof and prof.bar_enrolment_ct) else None
+    col = prof.college if prof else None
+    col_canonical = COLLEGE_CANONICAL.get(col, col) if col else None
+    yr = prof.year_of_study if prof else None
+    yr_canonical = YEAR_CANONICAL.get(yr, yr) if yr else None
     return {
         "first_name": reg.first_name,
         "middle_name": reg.middle_name or "",
         "last_name": reg.last_name,
-        "college": prof.college if prof else None,
-        "year_of_study": prof.year_of_study if prof else None,
+        "college": col_canonical,
+        "year_of_study": yr_canonical,
         "enrolment_number": enrol,
         "institutional_email": email,
         "bar_enrolment_number": bar,

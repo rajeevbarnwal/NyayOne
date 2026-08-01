@@ -169,7 +169,7 @@ export function s30Groups(c = contract) {
 
 /** sha256 of the option_c_plus token stylesheet (light+dark feature tokens). */
 export function tokensHash() {
-  return crypto.createHash('sha256').update(fs.readFileSync(TOKENS_CSS_PATH)).digest('hex');
+  return crypto.createHash('sha256').update(fs.readFileSync(TOKENS_CSS_PATH, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
 }
 
 /* ------------------------------- checksum ---------------------------------- */

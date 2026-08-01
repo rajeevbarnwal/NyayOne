@@ -32,7 +32,7 @@ export function updateProfileDraft(patch: Partial<ProfileDraft>): ProfileDraft {
   const fn = migrated.firstName ?? draft.firstName;
   const mn = migrated.middleName ?? draft.middleName;
   const ln = migrated.lastName ?? draft.lastName;
-  const computedFull = migrated.fullName ?? (fn || ln ? composeDisplayName(fn, mn, ln) : draft.fullName);
+  const computedFull = migrated.fullName ?? (fn || ln ? composeDisplayName({ firstName: fn, middleName: mn, lastName: ln }) : draft.fullName);
   draft = { ...draft, ...migrated, fullName: computedFull };
   return draft;
 }
