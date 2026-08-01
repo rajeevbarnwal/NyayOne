@@ -186,10 +186,10 @@ export async function verifyRecovery(
   });
 }
 
-export async function completeRecovery(recoveryId: string): Promise<void> {
+export async function completeRecovery(recoveryId: string, newPassword?: string): Promise<void> {
   await jsonRequest('/api/v1/auth/student/recovery/complete', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId }),
+    body: JSON.stringify({ recovery_id: recoveryId, new_password: newPassword || null }),
   });
 }
 

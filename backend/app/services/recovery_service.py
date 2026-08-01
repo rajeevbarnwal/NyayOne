@@ -135,7 +135,9 @@ def complete(session: Session, opaque_id: str, now: datetime) -> str | None:
     raw_token: str | None = None
     reg = session.get(StudentRegistration, rs.registration_id)
     user = session.get(User, reg.user_id) if reg is not None else None
-    if user is not None and user.status not in {"suspended", "deleted"}:
+    if user is not None and reg is not None and user.status not in {"suspended", "deleted"}:
+        reg.status = "active"
+        user.status = "active"
         for prior in session.scalars(
             select(AuthSession)
             .where(AuthSession.user_id == user.id, AuthSession.status == "active")
@@ -149,6 +151,7 @@ def complete(session: Session, opaque_id: str, now: datetime) -> str | None:
             token_hash=keyed_hash(raw_token),
             status="active",
             expires_at=now + timedelta(seconds=settings.auth_session_ttl_seconds),
+            last_seen_at=now,
         )
         session.add(auth_session)
 

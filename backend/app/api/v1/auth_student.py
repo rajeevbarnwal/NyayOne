@@ -366,6 +366,7 @@ class RecoveryVerifyRequest(BaseModel):
 class RecoveryRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
     recovery_id: str
+    new_password: str | None = None
 
 
 class LoginStartRequest(BaseModel):
