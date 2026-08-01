@@ -112,10 +112,18 @@ for (const [name, values, expected] of [
 
   await send.click();
   await page.waitForURL('**/s-09');
-  record('single_otp_control', 'no duplicate decorative OTP slots',
-    await page.getByLabel('Six digit code').count(), await page.getByLabel('Six digit code').count() === 1);
+  const otpControl = page.locator('input[aria-label="Six digit code"]');
+  await otpControl.waitFor({ state: 'visible' });
+  const otpControlCount = await otpControl.count();
+  const decorativeSlotCount = await page.locator('.v34-otp > span[aria-hidden="true"]').count();
+  record(
+    'single_otp_control',
+    'one real OTP input and six aria-hidden visual slots',
+    { otpControlCount, decorativeSlotCount },
+    otpControlCount === 1 && decorativeSlotCount === 6,
+  );
   const otp = await latestOtp();
-  await page.getByLabel('Six digit code').fill(otp);
+  await otpControl.fill(otp);
   await page.getByRole('button', { name: 'Verify and continue' }).click();
   await page.waitForURL('**/s-10');
   record('profile_name_split', 'First/Middle/Last are mapped independently to the API payload',
