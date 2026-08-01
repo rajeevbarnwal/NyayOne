@@ -30,6 +30,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parent
 SMOKE = REPO / "infra" / "video" / "scripts" / "livekit_turn_smoke.sh"
 DRIVER = REPO / "infra" / "video" / "scripts" / "livekit_two_browser_smoke.mjs"
+APPLICATION_DRIVER = REPO / "frontend" / "scripts" / "wave2-tutoring-e2e.mjs"
+APPLICATION_FIXTURE = BACKEND / "scripts" / "wave2_e2e_fixture.py"
 RUNBOOK = REPO / "infra" / "video" / "RUNBOOK.md"
 PG_GATE_SH = BACKEND / "scripts" / "wave2_db_gate.sh"
 PG_GATE_PY = BACKEND / "scripts" / "wave2_postgres_gate.py"
@@ -109,6 +111,56 @@ def test_livekit_smoke_refuses_rather_than_reporting_a_pass_it_did_not_earn():
     driver = _read(DRIVER)
     assert "const BLOCKED_EXIT = 78" in driver
     assert BLOCKED_SENTINEL in driver
+
+
+def test_livekit_smoke_supports_an_isolated_in_network_real_browser_rig():
+    """Colima may not expose UDP; a network-local browser must remain real proof."""
+    shell = _read(SMOKE)
+    driver = _read(DRIVER)
+
+    assert 'COMPOSE_BASE+=(-f "$SMOKE_COMPOSE_OVERRIDE")' in shell
+    assert 'curl -fsS "$LIVEKIT_URL/"' in shell
+    assert "process.env.SMOKE_BROWSER_LIVEKIT_URL" in driver
+    assert "process.env.SMOKE_BROWSER_ORIGIN" in driver
+    assert "chromium.connectOverCDP(CHROMIUM_CDP_URL)" in driver
+    assert "chromium.connectOverCDP(DENIED_CHROMIUM_CDP_URL)" in driver
+    assert "composeArgs.push('-f', process.env.SMOKE_COMPOSE_OVERRIDE)" in driver
+    assert "participant.joined.published < 2" in driver
+    assert "hasGetUserMedia" in driver
+    # Bare-metal Chromium is still the default; the isolated rig is an
+    # operator-selected transport, never a quiet weakening of the gate.
+    assert "await chromium.launch" in driver
+
+
+def test_application_live_room_oracle_executes_every_declared_assertion():
+    """A label mismatch must not turn a completed assertion into NOT EXECUTED."""
+    text = _read(APPLICATION_DRIVER)
+    assertion = "the room reports admission only after the selected media transport connects"
+    assert text.count(assertion) >= 2, (
+        "the live-room admission assertion must use the same stable name in "
+        "newChecks() and chk.ok()"
+    )
+
+
+def test_geometry_contexts_explicitly_select_the_deterministic_transport():
+    """Geometry belongs to the app seam; LiveKit/TURN has its own real gate."""
+    text = _read(APPLICATION_DRIVER)
+    stage = text.split("async function stageGeo(browser)", 1)[1].split(
+        "async function stageD1", 1
+    )[0]
+    loop = stage.split("for (const cfg of CONFIGS)", 1)[1]
+    init = loop.index("await ctx.addInitScript")
+    measure = loop.index("await measure(ctx")
+    assert init < measure
+    assert "window.__legalsaathiVideoTransport = 'deterministic'" in loop[:measure]
+
+
+def test_browser_fixture_applies_sqlite_pragma_only_to_sqlite():
+    """The same declared fixture must seed both SQLite and PostgreSQL."""
+    text = _read(APPLICATION_FIXTURE)
+    assert 'bind.dialect.name == "sqlite"' in text
+    assert text.count("if is_sqlite") >= 2
+    assert 'session.execute(sa_text("PRAGMA busy_timeout = 20000"))' in text
 
 
 def test_neither_gate_can_report_a_pass_without_the_runtime():
