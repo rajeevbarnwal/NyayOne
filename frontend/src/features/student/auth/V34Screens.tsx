@@ -529,39 +529,142 @@ export function V34Login() {
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'password' | 'otp'>('password');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpId, setOtpId] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
   async function submit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR;
-    if (mode === 'password' && (password.length < 8 || password.length > 128)) next.password = 'Password must be between 8 and 128 characters.';
+    if (mode === 'password' && (password.length < 8 || password.length > 128)) {
+      next.password = 'Password must be between 8 and 128 characters.';
+    }
+    if (mode === 'otp' && otpSent && !/^\d{6}$/.test(otpCode)) {
+      next.otp = 'Enter the complete 6-digit one time code.';
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
-    if (mode === 'password') { nav('/s-05'); return; }
+
+    if (mode === 'password') {
+      nav('/s-05');
+      return;
+    }
+
     setBusy(true);
     try {
-      const loginId = await startLoginOtp(mobile);
-      nav('/s-09', {
-        state: {
-          loginId,
-          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
-          issuedAt: Date.now(),
-        },
-      });
+      if (!otpSent) {
+        const loginId = await startLoginOtp(mobile);
+        setOtpId(loginId);
+        setOtpSent(true);
+        setErrors({});
+      } else {
+        await verifyLoginOtp(otpId, otpCode);
+        notifyStudentAuthChanged();
+        nav('/s-14');
+      }
     } catch {
-      setErrors({ submit: 'A one time code could not be requested. Please retry.' });
+      setErrors({
+        submit: !otpSent
+          ? 'A one time code could not be requested. Please retry.'
+          : 'Invalid or expired one time code. Please re-enter or request a new code.',
+      });
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <Screen id="S-04" aside={<AuthAside title="Welcome back." copy="Sign in with the mobile number on your account. A one time code is available instead of a password."/>}>
-      <Pane><PaneHead id="S-04 · SIGN IN" back={() => nav('/s-03')}/><main className="v34-main">
-        <h1 id="S-04-title" className="v34-title">Sign in</h1><div className="v34-fieldset">
-          <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15}/>
-          {mode === 'password' && <Field id="v34-login-password" label="PASSWORD" value={password} onChange={setPassword} type="password" autoComplete="current-password" error={errors.password} maxLength={128}/>} 
-        </div>{errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}<div className="v34-inlineactions"><button className="v34-hit v34-linkbtn" onClick={() => { setErrors({}); setMode((value) => value === 'password' ? 'otp' : 'password'); }}>{mode === 'password' ? 'Use a one time code' : 'Use password'}</button><button className="v34-hit" onClick={() => nav('/s-06')}>Forgot password</button></div><span className="v34-grow"/>
-      </main><Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}><IconAction label={mode === 'otp' ? 'Send one time code' : 'Sign in'} icon={mode === 'otp' ? 'send' : 'key'} onClick={submit} disabled={busy}/></Footer></Pane>
+      <Pane>
+        <PaneHead id="S-04 · SIGN IN" back={() => nav('/s-03')}/>
+        <main className="v34-main">
+          <h1 id="S-04-title" className="v34-title">Sign in</h1>
+          <div className="v34-fieldset">
+            <Field
+              id="v34-login-mobile"
+              label="MOBILE NUMBER"
+              value={mobile}
+              onChange={setMobile}
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel-national"
+              prefix="+91"
+              error={errors.mobile}
+              maxLength={15}
+              disabled={mode === 'otp' && otpSent}
+            />
+            {mode === 'password' && (
+              <Field
+                id="v34-login-password"
+                label="PASSWORD"
+                value={password}
+                onChange={setPassword}
+                type="password"
+                autoComplete="current-password"
+                error={errors.password}
+                maxLength={128}
+              />
+            )}
+            {mode === 'otp' && otpSent && (
+              <Field
+                id="v34-login-otp"
+                label="6-DIGIT ONE-TIME CODE *"
+                value={otpCode}
+                onChange={(val) => setOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                error={errors.otp}
+                maxLength={6}
+                placeholder="Enter 6-digit OTP code"
+              />
+            )}
+          </div>
+          {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
+          <div className="v34-inlineactions">
+            <button
+              type="button"
+              className="v34-hit v34-linkbtn"
+              onClick={() => {
+                setErrors({});
+                setOtpSent(false);
+                setOtpCode('');
+                setMode((value) => (value === 'password' ? 'otp' : 'password'));
+              }}
+            >
+              {mode === 'password' ? 'Use a one time code' : 'Use password'}
+            </button>
+            {mode === 'otp' && otpSent ? (
+              <button
+                type="button"
+                className="v34-hit v34-linkbtn"
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpCode('');
+                  setErrors({});
+                }}
+              >
+                Change mobile number
+              </button>
+            ) : (
+              <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
+                Forgot password
+              </button>
+            )}
+          </div>
+          <span className="v34-grow"/>
+        </main>
+        <Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}>
+          <IconAction
+            label={mode === 'password' ? 'Sign in' : otpSent ? 'Verify OTP & Sign In' : 'Send one time code'}
+            icon={mode === 'password' ? 'key' : otpSent ? 'verify' : 'send'}
+            onClick={submit}
+            disabled={busy}
+          />
+        </Footer>
+      </Pane>
     </Screen>
   );
 }
