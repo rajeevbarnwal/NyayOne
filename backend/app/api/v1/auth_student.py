@@ -466,11 +466,17 @@ def recovery_verify(payload: RecoveryVerifyRequest, session: Session = Depends(g
 
 
 @router.post("/recovery/complete")
-def recovery_complete(payload: RecoveryRef, session: Session = Depends(get_session)) -> dict[str, str]:
+def recovery_complete(
+    payload: RecoveryRef,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
     try:
-        recovery_service.complete(session, payload.recovery_id, _now())
+        raw_token = recovery_service.complete(session, payload.recovery_id, _now())
     except recovery_service.RecoveryError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from exc
+    if raw_token:
+        _set_session_cookie(response, raw_token)
     return {"status": "recovered"}
 
 
