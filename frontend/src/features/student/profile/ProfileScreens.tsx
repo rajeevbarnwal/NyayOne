@@ -197,7 +197,7 @@ function AcademicStep({ screenId }: { screenId: string }) {
         help="Never shown on your public profile — add only if already enrolled with a State Bar Council."
       />
       <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-09')}>
+        <button type="button" className="btn tap" onClick={() => nav('/s-10')}>
           Back
         </button>
         <button type="button" className="btn btn--primary tap" onClick={save} disabled={saving}>
@@ -271,7 +271,7 @@ export function ProfileStep3() {
       )}
       <SelectField id="p3-goal" label="Career goal" value={careerGoal} onChange={setGoal} options={GOALS} error={errors.careerGoal} />
       <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-10')}>
+        <button type="button" className="btn tap" onClick={() => nav('/s-10?step=academic')}>
           Back
         </button>
         <button type="button" className="btn btn--primary tap" onClick={finish}>

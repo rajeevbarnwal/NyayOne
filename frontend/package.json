@@ -14,6 +14,7 @@
     "qa": "node scripts/browser-qa.mjs",
     "qa:calendar-visual": "node scripts/calendar-visual-qa.mjs",
     "qa:registration": "node scripts/registration-e2e.mjs",
+    "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:lawschool": "node scripts/lawschool-e2e.mjs",
     "qa:credentials": "node scripts/credential-e2e.mjs",
     "cap:add:ios": "cap add ios",

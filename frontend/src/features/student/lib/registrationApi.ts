@@ -30,6 +30,15 @@ export interface AcademicProfileInput {
   barEnrolmentNumber?: string;
 }
 
+export interface StudentSessionActor {
+  sub: string;
+  roles: string[];
+  student_profile_id: string | null;
+  student_verification: 'draft' | 'verified';
+  is_minor: boolean;
+  consent_state: string[];
+}
+
 export class RegistrationApiError extends Error {
   constructor(
     readonly status: number,
@@ -159,6 +168,44 @@ export async function completeRecovery(recoveryId: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ recovery_id: recoveryId }),
   });
+}
+
+export async function startLoginOtp(mobile: string): Promise<string> {
+  const result = await jsonRequest<{ login_id: string }>(
+    '/api/v1/auth/student/login/otp/start',
+    { method: 'POST', body: JSON.stringify({ mobile }) },
+  );
+  return result.login_id;
+}
+
+export async function verifyLoginOtp(loginId: string, code: string): Promise<void> {
+  await jsonRequest('/api/v1/auth/student/login/otp/verify', {
+    method: 'POST',
+    body: JSON.stringify({ login_id: loginId, code }),
+  });
+}
+
+export async function getStudentSession(): Promise<StudentSessionActor | null> {
+  const result = await jsonRequest<{
+    authenticated: boolean;
+    actor: StudentSessionActor | null;
+  }>('/api/v1/auth/student/session', { method: 'GET' });
+  return result.authenticated ? result.actor : null;
+}
+
+export async function logoutStudent(): Promise<void> {
+  await jsonRequest('/api/v1/auth/student/logout', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
+
+export function notifyStudentAuthChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(STUDENT_AUTH_CHANGED_EVENT));
+  }
 }
 
 export function saveRegistrationSession(value: RegistrationSession): void {

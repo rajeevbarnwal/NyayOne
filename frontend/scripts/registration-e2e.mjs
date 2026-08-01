@@ -40,15 +40,17 @@ async function fresh(viewport = { width: 1440, height: 1000 }) {
 async function fillBase(page, {
   first = 'Aditi', middle = '', last = 'Nair', mobile = '9876543210', dob = '2004-03-14',
 } = {}) {
-  await page.goto(`${base}/s-05`);
-  await page.getByLabel('First name').fill(first);
-  await page.getByLabel('Middle name').fill(middle);
-  await page.getByLabel('Last name').fill(last);
-  await page.getByLabel('Mobile number').fill(mobile);
-  await page.getByLabel('Date of birth').fill(dob);
-  await page.getByLabel('I accept the Terms of Use.').check();
-  await page.getByLabel(/Privacy notice/).check();
-  await page.getByLabel(/law student or aspiring/).check();
+  await page.goto(`${base}/s-08`);
+  await page.getByLabel('FIRST NAME').fill(first);
+  await page.getByLabel('MIDDLE NAME').fill(middle);
+  await page.getByLabel('LAST NAME').fill(last);
+  await page.getByLabel('MOBILE NUMBER').fill(mobile);
+  await page.getByLabel('INSTITUTIONAL EMAIL').fill('aditi@nls.ac.in');
+  await page.getByLabel('DATE OF BIRTH').fill(dob);
+  await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
+  await page.getByLabel('YEAR OF STUDY').selectOption('3');
+  await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
+  await page.getByRole('checkbox', { name: /accept the terms and DPDP/ }).check();
 }
 
 // Explicit negative/boundary cases.
@@ -59,14 +61,19 @@ for (const [name, values, expected] of [
   ['future_dob', { mobile: '9000000001', dob: '2030-01-01' }, 'Enter a valid date of birth that is not in the future.'],
   ['empty_first_name', { mobile: '9000000002', first: '' }, 'Enter your first name.'],
   ['special_name', { mobile: '9000000003', first: '<script>' }, 'contains characters'],
-  ['name_61_chars', { mobile: '9000000004', first: 'A'.repeat(61) }, '60 characters or fewer'],
+  ['name_61_chars', { mobile: '9000000004', first: 'A'.repeat(61) }, 'capped at 60 characters'],
 ]) {
   const { context, page } = await fresh();
   await fillBase(page, values);
-  await page.getByRole('button', { name: /Create account/ }).click();
-  const text = await page.locator('body').innerText();
-  record(name, expected, text.includes(expected), text.includes(expected));
-  record(`${name}_blocked`, 'remain /s-05', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-05');
+  if (name === 'name_61_chars') {
+    const length = (await page.getByLabel('FIRST NAME').inputValue()).length;
+    record(name, expected, `${length} characters`, length === 60);
+  } else {
+    await page.getByRole('button', { name: 'Send one time code' }).click();
+    const text = await page.locator('body').innerText();
+    record(name, expected, text.includes(expected), text.includes(expected));
+    record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
+  }
   await context.close();
 }
 
@@ -74,53 +81,61 @@ for (const [name, values, expected] of [
 {
   const { context, page } = await fresh();
   await fillBase(page, { first: 'A'.repeat(60), mobile: '9000000005' });
-  await page.getByRole('button', { name: /Create account/ }).click();
-  await page.waitForURL('**/s-06');
-  record('name_60_chars', 'accepted and routed to /s-06', new URL(page.url()).pathname, true);
+  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.waitForURL('**/s-09');
+  record('name_60_chars', 'accepted and routed to /s-09', new URL(page.url()).pathname, true);
   await context.close();
 }
 
-// Full S-05 -> server OTP -> S-10 backend profile persistence.
+// Full v3.4 S-08 -> server OTP S-09 -> S-10 backend profile persistence.
 {
   const { context, page, consoleErrors, networkErrors } = await fresh();
   const requests = [];
+  let registrationPayload = null;
   page.on('request', (r) => {
-    if (r.url().includes('/api/v1/auth/student/')) requests.push(`${r.method()} ${new URL(r.url()).pathname}`);
+    if (r.url().includes('/api/v1/auth/student/')) {
+      requests.push(`${r.method()} ${new URL(r.url()).pathname}`);
+      if (r.url().includes('/api/v1/auth/student/register')) registrationPayload = r.postDataJSON();
+    }
   });
   await fillBase(page, { first: 'Aditi', middle: 'Rani', last: 'Nair', mobile: '9000000006' });
   await resetOtp();
 
-  const info = page.getByRole('button', { name: 'Information about name and guardian consent' });
-  await info.focus();
-  const tooltip = page.getByRole('tooltip');
-  await tooltip.waitFor({ state: 'visible' });
-  const tooltipBox = await tooltip.boundingBox();
-  record('info_tooltip', 'visible exact DPDP copy', await tooltip.innerText(),
-    (await tooltip.innerText()).includes('Under-18 accounts need verified guardian consent'));
-  record('info_tooltip_viewport', 'inside viewport', tooltipBox,
-    !!tooltipBox && tooltipBox.x >= 0 && tooltipBox.y >= 0 && tooltipBox.x + tooltipBox.width <= 1440);
+  const send = page.getByRole('button', { name: 'Send one time code' });
+  const iconContract = await send.evaluate((button) => ({
+    aria: button.getAttribute('aria-label'),
+    tip: button.getAttribute('data-tip'),
+    svg: button.querySelectorAll('svg').length,
+  }));
+  record('icon_tooltip_contract', 'icon CTA exposes matching accessible name and tooltip text', iconContract,
+    iconContract.aria === 'Send one time code' && iconContract.tip === iconContract.aria && iconContract.svg === 1);
 
-  await page.getByRole('button', { name: /Create account/ }).click();
-  await page.waitForURL('**/s-06');
-  record('single_otp_control', 'no duplicate decorative OTP slots',
-    await page.locator('.st-otp').count(), await page.locator('.st-otp').count() === 0);
-  const otp = await latestOtp();
-  await page.getByLabel('OTP').fill(otp);
-  await page.getByRole('button', { name: /Verify & continue/ }).click();
+  await send.click();
   await page.waitForURL('**/s-09');
-  record('profile_name_split', 'First/Middle/Last fields present; no Full name field',
-    {
-      first: await page.getByLabel('First name').count(),
-      middle: await page.getByLabel('Middle name').count(),
-      last: await page.getByLabel('Last name').count(),
-      full: await page.getByLabel('Full name').count(),
-    },
-    await page.getByLabel('First name').count() === 1
-      && await page.getByLabel('Middle name').count() === 1
-      && await page.getByLabel('Last name').count() === 1
-      && await page.getByLabel('Full name').count() === 0);
-  await page.getByRole('button', { name: 'Continue' }).click();
+  const otpControl = page.locator('input[aria-label="Six digit code"]');
+  await otpControl.waitFor({ state: 'visible' });
+  const otpControlCount = await otpControl.count();
+  const decorativeSlotCount = await page.locator('.v34-otp > span[aria-hidden="true"]').count();
+  record(
+    'single_otp_control',
+    'one real OTP input and six aria-hidden visual slots',
+    { otpControlCount, decorativeSlotCount },
+    otpControlCount === 1 && decorativeSlotCount === 6,
+  );
+  const otp = await latestOtp();
+  await otpControl.fill(otp);
+  await page.getByRole('button', { name: 'Verify and continue' }).click();
   await page.waitForURL('**/s-10');
+  record('profile_name_split', 'First/Middle/Last are mapped independently to the API payload',
+    registrationPayload,
+    registrationPayload?.first_name === 'Aditi'
+      && registrationPayload?.middle_name === 'Rani'
+      && registrationPayload?.last_name === 'Nair'
+      && registrationPayload?.full_name === undefined);
+  await page.getByLabel('CITY').selectOption('Bengaluru');
+  await page.getByLabel('PRONOUNS').fill('She / her');
+  await page.getByRole('button', { name: 'Continue to academics' }).click();
+  await page.waitForURL('**/s-10?step=academic');
 
   for (const label of [
     'College / University',
@@ -136,7 +151,7 @@ for (const [name, values, expected] of [
   await page.getByLabel('College enrolment number').fill('KA/1234/2023');
   await page.getByLabel('Institutional email').fill('aditi@nls.ac.in');
   await page.getByLabel('Bar enrolment number').fill('D/1234/2024');
-  await page.screenshot({ path: path.join(evidence, 's10_academic_fields.png'), fullPage: true });
+  await page.screenshot({ path: path.join(evidence, 's10_academic_fields_v34.png'), fullPage: true });
   await page.getByRole('button', { name: /Save & continue/ }).click();
   await page.waitForURL('**/s-11');
 
@@ -155,24 +170,24 @@ for (const [name, values, expected] of [
   record('profile_api_called', 'PATCH /profile', requests, requests.some((r) => r.includes('PATCH /api/v1/auth/student/profile')));
   record('console_errors', 'none', consoleErrors, consoleErrors.length === 0);
   record('network_errors', 'none', networkErrors, networkErrors.length === 0);
-  const file = 's05_s10_full_flow.png';
+  const file = 's08_s10_full_flow_v34.png';
   await page.screenshot({ path: path.join(evidence, file), fullPage: true });
   await context.close();
 }
 
-// S-08 recovery is mobile/OTP based and server-authoritative (not S-15 email).
+// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.
 {
   const { context, page } = await fresh();
   const calls = [];
   page.on('request', (r) => {
     if (r.url().includes('/api/v1/auth/student/recovery/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
-  await page.goto(`${base}/s-08`);
-  await page.getByLabel('Mobile number').fill('9000000006');
+  await page.goto(`${base}/s-06`);
+  await page.getByLabel('MOBILE NUMBER').fill('9000000006');
   await resetOtp();
-  await page.getByRole('button', { name: 'Start account recovery' }).click();
-  await page.getByText('If an account matches, a recovery code has been sent.').waitFor();
-  await page.getByLabel('6-digit recovery code').fill(await latestOtp());
+  await page.getByRole('button', { name: 'Send the code' }).click();
+  await page.getByText('If an account matches, a six digit recovery code has been sent.').waitFor();
+  await page.getByLabel('6-DIGIT RECOVERY CODE').fill(await latestOtp());
   await page.getByRole('button', { name: 'Verify recovery code' }).click();
   await page.getByText('Recovery verified. You may now sign in again.').waitFor();
   record('recovery_server_start', 'POST /recovery/start', calls,
@@ -181,35 +196,34 @@ for (const [name, values, expected] of [
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/verify')));
   record('recovery_server_complete', 'POST /recovery/complete', calls,
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/complete')));
-  record('recovery_no_email_redirect', 'remain /s-08', new URL(page.url()).pathname,
-    new URL(page.url()).pathname === '/s-08');
-  await page.screenshot({ path: path.join(evidence, 's08_recovery_complete.png'), fullPage: true });
+  record('recovery_no_email_redirect', 'remain /s-06', new URL(page.url()).pathname,
+    new URL(page.url()).pathname === '/s-06');
+  await page.screenshot({ path: path.join(evidence, 's06_recovery_complete_v34.png'), fullPage: true });
   await context.close();
 }
 
-// Responsive/theme and tooltip matrix.
+// Responsive/theme and icon-tooltip contract matrix.
 for (const width of [390, 430, 768, 1024, 1440]) {
   for (const theme of ['light', 'dark']) {
     const { context, page, consoleErrors } = await fresh({ width, height: 1000 });
     await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
-    await page.getByRole('button', { name: 'Information about name and guardian consent' }).click();
-    const tooltipBox = await page.getByRole('tooltip').boundingBox();
+    const action = page.getByRole('button', { name: 'Send one time code' });
+    const actionBox = await action.boundingBox();
     const metrics = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
-      button: (() => {
-        const element = document.querySelector('.st-info__btn');
-        const box = element?.getBoundingClientRect();
-        return box ? { width: box.width, height: box.height } : null;
-      })(),
+      iconActions: [...document.querySelectorAll('.v34-iconbtn')].map((element) => {
+        const box = element.getBoundingClientRect();
+        return { width: box.width, height: box.height, aria: element.getAttribute('aria-label'), tip: element.getAttribute('data-tip'), svg: element.querySelectorAll('svg').length };
+      }),
     }));
-    record(`responsive_${width}_${theme}`, `width<=${width}, tooltip in viewport, target>=44`,
-      { metrics, tooltipBox },
+    record(`responsive_${width}_${theme}`, `width<=${width}, icon CTA inside viewport and target>=44`,
+      { metrics, actionBox },
       metrics.width <= width
-      && !!metrics.button && metrics.button.width >= 44 && metrics.button.height >= 44
-      && !!tooltipBox && tooltipBox.x >= 0 && tooltipBox.x + tooltipBox.width <= width
+      && metrics.iconActions.every((item) => item.width >= 44 && item.height >= 44 && item.aria && item.tip === item.aria && item.svg === 1)
+      && !!actionBox && actionBox.x >= 0 && actionBox.x + actionBox.width <= width
       && consoleErrors.length === 0);
-    const file = `s05_${width}_${theme}.png`;
+    const file = `s08_v34_${width}_${theme}.png`;
     await page.screenshot({ path: path.join(evidence, file), fullPage: true });
     await context.close();
   }
