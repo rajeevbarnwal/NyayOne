@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { ThemeMode } from '../../../hooks/useTheme';
 import { useAuth } from '../../../app/authContext';
@@ -216,6 +216,9 @@ export function V34AuthGate(props: ScreenProps) {
   const [consentAccepted, setConsentAccepted] = useState(true);
   const [regBusy, setRegBusy] = useState(false);
   const [regErrors, setRegErrors] = useState<Record<string, string>>({});
+  const [regOtpSent, setRegOtpSent] = useState(false);
+  const [registrationId, setRegistrationId] = useState('');
+  const [regOtpCode, setRegOtpCode] = useState('');
 
   async function handleLoginSubmit() {
     const next: Record<string, string> = {};
@@ -276,7 +279,7 @@ export function V34AuthGate(props: ScreenProps) {
       setRegBusy(true);
       try {
         await verifyStudentOtp(registrationId, regOtpCode);
-        updateProfileDraft({ firstName, middleName, lastName });
+        updateProfileDraft({ firstName, middleName, lastName, dateOfBirth: dob });
         notifyStudentAuthChanged();
         nav('/s-10');
       } catch (error) {
@@ -1066,18 +1069,98 @@ export function V34ProfileStep1() {
 
 function V34PersonalProfileStep() {
   const nav = useNavigate();
-  const draft = getProfileDraft(); const [preferredName, setPreferredName] = useState(draft.firstName || ''); const [dateOfBirth, setDob] = useState(draft.dateOfBirth || ''); const [city, setCity] = useState(''); const [pronouns, setPronouns] = useState(''); const [errors, setErrors] = useState<Record<string, string>>({});
+  const draft = getProfileDraft();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(draft.avatarUrl || null);
+  const [preferredName, setPreferredName] = useState(draft.firstName || '');
+  const [dateOfBirth, setDob] = useState(draft.dateOfBirth || '');
+  const [city, setCity] = useState('');
+  const [pronouns, setPronouns] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const url = event.target?.result as string;
+        setPhotoPreview(url);
+        updateProfileDraft({ avatarUrl: url });
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
   function save(finishLater = false) {
-    const next: Record<string, string> = {}; if (!preferredName.trim()) next.name = 'Enter your preferred name.'; else if (preferredName.trim().length > 60) next.name = 'Preferred name must be 60 characters or fewer.'; if (!dateOfBirth) next.dob = 'Enter your date of birth.'; else if (!isRegistrableDob(dateOfBirth, new Date())) next.dob = DOB_ERROR; if (!city) next.city = 'Choose your city.'; if (pronouns.length > 60) next.pronouns = 'Pronouns must be 60 characters or fewer.'; setErrors(next); if (Object.keys(next).length) return;
-    updateProfileDraft({ firstName: preferredName.trim(), fullName: composeDisplayName({ firstName: preferredName.trim(), middleName: draft.middleName, lastName: draft.lastName }), dateOfBirth });
+    const next: Record<string, string> = {};
+    if (!preferredName.trim()) next.name = 'Enter your preferred name.';
+    else if (preferredName.trim().length > 60) next.name = 'Preferred name must be 60 characters or fewer.';
+    if (!dateOfBirth) next.dob = 'Enter your date of birth.';
+    else if (!isRegistrableDob(dateOfBirth, new Date())) next.dob = DOB_ERROR;
+    if (!city) next.city = 'Choose your city.';
+    if (pronouns.length > 60) next.pronouns = 'Pronouns must be 60 characters or fewer.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    updateProfileDraft({
+      firstName: preferredName.trim(),
+      fullName: composeDisplayName({ firstName: preferredName.trim(), middleName: draft.middleName, lastName: draft.lastName }),
+      dateOfBirth,
+      avatarUrl: photoPreview || undefined,
+    });
     nav(finishLater ? '/s-13' : '/s-10?step=academic');
   }
+
   return (
     <Screen id="S-10" variant="wizard" aside={<aside className="v34-profile-rail"><span className="v34-mono">PROFILE SETUP</span>{['Personal', 'Academic', 'Interests'].map((label, index) => <div key={label} className={index === 0 ? 'is-on' : ''}><b>{index + 1}</b><span>{label}<small>{index === 0 ? 'Name, date of birth, city' : index === 1 ? 'College, year, enrolment' : 'Practice areas, cities'}</small></span></div>)}<div className="v34-rule"/><strong className="v34-stat">34%</strong><small>We ask for the minimum. No marks or Aadhaar.</small></aside>}>
       <Pane><div className="v34-steps"><i className="is-on"/><i/><i/><span>STEP 1 OF 3</span></div><main className="v34-main">
-        <div><h1 id="S-10-title" className="v34-title">About you</h1><p className="v34-copy">Shapes which internships, tutors and digests you see first. Editable later.</p></div><div className="v34-card v34-photo"><span aria-hidden="true">◎</span><p>Photo is optional. Only tutors you book can see it.</p><button className="v34-hit">Add</button></div>
+        <div><h1 id="S-10-title" className="v34-title">About you</h1><p className="v34-copy">Shapes which internships, tutors and digests you see first. Editable later.</p></div>
+        <div className="v34-card v34-photo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <input
+            ref={fileInputRef}
+            id="v34-photo-input"
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            style={{ display: 'none' }}
+          />
+          {photoPreview ? (
+            <img
+              src={photoPreview}
+              alt="Profile photo preview"
+              style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }}
+            />
+          ) : (
+            <span aria-hidden="true">◎</span>
+          )}
+          <p style={{ flex: 1, margin: 0 }}>Photo is optional. Only tutors you book can see it.</p>
+          <button type="button" className="v34-hit" onClick={() => fileInputRef.current?.click()}>
+            {photoPreview ? 'Change' : 'Add'}
+          </button>
+        </div>
         <div className="v34-fieldset"><Field id="v34-preferred" label="PREFERRED NAME" value={preferredName} onChange={setPreferredName} maxLength={60} error={errors.name}/><div className="v34-row"><Field id="v34-profile-dob" label="DATE OF BIRTH" value={dateOfBirth} onChange={setDob} type="date" error={errors.dob}/><Select id="v34-city" label="CITY" value={city} onChange={setCity} options={[{ value: 'Bengaluru', label: 'Bengaluru' }, { value: 'New Delhi', label: 'New Delhi' }, { value: 'Mumbai', label: 'Mumbai' }]} error={errors.city}/></div><Field id="v34-pronouns" label="PRONOUNS" value={pronouns} onChange={setPronouns} optional maxLength={60} placeholder="Prefer not to say" error={errors.pronouns}/></div><div className="v34-rule"/><div className="v34-complete"><strong>34%</strong><span>profile complete<small>All three steps open internship applications.</small></span></div><span className="v34-grow"/>
-      </main><Footer hint="Step 1 stays in memory while this account setup is open."><IconAction secondary label="Save and finish later" icon="save" onClick={() => save(true)}/><IconAction label="Continue to academics" icon="forward" onClick={() => save(false)}/></Footer></Pane>
+      </main>
+      <Footer hint="Step 1 stays in memory while this account setup is open.">
+        <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="v34-hit v34-linkbtn"
+            style={{ padding: '8px 16px', cursor: 'pointer' }}
+            onClick={() => save(true)}
+          >
+            Save and finish later
+          </button>
+          <button
+            type="button"
+            className="v34-submit-btn"
+            style={{ padding: '10px 24px', width: 'auto' }}
+            onClick={() => save(false)}
+          >
+            Continue to academics
+          </button>
+        </div>
+      </Footer>
+      </Pane>
     </Screen>
   );
 }
