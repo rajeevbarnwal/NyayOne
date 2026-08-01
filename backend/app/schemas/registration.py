@@ -12,6 +12,17 @@ from pydantic import BaseModel, ConfigDict, field_validator
 MOBILE_RE = re.compile(r"^\d{10}$")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
 INSTITUTIONAL_EMAIL_MAX_LENGTH = 254
+CONSUMER_EMAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "proton.me",
+        "icloud.com",
+        "rediffmail.com",
+    }
+)
 INSTITUTIONAL_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 
@@ -133,6 +144,7 @@ class StudentAcademicProfileRequest(BaseModel):
             not value
             or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
             or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
+            or value.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
         ):
             raise ValueError("Enter a valid institutional email.")
         return value
@@ -164,6 +176,7 @@ class InstitutionalEmailVerificationRequest(BaseModel):
             not value
             or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
             or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
+            or value.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
         ):
             raise ValueError("Enter a valid institutional email.")
         return value
