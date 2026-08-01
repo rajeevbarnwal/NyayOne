@@ -366,6 +366,14 @@ export function V34AuthGate(props: ScreenProps) {
                   Forgot password
                 </button>
               </div>
+              <button
+                type="button"
+                className="v34-submit-btn"
+                onClick={handleLoginSubmit}
+                disabled={loginBusy}
+              >
+                {loginMode === 'otp' ? 'Send One-Time OTP Code' : 'Sign In'}
+              </button>
             </div>
           ) : (
             <div className="v34-fieldset" key="register-fields">
@@ -430,6 +438,14 @@ export function V34AuthGate(props: ScreenProps) {
               </label>
               {regErrors.consent && <span className="v34-field__error" role="alert">{regErrors.consent}</span>}
               {regErrors.submit && <span className="v34-field__error" role="alert">{regErrors.submit}</span>}
+              <button
+                type="button"
+                className="v34-submit-btn"
+                onClick={handleRegisterSubmit}
+                disabled={regBusy}
+              >
+                Create account and send OTP
+              </button>
             </div>
           )}
 
@@ -454,22 +470,7 @@ export function V34AuthGate(props: ScreenProps) {
           <span className="v34-grow" />
         </main>
         <Footer hint={<>Sign in or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}>
-          {activeTab === 'signin' ? (
-            <IconAction
-              label={loginMode === 'otp' ? 'Send one time code' : 'Sign in'}
-              icon={loginMode === 'otp' ? 'send' : 'key'}
-              onClick={handleLoginSubmit}
-              disabled={loginBusy}
-            />
-          ) : (
-            <IconAction
-              secondary
-              label="Create account and send OTP"
-              icon="add"
-              onClick={handleRegisterSubmit}
-              disabled={regBusy}
-            />
-          )}
+          <span />
         </Footer>
       </Pane>
     </Screen>
