@@ -49,6 +49,13 @@
 #   LIVEKIT_CLIENT_BUNDLE   (S4/S5/S6) URL of the livekit-client UMD bundle the
 #                           driver injects. Default:
 #                           https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js
+#   SMOKE_COMPOSE_OVERRIDE  optional compose overlay used by an isolated QA rig
+#   SMOKE_BROWSER_LIVEKIT_URL browser-reachable signalling URL when it differs
+#                           from the host/operator LIVEKIT_URL
+#   SMOKE_BROWSER_ORIGIN      optional same-network HTTP(S) page origin used by
+#                           an isolated browser; defaults to the SDK origin
+#   SMOKE_CHROMIUM_CDP_URL  optional in-network Chromium CDP endpoint; S5 uses
+#                           SMOKE_DENIED_CHROMIUM_CDP_URL for its denial browser
 #
 # Exit codes:  0 = every step passed
 #              1 = a step FAILED (the run stopped there)
@@ -98,6 +105,9 @@ if [[ $LIST_ONLY -eq 1 ]]; then
 fi
 
 COMPOSE_BASE=(-f docker-compose.yml -f infra/video/docker-compose.video.yml)
+if [[ -n "${SMOKE_COMPOSE_OVERRIDE:-}" ]]; then
+  COMPOSE_BASE+=(-f "$SMOKE_COMPOSE_OVERRIDE")
+fi
 BACKEND_URL="${BACKEND_URL:-http://localhost:1031}"
 LIVEKIT_CLIENT_BUNDLE="${LIVEKIT_CLIENT_BUNDLE:-https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js}"
 RESULTS=()
@@ -180,6 +190,9 @@ fi
 have curl || MISSING+=("curl")
 [[ -f docker-compose.yml ]] || MISSING+=("docker-compose.yml at the repo root")
 [[ -f infra/video/docker-compose.video.yml ]] || MISSING+=("infra/video/docker-compose.video.yml")
+if [[ -n "${SMOKE_COMPOSE_OVERRIDE:-}" && ! -f "$SMOKE_COMPOSE_OVERRIDE" ]]; then
+  MISSING+=("SMOKE_COMPOSE_OVERRIDE file")
+fi
 [[ -f infra/video/rendered/livekit.yaml ]] || MISSING+=("infra/video/rendered/livekit.yaml (run scripts/render_video_infra_config.py first)")
 [[ -n "${LIVEKIT_URL:-}" ]] || MISSING+=("LIVEKIT_URL")
 [[ -n "${LIVEKIT_API_KEY-}" ]] || MISSING+=("LIVEKIT_API_KEY")
@@ -230,8 +243,8 @@ for raw in sys.stdin:
 print(len(healthy))')
   [[ "$healthy" -ge 2 ]] \
     || fail_closed S1 "expected coturn AND livekit 'Up (healthy)', saw $healthy"
-  curl -fsS "http://localhost:1039/" > "$OUT/s1-livekit-root.log" 2>&1 \
-    || fail_closed S1 "GET http://localhost:1039/ did not return 2xx"
+  curl -fsS "$LIVEKIT_URL/" > "$OUT/s1-livekit-root.log" 2>&1 \
+    || fail_closed S1 "GET LIVEKIT_URL did not return 2xx"
   # Probe the service inside its container. The host metrics port is an
   # observability convenience and may legitimately be occupied by another
   # local process; that must not redirect this proof to an unrelated service.
