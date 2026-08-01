@@ -69,19 +69,30 @@ jobs:
       - name: Require a live ClamAV engine
         run: |
           python - <<'PY'
-          import socket, sys, time
+          import socket, struct, sys, time
+          eicar = (
+              b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-"
+              b"ANTIVIRUS-TEST-FILE!$H+H*"
+          )
           for attempt in range(120):
               try:
                   with socket.create_connection(("127.0.0.1", 3310), timeout=2) as sock:
-                      sock.sendall(b"zPING\0")
-                      if sock.recv(32).rstrip(b"\0\r\n") == b"PONG":
-                          print("clamd ready")
+                      sock.settimeout(2)
+                      sock.sendall(b"zINSTREAM\0")
+                      sock.sendall(struct.pack("!I", len(eicar)) + eicar)
+                      sock.sendall(struct.pack("!I", 0))
+                      verdict = sock.recv(4096).rstrip(b"\0\r\n")
+                      if verdict.endswith(b" FOUND"):
+                          print("clamd signature database ready; EICAR detected")
                           break
               except OSError:
                   pass
               time.sleep(2)
           else:
-              sys.exit("ClamAV did not become ready; malware screening cannot be claimed")
+              sys.exit(
+                  "ClamAV signature database did not detect EICAR; "
+                  "malware screening cannot be claimed"
+              )
           PY
       - name: Native regression gates
         run: |
