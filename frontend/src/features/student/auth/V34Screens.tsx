@@ -122,15 +122,15 @@ function Footer({ hint, children }: { hint: ReactNode; children: ReactNode }) {
   return <footer className="v34-footer"><div className="v34-actions"><span className="v34-actions__hint">{hint}</span>{children}</div></footer>;
 }
 
-function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, error, help, max, maxLength, prefix }: {
+function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, error, help, max, maxLength, prefix, disabled, readOnly }: {
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
-  placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string;
+  placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; disabled?: boolean; readOnly?: boolean;
 }) {
   const describedBy = error ? `${id}-error` : help ? `${id}-help` : undefined;
   return (
     <label className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`} htmlFor={id}>
       <span className="v34-field__top"><span>{label}</span>{optional && <small>OPTIONAL</small>}</span>
-      <span className="v34-field__control">{prefix && <span>{prefix}</span>}<input id={id} value={value} type={type} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} max={max} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)}/></span>
+      <span className="v34-field__control">{prefix && <span>{prefix}</span>}<input id={id} value={value} type={type} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} max={max} maxLength={maxLength} disabled={disabled} readOnly={readOnly} aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)}/></span>
       {error ? <span id={`${id}-error`} className="v34-field__error" role="alert">{error}</span> : help && <span id={`${id}-help`} className="v34-field__help">{help}</span>}
     </label>
   );
@@ -200,6 +200,9 @@ export function V34AuthGate(props: ScreenProps) {
   const [loginMobile, setLoginMobile] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
+  const [loginOtpSent, setLoginOtpSent] = useState(false);
+  const [loginOtpId, setLoginOtpId] = useState('');
+  const [loginOtpCode, setLoginOtpCode] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
 
@@ -219,6 +222,9 @@ export function V34AuthGate(props: ScreenProps) {
     if (loginMode === 'password' && (loginPassword.length < 8 || loginPassword.length > 128)) {
       next.password = 'Password must be between 8 and 128 characters.';
     }
+    if (loginMode === 'otp' && loginOtpSent && !/^\d{6}$/.test(loginOtpCode)) {
+      next.otp = 'Enter the complete 6-digit one time code.';
+    }
     setLoginErrors(next);
     if (Object.keys(next).length) return;
 
@@ -229,16 +235,22 @@ export function V34AuthGate(props: ScreenProps) {
 
     setLoginBusy(true);
     try {
-      const loginId = await startLoginOtp(loginMobile);
-      nav('/s-09', {
-        state: {
-          loginId,
-          destinationMasked: maskDestination({ channel: 'sms', ref: loginMobile }),
-          issuedAt: Date.now(),
-        },
-      });
+      if (!loginOtpSent) {
+        const loginId = await startLoginOtp(loginMobile);
+        setLoginOtpId(loginId);
+        setLoginOtpSent(true);
+        setLoginErrors({});
+      } else {
+        await verifyLoginOtp(loginOtpId, loginOtpCode);
+        notifyStudentAuthChanged();
+        nav('/s-14');
+      }
     } catch {
-      setLoginErrors({ submit: 'A one time code could not be requested. Please retry.' });
+      setLoginErrors({
+        submit: !loginOtpSent
+          ? 'A one time code could not be requested. Please retry.'
+          : 'Invalid or expired one time code. Please re-enter or request a new code.',
+      });
     } finally {
       setLoginBusy(false);
     }
@@ -337,6 +349,7 @@ export function V34AuthGate(props: ScreenProps) {
                 prefix="+91"
                 error={loginErrors.mobile}
                 maxLength={15}
+                disabled={loginMode === 'otp' && loginOtpSent}
               />
               {loginMode === 'password' && (
                 <Field
@@ -350,6 +363,20 @@ export function V34AuthGate(props: ScreenProps) {
                   maxLength={128}
                 />
               )}
+              {loginMode === 'otp' && loginOtpSent && (
+                <Field
+                  id="s03-login-otp"
+                  label="6-DIGIT ONE-TIME CODE *"
+                  value={loginOtpCode}
+                  onChange={(val) => setLoginOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  error={loginErrors.otp}
+                  maxLength={6}
+                  placeholder="Enter 6-digit OTP code"
+                />
+              )}
               {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
               <div className="v34-inlineactions">
                 <button
@@ -357,14 +384,30 @@ export function V34AuthGate(props: ScreenProps) {
                   className="v34-hit v34-linkbtn"
                   onClick={() => {
                     setLoginErrors({});
+                    setLoginOtpSent(false);
+                    setLoginOtpCode('');
                     setLoginMode((v) => (v === 'password' ? 'otp' : 'password'));
                   }}
                 >
                   {loginMode === 'password' ? 'Use a one time code' : 'Use password'}
                 </button>
-                <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
-                  Forgot password
-                </button>
+                {loginMode === 'otp' && loginOtpSent ? (
+                  <button
+                    type="button"
+                    className="v34-hit v34-linkbtn"
+                    onClick={() => {
+                      setLoginOtpSent(false);
+                      setLoginOtpCode('');
+                      setLoginErrors({});
+                    }}
+                  >
+                    Change mobile number
+                  </button>
+                ) : (
+                  <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
+                    Forgot password
+                  </button>
+                )}
               </div>
               <button
                 type="button"
@@ -372,7 +415,11 @@ export function V34AuthGate(props: ScreenProps) {
                 onClick={handleLoginSubmit}
                 disabled={loginBusy}
               >
-                {loginMode === 'otp' ? 'Send One-Time OTP Code' : 'Sign In'}
+                {loginMode === 'password'
+                  ? 'Sign In'
+                  : loginOtpSent
+                  ? 'Verify OTP & Sign In'
+                  : 'Send One-Time OTP Code'}
               </button>
             </div>
           ) : (
@@ -563,7 +610,15 @@ export function V34PasswordReset() {
         <Field id="v34-reset-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" prefix="+91" placeholder="10 digit number" maxLength={15} error={error}/>
         {recoveryId && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>} 
         {message && <div className="v34-well" role="status">{message}</div>}<div className="v34-rule"/><div><span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span><p className="v34-copy">The same confirmation protects your identity from anyone probing mobile numbers.</p></div><span className="v34-grow"/>
-      </main><Footer hint={recoveryId ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><IconAction label={recoveryId ? 'Verify recovery code' : 'Send the code'} icon={recoveryId ? 'verify' : 'send'} onClick={recoveryId ? verifyCode : send}/></Footer></Pane>
+        <button
+          type="button"
+          className="v34-submit-btn"
+          onClick={recoveryId ? verifyCode : send}
+          style={{ marginBottom: '16px' }}
+        >
+          {recoveryId ? 'Verify Recovery Code' : 'Send OTP'}
+        </button>
+      </main><Footer hint={recoveryId ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><span /></Footer></Pane>
     </Screen>
   );
 }
