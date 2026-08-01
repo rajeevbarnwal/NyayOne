@@ -267,6 +267,31 @@ export function V34AuthGate(props: ScreenProps) {
   }
 
   async function handleRegisterSubmit() {
+    if (regOtpSent) {
+      if (!/^\d{6}$/.test(regOtpCode)) {
+        setRegErrors({ otp: 'Enter the complete 6-digit registration code.' });
+        return;
+      }
+      setRegErrors({});
+      setRegBusy(true);
+      try {
+        await verifyStudentOtp(registrationId, regOtpCode);
+        updateProfileDraft({ firstName, middleName, lastName });
+        notifyStudentAuthChanged();
+        nav('/s-10');
+      } catch (error) {
+        setRegErrors({
+          submit:
+            error instanceof RegistrationApiError && error.code === 'otp_max_attempts'
+              ? 'Maximum attempts reached. Please register again.'
+              : 'Invalid or expired code. Please re-enter the 6-digit code.',
+        });
+      } finally {
+        setRegBusy(false);
+      }
+      return;
+    }
+
     const p = { firstName, middleName, lastName };
     const nameErr = validateNameParts(p);
     const next: Record<string, string> = {};
@@ -293,6 +318,7 @@ export function V34AuthGate(props: ScreenProps) {
         policyVersion: CONSENT_VERSION,
       });
 
+      setRegistrationId(created.registration_id);
       saveRegistrationSession({
         registrationId: created.registration_id,
         destinationMasked: maskDestination({ channel: 'sms', ref: regMobile }),
@@ -303,7 +329,8 @@ export function V34AuthGate(props: ScreenProps) {
       });
 
       setMinor(minor, minor);
-      nav('/s-06');
+      setRegOtpSent(true);
+      setRegErrors({});
     } catch (error) {
       const message =
         error instanceof RegistrationApiError
@@ -503,6 +530,25 @@ export function V34AuthGate(props: ScreenProps) {
                 />
                 <span>I agree to the Terms of Service * and Privacy Notice *</span>
               </label>
+              {regOtpSent && (
+                <>
+                  <div className="v34-well" style={{ marginBottom: '12px' }}>
+                    Registration code sent via SMS to {maskDestination({ channel: 'sms', ref: regMobile })}. Enter your 6-digit code below to verify your account.
+                  </div>
+                  <Field
+                    id="s03-reg-otp"
+                    label="6-DIGIT VERIFICATION CODE *"
+                    value={regOtpCode}
+                    onChange={(val) => setRegOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    error={regErrors.otp}
+                    maxLength={6}
+                    placeholder="Enter 6-digit OTP code"
+                  />
+                </>
+              )}
               {regErrors.consent && <span className="v34-field__error" role="alert">{regErrors.consent}</span>}
               {regErrors.submit && <span className="v34-field__error" role="alert">{regErrors.submit}</span>}
               <button
@@ -511,7 +557,7 @@ export function V34AuthGate(props: ScreenProps) {
                 onClick={handleRegisterSubmit}
                 disabled={regBusy}
               >
-                Create account and send OTP
+                {regOtpSent ? 'Verify OTP & Complete Registration' : 'Create account and send OTP'}
               </button>
             </div>
           )}
