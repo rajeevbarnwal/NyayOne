@@ -178,7 +178,26 @@
 .ir-timeline p, .ir-timeline small { margin: 0; display: block; }
 .ir-timeline small { color: var(--text3); }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
+  /* Keep the mobile primary navigation in its own flex row instead of letting
+     the sticky row cover reporting controls in the scrolling document. This
+     screen has a long, security-sensitive form: an obscured input is not an
+     acceptable 44 px target even when its raw bounding box is large enough. */
+  .ls-main:has(.st-internship-reporting) {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .ls-main:has(.st-internship-reporting) .ls-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .ls-main:has(.st-internship-reporting) .ls-bnav {
+    position: static;
+    flex: 0 0 auto;
+  }
+
   .ir-shell { gap: var(--space-3); }
   .ir-hero { align-items: flex-start; }
   .ir-trust { flex-basis: auto; }

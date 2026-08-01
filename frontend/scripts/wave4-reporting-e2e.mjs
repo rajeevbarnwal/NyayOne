@@ -203,6 +203,26 @@ async function geometryMatrix(browser) {
         const interactive = [...document.querySelectorAll('button,a,input,textarea')].filter((node) => {
           const style = getComputedStyle(node); return style.visibility !== 'hidden' && style.display !== 'none';
         });
+        const mobileNav = document.querySelector('.ls-bnav');
+        const navRect = mobileNav?.getBoundingClientRect();
+        const occludedByNav = navRect && navRect.width > 0 && navRect.height > 0
+          ? interactive.flatMap((node) => {
+            const rect = node.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const scrollRegion = node.closest('.ls-content');
+            const scrollRect = scrollRegion?.getBoundingClientRect();
+            const centerInsideScrollRegion = !scrollRect
+              || (centerX >= scrollRect.left && centerX <= scrollRect.right
+                && centerY >= scrollRect.top && centerY <= scrollRect.bottom);
+            const centerObscured = rect.width > 0 && rect.height > 0
+              && !mobileNav.contains(node)
+              && centerInsideScrollRegion
+              && centerX >= navRect.left && centerX <= navRect.right
+              && centerY >= navRect.top && centerY <= navRect.bottom;
+            return centerObscured ? [node.getAttribute('aria-label') || node.textContent?.trim() || node.id] : [];
+          })
+          : [];
         const tiny = interactive.map((node) => {
           const input = node instanceof HTMLInputElement ? node : null;
           const target = input && ['checkbox', 'radio', 'file'].includes(input.type)
@@ -214,10 +234,11 @@ async function geometryMatrix(browser) {
         return {
           overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           tiny: tiny.map(({ name, rect }) => ({ name, width: rect.width, height: rect.height })),
+          occludedByNav,
           publicActions: [...document.querySelectorAll('button,a')].filter((node) => /publish|public score|risk label/i.test(node.textContent ?? '')).length,
         };
       });
-      record(`geometry ${width}x${height} ${theme}`, 'overflow 0, targets >=44, public actions 0', JSON.stringify(metrics), metrics.overflow === 0 && metrics.tiny.length === 0 && metrics.publicActions === 0);
+      record(`geometry ${width}x${height} ${theme}`, 'overflow 0, targets >=44, nav center occlusion 0, public actions 0', JSON.stringify(metrics), metrics.overflow === 0 && metrics.tiny.length === 0 && metrics.occludedByNav.length === 0 && metrics.publicActions === 0);
       if (width === 390 || width === 1440) {
         await page.addScriptTag({ content: axe.source });
         const violations = await page.evaluate(async () => {
