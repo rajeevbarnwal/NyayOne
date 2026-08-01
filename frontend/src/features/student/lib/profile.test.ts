@@ -41,6 +41,7 @@ describe('profile validation + completeness (SAATHI-55)', () => {
     const atLimit = `${'a'.repeat(INSTITUTIONAL_EMAIL_MAX_LENGTH - suffix.length)}${suffix}`;
     expect(institutionalEmailError('')).toBeTruthy();
     expect(institutionalEmailError('not-an-email')).toBeTruthy();
+    expect(institutionalEmailError('student@gmail.com')).toContain('institutional email');
     expect(institutionalEmailError(atLimit)).toBeUndefined();
     expect(institutionalEmailError(`a${atLimit}`)).toContain('254 characters or fewer');
     expect(institutionalEmailError('aditi.nair@nls.ac.in')).toBeUndefined();
