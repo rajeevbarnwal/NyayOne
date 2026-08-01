@@ -8,6 +8,8 @@ import {
   newApplicationRef,
   SAMPLE_LISTINGS,
   validateApplicationPdf,
+  validateCoverNote,
+  MAX_APPLICATION_PDF_BYTES,
 } from './internships';
 
 describe('internships browse/filter/save (SAATHI-60)', () => {
@@ -47,5 +49,16 @@ describe('internships application tracker (SAATHI-61)', () => {
     expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 0 }, 'Résumé')).toContain('empty');
     expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 6 * 1024 * 1024 }, 'Résumé')).toContain('5 MB');
     expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: 1024 }, 'Résumé')).toBeNull();
+    expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: MAX_APPLICATION_PDF_BYTES }, 'Résumé')).toBeNull();
+    expect(validateApplicationPdf({ name: 'resume.pdf', type: 'application/pdf', size: MAX_APPLICATION_PDF_BYTES + 1 }, 'Résumé')).toContain('5 MB');
+  });
+  it('enforces the 50–250 character cover-note boundary and rejects control bytes', () => {
+    expect(validateCoverNote('')).toContain('at least 50');
+    expect(validateCoverNote(' '.repeat(60))).toContain('at least 50');
+    expect(validateCoverNote('A'.repeat(49))).toContain('at least 50');
+    expect(validateCoverNote('A'.repeat(50))).toBeNull();
+    expect(validateCoverNote('A'.repeat(250))).toBeNull();
+    expect(validateCoverNote('A'.repeat(251))).toContain('250');
+    expect(validateCoverNote(`${'A'.repeat(60)}\u0000`)).toContain('control');
   });
 });

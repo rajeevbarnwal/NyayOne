@@ -146,8 +146,8 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
   return (
     <StudentScreen screenId="S-18" className="st-set">
       <div className="st-set__head">
-        <p className="st-eyebrow">Settings · S3</p>
-        <h1 className="st-h1">Notifications &amp; appearance</h1>
+        <p className="st-eyebrow">Settings · notifications, theme and language</p>
+        <h1 className="st-h1">How LegalSaathi reaches you</h1>
       </div>
 
       {settings.isPending && <LoadingState label="Loading your settings…" />}
@@ -166,7 +166,9 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
       {s && (
         <>
           <SettingsNotices conflict={conflict} failure={failure} />
-          <section className="st-panel">
+          <details className="v34c-mobile-disclosure">
+            <summary>Notifications <span>3 preferences</span></summary>
+            <section className="st-panel">
             <h2 className="st-panel__title">Notifications</h2>
             <div className="st-setrow">
               <div>
@@ -189,9 +191,12 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
               </div>
               <Toggle id="pref-updates" on={s.notifUpdates} label="Product updates" onToggle={() => patch({ notifUpdates: !s.notifUpdates })} />
             </div>
-          </section>
+            </section>
+          </details>
 
-          <section className="st-panel">
+          <details className="v34c-mobile-disclosure">
+            <summary>Appearance &amp; language <span>{s.theme}</span></summary>
+            <section className="st-panel">
             <h2 className="st-panel__title">Appearance &amp; language</h2>
             <div className="st-setrow">
               <div>
@@ -219,7 +224,8 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
               onChange={(v) => v && patch({ language: v })}
               options={LANGUAGES}
             />
-          </section>
+            </section>
+          </details>
         </>
       )}
 
@@ -382,11 +388,13 @@ export function PrivacySettings() {
   return (
     <StudentScreen screenId="S-19" className="st-set">
       <div className="st-set__head">
-        <p className="st-eyebrow">Settings &amp; Privacy · S3</p>
-        <h1 className="st-h1">Privacy &amp; data (DPDP)</h1>
+        <p className="st-eyebrow">Privacy · consent, export and deletion</p>
+        <h1 className="st-h1">Your data, your decisions.</h1>
       </div>
 
-      <section className="st-panel">
+      <details className="v34c-mobile-disclosure">
+        <summary>Consent preferences <span>3 controls</span></summary>
+        <section className="st-panel">
         <h2 className="st-panel__title">Consent preferences</h2>
         {settings.isPending && <LoadingState label="Loading consent preferences…" />}
         {settings.isError && (
@@ -406,9 +414,12 @@ export function PrivacySettings() {
             ))}
           </>
         )}
-      </section>
+        </section>
+      </details>
 
-      <section className="st-panel">
+      <details className="v34c-mobile-disclosure">
+        <summary>Data rights <span>export · delete</span></summary>
+        <section className="st-panel">
         <div className="st-setrow">
           <div>
             <div className="st-setrow__label">Download my data</div>
@@ -510,7 +521,8 @@ export function PrivacySettings() {
             {flowError && <ValidationState message={flowError} />}
           </div>
         )}
-      </section>
+        </section>
+      </details>
 
       <div className="st-actions">
         <button type="button" className="btn tap" onClick={() => nav('/s-18')}>
