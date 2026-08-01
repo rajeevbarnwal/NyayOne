@@ -1089,6 +1089,10 @@ export function V34ProfileStep1() {
   const [enrolmentNumber, setEnrolmentNumber] = useState(draft.enrolmentNumber || '');
   const [academicErrors, setAcademicErrors] = useState<Record<string, string>>({});
 
+  // Step 3: Interests & Goals State
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(draft.interests?.length ? draft.interests : ['Constitutional', 'Corporate']);
+  const [careerGoal, setCareerGoal] = useState<string>('Litigation & judiciary');
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
@@ -1113,6 +1117,7 @@ export function V34ProfileStep1() {
       college: college || draft.college,
       yearOfStudy: yearOfStudy || draft.yearOfStudy,
       enrolmentNumber: enrolmentNumber || draft.enrolmentNumber,
+      interests: selectedInterests,
     });
     setSavedBanner('✓ Progress saved. Your draft will stay saved whenever you return.');
     setTimeout(() => setSavedBanner(null), 4000);
@@ -1152,7 +1157,20 @@ export function V34ProfileStep1() {
       yearOfStudy,
       enrolmentNumber,
     });
-    nav('/s-14');
+    setActiveStep(3);
+  }
+
+  function handleInterestsSubmit() {
+    updateProfileDraft({
+      interests: selectedInterests,
+    });
+    setActiveStep(4);
+  }
+
+  function toggleInterest(item: string) {
+    setSelectedInterests((prev) =>
+      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
+    );
   }
 
   const stepsList = [
@@ -1193,7 +1211,7 @@ export function V34ProfileStep1() {
           <i className={activeStep >= 1 ? 'is-on' : ''} />
           <i className={activeStep >= 2 ? 'is-on' : ''} />
           <i className={activeStep >= 3 ? 'is-on' : ''} />
-          <span>STEP {activeStep} OF 3</span>
+          <span>STEP {Math.min(activeStep, 3)} OF 3</span>
         </div>
         <main className="v34-main">
           {savedBanner && (
@@ -1285,7 +1303,7 @@ export function V34ProfileStep1() {
                 </span>
               </div>
             </>
-          ) : (
+          ) : activeStep === 2 ? (
             <>
               <div>
                 <h1 id="S-10-title" className="v34-title">Academic profile</h1>
@@ -1342,30 +1360,106 @@ export function V34ProfileStep1() {
                 </span>
               </div>
             </>
+          ) : activeStep === 3 ? (
+            <>
+              <div>
+                <h1 id="S-10-title" className="v34-title">Interests & career goals</h1>
+                <p className="v34-copy">Select your legal practice interests and target career paths.</p>
+              </div>
+              <div className="v34-fieldset">
+                <div>
+                  <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PRACTICE INTERESTS *</span>
+                  <div className="v34-chips" role="group" aria-label="Practice interests">
+                    {['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy', 'Intellectual Property', 'Environmental'].map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        className={selectedInterests.includes(item) ? 'is-on' : ''}
+                        onClick={() => toggleInterest(item)}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Select
+                  id="v34-career-goal"
+                  label="CAREER ASPIRATION *"
+                  value={careerGoal}
+                  onChange={setCareerGoal}
+                  options={[
+                    { value: 'Litigation & judiciary', label: 'Litigation & Judiciary' },
+                    { value: 'Corporate / in-house', label: 'Corporate / In-House Counsel' },
+                    { value: 'Policy & academia', label: 'Policy & Academia' },
+                    { value: 'Undecided', label: 'Undecided / Exploring' },
+                  ]}
+                />
+              </div>
+              <div className="v34-rule" />
+              <div className="v34-complete">
+                <strong>100%</strong>
+                <span>
+                  profile complete<small>Ready to unlock your student dashboard.</small>
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ textAlign: 'center', padding: '24px 12px' }}>
+                <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>🎉</span>
+                <h1 id="S-10-title" className="v34-title" style={{ fontSize: '24px', marginBottom: '8px' }}>Profile Setup Complete!</h1>
+                <p className="v34-copy" style={{ maxWidth: '460px', margin: '0 auto 24px auto' }}>
+                  Your student profile has been saved. Your personalized dashboard with tailored internships, tutors, and legal digests is ready.
+                </p>
+
+                <div className="v34-card" style={{ textAlign: 'left', maxWidth: '440px', margin: '0 auto 24px auto', padding: '16px' }}>
+                  <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PROFILE SUMMARY</span>
+                  <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                    <div><strong>Name:</strong> {preferredName || draft.firstName || 'Student'} {draft.lastName}</div>
+                    <div><strong>Date of Birth:</strong> {dateOfBirth || draft.dateOfBirth || 'Specified'}</div>
+                    <div><strong>City:</strong> {city || draft.city || 'Bengaluru'}</div>
+                    <div><strong>College:</strong> {college || 'Law School'}</div>
+                    <div><strong>Year of Study:</strong> {yearOfStudy || '1'}st Year</div>
+                    <div><strong>Practice Interests:</strong> {selectedInterests.join(', ')}</div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="v34-submit-btn"
+                  style={{ width: 'auto', padding: '12px 36px', fontSize: '15px', display: 'inline-block' }}
+                  onClick={() => nav('/s-14')}
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </>
           )}
 
           <span className="v34-grow" />
         </main>
-        <Footer hint={activeStep === 1 ? 'Step 1 stays in memory while this account setup is open.' : 'Step 2 connects you with law school resources and tutors.'}>
-          <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button
-              type="button"
-              className="v34-hit v34-linkbtn"
-              style={{ padding: '8px 16px', cursor: 'pointer' }}
-              onClick={activeStep === 1 ? saveInPlace : () => setActiveStep(1)}
-            >
-              {activeStep === 1 ? 'Save and finish later' : 'Back to personal'}
-            </button>
-            <button
-              type="button"
-              className="v34-submit-btn"
-              style={{ padding: '10px 24px', width: 'auto' }}
-              onClick={activeStep === 1 ? handlePersonalSubmit : handleAcademicSubmit}
-            >
-              {activeStep === 1 ? 'Continue to academics' : 'Complete profile & enter'}
-            </button>
-          </div>
-        </Footer>
+        {activeStep <= 3 && (
+          <Footer hint={activeStep === 1 ? 'Step 1 stays in memory while this account setup is open.' : activeStep === 2 ? 'Step 2 connects you with law school resources and tutors.' : 'Step 3 customizes your feed and internship recommendations.'}>
+            <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="v34-hit v34-linkbtn"
+                style={{ padding: '8px 16px', cursor: 'pointer' }}
+                onClick={activeStep === 1 ? saveInPlace : () => setActiveStep(activeStep - 1)}
+              >
+                {activeStep === 1 ? 'Save and finish later' : activeStep === 2 ? 'Back to personal' : 'Back to academics'}
+              </button>
+              <button
+                type="button"
+                className="v34-submit-btn"
+                style={{ padding: '10px 24px', width: 'auto' }}
+                onClick={activeStep === 1 ? handlePersonalSubmit : activeStep === 2 ? handleAcademicSubmit : handleInterestsSubmit}
+              >
+                {activeStep === 1 ? 'Continue to academics' : activeStep === 2 ? 'Continue to interests' : 'Complete profile'}
+              </button>
+            </div>
+          </Footer>
+        )}
       </Pane>
     </Screen>
   );
