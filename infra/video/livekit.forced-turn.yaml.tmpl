@@ -64,6 +64,15 @@ rtc:
   # purpose: an env var here is an env var an operator can use to accidentally
   # advertise a reachable address and silently lose forced-TURN.
   node_ip: 172.29.30.10
+  # LiveKit is intentionally multi-homed: the default network carries backend
+  # webhooks/Twirp while the video network carries RTC. Without an IP filter,
+  # Pion opens candidates on both interfaces and Linux can answer a TURN-
+  # forwarded ICE check from the default-network address. The browser correctly
+  # rejects that source-address mismatch. Restrict RTC candidate sockets to the
+  # same fixed address coturn's one-peer ACL permits.
+  ips:
+    includes:
+      - 172.29.30.10/32
   # Our own STUN — see mechanism 2 above.
   stun_servers:
     - ${TURN_PUBLIC_HOST}:${TURN_PUBLIC_PORT}
