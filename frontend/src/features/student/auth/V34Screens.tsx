@@ -195,35 +195,283 @@ export function V34AuthGate(props: ScreenProps) {
   const nav = useNavigate();
   const [language, setLanguage] = useState('English');
   const [activeTab, setActiveTab] = useState<'signin' | 'register'>('signin');
+
+  // Sign In state
+  const [loginMobile, setLoginMobile] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
+
+  // Register state
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [regMobile, setRegMobile] = useState('');
+  const [dob, setDob] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(true);
+  const [regBusy, setRegBusy] = useState(false);
+  const [regErrors, setRegErrors] = useState<Record<string, string>>({});
+
+  async function handleLoginSubmit() {
+    const next: Record<string, string> = {};
+    if (!isValidMobile(loginMobile)) next.mobile = MOBILE_ERROR;
+    if (loginMode === 'password' && (loginPassword.length < 8 || loginPassword.length > 128)) {
+      next.password = 'Password must be between 8 and 128 characters.';
+    }
+    setLoginErrors(next);
+    if (Object.keys(next).length) return;
+
+    if (loginMode === 'password') {
+      nav('/s-04');
+      return;
+    }
+
+    setLoginBusy(true);
+    try {
+      const loginId = await startLoginOtp(loginMobile);
+      nav('/s-09', {
+        state: {
+          loginId,
+          destinationMasked: maskDestination({ channel: 'sms', ref: loginMobile }),
+          issuedAt: Date.now(),
+        },
+      });
+    } catch {
+      setLoginErrors({ submit: 'A one time code could not be requested. Please retry.' });
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
+  async function handleRegisterSubmit() {
+    const p = { firstName, middleName, lastName };
+    const nameErr = validateNameParts(p);
+    const next: Record<string, string> = {};
+    if (nameErr.firstName) next.firstName = nameErrorMessage('firstName', nameErr.firstName);
+    if (nameErr.middleName) next.middleName = nameErrorMessage('middleName', nameErr.middleName);
+    if (nameErr.lastName) next.lastName = nameErrorMessage('lastName', nameErr.lastName);
+    if (!isValidMobile(regMobile)) next.mobile = MOBILE_ERROR;
+    if (!isRegistrableDob(dob)) next.dob = DOB_ERROR;
+    if (!consentAccepted) next.consent = 'You must accept the terms and privacy notice to create an account.';
+
+    setRegErrors(next);
+    if (Object.keys(next).length) return;
+
+    setRegBusy(true);
+    try {
+      const payload = namePartsToPayload(p);
+      const minor = isMinor(dob, new Date().toISOString());
+      const created = await registerStudent({
+        firstName: payload.firstName,
+        middleName: payload.middleName,
+        lastName: payload.lastName,
+        mobile: regMobile,
+        dob,
+        policyVersion: CONSENT_VERSION,
+      });
+
+      saveRegistrationSession({
+        registrationId: created.registration_id,
+        destinationMasked: maskDestination({ channel: 'sms', ref: regMobile }),
+        issuedAt: Date.now(),
+        isMinor: minor,
+        guardianConsentPending: minor,
+        flowOrigin: 'register',
+      });
+
+      setMinor(minor, minor);
+      nav('/s-06');
+    } catch (error) {
+      const message =
+        error instanceof RegistrationApiError
+          ? error.code === 'mobile_already_registered'
+            ? 'Mobile number is already registered. Switch to Sign In.'
+            : error.message
+          : 'Could not create account right now. Please retry.';
+      setRegErrors({ submit: message });
+    } finally {
+      setRegBusy(false);
+    }
+  }
+
   return (
     <Screen id="S-03" aside={<AuthAside title="The years before the bar, organised." copy="Built for students in India, not adapted from a firm tool."/>}>
-      <Pane><main className="v34-main">
-        <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
-        <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
-        <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p>
-        <div className="v34-auth-tabs" role="tablist" aria-label="Authentication Mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'signin'}
-            className={activeTab === 'signin' ? 'is-active' : ''}
-            onClick={() => { setActiveTab('signin'); nav('/s-04'); }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'register'}
-            className={activeTab === 'register' ? 'is-active' : ''}
-            onClick={() => { setActiveTab('register'); nav('/s-08'); }}
-          >
-            Register
-          </button>
-        </div>
-        <div className="v34-rule"/>
-        <div><span className="v34-mono">LANGUAGE</span><div className="v34-chips" role="radiogroup" aria-label="Language">{['English', 'हिंदी', 'More'].map((name) => <button key={name} type="button" role="radio" aria-checked={language === name} className={language === name ? 'is-on' : ''} onClick={() => setLanguage(name)}>{name}</button>)}</div></div><span className="v34-grow"/>
-      </main><Footer hint={<>Sign in, or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}><IconAction secondary label="Register" icon="add" onClick={() => nav('/s-08')}/><IconAction label="Sign in" icon="key" onClick={() => nav('/s-04')}/></Footer></Pane>
+      <Pane>
+        <main className="v34-main">
+          <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
+          <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
+          <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p>
+
+          <div className="v34-auth-tabs" role="tablist" aria-label="Authentication Mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'signin'}
+              className={activeTab === 'signin' ? 'is-active' : ''}
+              onClick={() => setActiveTab('signin')}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'register'}
+              className={activeTab === 'register' ? 'is-active' : ''}
+              onClick={() => setActiveTab('register')}
+            >
+              Register
+            </button>
+          </div>
+
+          {activeTab === 'signin' ? (
+            <div className="v34-fieldset" key="signin-fields">
+              <Field
+                id="s03-login-mobile"
+                label="MOBILE NUMBER *"
+                value={loginMobile}
+                onChange={setLoginMobile}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                prefix="+91"
+                error={loginErrors.mobile}
+                maxLength={15}
+              />
+              {loginMode === 'password' && (
+                <Field
+                  id="s03-login-password"
+                  label="PASSWORD *"
+                  value={loginPassword}
+                  onChange={setLoginPassword}
+                  type="password"
+                  autoComplete="current-password"
+                  error={loginErrors.password}
+                  maxLength={128}
+                />
+              )}
+              {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
+              <div className="v34-inlineactions">
+                <button
+                  type="button"
+                  className="v34-hit v34-linkbtn"
+                  onClick={() => {
+                    setLoginErrors({});
+                    setLoginMode((v) => (v === 'password' ? 'otp' : 'password'));
+                  }}
+                >
+                  {loginMode === 'password' ? 'Use a one time code' : 'Use password'}
+                </button>
+                <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
+                  Forgot password
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="v34-fieldset" key="register-fields">
+              <Field
+                id="s03-reg-firstname"
+                label="FIRST NAME *"
+                value={firstName}
+                onChange={setFirstName}
+                autoComplete="given-name"
+                error={regErrors.firstName}
+                maxLength={60}
+              />
+              <Field
+                id="s03-reg-middlename"
+                label="MIDDLE NAME"
+                optional
+                value={middleName}
+                onChange={setMiddleName}
+                autoComplete="additional-name"
+                error={regErrors.middleName}
+                maxLength={60}
+              />
+              <Field
+                id="s03-reg-lastname"
+                label="LAST NAME *"
+                value={lastName}
+                onChange={setLastName}
+                autoComplete="family-name"
+                error={regErrors.lastName}
+                maxLength={60}
+              />
+              <Field
+                id="s03-reg-mobile"
+                label="MOBILE NUMBER *"
+                value={regMobile}
+                onChange={setRegMobile}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                prefix="+91"
+                error={regErrors.mobile}
+                maxLength={15}
+              />
+              <Field
+                id="s03-reg-dob"
+                label="DATE OF BIRTH *"
+                value={dob}
+                onChange={setDob}
+                type="date"
+                max={todayLocalISO()}
+                error={regErrors.dob}
+                help="Real date of birth in local timezone (YYYY-MM-DD)"
+              />
+              <label htmlFor="s03-reg-consent" style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0', fontSize: '13px' }}>
+                <input
+                  id="s03-reg-consent"
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                />
+                <span>I agree to the Terms of Service * and Privacy Notice *</span>
+              </label>
+              {regErrors.consent && <span className="v34-field__error" role="alert">{regErrors.consent}</span>}
+              {regErrors.submit && <span className="v34-field__error" role="alert">{regErrors.submit}</span>}
+            </div>
+          )}
+
+          <div className="v34-rule" />
+          <div>
+            <span className="v34-mono">LANGUAGE</span>
+            <div className="v34-chips" role="radiogroup" aria-label="Language">
+              {['English', 'हिंदी', 'More'].map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  role="radio"
+                  aria-checked={language === name}
+                  className={language === name ? 'is-on' : ''}
+                  onClick={() => setLanguage(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="v34-grow" />
+        </main>
+        <Footer hint={<>Sign in or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}>
+          {activeTab === 'signin' ? (
+            <IconAction
+              label={loginMode === 'otp' ? 'Send one time code' : 'Sign in'}
+              icon={loginMode === 'otp' ? 'send' : 'key'}
+              onClick={handleLoginSubmit}
+              disabled={loginBusy}
+            />
+          ) : (
+            <IconAction
+              secondary
+              label="Create account and send OTP"
+              icon="add"
+              onClick={handleRegisterSubmit}
+              disabled={regBusy}
+            />
+          )}
+        </Footer>
+      </Pane>
     </Screen>
   );
 }
