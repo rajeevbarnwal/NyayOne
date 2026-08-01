@@ -13,7 +13,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,11 +39,18 @@ from app.models.registration import (
     VERIFICATION_STATUSES,
 )
 from app.schemas.registration import (
+    InstitutionalEmailVerificationRequest,
     StudentAcademicProfileRequest,
     StudentRegisterRequest,
     StudentRegisterResponse,
 )
-from app.services import otp_outbox, otp_service, recovery_service, registration_service
+from app.services import (
+    login_service,
+    otp_outbox,
+    otp_service,
+    recovery_service,
+    registration_service,
+)
 from app.services.otp_sender import OtpSender, OtpSendError, build_otp_sender
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import deliver_after_response
@@ -353,6 +368,70 @@ class RecoveryRef(BaseModel):
     recovery_id: str
 
 
+class LoginStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mobile: str
+
+    @field_validator("mobile")
+    @classmethod
+    def _mobile(cls, v: str) -> str:
+        if not _MOBILE_RE.match(v or ""):
+            raise ValueError("Mobile number must be exactly 10 digits.")
+        return v
+
+
+class LoginVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    login_id: str
+    code: str
+
+    @field_validator("login_id")
+    @classmethod
+    def _login_id(cls, v: str) -> str:
+        if not re.fullmatch(r"[0-9a-f]{32}", v or ""):
+            raise ValueError("Invalid login attempt.")
+        return v
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        if not _OTP_RE.match(v or ""):
+            raise ValueError("OTP code must be exactly 6 digits.")
+        return v
+
+
+def _cookie_secure() -> bool:
+    return (settings.app_env or "").strip().lower() not in {
+        "local",
+        "development",
+        "dev",
+        "test",
+        "testing",
+    }
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.auth_session_cookie_name,
+        value=token,
+        max_age=settings.auth_session_ttl_seconds,
+        path="/",
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.auth_session_cookie_name,
+        path="/",
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="lax",
+    )
+
+
 @router.post("/recovery/start", status_code=202)
 def recovery_start(
     payload: RecoveryStartRequest,
@@ -393,6 +472,83 @@ def recovery_complete(payload: RecoveryRef, session: Session = Depends(get_sessi
     except recovery_service.RecoveryError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from exc
     return {"status": "recovered"}
+
+
+# --------------------------------------------------------------------------- #
+# OTP login + server-side authenticated session                               #
+# --------------------------------------------------------------------------- #
+@router.post("/login/otp/start", status_code=202)
+def login_otp_start(
+    payload: LoginStartRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    sender: OtpSender | None = Depends(get_otp_sender),
+    outbox_session_factory: Callable[[], Session] = Depends(get_outbox_session_factory),
+) -> dict[str, str]:
+    provider = _require_sender(sender)
+    opaque_id, intent = login_service.start(session, payload.mobile, _now())
+    session.commit()
+    if intent is not None:
+        background_tasks.add_task(
+            deliver_after_response,
+            intent.outbox_id,
+            provider,
+            outbox_session_factory,
+        )
+    # Same 202 + shape for a known, unknown, suspended or cooldown account.
+    return {"login_id": opaque_id}
+
+
+@router.post("/login/otp/verify")
+def login_otp_verify(
+    payload: LoginVerifyRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    try:
+        raw_token, _ = login_service.verify(
+            session, payload.login_id, payload.code, _now()
+        )
+    except login_service.LoginError as exc:
+        raise HTTPException(
+            status_code=exc.status_code, detail={"code": exc.code}
+        ) from exc
+    _set_session_cookie(response, raw_token)
+    return {"status": "authenticated"}
+
+
+@router.get("/session")
+def student_session(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    claims = login_service.session_claims(
+        session,
+        request.cookies.get(settings.auth_session_cookie_name),
+        _now(),
+    )
+    if claims is None:
+        # Session discovery is intentionally a non-error probe so an anonymous
+        # app boot does not generate a console/network error. Protected APIs
+        # still resolve the same missing/expired cookie to an anonymous actor
+        # and return 401 through ``require_authenticated``.
+        return {"authenticated": False, "actor": None}
+    return {"authenticated": True, "actor": claims}
+
+
+@router.post("/logout")
+def student_logout(
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    login_service.logout(
+        session,
+        request.cookies.get(settings.auth_session_cookie_name),
+        _now(),
+    )
+    _clear_session_cookie(response)
+    return {"status": "logged_out"}
 
 
 # --------------------------------------------------------------------------- #
@@ -445,6 +601,70 @@ def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentV
     if ver is None:
         raise HTTPException(status_code=404, detail={"code": "verification_not_found"})
     return ver
+
+
+@router.post("/verification/email/request", status_code=202)
+def request_institutional_email_verification(
+    payload: InstitutionalEmailVerificationRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    """Accept an S-15 verification request only for the saved email.
+
+    The registration identifier is the existing short-lived onboarding
+    capability. Invalid email syntax is rejected by the request schema before
+    this function runs, so it cannot mutate verification or audit state.
+    """
+    from sqlalchemy import select
+
+    reg = session.get(StudentRegistration, payload.registration_id)
+    if reg is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "registration_not_found", "message": "Registration was not found"},
+        )
+    if reg.status not in {"otp_verified", "active"}:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "otp_verification_required", "message": "Verify the mobile number first"},
+        )
+
+    profile = session.scalar(
+        select(StudentProfile).where(StudentProfile.registration_id == reg.id)
+    )
+    if (
+        profile is None
+        or profile.institutional_email_hash is None
+        or profile.institutional_email_hash
+        != keyed_hash(payload.institutional_email, lower=True)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "institutional_email_mismatch",
+                "field": "institutional_email",
+                "message": "Use the institutional email saved in your academic profile",
+            },
+        )
+
+    verification = _load_verification(session, reg.id)
+    if verification.status == "verified":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "institutional_email_already_verified", "message": "Email is already verified"},
+        )
+    verification.method = "institutional_email"
+    verification.status = "pending"
+    session.add(
+        AuditEvent(
+            actor_role="student",
+            action="student.verification.email_requested",
+            resource_type="student_verification",
+            resource_id=verification.id,
+            after_state={"registration_id": str(reg.id), "status": "pending"},
+        )
+    )
+    session.commit()
+    return {"status": "pending"}
 
 
 @router.get("/verification/status")

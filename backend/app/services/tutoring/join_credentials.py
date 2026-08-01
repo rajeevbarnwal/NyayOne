@@ -16,11 +16,13 @@ The two frozen rules this module exists to enforce:
   no raw-token column; the raw token is returned in the ISSUING call's result
   object (so the API can put it in one response body) and is never written to a
   row, an audit payload, an outbox payload or a log line.
-* **a credential is superseded, expired or revoked — never replayable.** Every
-  successful issue REVOKES the participant's previous live grants, so the token
-  handed out earlier stops validating the moment a new one is minted. That, plus
-  the TTL and the explicit revocation paths, is what makes
-  :func:`validate` able to answer GRANT_EXPIRED / GRANT_REVOKED honestly.
+* **a stored grant is superseded, expired or revoked — never replayable through
+  the application.** Every successful issue revokes the participant's previous
+  live database grants, so :func:`validate` can answer GRANT_EXPIRED /
+  GRANT_REVOKED honestly. A self-hosted LiveKit JWT is stateless once minted:
+  it remains provider-valid until its five-minute expiry unless the room or
+  participant is removed through RoomService. The short TTL is therefore a
+  deliberate bound on provider-side replay, not an instant-revocation claim.
 
 Webhook contract (E2), which mirrors ``payments.handle_event``:
 
@@ -81,6 +83,7 @@ from app.services.tutoring.errors import (
     SessionStateInvalid,
     ValidationError,
     VideoUnverified,
+    VideoCallsDisabled,
 )
 
 #: Only a session PARTICIPANT may hold a join credential. An admin is not a
@@ -117,6 +120,20 @@ def _resolve_provider(
     if resolved is None:
         raise ProviderUnavailable("video provider is not configured", retryable=False)
     return resolved
+
+
+def assert_video_calls_enabled() -> None:
+    """Refuse new grants when the independently controlled feature is off.
+
+    This check happens before session lookup, payment lookup, grant revocation,
+    provider calls or audit writes. Turning the normal switch off therefore
+    drains already-connected rooms while making every new admission a typed,
+    non-retryable, zero-mutation refusal.
+    """
+    if not settings.video_calls_enabled:
+        raise VideoCallsDisabled(
+            "video calls are currently unavailable",
+        )
 
 
 def participant_ref(session_id: uuid.UUID, user_id: uuid.UUID) -> str:
@@ -263,6 +280,7 @@ def issue(
     when the provider is unusable (``PROVIDER_UNAVAILABLE``, never a 500).
     """
     now = now or utcnow()
+    assert_video_calls_enabled()
     if actor_role not in PARTICIPANT_ROLES:
         raise Forbidden(
             "join credentials are issued to session participants only",
@@ -284,8 +302,11 @@ def issue(
     permissions = ROLE_PERMISSIONS[actor_role]
     seconds = int(ttl if ttl is not None else ttl_seconds())
 
-    # A new credential SUPERSEDES the previous one, which is what stops an
-    # earlier token from being replayed after a reconnect.
+    # A new credential SUPERSEDES the previous application grant. Self-hosted
+    # LiveKit does not introspect our grant table, so the already-minted bearer
+    # remains provider-valid until its short expiry unless RoomService removes
+    # the participant/room. Do not describe this row update as instant JWT
+    # revocation.
     superseded = revoke(session, sess.id, ref=ref, reason="superseded", now=now)
 
     try:

@@ -20,7 +20,7 @@ export const traceability: Record<string, TraceEntry> = {
   'S-06': { id: 'S-06', epic: 'S1', story: 'Launch, login, registration & OTP', release: 'R1', persona: 'all' },
   'S-07': { id: 'S-07', epic: 'S1', story: 'Launch, login, registration & OTP', release: 'R1', persona: 'all' },
   'S-08': { id: 'S-08', epic: 'S1', story: 'Launch, login, registration & OTP', release: 'R1', persona: 'all' },
-  'S-09': { id: 'S-09', epic: 'S2', story: 'Three-step profile setup', release: 'R1', persona: 'all' },
+  'S-09': { id: 'S-09', epic: 'S1', story: 'Launch, login, registration & OTP', release: 'R1', persona: 'all' },
   'S-10': { id: 'S-10', epic: 'S2', story: 'Three-step profile setup', release: 'R1', persona: 'all' },
   'S-11': { id: 'S-11', epic: 'S2', story: 'Three-step profile setup', release: 'R1', persona: 'all' },
   'S-12': { id: 'S-12', epic: 'S2', story: 'Three-step profile setup', release: 'R1', persona: 'all' },

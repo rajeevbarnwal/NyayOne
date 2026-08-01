@@ -64,11 +64,14 @@ POSITIVE_INT_SETTINGS = (
 )
 
 _WAVE2_ENV = (
+    "APP_ENV",
     "PAYMENT_PROVIDER",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
     "VIDEO_PROVIDER",
+    "VIDEO_CALLS_ENABLED",
     "LIVEKIT_URL",
+    "LIVEKIT_PUBLIC_URL",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "BOOKING_HOLD_MINUTES",
@@ -89,7 +92,22 @@ def _hermetic_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _build(**overrides) -> Settings:
+    # Make the intended test environment explicit. CI jobs commonly export
+    # APP_ENV=staging; inheriting that value would make development-only
+    # provider assertions depend on the runner instead of their inputs.
+    overrides.setdefault("app_env", "development")
     return Settings(_env_file=None, **overrides)
+
+
+def test_build_helper_does_not_inherit_ambient_app_env(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("APP_ENV", "staging")
+    fresh = _build(
+        video_calls_enabled=True,
+        video_provider="deterministic",
+    )
+    assert fresh.app_env == "development"
 
 
 def _refuses(*, names: tuple[str, ...], secrets: tuple[str, ...] = (), **overrides):
@@ -114,7 +132,8 @@ def _refuses(*, names: tuple[str, ...], secrets: tuple[str, ...] = (), **overrid
 def test_default_wave2_configuration_constructs(monkeypatch: pytest.MonkeyPatch):
     fresh = _build()
     assert fresh.payment_provider == "deterministic"
-    assert fresh.video_provider == "deterministic"
+    assert fresh.video_calls_enabled is False
+    assert fresh.video_provider == "none"
     assert fresh.booking_hold_minutes == 10
     assert fresh.join_credential_ttl_seconds == 300
     assert fresh.rate_limit_tutor_search_per_min == 60
@@ -124,7 +143,61 @@ def test_default_wave2_configuration_constructs(monkeypatch: pytest.MonkeyPatch)
     assert fresh.reminder_offsets == ["7d", "1d", "3h"]
     # No Wave 2 credential is needed for the default deployment.
     assert fresh.razorpay_key_id is None and fresh.razorpay_key_secret is None
-    assert fresh.livekit_url is None and fresh.livekit_api_secret is None
+    assert fresh.livekit_url is None and fresh.livekit_public_url is None
+    assert fresh.livekit_api_secret is None
+
+
+def test_video_enablement_and_provider_are_independent_and_fail_closed():
+    assert _build(video_calls_enabled=False, video_provider="none")
+    message = _refuses(
+        names=("video_provider", "video_calls_enabled"),
+        video_calls_enabled=True,
+        video_provider="none",
+    )
+    assert "deterministic or livekit" in message
+
+
+def test_deterministic_video_is_forbidden_in_staging_and_production():
+    for environment in ("staging", "production"):
+        message = _refuses(
+            names=("video_provider", "deterministic"),
+            app_env=environment,
+            video_calls_enabled=True,
+            video_provider="deterministic",
+        )
+        assert "forbidden" in message
+
+
+def test_enabled_livekit_requires_a_browser_facing_websocket_url():
+    common = {
+        "video_calls_enabled": True,
+        "video_provider": "livekit",
+        "livekit_url": LIVEKIT_URL,
+        "livekit_api_key": SecretStr(LIVEKIT_KEY),
+        "livekit_api_secret": SecretStr(LIVEKIT_SECRET),
+    }
+    _refuses(names=("livekit_public_url",), **common)
+    assert _build(**common, livekit_public_url="ws://localhost:1039")
+    assert _build(**common, livekit_public_url="wss://video.example.test")
+
+
+def test_production_livekit_requires_wss_and_never_echoes_userinfo():
+    common = {
+        "app_env": "production",
+        "video_calls_enabled": True,
+        "video_provider": "livekit",
+        "livekit_url": LIVEKIT_URL,
+        "livekit_api_key": SecretStr(LIVEKIT_KEY),
+        "livekit_api_secret": SecretStr(LIVEKIT_SECRET),
+    }
+    message = _refuses(
+        names=("livekit_public_url", "wss://"),
+        secrets=("browser-user", "browser-password"),
+        livekit_public_url="ws://browser-user:browser-password@localhost:1039",
+        **common,
+    )
+    assert "browser-user" not in message and "browser-password" not in message
+    assert _build(**common, livekit_public_url="wss://video.example.test")
 
 
 def test_the_choice_tables_match_the_schema_and_the_code():
@@ -380,6 +453,20 @@ def test_livekit_with_full_configuration_constructs():
     assert configured.video_provider == "livekit"
     assert configured.livekit_api_secret.get_secret_value() == LIVEKIT_SECRET
     assert LIVEKIT_SECRET not in repr(configured)
+
+
+@pytest.mark.parametrize("policy", ["all", "relay", " ALL ", " Relay "])
+def test_video_ice_transport_policy_accepts_only_the_two_browser_policies(policy):
+    assert _build(video_ice_transport_policy=policy).video_ice_transport_policy == policy
+
+
+@pytest.mark.parametrize("policy", ["", "direct", "turn", "relay-only", "unknown"])
+def test_unknown_video_ice_transport_policy_fails_closed(policy):
+    message = _refuses(
+        names=("video_ice_transport_policy",),
+        video_ice_transport_policy=policy,
+    )
+    assert "all, relay" in message
 
 
 # --------------------------------------------------------------------------- #

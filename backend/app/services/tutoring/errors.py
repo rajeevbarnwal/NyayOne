@@ -263,6 +263,14 @@ class GrantRevoked(TutoringError):
     status_code = 410
 
 
+class VideoCallsDisabled(TutoringError):
+    """Product/operations switch has disabled new video room admission."""
+
+    code = "VIDEO_CALLS_DISABLED"
+    status_code = 503
+    retryable = False
+
+
 # --------------------------- providers ----------------------------------------
 class ProviderUnavailable(TutoringError):
     code = "PROVIDER_UNAVAILABLE"
@@ -291,5 +299,6 @@ ALL_CODES = (
     "REVIEW_EDIT_WINDOW_CLOSED",
     "GRANT_EXPIRED",
     "GRANT_REVOKED",
+    "VIDEO_CALLS_DISABLED",
     "PROVIDER_UNAVAILABLE",
 )

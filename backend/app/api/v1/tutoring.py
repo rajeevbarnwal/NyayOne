@@ -1050,6 +1050,31 @@ def resolve_attendance(
 # --------------------------------------------------------------------------- #
 
 
+@router.get("/tutoring/capabilities")
+def tutoring_capabilities() -> dict:
+    """Public, secret-free runtime availability for S-35.
+
+    Frontend builds are immutable but the operational video switch is not. The
+    UI reads this endpoint before opening devices or offering Join, so a normal
+    disable is immediately visible without rebuilding JavaScript. No API key,
+    internal service URL or deployment secret is exposed.
+    """
+    provider = (settings.video_provider or "none").strip().lower()
+    enabled = bool(settings.video_calls_enabled and provider != "none")
+    return {
+        "video_calls_enabled": enabled,
+        "video_transport": provider if enabled else "none",
+        "video_room_url": (
+            settings.livekit_public_url.strip()
+            if enabled and provider == "livekit" and settings.livekit_public_url
+            else None
+        ),
+        "video_ice_transport_policy": settings.video_ice_transport_policy.strip().lower(),
+        "join_credential_ttl_seconds": settings.join_credential_ttl_seconds,
+        "recording_enabled": False,
+    }
+
+
 @router.post("/tutoring/sessions/{session_id}/join-credentials", status_code=201)
 def issue_join_credentials(
     session_id: uuid.UUID,
@@ -1061,8 +1086,10 @@ def issue_join_credentials(
     It appears in this response body and nowhere else: the grant row stores a
     SHA-256 hash, the audit row stores neither the token nor its hash, and no
     outbox row is written at all. Issuing supersedes (revokes) the caller's
-    previous grant, so the token handed out before this call stops working —
-    that is what makes a replayed credential fail.
+    previous APPLICATION grant. Self-hosted LiveKit JWTs are stateless and may
+    remain provider-valid until their five-minute expiry unless the participant
+    is explicitly removed; the application therefore never presents an old
+    grant again and bounds that residual provider lifetime with the TTL.
     """
     try:
         issued = join_credentials.issue(
@@ -1085,6 +1112,13 @@ def issue_join_credentials(
         "expires_at": _iso(issued.expires_at),
         "ttl_seconds": issued.ttl_seconds,
         "superseded": issued.superseded,
+        "video_room_url": (
+            settings.livekit_public_url.strip()
+            if (settings.video_provider or "").strip().lower() == "livekit"
+            and settings.livekit_public_url
+            else None
+        ),
+        "video_ice_transport_policy": settings.video_ice_transport_policy.strip().lower(),
     }
 
 
