@@ -278,7 +278,7 @@ export function ProfileStep3() {
           yearOfStudy: draft.yearOfStudy || '1st year',
           enrolmentNumber: draft.enrolmentNumber || 'DL/0000/2026',
           institutionalEmail: draft.institutionalEmail || 'student@legalsaathi.in',
-          interests: interests.join(', '),
+          interests: interests,
           careerGoal: careerGoal,
         });
       } catch {

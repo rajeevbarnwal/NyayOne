@@ -31,6 +31,8 @@ export interface AcademicProfileInput {
   enrolmentNumber: string;
   institutionalEmail: string;
   barEnrolmentNumber?: string;
+  interests?: string[];
+  careerGoal?: string;
 }
 
 export interface StudentSessionActor {
@@ -147,7 +149,7 @@ export async function saveAcademicProfile(
       enrolment_number: input.enrolmentNumber,
       institutional_email: input.institutionalEmail,
       bar_enrolment_number: input.barEnrolmentNumber || null,
-      interests: input.interests || null,
+      interests: Array.isArray(input.interests) ? input.interests.join(', ') : input.interests || null,
       career_goal: input.careerGoal || null,
     }),
   });

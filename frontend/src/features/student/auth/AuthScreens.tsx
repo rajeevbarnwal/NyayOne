@@ -17,13 +17,8 @@ import {
 } from '../lib/otp';
 import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
 import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
-<<<<<<< HEAD
-import { isProfileComplete } from '../lib/profile';
+import { isProfileComplete, institutionalEmailError } from '../lib/profile';
 import { updateProfileDraft, getProfileDraft } from '../lib/profileStore';
-=======
-import { updateProfileDraft } from '../lib/profileStore';
-import { institutionalEmailError } from '../lib/profile';
->>>>>>> 7c4c3f859f082ace95279a3c172b2b88c5305504
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
@@ -367,6 +362,7 @@ export function Register() {
         destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
         issuedAt: Date.now(),
         isMinor: minor,
+        guardianConsentPending: minor,
         flowOrigin: 'register',
       });
       setMinor(minor, minor);

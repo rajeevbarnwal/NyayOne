@@ -89,7 +89,7 @@ describe('lawschool fixture contract (shared visual-oracle fixture)', () => {
   it('is embedded verbatim in the reference frame (LSKIT.FIXTURE == contract)', () => {
     const { lskit } = embeddedResources();
     const generatedCopy = fs.readFileSync(path.join(REF_DIR, 'OPTION_C_PLUS_LSKIT_GENERATED.js'), 'utf8');
-    expect(lskit).toBe(generatedCopy);
+    expect(lskit.replace(/\r\n/g, '\n')).toBe(generatedCopy.replace(/\r\n/g, '\n'));
     const m = lskit.match(/var FIXTURE=([\s\S]*?);\nfunction fmtDate/);
     expect(m).not.toBeNull();
     const fixture = JSON.parse(m[1]);
