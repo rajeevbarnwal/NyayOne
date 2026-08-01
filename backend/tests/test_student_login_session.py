@@ -233,9 +233,14 @@ def test_non_local_cookie_is_secure_and_authenticates_over_https(monkeypatch):
         engine.dispose()
 
 
-def test_non_local_environment_never_trusts_dev_claims_header(ctx, monkeypatch):
+@pytest.mark.parametrize("non_local_environment", ["staging", "production"])
+def test_non_local_environment_never_trusts_dev_claims_header(
+    ctx,
+    monkeypatch,
+    non_local_environment,
+):
     client, *_ = ctx
-    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "app_env", non_local_environment)
     response = client.get(
         "/api/v1/student/profile",
         headers={
