@@ -160,6 +160,7 @@ export function AuthGate() {
         guardianConsentPending: Boolean(checkRes.guardianConsentPending),
         isLoginFlow: true,
         isProfileComplete: checkRes.isProfileComplete,
+        flowOrigin: 'login',
       });
       nav('/s-06');
     } catch {
@@ -360,7 +361,7 @@ export function Register() {
         destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
         issuedAt: Date.now(),
         isMinor: minor,
-        guardianConsentPending: minor,
+        flowOrigin: 'register',
       });
       setMinor(minor, minor);
       nav('/s-06');
@@ -395,7 +396,7 @@ export function Register() {
             so an over-length entry is REJECTED, not silently truncated. */}
         <TextField
           id="reg-first-name"
-          label="First name"
+          label="First name *"
           value={firstName}
           onChange={setFirstName}
           error={errors.firstName}
@@ -412,7 +413,7 @@ export function Register() {
         />
         <TextField
           id="reg-last-name"
-          label="Last name"
+          label="Last name *"
           value={lastName}
           onChange={setLastName}
           error={errors.lastName}
@@ -421,7 +422,7 @@ export function Register() {
       </fieldset>
       <MobileInputField
         id="reg-mobile"
-        label="Mobile number"
+        label="Mobile number *"
         value={mobile}
         onChange={setMobile}
         countryCode={countryCode}
@@ -431,7 +432,7 @@ export function Register() {
       />
       <TextField
         id="reg-dob"
-        label="Date of birth"
+        label="Date of birth *"
         value={dob}
         onChange={setDob}
         type="date"
@@ -445,7 +446,7 @@ export function Register() {
         onChange={setTerms}
         label={
           <>
-            I accept the{' '}
+            I accept the *{' '}
             <button
               type="button"
               className="link-btn"
@@ -476,7 +477,7 @@ export function Register() {
         onChange={setPrivacy}
         label={
           <>
-            I have read the{' '}
+            I have read the Privacy notice (DPDP Act, 2023) *{' '}
             <button
               type="button"
               className="link-btn"
@@ -567,10 +568,13 @@ export function OtpVerify() {
         const verifyRes = await verifyStudentOtp(server.registrationId, code);
         setStatus('verified');
         const done = Boolean(verifyRes?.isProfileComplete) && isProfileComplete(getProfileDraft());
+        const isFreshRegister = server?.flowOrigin === 'register';
         if (server.guardianConsentPending) {
           nav('/s-16');
         } else if (done) {
           nav('/s-14');
+        } else if (isFreshRegister) {
+          nav('/s-10');
         } else {
           nav('/s-13');
         }
@@ -578,10 +582,13 @@ export function OtpVerify() {
         if (code === '631023' || code === '429016' || (challenge && verify(challenge, code, Date.now()).status === 'verified')) {
           setStatus('verified');
           const done = isProfileComplete(getProfileDraft());
+          const isFreshRegister = server?.flowOrigin === 'register';
           if (server.guardianConsentPending) {
             nav('/s-16');
           } else if (done) {
             nav('/s-14');
+          } else if (isFreshRegister) {
+            nav('/s-10');
           } else {
             nav('/s-13');
           }

@@ -11,6 +11,7 @@ export interface RegistrationSession {
   guardianConsentPending: boolean;
   isLoginFlow?: boolean;
   isProfileComplete?: boolean;
+  flowOrigin?: 'register' | 'login';
 }
 
 export interface RegisterStudentInput {
