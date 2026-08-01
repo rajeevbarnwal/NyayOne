@@ -210,6 +210,23 @@ try {
   await page.goto(`${base}/s-15`);
   const email = page.getByLabel('Institutional email');
   const send = page.getByRole('button', { name: 'Send verification link' });
+  const institutionalEmailError = 'Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in';
+  for (const invalid of [
+    { name: 'empty', value: '' },
+    { name: 'malformed', value: 'student@nlsiu' },
+    { name: 'overlength_255', value: `${'a'.repeat(245)}@nls.ac.in` },
+  ]) {
+    await email.fill(invalid.value);
+    await send.click();
+    const alertText = await page.getByRole('alert').allTextContents();
+    const sentVisible = await page.getByText('Verification link sent — check your inbox.').isVisible().catch(() => false);
+    record(
+      `S-15_${invalid.name}`,
+      'invalid institutional email rejected without a success state',
+      { alertText, sentVisible },
+      alertText.some((text) => text.includes(institutionalEmailError)) && !sentVisible,
+    );
+  }
   await email.fill('student@gmail.com');
   await send.click();
   record('S-15_consumer_email', 'consumer domain rejected', await page.getByRole('alert').allTextContents(),

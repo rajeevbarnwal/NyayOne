@@ -379,11 +379,14 @@ def test_direct_overlay_is_the_only_thing_that_opens_direct_media():
 
 
 def test_forced_turn_template_hardcodes_the_internal_node_ip():
-    """Not templated on purpose: an env var here can silently lose forced-TURN."""
+    """The multi-homed SFU must use only the peer address coturn permits."""
     text = TEMPLATES["forced-turn"].read_text(encoding="utf-8")
     assert f"node_ip: {SFU_STATIC_IP}" in text
     assert "node_ip: ${" not in text
     assert "use_external_ip: false" in text
+    rendered = _renderer().render("forced-turn", _base_env())["livekit"][1]
+    config = yaml.safe_load(rendered)
+    assert config["rtc"]["ips"]["includes"] == [f"{SFU_STATIC_IP}/32"]
 
 
 def test_direct_template_requires_an_operator_supplied_advertise_ip():
