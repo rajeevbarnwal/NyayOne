@@ -28,6 +28,7 @@ import {
   verifyStudentOtp,
   logoutStudent,
   notifyStudentAuthChanged,
+  checkMobile,
 } from '../lib/registrationApi';
 import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
@@ -229,6 +230,14 @@ export function V34AuthGate(props: ScreenProps) {
     if (Object.keys(next).length) return;
 
     if (loginMode === 'password') {
+      try {
+        const info = await checkMobile(loginMobile);
+        if (info.firstName) {
+          updateProfileDraft({ firstName: info.firstName, middleName: info.middleName, lastName: info.lastName });
+        }
+      } catch {
+        /* non-fatal fallback */
+      }
       notifyStudentAuthChanged();
       nav('/s-14', { state: { mobile: loginMobile } });
       return;
@@ -551,6 +560,14 @@ export function V34Login() {
     if (Object.keys(next).length) return;
 
     if (mode === 'password') {
+      try {
+        const info = await checkMobile(mobile);
+        if (info.firstName) {
+          updateProfileDraft({ firstName: info.firstName, middleName: info.middleName, lastName: info.lastName });
+        }
+      } catch {
+        /* non-fatal fallback */
+      }
       notifyStudentAuthChanged();
       nav('/s-14');
       return;
