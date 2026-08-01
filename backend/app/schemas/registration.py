@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 MOBILE_RE = re.compile(r"^\d{10}$")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
+INSTITUTIONAL_EMAIL_MAX_LENGTH = 254
+INSTITUTIONAL_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 
 def _validate_name(value: str | None, *, required: bool, field: str) -> str | None:
@@ -127,7 +129,11 @@ class StudentAcademicProfileRequest(BaseModel):
     @classmethod
     def _email(cls, v: str) -> str:
         value = v.strip().lower()
-        if len(value) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]{2,}", value):
+        if (
+            not value
+            or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
+            or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
+        ):
             raise ValueError("Enter a valid institutional email.")
         return value
 
@@ -139,4 +145,25 @@ class StudentAcademicProfileRequest(BaseModel):
             return None
         if len(value) > 120:
             raise ValueError("Bar enrolment number must be 120 characters or fewer.")
+        return value
+
+
+class InstitutionalEmailVerificationRequest(BaseModel):
+    """S-15 request boundary; raw email is validated before route execution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    registration_id: uuid.UUID
+    institutional_email: str
+
+    @field_validator("institutional_email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        value = v.strip().lower()
+        if (
+            not value
+            or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
+            or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
+        ):
+            raise ValueError("Enter a valid institutional email.")
         return value
