@@ -132,6 +132,19 @@ export async function saveAcademicProfile(
   });
 }
 
+export async function requestInstitutionalEmailVerification(
+  registrationId: string,
+  institutionalEmail: string,
+): Promise<{ status: string }> {
+  return jsonRequest('/api/v1/auth/student/verification/email/request', {
+    method: 'POST',
+    body: JSON.stringify({
+      registration_id: registrationId,
+      institutional_email: institutionalEmail.trim(),
+    }),
+  });
+}
+
 export async function startRecovery(mobile: string): Promise<string> {
   const result = await jsonRequest<{ recovery_id: string }>(
     '/api/v1/auth/student/recovery/start',

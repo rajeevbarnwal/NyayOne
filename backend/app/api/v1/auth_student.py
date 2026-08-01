@@ -39,6 +39,7 @@ from app.models.registration import (
     VERIFICATION_STATUSES,
 )
 from app.schemas.registration import (
+    InstitutionalEmailVerificationRequest,
     StudentAcademicProfileRequest,
     StudentRegisterRequest,
     StudentRegisterResponse,
@@ -530,6 +531,70 @@ def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentV
     if ver is None:
         raise HTTPException(status_code=404, detail={"code": "verification_not_found"})
     return ver
+
+
+@router.post("/verification/email/request", status_code=202)
+def request_institutional_email_verification(
+    payload: InstitutionalEmailVerificationRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    """Accept an S-15 verification request only for the saved email.
+
+    The registration identifier is the existing short-lived onboarding
+    capability. Invalid email syntax is rejected by the request schema before
+    this function runs, so it cannot mutate verification or audit state.
+    """
+    from sqlalchemy import select
+
+    reg = session.get(StudentRegistration, payload.registration_id)
+    if reg is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "registration_not_found", "message": "Registration was not found"},
+        )
+    if reg.status not in {"otp_verified", "active"}:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "otp_verification_required", "message": "Verify the mobile number first"},
+        )
+
+    profile = session.scalar(
+        select(StudentProfile).where(StudentProfile.registration_id == reg.id)
+    )
+    if (
+        profile is None
+        or profile.institutional_email_hash is None
+        or profile.institutional_email_hash
+        != keyed_hash(payload.institutional_email, lower=True)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "institutional_email_mismatch",
+                "field": "institutional_email",
+                "message": "Use the institutional email saved in your academic profile",
+            },
+        )
+
+    verification = _load_verification(session, reg.id)
+    if verification.status == "verified":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "institutional_email_already_verified", "message": "Email is already verified"},
+        )
+    verification.method = "institutional_email"
+    verification.status = "pending"
+    session.add(
+        AuditEvent(
+            actor_role="student",
+            action="student.verification.email_requested",
+            resource_type="student_verification",
+            resource_id=verification.id,
+            after_state={"registration_id": str(reg.id), "status": "pending"},
+        )
+    )
+    session.commit()
+    return {"status": "pending"}
 
 
 @router.get("/verification/status")
