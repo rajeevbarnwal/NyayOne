@@ -93,6 +93,15 @@ def upgrade() -> None:
     op.create_index("ix_calendar_events_starts_at", "calendar_events", ["starts_at"])
     op.create_index("ix_calendar_events_ends_at", "calendar_events", ["ends_at"])
     op.create_index("ix_calendar_events_status", "calendar_events", ["status"])
+    # Composite foreign keys need an index whose LEADING columns match the
+    # constrained columns IN ORDER. Two independent single-column indexes do
+    # not serve a two-column FK lookup, so ON DELETE CASCADE from
+    # calendar_event_sources would degrade to a sequential scan.
+    op.create_index(
+        "ix_calendar_events_event_source_owner",
+        "calendar_events",
+        ["event_source_id", "owner_user_id"],
+    )
 
     op.create_table(
         "calendar_view_preferences",
@@ -168,6 +177,19 @@ def upgrade() -> None:
     op.create_index("ix_calendar_conflicts_owner_user_id", "calendar_conflicts", ["owner_user_id"])
     op.create_index("ix_calendar_conflicts_left_event_id", "calendar_conflicts", ["left_event_id"])
     op.create_index("ix_calendar_conflicts_right_event_id", "calendar_conflicts", ["right_event_id"])
+    # Ordered composite indexes for the two composite owner-scoped FKs above.
+    # The single-column indexes stay for the owner-scoped range reads; these
+    # exist so each two-column FK has a matching leading-column index.
+    op.create_index(
+        "ix_calendar_conflicts_left_event_owner",
+        "calendar_conflicts",
+        ["left_event_id", "owner_user_id"],
+    )
+    op.create_index(
+        "ix_calendar_conflicts_right_event_owner",
+        "calendar_conflicts",
+        ["right_event_id", "owner_user_id"],
+    )
 
     op.create_table(
         "calendar_export_subscriptions",
@@ -247,6 +269,8 @@ def downgrade() -> None:
     op.drop_index("ix_calendar_export_subscriptions_status", table_name="calendar_export_subscriptions")
     op.drop_index("ix_calendar_export_subscriptions_owner_user_id", table_name="calendar_export_subscriptions")
     op.drop_table("calendar_export_subscriptions")
+    op.drop_index("ix_calendar_conflicts_right_event_owner", table_name="calendar_conflicts")
+    op.drop_index("ix_calendar_conflicts_left_event_owner", table_name="calendar_conflicts")
     op.drop_index("ix_calendar_conflicts_right_event_id", table_name="calendar_conflicts")
     op.drop_index("ix_calendar_conflicts_left_event_id", table_name="calendar_conflicts")
     op.drop_index("ix_calendar_conflicts_owner_user_id", table_name="calendar_conflicts")
@@ -254,6 +278,7 @@ def downgrade() -> None:
     op.drop_index("ix_calendar_reminder_preferences_owner_user_id", table_name="calendar_reminder_preferences")
     op.drop_table("calendar_reminder_preferences")
     op.drop_table("calendar_view_preferences")
+    op.drop_index("ix_calendar_events_event_source_owner", table_name="calendar_events")
     op.drop_index("ix_calendar_events_status", table_name="calendar_events")
     op.drop_index("ix_calendar_events_ends_at", table_name="calendar_events")
     op.drop_index("ix_calendar_events_starts_at", table_name="calendar_events")

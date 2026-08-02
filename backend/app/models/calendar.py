@@ -106,6 +106,15 @@ class CalendarEvent(TimestampedBase):
             ondelete="CASCADE",
             name="fk_calendar_event_source_owner",
         ),
+        # Ordered composite index for the composite FK above. A two-column FK
+        # is only served by an index whose LEADING columns are exactly those
+        # columns in order; the single-column unique on event_source_id and
+        # the single-column index on owner_user_id are not a substitute.
+        Index(
+            "ix_calendar_events_event_source_owner",
+            "event_source_id",
+            "owner_user_id",
+        ),
         UniqueConstraint("id", "owner_user_id", name="uq_calendar_event_id_owner"),
         UniqueConstraint("event_source_id", name="uq_calendar_events_event_source_id"),
         UniqueConstraint("owner_user_id", "idempotency_key", name="uq_calendar_event_owner_idempotency"),
@@ -198,6 +207,17 @@ class CalendarConflict(TimestampedBase):
             ["calendar_events.id", "calendar_events.owner_user_id"],
             ondelete="CASCADE",
             name="fk_calendar_conflict_right_event_owner",
+        ),
+        # Ordered composite indexes for the two composite FKs above.
+        Index(
+            "ix_calendar_conflicts_left_event_owner",
+            "left_event_id",
+            "owner_user_id",
+        ),
+        Index(
+            "ix_calendar_conflicts_right_event_owner",
+            "right_event_id",
+            "owner_user_id",
         ),
         UniqueConstraint("owner_user_id", "left_event_id", "right_event_id", name="uq_calendar_conflict_pair"),
         _in("status", CALENDAR_CONFLICT_STATUSES, "status"),

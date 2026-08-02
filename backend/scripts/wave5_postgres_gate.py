@@ -46,6 +46,115 @@ def is_isolated_gate_target(database_url: str, app_env: str, mutation_allowed: b
     )
 
 
+def index_shapes(
+    indexes: list[dict[str, object]], unique_constraints: list[dict[str, object]]
+) -> list[tuple[str, ...]]:
+    """Every index/unique shape as an ORDERED column tuple.
+
+    Index column order is semantic: only the leading columns of a b-tree index
+    can serve a lookup, so the shapes must never be collapsed into a set of
+    column names.
+    """
+    shapes = [tuple(index.get("column_names") or []) for index in indexes]
+    shapes += [tuple(unique.get("column_names") or []) for unique in unique_constraints]
+    return [shape for shape in shapes if shape]
+
+
+def foreign_key_is_indexed(
+    constrained_columns: list[str], shapes: list[tuple[str, ...]]
+) -> bool:
+    """True only when some index's LEADING columns equal the FK columns in order.
+
+    This mirrors ``backend/scripts/introspect_schema.py``, which is the
+    repository's semantic reference for this rule.
+    """
+    constrained = tuple(constrained_columns)
+    if not constrained:
+        return False
+    return any(shape[: len(constrained)] == constrained for shape in shapes)
+
+
+def _legacy_foreign_key_is_indexed(
+    constrained_columns: list[str],
+    indexes: list[dict[str, object]],
+    unique_constraints: list[dict[str, object]],
+) -> bool:
+    """The DEFECTIVE pre-repair predicate, kept only for the negative self-test.
+
+    It flattened every index into a set of column NAMES, so two independent
+    single-column indexes wrongly satisfied a two-column foreign key. It is
+    never consulted when deciding the gate result.
+    """
+    indexed = {
+        column for index in indexes for column in index.get("column_names") or []
+    }
+    indexed |= {
+        column
+        for unique in unique_constraints
+        for column in unique.get("column_names") or []
+    }
+    return set(constrained_columns) <= indexed
+
+
+def ordered_index_self_test() -> dict[str, object]:
+    """Negative self-test: two single-column indexes must NOT satisfy a 2-col FK.
+
+    The gate proves its own detector is the ordered one by showing that the old
+    set-of-names logic passes exactly the case the repaired logic rejects. If
+    this ever stops holding, W5-PG-05 fails closed.
+    """
+    fk = ["left_event_id", "owner_user_id"]
+    split = [
+        {"name": "ix_left_event_id", "column_names": ["left_event_id"]},
+        {"name": "ix_owner_user_id", "column_names": ["owner_user_id"]},
+    ]
+    ordered = [
+        {
+            "name": "ix_left_event_owner",
+            "column_names": ["left_event_id", "owner_user_id"],
+        }
+    ]
+    reversed_order = [
+        {
+            "name": "ix_owner_left_event",
+            "column_names": ["owner_user_id", "left_event_id"],
+        }
+    ]
+    leading_prefix = [
+        {
+            "name": "ix_left_event_owner_status",
+            "column_names": ["left_event_id", "owner_user_id", "status"],
+        }
+    ]
+    trailing_prefix = [
+        {
+            "name": "ix_status_left_event_owner",
+            "column_names": ["status", "left_event_id", "owner_user_id"],
+        }
+    ]
+    observations = {
+        "legacy_accepts_two_single_column_indexes": _legacy_foreign_key_is_indexed(
+            fk, split, []
+        ),
+        "repaired_rejects_two_single_column_indexes": not foreign_key_is_indexed(
+            fk, index_shapes(split, [])
+        ),
+        "repaired_accepts_ordered_composite": foreign_key_is_indexed(
+            fk, index_shapes(ordered, [])
+        ),
+        "repaired_rejects_reversed_composite": not foreign_key_is_indexed(
+            fk, index_shapes(reversed_order, [])
+        ),
+        "repaired_accepts_longer_index_with_matching_leading_columns": (
+            foreign_key_is_indexed(fk, index_shapes(leading_prefix, []))
+        ),
+        "repaired_rejects_matching_columns_that_are_not_leading": (
+            not foreign_key_is_indexed(fk, index_shapes(trailing_prefix, []))
+        ),
+    }
+    return {"ok": all(observations.values()), "observations": observations}
+
+
 def privacy_canary_hits(
     surfaces: dict[str, object], canaries: set[str]
 ) -> list[str]:
@@ -156,22 +265,26 @@ def main() -> int:
     inspector = inspect(engine)
     actual_tables = set(inspector.get_table_names())
     results.add("W5-PG-04", "all eight calendar tables", TABLES <= actual_tables, sorted(TABLES & actual_tables))
-    fk_index_ok = True
-    for table in TABLES:
-        indexed = {
-            column
-            for index in inspector.get_indexes(table)
-            for column in index.get("column_names") or []
-        }
-        indexed |= {
-            column
-            for unique in inspector.get_unique_constraints(table)
-            for column in unique.get("column_names") or []
-        }
+    self_test = ordered_index_self_test()
+    fk_problems: list[str] = []
+    for table in sorted(TABLES):
+        shapes = index_shapes(
+            inspector.get_indexes(table), inspector.get_unique_constraints(table)
+        )
         for fk in inspector.get_foreign_keys(table):
-            fk_index_ok &= set(fk["constrained_columns"]) <= indexed
-            fk_index_ok &= fk.get("options", {}).get("ondelete") in {"CASCADE", "RESTRICT"}
-    results.add("W5-PG-05", "foreign keys indexed with explicit delete policy", fk_index_ok)
+            columns = ",".join(fk["constrained_columns"])
+            if not foreign_key_is_indexed(fk["constrained_columns"], shapes):
+                fk_problems.append(
+                    f"{table}.{columns} foreign key has no index whose leading columns match in order"
+                )
+            if fk.get("options", {}).get("ondelete") not in {"CASCADE", "RESTRICT"}:
+                fk_problems.append(f"{table}.{columns} has no explicit CASCADE/RESTRICT delete policy")
+    results.add(
+        "W5-PG-05",
+        "foreign keys indexed in order with explicit delete policy",
+        not fk_problems and bool(self_test["ok"]),
+        {"problems": fk_problems, "ordered_index_self_test": self_test},
+    )
 
     down = _alembic("downgrade", PARENT)
     after_down = set(inspect(engine).get_table_names())
