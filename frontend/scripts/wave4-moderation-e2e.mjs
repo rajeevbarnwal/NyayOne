@@ -9,6 +9,10 @@ const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1271').replace(/\/$/, 
 const OUT = path.resolve(process.env.E2E_OUTPUT_DIR ?? 'test-results/wave4-moderation-e2e');
 const TOKEN = process.env.WAVE4_E2E_SESSION_TOKEN ?? '';
 const COOKIE = process.env.AUTH_SESSION_COOKIE_NAME ?? 'legalsaathi_session';
+const FIXTURE_REPORTS = Array.from(
+  { length: 4 },
+  (_, index) => `00000000-0000-4000-8000-${String(2740 + index).padStart(12, '0')}`,
+);
 const PENDING_REPORT = '00000000-0000-4000-8000-000000002743';
 const report = { startedAt: new Date().toISOString(), web: WEB, api: API, rows: [], failures: [] };
 
@@ -70,7 +74,18 @@ async function workflow(browser) {
   page.on('pageerror', (error) => pageErrors.push(String(error)));
   await page.goto(`${WEB}/moderation/internship-reports`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'Internship report queue' }).waitFor();
-  assert('queue renders four isolated fixtures', await page.locator('.mod-card').count() === 4, '4 cards', `${await page.locator('.mod-card').count()} cards`);
+  const fixtureCards = FIXTURE_REPORTS.map((reportId) =>
+    page.locator(`.mod-card:has(a[href="/moderation/internship-reports/${reportId}"])`),
+  );
+  const fixtureCount = (await Promise.all(fixtureCards.map((card) => card.count())))
+    .filter((count) => count === 1).length;
+  const totalCards = await page.locator('.mod-card').count();
+  assert(
+    'queue contains all four isolated fixtures amid target-runtime probes',
+    fixtureCount === 4,
+    '4/4 fixture cards',
+    `${fixtureCount}/4 fixtures; ${totalCards} total cards`,
+  );
   const queueText = await page.locator('main.mod-shell').innerText();
   assert('queue excludes narratives and reporter identity', !/first-person account|reporter_lookup|00000000-0000-4000-8000-0000000086/i.test(queueText), 'no narrative/identity', queueText.slice(0, 180));
   await page.screenshot({ path: path.join(OUT, 'moderation-queue-1440x900-light.png'), fullPage: true });
@@ -86,9 +101,15 @@ async function workflow(browser) {
   await page.screenshot({ path: path.join(OUT, 'moderation-case-needs-information-1440x900-light.png'), fullPage: true });
 
   await page.goto(`${WEB}/moderation/internship-reports`, { waitUntil: 'networkidle' });
-  const checks = page.getByLabel('Include in internal cluster');
-  assert('three aggregate-approved cluster candidates', await checks.count() === 3, '3', String(await checks.count()));
-  for (let index = 0; index < 3; index += 1) await checks.nth(index).check();
+  const checks = FIXTURE_REPORTS.slice(0, 3).map((reportId) =>
+    page.locator(
+      `.mod-card:has(a[href="/moderation/internship-reports/${reportId}"]) input[type="checkbox"]`,
+    ),
+  );
+  const availableChecks = (await Promise.all(checks.map((check) => check.count())))
+    .filter((count) => count === 1).length;
+  assert('three fixture aggregate-approved cluster candidates', availableChecks === 3, '3', String(availableChecks));
+  for (const check of checks) await check.check();
   await page.getByRole('button', { name: /Build privacy-safe preview \(3\)/ }).click();
   await page.waitForURL(/\/moderation\/risk-clusters\//);
   await page.getByRole('heading', { name: 'Privacy-safe risk preview' }).waitFor();
