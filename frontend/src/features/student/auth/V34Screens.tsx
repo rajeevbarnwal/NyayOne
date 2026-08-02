@@ -1164,7 +1164,7 @@ export function V34ProfileStep1() {
       barEnrolmentNumber,
     });
     setActiveStep(3);
-    nav('/s-10?step=interests', { replace: true });
+    nav('/s-11');
   }
 
   function handleInterestsSubmit() {
