@@ -1,0 +1,105 @@
+{
+  "gate": "wave5_postgres",
+  "status": "PASS",
+  "executed": true,
+  "head": "0013_wave5_calendar_interop",
+  "rows": [
+    {
+      "id": "W5-PG-01",
+      "title": "PostgreSQL 16 + pgvector",
+      "status": "PASS",
+      "detail": {
+        "server_version_num": 160014,
+        "pgvector": "0.8.6"
+      }
+    },
+    {
+      "id": "W5-PG-02",
+      "title": "upgrade head and no drift",
+      "status": "PASS",
+      "detail": {
+        "upgrade_rc": 0,
+        "check_rc": 0
+      }
+    },
+    {
+      "id": "W5-PG-03",
+      "title": "exact Alembic head",
+      "status": "PASS",
+      "detail": "0013_wave5_calendar_interop"
+    },
+    {
+      "id": "W5-PG-04",
+      "title": "all eight calendar tables",
+      "status": "PASS",
+      "detail": [
+        "calendar_conflicts",
+        "calendar_event_sources",
+        "calendar_events",
+        "calendar_export_revocations",
+        "calendar_export_subscriptions",
+        "calendar_export_tokens",
+        "calendar_reminder_preferences",
+        "calendar_view_preferences"
+      ]
+    },
+    {
+      "id": "W5-PG-05",
+      "title": "foreign keys indexed with explicit delete policy",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "W5-PG-06",
+      "title": "downgrade removes and re-upgrade restores Wave 5",
+      "status": "PASS",
+      "detail": {
+        "down_rc": 0,
+        "up_rc": 0
+      }
+    },
+    {
+      "id": "W5-PG-07",
+      "title": "8-way event idempotency race converges",
+      "status": "PASS",
+      "detail": [
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944",
+        "ab4eb662-5116-490a-a128-9c9168b28944"
+      ]
+    },
+    {
+      "id": "W5-PG-08",
+      "title": "half-open conflicts and canonical pairs",
+      "status": "PASS",
+      "detail": 2
+    },
+    {
+      "id": "W5-PG-09",
+      "title": "concurrent rotation leaves one active capability",
+      "status": "PASS",
+      "detail": {
+        "active": 1,
+        "working": 1,
+        "revocations": 3
+      }
+    },
+    {
+      "id": "W5-PG-10",
+      "title": "tokens hashed and absent from audit",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "W5-PG-11",
+      "title": "ICS CRLF and privacy-minimised fields",
+      "status": "PASS",
+      "detail": null
+    }
+  ]
+}

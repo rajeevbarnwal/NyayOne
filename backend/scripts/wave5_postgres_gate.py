@@ -1,0 +1,299 @@
+"""PostgreSQL 16 + pgvector release gate for Wave 5 calendar interoperability.
+
+The gate is destructive only to an explicitly opted-in loopback QA database.
+An absent target runtime is BLOCKED (exit 78), never a synthetic pass.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from sqlalchemy import func, inspect, select, text
+from sqlalchemy.engine import make_url
+
+BACKEND = Path(__file__).resolve().parents[1]
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+BLOCKED = 78
+HEAD = "0013_wave5_calendar_interop"
+PARENT = "0012_wave4_moderation"
+TABLES = {
+    "calendar_event_sources",
+    "calendar_events",
+    "calendar_view_preferences",
+    "calendar_reminder_preferences",
+    "calendar_conflicts",
+    "calendar_export_subscriptions",
+    "calendar_export_tokens",
+    "calendar_export_revocations",
+}
+
+
+def is_isolated_gate_target(database_url: str, app_env: str, mutation_allowed: bool) -> bool:
+    parsed = make_url(database_url)
+    return (
+        app_env.casefold() in {"test", "testing"}
+        and (parsed.host or "").casefold() in {"127.0.0.1", "localhost", "::1"}
+        and any(marker in (parsed.database or "").casefold() for marker in ("test", "qa", "wave5", "saathi295"))
+        and mutation_allowed
+    )
+
+
+def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "alembic", *args],
+        cwd=BACKEND,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+    )
+
+
+class Results:
+    def __init__(self) -> None:
+        self.rows: list[dict[str, object]] = []
+
+    def add(self, ident: str, title: str, ok: bool, detail: object = None) -> None:
+        self.rows.append({"id": ident, "title": title, "status": "PASS" if ok else "FAIL", "detail": detail})
+        print(f"[{'PASS' if ok else 'FAIL'}] {ident} {title}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default=str(BACKEND / "test-results/wave5-postgres/summary.json"))
+    args = parser.parse_args()
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    database_url = os.getenv("DATABASE_URL", "")
+    allowed = is_isolated_gate_target(
+        database_url,
+        os.getenv("APP_ENV", ""),
+        os.getenv("WAVE5_GATE_ALLOW_MUTATION") == "true",
+    ) if database_url.startswith("postgresql") else False
+    if not allowed:
+        summary = {"gate": "wave5_postgres", "status": "BLOCKED", "executed": False, "reason": "isolated PostgreSQL QA target unavailable or mutation opt-in absent"}
+        output.write_text(json.dumps(summary, indent=2) + "\n")
+        print("BLOCKED: Wave 5 gate requires loopback PostgreSQL QA database and WAVE5_GATE_ALLOW_MUTATION=true")
+        return BLOCKED
+
+    from app.core.auth import ActorContext, Role
+    from app.db.session import get_engine, get_sessionmaker
+    from app.models.calendar import (
+        CalendarExportRevocation,
+        CalendarExportSubscription,
+        CalendarExportToken,
+        CalendarReminderPreference,
+        CalendarViewPreference,
+    )
+    from app.models.registration import User
+    from app.schemas.calendar import EventCreate, ReminderPreferenceUpdate, ViewPreferenceUpdate
+    from app.services.calendar_service import (
+        CalendarError,
+        check_conflicts,
+        create_event,
+        create_export,
+        public_ics,
+        update_reminder_preference,
+        update_view_preferences,
+    )
+
+    results = Results()
+    engine = get_engine()
+    with engine.connect() as connection:
+        version_num = int(connection.scalar(text("SHOW server_version_num")))
+    if version_num < 160000:
+        summary = {"gate": "wave5_postgres", "status": "BLOCKED", "executed": False, "server_version_num": version_num, "pgvector": None}
+        output.write_text(json.dumps(summary, indent=2) + "\n")
+        return BLOCKED
+
+    # A genuinely fresh isolated database does not contain pgvector until the
+    # repository-owned 0001 migration installs it.  Running the migration
+    # before inspecting the extension makes this a clean-database gate instead
+    # of accidentally requiring CI/bootstrap code to pre-seed schema state.
+    up = _alembic("upgrade", "head")
+    check = _alembic("check")
+    with engine.connect() as connection:
+        vector = connection.scalar(text("SELECT extversion FROM pg_extension WHERE extname='vector'"))
+    results.add("W5-PG-01", "PostgreSQL 16 + pgvector", bool(vector), {"server_version_num": version_num, "pgvector": vector})
+    results.add("W5-PG-02", "upgrade head and no drift", up.returncode == check.returncode == 0, {"upgrade_rc": up.returncode, "check_rc": check.returncode})
+    with engine.connect() as connection:
+        head = connection.scalar(text("SELECT version_num FROM alembic_version"))
+    results.add("W5-PG-03", "exact Alembic head", head == HEAD, head)
+
+    inspector = inspect(engine)
+    actual_tables = set(inspector.get_table_names())
+    results.add("W5-PG-04", "all eight calendar tables", TABLES <= actual_tables, sorted(TABLES & actual_tables))
+    fk_index_ok = True
+    for table in TABLES:
+        indexed = {
+            column
+            for index in inspector.get_indexes(table)
+            for column in index.get("column_names") or []
+        }
+        indexed |= {
+            column
+            for unique in inspector.get_unique_constraints(table)
+            for column in unique.get("column_names") or []
+        }
+        for fk in inspector.get_foreign_keys(table):
+            fk_index_ok &= set(fk["constrained_columns"]) <= indexed
+            fk_index_ok &= fk.get("options", {}).get("ondelete") in {"CASCADE", "RESTRICT"}
+    results.add("W5-PG-05", "foreign keys indexed with explicit delete policy", fk_index_ok)
+
+    down = _alembic("downgrade", PARENT)
+    after_down = set(inspect(engine).get_table_names())
+    reup = _alembic("upgrade", "head")
+    results.add("W5-PG-06", "downgrade removes and re-upgrade restores Wave 5", down.returncode == reup.returncode == 0 and not (TABLES & after_down), {"down_rc": down.returncode, "up_rc": reup.returncode})
+
+    SessionLocal = get_sessionmaker()
+    with SessionLocal() as session:
+        user = User(role="student", status="active")
+        session.add(user)
+        session.commit()
+        owner_id = user.id
+    actor = ActorContext(user_id=owner_id, roles=frozenset({Role.STUDENT}))
+    payload = EventCreate.model_validate({
+        "title": "PostgreSQL gate reminder",
+        "starts_at": "2026-08-10T04:30:00Z",
+        "ends_at": "2026-08-10T05:30:00Z",
+        "timezone": "Asia/Kolkata",
+        "status": "scheduled",
+        "privacy_classification": "personal",
+    })
+
+    def replay_event(_: int) -> str:
+        with SessionLocal() as session:
+            return str(create_event(session, actor, payload, "wave5-pg-event-idempotency").id)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        event_ids = list(pool.map(replay_event, range(8)))
+    results.add("W5-PG-07", "8-way event idempotency race converges", len(set(event_ids)) == 1, event_ids)
+
+    with SessionLocal() as session:
+        adjacent = EventCreate.model_validate({**payload.model_dump(), "title": "Adjacent", "starts_at": "2026-08-10T05:30:00Z", "ends_at": "2026-08-10T06:30:00Z"})
+        overlap = EventCreate.model_validate({**payload.model_dump(), "title": "Overlap", "starts_at": "2026-08-10T05:00:00Z", "ends_at": "2026-08-10T06:00:00Z"})
+        adjacent_id = create_event(session, actor, adjacent, "wave5-pg-event-adjacent").id
+        overlap_id = create_event(session, actor, overlap, "wave5-pg-event-overlap").id
+        conflicts = check_conflicts(session, actor, [uuid.UUID(event_ids[0]), adjacent_id, overlap_id], True)
+        canonical = all(str(item.left_event_id) < str(item.right_event_id) for item in conflicts.items)
+    results.add("W5-PG-08", "half-open conflicts and canonical pairs", conflicts.total == 2 and canonical, conflicts.total)
+
+    with SessionLocal() as session:
+        view_user = User(role="student", status="active")
+        reminder_user = User(role="student", status="active")
+        session.add_all([view_user, reminder_user])
+        session.commit()
+        view_owner_id, reminder_owner_id = view_user.id, reminder_user.id
+
+    def race_view(index: int) -> str:
+        race_actor = ActorContext(user_id=view_owner_id, roles=frozenset({Role.STUDENT}))
+        payload = ViewPreferenceUpdate(
+            view_mode="week",
+            source_types=["exam" if index == 0 else "moot"],
+            timezone="Asia/Kolkata",
+            expected_version=0,
+        )
+        with SessionLocal() as session:
+            try:
+                update_view_preferences(session, race_actor, payload)
+                return "created"
+            except CalendarError as error:
+                session.rollback()
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        view_race = list(pool.map(race_view, range(2)))
+    with SessionLocal() as session:
+        view_rows = session.scalar(select(func.count()).select_from(CalendarViewPreference).where(
+            CalendarViewPreference.owner_user_id == view_owner_id
+        ))
+    results.add(
+        "W5-PG-09",
+        "first view-preference insert has one winner and one typed conflict",
+        sorted(view_race) == ["calendar_stale_version", "created"] and view_rows == 1,
+        {"outcomes": view_race, "rows": view_rows},
+    )
+
+    def race_reminder(_: int) -> str:
+        race_actor = ActorContext(user_id=reminder_owner_id, roles=frozenset({Role.STUDENT}))
+        payload = ReminderPreferenceUpdate(
+            source_type="exam",
+            channel="in_app",
+            enabled=True,
+            lead_minutes=30,
+            quiet_start_min=1320,
+            quiet_end_min=420,
+            timezone="Asia/Kolkata",
+            expected_version=0,
+        )
+        with SessionLocal() as session:
+            try:
+                update_reminder_preference(session, race_actor, payload)
+                return "created"
+            except CalendarError as error:
+                session.rollback()
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reminder_race = list(pool.map(race_reminder, range(2)))
+    with SessionLocal() as session:
+        reminder_rows = session.scalar(select(func.count()).select_from(CalendarReminderPreference).where(
+            CalendarReminderPreference.owner_user_id == reminder_owner_id,
+            CalendarReminderPreference.source_type == "exam",
+            CalendarReminderPreference.channel == "in_app",
+        ))
+    results.add(
+        "W5-PG-10",
+        "first reminder-preference insert has one winner and one typed conflict",
+        sorted(reminder_race) == ["calendar_stale_version", "created"] and reminder_rows == 1,
+        {"outcomes": reminder_race, "rows": reminder_rows},
+    )
+
+    def create_feed(index: int) -> tuple[str, str]:
+        with SessionLocal() as session:
+            item = create_export(session, actor, "Asia/Kolkata", f"wave5-pg-export-{index:02d}")
+            return str(item.id), item.feed_url or ""
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        feeds = list(pool.map(create_feed, range(4)))
+    with SessionLocal() as session:
+        active = session.scalar(select(func.count()).select_from(CalendarExportSubscription).where(CalendarExportSubscription.owner_user_id == owner_id, CalendarExportSubscription.status == "active"))
+        raw_hashes = list(session.scalars(select(CalendarExportToken.token_hash).join(CalendarExportSubscription, CalendarExportSubscription.id == CalendarExportToken.subscription_id).where(CalendarExportSubscription.owner_user_id == owner_id)))
+        revocations = session.scalar(select(func.count()).select_from(CalendarExportRevocation).join(CalendarExportSubscription, CalendarExportSubscription.id == CalendarExportRevocation.subscription_id).where(CalendarExportSubscription.owner_user_id == owner_id))
+        audit_blob = json.dumps([row[0] for row in session.execute(text("SELECT COALESCE(after_state::text, '') FROM audit_events WHERE actor_user_id = :owner"), {"owner": owner_id})])
+        working = []
+        for _ident, url in feeds:
+            raw = url.rsplit("/", 1)[-1].removesuffix(".ics")
+            try:
+                content = public_ics(session, raw)
+                working.append((raw, content))
+            except Exception:
+                pass
+    one_working = len(working) == 1
+    all_hashed = all(len(value) == 64 for value in raw_hashes)
+    all_raw_tokens = [url.rsplit("/", 1)[-1].removesuffix(".ics") for _ident, url in feeds]
+    no_raw_audit = all(raw not in audit_blob for raw in all_raw_tokens)
+    results.add("W5-PG-11", "concurrent rotation leaves one active capability", active == 1 and one_working and revocations == 3, {"active": active, "working": len(working), "revocations": revocations})
+    results.add("W5-PG-12", "tokens hashed and absent from audit", all_hashed and no_raw_audit)
+    results.add("W5-PG-13", "ICS CRLF and privacy-minimised fields", one_working and working[0][1].startswith("BEGIN:VCALENDAR\r\n") and "DESCRIPTION:" not in working[0][1] and "URL:" not in working[0][1])
+
+    summary = {
+        "gate": "wave5_postgres",
+        "status": "PASS" if all(row["status"] == "PASS" for row in results.rows) else "FAIL",
+        "executed": True,
+        "head": head,
+        "rows": results.rows,
+    }
+    output.write_text(json.dumps(summary, indent=2, default=str) + "\n")
+    return 0 if summary["status"] == "PASS" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

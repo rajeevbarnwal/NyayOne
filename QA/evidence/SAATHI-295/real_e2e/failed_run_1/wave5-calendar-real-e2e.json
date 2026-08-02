@@ -1,0 +1,118 @@
+{
+  "evidenceClass": "real-target-runtime-api-postgresql-browser",
+  "releaseGate": true,
+  "startedAt": "2026-08-02T11:26:58.025Z",
+  "webOrigin": "https://127.0.0.1:1290",
+  "apiOrigin": "https://127.0.0.1:1291",
+  "publicOrigin": "https://127.0.0.1:1291",
+  "fixture": {
+    "tutoring": true,
+    "credentialReminder": true,
+    "authenticatedStudent": true
+  },
+  "tracePolicy": "omitted: Playwright traces would retain HttpOnly/feed bearer material",
+  "rows": [
+    {
+      "name": "authenticated session",
+      "expected": "200 and matching student",
+      "actual": "200",
+      "pass": true
+    },
+    {
+      "name": "S-90 real module aggregation",
+      "expected": "tutoring + reminder, no failed adapters",
+      "actual": "{\"status\":200,\"sourceTypes\":[\"tutoring\",\"reminder\"],\"failedSources\":[]}",
+      "pass": true
+    },
+    {
+      "name": "S-90 tutoring identity",
+      "expected": "materialised calendar event id",
+      "actual": "1c7a5a2f-8573-43bc-94c1-c87a08547778",
+      "pass": true
+    },
+    {
+      "name": "S-90 credential-reminder identity",
+      "expected": "materialised imported reminder event id",
+      "actual": "6b19c91f-6e2a-43e5-a511-a12c23d7623a",
+      "pass": true
+    },
+    {
+      "name": "clean calendar fixture",
+      "expected": "no personal event before lifecycle",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "clean export fixture",
+      "expected": "0 existing exports",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-91 create navigation",
+      "expected": "opaque event id",
+      "actual": "d9fb30d7-c27f-4394-b502-e94e604b8f64",
+      "pass": true
+    },
+    {
+      "name": "S-91 refresh persistence",
+      "expected": "created title visible",
+      "actual": "Month\nAdd event\nConflict\nReminders\nExport\nEvent details · S19\n\nOpen the source, or manage a personal event you created.\n\nREMINDERS\ni\nscheduled\nCalendar QA msbptor3\n\n2026-08-04 · 18:55–19:55 · Asia/Kolkata\n\nType: Reminder\n\nPrivacy.\nThis event belongs to your private calendar.\nBack\nEdit\nDelete\n\nPersonal events are written to your authenticated account. LegalSaathi does not store them in localStorage. · DPDP Act, 2023.",
+      "pass": true
+    },
+    {
+      "name": "S-91 edit persistence",
+      "expected": "edited title after reload",
+      "actual": "Month\nAdd event\nConflict\nReminders\nExport\nEvent details · S19\n\nOpen the source, or manage a personal event you created.\n\nREMINDERS\ni\nscheduled\nCalendar QA msbptor3 edited\n\n2026-08-04 · 18:55–19:55 · Asia/Kolkata\n\nType: Reminder\n\nPrivacy.\nThis event belongs to your private calendar.\nBack\nEdit\nDelete\n\nPersonal events are written to your authenticated account. LegalSaathi does not store them in localStorage. · DPDP Act, 2023.",
+      "pass": true
+    },
+    {
+      "name": "S-90 aggregated source rendering",
+      "expected": "tutoring, credential reminder and personal event visible",
+      "actual": "Month\nAdd event\nConflict\nReminders\nExport\nUnified Calendar · S19\n\nEvery LegalSaathi module writes to one private, server-authoritative calendar.\n\nExam prep\nCommunity / moot\nInternship / tutoring\nClinical / other\nAUGUST 2026\n3 events\nFilter\nMON\nTUE\nWED\nTHU\nFRI\nSAT\nSUN\n1\n2\n3\n4\n18:55 Tutoring…\n18:55 Calendar…\n5\n17:55 Credenti…\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\nONE CALENDAR\n\nExams, moots, internships, clinical hours, tutoring and your own reminders—without copying private source records into browser storage.\n\nCOMING UP\nAdd\nTutoring session\n2026-08-04 · 18:55–19:55\nCalendar QA msbptor3 edited\n2026-08-04 · 18:55–19:55\nCredential renewal reminder\n2026-08-05 · 17:55–18:25\n\nCalendar preferences and personal events are stored against your authenticated account, not in browser storage. · DPDP Act, 2023.",
+      "pass": true
+    },
+    {
+      "name": "S-90 timezone UI save",
+      "expected": "200",
+      "actual": "200",
+      "pass": true
+    },
+    {
+      "name": "S-90 selected timezone persistence",
+      "expected": "Asia/Dubai",
+      "actual": "Asia/Dubai",
+      "pass": true
+    },
+    {
+      "name": "S-91 imported reminder read-only UI",
+      "expected": "Go to source; no Edit/Delete",
+      "actual": "{\"goToSource\":1,\"edit\":0,\"delete\":0}",
+      "pass": true
+    },
+    {
+      "name": "dashboard dynamic current-week dates",
+      "expected": [
+        "MON 27",
+        "TUE 28",
+        "WED 29",
+        "THU 30",
+        "FRI 31",
+        "SAT 1",
+        "SUN 2"
+      ],
+      "actual": "[\"MON 27\",\"TUE 28\",\"WED 29\",\"THU 30\",\"FRI 31\",\"SAT 1\",\"SUN 2\"]",
+      "pass": false
+    }
+  ],
+  "failures": [
+    "dashboard dynamic current-week dates: expected MON 27,TUE 28,WED 29,THU 30,FRI 31,SAT 1,SUN 2; actual [\"MON 27\",\"TUE 28\",\"WED 29\",\"THU 30\",\"FRI 31\",\"SAT 1\",\"SUN 2\"]",
+    "fatal: Error: dashboard dynamic current-week dates: expected MON 27,TUE 28,WED 29,THU 30,FRI 31,SAT 1,SUN 2; actual [\"MON 27\",\"TUE 28\",\"WED 29\",\"THU 30\",\"FRI 31\",\"SAT 1\",\"SUN 2\"]"
+  ],
+  "finishedAt": "2026-08-02T11:27:02.948Z",
+  "total": 14,
+  "passed": 13,
+  "failed": 2,
+  "fatalError": "Error: dashboard dynamic current-week dates: expected MON 27,TUE 28,WED 29,THU 30,FRI 31,SAT 1,SUN 2; actual [\"MON 27\",\"TUE 28\",\"WED 29\",\"THU 30\",\"FRI 31\",\"SAT 1\",\"SUN 2\"]",
+  "screenshots": 50
+}

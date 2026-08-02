@@ -1,0 +1,202 @@
+name: Wave 5 calendar interoperability gate
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/wave5-calendar-gate.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/wave5-calendar-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  calendar-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: legalsaathi
+          POSTGRES_PASSWORD: legalsaathi
+          POSTGRES_DB: legalsaathi_wave5_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave5_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave5_qa
+      APP_ENV: testing
+      WAVE5_GATE_ALLOW_MUTATION: "true"
+      REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
+      REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend
+        working-directory: backend
+        run: pip install -r requirements.txt pytest
+      - name: Enable pgvector
+        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi_wave5_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: Native calendar and migration regression
+        working-directory: backend
+        run: python -m pytest -q tests/test_wave5_calendar.py tests/test_wave2_schema.py tests/test_wave4_schema.py
+      - name: PostgreSQL 16 + pgvector calendar gate
+        working-directory: backend
+        run: python scripts/wave5_postgres_gate.py --output "$GITHUB_WORKSPACE/test-results/wave5-postgres/summary.json"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave5-calendar-evidence
+          path: test-results
+          if-no-files-found: error
+
+  calendar-real-browser:
+    name: Real PostgreSQL + HTTPS + Chromium S-90–S-93
+    needs: calendar-postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: legalsaathi
+          POSTGRES_PASSWORD: legalsaathi
+          POSTGRES_DB: legalsaathi_wave5_browser_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave5_browser_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave5_browser_qa
+      APP_ENV: testing
+      WAVE5_E2E_ALLOW_SEED: "true"
+      REGISTRATION_SECRET: ci-wave5-browser-encryption-secret-not-a-default
+      REGISTRATION_LOOKUP_SECRET: ci-wave5-browser-lookup-secret-not-a-default
+      CORS_ORIGINS: '["https://127.0.0.1:1290"]'
+      CALENDAR_PUBLIC_BASE_URL: https://127.0.0.1:1291
+      VITE_DISABLE_SERVICE_WORKER: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Install production frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Prepare masked session bearer and loopback TLS
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/wave5-tls" "$GITHUB_WORKSPACE/test-results"
+          TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$TOKEN"
+          echo "WAVE5_E2E_SESSION_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$RUNNER_TEMP/wave5-tls/backend.key" \
+            -out "$RUNNER_TEMP/wave5-tls/backend.crt" \
+            -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=IP:127.0.0.1"
+      - name: Migrate and seed the isolated PostgreSQL target
+        working-directory: backend
+        run: |
+          PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi \
+            -d legalsaathi_wave5_browser_qa \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          alembic upgrade head
+          python scripts/seed_wave5_calendar_e2e.py \
+            --manifest "$RUNNER_TEMP/wave5-calendar-seed.json"
+      - name: Build frontend and start the real HTTPS/API stack
+        shell: bash
+        run: |
+          (cd frontend && VITE_API_BASE_URL=https://127.0.0.1:1291 npm run build)
+          (cd backend && python -m uvicorn app.main:app \
+            --host 127.0.0.1 --port 1291 --no-access-log \
+            --ssl-keyfile "$RUNNER_TEMP/wave5-tls/backend.key" \
+            --ssl-certfile "$RUNNER_TEMP/wave5-tls/backend.crt" \
+            > "$GITHUB_WORKSPACE/test-results/wave5-real-backend.log" 2>&1 &)
+          (cd frontend && \
+            TLS_SPA_HOST=127.0.0.1 \
+            TLS_SPA_PORT=1290 \
+            TLS_SPA_DIST="$GITHUB_WORKSPACE/frontend/dist" \
+            TLS_SPA_KEY="$RUNNER_TEMP/wave5-tls/backend.key" \
+            TLS_SPA_CERT="$RUNNER_TEMP/wave5-tls/backend.crt" \
+            node scripts/serve-dist-tls.mjs \
+            > "$GITHUB_WORKSPACE/test-results/wave5-real-frontend.log" 2>&1 &)
+          for attempt in {1..90}; do
+            curl --fail --silent --insecure https://127.0.0.1:1291/health >/dev/null \
+              && curl --fail --silent --insecure https://127.0.0.1:1290/s-90 >/dev/null \
+              && break
+            test "$attempt" = 90 && exit 1
+            sleep 1
+          done
+      - name: Real S-90–S-93 Chromium release gate
+        working-directory: frontend
+        env:
+          WAVE5_E2E_ALLOW_REAL: "true"
+          WAVE5_E2E_ALLOW_SELF_SIGNED_TLS: "true"
+          WAVE5_E2E_SEED_MANIFEST: ${{ runner.temp }}/wave5-calendar-seed.json
+          E2E_WEB_URL: https://127.0.0.1:1290
+          E2E_API_URL: https://127.0.0.1:1291
+          E2E_PUBLIC_URL: https://127.0.0.1:1291
+          E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave5-real-browser
+        run: npm run qa:wave5-calendar-real
+      - name: Reject bearer material from uploadable evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          root = pathlib.Path("test-results")
+          session = os.environ.get("WAVE5_E2E_SESSION_TOKEN", "").encode()
+          feed = re.compile(rb"/public/calendar-feeds/[A-Za-z0-9_-]{32,160}\.ics")
+          failures = []
+          for item in (root.rglob("*") if root.exists() else ()):
+              if not item.is_file():
+                  continue
+              data = item.read_bytes()
+              if session and session in data:
+                  failures.append(f"{item}: raw session bearer")
+              if feed.search(data):
+                  failures.append(f"{item}: raw feed bearer")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              raise SystemExit(1)
+          print("artifact privacy guard: no raw session/feed bearer")
+          PY
+      - name: Upload real-browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave5-calendar-real-browser-evidence
+          path: test-results
+          if-no-files-found: error
