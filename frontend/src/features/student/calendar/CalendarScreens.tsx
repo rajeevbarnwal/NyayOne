@@ -254,7 +254,7 @@ function CalendarMonthAuthenticated() {
       <main className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature"
         data-wave5-ready={readyState(pending, error)}>
         <CalSubnav active="month" />
-        <h1 className="lede">Unified Calendar <span className="m">· S19</span></h1>
+        <h1 className="lede">Unified Calendar <span className="m">· S-90</span></h1>
         <p className="stand">Every LegalSaathi module writes to one private, server-authoritative calendar.</p>
 
         {showFilters && filters && (
@@ -452,7 +452,7 @@ function CalendarEventScreen() {
     <StudentScreen screenId="S-91" className="calv-screen">
       <main className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature" data-wave5-ready={ready}>
         <CalSubnav active={eventId ? undefined : 'add'} />
-        <h1 className="lede">{eventId ? 'Event details' : 'Add event'} <span className="m">· S19</span></h1>
+        <h1 className="lede">{eventId ? 'Event details' : 'Add event'} <span className="m">· S-91</span></h1>
         <p className="stand ident">{eventId ? 'Open the source, or manage a personal event you created.' : 'Add a private personal event to your unified calendar.'}</p>
 
         {eventId && detail.isPending && <LoadingState label="Loading event…" />}
@@ -536,7 +536,7 @@ function CalendarConflictAuthenticated() {
     <StudentScreen screenId="S-92" className="calv-screen">
       <main className="calv" data-wave5-ready={readyState(conflicts.isPending, conflicts.error)}>
         <CalSubnav active="conflict" />
-        <h1 className="lede">Schedule conflicts <span className="m">· S19</span></h1>
+        <h1 className="lede">Schedule conflicts <span className="m">· S-92</span></h1>
         <p className="stand ident">Overlapping events are compared as half-open intervals, so back-to-back events remain valid.</p>
         {conflicts.isPending && <LoadingState label="Checking your schedule…" />}
         {conflicts.error && <ErrorState title="Conflict check unavailable" detail={calendarErrorCopy(conflicts.error)} onRetry={() => void conflicts.refetch()} />}
@@ -600,6 +600,8 @@ function ReminderRow({ preference }: { preference: CalendarReminderPreference })
   const client = useQueryClient();
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState(preference);
+  const [expanded, setExpanded] = useState(false);
+  const controlsId = `cal-reminder-controls-${preference.id}`;
   useEffect(() => setDraft(preference), [preference]);
   const update = useMutation({
     mutationFn: (next: Partial<CalendarReminderPreference>) => updateCalendarReminderPreference({
@@ -631,10 +633,19 @@ function ReminderRow({ preference }: { preference: CalendarReminderPreference })
     },
   });
   return (
-    <section className="card cal-reminder-row" data-testid={`cal-reminder-${preference.sourceType}-${preference.channel}`}>
+    <section className="card cal-reminder-row" data-expanded={expanded}
+      data-testid={`cal-reminder-${preference.sourceType}-${preference.channel}`}>
       <div className="ph"><span className="t">{SOURCE_LABELS[preference.sourceType]} · {preference.channel.replace(/_/g, ' ')}</span>
-        <StatusBadge status={draft.enabled ? 'ok' : 'info'} label={draft.enabled ? 'Enabled' : 'Off'} /></div>
-      <div className="cal-reminder-controls">
+        <span className="cal-reminder-heading-actions">
+          <StatusBadge status={draft.enabled ? 'ok' : 'info'} label={draft.enabled ? 'Enabled' : 'Off'} />
+          <button type="button" className="btn cal-reminder-disclosure" aria-expanded={expanded}
+            aria-controls={controlsId}
+            aria-label={`${expanded ? 'Close' : 'Configure'} ${SOURCE_LABELS[preference.sourceType]} ${preference.channel.replace(/_/g, ' ')} reminder`}
+            onClick={() => setExpanded((current) => !current)}>
+            {expanded ? 'Close' : 'Configure'}<span aria-hidden="true">{expanded ? '↑' : '↓'}</span>
+          </button>
+        </span></div>
+      <div className="cal-reminder-controls" id={controlsId}>
         <label className="cal-toggle"><input type="checkbox" checked={draft.enabled} disabled={update.isPending}
           onChange={(event) => update.mutate({ enabled: event.target.checked })} /><span>Send this reminder</span></label>
         <label><span className="lbl">Lead time</span><select className="field" value={draft.leadMinutes} disabled={!draft.enabled || update.isPending}
@@ -742,7 +753,7 @@ function CalendarPreferencesAuthenticated() {
     <StudentScreen screenId="S-93" className="calv-screen">
       <main className="calv" data-wave5-ready={readyState(pending, error)}>
         <CalSubnav active={tab} />
-        <h1 className="lede">{tab === 'reminders' ? 'Reminder preferences' : 'Calendar export'} <span className="m">· S19</span></h1>
+        <h1 className="lede">{tab === 'reminders' ? 'Reminder preferences' : 'Calendar export'} <span className="m">· S-93</span></h1>
         <p className="stand ident">{tab === 'reminders' ? 'Choose privacy-safe reminders and quiet hours for each source.' : 'Create a revocable, read-only iCalendar feed for your own calendar app.'}</p>
         <nav className="cal-mode-tabs" aria-label="Calendar settings">
           <button type="button" aria-current={tab === 'reminders' ? 'page' : undefined} className={`btn${tab === 'reminders' ? ' solid' : ''}`} onClick={() => setParams({ tab: 'reminders' })}>Reminders</button>

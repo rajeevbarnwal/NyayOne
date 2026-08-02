@@ -90,6 +90,8 @@
 .calv .cal-conflict { border-inline-start: 4px solid var(--warn); }
 .calv .cal-mode-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
 .calv .cal-reminder-controls { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(140px, .8fr)); gap: 12px; align-items: end; }
+.calv .cal-reminder-heading-actions { display: flex; align-items: center; gap: 8px; }
+.calv .cal-reminder-disclosure { display: none; }
 .calv .cal-toggle { min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 650; }
 .calv .cal-toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
 .calv .cal-export-card { display: grid; gap: 14px; }
@@ -136,4 +138,9 @@
   }
   .calv .type-chips .chip { flex: 0 0 auto; }
   .calv .cal-detail-actions .btn { flex: 1 1 120px; }
+  .calv .cal-reminder-row .ph { align-items: center; margin-bottom: 0; }
+  .calv .cal-reminder-disclosure { display: inline-flex; padding-inline: 12px; }
+  .calv .cal-reminder-row:not([data-expanded='true']) .cal-reminder-controls,
+  .calv .cal-reminder-row:not([data-expanded='true']) .cal-field-help { display: none; }
+  .calv .cal-reminder-row[data-expanded='true'] .ph { margin-bottom: 14px; }
 }

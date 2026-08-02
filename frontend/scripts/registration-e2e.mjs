@@ -62,30 +62,61 @@ for (const [name, values, expected] of [
   ['future_dob', { mobile: '9000000001', dob: '2030-01-01' }, 'Enter a valid date of birth that is not in the future.'],
   ['empty_first_name', { mobile: '9000000002', first: '' }, 'Enter your first name.'],
   ['empty_last_name', { mobile: '9000000008', last: '' }, 'Enter your last name.'],
-  ['special_name', { mobile: '9000000003', first: '<script>' }, 'contains characters'],
-  ['name_61_chars', { mobile: '9000000004', first: 'A'.repeat(61) }, 'capped at 60 characters'],
 ]) {
   const { context, page } = await fresh();
   await fillBase(page, values);
-  if (name === 'name_61_chars') {
-    const length = (await page.getByLabel('FIRST NAME').inputValue()).length;
-    record(name, expected, `${length} characters`, length === 60);
-  } else {
-    await page.getByRole('button', { name: 'Send one time code' }).click();
-    const text = await page.locator('body').innerText();
-    record(name, expected, text.includes(expected), text.includes(expected));
-    record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
-  }
+  await page.getByRole('button', { name: 'Send one time code' }).click();
+  const text = await page.locator('body').innerText();
+  record(name, expected, text.includes(expected), text.includes(expected));
+  record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
   await context.close();
 }
 
-// Maximum allowed boundary: exactly 60 characters is accepted.
+// Name-character validation must target the correct split field.
 {
   const { context, page } = await fresh();
-  await fillBase(page, { first: 'A'.repeat(60), mobile: '9000000005' });
+  const outcomes = {};
+  const blocked = {};
+  for (const field of ['first', 'middle', 'last']) {
+    await fillBase(page, { mobile: '9000000003', [field]: '<script>' });
+    await page.getByRole('button', { name: 'Send one time code' }).click();
+    outcomes[field] = (await page.locator('body').innerText()).includes('contains characters');
+    blocked[field] = new URL(page.url()).pathname === '/s-08';
+  }
+  record('special_name_all_fields', 'first/middle/last reject special characters on the correct field', outcomes,
+    Object.values(outcomes).every(Boolean));
+  record('special_name_all_fields_blocked', 'every invalid split-name submission remains /s-08', blocked,
+    Object.values(blocked).every(Boolean));
+  await context.close();
+}
+
+// The UI must not silently truncate maximum+1; the domain validator owns the error.
+{
+  const { context, page } = await fresh();
+  const outcomes = {};
+  for (const [field, label] of [['first', 'FIRST NAME'], ['middle', 'MIDDLE NAME'], ['last', 'LAST NAME']]) {
+    await fillBase(page, { mobile: '9000000004', [field]: 'A'.repeat(61) });
+    const attemptedLength = (await page.getByLabel(label).inputValue()).length;
+    await page.getByRole('button', { name: 'Send one time code' }).click();
+    outcomes[field] = {
+      attemptedLength,
+      correctError: (await page.locator('body').innerText()).includes('60 characters or fewer'),
+      path: new URL(page.url()).pathname,
+    };
+  }
+  record('name_61_chars_all_fields', '61 retained then rejected for first/middle/last; no truncation', outcomes,
+    Object.values(outcomes).every((value) => value.attemptedLength === 61 && value.correctError && value.path === '/s-08'));
+  await context.close();
+}
+
+// Maximum allowed boundary: exactly 60 characters in every split field is accepted.
+{
+  const { context, page } = await fresh();
+  await fillBase(page, { first: 'A'.repeat(60), middle: 'B'.repeat(60), last: 'C'.repeat(60), mobile: '9000000005' });
   await page.getByRole('button', { name: 'Send one time code' }).click();
   await page.waitForURL('**/s-09');
-  record('name_60_chars', 'accepted and routed to /s-09', new URL(page.url()).pathname, true);
+  record('name_60_chars_all_fields', 'exactly 60 first/middle/last accepted and routed to /s-09', new URL(page.url()).pathname,
+    new URL(page.url()).pathname === '/s-09');
   await context.close();
 }
 
