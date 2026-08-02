@@ -96,3 +96,8 @@ storage/vectorstore/*
 
 # Generated browser-gate evidence: never enters a production commit.
 test-results/
+
+# Wave-specific raw release evidence remains local/Jira-attached. Committing
+# screenshots, runtime logs or capability-scan payloads makes the tested hash
+# self-referential and previously bloated the Wave 5 branch with failed runs.
+QA/evidence/SAATHI-295/final_*/
