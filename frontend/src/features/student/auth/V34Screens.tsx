@@ -1101,7 +1101,9 @@ export function V34ProfileStep1() {
   // Step 1: Personal State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(draft.avatarUrl || null);
-  const [preferredName, setPreferredName] = useState(draft.firstName || '');
+  const [firstName, setFirstName] = useState(draft.firstName || '');
+  const [middleName, setMiddleName] = useState(draft.middleName || '');
+  const [lastName, setLastName] = useState(draft.lastName || '');
   const [dateOfBirth, setDob] = useState(draft.dateOfBirth || '');
   const [city, setCity] = useState(draft.city || '');
   const [pronouns, setPronouns] = useState(draft.pronouns || '');
@@ -1114,12 +1116,13 @@ export function V34ProfileStep1() {
   const [academicErrors, setAcademicErrors] = useState<Record<string, string>>({});
 
   // Step 3: Interests & Goals State
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(draft.interests?.length ? draft.interests : ['Constitutional', 'Corporate']);
-  const [careerGoal, setCareerGoal] = useState<string>('Litigation & judiciary');
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(draft.interests || []);
+  const [careerGoal, setCareerGoal] = useState<string>(draft.careerGoal || '');
 
   const calculatedPct = useMemo(() => {
     let score = 0;
-    if (preferredName.trim()) score += 12;
+    if (firstName.trim()) score += 6;
+    if (lastName.trim()) score += 6;
     if (dateOfBirth) score += 12;
     if (city) score += 10;
 
@@ -1131,7 +1134,7 @@ export function V34ProfileStep1() {
     if (careerGoal) score += 15;
 
     return Math.min(100, score);
-  }, [preferredName, dateOfBirth, city, college, yearOfStudy, enrolmentNumber, selectedInterests, careerGoal]);
+  }, [firstName, lastName, dateOfBirth, city, college, yearOfStudy, enrolmentNumber, selectedInterests, careerGoal]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1148,8 +1151,10 @@ export function V34ProfileStep1() {
 
   function saveInPlace() {
     updateProfileDraft({
-      firstName: preferredName.trim() || draft.firstName,
-      fullName: preferredName.trim() ? composeDisplayName({ firstName: preferredName.trim(), middleName: draft.middleName, lastName: draft.lastName }) : draft.fullName,
+      firstName: firstName.trim() || draft.firstName,
+      middleName: middleName.trim() || draft.middleName,
+      lastName: lastName.trim() || draft.lastName,
+      fullName: composeDisplayName({ firstName: firstName.trim() || draft.firstName, middleName: middleName.trim() || draft.middleName, lastName: lastName.trim() || draft.lastName }),
       dateOfBirth: dateOfBirth || draft.dateOfBirth,
       city: city || draft.city,
       pronouns: pronouns || draft.pronouns,
@@ -1158,6 +1163,7 @@ export function V34ProfileStep1() {
       yearOfStudy: yearOfStudy || draft.yearOfStudy,
       enrolmentNumber: enrolmentNumber || draft.enrolmentNumber,
       interests: selectedInterests,
+      careerGoal: careerGoal || draft.careerGoal,
     });
     setSavedBanner('✓ Progress saved. Your draft will stay saved whenever you return.');
     setTimeout(() => setSavedBanner(null), 4000);
@@ -1165,8 +1171,10 @@ export function V34ProfileStep1() {
 
   function handlePersonalSubmit() {
     const next: Record<string, string> = {};
-    if (!preferredName.trim()) next.name = 'Enter your preferred name.';
-    else if (preferredName.trim().length > 60) next.name = 'Preferred name must be 60 characters or fewer.';
+    if (!firstName.trim()) next.firstName = 'Enter your first name.';
+    else if (firstName.trim().length > 60) next.firstName = 'First name must be 60 characters or fewer.';
+    if (!lastName.trim()) next.lastName = 'Enter your last name.';
+    else if (lastName.trim().length > 60) next.lastName = 'Last name must be 60 characters or fewer.';
     if (!dateOfBirth) next.dob = 'Enter your date of birth.';
     else if (!isRegistrableDob(dateOfBirth, new Date())) next.dob = DOB_ERROR;
     if (!city) next.city = 'Choose your city.';
@@ -1175,8 +1183,10 @@ export function V34ProfileStep1() {
     if (Object.keys(next).length) return;
 
     updateProfileDraft({
-      firstName: preferredName.trim(),
-      fullName: composeDisplayName({ firstName: preferredName.trim(), middleName: draft.middleName, lastName: draft.lastName }),
+      firstName: firstName.trim(),
+      middleName: middleName.trim(),
+      lastName: lastName.trim(),
+      fullName: composeDisplayName({ firstName: firstName.trim(), middleName: middleName.trim(), lastName: lastName.trim() }),
       dateOfBirth,
       city,
       pronouns,
@@ -1291,13 +1301,32 @@ export function V34ProfileStep1() {
               </div>
               <div className="v34-fieldset">
                 <Field
-                  id="v34-preferred"
-                  label="PREFERRED NAME *"
-                  value={preferredName}
-                  onChange={setPreferredName}
+                  id="v34-firstname"
+                  label="FIRST NAME *"
+                  value={firstName}
+                  onChange={setFirstName}
                   maxLength={60}
-                  error={personalErrors.name}
+                  error={personalErrors.firstName}
                 />
+                <div className="v34-row">
+                  <Field
+                    id="v34-middlename"
+                    label="MIDDLE NAME"
+                    value={middleName}
+                    onChange={setMiddleName}
+                    optional
+                    maxLength={60}
+                    error={personalErrors.middleName}
+                  />
+                  <Field
+                    id="v34-lastname"
+                    label="LAST NAME *"
+                    value={lastName}
+                    onChange={setLastName}
+                    maxLength={60}
+                    error={personalErrors.lastName}
+                  />
+                </div>
                 <div className="v34-row">
                   <Field
                     id="v34-profile-dob"
@@ -1455,7 +1484,7 @@ export function V34ProfileStep1() {
                 <div className="v34-card" style={{ textAlign: 'left', maxWidth: '440px', margin: '0 auto 24px auto', padding: '16px' }}>
                   <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PROFILE SUMMARY</span>
                   <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
-                    <div><strong>Name:</strong> {preferredName || draft.firstName || 'Student'} {draft.lastName}</div>
+                    <div><strong>Name:</strong> {[firstName, middleName, lastName].filter(Boolean).join(' ') || draft.fullName || 'Student'}</div>
                     <div><strong>Date of Birth:</strong> {formatDDMMYYYY(dateOfBirth || draft.dateOfBirth || '')}</div>
                     <div><strong>City:</strong> {city || draft.city || 'Bengaluru'}</div>
                     <div><strong>College:</strong> {COLLEGE_OPTIONS.find(c => c.value === college || c.value === draft.college)?.label || college || draft.college || 'Recognized Law College'}</div>
