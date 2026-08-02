@@ -76,6 +76,14 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+
+def _expected_alembic_head() -> str:
+    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
+    files = [p.stem for p in versions_dir.glob("*.py")]
+    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
+    assert numbered, f"No alembic version files found in {versions_dir}"
+    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
+
 #: EX_CONFIG. Distinct from 0 (pass) and 1 (assertion failure).
 BLOCKED_EXIT = 78
 BLOCKED_PREFIX = "BLOCKED: prerequisite runtime absent"
@@ -1064,14 +1072,6 @@ def main(argv: list[str] | None = None) -> int:
                 return rc == 0, {"stage": "fresh base->head", "rc": rc, "log": log if rc else "ok"}
 
             rec.guard("A1.2", "fresh-base (empty database) upgrade to head returns rc 0", a1_2)
-
-def _expected_alembic_head() -> str:
-    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
-    files = [p.stem for p in versions_dir.glob("*.py")]
-    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
-    assert numbered, f"No alembic version files found in {versions_dir}"
-    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
-
 
             def a1_3():
                 heads = {}
