@@ -19,7 +19,7 @@ import {
 // (senior_advocate / firm_partner / associate / clerk / billing_admin) are
 // authorisation claims within a verified lawyer workspace — see `filingRole`.
 export type Role =
-  | 'student' | 'tutor' | 'lawyer' | 'admin' | 'moderator'
+  | 'student' | 'tutor' | 'lawyer' | 'admin' | 'moderator' | 'safety_officer' | 'legal_reviewer'
   | 'senior_advocate' | 'firm_partner' | 'associate' | 'clerk' | 'billing_admin';
 export type VerificationStatus = 'draft' | 'submitted' | 'needs_info' | 'verified' | 'rejected';
 
@@ -129,7 +129,9 @@ export function deriveAuthState(store: KvStore = defaultKvStore(), now: number =
 }
 
 function studentActorToAuth(actor: StudentSessionActor): AuthState {
-  const allowedRoles: Role[] = ['student', 'tutor', 'lawyer', 'admin', 'moderator'];
+  const allowedRoles: Role[] = [
+    'student', 'tutor', 'lawyer', 'admin', 'moderator', 'safety_officer', 'legal_reviewer',
+  ];
   return {
     isAuthenticated: true,
     userId: actor.sub,

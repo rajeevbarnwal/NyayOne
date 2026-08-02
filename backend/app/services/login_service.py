@@ -90,6 +90,7 @@ def start(
         registration
         and registration.status in {"otp_verified", "active"}
         and user
+        and user.role == "student"
         and user.status not in {"suspended", "deleted"}
     )
 
@@ -176,6 +177,7 @@ def verify(
     if (
         registration is None
         or user is None
+        or user.role != "student"
         or registration.status not in {"otp_verified", "active"}
         or user.status in {"suspended", "deleted"}
     ):
@@ -247,6 +249,23 @@ def session_claims(
     user = session.get(User, auth_session.user_id)
     if user is None or user.status != "active":
         return None
+    # Internal identities are provisioned by the trusted staff identity layer,
+    # not by the student OTP flow. They still use the same opaque, hashed,
+    # HttpOnly session record once authenticated, so every downstream endpoint
+    # consumes one server-authoritative ActorContext.
+    if user.role in {"admin", "moderator", "safety_officer", "legal_reviewer"}:
+        auth_session.last_seen_at = now
+        session.commit()
+        return {
+            "sub": str(user.id),
+            "roles": [user.role],
+            "student_profile_id": None,
+            "student_verification": "draft",
+            "is_minor": False,
+            "consent_state": [],
+        }
+    if user.role != "student":
+        return None
     registration = session.scalar(
         select(StudentRegistration)
         .where(StudentRegistration.user_id == user.id)
@@ -277,7 +296,7 @@ def session_claims(
     session.commit()
     return {
         "sub": str(user.id),
-        "roles": ["student"],
+        "roles": [user.role],
         "student_profile_id": str(profile.id) if profile is not None else None,
         "student_verification": (
             "verified" if verification and verification.status == "verified" else "draft"
