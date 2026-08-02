@@ -144,6 +144,10 @@ describe('Wave 5 S-90–S-93 calendar screens', () => {
     expect(html).toContain('22:00');
     expect(html).toContain('07:00');
     expect(html).toContain('Timezone');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls="cal-reminder-controls-pref-1"');
+    expect(html).toContain('aria-label="Configure Exam prep in app reminder"');
+    expect(html).toContain('>Configure<');
     expect(html).toContain('<option selected="">Asia/Kolkata</option>');
     expect(html).not.toContain('role="tablist"');
     expect(html).not.toContain('role="tab"');

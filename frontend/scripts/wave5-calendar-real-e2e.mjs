@@ -265,7 +265,12 @@ async function geometry(page) {
           width: Number(rect.width.toFixed(2)), height: Number(rect.height.toFixed(2)),
         };
       });
-    return { containers, small };
+    return {
+      containers,
+      small,
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: innerHeight,
+    };
   });
 }
 
@@ -458,6 +463,7 @@ try {
   await page.goto(new URL('/s-93?tab=reminders', WEB).href, { waitUntil: 'domcontentloaded' });
   await waitReady(page);
   const reminderRow = page.getByTestId('cal-reminder-reminder-in_app');
+  await reminderRow.getByRole('button', { name: /Configure Reminders in app reminder/i }).click();
   const reminderToggle = reminderRow.getByRole('checkbox', { name: 'Send this reminder' });
   await reminderRow.waitFor({ state: 'visible', timeout: 20_000 });
   const [disabledResponse] = await Promise.all([
@@ -605,6 +611,11 @@ try {
           layout.containers.every((item) => item.overflow <= 1));
         record(`${prefix} target size`, 'all enabled targets at least 44x44 CSS px', layout.small,
           layout.small.length === 0);
+        if (state === 's93-reminders' && width <= 430) {
+          record(`${prefix} meaningful mobile scroll`, 'collapsed reminder list no taller than two viewports',
+            { documentHeight: layout.documentHeight, viewportHeight: layout.viewportHeight },
+            layout.documentHeight <= layout.viewportHeight * 2);
+        }
         const a11y = await axeResults(shotPage);
         record(`${prefix} axe A/AA`, '0 violations', a11y.violations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })),
           a11y.violations.length === 0);
@@ -684,9 +695,58 @@ try {
   await waitReady(revokePage);
   await revokePage.getByRole('button', { name: 'Revoke feed', exact: true }).click();
   await revokePage.getByText(/feed revoked/i).waitFor({ timeout: 20_000 });
+  await revokePage.reload({ waitUntil: 'domcontentloaded' });
+  await waitReady(revokePage);
+  const revokedStateText = await revokePage.locator('main.calv').innerText();
+  assert('S-93 revoked feed recovery UI', 'revoked status and Create private feed action after reload',
+    {
+      revokedStatus: /revoked/i.test(revokedStateText),
+      createAction: await revokePage.getByRole('button', { name: 'Create private feed', exact: true }).count(),
+    },
+    /revoked/i.test(revokedStateText)
+      && await revokePage.getByRole('button', { name: 'Create private feed', exact: true }).count() === 1);
   await revokeContext.close();
   const revokedResponse = await publicApi.get(feedUrl);
   assert('public ICS revocation', '404 after UI revoke', revokedResponse.status(), revokedResponse.status() === 404);
+
+  // Move the personal event beyond the imported tutoring interval, then prove
+  // both the persisted conflict projection and the S-92 UI clear after a
+  // refresh.  This is stronger than changing a local fixture or merely
+  // dismissing the conflict card.
+  const eventBeforeMove = await apiJson(api, 'GET', `/api/v1/calendar/events/${encodeURIComponent(personalEventId)}`);
+  const shiftedStart = new Date(new Date(eventBeforeMove.body?.starts_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+  const shiftedEnd = new Date(new Date(eventBeforeMove.body?.ends_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+  const moved = await apiJson(api, 'PUT', `/api/v1/calendar/events/${encodeURIComponent(personalEventId)}`, {
+    data: {
+      title: eventBeforeMove.body?.title,
+      starts_at: shiftedStart.toISOString(),
+      ends_at: shiftedEnd.toISOString(),
+      timezone: eventBeforeMove.body?.timezone,
+      status: eventBeforeMove.body?.status,
+      privacy_classification: eventBeforeMove.body?.privacy_classification,
+      event_kind: eventBeforeMove.body?.event_kind,
+      expected_version: eventBeforeMove.body?.version,
+    },
+  });
+  assert('S-92 move conflicting event', '200 with a later persisted interval',
+    { status: moved.status, startsAt: moved.body?.starts_at, version: moved.body?.version },
+    eventBeforeMove.status === 200 && moved.status === 200
+      && moved.body?.version === eventBeforeMove.body?.version + 1
+      && new Date(moved.body?.starts_at).getTime() === shiftedStart.getTime());
+  const conflictsCleared = await apiJson(api, 'POST', '/api/v1/calendar/conflicts/check', {
+    data: { event_ids: [personalEventId, tutoringCalendarEventId], persist: true },
+  });
+  assert('S-92 conflict disappears after move', '200 and zero current overlaps',
+    { status: conflictsCleared.status, total: conflictsCleared.body?.total },
+    conflictsCleared.status === 200 && conflictsCleared.body?.total === 0);
+  const clearedContext = await newBrowserContext(browser, { viewport: { width: 430, height: 844 } });
+  const clearedPage = await clearedContext.newPage();
+  await clearedPage.goto(new URL('/s-92', WEB).href, { waitUntil: 'domcontentloaded' });
+  await waitReady(clearedPage);
+  const clearedText = await clearedPage.locator('main.calv').innerText();
+  assert('S-92 cleared conflict UI', 'No conflicts found after refresh', clearedText,
+    /no conflicts found/i.test(clearedText) && !(await clearedPage.locator('.cal-conflict').filter({ hasText: editedTitle }).count()));
+  await clearedContext.close();
 
   // Delete through S-91 and prove the resource disappears after refresh/API.
   const deleteContext = await newBrowserContext(browser, { viewport: { width: 430, height: 844 } });
