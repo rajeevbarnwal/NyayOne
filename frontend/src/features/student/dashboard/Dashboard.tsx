@@ -11,12 +11,23 @@ import {
 } from '../lib/dashboard';
 import { profileTier, TIER_LABELS } from '../lib/profile';
 import { getProfileDraft } from '../lib/profileStore';
-import { DEFAULT_TZ, localDateKey, localTime, SOURCE_LABELS } from '../lib/calendar';
+import { DEFAULT_TZ, localDateKey, localTime, SOURCE_LABELS, type CalendarEventStatus } from '../lib/calendar';
 import { getCalendarViewPreferences, listCalendarEvents, type CalendarEventRecord } from '../lib/calendarApi';
 import { SAMPLE_ENTRIES, totalHours } from '../lib/clinical';
 
 export function dashboardWeekday(now: Date, timezone: string): string {
   return new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: timezone }).format(now);
+}
+
+export function calendarStatusPresentation(status: CalendarEventStatus): {
+  chip: string;
+  tone: 'info' | 'warn' | 'ok';
+} {
+  if (status === 'deadline') return { chip: 'Deadline', tone: 'warn' };
+  if (status === 'tentative') return { chip: 'Tentative', tone: 'info' };
+  if (status === 'done') return { chip: 'Done', tone: 'ok' };
+  if (status === 'cancelled') return { chip: 'Cancelled', tone: 'warn' };
+  return { chip: 'Scheduled', tone: 'info' };
 }
 
 export function currentWeek(now = new Date(), timezone = DEFAULT_TZ) {
@@ -74,12 +85,15 @@ export function Dashboard() {
     hour: '2-digit', hourCycle: 'h23', timeZone: timezone,
   }).format(now));
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const nextActions = events.slice(0, 4).map((e) => ({
-    title: e.title,
-    meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateKey(e.startsAt, timezone)} · ${localTime(e.startsAt, timezone)}`,
-    chip: e.status === 'deadline' ? 'Deadline' : e.status === 'tentative' ? 'Tentative' : 'Scheduled',
-    status: (e.status === 'deadline' ? 'warn' : e.status === 'done' ? 'ok' : 'info') as 'info' | 'warn' | 'ok',
-  }));
+  const nextActions = events.slice(0, 4).map((e) => {
+    const presentation = calendarStatusPresentation(e.status);
+    return {
+      title: e.title,
+      meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateKey(e.startsAt, timezone)} · ${localTime(e.startsAt, timezone)}`,
+      chip: presentation.chip,
+      status: presentation.tone,
+    };
+  });
   const completion = profileCompletionPct(profile);
   const clinicalHours = totalHours(SAMPLE_ENTRIES);
 

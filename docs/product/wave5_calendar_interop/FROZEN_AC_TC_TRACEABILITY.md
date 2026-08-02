@@ -1,7 +1,9 @@
 # Wave 5 — Frozen Acceptance/Test Traceability Matrix
 
-Frozen: 2026-08-02  
-Exact base: `adf191dfa6d3229e58e5df0cd8d35f87ad4fb8ae`  
+Frozen: 2026-08-02
+
+Exact base: `adf191dfa6d3229e58e5df0cd8d35f87ad4fb8ae`
+
 Status of every row at freeze time: **NOT EXECUTED**
 
 The matrix is intentionally end-to-end. A frontend unit test is not a

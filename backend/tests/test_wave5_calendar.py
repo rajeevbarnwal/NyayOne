@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -26,13 +27,14 @@ from app.models.calendar import (
     CalendarExportSubscription,
     CalendarExportToken,
     CalendarReminderPreference,
+    CalendarViewPreference,
 )
 from app.models.credentials import Credential, CredentialReminderJob
 from app.models.registration import User
 from app.models.wave2 import TutorAvailabilitySlot, TutorProfile, TutoringSession
 from app.schemas.calendar import EventCreate
 from app.services import calendar_service
-from scripts.wave5_postgres_gate import is_isolated_gate_target
+from scripts.wave5_postgres_gate import is_isolated_gate_target, privacy_canary_hits
 from tests import apptemplate, dbtemplate
 
 
@@ -139,6 +141,33 @@ def _create(client, user_id: uuid.UUID, key: str, **kwargs):
         json=_event_body(**kwargs),
         headers={**_claims(user_id), "Idempotency-Key": key},
     )
+
+
+def _calendar_counts(SessionLocal, owner: uuid.UUID) -> dict[str, int]:
+    """Mutation ledger used by the explicit N-* negative assertions."""
+    models = {
+        "sources": CalendarEventSource,
+        "events": CalendarEvent,
+        "views": CalendarViewPreference,
+        "reminders": CalendarReminderPreference,
+        "conflicts": CalendarConflict,
+        "exports": CalendarExportSubscription,
+        "tokens": CalendarExportToken,
+        "revocations": CalendarExportRevocation,
+    }
+    with SessionLocal() as session:
+        counts = {
+            label: int(session.scalar(select(func.count()).select_from(model).where(
+                getattr(model, "owner_user_id", None) == owner
+            )) or 0)
+            if hasattr(model, "owner_user_id")
+            else int(session.scalar(select(func.count()).select_from(model)) or 0)
+            for label, model in models.items()
+        }
+        counts["audit"] = int(session.scalar(
+            select(func.count()).select_from(AuditEvent).where(AuditEvent.actor_user_id == owner)
+        ) or 0)
+        return counts
 
 
 def _seed_tutoring(
@@ -825,3 +854,714 @@ def test_public_token_path_is_redacted():
     path = "/api/v1/public/calendar-feeds/not-a-real-secret.ics"
     assert redact_sensitive_path(path) == "/api/v1/public/calendar-feeds/:token"
     assert "not-a-real-secret" not in redact_sensitive_path(path)
+
+
+@pytest.mark.parametrize("title", ["", "   \t\n"])
+def test_negative_n01_empty_or_whitespace_title_is_422_and_atomic(ctx, title):
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    response = _create(client, owner, "n01-empty-title", title=title)
+    assert response.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n03_controls_rejected_unicode_html_is_safe_text(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    rejected = _create(
+        client,
+        owner,
+        "n03-control-title",
+        title="Hearing\u0000<script>alert(1)</script>",
+    )
+    assert rejected.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before
+
+    permitted = "Moot ⚖️ — <script>alert('never executable')</script>; comma, slash\\"
+    accepted = _create(client, owner, "n03-safe-unicode", title=permitted)
+    assert accepted.status_code == 201 and accepted.json()["title"] == permitted
+    export = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n03-safe-export"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    feed = client.get(export["feed_url"])
+    assert feed.status_code == 200
+    # Public ICS is allowlist-based; user HTML/Unicode is never projected.
+    assert permitted not in feed.text and "<script>" not in feed.text
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"starts_at": None},
+        {"ends_at": None},
+        {"starts_at": "not-a-date"},
+        {"ends_at": "not-a-date"},
+        {"timezone": "Mars/Olympus_Mons"},
+        {"timezone": ""},
+    ],
+)
+def test_negative_n04_missing_invalid_instants_or_timezone_are_422_without_mutation(ctx, mutation):
+    client, SessionLocal, (owner, _) = ctx
+    payload = _event_body()
+    payload.update(mutation)
+    before = _calendar_counts(SessionLocal, owner)
+    response = client.post(
+        "/api/v1/calendar/events",
+        json=payload,
+        headers={**_claims(owner), "Idempotency-Key": "n04-invalid-wire"},
+    )
+    assert response.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        ("2026-08-10T05:30:00Z", "2026-08-10T04:30:00Z"),
+        ("2026-08-10T04:30:00Z", "2026-08-10T04:30:00Z"),
+    ],
+)
+def test_negative_n05_reversed_and_zero_duration_are_422_and_atomic(ctx, start, end):
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    response = _create(client, owner, "n05-invalid-interval", start=start, end=end)
+    assert response.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n06_iana_and_dst_policy_is_explicit_and_never_silently_shifted(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    valid = _create(
+        client,
+        owner,
+        "n06-valid-iana",
+        start="2026-08-10T10:00:00+05:30",
+        end="2026-08-10T11:00:00+05:30",
+    )
+    assert valid.status_code == 201
+    assert valid.json()["starts_at"] == "2026-08-10T04:30:00Z"
+    count_after_valid = _calendar_counts(SessionLocal, owner)
+
+    invalid_zone = _create(client, owner, "n06-invalid-zone", timezone_name="GMT+5:30")
+    nonexistent_local_offset = _create(
+        client,
+        owner,
+        "n06-nonexistent-local",
+        start="2026-03-29T01:30:00+01:00",
+        end="2026-03-29T02:30:00+01:00",
+        timezone_name="Europe/London",
+    )
+    assert invalid_zone.status_code == nonexistent_local_offset.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == count_after_valid
+
+    # Both fall-back folds are explicit instants and must remain distinct.
+    fold_one = EventCreate.model_validate(_event_body(
+        start="2026-10-25T01:10:00+01:00",
+        end="2026-10-25T01:40:00+01:00",
+        timezone_name="Europe/London",
+    ))
+    fold_two = EventCreate.model_validate(_event_body(
+        start="2026-10-25T01:10:00+00:00",
+        end="2026-10-25T01:40:00+00:00",
+        timezone_name="Europe/London",
+    ))
+    assert fold_one.starts_at != fold_two.starts_at
+
+
+def test_negative_n08_overlap_matrix_is_stable_owner_scoped_and_half_open(ctx):
+    client, _, (owner, other) = ctx
+    fixtures = [
+        ("base", "2026-08-12T10:00:00.000Z", "2026-08-12T11:00:00.000Z"),
+        ("one-ms", "2026-08-12T10:59:59.999Z", "2026-08-12T12:00:00.000Z"),
+        ("duplicate", "2026-08-12T10:00:00.000Z", "2026-08-12T11:00:00.000Z"),
+        ("contained", "2026-08-12T10:15:00.000Z", "2026-08-12T10:45:00.000Z"),
+        ("adjacent", "2026-08-12T11:00:00.000Z", "2026-08-12T12:00:00.000Z"),
+    ]
+    ids = []
+    for label, start, end in fixtures:
+        response = _create(client, owner, f"n08-{label}-event", start=start, end=end)
+        assert response.status_code == 201
+        ids.append(response.json()["id"])
+    foreign = _create(client, other, "n08-foreign-event").json()["id"]
+
+    first = client.post(
+        "/api/v1/calendar/conflicts/check",
+        headers=_claims(owner),
+        json={"event_ids": ids, "persist": False},
+    )
+    second = client.post(
+        "/api/v1/calendar/conflicts/check",
+        headers=_claims(owner),
+        json={"event_ids": list(reversed(ids)), "persist": False},
+    )
+    assert first.status_code == second.status_code == 200
+    pairs_one = [(row["left_event_id"], row["right_event_id"]) for row in first.json()["items"]]
+    pairs_two = [(row["left_event_id"], row["right_event_id"]) for row in second.json()["items"]]
+    assert pairs_one == pairs_two
+    assert all(left < right for left, right in pairs_one)
+    assert not any(set(pair) == {ids[0], ids[-1]} for pair in pairs_one)  # base/adjacent boundary
+    hidden = client.post(
+        "/api/v1/calendar/conflicts/check",
+        headers=_claims(owner),
+        json={"event_ids": [ids[0], foreign], "persist": False},
+    )
+    assert hidden.status_code == 404
+    assert hidden.json()["detail"] == {
+        "code": "calendar_event_not_found",
+        "message": "Calendar event not found",
+    }
+
+
+def test_negative_n09_supported_date_extremes_persist_and_out_of_range_is_typed(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    for label, start, end in (
+        ("old", "1900-01-01T00:00:00Z", "1900-01-01T01:00:00Z"),
+        ("future", "2100-12-31T22:00:00Z", "2100-12-31T23:00:00Z"),
+    ):
+        response = _create(client, owner, f"n09-{label}-date", start=start, end=end)
+        assert response.status_code == 201
+    before_bad = _calendar_counts(SessionLocal, owner)
+    rejected = _create(
+        client,
+        owner,
+        "n09-out-of-range",
+        start="10000-01-01T00:00:00Z",
+        end="10000-01-01T01:00:00Z",
+    )
+    assert rejected.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before_bad
+
+
+def test_negative_n10_source_tuple_dedupes_but_same_id_across_types_is_distinct(ctx):
+    _, SessionLocal, (owner, _) = ctx
+    now = datetime(2026, 8, 20, 4, 30, tzinfo=timezone.utc)
+    with SessionLocal() as session:
+        for source_type, title in (
+            ("tutoring", "First tutoring title"),
+            ("tutoring", "Updated tutoring title"),
+            ("reminder", "Credential renewal reminder"),
+        ):
+            calendar_service._upsert_imported_event(
+                session,
+                owner_id=owner,
+                source_type=source_type,
+                source_id="shared-source-id",
+                source_url="/s-35" if source_type == "tutoring" else "/s-82",
+                title=title,
+                starts_at=now,
+                ends_at=now + timedelta(hours=1),
+                timezone_name="Asia/Kolkata",
+                status="scheduled",
+            )
+        session.commit()
+        sources = list(session.scalars(select(CalendarEventSource).where(
+            CalendarEventSource.owner_user_id == owner,
+            CalendarEventSource.source_id == "shared-source-id",
+        )))
+        events = list(session.scalars(select(CalendarEvent).where(CalendarEvent.owner_user_id == owner)))
+    assert len(sources) == len(events) == 2
+    assert {source.source_type for source in sources} == {"tutoring", "reminder"}
+    assert {event.title for event in events} == {
+        "Updated tutoring title",
+        "Credential renewal reminder",
+    }
+
+
+def test_negative_n12_wrong_role_is_403_without_mutation(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    headers = {"X-Actor-Claims": json.dumps({"sub": str(owner), "roles": ["lawyer"]})}
+    before = _calendar_counts(SessionLocal, owner)
+    response = client.post(
+        "/api/v1/calendar/events",
+        headers={**headers, "Idempotency-Key": "n12-wrong-role"},
+        json=_event_body(),
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "forbidden"
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n13_cross_user_resources_are_non_enumerating_and_immutable(ctx):
+    client, SessionLocal, (owner, other) = ctx
+    event = _create(client, owner, "n13-owned-event").json()
+    export = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n13-owned-export"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    before = _calendar_counts(SessionLocal, owner)
+    update = {**_event_body(title="Cross-user overwrite"), "expected_version": 1}
+    responses = [
+        client.get(f"/api/v1/calendar/events/{event['id']}", headers=_claims(other)),
+        client.put(f"/api/v1/calendar/events/{event['id']}", headers=_claims(other), json=update),
+        client.delete(f"/api/v1/calendar/events/{event['id']}", headers=_claims(other)),
+        client.get(f"/api/v1/calendar/exports/{export['id']}", headers=_claims(other)),
+        client.delete(f"/api/v1/calendar/exports/{export['id']}", headers=_claims(other)),
+    ]
+    assert all(response.status_code == 404 for response in responses)
+    assert len({json.dumps(response.json(), sort_keys=True) for response in responses[:3]}) == 1
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n14_forged_claims_header_is_rejected_outside_test(monkeypatch, ctx):
+    from app.core.config import settings
+
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    monkeypatch.setattr(settings, "app_env", "production")
+    response = _create(client, owner, "n14-forged-production-header")
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "authentication_required"
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n15_unknown_and_cross_user_identifiers_have_identical_contract(ctx):
+    client, _, (owner, other) = ctx
+    event = _create(client, other, "n15-other-event").json()
+    unknown = str(uuid.uuid4())
+    foreign_response = client.get(f"/api/v1/calendar/events/{event['id']}", headers=_claims(owner))
+    unknown_response = client.get(f"/api/v1/calendar/events/{unknown}", headers=_claims(owner))
+    assert foreign_response.status_code == unknown_response.status_code == 404
+    assert foreign_response.content == unknown_response.content
+    assert foreign_response.headers["content-type"] == unknown_response.headers["content-type"]
+
+
+def test_negative_n16_missing_reminder_payload_is_rejected_without_partial_overwrite(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    before = client.get("/api/v1/calendar/reminder-preferences", headers=_claims(owner)).json()
+    before_counts = _calendar_counts(SessionLocal, owner)
+    for payload in ({}, {"source_type": "exam"}, {"enabled": False}):
+        response = client.put(
+            "/api/v1/calendar/reminder-preferences",
+            headers=_claims(owner),
+            json=payload,
+        )
+        assert response.status_code == 422
+    assert client.get("/api/v1/calendar/reminder-preferences", headers=_claims(owner)).json() == before
+    assert _calendar_counts(SessionLocal, owner) == before_counts
+
+
+@pytest.mark.parametrize("lead", [-1, 1, 9, 11, 29, 31, 61, 121, 1439, 1441])
+def test_negative_n17_noncanonical_reminder_lead_is_422_and_atomic(ctx, lead):
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    response = client.put(
+        "/api/v1/calendar/reminder-preferences",
+        headers=_claims(owner),
+        json={
+            "source_type": "exam",
+            "channel": "in_app",
+            "enabled": True,
+            "lead_minutes": lead,
+            "quiet_start_min": 0,
+            "quiet_end_min": 1439,
+            "timezone": "Asia/Kolkata",
+            "expected_version": 0,
+        },
+    )
+    assert response.status_code == 422
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "accepted"),
+    [
+        ("quiet_start_min", -1, False),
+        ("quiet_start_min", 0, True),
+        ("quiet_end_min", 1439, True),
+        ("quiet_end_min", 1440, False),
+        ("source_type", "unknown", False),
+        ("channel", "sms", False),
+        ("timezone", "Invalid/Timezone", False),
+    ],
+)
+def test_negative_n18_quiet_source_channel_timezone_boundaries(ctx, field, value, accepted):
+    client, _, (owner, _) = ctx
+    payload = {
+        "source_type": "exam",
+        "channel": "in_app",
+        "enabled": True,
+        "lead_minutes": 30,
+        "quiet_start_min": 0,
+        "quiet_end_min": 1439,
+        "timezone": "Asia/Kolkata",
+        "expected_version": 0,
+    }
+    payload[field] = value
+    response = client.put(
+        "/api/v1/calendar/reminder-preferences",
+        headers=_claims(owner),
+        json=payload,
+    )
+    assert response.status_code == (200 if accepted else 422)
+
+
+def test_negative_n20_commit_failure_rolls_back_reminder_and_retry_is_exactly_once(ctx, monkeypatch):
+    client, SessionLocal, (owner, _) = ctx
+    payload = {
+        "source_type": "exam",
+        "channel": "in_app",
+        "enabled": False,
+        "lead_minutes": 60,
+        "quiet_start_min": 0,
+        "quiet_end_min": 1439,
+        "timezone": "Asia/Kolkata",
+        "expected_version": 0,
+    }
+    real_commit = Session.commit
+    attempts = {"count": 0}
+
+    def fail_first_commit(session):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("n20 injected commit failure")
+        return real_commit(session)
+
+    monkeypatch.setattr(Session, "commit", fail_first_commit)
+    failed = client.put(
+        "/api/v1/calendar/reminder-preferences",
+        headers=_claims(owner),
+        json=payload,
+    )
+    assert failed.status_code == 500
+    assert _calendar_counts(SessionLocal, owner)["reminders"] == 0
+    assert _calendar_counts(SessionLocal, owner)["audit"] == 0
+    retry = client.put(
+        "/api/v1/calendar/reminder-preferences",
+        headers=_claims(owner),
+        json=payload,
+    )
+    assert retry.status_code == 200 and retry.json()["version"] == 1
+    counts = _calendar_counts(SessionLocal, owner)
+    assert counts["reminders"] == counts["audit"] == 1
+
+
+def test_negative_n22_export_idempotency_mismatch_is_typed_and_atomic(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    first = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n22-export-idempotency"},
+        json={"timezone": "Asia/Kolkata"},
+    )
+    assert first.status_code == 201
+    before = _calendar_counts(SessionLocal, owner)
+    mismatch = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n22-export-idempotency"},
+        json={"timezone": "Europe/London"},
+    )
+    assert mismatch.status_code == 409
+    assert mismatch.json()["detail"]["code"] == "idempotency_conflict"
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "A" * 42,
+        "not+url/safe+base64" + "A" * 30,
+        "क" * 43,
+        "%2e%2e%2f" + "A" * 43,
+        "A" * 161,
+    ],
+)
+def test_negative_n24_malformed_short_unicode_or_traversal_token_is_safe_404(ctx, candidate):
+    client, SessionLocal, (owner, _) = ctx
+    before = _calendar_counts(SessionLocal, owner)
+    response = client.get(f"/api/v1/public/calendar-feeds/{candidate}.ics")
+    assert response.status_code == 404
+    assert candidate not in response.text
+    assert "traceback" not in response.text.casefold()
+    assert _calendar_counts(SessionLocal, owner) == before
+
+
+def test_negative_n25_unknown_expired_revoked_rotated_and_valid_capabilities(ctx):
+    client, SessionLocal, (owner, _) = ctx
+
+    def create(key: str) -> tuple[dict[str, object], str]:
+        response = client.post(
+            "/api/v1/calendar/exports",
+            headers={**_claims(owner), "Idempotency-Key": key},
+            json={"timezone": "Asia/Kolkata"},
+        )
+        assert response.status_code == 201 and response.json()["feed_url"]
+        return response.json(), response.json()["feed_url"]
+
+    first, first_url = create("n25-first-export")
+    assert client.get(first_url).status_code == 200
+    _, second_url = create("n25-second-export")
+    rotated = client.get(first_url)
+    assert client.get(second_url).status_code == 200
+    second_id = client.get("/api/v1/calendar/exports", headers=_claims(owner)).json()["items"][0]["id"]
+    assert client.delete(f"/api/v1/calendar/exports/{second_id}", headers=_claims(owner)).status_code == 200
+    revoked = client.get(second_url)
+
+    third, third_url = create("n25-third-export")
+    with SessionLocal() as session:
+        subscription = session.get(CalendarExportSubscription, uuid.UUID(third["id"]))
+        token = session.scalar(select(CalendarExportToken).where(
+            CalendarExportToken.subscription_id == subscription.id
+        ))
+        expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        subscription.expires_at = expired_at
+        token.expires_at = expired_at
+        session.commit()
+    expired = client.get(third_url)
+    unknown = client.get("/api/v1/public/calendar-feeds/" + ("Z" * 43) + ".ics")
+    assert rotated.status_code == revoked.status_code == expired.status_code == unknown.status_code == 404
+    assert rotated.content == revoked.content == expired.content == unknown.content
+    assert first["id"] != third["id"]
+
+
+def test_negative_n26_capability_expiry_boundary_is_exclusive(ctx, monkeypatch):
+    client, SessionLocal, (owner, _) = ctx
+    created = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n26-expiry-boundary"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    raw = created["feed_url"].rsplit("/", 1)[-1].removesuffix(".ics")
+    fixed_now = datetime(2026, 8, 2, 12, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(calendar_service, "_now", lambda: fixed_now)
+
+    def set_expiry(value: datetime) -> None:
+        with SessionLocal() as session:
+            subscription = session.get(CalendarExportSubscription, uuid.UUID(created["id"]))
+            token = session.scalar(select(CalendarExportToken).where(
+                CalendarExportToken.subscription_id == subscription.id
+            ))
+            subscription.status = "active"
+            subscription.active_marker = True
+            subscription.expires_at = value
+            token.revoked_at = None
+            token.expires_at = value
+            session.commit()
+
+    set_expiry(fixed_now - timedelta(milliseconds=1))
+    assert client.get(created["feed_url"]).status_code == 404
+    set_expiry(fixed_now)
+    assert client.get(created["feed_url"]).status_code == 404
+    set_expiry(fixed_now + timedelta(milliseconds=1))
+    assert client.get(created["feed_url"]).status_code == 200
+    with SessionLocal() as session:
+        assert session.scalar(select(CalendarExportToken).where(
+            CalendarExportToken.token_hash == keyed_hash(raw)
+        )) is not None
+
+
+def test_negative_n27_fail_closed_scanner_detects_raw_capability_on_every_surface():
+    raw = "n27_RAW_CAPABILITY_CANARY_DO_NOT_SEAL_0123456789"
+    surfaces = {
+        "exception": {"detail": raw},
+        "log": f"request failed {raw}",
+        "audit": {"after_state": {"token": raw}},
+        "evidence": {"request_url": f"https://example.test/feed/{raw}.ics"},
+    }
+    assert privacy_canary_hits(surfaces, {raw}) == sorted(surfaces)
+    assert privacy_canary_hits(
+        {name: "[redacted]" for name in surfaces},
+        {raw},
+    ) == []
+
+
+def test_negative_n29_query_and_non_designated_capability_urls_are_rejected(ctx):
+    client, _, (owner, _) = ctx
+    created = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n29-designated-route"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    raw = created["feed_url"].rsplit("/", 1)[-1].removesuffix(".ics")
+    query = client.get(f"{created['feed_url']}?utm_source=forbidden")
+    alternatives = [
+        client.get(f"/api/v1/calendar-feeds/{raw}.ics"),
+        client.get(f"/api/v1/calendar/exports/{raw}.ics"),
+        client.get(f"/api/v1/public/calendar-feeds/{raw}"),
+    ]
+    assert query.status_code == 404
+    assert query.json()["detail"]["code"] == "calendar_export_not_found"
+    assert all(response.status_code in {404, 422} for response in alternatives)
+    assert all(not response.is_redirect for response in [query, *alternatives])
+    assert all(raw not in response.text for response in [query, *alternatives])
+
+
+def test_negative_n30_release_exposes_ics_only_and_no_oauth_or_provider_routes(_mounted):
+    app, client = _mounted
+    calendar_paths = {path for path in app.openapi()["paths"] if "calendar" in path}
+    assert "/api/v1/public/calendar-feeds/{raw_token}.ics" in calendar_paths
+    assert all(
+        marker not in path.casefold()
+        for path in calendar_paths
+        for marker in ("oauth", "google", "outlook", "provider-token", "webhook")
+    )
+    for path in (
+        "/api/v1/calendar/oauth/google",
+        "/api/v1/calendar/oauth/outlook",
+        "/api/v1/calendar/sync/provider",
+    ):
+        response = client.post(path)
+        assert response.status_code == 404
+
+
+def _unfold_ics_lines(content: str) -> list[str]:
+    unfolded: list[str] = []
+    for line in content.split("\r\n"):
+        if not line:
+            continue
+        if line.startswith(" "):
+            assert unfolded, "continuation line requires a preceding content line"
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    return unfolded
+
+
+def _unescape_ics_text(value: str) -> str:
+    return re.sub(r"\\([\\n;,])", lambda match: "\n" if match.group(1) == "n" else match.group(1), value)
+
+
+def test_negative_n31_ics_text_escaping_round_trips_through_test_decoder():
+    original = "Comma, semicolon; slash\\ newline\nUnicode ⚖️"
+    escaped = calendar_service._ics_escape(original)
+    assert escaped == "Comma\\, semicolon\\; slash\\\\ newline\\nUnicode ⚖️"
+    assert _unescape_ics_text(escaped) == original
+
+
+def test_negative_n32_utf8_property_folding_is_75_octets_and_round_trips():
+    original = "SUMMARY:" + ("न्याय⚖️," * 30) + ";end\\"
+    folded = calendar_service._fold_ics(original)
+    assert len(folded) > 1
+    assert all(len(line.encode("utf-8")) <= 75 for line in folded)
+    assert all(line.startswith(" ") for line in folded[1:])
+    parsed = _unfold_ics_lines("\r\n".join(folded) + "\r\n")
+    assert parsed == [original]
+
+
+def test_negative_n35_empty_calendar_is_valid_crlf_vcalendar(ctx):
+    client, _, (owner, _) = ctx
+    created = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n35-empty-calendar"},
+        json={"timezone": "UTC"},
+    ).json()
+    feed = client.get(created["feed_url"])
+    assert feed.status_code == 200
+    assert feed.text.startswith("BEGIN:VCALENDAR\r\n")
+    assert feed.text.endswith("END:VCALENDAR\r\n")
+    assert "BEGIN:VEVENT" not in feed.text
+    assert _unfold_ics_lines(feed.text)[0:2] == [
+        "BEGIN:VCALENDAR",
+        "PRODID:-//LegalSaathi//Private Calendar Feed//EN",
+    ]
+
+
+def test_negative_n36_replay_dedupes_vevent_and_uid_is_stable_nonreversible(ctx):
+    client, _, (owner, _) = ctx
+    first = _create(client, owner, "n36-idempotent-event", event_kind="study").json()
+    replay = _create(client, owner, "n36-idempotent-event", event_kind="study").json()
+    assert first["id"] == replay["id"]
+    created = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n36-export"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    first_feed = client.get(created["feed_url"]).text
+    second_feed = client.get(created["feed_url"]).text
+    assert first_feed.count("BEGIN:VEVENT") == second_feed.count("BEGIN:VEVENT") == 1
+    first_uid = next(line.removeprefix("UID:") for line in _unfold_ics_lines(first_feed) if line.startswith("UID:"))
+    second_uid = next(line.removeprefix("UID:") for line in _unfold_ics_lines(second_feed) if line.startswith("UID:"))
+    assert first_uid == second_uid == f"{keyed_hash(first['id'])}@calendar.legalsaathi.local"
+    assert first["id"] not in first_uid
+
+
+@pytest.mark.parametrize("failpoint", ["before_flush", "after_flush", "before_commit"])
+def test_negative_n45_n46_event_failpoints_rollback_and_retry_once(ctx, monkeypatch, failpoint):
+    client, SessionLocal, (owner, _) = ctx
+    key = f"n45-{failpoint}-event"
+    before = _calendar_counts(SessionLocal, owner)
+    with monkeypatch.context() as patch:
+        if failpoint == "before_flush":
+            real_flush = Session.flush
+            state = {"raised": False}
+
+            def fail_first_flush(session, *args, **kwargs):
+                if not state["raised"]:
+                    state["raised"] = True
+                    raise RuntimeError("n45 before flush")
+                return real_flush(session, *args, **kwargs)
+
+            patch.setattr(Session, "flush", fail_first_flush)
+        elif failpoint == "after_flush":
+            patch.setattr(
+                calendar_service,
+                "record_audit_event",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("n45 after flush")),
+            )
+        else:
+            real_commit = Session.commit
+            state = {"raised": False}
+
+            def fail_first_commit(session):
+                if not state["raised"]:
+                    state["raised"] = True
+                    raise RuntimeError("n45 before commit")
+                return real_commit(session)
+
+            patch.setattr(Session, "commit", fail_first_commit)
+        failed = _create(client, owner, key)
+        assert failed.status_code == 500
+
+    assert _calendar_counts(SessionLocal, owner) == before
+    retry = _create(client, owner, key)
+    assert retry.status_code == 201
+    replay = _create(client, owner, key)
+    assert replay.status_code == 201 and replay.json()["id"] == retry.json()["id"]
+    counts = _calendar_counts(SessionLocal, owner)
+    assert counts["events"] == before["events"] + 1
+    assert counts["sources"] == before["sources"] + 1
+    assert counts["audit"] == before["audit"] + 1
+
+
+def test_negative_n48_privacy_scanner_self_test_and_clean_runtime_surfaces(ctx):
+    client, SessionLocal, (owner, _) = ctx
+    created = client.post(
+        "/api/v1/calendar/exports",
+        headers={**_claims(owner), "Idempotency-Key": "n48-export"},
+        json={"timezone": "Asia/Kolkata"},
+    ).json()
+    raw = created["feed_url"].rsplit("/", 1)[-1].removesuffix(".ics")
+    forbidden = {
+        raw,
+        "9876543210",
+        "student-private@example.test",
+        "ENROL-N48-PRIVATE",
+        "private-note-n48",
+    }
+    with SessionLocal() as session:
+        db_surface = {
+            "token_hashes": list(session.scalars(select(CalendarExportToken.token_hash))),
+            "subscriptions": [
+                {"id": str(row.id), "status": row.status, "timezone": row.timezone}
+                for row in session.scalars(select(CalendarExportSubscription))
+            ],
+        }
+        audit_surface = [
+            {"action": row.action, "before": row.before_state, "after": row.after_state}
+            for row in session.scalars(select(AuditEvent))
+        ]
+    clean_surfaces = {
+        "database": db_surface,
+        "audit": audit_surface,
+        "log": redact_sensitive_path(f"/api/v1/public/calendar-feeds/{raw}.ics"),
+        "url": "/api/v1/public/calendar-feeds/:token",
+        "storage": {},
+        "console": [],
+        "error": client.get("/api/v1/public/calendar-feeds/" + ("X" * 43) + ".ics").json(),
+    }
+    assert privacy_canary_hits(clean_surfaces, forbidden) == []
+
+    # The exact same scanner must fail every named surface when seeded.
+    planted = {label: {"planted": next(iter(forbidden))} for label in clean_surfaces}
+    assert privacy_canary_hits(planted, forbidden) == sorted(planted)
