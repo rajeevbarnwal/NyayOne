@@ -1848,7 +1848,7 @@ async function stageE(page) {
   const chk = newChecks('I1-e-live-room-entry', [
     'the browser reached a MEDIA-READY state (devices enumerated, preview frame decoded)',
     'the server issued a join credential',
-    'the room header reports the participant is in the room',
+    'the room reports admission only after the selected media transport connects',
     'a grant row exists and stores only a token HASH',
     'the details sheet declares the credential redacted and in-memory only',
     'the raw join token never reaches DOM, storage, cookie or URL',
@@ -2250,6 +2250,15 @@ async function stageGeo(browser) {
   const results = {};
   for (const cfg of CONFIGS) {
     const ctx = await browser.newContext({ permissions: ['camera', 'microphone'], ...cfg.ctx });
+    // The aggregate intentionally proves the deterministic application seam;
+    // real LiveKit/TURN is owned by infra/video/scripts/livekit_turn_smoke.sh.
+    // Every fresh geometry context must make the same explicit selection as
+    // stage E before the application boots. Falling through to the production
+    // LiveKit adapter here makes the geometry oracle wait on an unrelated
+    // external media runtime and produces a false timeout.
+    await ctx.addInitScript(() => {
+      window.__legalsaathiVideoTransport = 'deterministic';
+    });
     results[cfg.key] = {
       criterion: cfg.criterion,
       kind: cfg.kind,

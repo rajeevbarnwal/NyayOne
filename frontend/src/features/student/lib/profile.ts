@@ -50,6 +50,15 @@ export const EMPTY_PROFILE: ProfileDraft = {
 /** Full institutional email (must have a dotted domain). "aditi@nlsiu" fails. */
 export const INSTITUTIONAL_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export const INSTITUTIONAL_EMAIL_MAX_LENGTH = 254;
+export const CONSUMER_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'yahoo.com',
+  'outlook.com',
+  'hotmail.com',
+  'proton.me',
+  'icloud.com',
+  'rediffmail.com',
+]);
 export const INSTITUTIONAL_EMAIL_ERROR =
   'Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in';
 
@@ -60,10 +69,12 @@ export const INSTITUTIONAL_EMAIL_ERROR =
  */
 export function institutionalEmailError(value: string): string | undefined {
   const email = value.trim();
+  const domain = email.toLowerCase().slice(email.lastIndexOf('@') + 1);
   if (
     !email
     || email.length > INSTITUTIONAL_EMAIL_MAX_LENGTH
     || !INSTITUTIONAL_EMAIL_RE.test(email)
+    || CONSUMER_EMAIL_DOMAINS.has(domain)
   ) {
     return INSTITUTIONAL_EMAIL_ERROR;
   }

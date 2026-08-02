@@ -12,6 +12,7 @@ describe('student screen registry (SAATHI-52/53/55/57/58)', () => {
       'S-55', 'S-56', 'S-57', 'S-58', 'S-59', 'S-60',
       'S-61', 'S-62', 'S-63', 'S-64', 'S-65',
       'S-82', 'S-83', 'S-84', 'S-85',
+      'S-86', 'S-87',
       'S-90', 'S-91', // S19.1 cross-module calendar (SAATHI-286)
       'S-94', 'S-95', // Terms & Conditions and Privacy Policy docs
     ];

@@ -25,6 +25,13 @@ export function AppShell({
   if (/^\/s-(?:0[1-9]|10)$/.test(location.pathname)) {
     return <main className="ls-v34-content" id="main-content">{children}</main>;
   }
+  if (/^\/s-(?:1[1-9]|2[0-6])$/.test(location.pathname)) {
+    return (
+      <V34ContinuationShell pathname={location.pathname} theme={theme} toggleTheme={toggleTheme}>
+        {children}
+      </V34ContinuationShell>
+    );
+  }
   return (
     <div className="ls-shell">
       {/* Desktop chambers rail */}
@@ -85,6 +92,128 @@ export function AppShell({
             </NavLink>
           ))}
         </nav>
+      </div>
+    </div>
+  );
+}
+
+const V34_BACK: Record<string, string> = {
+  '/s-11': '/s-10', '/s-12': '/s-11', '/s-13': '/s-14', '/s-14': '/s-07',
+  '/s-15': '/s-14', '/s-16': '/s-14', '/s-17': '/s-14', '/s-18': '/s-17',
+  '/s-19': '/s-17', '/s-20': '/s-14', '/s-21': '/s-20', '/s-22': '/s-21',
+  '/s-23': '/s-22', '/s-24': '/s-20', '/s-25': '/s-20', '/s-26': '/s-25',
+};
+
+const V34_LABELS: Record<string, string> = {
+  '/s-11': 'PREFERENCES', '/s-12': 'SETUP COMPLETE', '/s-13': 'RESUME SETUP',
+  '/s-14': 'STUDENT HOME', '/s-15': 'EMAIL VERIFICATION', '/s-16': 'RESTRICTED ACCESS',
+  '/s-17': 'PROFILE', '/s-18': 'SETTINGS', '/s-19': 'PRIVACY & CONSENT',
+  '/s-20': 'INTERNSHIPS', '/s-21': 'ROLE DETAIL', '/s-22': 'APPLICATION',
+  '/s-23': 'SUBMITTED', '/s-24': 'APPLICATION TRACKER', '/s-25': 'SAVED', '/s-26': 'SAVED · EMPTY',
+};
+
+const V34_MOBILE_NAV = [
+  { label: 'Home', to: '/s-14', icon: 'home' },
+  { label: 'Calendar', to: '/s-90', icon: 'calendar' },
+  { label: 'Prep', to: '/s-55', icon: 'prep' },
+  { label: 'Career', to: '/s-20', icon: 'career' },
+  { label: 'Community', to: '/s-50', icon: 'community' },
+] as const;
+
+function V34ShellIcon({ name, size = 21 }: { name: string; size?: number }) {
+  const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <svg className={`v34c-icon v34c-icon--${name}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {name === 'back' && <path d="m15 5-7 7 7 7" {...line}/>}
+      {name === 'sun' && <><circle cx="12" cy="12" r="4" {...line}/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" {...line}/></>}
+      {name === 'moon' && <path d="M20 15A8.5 8.5 0 0 1 9 4a9 9 0 1 0 11 11Z" {...line}/>}
+      {name === 'home' && <><path d="m3 11 9-7 9 7" {...line}/><path d="M5 10v10h14V10M9 20v-6h6v6" {...line}/></>}
+      {name === 'calendar' && <><rect x="3" y="5" width="18" height="16" rx="2" {...line}/><path d="M7 3v4m10-4v4M3 10h18" {...line}/></>}
+      {name === 'prep' && <><circle cx="12" cy="12" r="9" {...line}/><circle cx="12" cy="12" r="4" {...line}/><path d="M12 3v5m9 4h-5m-4 9v-5M3 12h5" {...line}/></>}
+      {name === 'career' && <><rect x="3" y="7" width="18" height="13" rx="2" {...line}/><path d="M9 7V4h6v3m-3 4v5m-2-2h4" {...line}/></>}
+      {name === 'community' && <><path d="M4 5h16v11H9l-5 4V5Z" {...line}/><path d="M8 9h8m-8 3h5" {...line}/></>}
+      {name === 'research' && <><circle cx="10" cy="10" r="6" {...line}/><path d="m14.5 14.5 5 5M10 7v6m-3-3h6" {...line}/></>}
+    </svg>
+  );
+}
+
+function V34Brand() {
+  return (
+    <NavLink to="/s-14" className="v34c-brand" aria-label="LegalSaathi home">
+      <span className="v34c-brand__mark" aria-hidden>§</span>
+      <span><b>LegalSaathi</b><small>STUDENT MODULE</small></span>
+    </NavLink>
+  );
+}
+
+function V34ContinuationShell({
+  children,
+  pathname,
+  theme,
+  toggleTheme,
+}: {
+  children: ReactNode;
+  pathname: string;
+  theme: ThemeMode;
+  toggleTheme: () => void;
+}) {
+  const screenId = pathname.slice(1).toUpperCase();
+  const setup = /^\/s-1[1-3]$/.test(pathname);
+  return (
+    <div className={`v34-screen v34-screen--continuation${setup ? ' v34-screen--setup' : ''}`} data-v34-screen={screenId}>
+      <aside className="v34c-rail" aria-label={setup ? 'Profile setup' : 'Primary'}>
+        <V34Brand/>
+        {setup ? (
+          <div className="v34c-setupsteps" aria-label="Profile setup steps">
+            {[
+              ['1', 'Personal', '/s-10'], ['2', 'Academic', '/s-10'], ['3', 'Preferences', '/s-11'],
+            ].map(([n, label, to], index) => (
+              <NavLink key={`${n}-${label}`} to={to} className={pathname === '/s-11' && index === 2 ? 'is-on' : ''}>
+                <b>{n}</b><span><strong>{label}</strong><small>{index < 2 ? 'Saved' : 'Current step'}</small></span>
+              </NavLink>
+            ))}
+            <div className="v34-rule"/>
+            <p>Your private academic record stays separate from public profile information.</p>
+          </div>
+        ) : (
+          <nav className="v34c-railnav" aria-label="Student module">
+            {railItems.map((item) => (
+              <NavLink key={item.id} to={item.to} className={({ isActive }) => isActive ? 'is-on' : undefined}>
+                <span aria-hidden>{item.glyph}</span><span>{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        )}
+        <span className="v34-grow"/>
+        <p className="v34c-railnote">TIER 2 · Private fields are never shown publicly.</p>
+      </aside>
+
+      <div className="v34-pane">
+        <div className="v34-status" aria-hidden><span>9:41</span><span>100</span></div>
+        <header className="v34c-head">
+          <NavLink to={V34_BACK[pathname] ?? '/s-14'} className="v34c-back" aria-label={`Back from ${screenId}`}>
+            <V34ShellIcon name="back" size={18}/><span>Back</span>
+          </NavLink>
+          <span className="v34c-screenid">{screenId} · {V34_LABELS[pathname] ?? 'STUDENT'}</span>
+          <span className="v34-grow"/>
+          <V34Brand/>
+          <button type="button" className="v34-theme" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+            <V34ShellIcon name={theme === 'dark' ? 'moon' : 'sun'}/>
+          </button>
+        </header>
+        <main className="v34c-content" id="main-content">{children}</main>
+        {!setup && (
+          <nav className="v34c-tabbar" aria-label="Primary mobile">
+            {V34_MOBILE_NAV.map((item) => (
+              <NavLink key={item.label} to={item.to} className={({ isActive }) => isActive ? 'is-on' : undefined}>
+                <V34ShellIcon name={item.icon}/><span>{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        )}
+        <NavLink className="v34c-ask" to="/s-36" aria-label="Ask a legal research question" data-tip="Ask LegalSaathi">
+          <V34ShellIcon name="research" size={25}/>
+        </NavLink>
       </div>
     </div>
   );

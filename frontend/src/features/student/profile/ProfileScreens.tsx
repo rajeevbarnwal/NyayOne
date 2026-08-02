@@ -238,16 +238,46 @@ export function ProfileStep2() {
 }
 
 export function ProfileResume() {
-  // S-13: resume from the last incomplete step. The RENDERED form must match the
-  // computed step (independent-QA fix, comment 12458/12459): step 1 → Personal,
-  // step 2 → Academic, step 3 → Preferences, complete → completion. Saved
-  // academic values are preserved (seedResumeDraft never seeds over real data).
+  const nav = useNavigate();
+  // S-13 is a truthful handoff, not a second copy of the form. The destination
+  // remains computed from the live draft and saved values remain untouched.
   const seeded = useMemo(() => seedResumeDraft(), []);
   const step = nextIncompleteStep(seeded);
-  if (step === 1) return <ProfileStep1 />;
-  if (step === 2) return <AcademicStep screenId="S-13" />;
-  if (step === 3) return <ProfileStep3 />;
-  return <ProfileDone />;
+  const destination = step === 1 ? '/s-10' : step === 2 ? '/s-10?step=academic' : step === 3 ? '/s-11' : '/s-14';
+  const current = step ?? 4;
+  const heading = step === 1 ? 'Finish your details' : step === 2 ? 'Finish your studies' : step === 3 ? 'Pick up where you stopped' : 'Your setup is complete';
+  return (
+    <StudentScreen screenId="S-13" className="st-stack st-resume">
+      <div>
+        <p className="st-eyebrow">Welcome back · {step ? `${Math.round(((step - 1) / 3) * 100)}% done` : '100% done'}</p>
+        <h1 className="st-h1">{heading}</h1>
+        <p className="st-card__sub" style={{ marginTop: 10 }}>
+          Saved answers stay exactly as you left them. Continue at the first incomplete step, or browse before finishing.
+        </p>
+      </div>
+      <section className="st-panel" aria-label="Profile setup progress">
+        {[
+          ['Personal', 'Name, date of birth and city'],
+          ['Academic', 'College, year and enrolment'],
+          ['Preferences', 'Practice areas and career direction'],
+        ].map(([label, detail], index) => {
+          const n = index + 1;
+          const state = n < current ? 'Saved' : n === current ? 'Continue here' : 'Not started';
+          return (
+            <div className="st-setrow" key={label}>
+              <div><div className="st-setrow__label">Step {n} · {label}</div><div className="st-setrow__sub">{detail}</div></div>
+              <span className={`status ${n < current ? 'status--ok' : n === current ? 'status--warn' : 'status--info'}`}>{state}</span>
+            </div>
+          );
+        })}
+      </section>
+      <div className="st-actions st-actions--split">
+        <button type="button" className="btn tap" onClick={() => nav('/s-20')}>Browse first</button>
+        <button type="button" className="btn btn--primary tap" onClick={() => nav(destination)}>{step ? `Continue step ${step}` : 'Open dashboard'}</button>
+      </div>
+      <DpdpFootnote>Draft fields remain private and are not submitted by opening this screen</DpdpFootnote>
+    </StudentScreen>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -289,7 +319,7 @@ export function ProfileStep3() {
   }
 
   return (
-    <AuthCard screenId="S-11" kicker="Step 3 of 3 · Preferences" title="Specialisations">
+    <AuthCard screenId="S-11" kicker="Step 3 of 3 · Preferences" title="What should find you?" sub="Choose the legal work and direction you want LegalSaathi to surface first. You can change this later.">
       <Progress pct={100} />
       <span className="st-field__label" id="interests-label">
         Areas of interest
@@ -331,8 +361,8 @@ export function ProfileDone() {
   const tier = profileTier(draft);
   const firstName = draft.fullName.trim().split(/\s+/)[0] || 'Student';
   return (
-    <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re all set, ${firstName}`}>
-      <p className="st-card__sub">Your hub is now personalised.</p>
+    <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re ready, ${firstName}.`}>
+      <p className="st-card__sub">Your student workspace is organised. Verification controls which applications and trusted features are available.</p>
       <span className="st-badge">
         <span aria-hidden>✓</span> {TIER_LABELS[tier === 'verified_student' ? 'verified_student' : 'incomplete']}
       </span>
@@ -390,7 +420,7 @@ export function ProfileView() {
     <StudentScreen screenId="S-17" className="st-set">
       <div className="st-set__head">
         <p className="st-eyebrow">Profile · S3</p>
-        <h1 className="st-h1">Your profile</h1>
+        <h1 className="st-h1">Your LegalSaathi profile</h1>
       </div>
 
       {query.isPending && <LoadingState label="Loading your profile…" />}
@@ -412,7 +442,7 @@ export function ProfileView() {
 
       {p && (
         <>
-          <div className="st-panel">
+          {!editing && <div className="st-panel">
             {([
               ['Full name', fullName || 'Not provided'],
               ['Mobile', p.maskedMobile || 'Not provided'],
@@ -429,7 +459,7 @@ export function ProfileView() {
             <p className="st-setrow__sub" style={{ marginTop: 'var(--space-3)' }}>
               Bar enrolment number stays private · never on your public profile.
             </p>
-          </div>
+          </div>}
 
           {editing && (
             <div className="st-panel" style={{ marginTop: 'var(--space-3)' }}>

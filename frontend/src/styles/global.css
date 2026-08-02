@@ -3,6 +3,7 @@
 @import './fonts.css';
 @import './student.css';
 @import './student-v34.css';
+@import './internship-reporting.css';
 
 * {
   box-sizing: border-box;
@@ -298,7 +299,7 @@ button, input, textarea, select {
 .ls-trace__seg { color: var(--text2); }
 .ls-trace__pill { padding: 2px 8px; border-radius: var(--radius-pill); background: var(--info-bg); color: var(--info); }
 .ls-trace__pill--persona { background: var(--ok-bg); color: var(--ok); }
-.ls-trace__src { margin-left: auto; opacity: 0.7; }
+.ls-trace__src { margin-left: auto; color: var(--text2); }
 
 /* -------------------------------------------------------------------------- */
 /* Mobile Input & Country Code Dropdown Styles                                */

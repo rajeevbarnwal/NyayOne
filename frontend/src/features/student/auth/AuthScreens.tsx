@@ -909,10 +909,10 @@ export function EmailVerify() {
   return (
     <AuthCard
       screenId="S-15"
-      kicker="Verification"
-      title="Institutional email · NLU verification"
+      kicker="One more check · verification link"
+      title="Confirm your college email"
       meta={<StatusBadge status="warn" label="Verification pending" />}
-      sub="Confirm from your NLU inbox to unlock verified-student features. Manual review if the domain is unrecognised."
+      sub="Open the one-time link in your institutional inbox to unlock verified-student features. Nothing is verified merely by typing an address here."
     >
       <TextField id="inst-email" label="Institutional email" value={email} onChange={changeEmail} type="email" inputMode="email" error={error} />
       {sent && (
@@ -923,6 +923,11 @@ export function EmailVerify() {
           <span>Verification link sent — check your inbox.</span>
         </div>
       )}
+      <div className="st-panel" style={{ marginTop: 'var(--space-4)' }}>
+        <div className="st-setrow"><div><div className="st-setrow__label">Delivery</div><div className="st-setrow__sub">Institutional inbox only</div></div></div>
+        <div className="st-setrow"><div><div className="st-setrow__label">Verification</div><div className="st-setrow__sub">One-time link · server-authoritative</div></div></div>
+        <div className="st-setrow"><div><div className="st-setrow__label">If the domain is not recognised</div><div className="st-setrow__sub">Manual review remains available</div></div></div>
+      </div>
       <div className="st-actions st-actions--split">
         <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
           Back to dashboard
@@ -949,7 +954,7 @@ export function RestrictedDashboard() {
     <StudentScreen screenId="S-16" className="st-authwrap">
       <div className="st-card">
         <p className="st-card__kicker">Restricted access</p>
-        <h1 className="st-card__title">Restricted</h1>
+        <h1 className="st-card__title">Some features are still locked</h1>
         <div className="st-metarow">
           <StatusBadge status="risk" label="Restricted" />
         </div>

@@ -134,7 +134,8 @@ def open_session():
     """
     maker = get_sessionmaker()
     bind = maker.kw.get("bind") if hasattr(maker, "kw") else None
-    if bind is not None and not getattr(bind, "_wave2_busy_timeout", False):
+    is_sqlite = bind is not None and bind.dialect.name == "sqlite"
+    if is_sqlite and not getattr(bind, "_wave2_busy_timeout", False):
         # The PRAGMA has to be issued on the RAW connection as it is handed out:
         # setting it from inside an already-open transaction is too late, which
         # is exactly why the first attempt at this still saw "database is locked".
@@ -151,7 +152,8 @@ def open_session():
         bind.dispose()
     session = maker()
     try:
-        session.execute(sa_text("PRAGMA busy_timeout = 20000"))
+        if is_sqlite:
+            session.execute(sa_text("PRAGMA busy_timeout = 20000"))
         yield session
     finally:
         session.close()

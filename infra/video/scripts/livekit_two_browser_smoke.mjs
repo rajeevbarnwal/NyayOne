@@ -59,9 +59,13 @@ const BUNDLE_URL =
 const SESSION_ID = process.env.SMOKE_SESSION_ID;
 const STUDENT_HEADER = process.env.SMOKE_AUTH_HEADER;
 const TUTOR_HEADER = process.env.SMOKE_TUTOR_AUTH_HEADER;
+const CHROMIUM_CDP_URL = process.env.SMOKE_CHROMIUM_CDP_URL || '';
+const DENIED_CHROMIUM_CDP_URL = process.env.SMOKE_DENIED_CHROMIUM_CDP_URL || '';
 // LiveKit's browser transport is a WebSocket: ws(s)://, not the http(s) the
 // backend uses for Twirp. Deriving it here keeps the operator to ONE variable.
-const WS_URL = (process.env.LIVEKIT_URL || '').replace(/^http/, 'ws');
+const WS_URL = (
+  process.env.SMOKE_BROWSER_LIVEKIT_URL || process.env.LIVEKIT_URL || ''
+).replace(/^http/, 'ws');
 // The response field holding the raw join credential, read through a variable
 // rather than as `grant.join_token`. Reason: backend/tests/test_wave2_video_infra.py
 // refuses to see a credential-shaped name on the left of an `=` or `:` anywhere
@@ -71,7 +75,13 @@ const WS_URL = (process.env.LIVEKIT_URL || '').replace(/^http/, 'ws');
 const JOIN_FIELD = 'join_token';
 const ICE_POLICY_FIELD = 'video_ice_transport_policy';
 const EXPECTED_ICE_POLICY = process.env.SMOKE_EXPECT_ICE_POLICY || '';
-const TEST_ORIGIN = new URL('.', BUNDLE_URL).href;
+// A browser running inside the media network needs an HTTP origin beside the
+// ws:// signalling endpoint; using the default HTTPS SDK origin would make
+// Chromium correctly block the WebSocket as mixed content. Bare-metal keeps
+// the existing SDK origin. The SDK itself is still fetched once by the Node
+// controller and injected as content, never loaded from this page.
+const TEST_ORIGIN =
+  process.env.SMOKE_BROWSER_ORIGIN || new URL('.', BUNDLE_URL).href;
 
 const want = (id) => STEPS.includes(id);
 let failed = false;
@@ -142,6 +152,8 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
       if (!LK) return { ok: false, error: 'the livekit-client UMD bundle did not expose a global' };
       const NativePeerConnection = window.RTCPeerConnection;
       window.__rtcConfigs = [];
+      window.__rtcErrors = [];
+      window.__peerConnections = [];
       window.RTCPeerConnection = function RecordedPeerConnection(config, ...args) {
         window.__rtcConfigs.push({
           phase: 'construct',
@@ -151,6 +163,15 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
           ),
         });
         const peerConnection = new NativePeerConnection(config, ...args);
+        window.__peerConnections.push(peerConnection);
+        peerConnection.addEventListener('icecandidateerror', (event) => {
+          // Numeric code + browser error text only. Candidate addresses, TURN
+          // usernames and credentials are deliberately excluded from evidence.
+          window.__rtcErrors.push({
+            errorCode: event.errorCode || null,
+            errorText: event.errorText || null,
+          });
+        });
         const nativeSetConfiguration = peerConnection.setConfiguration.bind(peerConnection);
         peerConnection.setConfiguration = (nextConfig) => {
           window.__rtcConfigs.push({
@@ -183,6 +204,7 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
           room.engine?.pcManager?.publisher?._pc ||
           room.engine?.publisher?.pc ||
           room.engine?.pcManager?.subscriber?._pc ||
+          window.__peerConnections.at(-1) ||
           null;
         const pcConfig = pc?.getConfiguration?.() || {};
         const joinIceServers = room.engine?.latestJoinResponse?.iceServers || [];
@@ -204,16 +226,28 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
           joinIceServerCount: joinIceServers.length,
           joinIceUrls: joinIceServers.flatMap((server) => server.urls || []),
           rtcConfigs: window.__rtcConfigs,
+          rtcErrors: window.__rtcErrors,
+          connectionState: pc?.connectionState || null,
+          iceConnectionState: pc?.iceConnectionState || null,
+          iceGatheringState: pc?.iceGatheringState || null,
         };
       }
       let published = 0;
       let publishError = null;
+      const captureContext = {
+        isSecureContext: window.isSecureContext,
+        hasMediaDevices: Boolean(navigator.mediaDevices),
+        hasGetUserMedia: Boolean(navigator.mediaDevices?.getUserMedia),
+      };
       if (canPublish) {
         try {
           await room.localParticipant.enableCameraAndMicrophone();
           published = room.localParticipant.trackPublications.size;
         } catch (error) {
-          publishError = String(error && error.name ? error.name : error);
+          // Error class only: platform capture errors may contain a device
+          // path or label in their message, neither of which belongs in release
+          // evidence.
+          publishError = String(error && error.name ? error.name : 'Error');
         }
       }
       return {
@@ -221,6 +255,7 @@ async function joinParticipant(browser, { bundle, grant, label, permissions }) {
         identity: room.localParticipant.identity,
         published,
         publishError,
+        captureContext,
         state: room.state,
       };
     },
@@ -308,18 +343,23 @@ async function main() {
 
   let browser;
   try {
-    browser = await chromium.launch({
-      args: [
-        // Deterministic media without a physical camera. This is the ONLY
-        // simulated thing in the run: the SFU, the relay, the ICE negotiation
-        // and every byte on the wire are real.
-        '--use-fake-ui-for-media-stream',
-        '--use-fake-device-for-media-stream',
-        '--autoplay-policy=no-user-gesture-required',
-      ],
-    });
+    browser = CHROMIUM_CDP_URL
+      ? await chromium.connectOverCDP(CHROMIUM_CDP_URL)
+      : await chromium.launch({
+          args: [
+            // Deterministic media without a physical camera. This is the ONLY
+            // simulated thing in the run: the SFU, the relay, the ICE negotiation
+            // and every byte on the wire are real.
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            '--autoplay-policy=no-user-gesture-required',
+          ],
+        });
   } catch (error) {
-    blocked(`chromium could not launch (${error.message}); run: npx playwright install chromium`);
+    blocked(
+      `chromium could not ${CHROMIUM_CDP_URL ? 'connect over CDP' : 'launch'} ` +
+        `(${error.message}); run: npx playwright install chromium`,
+    );
   }
 
   const participants = [];
@@ -369,7 +409,17 @@ async function main() {
                 `${participant.joined.iceUrls?.join(', ') || '<none>'}; ` +
                 `join ICE count=${participant.joined.joinIceServerCount ?? 0}; ` +
                 `join ICE URLs=${participant.joined.joinIceUrls?.join(', ') || '<none>'}; ` +
-                `constructed=${JSON.stringify(participant.joined.rtcConfigs || [])}`,
+                `constructed=${JSON.stringify(participant.joined.rtcConfigs || [])}; ` +
+                `iceErrors=${JSON.stringify(participant.joined.rtcErrors || [])}; ` +
+                `states=${JSON.stringify({ connection: participant.joined.connectionState, ice: participant.joined.iceConnectionState, gathering: participant.joined.iceGatheringState })}`,
+            );
+          }
+          if (participant.joined.published < 2) {
+            throw new Error(
+              `${label} joined but published ${participant.joined.published} local ` +
+                `track(s); expected fake camera + microphone; capture error=` +
+                `${participant.joined.publishError || '<none>'}; ` +
+                `context=${JSON.stringify(participant.joined.captureContext)}`,
             );
           }
           participants.push(participant);
@@ -427,12 +477,14 @@ async function main() {
         // The S4 browser deliberately auto-grants fake devices. Launch a
         // separate browser without --use-fake-ui-for-media-stream so S5 proves
         // the real denial path rather than overriding it at process level.
-        const deniedBrowser = await chromium.launch({
-          args: [
-            '--use-fake-device-for-media-stream',
-            '--autoplay-policy=no-user-gesture-required',
-          ],
-        });
+        const deniedBrowser = DENIED_CHROMIUM_CDP_URL
+          ? await chromium.connectOverCDP(DENIED_CHROMIUM_CDP_URL)
+          : await chromium.launch({
+              args: [
+                '--use-fake-device-for-media-stream',
+                '--autoplay-policy=no-user-gesture-required',
+              ],
+            });
         // Chromium's loopback WebRTC connection is permission-gated separately
         // from media capture. Establish the provider transport first, then
         // revoke camera/microphone before capture. This reproduces the real
@@ -561,9 +613,11 @@ async function main() {
           'docker-compose.yml',
           '-f',
           'infra/video/docker-compose.video.yml',
-          '--profile',
-          'video',
         ];
+        if (process.env.SMOKE_COMPOSE_OVERRIDE) {
+          composeArgs.push('-f', process.env.SMOKE_COMPOSE_OVERRIDE);
+        }
+        composeArgs.push('--profile', 'video');
         // Stop first and wait for both real clients to OBSERVE the outage.
         // `docker compose restart` could finish before Chromium dispatched the
         // Reconnecting event, making this gate a race between the container
@@ -621,22 +675,18 @@ async function main() {
         if (livekitStopped) {
           try {
             const { execFileSync } = await import('node:child_process');
-            execFileSync(
-              'docker',
-              [
-                'compose',
-                '-f',
-                'docker-compose.yml',
-                '-f',
-                'infra/video/docker-compose.video.yml',
-                '--profile',
-                'video',
-                'up',
-                '-d',
-                'livekit',
-              ],
-              { stdio: 'pipe' },
-            );
+            const recoveryArgs = [
+              'compose',
+              '-f',
+              'docker-compose.yml',
+              '-f',
+              'infra/video/docker-compose.video.yml',
+            ];
+            if (process.env.SMOKE_COMPOSE_OVERRIDE) {
+              recoveryArgs.push('-f', process.env.SMOKE_COMPOSE_OVERRIDE);
+            }
+            recoveryArgs.push('--profile', 'video', 'up', '-d', 'livekit');
+            execFileSync('docker', recoveryArgs, { stdio: 'pipe' });
           } catch {
             // Preserve the original reconnect failure as the gate result.
           }
