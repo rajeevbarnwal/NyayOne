@@ -34,6 +34,7 @@ import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
 import { COLLEGE_OPTIONS } from '../lib/catalog';
+import { profileCompletionPct } from '../lib/dashboard';
 
 function formatDDMMYYYY(dateStr: string): string {
   if (!dateStr) return '';
@@ -251,7 +252,14 @@ export function V34AuthGate(props: ScreenProps) {
         /* non-fatal fallback */
       }
       notifyStudentAuthChanged();
-      nav('/s-14', { state: { mobile: loginMobile } });
+      const currentDraft = getProfileDraft();
+      const pct = profileCompletionPct(currentDraft);
+      if (pct < 100) {
+        const nextStep = !currentDraft.college ? 'academic' : 'interests';
+        nav(`/s-10?step=${nextStep}`, { replace: true });
+      } else {
+        nav('/s-14', { replace: true, state: { mobile: loginMobile } });
+      }
       return;
     }
 
@@ -265,7 +273,14 @@ export function V34AuthGate(props: ScreenProps) {
       } else {
         await verifyLoginOtp(loginOtpId, loginOtpCode);
         notifyStudentAuthChanged();
-        nav('/s-14');
+        const currentDraft = getProfileDraft();
+        const pct = profileCompletionPct(currentDraft);
+        if (pct < 100) {
+          const nextStep = !currentDraft.college ? 'academic' : 'interests';
+          nav(`/s-10?step=${nextStep}`, { replace: true });
+        } else {
+          nav('/s-14', { replace: true });
+        }
       }
     } catch {
       setLoginErrors({
