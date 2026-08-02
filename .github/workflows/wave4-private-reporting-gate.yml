@@ -59,7 +59,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install backend
         working-directory: backend
-        run: pip install -r requirements.txt -r requirements.lock pytest
+        run: pip install -r requirements.lock
       - name: Install frontend and Chromium
         working-directory: frontend
         run: |
