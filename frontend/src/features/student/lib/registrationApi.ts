@@ -113,6 +113,7 @@ export interface CheckMobileResult {
   middleName?: string;
   lastName?: string;
   dateOfBirth?: string;
+  city?: string;
   preferredLanguage?: string;
   college?: string;
   yearOfStudy?: string;

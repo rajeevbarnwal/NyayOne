@@ -298,6 +298,23 @@ export function V34AuthGate(props: ScreenProps) {
         setLoginErrors({});
       } else {
         await verifyLoginOtp(loginOtpId, loginOtpCode);
+        try {
+          const info = await checkMobile(loginMobile);
+          if (info.registered || info.firstName) {
+            updateProfileDraft({
+              firstName: info.firstName,
+              middleName: info.middleName,
+              lastName: info.lastName,
+              dateOfBirth: info.dateOfBirth,
+              city: info.city,
+              college: info.college,
+              yearOfStudy: info.yearOfStudy,
+              enrolmentNumber: info.enrolmentNumber,
+            });
+          }
+        } catch {
+          /* non-fatal */
+        }
         notifyStudentAuthChanged();
         const currentDraft = getProfileDraft();
         const pct = profileCompletionPct(currentDraft);
@@ -1135,6 +1152,19 @@ export function V34ProfileStep1() {
 
   useEffect(() => {
     if (query.get('step') === 'academic') setActiveStep(2);
+    const current = getProfileDraft();
+    if (current.firstName && !firstName) setFirstName(current.firstName);
+    if (current.middleName && !middleName) setMiddleName(current.middleName);
+    if (current.lastName && !lastName) setLastName(current.lastName);
+    if (current.dateOfBirth && !dateOfBirth) setDob(current.dateOfBirth);
+    if (current.city && !city) setCity(current.city);
+    if (current.pronouns && !pronouns) setPronouns(current.pronouns);
+    if (current.avatarUrl && !photoPreview) setPhotoPreview(current.avatarUrl);
+    if (current.college && !college) setCollege(current.college);
+    if (current.yearOfStudy && !yearOfStudy) setYear(current.yearOfStudy);
+    if (current.enrolmentNumber && !enrolmentNumber) setEnrolmentNumber(current.enrolmentNumber);
+    if (current.interests?.length && !selectedInterests.length) setSelectedInterests(current.interests);
+    if (current.careerGoal && !careerGoal) setCareerGoal(current.careerGoal);
   }, [location.search]);
 
   // Step 1: Personal State
@@ -1550,7 +1580,7 @@ export function V34ProfileStep1() {
           <span className="v34-grow" />
         </main>
         {activeStep <= 3 && (
-          <Footer hint={activeStep === 1 ? 'Step 1 stays in memory while this account setup is open.' : activeStep === 2 ? 'Step 2 connects you with law school resources and tutors.' : 'Step 3 customizes your feed and internship recommendations.'}>
+          <Footer hint={activeStep === 1 ? 'Step 1: Save your personal details to progress your profile.' : activeStep === 2 ? 'Step 2 connects you with law school resources and tutors.' : 'Step 3 customizes your feed and internship recommendations.'}>
             <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
               <button
                 type="button"
