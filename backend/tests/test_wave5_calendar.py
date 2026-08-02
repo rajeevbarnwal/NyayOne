@@ -135,7 +135,13 @@ def _job_env_blocks(document: str) -> list[dict[str, str]]:
     return blocks
 
 
-def test_staging_rejects_loopback_calendar_origin_and_accepts_the_ci_origin():
+def test_staging_rejects_loopback_calendar_origin_and_accepts_the_ci_origin(monkeypatch):
+    # This test runs inside the very staging jobs being validated, where the
+    # workflow-level variable is already present. Remove it for the explicit
+    # "unset uses the refused loopback default" case; explicit constructor
+    # values below remain authoritative and monkeypatch restores the process
+    # environment after the test.
+    monkeypatch.delenv("CALENDAR_PUBLIC_BASE_URL", raising=False)
     for loopback in ("https://localhost:1030", "https://127.0.0.1:1030", "https://[::1]:1030"):
         with pytest.raises(ConfigurationError, match="calendar_public_base_url"):
             _staging_settings(calendar_public_base_url=loopback)

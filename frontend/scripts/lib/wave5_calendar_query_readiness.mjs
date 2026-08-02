@@ -72,7 +72,13 @@ export function registerCalendarQueryReady(page, timezone, timeout = READY_TIMEO
 /** Awaits the response AND its body, so a later navigation cannot abort it. */
 export async function settleCalendarQuery(pending) {
   const response = await pending;
-  await response.finished();
+  const completionError = await response.finished();
+  if (completionError) {
+    throw new Error(
+      `calendar-events response did not finish cleanly: ${completionError.message}`,
+      { cause: completionError },
+    );
+  }
   return response;
 }
 

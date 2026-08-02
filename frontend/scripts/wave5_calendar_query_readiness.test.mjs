@@ -37,7 +37,7 @@ function eventsUrl(timezone) {
 }
 
 /** Minimal Playwright-shaped page whose network semantics match Chromium's. */
-function fakePage() {
+function fakePage({ responseCompletionError = null } = {}) {
   const state = { consoleErrors: [], pageErrors: [], failedRequests: [], badResponses: [] };
   const inflight = new Set();
   const listeners = new Set();
@@ -57,7 +57,7 @@ function fakePage() {
       // that point a navigation can no longer abort the request.
       finished: async () => {
         finished = true;
-        return null;
+        return responseCompletionError;
       },
       isFinished: () => finished,
     };
@@ -162,6 +162,21 @@ describe('D3 post-timezone readiness contract', () => {
     // Nothing was whitelisted or cleared: the array was never written to.
     expect(runtimeErrors(page.state).failedRequests).toEqual([]);
     expect(runtimeClean(page.state)).toBe(true);
+  });
+
+  it('fails closed when a 200 response body does not finish cleanly', async () => {
+    const page = fakePage({
+      responseCompletionError: new Error('net::ERR_ABORTED'),
+    });
+    await expect(changeTimezoneWithQueryReady({
+      page,
+      timezone: TIMEZONE,
+      applyChange: applyTimezoneChange(page),
+      savePredicate,
+      timeout: 5_000,
+      legacyNavigateImmediately: false,
+    })).rejects.toThrow('calendar-events response did not finish cleanly: net::ERR_ABORTED');
+    page.dispose();
   });
 });
 
