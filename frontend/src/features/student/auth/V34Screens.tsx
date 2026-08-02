@@ -1117,6 +1117,22 @@ export function V34ProfileStep1() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>(draft.interests?.length ? draft.interests : ['Constitutional', 'Corporate']);
   const [careerGoal, setCareerGoal] = useState<string>('Litigation & judiciary');
 
+  const calculatedPct = useMemo(() => {
+    let score = 0;
+    if (preferredName.trim()) score += 12;
+    if (dateOfBirth) score += 12;
+    if (city) score += 10;
+
+    if (college) score += 18;
+    if (yearOfStudy) score += 10;
+    if (enrolmentNumber.trim()) score += 5;
+
+    if (selectedInterests.length > 0) score += 18;
+    if (careerGoal) score += 15;
+
+    return Math.min(100, score);
+  }, [preferredName, dateOfBirth, city, college, yearOfStudy, enrolmentNumber, selectedInterests, careerGoal]);
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
@@ -1225,7 +1241,7 @@ export function V34ProfileStep1() {
             </div>
           ))}
           <div className="v34-rule" />
-          <strong className="v34-stat">{activeStep === 1 ? '34%' : activeStep === 2 ? '67%' : '100%'}</strong>
+          <strong className="v34-stat">{calculatedPct}%</strong>
           <small>We ask for the minimum. No marks or Aadhaar.</small>
         </aside>
       }
@@ -1321,7 +1337,7 @@ export function V34ProfileStep1() {
               </div>
               <div className="v34-rule" />
               <div className="v34-complete">
-                <strong>34%</strong>
+                <strong>{calculatedPct}%</strong>
                 <span>
                   profile complete<small>All three steps open internship applications.</small>
                 </span>
@@ -1378,7 +1394,7 @@ export function V34ProfileStep1() {
               </div>
               <div className="v34-rule" />
               <div className="v34-complete">
-                <strong>67%</strong>
+                <strong>{calculatedPct}%</strong>
                 <span>
                   profile complete<small>One final step remaining to unlock all features.</small>
                 </span>
@@ -1421,7 +1437,7 @@ export function V34ProfileStep1() {
               </div>
               <div className="v34-rule" />
               <div className="v34-complete">
-                <strong>100%</strong>
+                <strong>{calculatedPct}%</strong>
                 <span>
                   profile complete<small>Ready to unlock your student dashboard.</small>
                 </span>
