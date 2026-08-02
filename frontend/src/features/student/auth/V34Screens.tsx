@@ -205,8 +205,11 @@ export function V34Onboarding() {
 
 export function V34AuthGate(props: ScreenProps) {
   const nav = useNavigate();
+  const location = useLocation();
+  const locState = (location.state as { mobile?: string; tab?: 'signin' | 'register'; message?: string } | null);
+
   const [language, setLanguage] = useState('English');
-  const [activeTab, setActiveTab] = useState<'signin' | 'register'>('signin');
+  const [activeTab, setActiveTab] = useState<'signin' | 'register'>(locState?.tab || 'signin');
 
   // Sign In state
   const [loginMobile, setLoginMobile] = useState('');
@@ -217,6 +220,21 @@ export function V34AuthGate(props: ScreenProps) {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginResendCooldown, setLoginResendCooldown] = useState<number>(0);
   const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
+
+  // Register state
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [regMobile, setRegMobile] = useState(locState?.mobile || '');
+  const [dob, setDob] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(true);
+  const [regBusy, setRegBusy] = useState(false);
+  const [regErrors, setRegErrors] = useState<Record<string, string>>(
+    locState?.message ? { submit: locState.message } : {}
+  );
+  const [regOtpSent, setRegOtpSent] = useState(false);
+  const [registrationId, setRegistrationId] = useState('');
+  const [regOtpCode, setRegOtpCode] = useState('');
 
   useEffect(() => {
     if (loginResendCooldown <= 0) return;
@@ -243,19 +261,6 @@ export function V34AuthGate(props: ScreenProps) {
     }
   }
 
-  // Register state
-  const [firstName, setFirstName] = useState('');
-  const [middleName, setMiddleName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [regMobile, setRegMobile] = useState('');
-  const [dob, setDob] = useState('');
-  const [consentAccepted, setConsentAccepted] = useState(true);
-  const [regBusy, setRegBusy] = useState(false);
-  const [regErrors, setRegErrors] = useState<Record<string, string>>({});
-  const [regOtpSent, setRegOtpSent] = useState(false);
-  const [registrationId, setRegistrationId] = useState('');
-  const [regOtpCode, setRegOtpCode] = useState('');
-
   async function handleLoginSubmit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(loginMobile)) next.mobile = MOBILE_ERROR;
@@ -268,6 +273,15 @@ export function V34AuthGate(props: ScreenProps) {
     setLoginBusy(true);
     try {
       if (!loginOtpSent) {
+        const check = await checkMobile(loginMobile);
+        if (!check.registered) {
+          setRegMobile(loginMobile);
+          setActiveTab('register');
+          setRegErrors({
+            submit: 'No existing account found for this mobile number. Complete registration below to create your student account.'
+          });
+          return;
+        }
         const loginId = await startLoginOtp(loginMobile);
         loginOtpIdRef.current = loginId;
         setLoginOtpId(loginId);
@@ -626,6 +640,17 @@ export function V34Login() {
     setBusy(true);
     try {
       if (!otpSent) {
+        const check = await checkMobile(mobile);
+        if (!check.registered) {
+          nav('/s-03', {
+            state: {
+              mobile,
+              tab: 'register',
+              message: 'No existing account found. Complete registration below to create your student account.',
+            },
+          });
+          return;
+        }
         const loginId = await startLoginOtp(mobile);
         setOtpId(loginId);
         setOtpSent(true);
