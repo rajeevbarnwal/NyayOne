@@ -27,7 +27,7 @@ export function AppShell({
   }
   if (/^\/s-(?:1[1-9]|2[0-6])$/.test(location.pathname)) {
     return (
-      <V34ContinuationShell pathname={location.pathname} theme={theme} toggleTheme={toggleTheme}>
+      <V34ContinuationShell pathname={location.pathname} search={location.search} theme={theme} toggleTheme={toggleTheme}>
         {children}
       </V34ContinuationShell>
     );
@@ -149,16 +149,23 @@ function V34Brand() {
 function V34ContinuationShell({
   children,
   pathname,
+  search,
   theme,
   toggleTheme,
 }: {
   children: ReactNode;
   pathname: string;
+  search: string;
   theme: ThemeMode;
   toggleTheme: () => void;
 }) {
   const screenId = pathname.slice(1).toUpperCase();
   const setup = /^\/s-1[1-3]$/.test(pathname);
+  const listing = new URLSearchParams(search).get('listing');
+  const staticBack = V34_BACK[pathname] ?? '/s-14';
+  const back = listing && (pathname === '/s-22' || pathname === '/s-23')
+    ? `${pathname === '/s-22' ? '/s-21' : '/s-22'}?listing=${encodeURIComponent(listing)}`
+    : staticBack;
   return (
     <div className={`v34-screen v34-screen--continuation${setup ? ' v34-screen--setup' : ''}`} data-v34-screen={screenId}>
       <aside className="v34c-rail" aria-label={setup ? 'Profile setup' : 'Primary'}>
@@ -191,7 +198,7 @@ function V34ContinuationShell({
       <div className="v34-pane">
         <div className="v34-status" aria-hidden><span>9:41</span><span>100</span></div>
         <header className="v34c-head">
-          <NavLink to={V34_BACK[pathname] ?? '/s-14'} className="v34c-back" aria-label={`Back from ${screenId}`}>
+          <NavLink to={back} className="v34c-back" aria-label={`Back from ${screenId}`}>
             <V34ShellIcon name="back" size={18}/><span>Back</span>
           </NavLink>
           <span className="v34c-screenid">{screenId} · {V34_LABELS[pathname] ?? 'STUDENT'}</span>

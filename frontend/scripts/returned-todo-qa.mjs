@@ -14,12 +14,12 @@ const routeMap = {
   'SAATHI-55': '/s-09',
   'SAATHI-57': '/s-14',
   'SAATHI-60': '/s-20',
-  'SAATHI-61': '/s-22',
+  'SAATHI-61': '/s-22?listing=cam',
   'SAATHI-74': '/s-51',
   'SAATHI-104': '/s-20',
   'SAATHI-108': '/s-17',
   'SAATHI-112': '/s-20',
-  'SAATHI-116': '/s-22',
+  'SAATHI-116': '/s-22?listing=cam',
   'SAATHI-144': '/s-51',
   'SAATHI-147': '/s-55',
   'SAATHI-173': '/s-61',
@@ -32,10 +32,73 @@ const context = await browser.newContext({ acceptDownloads: true });
 const page = await context.newPage();
 const consoleErrors = [];
 const networkErrors = [];
+const unmatchedInternshipApi = [];
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 page.on('response', (response) => {
   if (response.status() >= 400) networkErrors.push(`${response.status()} ${response.url()}`);
 });
+
+const internshipListings = [
+  {
+    id: 'cam', role: 'Summer Associate, disputes', organisation: 'Cyril Amarchand Mangaldas', location: 'Mumbai',
+    stipend_monthly_paise: 4000000, verification_status: 'verified', application_deadline: '2027-07-09',
+    eligibility: '4th or 5th year · one 1,500-word writing sample', tags: ['Disputes', 'Mumbai', '6 weeks'],
+    description: 'Research notes for live commercial disputes, first cuts of applications and written submissions, and client conferences with a supervising associate.',
+    source: {
+      name: 'Cyril Amarchand Mangaldas careers', url: 'https://www.cyrilshroff.com/careers/',
+      retrieved_at: '2026-06-28T00:00:00Z', verified_at: '2026-06-28T00:00:00Z',
+    },
+  },
+  {
+    id: 'menon', role: 'Judicial research assistant', organisation: 'Chambers of Sr. Adv. R. Menon', location: 'Delhi High Court',
+    stipend_monthly_paise: 1500000, verification_status: 'unverified', application_deadline: '2027-07-08',
+    eligibility: '2nd year or above · rolling selection', tags: ['Research', 'Delhi'],
+    description: 'Judicial research support with a senior advocate’s chambers at the Delhi High Court.',
+    source: { name: 'Sample fixture', url: null, retrieved_at: null, verified_at: null },
+  },
+  {
+    id: 'vidhi', role: 'Research fellowship, policy', organisation: 'Vidhi Centre for Legal Policy', location: 'New Delhi',
+    stipend_monthly_paise: null, verification_status: 'unverified', application_deadline: '2027-07-15',
+    eligibility: 'All years · certificate on completion', tags: ['Policy', 'Research'],
+    description: 'Legal-policy research internship; certificate on completion. Unpaid.',
+    source: { name: 'Sample fixture', url: null, retrieved_at: null, verified_at: null },
+  },
+];
+const savedListingIds = new Set(['cam']);
+
+await page.route('**/api/v1/**', async (route) => {
+  const request = route.request();
+  const url = new URL(request.url());
+  const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  const isInternshipApi = url.pathname === '/api/v1/internships'
+    || url.pathname.startsWith('/api/v1/internships/')
+    || url.pathname.startsWith('/api/v1/student/internships/');
+  if (!isInternshipApi) return route.fallback();
+  if (request.method() === 'GET' && url.pathname === '/api/v1/internships') {
+    return json(200, { items: internshipListings, total: internshipListings.length, page: 1, page_size: 20 });
+  }
+  if (request.method() === 'GET' && url.pathname === '/api/v1/student/internships/saved') {
+    return json(200, { items: internshipListings.filter((listing) => savedListingIds.has(listing.id)) });
+  }
+  const detailMatch = url.pathname.match(/^\/api\/v1\/internships\/([^/]+)$/);
+  if (request.method() === 'GET' && detailMatch) {
+    const listingId = decodeURIComponent(detailMatch[1]);
+    const listing = internshipListings.find((candidate) => candidate.id === listingId);
+    return listing ? json(200, listing) : json(404, { detail: { code: 'internship_not_found' } });
+  }
+  unmatchedInternshipApi.push(`${request.method()} ${url.pathname}${url.search}`);
+  return json(501, { detail: { code: 'qa_internship_route_not_stubbed' } });
+});
+
+function isExactApiResponse(response, method, pathname) {
+  const url = new URL(response.url());
+  return response.request().method() === method && url.pathname === pathname;
+}
+
+async function finishResponse(response) {
+  const error = await response.finished();
+  return { status: response.status(), finishedError: error?.message ?? null };
+}
 
 const checks = [];
 function check(name, pass, detail = '') {
@@ -101,7 +164,16 @@ check('SAATHI-57 removes hardcoded Aditi metrics', !dashboardText.includes('Adit
 check('SAATHI-57 canonical Calendar/Explore labels', dashboardText.includes('Calendar · this week') && dashboardText.includes('Explore'));
 
 // Functional: verified-only filter is independent (PO observation was not reproduced).
+const catalogueResponses = [
+  page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
+  page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+];
 await page.goto(`${BASE}/s-20`, { waitUntil: 'networkidle' });
+const completedCatalogueResponses = await Promise.all((await Promise.all(catalogueResponses)).map(finishResponse));
+check('SAATHI-60 catalogue and saved API ready',
+  completedCatalogueResponses.length === 2
+    && completedCatalogueResponses.every((response) => response.status === 200 && response.finishedError === null),
+  JSON.stringify(completedCatalogueResponses));
 await page.getByRole('button', { name: 'Verified only' }).click();
 check('SAATHI-60/112 verified-only independently yields one listing', (await page.getByText('1 shown').count()) === 1);
 await page.getByRole('button', { name: 'Unpaid' }).click();
@@ -109,15 +181,22 @@ check('SAATHI-60/112 combined verified+unpaid yields empty state', await page.ge
 await page.getByRole('button', { name: 'All stipends' }).click();
 check('SAATHI-60/112 clearing stipend retains verified-only', (await page.getByText('1 shown').count()) === 1);
 
-// Functional: real PDF inputs, validation and persisted tracker entry.
-await page.goto(`${BASE}/s-22`, { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: 'Submit application' }).click();
+// Functional: stable listing identity, real PDF inputs, validation and persisted tracker entry.
+const detailResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam'));
+await page.goto(`${BASE}/s-22?listing=cam`, { waitUntil: 'networkidle' });
+const completedDetailResponse = await finishResponse(await detailResponse);
+check('SAATHI-61/116 CAM detail API ready',
+  completedDetailResponse.status === 200 && completedDetailResponse.finishedError === null,
+  JSON.stringify(completedDetailResponse));
+await page.getByRole('button', { name: 'Continue to documents' }).click();
+await page.getByRole('button', { name: 'Review application' }).click();
 check('SAATHI-61/116 requires résumé PDF', await page.getByText('Résumé PDF is required.').isVisible());
 check('SAATHI-61/116 requires transcript PDF', await page.getByText('Transcript PDF is required.').isVisible());
 await page.setInputFiles('#app-resume', { name: 'resume.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 resume') });
 await page.setInputFiles('#app-transcript', { name: 'transcript.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 transcript') });
+await page.getByRole('button', { name: 'Review application' }).click();
 await page.getByRole('button', { name: 'Submit application' }).click();
-check('SAATHI-61/116 submission reaches confirmation', page.url().endsWith('/s-23'));
+check('SAATHI-61/116 submission reaches confirmation', new URL(page.url()).pathname === '/s-23', page.url());
 const storedApplications = await page.evaluate(() => localStorage.getItem('legalsaathi.internship.applications.v1'));
 check('SAATHI-61/116 submission stored', Boolean(storedApplications), storedApplications ?? 'missing');
 await page.getByRole('button', { name: 'Open tracker' }).click();
@@ -125,6 +204,8 @@ await page.getByRole('heading', { name: 'Your applications' }).waitFor();
 const trackerCount = await page.locator('section[aria-label="Your applications"] li').count();
 check('SAATHI-61/116 tracker route opens', page.url().endsWith('/s-24'), page.url());
 check('SAATHI-61/116 submitted application persists in tracker', trackerCount > 5, `application rows=${trackerCount}`);
+check('SAATHI-60/61 internship API oracle had no unmatched call', unmatchedInternshipApi.length === 0,
+  JSON.stringify(unmatchedInternshipApi));
 
 // Functional: reply posting/validation.
 await page.goto(`${BASE}/s-51`, { waitUntil: 'networkidle' });

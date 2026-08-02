@@ -19,7 +19,11 @@ const viewports = [
 ];
 const themes = ['light', 'dark'];
 const states = [
-  ...Array.from({ length: 16 }, (_, index) => ({ id: `S-${index + 11}`, path: `/s-${index + 11}` })),
+  ...Array.from({ length: 16 }, (_, index) => {
+    const id = `S-${index + 11}`;
+    const path = id === 'S-21' || id === 'S-22' ? `/${id.toLowerCase()}?listing=cam` : `/${id.toLowerCase()}`;
+    return { id, path };
+  }),
   { id: 'S-17E', path: '/s-17', edit: true },
 ];
 const mobileScrollLimits = {
@@ -45,7 +49,99 @@ let settings = {
   ],
 };
 
-async function installApiContract(page) {
+const calendarViewPreferences = {
+  view_mode: 'week',
+  source_types: ['internship'],
+  from_date: null,
+  to_date: null,
+  timezone: 'Asia/Kolkata',
+  version: 1,
+  updated_at: '2026-08-03T00:00:00Z',
+};
+const calendarEvents = { items: [], total: 0, failed_sources: [] };
+const internshipListings = [
+  {
+    id: 'cam',
+    role: 'Summer Associate, disputes',
+    organisation: 'Cyril Amarchand Mangaldas',
+    location: 'Mumbai',
+    stipend_monthly_paise: 4000000,
+    verification_status: 'verified',
+    application_deadline: '2027-07-09',
+    eligibility: '4th or 5th year · one 1,500-word writing sample',
+    tags: ['Disputes', 'Mumbai', '6 weeks'],
+    description: 'Research notes for live commercial disputes, first cuts of applications and written submissions, and client conferences with a supervising associate.',
+    source: {
+      name: 'Cyril Amarchand Mangaldas careers',
+      url: 'https://www.cyrilshroff.com/careers/',
+      retrieved_at: '2026-06-28T00:00:00Z',
+      verified_at: '2026-06-28T00:00:00Z',
+    },
+  },
+  {
+    id: 'menon',
+    role: 'Judicial research assistant',
+    organisation: 'Chambers of Sr. Adv. R. Menon',
+    location: 'Delhi High Court',
+    stipend_monthly_paise: 1500000,
+    verification_status: 'unverified',
+    application_deadline: '2027-07-08',
+    eligibility: '2nd year or above · rolling selection',
+    tags: ['Research', 'Delhi'],
+    description: 'Judicial research support with a senior advocate’s chambers at the Delhi High Court.',
+    source: {
+      name: 'Sample fixture',
+      url: null,
+      retrieved_at: null,
+      verified_at: null,
+    },
+  },
+  {
+    id: 'vidhi',
+    role: 'Research fellowship, policy',
+    organisation: 'Vidhi Centre for Legal Policy',
+    location: 'New Delhi',
+    stipend_monthly_paise: null,
+    verification_status: 'unverified',
+    application_deadline: '2027-07-15',
+    eligibility: 'All years · certificate on completion',
+    tags: ['Policy', 'Research'],
+    description: 'Legal-policy research internship; certificate on completion. Unpaid.',
+    source: {
+      name: 'Sample fixture',
+      url: null,
+      retrieved_at: null,
+      verified_at: null,
+    },
+  },
+];
+
+function createRuntimeEvidence() {
+  return {
+    consoleErrors: [],
+    pageErrors: [],
+    failedRequests: [],
+    httpErrors: [],
+    unmatchedApi: [],
+  };
+}
+
+function attachRuntimeEvidence(page, runtime) {
+  page.on('console', (message) => {
+    if (message.type() === 'error') runtime.consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => runtime.pageErrors.push(error.message));
+  page.on('requestfailed', (request) => {
+    runtime.failedRequests.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'unknown'}`);
+  });
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      runtime.httpErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+    }
+  });
+}
+
+async function installApiContract(page, runtime, savedListingIds = new Set(['cam'])) {
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -84,7 +180,83 @@ async function installApiContract(page) {
     if (url.pathname.endsWith('/privacy/delete')) return json(202, { request_id: 'delete-opaque-001', status: 'pending' });
     if (url.pathname.endsWith('/recovery/start')) return json(202, { recovery_id: 'recovery-opaque-001' });
     if (url.pathname.endsWith('/recovery/verify')) return json(200, { status: 'verified' });
-    return json(404, { detail: { code: 'qa_route_not_stubbed' } });
+    if (request.method() === 'GET' && url.pathname === '/api/v1/calendar/view-preferences') {
+      return json(200, calendarViewPreferences);
+    }
+    if (request.method() === 'GET' && url.pathname === '/api/v1/calendar/events') {
+      return json(200, calendarEvents);
+    }
+    if (request.method() === 'GET' && url.pathname === '/api/v1/internships') {
+      return json(200, { items: internshipListings, total: internshipListings.length, page: 1, page_size: 20 });
+    }
+    if (request.method() === 'GET' && url.pathname === '/api/v1/student/internships/saved') {
+      return json(200, { items: internshipListings.filter((listing) => savedListingIds.has(listing.id)) });
+    }
+    const savedMatch = url.pathname.match(/^\/api\/v1\/student\/internships\/([^/]+)\/saved$/);
+    if ((request.method() === 'PUT' || request.method() === 'DELETE') && savedMatch) {
+      const listingId = decodeURIComponent(savedMatch[1]);
+      const listing = internshipListings.find((candidate) => candidate.id === listingId);
+      if (!listing) return json(404, { detail: { code: 'internship_not_found' } });
+      if (request.method() === 'PUT') savedListingIds.add(listingId);
+      else savedListingIds.delete(listingId);
+      return json(200, { saved: request.method() === 'PUT', listing_id: listingId });
+    }
+    const detailMatch = url.pathname.match(/^\/api\/v1\/internships\/([^/]+)$/);
+    if (request.method() === 'GET' && detailMatch) {
+      const listingId = decodeURIComponent(detailMatch[1]);
+      const listing = internshipListings.find((candidate) => candidate.id === listingId);
+      return listing
+        ? json(200, listing)
+        : json(404, { detail: { code: 'internship_not_found', message: 'This internship listing is unavailable.' } });
+    }
+    runtime.unmatchedApi.push(`${request.method()} ${url.pathname}${url.search}`);
+    return json(501, { detail: { code: 'qa_route_not_stubbed' } });
+  });
+}
+
+function isCalendarResponse(response, pathname) {
+  const url = new URL(response.url());
+  return response.request().method() === 'GET' && url.pathname === pathname;
+}
+
+function isExactApiResponse(response, method, pathname) {
+  const url = new URL(response.url());
+  return response.request().method() === method && url.pathname === pathname;
+}
+
+async function finishResponse(response) {
+  const error = await response.finished();
+  return {
+    method: response.request().method(),
+    path: `${new URL(response.url()).pathname}${new URL(response.url()).search}`,
+    status: response.status(),
+    finishedError: error?.message ?? null,
+  };
+}
+
+async function waitForCalendarDashboardReady(page, responsePromises) {
+  const responses = await Promise.all(responsePromises);
+  const completed = await Promise.all(responses.map(finishResponse));
+  await page.waitForFunction(() => {
+    const text = document.body.innerText;
+    return !text.includes('Loading calendar…') && !text.includes('Calendar preview is unavailable.');
+  });
+  return completed;
+}
+
+async function waitForInternshipStateReady(page, responsePromises) {
+  const responses = await Promise.all(responsePromises);
+  const completed = await Promise.all(responses.map(finishResponse));
+  await page.waitForFunction(() => !document.body.innerText.includes('Loading internship'));
+  return completed;
+}
+
+async function waitForDocumentReady(page) {
+  await page.evaluate(async () => {
+    if (document.fonts) await document.fonts.ready;
+    await new Promise((resolveFrame) => requestAnimationFrame(
+      () => requestAnimationFrame(resolveFrame),
+    ));
   });
 }
 
@@ -138,18 +310,54 @@ try {
       });
       await context.addInitScript(({ themeValue }) => {
         localStorage.setItem('ls-theme', themeValue);
-        localStorage.setItem('legalsaathi.internship.saved.v1', JSON.stringify(['cam']));
       }, { themeValue: theme });
       const page = await context.newPage();
-      await installApiContract(page);
-      const runtime = { consoleErrors: [], pageErrors: [], failedRequests: [] };
-      page.on('console', (message) => { if (message.type() === 'error') runtime.consoleErrors.push(message.text()); });
-      page.on('pageerror', (error) => runtime.pageErrors.push(error.message));
-      page.on('requestfailed', (request) => runtime.failedRequests.push(`${request.method()} ${request.url()}`));
+      const runtime = createRuntimeEvidence();
+      attachRuntimeEvidence(page, runtime);
+      const contextSavedIds = new Set(['cam']);
+      await installApiContract(page, runtime, contextSavedIds);
 
       for (const state of states) {
+        if (state.id === 'S-26') contextSavedIds.clear();
+        const calendarResponses = state.id === 'S-14' ? [
+          page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/view-preferences')),
+          page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/events')),
+        ] : [];
+        const internshipResponses = state.id === 'S-20' ? [
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+        ] : state.id === 'S-21' ? [
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam')),
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+        ] : state.id === 'S-22' ? [
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam')),
+        ] : state.id === 'S-25' ? [
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+        ] : state.id === 'S-26' ? [
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+        ] : [];
         await page.goto(`${base}${state.path}`, { waitUntil: 'domcontentloaded' });
         await page.locator(`[data-screen="${state.id === 'S-17E' ? 'S-17' : state.id}"]`).waitFor({ state: 'visible' });
+        if (state.id === 'S-14') {
+          const completed = await waitForCalendarDashboardReady(page, calendarResponses);
+          record(
+            `${state.id}__${viewport.name}__${theme}__calendar-ready`,
+            'both exact calendar GETs finish with HTTP 200 before capture',
+            completed,
+            completed.length === 2 && completed.every((item) => item.status === 200 && item.finishedError === null),
+          );
+        }
+        if (internshipResponses.length > 0) {
+          const completed = await waitForInternshipStateReady(page, internshipResponses);
+          record(
+            `${state.id}__${viewport.name}__${theme}__internship-api-ready`,
+            'all exact internship GETs finish with HTTP 200 before capture',
+            completed,
+            completed.length === internshipResponses.length
+              && completed.every((item) => item.status === 200 && item.finishedError === null),
+          );
+        }
+        await waitForDocumentReady(page);
         if (state.edit) {
           const edit = page.getByRole('button', { name: 'Edit college & year' });
           await edit.waitFor({ state: 'visible' });
@@ -190,24 +398,37 @@ try {
         }
         await page.screenshot({ path: resolve(screenshotsDir, `${prefix}.png`), fullPage: false });
       }
-      record(`${viewport.name}__${theme}__runtime`, '0 console/page/request errors', runtime,
-        runtime.consoleErrors.length === 0 && runtime.pageErrors.length === 0 && runtime.failedRequests.length === 0);
+      record(`${viewport.name}__${theme}__runtime`, '0 console/page/request/HTTP/unmatched-API errors', runtime,
+        runtime.consoleErrors.length === 0
+        && runtime.pageErrors.length === 0
+        && runtime.failedRequests.length === 0
+        && runtime.httpErrors.length === 0
+        && runtime.unmatchedApi.length === 0);
       await context.close();
     }
   }
 
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
-  await installApiContract(page);
+  const functionalRuntime = createRuntimeEvidence();
+  attachRuntimeEvidence(page, functionalRuntime);
+  const functionalSavedIds = new Set(['cam']);
+  await installApiContract(page, functionalRuntime, functionalSavedIds);
 
   await page.goto(`${base}/s-13`);
+  await waitForDocumentReady(page);
   const resume = page.getByRole('button', { name: 'Continue step 2' });
   await resume.waitFor({ state: 'visible' });
-  await resume.click();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?step=academic'),
+    resume.click(),
+  ]);
+  await waitForDocumentReady(page);
   record('S-13_resume_branch', 'first incomplete step routes to S-10 academic', new URL(page.url()).pathname + new URL(page.url()).search,
     new URL(page.url()).pathname === '/s-10' && new URL(page.url()).search === '?step=academic');
 
   await page.goto(`${base}/s-15`);
+  await waitForDocumentReady(page);
   const email = page.getByLabel('Institutional email');
   const send = page.getByRole('button', { name: 'Send verification link' });
   const institutionalEmailError = 'Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in';
@@ -234,13 +455,88 @@ try {
   await email.fill('student@nls.ac.in');
   record('S-15_academic_email', 'academic domain clears local validation', await email.inputValue(), await email.inputValue() === 'student@nls.ac.in');
 
+  const browseResponses = [
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+  ];
   await page.goto(`${base}/s-20`);
+  const completedBrowseResponses = await waitForInternshipStateReady(page, browseResponses);
+  await waitForDocumentReady(page);
+  record('S-20_api_ready', 'catalogue and saved-list GETs finish with HTTP 200 before interaction', completedBrowseResponses,
+    completedBrowseResponses.length === 2
+      && completedBrowseResponses.every((item) => item.status === 200 && item.finishedError === null));
   const search = page.getByRole('searchbox', { name: 'Search internships' });
   await search.fill('not-a-real-placement');
   record('S-20_empty_search', 'truthful no-results state', await page.getByText('No matching listings').isVisible(),
     await page.getByText('No matching listings').isVisible());
 
+  const menonResponses = [
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/menon')),
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+  ];
+  await page.goto(`${base}/s-21?listing=menon`);
+  const completedMenonResponses = await waitForInternshipStateReady(page, menonResponses);
+  await waitForDocumentReady(page);
+  record('S-21_menon_identity', 'stable menon identity renders Judicial research assistant, never CAM fallback', {
+    url: page.url(), responses: completedMenonResponses,
+  }, await page.getByRole('heading', { name: 'Judicial research assistant' }).isVisible()
+    && new URL(page.url()).searchParams.get('listing') === 'menon'
+    && completedMenonResponses.every((item) => item.status === 200 && item.finishedError === null));
+
+  const saveMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'PUT', '/api/v1/student/internships/menon/saved'));
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const completedSaveMenon = await finishResponse(await saveMenonResponse);
+  await page.getByRole('status').filter({ hasText: 'Saved privately to your account.' }).waitFor({ state: 'visible' });
+  record('S-21_save_identity', 'PUT saves exactly menon to the account-backed list', completedSaveMenon,
+    completedSaveMenon.status === 200 && completedSaveMenon.finishedError === null && functionalSavedIds.has('menon'));
+
+  const savedMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved'));
+  await page.goto(`${base}/s-25`);
+  const completedSavedMenon = await waitForInternshipStateReady(page, [savedMenonResponse]);
+  await waitForDocumentReady(page);
+  const menonSavedRow = page.getByRole('listitem').filter({ hasText: 'Judicial research assistant' });
+  record('S-25_saved_identity', 'fresh saved-list GET contains the menon identity', completedSavedMenon,
+    await menonSavedRow.isVisible() && completedSavedMenon[0]?.status === 200 && completedSavedMenon[0]?.finishedError === null);
+  const removeMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'DELETE', '/api/v1/student/internships/menon/saved'));
+  await menonSavedRow.getByRole('button', { name: 'Remove' }).click();
+  const completedRemoveMenon = await finishResponse(await removeMenonResponse);
+  record('S-25_remove_identity', 'DELETE removes exactly menon without changing CAM', completedRemoveMenon,
+    completedRemoveMenon.status === 200 && completedRemoveMenon.finishedError === null
+      && !functionalSavedIds.has('menon') && functionalSavedIds.has('cam'));
+
+  const vidhiResponses = [
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/vidhi')),
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
+  ];
+  await page.goto(`${base}/s-21?listing=vidhi`);
+  const completedVidhiResponses = await waitForInternshipStateReady(page, vidhiResponses);
+  await waitForDocumentReady(page);
+  record('S-21_vidhi_deep_link', 'direct vidhi identity renders Research fellowship, policy after exact GET', completedVidhiResponses,
+    await page.getByRole('heading', { name: 'Research fellowship, policy' }).isVisible()
+      && completedVidhiResponses.every((item) => item.status === 200 && item.finishedError === null));
+
+  const bareDetailSavedResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved'));
+  await page.goto(`${base}/s-21`);
+  await finishResponse(await bareDetailSavedResponse);
+  await waitForDocumentReady(page);
+  const missingDetailAlert = page.getByRole('alert').filter({ hasText: 'Listing unavailable' });
+  record('S-21_missing_identity', 'truthful unavailable state with no CAM fallback', await page.getByRole('alert').allTextContents(),
+    await missingDetailAlert.isVisible()
+      && await page.getByRole('heading', { name: 'Summer Associate, disputes' }).count() === 0);
+
   await page.goto(`${base}/s-22`);
+  await waitForDocumentReady(page);
+  const missingApplyAlert = page.getByRole('alert').filter({ hasText: 'Listing unavailable' });
+  record('S-22_missing_identity', 'truthful unavailable state with no CAM fallback', await page.getByRole('alert').allTextContents(),
+    await missingApplyAlert.isVisible()
+      && await page.getByText('Cyril Amarchand Mangaldas · Summer Associate, disputes').count() === 0);
+
+  const applyDetailResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam'));
+  await page.goto(`${base}/s-22?listing=cam`);
+  const completedApplyDetail = await waitForInternshipStateReady(page, [applyDetailResponse]);
+  await waitForDocumentReady(page);
+  record('S-22_cam_identity_ready', 'exact CAM detail GET finishes with HTTP 200 before application testing', completedApplyDetail,
+    completedApplyDetail[0]?.status === 200 && completedApplyDetail[0]?.finishedError === null);
   const cover = page.getByLabel('Cover note');
   const continueDocuments = page.getByRole('button', { name: 'Continue to documents' });
   await cover.fill('A'.repeat(49));
@@ -265,6 +561,7 @@ try {
     !(await page.getByText('Resume must be 5 MB or smaller.').isVisible()) && await page.getByText('Transcript must be 5 MB or smaller.').isVisible());
 
   await page.goto(`${base}/s-19`);
+  await waitForDocumentReady(page);
   await page.locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' }).locator('summary').click();
   const deleteToggle = page.getByRole('button', { name: 'Delete…' });
   await deleteToggle.click();
@@ -276,6 +573,12 @@ try {
   const serialized = JSON.stringify(storage).toLowerCase();
   record('browser_storage_privacy', 'no raw mobile, OTP, document bytes or private profile values in browser storage', storage,
     !serialized.includes('9876543210') && !serialized.includes('student@nls.ac.in') && !serialized.includes('aditi'));
+  record('functional_runtime', '0 console/page/request/HTTP/unmatched-API errors', functionalRuntime,
+    functionalRuntime.consoleErrors.length === 0
+    && functionalRuntime.pageErrors.length === 0
+    && functionalRuntime.failedRequests.length === 0
+    && functionalRuntime.httpErrors.length === 0
+    && functionalRuntime.unmatchedApi.length === 0);
   await context.close();
 } finally {
   await browser.close();
