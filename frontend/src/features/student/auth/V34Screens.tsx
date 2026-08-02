@@ -1144,6 +1144,7 @@ export function V34ProfileStep1() {
       avatarUrl: photoPreview || undefined,
     });
     setActiveStep(2);
+    nav('/s-10?step=academic', { replace: true });
   }
 
   function handleAcademicSubmit() {
@@ -1159,6 +1160,7 @@ export function V34ProfileStep1() {
       enrolmentNumber,
     });
     setActiveStep(3);
+    nav('/s-10?step=interests', { replace: true });
   }
 
   function handleInterestsSubmit() {
@@ -1166,6 +1168,7 @@ export function V34ProfileStep1() {
       interests: selectedInterests,
     });
     setActiveStep(4);
+    nav('/s-10?step=confirmation', { replace: true });
   }
 
   function toggleInterest(item: string) {
