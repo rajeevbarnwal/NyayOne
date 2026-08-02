@@ -119,6 +119,27 @@ function readyState(pending: boolean, error: unknown): 'loading' | 'error' | 're
   return pending ? 'loading' : error ? 'error' : 'ready';
 }
 
+export function calendarEventReadyState({
+  hasEvent,
+  detailPending,
+  detailFetching,
+  savePending,
+  removePending,
+  error,
+}: {
+  hasEvent: boolean;
+  detailPending: boolean;
+  detailFetching: boolean;
+  savePending: boolean;
+  removePending: boolean;
+  error: unknown;
+}): 'loading' | 'error' | 'ready' {
+  return readyState(
+    (hasEvent && (detailPending || detailFetching)) || savePending || removePending,
+    error,
+  );
+}
+
 export function failedSourceRetryFilters(
   failedSources: readonly CalendarSourceType[],
   filters: Pick<CalendarViewPreferences, 'fromDate' | 'toDate' | 'timezone'>,
@@ -438,7 +459,14 @@ function CalendarEventScreen() {
   });
 
   const showForm = !eventId || editing;
-  const ready = readyState(Boolean(eventId) && detail.isPending, detail.error);
+  const ready = calendarEventReadyState({
+    hasEvent: Boolean(eventId),
+    detailPending: detail.isPending,
+    detailFetching: detail.isFetching,
+    savePending: save.isPending,
+    removePending: remove.isPending,
+    error: detail.error,
+  });
   const set = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
     setMessage('');

@@ -17,16 +17,20 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  calendarEventDetailPath,
   changeTimezoneWithQueryReady,
   encodedTimezoneParam,
+  matchesCalendarEventDetailQuery,
   matchesCalendarEventsQuery,
   runtimeClean,
   runtimeErrors,
+  saveCalendarEventWithDetailReady,
 } from './lib/wave5_calendar_query_readiness.mjs';
 
 const WEB = 'https://127.0.0.1:1290';
 const API = 'https://127.0.0.1:1291';
 const TIMEZONE = 'Asia/Dubai';
+const EVENT_ID = 'c64c7235-f22f-4bb8-8bed-7ab38d7c44ce';
 const REFETCH_MS = 20;
 
 function eventsUrl(timezone) {
@@ -34,6 +38,10 @@ function eventsUrl(timezone) {
   query.set('source_types', 'tutoring');
   query.set('timezone', timezone);
   return `${API}/api/v1/calendar/events?${query.toString()}`;
+}
+
+function eventDetailUrl(eventId = EVENT_ID) {
+  return `${API}${calendarEventDetailPath(eventId)}`;
 }
 
 /** Minimal Playwright-shaped page whose network semantics match Chromium's. */
@@ -57,7 +65,9 @@ function fakePage({ responseCompletionError = null } = {}) {
       // that point a navigation can no longer abort the request.
       finished: async () => {
         finished = true;
-        return responseCompletionError;
+        return typeof responseCompletionError === 'function'
+          ? responseCompletionError(request)
+          : responseCompletionError;
       },
       isFinished: () => finished,
     };
@@ -120,6 +130,16 @@ function applyTimezoneChange(page) {
   };
 }
 
+/** Save one event, then start the exact invalidation refetch that lands later. */
+function applyEventSave(page, eventId = EVENT_ID) {
+  return async () => {
+    const put = page.startRequest(eventDetailUrl(eventId), 'PUT');
+    page.completeRequest(put, 200);
+    const detail = page.startRequest(eventDetailUrl(eventId), 'GET');
+    setTimeout(() => page.completeRequest(detail, 200), REFETCH_MS);
+  };
+}
+
 const savePredicate = (response) => response.url().endsWith('/api/v1/calendar/view-preferences')
   && response.request().method() === 'PUT';
 
@@ -135,6 +155,25 @@ async function runSequence({ legacyNavigateImmediately }) {
   });
   // The runner's very next act after the timezone save is a navigation.
   await page.goto(`${WEB}/s-91`);
+  page.dispose();
+  return { page, result };
+}
+
+async function runEventDetailSequence({ legacyNavigateImmediately }) {
+  const page = fakePage();
+  const path = calendarEventDetailPath(EVENT_ID);
+  const result = await saveCalendarEventWithDetailReady({
+    page,
+    eventId: EVENT_ID,
+    applySave: applyEventSave(page),
+    savePredicate: (response) => new URL(response.url()).pathname === path
+      && response.request().method() === 'PUT'
+      && response.status() === 200,
+    timeout: 5_000,
+    legacyNavigateImmediately,
+  });
+  // This models the real runner's immediate post-edit reload.
+  await page.goto(`${WEB}/s-91?event=${EVENT_ID}`);
   page.dispose();
   return { page, result };
 }
@@ -197,5 +236,58 @@ describe('calendar-events query matcher', () => {
   it('requires the URL-encoded wire form', () => {
     expect(encodedTimezoneParam(TIMEZONE)).toBe('timezone=Asia%2FDubai');
     expect(new URL(ok.url).search).toContain('timezone=Asia%2FDubai');
+  });
+});
+
+describe('S-91 event-detail readiness contract', () => {
+  it('the OLD immediate-reload sequence aborts the exact event-detail GET', async () => {
+    const { page, result } = await runEventDetailSequence({ legacyNavigateImmediately: true });
+    expect(result.detailReady).toBeNull();
+    expect(runtimeClean(page.state)).toBe(false);
+    expect(runtimeErrors(page.state).failedRequests).toEqual([
+      `GET ${eventDetailUrl()} net::ERR_ABORTED`,
+    ]);
+  });
+
+  it('settles the exact event-detail GET body before reload', async () => {
+    const { page, result } = await runEventDetailSequence({ legacyNavigateImmediately: false });
+    expect(result.save.status()).toBe(200);
+    expect(result.detailReady).not.toBeNull();
+    expect(result.detailReady.status()).toBe(200);
+    expect(result.detailReady.isFinished()).toBe(true);
+    expect(page.inflightCount()).toBe(0);
+    expect(runtimeErrors(page.state).failedRequests).toEqual([]);
+    expect(runtimeClean(page.state)).toBe(true);
+  });
+
+  it('fails closed when the event-detail response body is aborted after HTTP 200', async () => {
+    const page = fakePage({
+      responseCompletionError: (request) => request.method === 'GET'
+        ? new Error('net::ERR_ABORTED')
+        : null,
+    });
+    await expect(saveCalendarEventWithDetailReady({
+      page,
+      eventId: EVENT_ID,
+      applySave: applyEventSave(page),
+      savePredicate: (response) => response.url() === eventDetailUrl()
+        && response.request().method() === 'PUT'
+        && response.status() === 200,
+      timeout: 5_000,
+    })).rejects.toThrow('calendar-event detail response did not finish cleanly: net::ERR_ABORTED');
+    page.dispose();
+  });
+
+  it('matches only the exact successful event-detail GET', () => {
+    const ok = { url: eventDetailUrl(), method: 'GET', status: 200 };
+    expect(matchesCalendarEventDetailQuery(ok, EVENT_ID)).toBe(true);
+    expect(matchesCalendarEventDetailQuery({ ...ok, url: eventsUrl(TIMEZONE) }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, url: eventDetailUrl('wrong-id') }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, url: `${eventDetailUrl()}?expand=true` }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, method: 'PUT' }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, status: 304 }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, status: 500 }, EVENT_ID)).toBe(false);
+    expect(matchesCalendarEventDetailQuery({ ...ok, url: 'not-a-url' }, EVENT_ID)).toBe(false);
+    expect(() => calendarEventDetailPath('')).toThrow('calendar event id is required');
   });
 });

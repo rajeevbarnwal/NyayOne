@@ -8,6 +8,7 @@ import {
   CalendarConflictScreen,
   CalendarMonth,
   CalendarPreferencesScreen,
+  calendarEventReadyState,
   copyPrivateFeedUrl,
   failedSourceRetryFilters,
   reconcileFailedSourceRetry,
@@ -70,6 +71,22 @@ describe('Wave 5 S-90–S-93 calendar screens', () => {
     expect(html).not.toContain('stored on your device');
     expect(html).not.toContain('/s-91?mode=detail');
     expect(html).not.toContain('cal-tab-event');
+  });
+
+  it('keeps S91 unready during cached detail refetches and event mutations', () => {
+    const settled = {
+      hasEvent: true,
+      detailPending: false,
+      detailFetching: false,
+      savePending: false,
+      removePending: false,
+      error: null,
+    };
+    expect(calendarEventReadyState(settled)).toBe('ready');
+    expect(calendarEventReadyState({ ...settled, detailFetching: true })).toBe('loading');
+    expect(calendarEventReadyState({ ...settled, savePending: true })).toBe('loading');
+    expect(calendarEventReadyState({ ...settled, removePending: true })).toBe('loading');
+    expect(calendarEventReadyState({ ...settled, error: new Error('missing') })).toBe('error');
   });
 
   it('never renders Edit/Delete for imported reminders or tutoring events', () => {
