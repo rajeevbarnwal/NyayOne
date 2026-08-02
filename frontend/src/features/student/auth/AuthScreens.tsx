@@ -124,29 +124,6 @@ export function AuthGate() {
         setError('This mobile number is not registered. Please enter a registered number or register with us.');
         return;
       }
-      // Scenario 1 & 2: Entry EXISTS in DB (otp_pending or otp_verified)
-      if (checkRes.firstName || checkRes.lastName) {
-        const fn = checkRes.firstName ?? '';
-        const mn = checkRes.middleName ?? '';
-        const ln = checkRes.lastName ?? '';
-        const full = [fn, mn, ln].filter(Boolean).join(' ');
-        const interestsArr = checkRes.interests ? checkRes.interests.split(',').map((s) => s.trim()).filter(Boolean) : [];
-        updateProfileDraft({
-          firstName: fn,
-          middleName: mn,
-          lastName: ln,
-          fullName: full,
-          dateOfBirth: checkRes.dateOfBirth ?? '',
-          preferredLanguage: checkRes.preferredLanguage ?? 'en',
-          college: checkRes.college ?? '',
-          yearOfStudy: checkRes.yearOfStudy ?? '',
-          enrolmentNumber: checkRes.enrolmentNumber ?? '',
-          institutionalEmail: checkRes.institutionalEmail ?? '',
-          barEnrolmentNumber: checkRes.barEnrolmentNumber ?? '',
-          interests: interestsArr,
-          careerGoal: checkRes.careerGoal ?? '',
-        });
-      }
       const fullMobile = `${countryCode}${digits}`;
       startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
       setMinor(false, false);

@@ -146,11 +146,9 @@ class CheckMobileRequest(BaseModel):
 def check_mobile(payload: CheckMobileRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
     from sqlalchemy import select
     digits = "".join(c for c in payload.mobile if c.isdigit())
-    if len(digits) > 10:
-        digits = digits[-10:]
+    if not re.match(r"^\d{10}$", digits):
+        return {"exists": False, "registered": False}
     reg = registration_service.find_by_mobile(session, digits)
-    if reg is None:
-        reg = registration_service.find_by_mobile(session, payload.mobile)
     if reg is None:
         return {"exists": False, "registered": False}
 
@@ -160,28 +158,11 @@ def check_mobile(payload: CheckMobileRequest, session: Session = Depends(get_ses
     is_complete = has_academic and has_prefs
     guardian_pending = bool(reg.is_minor and not getattr(reg, "guardian_consent_received", False))
 
-    enrolment_number = decrypt(profile.enrolment_ct) if (profile and profile.enrolment_ct) else None
-    institutional_email = decrypt(profile.institutional_email_ct) if (profile and profile.institutional_email_ct) else None
-    bar_enrolment_number = decrypt(profile.bar_enrolment_ct) if (profile and profile.bar_enrolment_ct) else None
-
-    dob = decrypt(reg.dob_ct) if reg.dob_ct else None
     return {
         "exists": True,
         "registered": True,
         "status": reg.status,
         "registration_id": str(reg.id),
-        "first_name": reg.first_name,
-        "middle_name": reg.middle_name or "",
-        "last_name": reg.last_name,
-        "dob": dob,
-        "preferred_language": "en",
-        "college": profile.college if profile else None,
-        "year_of_study": profile.year_of_study if profile else None,
-        "enrolment_number": enrolment_number,
-        "institutional_email": institutional_email,
-        "bar_enrolment_number": bar_enrolment_number,
-        "interests": profile.interests if profile else None,
-        "career_goal": profile.career_goal if profile else None,
         "is_profile_complete": is_complete,
         "guardian_consent_pending": guardian_pending,
     }
@@ -223,16 +204,6 @@ def otp_verify(payload: OtpVerifyRequest, session: Session = Depends(get_session
     try:
         otp_service.verify(session, payload.registration_id, payload.code, _now(), purpose="signup")
     except otp_service.OtpError as exc:
-        if settings.app_env == "development" and payload.code in {"631023", "429016"}:
-            reg = session.get(StudentRegistration, payload.registration_id)
-            if reg is not None:
-                reg.status = "otp_verified"
-                session.commit()
-                profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
-                has_academic = profile is not None and bool(profile.college and profile.year_of_study and profile.enrolment_ct)
-                has_prefs = profile is not None and bool(getattr(profile, "career_goal", None) or getattr(profile, "interests", None))
-                is_complete = has_academic and has_prefs
-                return {"status": "verified", "is_profile_complete": is_complete}
         raise _otp_error(exc) from exc
     session.commit()
     profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == payload.registration_id))

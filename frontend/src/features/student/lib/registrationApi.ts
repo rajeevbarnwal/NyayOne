@@ -109,19 +109,6 @@ export interface CheckMobileResult {
   registered: boolean;
   status?: 'otp_pending' | 'otp_verified' | 'active' | string;
   registrationId?: string;
-  firstName?: string;
-  middleName?: string;
-  lastName?: string;
-  dateOfBirth?: string;
-  city?: string;
-  preferredLanguage?: string;
-  college?: string;
-  yearOfStudy?: string;
-  enrolmentNumber?: string;
-  institutionalEmail?: string;
-  barEnrolmentNumber?: string;
-  interests?: string;
-  careerGoal?: string;
   isProfileComplete?: boolean;
   guardianConsentPending?: boolean;
 }
@@ -132,9 +119,8 @@ export async function checkMobile(mobile: string): Promise<CheckMobileResult> {
     registered: boolean;
     status?: string;
     registration_id?: string;
-    first_name?: string;
-    middle_name?: string;
-    last_name?: string;
+    is_profile_complete?: boolean;
+    guardian_consent_pending?: boolean;
   }>('/api/v1/auth/student/check-mobile', {
     method: 'POST',
     body: JSON.stringify({ mobile }),
@@ -144,9 +130,8 @@ export async function checkMobile(mobile: string): Promise<CheckMobileResult> {
     registered: result.registered,
     status: result.status,
     registrationId: result.registration_id,
-    firstName: result.first_name,
-    middleName: result.middle_name,
-    lastName: result.last_name,
+    isProfileComplete: result.is_profile_complete,
+    guardianConsentPending: result.guardian_consent_pending,
   };
 }
 
@@ -341,18 +326,6 @@ export async function checkMobileRegistered(mobile: string): Promise<CheckMobile
       registered: res.registered,
       status: res.status,
       registrationId: res.registration_id,
-      firstName: res.first_name,
-      middleName: res.middle_name,
-      lastName: res.last_name,
-      dateOfBirth: res.dob,
-      preferredLanguage: res.preferred_language,
-      college: res.college,
-      yearOfStudy: res.year_of_study,
-      enrolmentNumber: res.enrolment_number,
-      institutionalEmail: res.institutional_email,
-      barEnrolmentNumber: res.bar_enrolment_number,
-      interests: res.interests,
-      careerGoal: res.career_goal,
       isProfileComplete: res.is_profile_complete,
       guardianConsentPending: res.guardian_consent_pending,
     };
