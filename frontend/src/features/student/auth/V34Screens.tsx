@@ -215,7 +215,32 @@ export function V34AuthGate(props: ScreenProps) {
   const [loginOtpId, setLoginOtpId] = useState('');
   const [loginOtpCode, setLoginOtpCode] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
+  const [loginResendCooldown, setLoginResendCooldown] = useState<number>(0);
   const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (loginResendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setLoginResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loginResendCooldown]);
+
+  async function handleResendLoginOtp() {
+    if (loginResendCooldown > 0 || loginBusy) return;
+    setLoginBusy(true);
+    try {
+      const loginId = await startLoginOtp(loginMobile);
+      setLoginOtpId(loginId);
+      setLoginResendCooldown(30);
+      setLoginErrors({ submit: '✓ A new code was sent to your mobile.' });
+      setTimeout(() => setLoginErrors({}), 4000);
+    } catch {
+      setLoginErrors({ submit: 'Could not resend OTP code. Please retry.' });
+    } finally {
+      setLoginBusy(false);
+    }
+  }
 
   // Register state
   const [firstName, setFirstName] = useState('');
@@ -269,6 +294,7 @@ export function V34AuthGate(props: ScreenProps) {
         const loginId = await startLoginOtp(loginMobile);
         setLoginOtpId(loginId);
         setLoginOtpSent(true);
+        setLoginResendCooldown(30);
         setLoginErrors({});
       } else {
         await verifyLoginOtp(loginOtpId, loginOtpCode);
@@ -449,6 +475,19 @@ export function V34AuthGate(props: ScreenProps) {
                     maxLength={6}
                     placeholder="Enter 6-digit OTP code"
                   />
+                  <div className="v34-card v34-kv" style={{ marginTop: '12px', padding: '12px' }}>
+                    <span>Resend available in: <b>{loginResendCooldown > 0 ? `00:${String(loginResendCooldown).padStart(2, '0')}` : 'Ready'}</b></span>
+                    <span>
+                      <button
+                        type="button"
+                        className="v34-textlink"
+                        disabled={loginResendCooldown > 0 || loginBusy}
+                        onClick={handleResendLoginOtp}
+                      >
+                        {loginResendCooldown > 0 ? 'Wait to resend' : 'Resend OTP now'}
+                      </button>
+                    </span>
+                  </div>
                 </>
               )}
               {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
