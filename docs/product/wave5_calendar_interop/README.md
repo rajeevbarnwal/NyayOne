@@ -1,10 +1,15 @@
 # Wave 5 Calendar Interoperability — Frozen Product Contract
 
-Date frozen: 2026-08-02  
-Repository base: `adf191dfa6d3229e58e5df0cd8d35f87ad4fb8ae`  
-Branch: `codex/wave5-calendar-interoperability-saathi-295`  
-Owning epic: SAATHI-284  
-Dependency stories: SAATHI-285 and SAATHI-290  
+Date frozen: 2026-08-02
+
+Repository base: `adf191dfa6d3229e58e5df0cd8d35f87ad4fb8ae`
+
+Branch: `codex/wave5-calendar-interoperability-saathi-295`
+
+Owning epic: SAATHI-284
+
+Dependency stories: SAATHI-285 and SAATHI-290
+
 Delivery story: SAATHI-295
 
 This folder is the binding product and verification contract for the Wave 5

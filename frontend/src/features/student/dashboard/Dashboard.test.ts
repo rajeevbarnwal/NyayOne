@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDashboardWeek, currentWeek, dashboardWeekday } from './Dashboard';
+import { buildDashboardWeek, calendarStatusPresentation, currentWeek, dashboardWeekday } from './Dashboard';
 import type { CalendarEventRecord } from '../lib/calendarApi';
 
 const EVENT: CalendarEventRecord = {
@@ -32,5 +32,11 @@ describe('Dashboard selected-timezone current week', () => {
     const week = buildDashboardWeek(new Date('2026-08-03T05:00:00.000Z'), 'Asia/Kolkata', [EVENT]);
     expect(week[0]).toMatchObject({ key: '2026-08-03', dow: 'MON', date: 3 });
     expect(week[0].event).toContain('05:00');
+  });
+
+  it('keeps cancelled distinct from completed and scheduled events', () => {
+    expect(calendarStatusPresentation('cancelled')).toEqual({ chip: 'Cancelled', tone: 'warn' });
+    expect(calendarStatusPresentation('done')).toEqual({ chip: 'Done', tone: 'ok' });
+    expect(calendarStatusPresentation('scheduled')).toEqual({ chip: 'Scheduled', tone: 'info' });
   });
 });

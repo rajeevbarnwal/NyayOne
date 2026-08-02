@@ -60,7 +60,7 @@ export const TIMEZONE_OPTIONS: readonly string[] = [
   'Asia/Kolkata', 'UTC', 'Asia/Dubai', 'Europe/London', 'America/New_York', 'Asia/Singapore',
 ];
 
-export type CalendarEventStatus = 'scheduled' | 'deadline' | 'tentative' | 'done';
+export type CalendarEventStatus = 'scheduled' | 'deadline' | 'tentative' | 'done' | 'cancelled';
 export type PrivacyClassification = 'public' | 'personal' | 'restricted';
 
 /** The single normalized event contract consumed by S19.1/2/3. */

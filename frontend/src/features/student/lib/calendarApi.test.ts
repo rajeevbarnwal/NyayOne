@@ -9,6 +9,7 @@ import {
   getCalendarExport,
   listCalendarEvents,
   listCalendarExports,
+  rotateCalendarExport,
   updateCalendarConflict,
   updateCalendarEvent,
   updateCalendarReminderPreference,
@@ -63,6 +64,19 @@ describe('Wave 5 calendar API contract', () => {
     expect(parsed.searchParams.get('from_date')).toBe('2026-08-01');
     expect(init.credentials).toBe('include');
     expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+  });
+
+  it('preserves the backend cancelled status instead of presenting it as scheduled or done', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({
+      items: [{ ...EVENT, status: 'cancelled' }],
+      total: 1,
+      failed_sources: [],
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await listCalendarEvents();
+
+    expect(result.items[0].status).toBe('cancelled');
   });
 
   it('creates, gets, updates and deletes a personal event with exact wire/version semantics', async () => {
@@ -126,6 +140,22 @@ describe('Wave 5 calendar API contract', () => {
     expect(JSON.stringify(detail)).not.toContain('raw-secret-token');
     expect(created.oneTimeFeedUrl).toContain('raw-secret-token');
     expect(new Headers((fetchMock.mock.calls[2] as [string, RequestInit])[1].headers).get('Idempotency-Key')).toBe('export-idempotency-key');
+  });
+
+  it('rotates with one atomic POST and never revokes the active feed first', async () => {
+    const replacement = { ...EXPORT, id: '00000000-0000-4000-8000-000000000906' };
+    const fetchMock = vi.fn().mockResolvedValue(response(replacement, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rotated = await rotateCalendarExport('UTC', 'rotation-idempotency-key');
+
+    expect(rotated.oneTimeFeedUrl).toContain('raw-secret-token');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new URL(url).pathname).toBe('/api/v1/calendar/exports');
+    expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('Idempotency-Key')).toBe('rotation-idempotency-key');
+    expect(JSON.parse(String(init.body))).toEqual({ timezone: 'UTC' });
   });
 
   it('keeps structured server failures typed and does not fabricate success', async () => {

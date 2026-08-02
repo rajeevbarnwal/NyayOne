@@ -38,6 +38,7 @@ import {
   listCalendarExports,
   listCalendarReminderPreferences,
   revokeCalendarExport,
+  rotateCalendarExport,
   updateCalendarEvent,
   updateCalendarConflict,
   updateCalendarReminderPreference,
@@ -696,10 +697,9 @@ function CalendarPreferencesAuthenticated() {
     onError: (error) => setMessage(calendarErrorCopy(error)),
   });
   const rotate = useMutation({
-    mutationFn: async (current: { id: string }) => {
-      await revokeCalendarExport(current.id);
-      return createCalendarExport(exportTimezone);
-    },
+    // POST /exports performs the old-capability revocation and replacement
+    // creation in one backend transaction. Never issue DELETE then POST here.
+    mutationFn: () => rotateCalendarExport(exportTimezone),
     onMutate: () => {
       setOneTimeFeedUrl(null);
       setMessage('Rotating the private feed…');
@@ -707,12 +707,12 @@ function CalendarPreferencesAuthenticated() {
     onSuccess: async (created) => {
       setOneTimeFeedUrl(created.oneTimeFeedUrl);
       setMessage(created.oneTimeFeedUrl
-        ? 'Previous feed revoked. Copy the replacement now; LegalSaathi will not show it again.'
-        : 'Previous feed revoked, but no replacement secret was returned. Refresh before retrying.');
+        ? 'Previous feed atomically rotated. Copy the replacement now; LegalSaathi will not show it again.'
+        : 'Feed rotation completed, but no replacement secret was returned. Refresh before retrying.');
       await client.invalidateQueries({ queryKey: ['calendar', 'exports'] });
     },
     onError: async (error) => {
-      setMessage(`Feed rotation did not finish. Refresh its status before retrying. ${calendarErrorCopy(error)}`);
+      setMessage(`Feed rotation failed; your existing feed remains active. ${calendarErrorCopy(error)}`);
       await client.invalidateQueries({ queryKey: ['calendar', 'exports'] });
     },
   });
@@ -783,7 +783,7 @@ function CalendarPreferencesAuthenticated() {
               <p className="rem__m">Expires {new Date(activeExport.expiresAt).toLocaleString()} · {activeExport.timezone}</p>
               <div className="st-actions">
                 <button type="button" className="btn solid" disabled={rotate.isPending || revoke.isPending}
-                  onClick={() => rotate.mutate(activeExport)}>{rotate.isPending ? 'Rotating…' : 'Rotate feed'}</button>
+                  onClick={() => rotate.mutate()}>{rotate.isPending ? 'Rotating…' : 'Rotate feed'}</button>
                 <button type="button" className="btn cal-danger" disabled={revoke.isPending || rotate.isPending}
                   onClick={() => revoke.mutate(activeExport.id)}>{revoke.isPending ? 'Revoking…' : 'Revoke feed'}</button>
               </div>

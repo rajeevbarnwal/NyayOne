@@ -46,6 +46,23 @@ def is_isolated_gate_target(database_url: str, app_env: str, mutation_allowed: b
     )
 
 
+def privacy_canary_hits(
+    surfaces: dict[str, object], canaries: set[str]
+) -> list[str]:
+    """Return only surface labels containing a forbidden value.
+
+    This deliberately does not return the matched value: the release gate must
+    prove that it detects a raw capability without copying that capability into
+    stdout or its JSON evidence.
+    """
+    hits: list[str] = []
+    for label, value in surfaces.items():
+        serialized = json.dumps(value, default=str, sort_keys=True)
+        if any(canary and canary in serialized for canary in canaries):
+            hits.append(label)
+    return sorted(hits)
+
+
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "alembic", *args],
@@ -86,6 +103,8 @@ def main() -> int:
     from app.core.auth import ActorContext, Role
     from app.db.session import get_engine, get_sessionmaker
     from app.models.calendar import (
+        CalendarConflict,
+        CalendarEvent,
         CalendarExportRevocation,
         CalendarExportSubscription,
         CalendarExportToken,
@@ -93,13 +112,20 @@ def main() -> int:
         CalendarViewPreference,
     )
     from app.models.registration import User
-    from app.schemas.calendar import EventCreate, ReminderPreferenceUpdate, ViewPreferenceUpdate
+    from app.schemas.calendar import (
+        EventCreate,
+        EventUpdate,
+        ReminderPreferenceUpdate,
+        ViewPreferenceUpdate,
+    )
     from app.services.calendar_service import (
         CalendarError,
         check_conflicts,
         create_event,
         create_export,
+        delete_event,
         public_ics,
+        update_event,
         update_reminder_preference,
         update_view_preferences,
     )
@@ -256,6 +282,138 @@ def main() -> int:
         {"outcomes": reminder_race, "rows": reminder_rows},
     )
 
+    with SessionLocal() as session:
+        update_target = create_event(
+            session,
+            actor,
+            EventCreate.model_validate({
+                **payload.model_dump(),
+                "title": "Concurrent update target",
+                "starts_at": "2026-08-11T04:30:00Z",
+                "ends_at": "2026-08-11T05:30:00Z",
+            }),
+            "wave5-pg-update-target",
+        )
+
+    def race_update(index: int) -> str:
+        update_payload = EventUpdate.model_validate({
+            **payload.model_dump(),
+            "title": f"Concurrent winner {index}",
+            "starts_at": "2026-08-11T04:30:00Z",
+            "ends_at": "2026-08-11T05:30:00Z",
+            "expected_version": 1,
+        })
+        with SessionLocal() as session:
+            try:
+                update_event(session, actor, update_target.id, update_payload)
+                return "updated"
+            except CalendarError as error:
+                session.rollback()
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        update_race = list(pool.map(race_update, range(2)))
+    with SessionLocal() as session:
+        updated_row = session.get(CalendarEvent, update_target.id)
+        updated_version = updated_row.version if updated_row else None
+    results.add(
+        "W5-PG-14",
+        "parallel event update has one version winner and one typed stale conflict",
+        sorted(update_race) == ["calendar_stale_version", "updated"] and updated_version == 2,
+        {"outcomes": update_race, "version": updated_version},
+    )
+
+    with SessionLocal() as session:
+        delete_target = create_event(
+            session,
+            actor,
+            EventCreate.model_validate({
+                **payload.model_dump(),
+                "title": "Concurrent delete target",
+                "starts_at": "2026-08-12T04:30:00Z",
+                "ends_at": "2026-08-12T05:30:00Z",
+            }),
+            "wave5-pg-delete-target",
+        )
+
+    def race_delete(_: int) -> str:
+        with SessionLocal() as session:
+            try:
+                delete_event(session, actor, delete_target.id)
+                return "deleted"
+            except CalendarError as error:
+                session.rollback()
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        delete_race = list(pool.map(race_delete, range(2)))
+    with SessionLocal() as session:
+        delete_rows = session.scalar(select(func.count()).select_from(CalendarEvent).where(
+            CalendarEvent.id == delete_target.id
+        ))
+    results.add(
+        "W5-PG-15",
+        "parallel event delete has one winner and a non-enumerating loser",
+        sorted(delete_race) == ["calendar_event_not_found", "deleted"] and delete_rows == 0,
+        {"outcomes": delete_race, "rows": delete_rows},
+    )
+
+    with SessionLocal() as session:
+        conflict_left = create_event(
+            session,
+            actor,
+            EventCreate.model_validate({
+                **payload.model_dump(),
+                "title": "Concurrent conflict left",
+                "starts_at": "2026-08-13T04:30:00Z",
+                "ends_at": "2026-08-13T05:30:00Z",
+            }),
+            "wave5-pg-conflict-left",
+        )
+        conflict_right = create_event(
+            session,
+            actor,
+            EventCreate.model_validate({
+                **payload.model_dump(),
+                "title": "Concurrent conflict right",
+                "starts_at": "2026-08-13T05:00:00Z",
+                "ends_at": "2026-08-13T06:00:00Z",
+            }),
+            "wave5-pg-conflict-right",
+        )
+
+    def race_conflict(_: int) -> tuple[int, tuple[tuple[str, str], ...]]:
+        with SessionLocal() as session:
+            result = check_conflicts(
+                session,
+                actor,
+                [conflict_left.id, conflict_right.id],
+                True,
+            )
+            pairs = tuple(
+                (str(item.left_event_id), str(item.right_event_id))
+                for item in result.items
+            )
+            return result.total, pairs
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        conflict_race = list(pool.map(race_conflict, range(2)))
+    with SessionLocal() as session:
+        conflict_rows = session.scalar(select(func.count()).select_from(CalendarConflict).where(
+            CalendarConflict.owner_user_id == owner_id,
+            CalendarConflict.left_event_id.in_((conflict_left.id, conflict_right.id)),
+            CalendarConflict.right_event_id.in_((conflict_left.id, conflict_right.id)),
+        ))
+    results.add(
+        "W5-PG-16",
+        "parallel conflict materialisation converges on one canonical pair",
+        conflict_rows == 1
+        and len(conflict_race) == 2
+        and all(total == 1 for total, _pairs in conflict_race)
+        and conflict_race[0][1] == conflict_race[1][1],
+        {"outcomes": conflict_race, "rows": conflict_rows},
+    )
+
     def create_feed(index: int) -> tuple[str, str]:
         with SessionLocal() as session:
             item = create_export(session, actor, "Asia/Kolkata", f"wave5-pg-export-{index:02d}")
@@ -283,6 +441,38 @@ def main() -> int:
     results.add("W5-PG-11", "concurrent rotation leaves one active capability", active == 1 and one_working and revocations == 3, {"active": active, "working": len(working), "revocations": revocations})
     results.add("W5-PG-12", "tokens hashed and absent from audit", all_hashed and no_raw_audit)
     results.add("W5-PG-13", "ICS CRLF and privacy-minimised fields", one_working and working[0][1].startswith("BEGIN:VCALENDAR\r\n") and "DESCRIPTION:" not in working[0][1] and "URL:" not in working[0][1])
+
+    scanner_canary = "W5_PRIVACY_SCANNER_CANARY_DO_NOT_SEAL"
+    named_surfaces = {
+        "database": {"value": scanner_canary},
+        "log": scanner_canary,
+        "audit": {"after_state": scanner_canary},
+        "url": f"/unsafe/{scanner_canary}",
+        "storage": {"calendar-token": scanner_canary},
+        "console": [scanner_canary],
+        "error": {"detail": scanner_canary},
+        "evidence": {"body": scanner_canary},
+    }
+    self_test_hits = privacy_canary_hits(named_surfaces, {scanner_canary})
+    clean_runtime_hits = privacy_canary_hits(
+        {
+            "database": {"token_hashes": raw_hashes},
+            "audit": audit_blob,
+            "log": "/api/v1/public/calendar-feeds/:token",
+            "url": "/api/v1/public/calendar-feeds/:token",
+            "storage": {},
+            "console": [],
+            "error": {"code": "calendar_export_not_found"},
+            "evidence": {"token_state": "redacted"},
+        },
+        set(all_raw_tokens),
+    )
+    results.add(
+        "W5-PG-17",
+        "fail-closed privacy scanner detects every seeded surface and clean runtime is empty",
+        self_test_hits == sorted(named_surfaces) and clean_runtime_hits == [],
+        {"seeded_surface_hits": self_test_hits, "clean_runtime_hits": clean_runtime_hits},
+    )
 
     summary = {
         "gate": "wave5_postgres",

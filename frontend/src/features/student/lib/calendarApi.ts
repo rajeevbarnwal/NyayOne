@@ -456,6 +456,15 @@ export async function createCalendarExport(timezone: string, idempotencyKey = ne
   return { ...mapExport(wire), oneTimeFeedUrl: wire.feed_url };
 }
 
+/**
+ * Rotate through the server's single transactional create/rotate command.
+ * Calling DELETE first would strand the user without a working feed if the
+ * replacement creation failed after revocation.
+ */
+export async function rotateCalendarExport(timezone: string, idempotencyKey = newRequestId()): Promise<CreatedCalendarExport> {
+  return createCalendarExport(timezone, idempotencyKey);
+}
+
 export async function revokeCalendarExport(id: string): Promise<CalendarExportSummary> {
   return mapExport(await request<ExportWire>(`/exports/${encodeURIComponent(id)}`, { method: 'DELETE' }));
 }
