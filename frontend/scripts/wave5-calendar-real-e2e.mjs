@@ -23,6 +23,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium, request as playwrightRequest } from 'playwright';
 import axe from 'axe-core';
+import {
+  CALENDAR_EVENTS_PATH,
+  changeTimezoneWithQueryReady,
+  encodedTimezoneParam,
+  runtimeClean,
+  runtimeErrors,
+} from './lib/wave5_calendar_query_readiness.mjs';
 
 const REQUIRED = [
   'WAVE5_E2E_SESSION_TOKEN',
@@ -63,6 +70,17 @@ for (const key of ['actor_id', 'tutoring_session_id', 'credential_reminder_id', 
 }
 if (fixture.session_token !== 'NOT_LOGGED') throw new Error('seed manifest must not contain a session bearer');
 
+/** The timezone S-90 switches to mid-run; the post-save refetch carries it. */
+const NEXT_TIMEZONE = 'Asia/Dubai';
+/**
+ * Seeded D3 regression switch. When set, the runner reproduces the pre-repair
+ * "navigate immediately after the timezone PUT" sequence so the oracle can be
+ * shown to FAIL on it. It is never set by CI; reverting to the old behaviour is
+ * provably this one branch.
+ */
+const LEGACY_TIMEZONE_NAVIGATION =
+  process.env.WAVE5_E2E_INJECT_LEGACY_TIMEZONE_NAVIGATION === 'true';
+
 const WIDTHS = [390, 430, 768, 1024, 1440];
 const THEMES = ['light', 'dark'];
 const report = {
@@ -74,6 +92,7 @@ const report = {
   publicOrigin: PUBLIC.origin,
   fixture: { tutoring: true, credentialReminder: true, authenticatedStudent: true },
   tracePolicy: 'omitted: Playwright traces would retain HttpOnly/feed bearer material',
+  legacyTimezoneNavigationInjected: LEGACY_TIMEZONE_NAVIGATION,
   rows: [],
   failures: [],
 };
@@ -169,19 +188,6 @@ function watchRuntime(page) {
     if (response.status() >= 400) state.badResponses.push(sanitize(`${response.status()} ${response.url()}`));
   });
   return state;
-}
-
-function runtimeErrors(state) {
-  return {
-    consoleErrors: state.consoleErrors,
-    pageErrors: state.pageErrors,
-    failedRequests: state.failedRequests,
-    badResponses: state.badResponses,
-  };
-}
-
-function runtimeClean(state) {
-  return Object.values(runtimeErrors(state)).every((items) => items.length === 0);
 }
 
 async function waitReady(page) {
@@ -383,16 +389,43 @@ try {
     monthText.includes('Tutoring session') && monthText.includes('Credential renewal reminder') && monthText.includes(editedTitle));
 
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
-  const [timezoneSave] = await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith('/api/v1/calendar/view-preferences')
-      && response.request().method() === 'PUT'),
-    page.locator('#cal-tz').selectOption('Asia/Dubai'),
-  ]);
+  // D3 readiness contract: saving the timezone invalidates the calendar-events
+  // query, so a NEW GET carrying timezone=Asia%2FDubai starts AFTER the PUT.
+  // networkidle cannot express that (the document is already idle), so the
+  // wait is registered BEFORE the change and the GET is settled to completion
+  // BEFORE any navigation. See scripts/lib/wave5_calendar_query_readiness.mjs.
+  const { save: timezoneSave, queryReady: timezoneQueryReady } = await changeTimezoneWithQueryReady({
+    page,
+    timezone: NEXT_TIMEZONE,
+    applyChange: () => page.locator('#cal-tz').selectOption(NEXT_TIMEZONE),
+    savePredicate: (response) => response.url().endsWith('/api/v1/calendar/view-preferences')
+      && response.request().method() === 'PUT',
+    legacyNavigateImmediately: LEGACY_TIMEZONE_NAVIGATION,
+  });
   assert('S-90 timezone UI save', '200', timezoneSave.status(), timezoneSave.status() === 200);
   const savedView = await apiJson(api, 'GET', '/api/v1/calendar/view-preferences');
   assert('S-90 selected timezone persistence', 'Asia/Dubai', savedView.body?.timezone,
     savedView.status === 200 && savedView.body?.timezone === 'Asia/Dubai');
-  await page.waitForLoadState('networkidle', { timeout: 20_000 });
+  if (!LEGACY_TIMEZONE_NAVIGATION) {
+    // Readiness PRECONDITION, deliberately NOT an assert() row.
+    //
+    // The assertion count for this journey is a frozen contract at 305, so the
+    // repair must not add a 306th row. It does not need to: the guarantee is
+    // already structural — changeTimezoneWithQueryReady() awaits the matching
+    // response AND response.finished(), so a query that never arrives or never
+    // completes makes waitForResponse time out and throws before we get here.
+    // This block is the belt to that braces, and it throws rather than
+    // recording, so it is strictly fail-closed and count-neutral.
+    const settledSearch = new URL(timezoneQueryReady?.url() ?? WEB.origin).search;
+    if (!timezoneQueryReady
+      || timezoneQueryReady.status() !== 200
+      || !settledSearch.includes(encodedTimezoneParam(NEXT_TIMEZONE))) {
+      throw new Error(
+        'post-timezone readiness contract violated before navigation: expected a completed '
+        + `200 GET ${CALENDAR_EVENTS_PATH} carrying ${encodedTimezoneParam(NEXT_TIMEZONE)}, got `
+        + `status=${timezoneQueryReady?.status()} search=${settledSearch}`);
+    }
+  }
 
   // An imported credential reminder uses the reminder source category but has
   // no personal event_kind.  Its source module, not the calendar, owns edits.

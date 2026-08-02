@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, func, select, text
@@ -77,6 +78,99 @@ def test_calendar_public_origin_is_loopback_only_in_local_or_test_environments()
         calendar_public_base_url="https://calendar.example.test",
     )
     assert configured.calendar_public_base_url == "https://calendar.example.test"
+
+
+# --------------------------------------------------------------------------- #
+# D1 — staging CI jobs must state an explicit non-loopback calendar origin.
+#
+# `APP_ENV: staging` is not a local/test environment, so the loopback default
+# is refused on purpose.  A staging CI job that omits CALENDAR_PUBLIC_BASE_URL
+# therefore cannot even construct Settings.  These tests pin both halves: the
+# refusal must stay (fail-closed), and the exact origin the workflows declare
+# must be accepted.
+# --------------------------------------------------------------------------- #
+CI_STAGING_CALENDAR_ORIGIN = "https://calendar.example.test"
+_STAGING_WORKFLOWS = (
+    "wave1-foundation-gate.yml",
+    "wave3-credential-trust-gate.yml",
+)
+
+
+def _staging_settings(**overrides: object) -> Settings:
+    # `staging` also activates the Wave 4 scanner contract; select the same real
+    # seam the workflows select so this test isolates the Wave 5 origin rule.
+    return Settings(
+        _env_file=None,
+        app_env="staging",
+        internship_report_scanner_provider="clamav",
+        **overrides,
+    )
+
+
+def _job_env_blocks(document: str) -> list[dict[str, str]]:
+    """Return every ``env:`` mapping in a workflow, keyed by indentation.
+
+    Deliberately dependency-free: the backend runtime does not declare a YAML
+    parser, and the assertion only needs flat scalar key/value pairs.
+    """
+    lines = document.splitlines()
+    blocks: list[dict[str, str]] = []
+    for index, line in enumerate(lines):
+        if line.strip() != "env:":
+            continue
+        indent = len(line) - len(line.lstrip())
+        block: dict[str, str] = {}
+        for candidate in lines[index + 1 :]:
+            if not candidate.strip():
+                continue
+            candidate_indent = len(candidate) - len(candidate.lstrip())
+            if candidate_indent <= indent:
+                break
+            if candidate.lstrip().startswith("#"):
+                continue
+            key, separator, value = candidate.strip().partition(":")
+            if separator:
+                block[key.strip()] = value.strip()
+        blocks.append(block)
+    return blocks
+
+
+def test_staging_rejects_loopback_calendar_origin_and_accepts_the_ci_origin():
+    for loopback in ("https://localhost:1030", "https://127.0.0.1:1030", "https://[::1]:1030"):
+        with pytest.raises(ConfigurationError, match="calendar_public_base_url"):
+            _staging_settings(calendar_public_base_url=loopback)
+    # The default is a loopback origin, so an unset variable must also refuse.
+    with pytest.raises(ConfigurationError, match="calendar_public_base_url"):
+        _staging_settings()
+    accepted = _staging_settings(calendar_public_base_url=CI_STAGING_CALENDAR_ORIGIN)
+    assert accepted.calendar_public_base_url == CI_STAGING_CALENDAR_ORIGIN
+    # Production stays fail-closed on the same rule; nothing here relaxes it.
+    with pytest.raises(ConfigurationError, match="calendar_public_base_url"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            internship_report_scanner_provider="clamav",
+            calendar_public_base_url="https://127.0.0.1:1030",
+        )
+
+
+def test_staging_ci_workflows_declare_the_explicit_calendar_origin():
+    root = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+    for name in _STAGING_WORKFLOWS:
+        document = (root / name).read_text(encoding="utf-8")
+        staging_blocks = [
+            block for block in _job_env_blocks(document) if block.get("APP_ENV") == "staging"
+        ]
+        assert staging_blocks, f"{name} no longer declares a staging job environment"
+        for block in staging_blocks:
+            assert block.get("CALENDAR_PUBLIC_BASE_URL") == CI_STAGING_CALENDAR_ORIGIN, name
+            # The declared value must be one Settings actually accepts.
+            assert (
+                _staging_settings(
+                    calendar_public_base_url=block["CALENDAR_PUBLIC_BASE_URL"]
+                ).calendar_public_base_url
+                == CI_STAGING_CALENDAR_ORIGIN
+            )
 
 
 @pytest.fixture(scope="module")
