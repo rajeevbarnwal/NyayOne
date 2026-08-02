@@ -20,6 +20,9 @@ export interface ProfileDraft {
   fullName: string;
   preferredLanguage: string;
   dateOfBirth: string; // yyyy-mm-dd
+  city?: string;
+  pronouns?: string;
+  avatarUrl?: string;
   // Step 2 — academic
   college: string;
   yearOfStudy: string;
@@ -38,6 +41,9 @@ export const EMPTY_PROFILE: ProfileDraft = {
   fullName: '',
   preferredLanguage: 'en',
   dateOfBirth: '',
+  city: '',
+  pronouns: '',
+  avatarUrl: '',
   college: '',
   yearOfStudy: '',
   enrolmentNumber: '',

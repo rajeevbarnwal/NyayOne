@@ -107,11 +107,22 @@ export async function registerStudent(
 export interface CheckMobileResult {
   exists: boolean;
   registered: boolean;
-  status?: string;
+  status?: 'otp_pending' | 'otp_verified' | 'active' | string;
   registrationId?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  dateOfBirth?: string;
+  preferredLanguage?: string;
+  college?: string;
+  yearOfStudy?: string;
+  enrolmentNumber?: string;
+  institutionalEmail?: string;
+  barEnrolmentNumber?: string;
+  interests?: string;
+  careerGoal?: string;
+  isProfileComplete?: boolean;
+  guardianConsentPending?: boolean;
 }
 
 export async function checkMobile(mobile: string): Promise<CheckMobileResult> {
@@ -296,26 +307,7 @@ export function clearRegistrationSession(): void {
   window.sessionStorage.removeItem(SESSION_KEY);
 }
 
-export interface CheckMobileResult {
-  exists: boolean;
-  registered: boolean;
-  status?: 'otp_pending' | 'otp_verified' | 'active';
-  registrationId?: string;
-  firstName?: string;
-  middleName?: string;
-  lastName?: string;
-  dateOfBirth?: string;
-  preferredLanguage?: string;
-  college?: string;
-  yearOfStudy?: string;
-  enrolmentNumber?: string;
-  institutionalEmail?: string;
-  barEnrolmentNumber?: string;
-  interests?: string;
-  careerGoal?: string;
-  isProfileComplete?: boolean;
-  guardianConsentPending?: boolean;
-}
+
 
 export async function checkMobileRegistered(mobile: string): Promise<CheckMobileResult> {
   try {
