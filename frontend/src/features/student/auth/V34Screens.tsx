@@ -213,6 +213,7 @@ export function V34AuthGate(props: ScreenProps) {
   const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
   const [loginOtpSent, setLoginOtpSent] = useState(false);
   const [loginOtpId, setLoginOtpId] = useState('');
+  const loginOtpIdRef = useRef<string>('');
   const [loginOtpCode, setLoginOtpCode] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginResendCooldown, setLoginResendCooldown] = useState<number>(0);
@@ -231,6 +232,7 @@ export function V34AuthGate(props: ScreenProps) {
     setLoginBusy(true);
     try {
       const loginId = await startLoginOtp(loginMobile);
+      loginOtpIdRef.current = loginId;
       setLoginOtpId(loginId);
       setLoginResendCooldown(30);
       setLoginErrors({ submit: '✓ A new code was sent to your mobile.' });
@@ -292,12 +294,14 @@ export function V34AuthGate(props: ScreenProps) {
     try {
       if (!loginOtpSent) {
         const loginId = await startLoginOtp(loginMobile);
+        loginOtpIdRef.current = loginId;
         setLoginOtpId(loginId);
         setLoginOtpSent(true);
         setLoginResendCooldown(30);
         setLoginErrors({});
       } else {
-        await verifyLoginOtp(loginOtpId, loginOtpCode);
+        const activeLoginId = loginOtpIdRef.current || loginOtpId;
+        await verifyLoginOtp(activeLoginId, loginOtpCode);
         try {
           const info = await checkMobile(loginMobile);
           if (info.registered || info.firstName) {
