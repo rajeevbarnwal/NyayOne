@@ -1064,6 +1064,8 @@ export function V34ProfileStep1() {
   const [college, setCollege] = useState(draft.college || '');
   const [yearOfStudy, setYear] = useState(draft.yearOfStudy || '');
   const [enrolmentNumber, setEnrolmentNumber] = useState(draft.enrolmentNumber || '');
+  const [institutionalEmail, setInstitutionalEmail] = useState(draft.institutionalEmail || '');
+  const [barEnrolmentNumber, setBarEnrolmentNumber] = useState(draft.barEnrolmentNumber || '');
   const [academicErrors, setAcademicErrors] = useState<Record<string, string>>({});
 
   // Step 3: Interests & Goals State
@@ -1158,6 +1160,8 @@ export function V34ProfileStep1() {
       college,
       yearOfStudy,
       enrolmentNumber,
+      institutionalEmail,
+      barEnrolmentNumber,
     });
     setActiveStep(3);
     nav('/s-10?step=interests', { replace: true });
@@ -1335,43 +1339,63 @@ export function V34ProfileStep1() {
               <div className="v34-fieldset">
                 <Select
                   id="v34-college"
-                  label="COLLEGE / LAW SCHOOL *"
+                  label="College / University"
                   value={college}
                   onChange={setCollege}
                   options={[
-                    { value: 'nls', label: 'National Law School of India University (NLSIU), Bengaluru' },
-                    { value: 'nalsar', label: 'NALSAR University of Law, Hyderabad' },
-                    { value: 'nujs', label: 'WBNUJS, Kolkata' },
-                    { value: 'nlud', label: 'National Law University, Delhi' },
-                    { value: 'glc', label: 'Government Law College, Mumbai' },
-                    { value: 'other', label: 'Other Recognized Law College' },
+                    { value: 'NLSIU', label: 'National Law School of India University (NLSIU)' },
+                    { value: 'NALSAR', label: 'NALSAR University of Law' },
+                    { value: 'WBNUJS', label: 'The West Bengal NUJS' },
+                    { value: 'NLUD', label: 'National Law University, Delhi' },
+                    { value: 'GLC', label: 'Government Law College, Mumbai' },
+                    { value: 'Other', label: 'Other' },
                   ]}
                   error={academicErrors.college}
                 />
                 <div className="v34-row">
                   <Select
                     id="v34-year"
-                    label="YEAR OF STUDY *"
+                    label="Year of study"
                     value={yearOfStudy}
                     onChange={setYear}
                     options={[
-                      { value: '1', label: '1st Year' },
-                      { value: '2', label: '2nd Year' },
-                      { value: '3', label: '3rd Year' },
-                      { value: '4', label: '4th Year' },
-                      { value: '5', label: '5th Year' },
-                      { value: 'graduated', label: 'Graduated / LLM' },
+                      { value: '1st', label: '1st year' },
+                      { value: '2nd', label: '2nd year' },
+                      { value: '3rd', label: '3rd year' },
+                      { value: '4th', label: '4th year' },
+                      { value: '5th', label: '5th year' },
+                      { value: 'llm', label: 'LL.M.' },
                     ]}
                     error={academicErrors.year}
                   />
                   <Field
                     id="v34-enrolment"
-                    label="ENROLMENT NUMBER"
+                    label="College enrolment number"
                     optional
                     value={enrolmentNumber}
                     onChange={setEnrolmentNumber}
                     placeholder="e.g. 2023/BALLB/042"
                     maxLength={40}
+                  />
+                </div>
+                <div className="v34-row">
+                  <Field
+                    id="v34-institutional-email"
+                    label="Institutional email"
+                    optional
+                    value={institutionalEmail}
+                    onChange={setInstitutionalEmail}
+                    placeholder="e.g. aditi@nls.ac.in"
+                    maxLength={254}
+                  />
+                  <Field
+                    id="v34-bar-enrolment"
+                    label="Bar enrolment number"
+                    optional
+                    value={barEnrolmentNumber}
+                    onChange={setBarEnrolmentNumber}
+                    placeholder="Leave blank if not enrolled"
+                    maxLength={120}
                   />
                 </div>
               </div>
@@ -1481,7 +1505,7 @@ export function V34ProfileStep1() {
                 style={{ padding: '10px 24px', width: 'auto' }}
                 onClick={activeStep === 1 ? handlePersonalSubmit : activeStep === 2 ? handleAcademicSubmit : handleInterestsSubmit}
               >
-                {activeStep === 1 ? 'Continue to academics' : activeStep === 2 ? 'Continue to interests' : 'Complete profile'}
+                {activeStep === 1 ? 'Continue to academics' : activeStep === 2 ? 'Save & continue' : 'Complete profile'}
               </button>
             </div>
           </Footer>
