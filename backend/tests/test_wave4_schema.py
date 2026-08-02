@@ -44,7 +44,7 @@ def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
     inspector = inspect(engine)
     assert TABLES <= set(inspector.get_table_names())
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVISION
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0012_student_profile_preferences"
 
     report_columns = {item["name"] for item in inspector.get_columns("internship_reports")}
     assert {
