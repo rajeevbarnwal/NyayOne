@@ -18,7 +18,6 @@
  * boundary · 05 loading/empty/partial-error · 06 deep link · 07 no restricted
  * leakage in previews.
  */
-import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
 
 // --- contract ---------------------------------------------------------------
 
@@ -61,7 +60,7 @@ export const TIMEZONE_OPTIONS: readonly string[] = [
   'Asia/Kolkata', 'UTC', 'Asia/Dubai', 'Europe/London', 'America/New_York', 'Asia/Singapore',
 ];
 
-export type CalendarEventStatus = 'scheduled' | 'deadline' | 'tentative' | 'done';
+export type CalendarEventStatus = 'scheduled' | 'deadline' | 'tentative' | 'done' | 'cancelled';
 export type PrivacyClassification = 'public' | 'personal' | 'restricted';
 
 /** The single normalized event contract consumed by S19.1/2/3. */
@@ -142,6 +141,17 @@ export function isValidTimezone(tz: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Strict YYYY-MM-DD validation; Date.parse alone normalises impossible dates. */
+export function isStrictCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 // --- privacy redaction (TC-285-07) ------------------------------------------
@@ -423,7 +433,6 @@ export function resolveDeepLink(
 
 // --- persistence (user-scoped filters; TC-285-02 refresh persistence) -------
 
-const filtersKey = (userId: string) => `ls-cal-filters-${userId}`;
 
 // --- date-range filter validation (S-90 From/To) ----------------------------
 
@@ -492,128 +501,38 @@ export function validatePersonalEvent(i: PersonalEventInput): void {
  * localDateKey/localTime in that timezone.
  */
 export function zonedToUtcIso(date: string, time: string, timezone: string): string {
-  const guess = new Date(`${date}T${time}:00Z`); // treat picked wall time as if UTC
-  // Offset (ms the zone is ahead of UTC) at this instant — runtime-tz independent.
+  if (!isStrictCalendarDate(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !isValidTimezone(timezone)) {
+    throw new RangeError('invalid_calendar_wall_time');
+  }
+  const wallEpoch = Date.parse(`${date}T${time}:00Z`);
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone, hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
-  const p = dtf.formatToParts(guess).reduce<Record<string, string>>((a, x) => { a[x.type] = x.value; return a; }, {});
-  const asZone = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
-  const offsetMs = asZone - guess.getTime();
-  return new Date(guess.getTime() - offsetMs).toISOString();
-}
-
-export class CalendarService {
-  private store: KvStore;
-  private userId: string;
-
-  constructor(userId: string, store: KvStore = defaultKvStore()) {
-    this.userId = userId;
-    this.store = store;
+  const partsAt = (epoch: number) => dtf.formatToParts(new Date(epoch)).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  const offsets = new Set<number>();
+  // Sample both sides of a possible transition. Offset changes are much less
+  // frequent than this six-hour cadence, and every candidate is round-tripped.
+  for (let delta = -36; delta <= 36; delta += 6) {
+    const epoch = wallEpoch + delta * 60 * 60 * 1000;
+    const parts = partsAt(epoch);
+    const localEpoch = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
+    offsets.add(localEpoch - epoch);
   }
-
-  getFilters(): CalendarFilters {
-    return this.store.get<CalendarFilters>(filtersKey(this.userId)) ?? defaultFilters();
-  }
-
-  setFilters(f: CalendarFilters): CalendarFilters {
-    this.store.set(filtersKey(this.userId), f);
-    return f;
-  }
-
-  /** Aggregate + apply persisted filters in one call (screen entry point). */
-  view(results: readonly SourceResult[]): { agg: AggregateResult; filtered: CalendarEvent[]; filters: CalendarFilters } {
-    const agg = aggregate(results);
-    const filters = this.getFilters();
-    return { agg, filtered: filterEvents(agg.events, filters), filters };
-  }
-
-  // --- personal events (S-91 Add Event, persisted through the service) ------
-
-  private personalKey(): string {
-    return `ls-cal-personal-${this.userId}`;
-  }
-
-  /** Raw persisted personal events for this user (owner-scoped). */
-  listPersonalRaw(): RawSourceRecord[] {
-    return this.store.get<RawSourceRecord[]>(this.personalKey()) ?? [];
-  }
-
-  /**
-   * Add a manual personal event (S-91). Validated + normalized + persisted
-   * through the service boundary so it appears on S-90 and survives refresh.
-   * Throws PersonalEventError on invalid input (nothing is persisted then).
-   */
-  addPersonalEvent(input: PersonalEventInput, now: string): CalendarEvent {
-    validatePersonalEvent(input); // throws before any write
-    const existing = this.listPersonalRaw();
-    const sourceId = `me-${Date.parse(now) || Date.now()}-${existing.length + 1}`;
-    const startsAt = zonedToUtcIso(input.date, input.time, input.timezone);
-    const raw: RawSourceRecord = {
-      sourceId,
-      ownerId: this.userId,
-      title: input.title.trim(),
-      startsAt,
-      timezone: input.timezone,
-      status: input.type === 'deadline' ? 'deadline' : 'scheduled',
-      privacyClassification: 'personal',
-      sourceUrl: SOURCE_ROUTE.reminder,
-      updatedAt: now,
-    };
-    const normalized = normalizeEvent('reminder', raw, this.userId); // validates before any write
-    this.store.set(this.personalKey(), [...existing, raw]);
-    return normalized;
-  }
-}
-
-// --- stable local fixtures (no live integrations) ---------------------------
-// Deterministic sample sources so the screen + tests have real ISO datetimes.
-// NOTE: titles carry no private identifiers; source_url is always in-app.
-
-export const SAMPLE_INTERNSHIP_EVENTS: readonly RawSourceRecord[] = [
-  { sourceId: 'cam-deadline', title: 'CAM application deadline', startsAt: '2026-07-20T18:30:00Z', status: 'deadline', privacyClassification: 'personal', sourceUrl: SOURCE_ROUTE.internship, updatedAt: '2026-07-10T04:00:00Z' },
-  { sourceId: 'vidhi-interview', title: 'Vidhi interview', startsAt: '2026-07-22T05:30:00Z', endsAt: '2026-07-22T06:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.internship, updatedAt: '2026-07-11T04:00:00Z' },
-];
-
-export const SAMPLE_EXAM_EVENTS: readonly RawSourceRecord[] = [
-  { sourceId: 'clat-mock-3', title: 'CLAT mock test 3', startsAt: '2026-07-19T04:30:00Z', endsAt: '2026-07-19T06:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.exam, updatedAt: '2026-07-09T04:00:00Z' },
-];
-
-export const SAMPLE_CLINICAL_EVENTS: readonly RawSourceRecord[] = [
-  // title deliberately excludes verifier email / evidence (restricted).
-  { sourceId: 'legal-aid-camp', title: 'Legal-aid camp (clinical hours)', startsAt: '2026-07-20T03:30:00Z', endsAt: '2026-07-20T09:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.clinical, updatedAt: '2026-07-08T04:00:00Z' },
-];
-
-export const SAMPLE_COMMUNITY_EVENTS: readonly RawSourceRecord[] = [
-  { sourceId: 'ama-constitution', title: 'Community AMA: Constitutional law', startsAt: '2026-07-21T13:00:00Z', endsAt: '2026-07-21T14:00:00Z', status: 'tentative', privacyClassification: 'public', sourceUrl: SOURCE_ROUTE.community, updatedAt: '2026-07-07T04:00:00Z' },
-];
-
-/** Named loaders for the bundled fixtures (owner defaults to the given student). */
-export function sampleLoaders(ownerId = 'self'): SourceLoader[] {
-  return [
-    { sourceType: 'internship', load: () => SAMPLE_INTERNSHIP_EVENTS, ownerId },
-    { sourceType: 'exam', load: () => SAMPLE_EXAM_EVENTS, ownerId },
-    { sourceType: 'clinical', load: () => SAMPLE_CLINICAL_EVENTS, ownerId },
-    { sourceType: 'community', load: () => SAMPLE_COMMUNITY_EVENTS, ownerId },
-  ];
-}
-
-/** Build the default set of source results from bundled fixtures. */
-export function sampleSourceResults(ownerId = 'self'): SourceResult[] {
-  return runLoaders(sampleLoaders(ownerId));
-}
-
-/**
- * Full set of loaders for a student: bundled module fixtures + the persisted
- * personal-events source (so S-91 additions appear on S-90 and survive refresh).
- */
-export function calendarLoaders(svc: CalendarService, ownerId = 'self'): SourceLoader[] {
-  return [
-    ...sampleLoaders(ownerId),
-    { sourceType: 'reminder', load: () => svc.listPersonalRaw(), ownerId },
-  ];
+  const matches = [...offsets].map((offset) => wallEpoch - offset).filter((candidate) => {
+    const parts = partsAt(candidate);
+    const renderedDate = `${parts.year}-${parts.month}-${parts.day}`;
+    const renderedTime = `${String(+parts.hour % 24).padStart(2, '0')}:${parts.minute}`;
+    return renderedDate === date && renderedTime === time;
+  });
+  const unique = [...new Set(matches)].sort((a, b) => a - b);
+  if (unique.length === 0) throw new RangeError('nonexistent_calendar_wall_time');
+  if (unique.length > 1) throw new RangeError('ambiguous_calendar_wall_time');
+  return new Date(unique[0]).toISOString();
 }
 
 export const CALENDAR_SOURCE_NOTE =
-  'Aggregated from your LegalSaathi activity. Times shown in your selected timezone; external calendar sync is not enabled.';
+  'Aggregated from your LegalSaathi activity. Times use your selected timezone; private exports are revocable and opt-in.';

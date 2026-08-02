@@ -1,18 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryKvStore } from '../../../lib/kvStore';
 import {
   aggregate, runAdapter, normalizeEvent, sortEvents, filterEvents,
   localDateKey, localTime, toPreview, previewLeaksRestricted, resolveDeepLink,
-  eventId, CalendarError, CalendarService, defaultFilters, sampleSourceResults,
-  runLoaders, retryFailed, deriveStatus, calendarLoaders,
+  eventId, CalendarError,
+  runLoaders, retryFailed, deriveStatus,
   validateDateRange, validatePersonalEvent, PersonalEventError, zonedToUtcIso, SOURCE_ROUTE,
-  SAMPLE_INTERNSHIP_EVENTS, SAMPLE_EXAM_EVENTS, SAMPLE_CLINICAL_EVENTS,
+  isStrictCalendarDate,
   type RawSourceRecord, type SourceLoader, type PersonalEventInput,
 } from './calendar';
 
 const raw = (id: string, startsAt: string, url = '/x'): RawSourceRecord => ({ sourceId: id, title: `t-${id}`, startsAt, sourceUrl: url });
+const SAMPLE_INTERNSHIP_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'cam-deadline', ownerId: 'stu-1', title: 'CAM application deadline', startsAt: '2026-07-20T18:30:00Z', status: 'deadline', privacyClassification: 'personal', sourceUrl: SOURCE_ROUTE.internship, updatedAt: '2026-07-10T04:00:00Z' },
+  { sourceId: 'vidhi-interview', ownerId: 'stu-1', title: 'Vidhi interview', startsAt: '2026-07-22T05:30:00Z', endsAt: '2026-07-22T06:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.internship, updatedAt: '2026-07-11T04:00:00Z' },
+];
+const SAMPLE_EXAM_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'clat-mock-3', ownerId: 'stu-1', title: 'CLAT mock test 3', startsAt: '2026-07-19T04:30:00Z', endsAt: '2026-07-19T06:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.exam, updatedAt: '2026-07-09T04:00:00Z' },
+];
+const SAMPLE_CLINICAL_EVENTS: readonly RawSourceRecord[] = [
+  { sourceId: 'legal-aid-camp', ownerId: 'stu-1', title: 'Legal-aid camp (clinical hours)', startsAt: '2026-07-20T03:30:00Z', endsAt: '2026-07-20T09:30:00Z', status: 'scheduled', sourceUrl: SOURCE_ROUTE.clinical, updatedAt: '2026-07-08T04:00:00Z' },
+];
+const sampleSourceResults = (ownerId = 'stu-1') => runLoaders([
+  { sourceType: 'internship' as const, load: () => SAMPLE_INTERNSHIP_EVENTS, ownerId },
+  { sourceType: 'exam' as const, load: () => SAMPLE_EXAM_EVENTS, ownerId },
+  { sourceType: 'clinical' as const, load: () => SAMPLE_CLINICAL_EVENTS, ownerId },
+  { sourceType: 'community' as const, load: () => [{ sourceId: 'ama-constitution', ownerId, title: 'Community AMA', startsAt: '2026-07-21T13:00:00Z', privacyClassification: 'public' as const, sourceUrl: SOURCE_ROUTE.community }], ownerId },
+]);
 
 describe('SAATHI-285/287 calendar aggregation contract', () => {
+  it('strictly validates real calendar dates without rejecting future event dates', () => {
+    expect(isStrictCalendarDate('2030-01-01')).toBe(true);
+    expect(isStrictCalendarDate('2028-02-29')).toBe(true);
+    expect(isStrictCalendarDate('2026-02-29')).toBe(false);
+    expect(isStrictCalendarDate('2026-02-30')).toBe(false);
+    expect(isStrictCalendarDate('')).toBe(false);
+  });
+
+  it('rejects London DST gaps and folds instead of silently shifting/choosing one', () => {
+    expect(() => zonedToUtcIso('2026-03-29', '01:30', 'Europe/London')).toThrow(/nonexistent_calendar_wall_time/);
+    expect(() => zonedToUtcIso('2026-10-25', '01:30', 'Europe/London')).toThrow(/ambiguous_calendar_wall_time/);
+    expect(zonedToUtcIso('2026-08-03', '19:00', 'Asia/Kolkata')).toBe('2026-08-03T13:30:00.000Z');
+    expect(zonedToUtcIso('2026-08-03', '19:00', 'UTC')).toBe('2026-08-03T19:00:00.000Z');
+  });
   it('TC-285-01: aggregates >=2 source adapters and sorts chronologically', () => {
     const results = [
       runAdapter('exam', () => [raw('a', '2026-07-19T04:30:00Z', '/exam/a')]),
@@ -33,27 +62,15 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     expect(evs.map((e) => e.id)).toEqual(['exam:z', 'internship:a']);
   });
 
-  it('TC-285-02: filters by source and date; CalendarService persists across reload', () => {
-    const store = new InMemoryKvStore();
-    const svc = new CalendarService('stu-1', store);
+  it('TC-285-02: filters by source and date without browser persistence authority', () => {
     const { events } = aggregate(sampleSourceResults());
     // CAM deadline is 2026-07-20T18:30Z = 2026-07-21 00:00 IST, so the IST day is the 21st.
-    svc.setFilters({ sources: ['internship'], from: '2026-07-21', to: '2026-07-21', timezone: 'Asia/Kolkata' });
-    // Simulate a fresh page load: brand-new service over the same store.
-    const reloaded = new CalendarService('stu-1', store);
-    const f = reloaded.getFilters();
-    expect(f.sources).toEqual(['internship']);
+    const f = { sources: ['internship'] as const, from: '2026-07-21', to: '2026-07-21', timezone: 'Asia/Kolkata' };
     const out = filterEvents(events, f);
     expect(out.every((e) => e.sourceType === 'internship')).toBe(true);
     expect(out.every((e) => localDateKey(e.startsAt, f.timezone) === '2026-07-21')).toBe(true);
     expect(out.length).toBe(1); // only the CAM deadline lands on 2026-07-21 IST
     expect(out[0].id).toBe('internship:cam-deadline');
-  });
-
-  it('TC-285-02: filters are user-scoped (no cross-user bleed)', () => {
-    const store = new InMemoryKvStore();
-    new CalendarService('stu-1', store).setFilters({ ...defaultFilters(), sources: ['exam'] });
-    expect(new CalendarService('stu-2', store).getFilters().sources).toEqual([]);
   });
 
   it('TC-285-03: dedupes repeated source records but keeps distinct events', () => {
@@ -268,29 +285,4 @@ describe('SAATHI-285/287 calendar aggregation contract', () => {
     expect(code({ ...base, timezone: 'Mars/Phobos' })).toBe('invalid_timezone');
   });
 
-  it('addPersonalEvent: persists through the service, appears via calendarLoaders, survives reload', () => {
-    const store = new InMemoryKvStore();
-    const svc = new CalendarService('stu-1', store);
-    svc.addPersonalEvent({ title: 'Revise contracts', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, '2026-07-12T00:00:00Z');
-    // aggregate via the full loader set for a FRESH service over the same store (reload)
-    const reloaded = new CalendarService('stu-1', store);
-    const { events } = aggregate(runLoaders(calendarLoaders(reloaded, 'stu-1')));
-    const mine = events.filter((e) => e.sourceType === 'reminder' && e.title === 'Revise contracts');
-    expect(mine.length).toBe(1);
-    expect(mine[0].ownerId).toBe('stu-1');
-    expect(localTime(mine[0].startsAt, 'Asia/Kolkata')).toBe('09:30');
-  });
-
-  it('addPersonalEvent: invalid input throws and persists nothing', () => {
-    const store = new InMemoryKvStore();
-    const svc = new CalendarService('stu-1', store);
-    expect(() => svc.addPersonalEvent({ title: '', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'Asia/Kolkata' }, 't0')).toThrowError(PersonalEventError);
-    expect(svc.listPersonalRaw().length).toBe(0);
-  });
-
-  it('personal events are user-scoped (not visible to another student)', () => {
-    const store = new InMemoryKvStore();
-    new CalendarService('stu-1', store).addPersonalEvent({ title: 'Mine', date: '2026-07-20', time: '09:30', type: 'study', timezone: 'UTC' }, '2026-07-12T00:00:00Z');
-    expect(new CalendarService('stu-2', store).listPersonalRaw().length).toBe(0);
-  });
 });

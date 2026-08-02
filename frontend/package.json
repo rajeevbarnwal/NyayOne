@@ -13,6 +13,8 @@
     "test:run": "vitest --run",
     "qa": "node scripts/browser-qa.mjs",
     "qa:calendar-visual": "node scripts/calendar-visual-qa.mjs",
+    "qa:wave5-calendar-ui": "node scripts/wave5-calendar-e2e.mjs",
+    "qa:wave5-calendar-real": "node scripts/wave5-calendar-real-e2e.mjs",
     "qa:registration": "node scripts/registration-e2e.mjs",
     "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",

@@ -11,6 +11,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.internship_reports import router as internship_reports_router
 from app.api.v1.moderation_reports import router as moderation_reports_router
+from app.api.v1.calendar import router as calendar_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -23,3 +24,4 @@ api_router.include_router(law_schools_student_router)
 api_router.include_router(tutoring_router)
 api_router.include_router(internship_reports_router)
 api_router.include_router(moderation_reports_router)
+api_router.include_router(calendar_router)

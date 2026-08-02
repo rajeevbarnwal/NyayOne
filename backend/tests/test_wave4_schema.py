@@ -10,7 +10,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 
 BACKEND = Path(__file__).resolve().parents[1]
-REVISION = "0012_wave4_moderation"
+WAVE4_REVISION = "0012_wave4_moderation"
+HEAD_REVISION = "0013_wave5_calendar_interop"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
@@ -52,7 +53,7 @@ def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
     inspector = inspect(engine)
     assert TABLES <= set(inspector.get_table_names())
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVISION
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == HEAD_REVISION
 
     report_columns = {item["name"] for item in inspector.get_columns("internship_reports")}
     assert {

@@ -49,6 +49,12 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi
       APP_ENV: staging
+      # Wave 5 fail-closed contract: outside local/test environments the
+      # subscriber-facing calendar origin must be a real non-loopback HTTPS
+      # origin, so this staging job must state one explicitly instead of
+      # inheriting the loopback development default. The reserved .test TLD is
+      # never resolved by this job; it only satisfies the origin contract.
+      CALENDAR_PUBLIC_BASE_URL: https://calendar.example.test
       # Wave 4 production contract: select the real scanner seam. This
       # regression workflow does not exercise reporting; the dedicated Wave 4
       # gate starts clamd and proves PING + EICAR rejection.
