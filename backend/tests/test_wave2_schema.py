@@ -64,7 +64,7 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: Current head. 0009 adds server-authoritative session pricing, 0010 adds
 #: student login/session tables and 0011 adds Wave 4 private reporting. Therefore the revision an
 #: upgrade lands on differs from the revision that created the 17 Wave 2 tables.
-HEAD_REVISION = "0011_wave4_private_reporting"
+HEAD_REVISION = "0012_student_profile_preferences"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",

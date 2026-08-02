@@ -1,7 +1,7 @@
 """Add interests and career_goal columns to student_profiles table.
 
-Revision ID: 0011_student_profile_preferences
-Revises: 0010_student_login_session
+Revision ID: 0012_student_profile_preferences
+Revises: 0011_wave4_private_reporting
 """
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0011_student_profile_preferences"
-down_revision: Union[str, None] = "0010_student_login_session"
+revision: str = "0012_student_profile_preferences"
+down_revision: Union[str, None] = "0011_wave4_private_reporting"
 branch_labels = None
 depends_on = None
 
