@@ -209,8 +209,6 @@ export function V34AuthGate(props: ScreenProps) {
 
   // Sign In state
   const [loginMobile, setLoginMobile] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
   const [loginOtpSent, setLoginOtpSent] = useState(false);
   const [loginOtpId, setLoginOtpId] = useState('');
   const loginOtpIdRef = useRef<string>('');
@@ -260,35 +258,11 @@ export function V34AuthGate(props: ScreenProps) {
   async function handleLoginSubmit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(loginMobile)) next.mobile = MOBILE_ERROR;
-    if (loginMode === 'password' && (loginPassword.length < 8 || loginPassword.length > 128)) {
-      next.password = 'Password must be between 8 and 128 characters.';
-    }
-    if (loginMode === 'otp' && loginOtpSent && !/^\d{6}$/.test(loginOtpCode)) {
+    if (loginOtpSent && !/^\d{6}$/.test(loginOtpCode)) {
       next.otp = 'Enter the complete 6-digit one time code.';
     }
     setLoginErrors(next);
     if (Object.keys(next).length) return;
-
-    if (loginMode === 'password') {
-      try {
-        const info = await checkMobile(loginMobile);
-        if (info.firstName) {
-          updateProfileDraft({ firstName: info.firstName, middleName: info.middleName, lastName: info.lastName });
-        }
-      } catch {
-        /* non-fatal fallback */
-      }
-      notifyStudentAuthChanged();
-      const currentDraft = getProfileDraft();
-      const pct = profileCompletionPct(currentDraft);
-      if (pct < 100) {
-        const nextStep = !currentDraft.college ? 'academic' : 'interests';
-        nav(`/s-10?step=${nextStep}`, { replace: true });
-      } else {
-        nav('/s-14', { replace: true, state: { mobile: loginMobile } });
-      }
-      return;
-    }
 
     setLoginBusy(true);
     try {
@@ -302,23 +276,6 @@ export function V34AuthGate(props: ScreenProps) {
       } else {
         const activeLoginId = loginOtpIdRef.current || loginOtpId;
         await verifyLoginOtp(activeLoginId, loginOtpCode);
-        try {
-          const info = await checkMobile(loginMobile);
-          if (info.registered || info.firstName) {
-            updateProfileDraft({
-              firstName: info.firstName,
-              middleName: info.middleName,
-              lastName: info.lastName,
-              dateOfBirth: info.dateOfBirth,
-              city: info.city,
-              college: info.college,
-              yearOfStudy: info.yearOfStudy,
-              enrolmentNumber: info.enrolmentNumber,
-            });
-          }
-        } catch {
-          /* non-fatal */
-        }
         notifyStudentAuthChanged();
         const currentDraft = getProfileDraft();
         const pct = profileCompletionPct(currentDraft);
@@ -460,26 +417,14 @@ export function V34AuthGate(props: ScreenProps) {
                 prefix="+91"
                 error={loginErrors.mobile}
                 maxLength={15}
-                disabled={loginMode === 'otp' && loginOtpSent}
+                disabled={loginOtpSent}
               />
-              {loginMode === 'password' && (
-                <Field
-                  id="s03-login-password"
-                  label="PASSWORD *"
-                  value={loginPassword}
-                  onChange={setLoginPassword}
-                  type="password"
-                  autoComplete="current-password"
-                  error={loginErrors.password}
-                  maxLength={128}
-                />
-              )}
-              {loginMode === 'otp' && !loginOtpSent && (
+              {!loginOtpSent && (
                 <div className="v34-well" style={{ marginBottom: '12px' }}>
                   Enter your mobile number and click <strong>Send One-Time OTP Code</strong> to receive your 6-digit verification code via SMS.
                 </div>
               )}
-              {loginMode === 'otp' && loginOtpSent && (
+              {loginOtpSent && (
                 <>
                   <div className="v34-well" style={{ marginBottom: '12px' }}>
                     Six-digit code sent via SMS to {loginMobile ? maskDestination({ channel: 'sms', ref: loginMobile }) : 'your mobile'}. Enter your code below to sign in.
@@ -512,20 +457,8 @@ export function V34AuthGate(props: ScreenProps) {
                 </>
               )}
               {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
-              <div className="v34-inlineactions">
-                <button
-                  type="button"
-                  className="v34-hit v34-linkbtn"
-                  onClick={() => {
-                    setLoginErrors({});
-                    setLoginOtpSent(false);
-                    setLoginOtpCode('');
-                    setLoginMode((v) => (v === 'password' ? 'otp' : 'password'));
-                  }}
-                >
-                  {loginMode === 'password' ? 'Use a one time code' : 'Use password'}
-                </button>
-                {loginMode === 'otp' && loginOtpSent ? (
+              {loginOtpSent && (
+                <div className="v34-inlineactions">
                   <button
                     type="button"
                     className="v34-hit v34-linkbtn"
@@ -537,23 +470,15 @@ export function V34AuthGate(props: ScreenProps) {
                   >
                     Change mobile number
                   </button>
-                ) : (
-                  <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
-                    Forgot password
-                  </button>
-                )}
-              </div>
+                </div>
+              )}
               <button
                 type="button"
                 className="v34-submit-btn"
                 onClick={handleLoginSubmit}
                 disabled={loginBusy}
               >
-                {loginMode === 'password'
-                  ? 'Sign In'
-                  : loginOtpSent
-                  ? 'Verify OTP & Sign In'
-                  : 'Send One-Time OTP Code'}
+                {loginOtpSent ? 'Verify OTP & Sign In' : 'Send One-Time OTP Code'}
               </button>
             </div>
           ) : (
@@ -682,8 +607,6 @@ export function V34Login() {
   const location = useLocation();
   const locationState = (location.state as { mobile?: string; password?: string } | null);
   const [mobile, setMobile] = useState(locationState?.mobile || '');
-  const [password, setPassword] = useState(locationState?.password || '');
-  const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [otpSent, setOtpSent] = useState(false);
   const [otpId, setOtpId] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -693,28 +616,11 @@ export function V34Login() {
   async function submit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR;
-    if (mode === 'password' && (password.length < 8 || password.length > 128)) {
-      next.password = 'Password must be between 8 and 128 characters.';
-    }
-    if (mode === 'otp' && otpSent && !/^\d{6}$/.test(otpCode)) {
+    if (otpSent && !/^\d{6}$/.test(otpCode)) {
       next.otp = 'Enter the complete 6-digit one time code.';
     }
     setErrors(next);
     if (Object.keys(next).length) return;
-
-    if (mode === 'password') {
-      try {
-        const info = await checkMobile(mobile);
-        if (info.firstName) {
-          updateProfileDraft({ firstName: info.firstName, middleName: info.middleName, lastName: info.lastName });
-        }
-      } catch {
-        /* non-fatal fallback */
-      }
-      notifyStudentAuthChanged();
-      nav('/s-14');
-      return;
-    }
 
     setBusy(true);
     try {
@@ -757,21 +663,9 @@ export function V34Login() {
               prefix="+91"
               error={errors.mobile}
               maxLength={15}
-              disabled={mode === 'otp' && otpSent}
+              disabled={otpSent}
             />
-            {mode === 'password' && (
-              <Field
-                id="v34-login-password"
-                label="PASSWORD"
-                value={password}
-                onChange={setPassword}
-                type="password"
-                autoComplete="current-password"
-                error={errors.password}
-                maxLength={128}
-              />
-            )}
-            {mode === 'otp' && otpSent && (
+            {otpSent && (
               <Field
                 id="v34-login-otp"
                 label="6-DIGIT ONE-TIME CODE *"
@@ -787,20 +681,8 @@ export function V34Login() {
             )}
           </div>
           {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
-          <div className="v34-inlineactions">
-            <button
-              type="button"
-              className="v34-hit v34-linkbtn"
-              onClick={() => {
-                setErrors({});
-                setOtpSent(false);
-                setOtpCode('');
-                setMode((value) => (value === 'password' ? 'otp' : 'password'));
-              }}
-            >
-              {mode === 'password' ? 'Use a one time code' : 'Use password'}
-            </button>
-            {mode === 'otp' && otpSent ? (
+          {otpSent && (
+            <div className="v34-inlineactions">
               <button
                 type="button"
                 className="v34-hit v34-linkbtn"
@@ -812,18 +694,14 @@ export function V34Login() {
               >
                 Change mobile number
               </button>
-            ) : (
-              <button type="button" className="v34-hit" onClick={() => nav('/s-06')}>
-                Forgot password
-              </button>
-            )}
-          </div>
+            </div>
+          )}
           <span className="v34-grow"/>
         </main>
         <Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}>
           <IconAction
-            label={mode === 'password' ? 'Sign in' : otpSent ? 'Verify OTP & Sign In' : 'Send one time code'}
-            icon={mode === 'password' ? 'key' : otpSent ? 'verify' : 'send'}
+            label={otpSent ? 'Verify OTP & Sign In' : 'Send one time code'}
+            icon={otpSent ? 'verify' : 'send'}
             onClick={submit}
             disabled={busy}
           />
