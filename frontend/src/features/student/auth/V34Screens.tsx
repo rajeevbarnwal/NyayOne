@@ -19,6 +19,7 @@ import {
   loadRegistrationSession,
   registerStudent,
   resendStudentOtp,
+  saveAcademicProfile,
   saveRegistrationSession,
   startLoginOtp,
   startRecovery,
@@ -1149,7 +1150,7 @@ export function V34ProfileStep1() {
     nav('/s-10?step=academic', { replace: true });
   }
 
-  function handleAcademicSubmit() {
+  async function handleAcademicSubmit() {
     const next: Record<string, string> = {};
     if (!college) next.college = 'Choose your college.';
     if (!yearOfStudy) next.year = 'Choose your year of study.';
@@ -1163,6 +1164,21 @@ export function V34ProfileStep1() {
       institutionalEmail,
       barEnrolmentNumber,
     });
+    const reg = loadRegistrationSession();
+    if (reg?.registrationId) {
+      try {
+        await saveAcademicProfile({
+          registrationId: reg.registrationId,
+          college,
+          yearOfStudy,
+          enrolmentNumber,
+          institutionalEmail,
+          barEnrolmentNumber,
+        });
+      } catch {
+        // Fallback gracefully to local navigation if session is mock/offline
+      }
+    }
     setActiveStep(3);
     nav('/s-11');
   }
