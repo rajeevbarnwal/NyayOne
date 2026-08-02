@@ -45,9 +45,9 @@ async function fillBase(page, {
   await page.getByLabel('FIRST NAME').fill(first);
   await page.getByLabel('MIDDLE NAME').fill(middle);
   await page.getByLabel('LAST NAME').fill(last);
-  await page.getByLabel('MOBILE NUMBER').fill(mobile);
+  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill(mobile);
   await page.getByLabel('INSTITUTIONAL EMAIL').fill('aditi@nls.ac.in');
-  await page.getByLabel('DATE OF BIRTH').fill(dob);
+  await page.getByLabel('DATE OF BIRTH', { exact: true }).fill(dob);
   await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
   await page.getByLabel('YEAR OF STUDY').selectOption('3');
   await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
@@ -216,7 +216,7 @@ for (const [name, values, expected] of [
     if (r.url().includes('/api/v1/auth/student/recovery/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
   await page.goto(`${base}/s-06`);
-  await page.getByLabel('MOBILE NUMBER').fill('9000000006');
+  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill('9000000006');
   await resetOtp();
   await page.getByRole('button', { name: 'Send the code' }).click();
   await page.getByText('If an account matches, a six digit recovery code has been sent.').waitFor();
