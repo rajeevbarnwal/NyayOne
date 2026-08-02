@@ -767,6 +767,7 @@ export function V34PasswordReset() {
     setBusy(true);
     try {
       await verifyRecovery(recoveryId, code);
+      await completeRecovery(recoveryId);
       setStep('password');
       setMessage('Recovery verified. You may now sign in again.');
     } catch {
