@@ -63,10 +63,27 @@ export function Dashboard() {
           <h1>Good evening, {firstName}.</h1>
           <p className="st-metatag" style={{ marginTop: 8 }}>Your deadlines, sessions and applications stay together without exposing private activity.</p>
         </div>
-        <span className="st-badge">
-          <span aria-hidden>✓</span> {TIER_LABELS[tier]}
+        <span className={`st-badge ${completion < 100 ? 'st-badge--warning' : ''}`} style={completion < 100 ? { backgroundColor: '#fffbe6', borderColor: '#ffe58f', color: '#d46b08' } : undefined}>
+          <span aria-hidden>{completion === 100 ? '✓' : '⚠️'}</span> {completion === 100 ? TIER_LABELS[tier] : `Profile incomplete (${completion}%)`}
         </span>
       </div>
+
+      {completion < 100 && (
+        <div style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <strong style={{ color: '#873800' }}>Your profile setup is {completion}% complete</strong>
+            <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#595959' }}>Finish setting up your academic details to unlock full internship applications.</p>
+          </div>
+          <button
+            type="button"
+            className="v34-submit-btn"
+            style={{ width: 'auto', padding: '8px 16px', fontSize: '13px' }}
+            onClick={() => nav(`/s-10?step=${!profile.college ? 'academic' : 'interests'}`)}
+          >
+            Finish Profile Setup
+          </button>
+        </div>
+      )}
 
       {/* Unified calendar strip */}
       <details className="v34c-mobile-disclosure">
