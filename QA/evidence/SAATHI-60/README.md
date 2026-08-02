@@ -15,7 +15,7 @@ session cookie, and headless Chromium.
 | Area | Result | Evidence |
 |---|---:|---|
 | Complete backend regression | 1,090 passed, 2 unrelated environment-gated skips | External raw JUnit: `QA/saathi60_final_2026-08-03/logs/backend_full_final.xml` |
-| Complete frontend regression | 691 passed, 0 failed | External raw JSON: `QA/saathi60_final_2026-08-03/logs/frontend_full_final.json` |
+| Complete frontend regression | 695 passed, 0 failed | External raw JSON: `QA/saathi60_final_2026-08-03/logs/frontend_full_after_ci_readiness_repair.json` |
 | Typecheck, lint, build | PASS | Executed on the final source tree |
 | Alembic | upgrade → downgrade → upgrade → no drift PASS | Head `0014_saathi60_internships` |
 | PostgreSQL schema | PASS | PostgreSQL 16.14, pgvector present, zero schema failures |
@@ -63,6 +63,23 @@ session cookie, and headless Chromium.
 | Horizontal overflow / target below 44px | Zero overflow; no undersized visible target | PASS |
 | WCAG A/AA axe scan | Zero violations in the committed viewport matrix | PASS |
 | Console, page, request, HTTP or unmatched-API errors | Zero | PASS |
+
+## Remote-gate readiness correction
+
+The first push-triggered Wave 5 browser run exposed a genuine S-91
+create-transition race: the old generic ready marker could still describe the
+create view while the newly routed event-detail GET was starting. A reload
+then surfaced that request as `net::ERR_ABORTED`; the runtime oracle correctly
+failed 304/305 rather than hiding it.
+
+The final runner registers the POST 201 and successful detail GET before the
+create action, awaits `response.finished()` for both, reconciles the POST body
+id, route id and detail URL, and waits for an application-owned readiness
+marker keyed to the new event id before reloading. The seeded old sequence
+reproduces the abort, while the corrected contract fails closed on a wrong id,
+query-bearing URL, non-200 response or aborted response body. It contains no
+fixed sleep, `ERR_ABORTED` exception, error-array clearing or assertion-count
+change.
 
 ## Database ownership
 
