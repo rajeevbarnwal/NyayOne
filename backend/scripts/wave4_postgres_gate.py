@@ -23,8 +23,16 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+def _expected_alembic_head() -> str:
+    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
+    files = [p.stem for p in versions_dir.glob("*.py")]
+    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
+    assert numbered, f"No alembic version files found in {versions_dir}"
+    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
+
+
 BLOCKED = 78
-HEAD = "0012_wave4_moderation"
+HEAD = _expected_alembic_head()
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",

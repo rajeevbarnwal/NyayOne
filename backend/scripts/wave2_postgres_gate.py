@@ -1065,6 +1065,14 @@ def main(argv: list[str] | None = None) -> int:
 
             rec.guard("A1.2", "fresh-base (empty database) upgrade to head returns rc 0", a1_2)
 
+def _expected_alembic_head() -> str:
+    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
+    files = [p.stem for p in versions_dir.glob("*.py")]
+    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
+    assert numbered, f"No alembic version files found in {versions_dir}"
+    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
+
+
             def a1_3():
                 heads = {}
                 for key in ("a", "b"):
@@ -1074,12 +1082,13 @@ def main(argv: list[str] | None = None) -> int:
                             text("SELECT version_num FROM alembic_version")
                         )
                     scratch_engine.dispose()
-                same = heads["a"] == heads["b"] == "0012_wave4_moderation"
+                expected = _expected_alembic_head()
+                same = heads["a"] == heads["b"] == expected
                 return same, heads
 
             rec.guard(
                 "A1.3",
-                "both paths land on head 0012_wave4_moderation",
+                "both paths land on expected head revision",
                 a1_3,
             )
 
