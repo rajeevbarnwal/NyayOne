@@ -10,7 +10,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 
 BACKEND = Path(__file__).resolve().parents[1]
-REVISION = "0011_wave4_private_reporting"
+REVISION = "0012_wave4_moderation"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
@@ -22,6 +22,14 @@ TABLES = {
     "reporter_identity_access_approvals",
     "moderation_handoffs",
     "internship_reporting_outbox",
+    "moderation_cases",
+    "moderation_assignments",
+    "moderation_actions",
+    "duplicate_clusters",
+    "duplicate_cluster_members",
+    "risk_signals",
+    "risk_signal_approvals",
+    "moderation_notification_outbox",
 }
 
 
