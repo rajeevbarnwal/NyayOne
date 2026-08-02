@@ -33,7 +33,6 @@ import {
 import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
-import { ProfileStep2 } from '../profile/ProfileScreens';
 import { COLLEGE_OPTIONS } from '../lib/catalog';
 
 function formatDDMMYYYY(dateStr: string): string {
