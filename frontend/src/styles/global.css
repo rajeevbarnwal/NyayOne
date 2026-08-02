@@ -4,6 +4,7 @@
 @import './student.css';
 @import './student-v34.css';
 @import './internship-reporting.css';
+@import './moderation-reporting.css';
 
 * {
   box-sizing: border-box;
