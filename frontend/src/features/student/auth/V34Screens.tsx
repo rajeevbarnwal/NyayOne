@@ -768,7 +768,7 @@ export function V34PasswordReset() {
     try {
       await verifyRecovery(recoveryId, code);
       setStep('password');
-      setMessage('Recovery code verified. Create your new password below.');
+      setMessage('Recovery verified. You may now sign in again.');
     } catch {
       setError('Recovery could not be verified. Check the code or request a new one.');
     } finally {
@@ -895,9 +895,9 @@ export function V34PasswordReset() {
             style={{ marginBottom: '16px' }}
           >
             {step === 'mobile'
-              ? 'Send OTP'
+              ? 'Send the code'
               : step === 'otp'
-              ? 'Verify Recovery Code'
+              ? 'Verify recovery code'
               : 'Save Password & Sign In'}
           </button>
         </main>
