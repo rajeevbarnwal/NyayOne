@@ -1,12 +1,12 @@
-"""Wave 4 private internship reporting models (SAATHI-269 / SAATHI-450).
+"""Wave 4 private reporting and internal moderation models.
 
 Reporter identity is physically separated from report content.  The report row
 contains no user id, email, mobile or reversible identity.  Ownership is resolved
 through ``reporter_identity_vault`` using a keyed lookup hash; the authorised
 identity value is encrypted and key-versioned.
 
-Public risk labels are deliberately absent from this module.  They remain behind
-the Product/Safety gate owned by SAATHI-452/279 and are disabled by default.
+Internal aggregate candidates are persisted for SAATHI-274, but public
+projection stays structurally disabled until SAATHI-279 and SAATHI-452 close.
 """
 from __future__ import annotations
 
@@ -73,6 +73,28 @@ REPORTING_OUTBOX_KINDS = (
     "moderation_handoff_created",
 )
 REPORTING_OUTBOX_STATES = ("pending", "sent", "failed", "void")
+MODERATION_CASE_STATES = (
+    "pending",
+    "under_review",
+    "approved_aggregate_only",
+    "rejected",
+    "needs_information",
+)
+MODERATION_ACTIONS = (
+    "claim",
+    "needs_information",
+    "approve_aggregate_only",
+    "reject",
+)
+MODERATION_REASON_CODES = (
+    "review_started",
+    "more_information_required",
+    "aggregate_criteria_met",
+    "insufficient_or_unverifiable",
+)
+DUPLICATE_CLUSTER_STATES = ("candidate", "suppressed", "eligible")
+RISK_APPROVAL_ROLES = ("moderator", "safety_officer", "legal_reviewer")
+MODERATION_OUTBOX_STATES = ("pending", "sent", "failed", "void")
 
 
 def _in(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
@@ -298,5 +320,192 @@ class InternshipReportingOutbox(TimestampedBase):
     __table_args__ = (
         _in("event_kind", REPORTING_OUTBOX_KINDS, "event_kind"),
         _in("state", REPORTING_OUTBOX_STATES, "state"),
+        CheckConstraint("attempts >= 0", name="attempts_nonnegative"),
+    )
+
+
+class ModerationCase(TimestampedBase):
+    __tablename__ = "moderation_cases"
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("internship_reports.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    state: Mapped[str] = mapped_column(
+        String(40), default="pending", server_default="pending", nullable=False, index=True
+    )
+    assigned_moderator_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("report_id", name="uq_moderation_cases_report_id"),
+        _in("state", MODERATION_CASE_STATES, "state"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "(state = 'pending' AND assigned_moderator_user_id IS NULL AND claimed_at IS NULL) "
+            "OR (state != 'pending' AND assigned_moderator_user_id IS NOT NULL AND claimed_at IS NOT NULL)",
+            name="claim_state_consistent",
+        ),
+    )
+
+
+class ModerationAssignment(TimestampedBase):
+    __tablename__ = "moderation_assignments"
+
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("moderation_cases.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    moderator_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("case_id", "moderator_user_id", name="uq_moderation_assignment_actor"),
+        CheckConstraint(
+            "(active = true AND released_at IS NULL) OR (active = false AND released_at IS NOT NULL)",
+            name="active_release_consistent",
+        ),
+    )
+
+
+class ModerationAction(TimestampedBase):
+    __tablename__ = "moderation_actions"
+
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("moderation_cases.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    reason_key_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    case_version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        _in("action", MODERATION_ACTIONS, "action"),
+        _in("reason_code", MODERATION_REASON_CODES, "reason_code"),
+        CheckConstraint("length(reason_ciphertext) > 20", name="reason_ciphertext_nontrivial"),
+        CheckConstraint("case_version >= 2", name="case_version_minimum"),
+    )
+
+
+class DuplicateCluster(TimestampedBase):
+    __tablename__ = "duplicate_clusters"
+
+    organisation_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    organisation_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    key_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    category: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    window_start: Mapped[date] = mapped_column(Date, nullable=False)
+    window_end: Mapped[date] = mapped_column(Date, nullable=False)
+    explanation_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(24), default="candidate", server_default="candidate", nullable=False, index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+
+    __table_args__ = (
+        _in("category", REPORT_CATEGORIES, "category"),
+        _in("state", DUPLICATE_CLUSTER_STATES, "state"),
+        CheckConstraint("length(organisation_hash) = 64", name="organisation_hash_length"),
+        CheckConstraint("length(organisation_ciphertext) > 20", name="organisation_ciphertext_nontrivial"),
+        CheckConstraint("window_end >= window_start", name="window_order"),
+        CheckConstraint("version >= 1", name="version_positive"),
+    )
+
+
+class DuplicateClusterMember(TimestampedBase):
+    __tablename__ = "duplicate_cluster_members"
+
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("duplicate_clusters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("internship_reports.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "report_id", name="uq_duplicate_cluster_member"),
+        UniqueConstraint("report_id", "cluster_id", name="uq_report_duplicate_cluster"),
+    )
+
+
+class RiskSignal(TimestampedBase):
+    __tablename__ = "risk_signals"
+
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("duplicate_clusters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    neutral_label: Mapped[str] = mapped_column(String(160), nullable=False)
+    report_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    distinct_reporter_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    threshold_met: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    small_count_suppressed: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    moderator_approved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    safety_legal_approved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    publication_ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("cluster_id", name="uq_risk_signals_cluster_id"),
+        CheckConstraint("report_count >= distinct_reporter_count", name="reporter_count_bounded"),
+        CheckConstraint("distinct_reporter_count >= 1", name="distinct_reporters_positive"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("publication_ready = false", name="publication_disabled"),
+    )
+
+
+class RiskSignalApproval(TimestampedBase):
+    __tablename__ = "risk_signal_approvals"
+
+    risk_signal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("risk_signals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("risk_signal_id", "actor_user_id", name="uq_risk_signal_approval_actor"),
+        _in("actor_role", RISK_APPROVAL_ROLES, "actor_role"),
+        _in("decision", ("approve", "reject"), "decision"),
+    )
+
+
+class ModerationNotificationOutbox(TimestampedBase):
+    __tablename__ = "moderation_notification_outbox"
+
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("moderation_cases.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("internship_reports.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    event_kind: Mapped[str] = mapped_column(String(48), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16), default="pending", server_default="pending", nullable=False, index=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+
+    __table_args__ = (
+        _in("event_kind", ("report_information_requested", "moderation_decision_recorded"), "event_kind"),
+        _in("state", MODERATION_OUTBOX_STATES, "state"),
         CheckConstraint("attempts >= 0", name="attempts_nonnegative"),
     )

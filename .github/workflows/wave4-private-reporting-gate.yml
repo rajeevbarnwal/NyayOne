@@ -22,11 +22,11 @@ jobs:
         env:
           POSTGRES_USER: legalsaathi
           POSTGRES_PASSWORD: legalsaathi
-          POSTGRES_DB: legalsaathi
+          POSTGRES_DB: legalsaathi_wave4_qa
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U legalsaathi -d legalsaathi"
+          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave4_qa"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -35,8 +35,9 @@ jobs:
         ports:
           - 3310:3310
     env:
-      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi
-      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave4_qa
+      APP_ENV: testing
+      WAVE4_GATE_ALLOW_MUTATION: "true"
       REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
       REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
       INTERNSHIP_REPORT_STORAGE_ROOT: ${{ github.workspace }}/test-results/report-evidence
@@ -65,7 +66,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
       - name: Enable pgvector
-        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi -c "CREATE EXTENSION IF NOT EXISTS vector;"
+        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi_wave4_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Require a live ClamAV engine
         run: |
           python - <<'PY'
@@ -128,8 +129,12 @@ jobs:
         working-directory: backend
         run: PYTHON=python bash scripts/wave4_db_gate.sh "$GITHUB_WORKSPACE/test-results/wave4-postgres/summary.json"
       - name: Seed actors and start app
+        env:
+          WAVE4_E2E_ALLOW_SEED: "true"
+          WAVE4_E2E_SESSION_TOKEN: wave4-ci-opaque-session-token-at-least-32-characters
         run: |
           (cd backend && python scripts/seed_e2e_actors.py)
+          (cd backend && python scripts/seed_wave4_moderation_e2e.py)
           (cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 1261 > ../test-results/wave4-backend.log 2>&1 &)
           (cd frontend && VITE_API_BASE_URL=http://127.0.0.1:1261 npm run dev -- --host 127.0.0.1 --port 1260 > ../test-results/wave4-frontend.log 2>&1 &)
           for url in http://127.0.0.1:1261/health http://127.0.0.1:1260/s-86; do
@@ -142,6 +147,15 @@ jobs:
           E2E_API_URL: http://127.0.0.1:1261
           E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave4-browser
         run: npm run qa:wave4-reporting
+      - name: MOD-01/MOD-02/MOD-03 moderation Chromium and privacy matrix
+        working-directory: frontend
+        env:
+          WAVE4_E2E_ALLOW_RUN: "true"
+          WAVE4_E2E_SESSION_TOKEN: wave4-ci-opaque-session-token-at-least-32-characters
+          E2E_WEB_URL: http://127.0.0.1:1260
+          E2E_API_URL: http://127.0.0.1:1261
+          E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave4-moderation-browser
+        run: npm run qa:wave4-moderation
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
