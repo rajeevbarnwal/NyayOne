@@ -41,6 +41,8 @@ const FEATURE_STATE_LABELS: Record<string, string> = {
   'S-83': 'wallet/add',
   'S-84': 'wallet/pending',
   'S-85': 'wallet/share',
+  'S-86': 'internship-report/create',
+  'S-87': 'internship-report/status',
 };
 
 /** Generates the S-01 … S-99 canonical route registry. */

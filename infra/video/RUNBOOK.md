@@ -224,8 +224,12 @@ client politely chose one. Three independent mechanisms:
    them — and because compose merges `ports` by appending, an overlay can never
    silently remove the relay path.
 2. **No browser-reachable candidate.** `rendered/livekit.yaml` sets
-   `rtc.use_external_ip: false` and `rtc.node_ip: 172.29.30.10` — the SFU's
-   address on the private `video` network. That value is **hard-coded in
+   `rtc.use_external_ip: false`, `rtc.node_ip: 172.29.30.10`, and
+   `rtc.ips.includes: [172.29.30.10/32]` — the SFU's address on the private
+   `video` network. The IP filter is load-bearing because LiveKit also shares
+   the default network for webhooks; without it, a TURN-forwarded ICE check can
+   be answered from the wrong interface and the browser will reject the source
+   mismatch. The fixed address is **hard-coded in
    `livekit.forced-turn.yaml.tmpl`, not templated**, precisely so no environment
    variable can widen it.
 3. **No third-party STUN.** `rtc.stun_servers` points at our own coturn. LiveKit's
@@ -628,6 +632,15 @@ the end of S7: a raw join token must not persist anywhere.
 Driver: `infra/video/scripts/livekit_two_browser_smoke.mjs` (two real Chromium
 contexts, fake camera/mic devices, the real `livekit-client` SDK).
 
+Bare-metal Chromium is the default. For an isolated Docker/Colima rig, set
+`SMOKE_CHROMIUM_CDP_URL`, `SMOKE_DENIED_CHROMIUM_CDP_URL`,
+`SMOKE_BROWSER_LIVEKIT_URL`, `SMOKE_BROWSER_ORIGIN`, and (when host ports must
+not collide) `SMOKE_COMPOSE_OVERRIDE`. The browser origin must still be a secure
+context: use real TLS, or a loopback-only proxy inside each QA browser namespace
+so the page and signalling URL are `http://localhost`. Do not use an HTTPS CDN
+page with a `ws://` provider (mixed content), and do not report a joined client
+as S4 PASS unless the driver observes two local publications and remote tracks.
+
 Pass: the two participants receive **different** tokens for the **same**
 `room_ref`; both connect; each SEES at least one remote participant and at least
 one subscribed remote track; and the selected ICE candidate pair of both is
@@ -824,7 +837,7 @@ Config-level and static-analysis only, plus the two gates' own REFUSALS:
   compose file, both services declare a healthcheck, no secret literal is
   committed, env var names match `Settings` exactly, the webhook URL matches the
   committed route, and the forced-TURN posture holds (no published media ports,
-  hard-coded `node_ip`, single-destination peer ACL).
+  hard-coded `node_ip` plus matching RTC IP filter, single-destination peer ACL).
 * `backend/tests/test_wave2_runtime_gates.py` — the two gate scripts exist, carry
   the BLOCKED contract and exit code 78, and this section's step ids/titles match
   the smoke script's `STEP_CONTRACT` exactly.

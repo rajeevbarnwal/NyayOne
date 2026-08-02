@@ -1,0 +1,110 @@
+"""Executable migration/schema proof for SAATHI-269/450."""
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from sqlalchemy import create_engine, inspect, text
+
+BACKEND = Path(__file__).resolve().parents[1]
+REVISION = "0011_wave4_private_reporting"
+PARENT = "0010_student_login_session"
+TABLES = {
+    "internship_reports",
+    "internship_report_categories",
+    "internship_report_consents",
+    "internship_report_evidence",
+    "reporter_identity_vault",
+    "reporter_identity_access_requests",
+    "reporter_identity_access_approvals",
+    "moderation_handoffs",
+    "internship_reporting_outbox",
+}
+
+
+def _alembic(database: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "alembic", *args],
+        cwd=BACKEND,
+        env={**os.environ, "DATABASE_URL": f"sqlite+pysqlite:///{database}"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
+    alembic_snapshots, tmp_path
+):
+    database = tmp_path / "wave4-schema.db"
+    shutil.copyfile(alembic_snapshots["head"], database)
+    engine = create_engine(f"sqlite+pysqlite:///{database}")
+    inspector = inspect(engine)
+    assert TABLES <= set(inspector.get_table_names())
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVISION
+
+    report_columns = {item["name"] for item in inspector.get_columns("internship_reports")}
+    assert {
+        "organisation_name",
+        "listing_application_ref",
+        "experience_start_date",
+        "experience_end_date",
+        "narrative",
+        "privacy_mode",
+        "status",
+        "version",
+    } <= report_columns
+    assert not report_columns & {
+        "user_id",
+        "reporter_id",
+        "author_id",
+        "reporter_lookup_hash",
+        "reporter_ciphertext",
+        "mobile",
+        "email",
+    }
+    vault_columns = {item["name"] for item in inspector.get_columns("reporter_identity_vault")}
+    assert {"report_id", "reporter_lookup_hash", "reporter_ciphertext", "key_version"} <= vault_columns
+    evidence_columns = {item["name"] for item in inspector.get_columns("internship_report_evidence")}
+    assert {"object_ref", "mime_type", "size_bytes", "checksum_sha256", "scan_state"} <= evidence_columns
+    assert not evidence_columns & {"filename", "file_bytes", "content", "raw_file"}
+
+    for table in TABLES:
+        index_columns = {
+            column
+            for index in inspector.get_indexes(table)
+            for column in index.get("column_names") or []
+        }
+        unique_columns = {
+            column
+            for constraint in inspector.get_unique_constraints(table)
+            for column in constraint.get("column_names") or []
+        }
+        for fk in inspector.get_foreign_keys(table):
+            assert set(fk["constrained_columns"]) <= index_columns | unique_columns, (
+                table,
+                fk["constrained_columns"],
+            )
+            assert fk.get("options", {}).get("ondelete") in {"CASCADE", "RESTRICT", "SET NULL"}
+    engine.dispose()
+
+
+def test_upgrade_check_downgrade_reupgrade_is_clean(tmp_path):
+    database = tmp_path / "wave4-lifecycle.db"
+    up = _alembic(database, "upgrade", "head")
+    assert up.returncode == 0, up.stderr
+    check = _alembic(database, "check")
+    assert check.returncode == 0, check.stdout + check.stderr
+    down = _alembic(database, "downgrade", PARENT)
+    assert down.returncode == 0, down.stderr
+    engine = create_engine(f"sqlite+pysqlite:///{database}")
+    assert not (TABLES & set(inspect(engine).get_table_names()))
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == PARENT
+    engine.dispose()
+    reup = _alembic(database, "upgrade", "head")
+    assert reup.returncode == 0, reup.stderr
+    assert _alembic(database, "check").returncode == 0

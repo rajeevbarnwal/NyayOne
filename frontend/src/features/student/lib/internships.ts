@@ -114,6 +114,27 @@ export function newApplicationRef(): string {
 }
 
 export const MAX_APPLICATION_PDF_BYTES = 5 * 1024 * 1024;
+export const MIN_COVER_NOTE_LENGTH = 50;
+export const MAX_COVER_NOTE_LENGTH = 250;
+
+/** Design-approved S-22 boundary: meaningful note, bounded storage and no control bytes. */
+export function validateCoverNote(value: string): string | null {
+  const trimmed = value.trim();
+  const hasControlCharacter = Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return (
+      codePoint <= 8 ||
+      codePoint === 11 ||
+      codePoint === 12 ||
+      (codePoint >= 14 && codePoint <= 31) ||
+      codePoint === 127
+    );
+  });
+  if (hasControlCharacter) return 'Cover note contains unsupported control characters.';
+  if (trimmed.length < MIN_COVER_NOTE_LENGTH) return `Cover note must be at least ${MIN_COVER_NOTE_LENGTH} characters.`;
+  if (trimmed.length > MAX_COVER_NOTE_LENGTH) return `Cover note must be ${MAX_COVER_NOTE_LENGTH} characters or fewer.`;
+  return null;
+}
 
 /** Validate an actual upload, not a typed file-name placeholder. */
 export function validateApplicationPdf(
@@ -130,6 +151,7 @@ export function validateApplicationPdf(
 }
 
 const SUBMITTED_KEY = 'legalsaathi.internship.applications.v1';
+const SAVED_KEY = 'legalsaathi.internship.saved.v1';
 
 export function saveSubmittedApplication(application: Application): void {
   if (typeof window === 'undefined') return;
@@ -149,6 +171,28 @@ export function loadSubmittedApplications(): Application[] {
   } catch {
     return [];
   }
+}
+
+export function loadLatestSubmittedApplication(): Application | null {
+  return loadSubmittedApplications()[0] ?? null;
+}
+
+/** Listing IDs are non-sensitive UI state. `null` distinguishes never seeded from deliberately empty. */
+export function loadSavedListingIds(): string[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(SAVED_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string') ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSavedListingIds(ids: readonly string[]): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(SAVED_KEY, JSON.stringify([...new Set(ids)])); } catch { /* storage denial keeps the in-memory UI usable */ }
 }
 
 export const SAMPLE_LISTINGS: readonly InternshipListing[] = [

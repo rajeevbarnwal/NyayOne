@@ -184,6 +184,10 @@ def test_enabled_livekit_requires_a_browser_facing_websocket_url():
 def test_production_livekit_requires_wss_and_never_echoes_userinfo():
     common = {
         "app_env": "production",
+        # Production construction must satisfy every fail-closed subsystem,
+        # including the Wave 4 malware-screening boundary.  The dedicated
+        # Wave 4 tests still prove that the deterministic scanner is rejected.
+        "internship_report_scanner_provider": "clamav",
         "video_calls_enabled": True,
         "video_provider": "livekit",
         "livekit_url": LIVEKIT_URL,

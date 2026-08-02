@@ -1,0 +1,225 @@
+.st-internship-reporting {
+  width: 100%;
+  overflow-x: clip;
+}
+
+.ir-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ir-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  padding: clamp(20px, 4vw, 44px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 90% 15%, var(--accent-tint), transparent 38%),
+    var(--surface);
+}
+
+.ir-hero > div:first-child { max-width: 680px; }
+.ir-hero h1 { font-size: clamp(2rem, 5vw, 3.6rem); margin-bottom: var(--space-3); }
+.ir-hero p { color: var(--text2); margin: 0; }
+.ir-eyebrow { color: var(--accent) !important; font: 700 var(--fs-xs) var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+
+.ir-trust {
+  flex: 0 0 min(280px, 32%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--ok);
+  border-radius: var(--radius-lg);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.ir-trust > span { font-size: 1.75rem; }
+.ir-trust strong, .ir-trust small { display: block; }
+.ir-trust small { margin-top: 3px; color: var(--text2); }
+
+.ir-tabs {
+  display: flex;
+  gap: var(--space-2);
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.ir-tabs a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--text2);
+  text-decoration: none;
+}
+.ir-tabs a[aria-current='page'] { color: var(--on-accent); background: var(--accent); font-weight: 700; }
+
+.ir-support {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-lg);
+  background: var(--warn-bg);
+  color: var(--text2);
+}
+.ir-support strong { color: var(--warn); white-space: nowrap; }
+
+.ir-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.ir-section {
+  min-width: 0;
+  padding: clamp(18px, 3vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.ir-section__head { display: flex; gap: var(--space-3); align-items: flex-start; margin-bottom: var(--space-4); }
+.ir-section__head > span {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font: 700 var(--fs-sm) var(--font-mono);
+}
+.ir-section__head h2 { margin-bottom: 3px; }
+.ir-section__head p { margin: 0; color: var(--text3); }
+.ir-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+
+.ir-category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-5); }
+.ir-category-grid .st-check { margin: 0; border-bottom: 1px solid var(--line); padding: 4px 0; }
+.ir-narrative { min-height: 180px; resize: vertical; }
+.ir-error { color: var(--risk); margin: var(--space-2) 0 0; font-size: var(--fs-sm); }
+
+.ir-file {
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--accent-tint);
+  color: var(--text2);
+  text-align: center;
+  cursor: pointer;
+}
+.ir-file strong { color: var(--text); }
+.ir-file input { min-height: 44px; max-width: 100%; }
+.ir-files { margin: var(--space-3) 0 0; padding-left: 22px; color: var(--text2); overflow-wrap: anywhere; }
+.ir-file-state { color: var(--ok); }
+
+.ir-privacy { margin: 0 0 var(--space-4); padding: 0; border: 0; }
+.ir-privacy legend { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); color: var(--text); font-weight: 700; }
+.ir-privacy > label {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.ir-privacy > label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.ir-privacy input { min-width: 22px; min-height: 22px; }
+.ir-privacy strong, .ir-privacy small { display: block; }
+.ir-privacy small { margin-top: 4px; color: var(--text3); }
+
+.ir-banner { padding: var(--space-3) var(--space-4); border: 1px solid var(--ok); border-radius: var(--radius-md); background: var(--ok-bg); color: var(--ok); }
+.ir-banner--error { border-color: var(--risk); background: var(--risk-bg); color: var(--risk); }
+.ir-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); }
+.ir-actions .btn { text-decoration: none; }
+
+.ir-drafts { padding: clamp(18px, 3vw, 32px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); }
+.ir-draft-list { display: grid; gap: var(--space-2); }
+.ir-draft-list article { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.ir-draft-list strong, .ir-draft-list small { display: block; }
+.ir-draft-list small { color: var(--text3); }
+.ir-draft-list .btn { text-decoration: none; }
+.ir-foot { margin: 0; text-align: center; color: var(--text3); font-size: var(--fs-sm); }
+
+.ir-state, .ir-status-card {
+  padding: clamp(24px, 5vw, 52px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+.ir-state > span, .ir-status-card__mark { width: 64px; height: 64px; display: grid; place-items: center; margin: 0 auto var(--space-4); border-radius: 50%; background: var(--accent-tint); color: var(--accent); font-size: 2rem; }
+.ir-state p, .ir-status-card > p { color: var(--text2); }
+.ir-state .btn { text-decoration: none; }
+.ir-state--error > span { color: var(--risk); background: var(--risk-bg); }
+.ir-status-card dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-5) 0 0; text-align: left; }
+.ir-status-card dl > div { padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.ir-status-card dt { color: var(--text3); font-size: var(--fs-xs); }
+.ir-status-card dd { margin: 4px 0 0; color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
+.ir-timeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.ir-timeline > div { display: flex; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.ir-timeline > div > span { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border-radius: 50%; background: var(--panel); color: var(--text3); }
+.ir-timeline .is-complete > span { background: var(--ok-bg); color: var(--ok); }
+.ir-timeline p, .ir-timeline small { margin: 0; display: block; }
+.ir-timeline small { color: var(--text3); }
+
+@media (max-width: 768px) {
+  /* Keep the mobile primary navigation in its own flex row instead of letting
+     the sticky row cover reporting controls in the scrolling document. This
+     screen has a long, security-sensitive form: an obscured input is not an
+     acceptable 44 px target even when its raw bounding box is large enough. */
+  .ls-main:has(.st-internship-reporting) {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .ls-main:has(.st-internship-reporting) .ls-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .ls-main:has(.st-internship-reporting) .ls-bnav {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  .ir-shell { gap: var(--space-3); }
+  .ir-hero { align-items: flex-start; }
+  .ir-trust { flex-basis: auto; }
+  .ir-two, .ir-category-grid { grid-template-columns: 1fr; }
+  .ir-support { flex-direction: column; }
+  .ir-support strong { white-space: normal; }
+  .ir-status-card dl, .ir-timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .ir-hero { flex-direction: column; padding: var(--space-4); }
+  .ir-hero h1 { font-size: 2rem; }
+  .ir-trust { width: 100%; }
+  .ir-tabs { width: 100%; }
+  .ir-tabs a { flex: 1; min-width: 0; padding-inline: var(--space-2); }
+  .ir-section, .ir-drafts { padding: var(--space-4); }
+  .ir-category-grid { max-height: 252px; overflow-y: auto; padding-right: 3px; }
+  .ir-draft-list article { align-items: flex-start; flex-direction: column; }
+  .ir-draft-list .btn, .ir-actions .btn { width: 100%; }
+  .ir-status-card dl, .ir-timeline { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-internship-reporting * { scroll-behavior: auto !important; }
+}
