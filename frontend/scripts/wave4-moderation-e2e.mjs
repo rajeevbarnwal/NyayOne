@@ -134,6 +134,7 @@ async function geometryAndA11y(browser) {
       await page.goto(`${WEB}/moderation/internship-reports`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: 'Internship report queue' }).waitFor();
       const metrics = await page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
         const tiny = [...document.querySelectorAll('button,a,input,select,textarea')].flatMap((node) => {
           const style = getComputedStyle(node);
           if (style.display === 'none' || style.visibility === 'hidden') return [];
@@ -141,7 +142,12 @@ async function geometryAndA11y(browser) {
           const rect = target.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && (rect.width < 44 || rect.height < 44) ? [{ name: node.getAttribute('aria-label') || node.textContent?.trim() || node.id, width: rect.width, height: rect.height }] : [];
         });
-        return { overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, tiny };
+        const culprits = [...document.querySelectorAll('body *')].flatMap((node) => {
+          const rect = node.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0 || (rect.right <= viewportWidth + 0.5 && rect.left >= -0.5)) return [];
+          return [{ tag: node.tagName.toLowerCase(), className: String(node.className).slice(0, 100), left: rect.left, right: rect.right, width: rect.width }];
+        }).slice(0, 12);
+        return { overflow: document.documentElement.scrollWidth - viewportWidth, tiny, culprits };
       });
       record(`geometry ${width}x${height} ${theme}`, 'overflow 0; every target >=44px', JSON.stringify(metrics), metrics.overflow === 0 && metrics.tiny.length === 0);
       if (width === 390 || width === 1440) {

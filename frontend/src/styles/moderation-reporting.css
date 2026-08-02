@@ -1,4 +1,5 @@
-.mod-shell { width:100%; max-width:1120px; min-width:0; margin:0 auto; padding:clamp(20px,4vw,44px); display:grid; gap:24px; color:var(--text); }
+.mod-shell { width:100%; max-width:1120px; min-width:0; margin:0 auto; padding:clamp(20px,4vw,44px); display:grid; gap:24px; color:var(--text); overflow-wrap:anywhere; }
+.mod-shell>*,.mod-grid>*,.mod-card__top>* { min-width:0; }
 .mod-header { display:flex; justify-content:space-between; gap:28px; align-items:flex-start; padding:28px; border-radius:24px; background:linear-gradient(135deg,var(--accent-tint),var(--surface)); border:1px solid var(--line); }
 .mod-header h1,.mod-card h2,.mod-cluster h2,.mod-detail h2,.mod-narrative h2,.mod-actions h2,.mod-risk h2 { margin:.2rem 0; font-family:var(--font-serif); }
 .mod-header p { max-width:62ch; }
@@ -6,7 +7,7 @@
 .mod-kill { flex:0 0 230px; padding:14px 16px; border:1px solid color-mix(in srgb,var(--risk) 45%,var(--line)); border-radius:16px; background:var(--risk-bg); display:grid; gap:4px; }
 .mod-kill span { font-size:.82rem; line-height:1.35; }
 .mod-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-.mod-toolbar>* { padding:8px 12px; border-radius:999px; background:var(--surface); border:1px solid var(--line); }
+.mod-toolbar>* { max-width:100%; padding:8px 12px; border-radius:999px; background:var(--surface); border:1px solid var(--line); }
 .mod-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr)); gap:16px; }
 .mod-card,.mod-cluster,.mod-detail,.mod-narrative,.mod-actions,.mod-risk { padding:22px; border-radius:20px; background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); }
 .mod-card { display:grid; gap:14px; }
