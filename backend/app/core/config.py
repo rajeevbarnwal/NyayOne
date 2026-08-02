@@ -184,6 +184,20 @@ class Settings(BaseSettings):
     retention_days_credential_audit: int | None = None
     retention_days_credential_evidence: int | None = None
 
+    # --- Wave 4 private internship reporting (SAATHI-269 / SAATHI-450) ----
+    internship_report_max_file_bytes: int = 5 * 1024 * 1024
+    internship_report_max_evidence_files: int = 5
+    internship_report_storage_root: str = "/tmp/legalsaathi_internship_report_storage"
+    internship_report_scanner_provider: str = "deterministic"
+    internship_report_clamav_host: str = "127.0.0.1"
+    internship_report_clamav_port: int = 3310
+    internship_report_clamav_timeout_seconds: float = 10.0
+    internship_report_consent_version: str = "internship-report-v1"
+    retention_days_internship_report_evidence: int | None = None
+    # Product approval W4-PRODUCT-APPROVAL-20260801 permits implementation but
+    # explicitly forbids activation until counsel/security + target gates pass.
+    internship_risk_labels_enabled: bool = False
+
     # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
     # Booking hold TTL: how long a slot stays reserved while the student pays.
     booking_hold_minutes: int = 10
@@ -404,6 +418,49 @@ class Settings(BaseSettings):
         if problems:
             raise ConfigurationError(
                 "Wave 2 configuration is invalid; refusing to start: "
+                + "; ".join(problems)
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_wave4_configuration(self) -> "Settings":
+        """Fail closed on unsafe private-reporting deployment settings.
+
+        Public labels cannot be enabled in this release build.  Making the
+        process refuse to boot is stronger than relying on a UI toggle and
+        prevents an operator typo from exposing an unapproved projection.
+        """
+        problems: list[str] = []
+        for name in (
+            "internship_report_max_file_bytes",
+            "internship_report_max_evidence_files",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                problems.append(f"{name} must be a strictly positive integer")
+        if self.internship_report_scanner_provider not in {"deterministic", "clamav"}:
+            problems.append(
+                "internship_report_scanner_provider must be deterministic or clamav"
+            )
+        if self.internship_report_clamav_port <= 0 or self.internship_report_clamav_port > 65535:
+            problems.append("internship_report_clamav_port must be between 1 and 65535")
+        if self.internship_report_clamav_timeout_seconds <= 0:
+            problems.append("internship_report_clamav_timeout_seconds must be positive")
+        if (self.app_env or "").strip().lower() in {"production", "prod", "staging", "stage"} \
+                and self.internship_report_scanner_provider != "clamav":
+            problems.append(
+                "internship_report_scanner_provider must be clamav in staging/production"
+            )
+        if not (self.internship_report_consent_version or "").strip():
+            problems.append("internship_report_consent_version must not be empty")
+        if self.internship_risk_labels_enabled:
+            problems.append(
+                "internship_risk_labels_enabled must remain false until "
+                "counsel/security approval and all target-runtime gates pass"
+            )
+        if problems:
+            raise ConfigurationError(
+                "Wave 4 configuration is invalid; refusing to start: "
                 + "; ".join(problems)
             )
         return self

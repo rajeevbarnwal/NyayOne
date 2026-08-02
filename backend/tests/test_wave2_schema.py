@@ -61,11 +61,23 @@ MIGRATION_0008 = (
 
 WAVE2_REVISION = "0008_wave2_tutoring"
 PARENT_REVISION = "0007_wave3_credentials"
-#: Current head. 0009 adds server-authoritative session pricing and 0010 adds
-#: student login/session tables on top of 0008. Therefore the revision an
+#: Current head. 0009 adds server-authoritative session pricing, 0010 adds
+#: student login/session tables and 0011 adds Wave 4 private reporting. Therefore the revision an
 #: upgrade lands on differs from the revision that created the 17 Wave 2 tables.
-HEAD_REVISION = "0010_student_login_session"
-POST_WAVE2_TABLES = {"login_attempts", "auth_sessions"}
+HEAD_REVISION = "0011_wave4_private_reporting"
+POST_WAVE2_TABLES = {
+    "login_attempts",
+    "auth_sessions",
+    "internship_reports",
+    "internship_report_categories",
+    "internship_report_consents",
+    "internship_report_evidence",
+    "reporter_identity_vault",
+    "reporter_identity_access_requests",
+    "reporter_identity_access_approvals",
+    "moderation_handoffs",
+    "internship_reporting_outbox",
+}
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently
 # pass because the assertion was derived from the same source as the code.
@@ -852,7 +864,7 @@ def test_alembic_lifecycle_upgrade_check_downgrade_reupgrade(migrated_db, tmp_pa
     after_down = _live_tables(db)
     leftovers = sorted(after_down & set(EXPECTED_WAVE2_TABLES))
     assert leftovers == [], f"downgrade left Wave 2 tables behind: {leftovers}"
-    # Everything 0008/0009/0010 did not own must survive, and nothing appears.
+    # Everything 0008/0009/0010/0011 did not own must survive, and nothing appears.
     assert after_down == at_head - set(EXPECTED_WAVE2_TABLES) - POST_WAVE2_TABLES
     assert "users" in after_down
 
