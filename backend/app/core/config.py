@@ -197,6 +197,11 @@ class Settings(BaseSettings):
     # Product approval W4-PRODUCT-APPROVAL-20260801 permits implementation but
     # explicitly forbids activation until counsel/security + target gates pass.
     internship_risk_labels_enabled: bool = False
+    # Approved SAATHI-452 internal aggregation defaults. These values may build
+    # a privacy-safe candidate but never enable a public projection.
+    internship_risk_min_distinct_reporters: int = 3
+    internship_risk_window_months: int = 24
+    internship_risk_public_count_suppression: int = 5
 
     # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
     # Booking hold TTL: how long a slot stays reserved while the student pays.
@@ -434,10 +439,21 @@ class Settings(BaseSettings):
         for name in (
             "internship_report_max_file_bytes",
             "internship_report_max_evidence_files",
+            "internship_risk_min_distinct_reporters",
+            "internship_risk_window_months",
+            "internship_risk_public_count_suppression",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 problems.append(f"{name} must be a strictly positive integer")
+        if (
+            self.internship_risk_public_count_suppression
+            < self.internship_risk_min_distinct_reporters
+        ):
+            problems.append(
+                "internship_risk_public_count_suppression must be at least "
+                "internship_risk_min_distinct_reporters"
+            )
         if self.internship_report_scanner_provider not in {"deterministic", "clamav"}:
             problems.append(
                 "internship_report_scanner_provider must be deterministic or clamav"

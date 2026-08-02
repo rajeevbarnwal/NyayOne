@@ -33,15 +33,23 @@ from app.models.credentials import (  # noqa: F401
     VerificationToken,
 )
 from app.models.wave4 import (  # noqa: F401
+    DuplicateCluster,
+    DuplicateClusterMember,
     InternshipReport,
     InternshipReportCategory,
     InternshipReportConsent,
     InternshipReportEvidence,
     InternshipReportingOutbox,
+    ModerationAction,
+    ModerationAssignment,
+    ModerationCase,
     ModerationHandoff,
+    ModerationNotificationOutbox,
     ReporterIdentityAccessApproval,
     ReporterIdentityAccessRequest,
     ReporterIdentityVault,
+    RiskSignal,
+    RiskSignalApproval,
 )
 
 __all__ = [
@@ -98,4 +106,12 @@ __all__ = [
     "ReporterIdentityAccessApproval",
     "ModerationHandoff",
     "InternshipReportingOutbox",
+    "ModerationCase",
+    "ModerationAssignment",
+    "ModerationAction",
+    "DuplicateCluster",
+    "DuplicateClusterMember",
+    "RiskSignal",
+    "RiskSignalApproval",
+    "ModerationNotificationOutbox",
 ]

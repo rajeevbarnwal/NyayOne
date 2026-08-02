@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0012_student_profile_preferences"
-down_revision: Union[str, None] = "0011_wave4_private_reporting"
+revision: str = "0013_student_profile_preferences"
+down_revision: Union[str, None] = "0012_wave4_moderation"
 branch_labels = None
 depends_on = None
 

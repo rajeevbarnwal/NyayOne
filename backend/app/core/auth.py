@@ -28,6 +28,8 @@ class Role(str, Enum):
     LAWYER = "lawyer"
     ADMIN = "admin"
     MODERATOR = "moderator"
+    SAFETY_OFFICER = "safety_officer"
+    LEGAL_REVIEWER = "legal_reviewer"
 
 
 class VerificationStatus(str, Enum):
