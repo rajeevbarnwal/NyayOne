@@ -1,0 +1,1531 @@
+{
+  "evidenceClass": "deterministic-mocked-ui-only",
+  "releaseGate": false,
+  "startedAt": "2026-08-02T12:07:57.034Z",
+  "web": "http://127.0.0.1:1289",
+  "rows": [
+    {
+      "name": "s90-month-390-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-390-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-430-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-768-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1024-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s90-month-1440-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-390-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-430-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-768-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1024-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s91-add-1440-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-390-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-430-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-768-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1024-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s92-conflicts-1440-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-390-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-430-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-768-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1024-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-reminders-1440-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-390-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-430-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-768-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1024-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-light explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-light horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-light interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-light axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-light runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-dark explicit readiness",
+      "expected": "ready",
+      "actual": "ready",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-dark horizontal overflow",
+      "expected": "0 px",
+      "actual": "0 px",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-dark interactive targets",
+      "expected": "all at least 44px",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-dark axe A/AA",
+      "expected": "0 violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "s93-export-1440-dark runtime",
+      "expected": "0 console/page/network errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[]}",
+      "pass": true
+    },
+    {
+      "name": "export secret never rendered",
+      "expected": "secret absent",
+      "actual": "absent",
+      "pass": true
+    },
+    {
+      "name": "export secret never stored",
+      "expected": "secret absent",
+      "actual": "absent",
+      "pass": true
+    },
+    {
+      "name": "export one-time control clears after copy",
+      "expected": "control absent",
+      "actual": "0",
+      "pass": true
+    }
+  ],
+  "failures": [],
+  "finishedAt": "2026-08-02T12:08:22.229Z",
+  "total": 253,
+  "passed": 253,
+  "failed": 0
+}

@@ -5,6 +5,7 @@ import path from 'node:path';
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1043';
 const capture = process.env.QA_OTP_CAPTURE_URL ?? 'http://127.0.0.1:1099';
 const evidence = process.env.QA_EVIDENCE_DIR ?? path.resolve('../QA/registration_closure');
+const ignoreHTTPSErrors = process.env.QA_ALLOW_SELF_SIGNED_TLS === 'true';
 await fs.mkdir(evidence, { recursive: true });
 
 const results = [];
@@ -28,7 +29,7 @@ const resetOtp = async () => {
 const browser = await chromium.launch({ headless: true });
 
 async function fresh(viewport = { width: 1440, height: 1000 }) {
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({ viewport, ignoreHTTPSErrors });
   const page = await context.newPage();
   const consoleErrors = [];
   const networkErrors = [];
@@ -60,6 +61,7 @@ for (const [name, values, expected] of [
   ['mobile_12_digits', { mobile: '987654321012' }, 'Mobile number must be exactly 10 digits.'],
   ['future_dob', { mobile: '9000000001', dob: '2030-01-01' }, 'Enter a valid date of birth that is not in the future.'],
   ['empty_first_name', { mobile: '9000000002', first: '' }, 'Enter your first name.'],
+  ['empty_last_name', { mobile: '9000000008', last: '' }, 'Enter your last name.'],
   ['special_name', { mobile: '9000000003', first: '<script>' }, 'contains characters'],
   ['name_61_chars', { mobile: '9000000004', first: 'A'.repeat(61) }, 'capped at 60 characters'],
 ]) {

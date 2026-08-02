@@ -70,12 +70,70 @@
 .calv .cardw { max-width: 468px; } /* v3.2 Add-Event card width (bbox 15→483) */
 .calv .filters { margin-bottom: 16px; }
 .calv .ident { margin: 0 0 14px; }
+.calv .cal-filter-dates,
+.calv .cal-form-row { margin-top: 14px; }
+.calv .cal-filter-tz,
+.calv .cal-type-label { margin-top: 14px; }
+.calv .cal-clear { margin-top: 14px; }
+.calv .cal-heading-actions { display: inline-flex; align-items: center; gap: 10px; }
+.calv .cal-copy { margin: 0; font-size: 12.5px; line-height: 1.55; }
+.calv .cal-event-row { width: 100%; min-height: 44px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; align-items: center; }
+.calv .cal-event-row > span:last-child { display: grid; gap: 3px; }
+.calv .cal-event-title { margin: 0 0 7px; font-family: var(--font-serif); font-size: 22px; font-weight: 550; }
+.calv .cal-detail-actions { margin-top: 16px; flex-wrap: wrap; }
+.calv .cal-danger { color: var(--risk); border-color: color-mix(in srgb, var(--risk) 45%, var(--line)); }
+.calv .cal-danger:hover { background: var(--risk-bg); }
+.calv .cal-field-help { display: block; margin: 6px 0 0; color: var(--text3); font-size: 11px; line-height: 1.45; }
+.calv .type-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 7px; }
+.calv .cal-conflict-list,
+.calv .cal-preference-list { display: grid; gap: 14px; }
+.calv .cal-conflict { border-inline-start: 4px solid var(--warn); }
+.calv .cal-mode-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.calv .cal-reminder-controls { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(140px, .8fr)); gap: 12px; align-items: end; }
+.calv .cal-toggle { min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 650; }
+.calv .cal-toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+.calv .cal-export-card { display: grid; gap: 14px; }
+.calv .cal-one-time { display: grid; gap: 9px; padding: 14px; border-radius: 12px; background: var(--warn-bg); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); font-size: 12.5px; line-height: 1.5; }
+.calv .cal-one-time .btn { justify-self: start; }
+.calv .ui-notice { display: block; margin: 12px 0; line-height: 1.5; }
+.calv .ui-notice > strong { display: inline; margin-right: .35em; white-space: nowrap; }
+.calv .ui-notice .btn { margin-left: 10px; }
+
+/* The application shell leaves 744px of feature width at a 1024px viewport.
+   Five 140px reminder columns plus gaps cannot fit that space, so collapse to
+   two fluid columns before the shell itself reaches the tablet breakpoint. */
+@media (max-width: 1200px) {
+  .calv .cal-reminder-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 768px) {
+  .st-screen.calv-screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .calv .two-b { grid-template-columns: 1fr; }
   /* Full-bleed the month grid to reclaim the content padding so a 7-column grid
      still yields ≥44px-wide event markers at 390/430 without horizontal overflow. */
   .calv .cal { margin-inline: calc(var(--space-5) * -1); border-radius: 0; gap: 1px; }
   .calv .cal .cell { min-height: 72px; padding: 5px 3px; }
   .calv button.ev { min-width: 44px; }
+  .calv .cal-reminder-controls { grid-template-columns: 1fr 1fr; }
+  .calv .cal-heading-actions { align-items: flex-end; flex-direction: column; }
+  .calv .cal-event-row { padding-inline: 0; }
+}
+
+@media (max-width: 520px) {
+  .calv .cols2,
+  .calv .cal-reminder-controls { grid-template-columns: 1fr; }
+  .calv .card { padding: 16px; }
+  .calv .subnav { flex-wrap: nowrap; scrollbar-width: thin; }
+  /* Keep event types on one touch-scrollable rail. Besides reducing needless
+     mobile page length, this keeps the form actions clear of the fixed bottom
+     navigation instead of leaving partially occluded click targets. */
+  .calv .type-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding-block: 2px 6px;
+    scrollbar-width: thin;
+  }
+  .calv .type-chips .chip { flex: 0 0 auto; }
+  .calv .cal-detail-actions .btn { flex: 1 1 120px; }
 }
