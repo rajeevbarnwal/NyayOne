@@ -1,3 +1,4 @@
+from ipaddress import ip_address
 from urllib.parse import urlsplit
 
 from pydantic import SecretStr, field_validator, model_validator
@@ -203,6 +204,14 @@ class Settings(BaseSettings):
     internship_risk_window_months: int = 24
     internship_risk_public_count_suppression: int = 5
 
+    # --- Wave 5 calendar interoperability (SAATHI-285/290/295) -----------
+    # Opaque external-feed URLs expire unless the owner explicitly rotates or
+    # revokes them earlier. The database stores only a keyed token hash.
+    calendar_export_token_ttl_days: int = 90
+    # Absolute subscriber-facing origin. It is non-secret; the bearer token is
+    # appended only to the one-time response and never persisted or logged.
+    calendar_public_base_url: str = "https://localhost:1030"
+
     # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
     # Booking hold TTL: how long a slot stays reserved while the student pays.
     booking_hold_minutes: int = 10
@@ -291,6 +300,19 @@ class Settings(BaseSettings):
             raise ValueError(
                 "credential_public_base_url must be an HTTPS URL ending in /verify"
             )
+        return normalized
+
+    @field_validator("calendar_public_base_url")
+    @classmethod
+    def validate_calendar_public_base_url(cls, value: str) -> str:
+        normalized = (value or "").strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError(
+                "calendar_public_base_url must be an absolute HTTPS origin without userinfo"
+            )
+        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            raise ValueError("calendar_public_base_url must not contain a path, query or fragment")
         return normalized
 
     # ------------------------------------------------------------------ #
@@ -478,6 +500,30 @@ class Settings(BaseSettings):
             raise ConfigurationError(
                 "Wave 4 configuration is invalid; refusing to start: "
                 + "; ".join(problems)
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_wave5_configuration(self) -> "Settings":
+        value = self.calendar_export_token_ttl_days
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 365:
+            raise ConfigurationError(
+                "calendar_export_token_ttl_days must be an integer between 1 and 365"
+            )
+        environment = (self.app_env or "").strip().casefold()
+        local_environments = {"development", "dev", "local", "test", "testing"}
+        parsed = urlsplit(self.calendar_public_base_url)
+        hostname = (parsed.hostname or "").casefold()
+        loopback = hostname == "localhost"
+        try:
+            address = ip_address(hostname)
+            loopback = loopback or address.is_loopback or address.is_unspecified
+        except ValueError:
+            pass
+        if environment not in local_environments and loopback:
+            raise ConfigurationError(
+                "calendar_public_base_url must use a non-loopback public HTTPS origin "
+                "outside local/test environments"
             )
         return self
 
