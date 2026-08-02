@@ -33,6 +33,7 @@ import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
 import { ProfileStep2 } from '../profile/ProfileScreens';
+import { InfoTooltip } from '../components';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 type IconName = 'add' | 'back' | 'check' | 'forward' | 'key' | 'moon' | 'retry' | 'save' | 'send' | 'sun' | 'verify';
@@ -126,13 +127,19 @@ function Field({ id, label, value, onChange, type = 'text', inputMode, autoCompl
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
   placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string;
 }) {
-  const describedBy = error ? `${id}-error` : help ? `${id}-help` : undefined;
+  const describedBy = error ? `${id}-error` : undefined;
   return (
-    <label className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`} htmlFor={id}>
-      <span className="v34-field__top"><span>{label}</span>{optional && <small>OPTIONAL</small>}</span>
+    <div className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`}>
+      <span className="v34-field__top">
+        <label htmlFor={id}>{label}</label>
+        <span className="v34-field__meta">
+          {optional && <small>OPTIONAL</small>}
+          {help && <InfoTooltip label={`More information about ${label}`} text={help}/>}
+        </span>
+      </span>
       <span className="v34-field__control">{prefix && <span>{prefix}</span>}<input id={id} value={value} type={type} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} max={max} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)}/></span>
-      {error ? <span id={`${id}-error`} className="v34-field__error" role="alert">{error}</span> : help && <span id={`${id}-help`} className="v34-field__help">{help}</span>}
-    </label>
+      {error && <span id={`${id}-error`} className="v34-field__error" role="alert">{error}</span>}
+    </div>
   );
 }
 

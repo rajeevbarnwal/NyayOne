@@ -242,6 +242,13 @@ for (const width of [390, 430, 768, 1024, 1440]) {
     await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
     const action = page.getByRole('button', { name: 'Send one time code' });
+    const helpButton = page.getByRole('button', { name: 'More information about MOBILE NUMBER' });
+    await helpButton.focus();
+    const tooltip = page.getByRole('tooltip');
+    await tooltip.waitFor({ state: 'visible' });
+    const tooltipText = (await tooltip.textContent() ?? '').trim();
+    await page.keyboard.press('Escape');
+    const tooltipDismissed = await tooltip.isHidden();
     const actionBox = await action.boundingBox();
     const metrics = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -254,6 +261,7 @@ for (const width of [390, 430, 768, 1024, 1440]) {
       { metrics, actionBox },
       metrics.width <= width
       && metrics.iconActions.every((item) => item.width >= 44 && item.height >= 44 && item.aria && item.tip === item.aria && item.svg === 1)
+      && tooltipText === 'Exactly 10 digits. The one time code is sent here.' && tooltipDismissed
       && !!actionBox && actionBox.x >= 0 && actionBox.x + actionBox.width <= width
       && consoleErrors.length === 0);
     const file = `s08_v34_${width}_${theme}.png`;
