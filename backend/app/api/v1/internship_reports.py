@@ -27,6 +27,7 @@ from app.models.wave4 import (
     InternshipReportConsent,
     InternshipReportEvidence,
     InternshipReportingOutbox,
+    ModerationCase,
     ModerationHandoff,
     ReporterIdentityVault,
 )
@@ -511,6 +512,7 @@ def submit_report(
     row.submitted_at = now
     row.version += 1
     session.add(ModerationHandoff(report_id=row.id, state="pending"))
+    session.add(ModerationCase(report_id=row.id, state="pending"))
     session.add_all(
         [
             InternshipReportingOutbox(

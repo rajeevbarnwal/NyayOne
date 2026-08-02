@@ -13,6 +13,8 @@ import { mentorRoutes } from '../features/mentor/screens';
 import { MentorGuard } from '../features/mentor/MentorSessionScreens';
 import { authRoutes } from '../features/auth/screens';
 import { PublicCredentialVerification } from '../features/student/credentials/CredentialScreens';
+import { moderationRoutes } from '../features/moderation/screens';
+import { ModerationGuard } from '../features/moderation/ModerationScreens';
 
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; implemented S-01..S-19 screens (student module) render
@@ -65,6 +67,16 @@ function ShellRoutes() {
           {authRoutes.map((r) => {
             const Auth = r.Component;
             return <Route key={r.path} path={r.path} element={<Auth />} />;
+          })}
+          {moderationRoutes.map((r) => {
+            const Moderation = r.Component;
+            return (
+              <Route
+                key={r.path}
+                path={r.path}
+                element={<ModerationGuard><Moderation /></ModerationGuard>}
+              />
+            );
           })}
           <Route path="*" element={<div className="route-loading">Not found</div>} />
         </Routes>

@@ -26,7 +26,14 @@ from sqlalchemy.types import Uuid
 from app.db.base import TimestampedBase
 
 # --- Permitted finite-domain values (mirrored by DB CHECK constraints) -------
-USER_ROLES = ("student", "lawyer", "admin")
+USER_ROLES = (
+    "student",
+    "lawyer",
+    "admin",
+    "moderator",
+    "safety_officer",
+    "legal_reviewer",
+)
 USER_STATUSES = ("pending", "active", "suspended", "deleted")
 REGISTRATION_STATUSES = ("otp_pending", "otp_verified", "active", "suspended", "deleted")
 OTP_PURPOSES = ("signup", "recovery", "login")
