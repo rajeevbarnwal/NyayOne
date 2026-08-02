@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterListings,
-  toggleSave,
   stepForStatus,
   statusChip,
   stipendText,
+  isVerifiedListing,
+  listingSourceLabel,
   newApplicationRef,
   SAMPLE_LISTINGS,
   validateApplicationPdf,
@@ -16,12 +17,18 @@ describe('internships browse/filter/save (SAATHI-60)', () => {
   it('filters by query, stipend and verified-only', () => {
     expect(filterListings(SAMPLE_LISTINGS, { query: 'mumbai' }).map((l) => l.id)).toEqual(['cam']);
     expect(filterListings(SAMPLE_LISTINGS, { stipend: 'unpaid' }).map((l) => l.id)).toEqual(['vidhi']);
-    expect(filterListings(SAMPLE_LISTINGS, { stipend: 'paid' }).every((l) => l.stipendMonthly !== null)).toBe(true);
-    expect(filterListings(SAMPLE_LISTINGS, { verifiedOnly: true }).map((l) => l.id)).toEqual(['cam']);
+    expect(filterListings(SAMPLE_LISTINGS, { stipend: 'paid' }).every((l) => l.stipendMonthlyPaise !== null)).toBe(true);
+    expect(filterListings(SAMPLE_LISTINGS, { verifiedOnly: true }).map((listing) => listing.id)).toEqual(['cam']);
   });
-  it('toggles saved set', () => {
-    expect(toggleSave([], 'cam')).toEqual(['cam']);
-    expect(toggleSave(['cam'], 'cam')).toEqual([]);
+  it('derives badge truth and source copy from one verification status', () => {
+    expect(SAMPLE_LISTINGS.map(isVerifiedListing)).toEqual([true, false, false]);
+    expect(SAMPLE_LISTINGS.map(listingSourceLabel)).toEqual([
+      'Source: Cyril Amarchand Mangaldas careers · verified 28 Jun 2026 · not affiliated',
+      'Source: Sample fixture · unverified · not affiliated',
+      'Source: Sample fixture · unverified · not affiliated',
+    ]);
+    expect(listingSourceLabel(SAMPLE_LISTINGS[0])).toContain('verified');
+    expect(listingSourceLabel(SAMPLE_LISTINGS[0])).not.toContain('unverified');
   });
   it('renders stipend text', () => {
     expect(stipendText(SAMPLE_LISTINGS[0])).toBe('₹40,000/mo');

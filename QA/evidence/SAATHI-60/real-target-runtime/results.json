@@ -1,0 +1,1665 @@
+{
+  "evidenceClass": "real-http-postgresql-cookie-browser",
+  "startedAt": "2026-08-02T19:50:43.697Z",
+  "webOrigin": "http://127.0.0.1:4177",
+  "apiOrigin": "http://127.0.0.1:1062",
+  "rows": [
+    {
+      "name": "registration:start",
+      "expected": "HTTP 201",
+      "actual": "201",
+      "pass": true
+    },
+    {
+      "name": "registration:verify",
+      "expected": "HTTP 200",
+      "actual": "200",
+      "pass": true
+    },
+    {
+      "name": "login:start",
+      "expected": "non-enumerating HTTP 202",
+      "actual": "202",
+      "pass": true
+    },
+    {
+      "name": "login:verify",
+      "expected": "HTTP 200 and authenticated session",
+      "actual": "200",
+      "pass": true
+    },
+    {
+      "name": "login:session",
+      "expected": "cookie-backed student actor",
+      "actual": "{\"authenticated\":true,\"actor\":{\"sub\":\"60aa5d3b-9fcc-4060-a777-91db74b3a510\",\"roles\":[\"student\"],\"student_profile_id\":\"8496457e-e360-46f5-804c-23b9f42358fd\",\"student_verification\":\"draft\",\"is_minor\":false,\"consent_state\":[\"registration\"]}}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "catalogue:count",
+      "expected": "3 shown",
+      "actual": "3 shown",
+      "pass": true
+    },
+    {
+      "name": "catalogue:verified-only",
+      "expected": "exactly CAM",
+      "actual": "Open listings\n1 SHOWN\nSummer Associate, disputes — Cyril Amarchand Mangaldas\nMumbai · ₹40,000/mo · deadline 9 Jul\n✓\nVerified listing\nSave\nView",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "identity:view-menon",
+      "expected": "/s-21?listing=menon and Menon heading",
+      "actual": "{\"url\":\"http://127.0.0.1:4177/s-21?listing=menon\",\"heading\":\"Judicial research assistant\"}",
+      "pass": true
+    },
+    {
+      "name": "response:PUT:/api/v1/student/internships/menon/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"PUT\",\"path\":\"/api/v1/student/internships/menon/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "saved:first-context",
+      "expected": "Menon persisted",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nPRIVATE TO YOUR ACCOUNT · ORGANISATIONS ARE NOT NOTIFIED\n\nSaved\nJudicial research assistant — Chambers of Sr. Adv. R. Menon\nDelhi High Court · ₹15,000/mo\nRemove\nView",
+      "pass": true
+    },
+    {
+      "name": "runtime:primary",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "saved:fresh-browser-context",
+      "expected": "same account still contains Menon",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nPRIVATE TO YOUR ACCOUNT · ORGANISATIONS ARE NOT NOTIFIED\n\nSaved\nJudicial research assistant — Chambers of Sr. Adv. R. Menon\nDelhi High Court · ₹15,000/mo\nRemove\nView",
+      "pass": true
+    },
+    {
+      "name": "runtime:fresh-context",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__light:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__light:mobile-scroll",
+      "expected": "<=172px",
+      "actual": "93",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__light:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__light:mobile-scroll",
+      "expected": "<=205px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__light:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__light:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:390x844:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__dark:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__dark:mobile-scroll",
+      "expected": "<=172px",
+      "actual": "93",
+      "pass": true
+    },
+    {
+      "name": "S-20__390x844__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__dark:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__dark:mobile-scroll",
+      "expected": "<=205px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-21__390x844__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__dark:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__dark:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-25__390x844__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:390x844:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__light:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__light:mobile-scroll",
+      "expected": "<=172px",
+      "actual": "5",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__light:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__light:mobile-scroll",
+      "expected": "<=205px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__light:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__light:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "runtime:430x932:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__dark:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__430x932__dark:mobile-scroll",
+      "expected": "<=172px",
+      "actual": "5",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__dark:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__430x932__dark:mobile-scroll",
+      "expected": "<=205px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__dark:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__430x932__dark:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "runtime:430x932:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__light:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__light:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__light:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:768x1024:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__dark:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__768x1024__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__dark:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__768x1024__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__dark:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__768x1024__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:768x1024:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__light:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__light:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__light:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:1024x768:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__dark:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1024x768__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__dark:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1024x768__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__dark:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1024x768__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:1024x768:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__light:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__light:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__light:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:1440x900:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__dark:screen",
+      "expected": "S-20",
+      "actual": "S-20",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-20__1440x900__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/menon",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/menon\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__dark:screen",
+      "expected": "S-21",
+      "actual": "S-21",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-21__1440x900__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__dark:screen",
+      "expected": "S-25",
+      "actual": "S-25",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-25__1440x900__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "runtime:1440x900:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:DELETE:/api/v1/student/internships/menon/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"DELETE\",\"path\":\"/api/v1/student/internships/menon/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:390x844:light",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__light:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__light:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:390x844:light",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"light\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:390x844:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:390x844:dark",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__dark:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__dark:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "S-26__390x844__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:390x844:dark",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"dark\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:390x844:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:430x932:light",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__light:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__light:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "privacy:430x932:light",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"light\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:430x932:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:430x932:dark",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__dark:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__430x932__dark:mobile-scroll",
+      "expected": "<=0px",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "privacy:430x932:dark",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"dark\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:430x932:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:768x1024:light",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__light:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:768x1024:light",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"light\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:768x1024:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:768x1024:dark",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__dark:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__768x1024__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:768x1024:dark",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"dark\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:768x1024:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:1024x768:light",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__light:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:1024x768:light",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"light\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:1024x768:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:1024x768:dark",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__dark:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__1024x768__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:1024x768:dark",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"dark\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:1024x768:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:1440x900:light",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__light:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__light:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__light:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__light:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:1440x900:light",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"light\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:1440x900:light",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/student/internships/saved",
+      "expected": "HTTP 200, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/student/internships/saved\",\"status\":200,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "empty:1440x900:dark",
+      "expected": "truthful empty server state",
+      "actual": "INTERNSHIPS · S4\n\nSaved internships\n\nEMPTY\n\nNo saved internships yet\n\nBrowse listings and save the ones you like.\nBrowse listings",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__dark:screen",
+      "expected": "S-26",
+      "actual": "S-26",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__dark:overflow-x",
+      "expected": "0px",
+      "actual": "{\"body\":0,\"content\":0}",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__dark:targets",
+      "expected": "all visible controls >=44x44",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "S-26__1440x900__dark:axe",
+      "expected": "0 WCAG A/AA violations",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "privacy:1440x900:dark",
+      "expected": "no saved-list cache, OTP, mobile, or readable session cookie",
+      "actual": "{\"local\":{\"ls-theme\":\"dark\"},\"session\":{},\"cookies\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "runtime:empty:1440x900:dark",
+      "expected": "0 console/page/request/HTTP errors",
+      "actual": "{\"consoleErrors\":[],\"pageErrors\":[],\"failedRequests\":[],\"httpErrors\":[]}",
+      "pass": true
+    },
+    {
+      "name": "negative:missing-identity",
+      "expected": "truthful unavailable; no CAM fallback",
+      "actual": "ERROR\n\nListing unavailable\n\nThis listing link is incomplete. Return to internships and select a listing.",
+      "pass": true
+    },
+    {
+      "name": "response:GET:/api/v1/internships/not-a-listing",
+      "expected": "HTTP 404, body fully received",
+      "actual": "{\"method\":\"GET\",\"path\":\"/api/v1/internships/not-a-listing\",\"status\":404,\"finishedError\":null}",
+      "pass": true
+    },
+    {
+      "name": "negative:unknown-identity",
+      "expected": "404 produces unavailable state; no fallback",
+      "actual": "ERROR\n\nListing unavailable\n\nThis internship listing is no longer available.\nRetry",
+      "pass": true
+    }
+  ],
+  "failures": [],
+  "screenshots": 40,
+  "completedAt": "2026-08-02T19:51:09.082Z",
+  "fatalError": null,
+  "total": 275,
+  "passed": 275,
+  "failed": 0
+}

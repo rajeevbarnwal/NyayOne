@@ -61,6 +61,10 @@ from app.models.calendar import (  # noqa: F401
     CalendarReminderPreference,
     CalendarViewPreference,
 )
+from app.models.internships import (  # noqa: F401
+    InternshipListing,
+    SavedInternship,
+)
 
 __all__ = [
     "User",
@@ -133,4 +137,7 @@ __all__ = [
     "CalendarExportSubscription",
     "CalendarExportToken",
     "CalendarExportRevocation",
+    # SAATHI-60 internship discovery and owner-scoped saves
+    "InternshipListing",
+    "SavedInternship",
 ]
