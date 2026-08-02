@@ -27,8 +27,10 @@ import {
   CALENDAR_EVENTS_PATH,
   changeTimezoneWithQueryReady,
   encodedTimezoneParam,
+  registerCalendarQueryReady,
   runtimeClean,
   runtimeErrors,
+  settleCalendarQuery,
 } from './lib/wave5_calendar_query_readiness.mjs';
 
 const REQUIRED = [
@@ -445,7 +447,33 @@ try {
 
   // The dashboard week must follow the actual current date, never the old
   // July-2026 design fixture.
+  // Arm both application-owned readiness waits before navigation. The weekday
+  // labels can render from local dates before React Query finishes either the
+  // view-preferences request or the dependent calendar-events request, so a
+  // standalone networkidle wait here would repeat the D3 race in a second
+  // route.
+  const dashboardPreferencesReady = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/calendar/view-preferences')
+      && response.request().method() === 'GET'
+      && response.status() === 200,
+    { timeout: 20_000 },
+  );
+  const dashboardEventsReady = registerCalendarQueryReady(
+    page,
+    savedView.body.timezone,
+  );
   await page.goto(new URL('/s-14', WEB).href, { waitUntil: 'domcontentloaded' });
+  const [dashboardPreferencesResponse] = await Promise.all([
+    dashboardPreferencesReady,
+    settleCalendarQuery(dashboardEventsReady),
+  ]);
+  const dashboardPreferencesCompletionError = await dashboardPreferencesResponse.finished();
+  if (dashboardPreferencesCompletionError) {
+    throw new Error(
+      `dashboard view-preferences response did not finish cleanly: ${dashboardPreferencesCompletionError.message}`,
+      { cause: dashboardPreferencesCompletionError },
+    );
+  }
   const expectedDashboard = dashboardWeekExpectation(savedView.body.timezone);
   const calendarDisclosure = page.locator('details').filter({ hasText: 'Calendar · this week' }).first();
   await calendarDisclosure.locator('summary').click();
@@ -457,7 +485,6 @@ try {
     JSON.stringify(actualDashboard.labels) === JSON.stringify(expectedDashboard.labels)
       && actualDashboard.weekday.toLocaleLowerCase('en-IN')
         .startsWith(expectedDashboard.weekday.toLocaleLowerCase('en-IN')));
-  await page.waitForLoadState('networkidle', { timeout: 20_000 });
 
   // S-92 persists the half-open overlap and then exercises both transitions.
   await page.goto(new URL('/s-92', WEB).href, { waitUntil: 'domcontentloaded' });
