@@ -109,7 +109,25 @@
 }
 
 @media (max-width: 768px) {
-  .st-screen.calv-screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  /* Keep the mobile primary nav in its own flex row. A sticky nav layered over
+     the calendar scrollport can occlude an otherwise 44px reminder control,
+     reducing its effective pointer target even though its raw box is large
+     enough. This mirrors the established long-form reporting layout. */
+  .ls-main:has(.calv-screen) {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .ls-main:has(.calv-screen) .ls-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .ls-main:has(.calv-screen) .ls-bnav {
+    position: static;
+    flex: 0 0 auto;
+  }
+  .st-screen.calv-screen { padding-bottom: 0; }
   .calv .two-b { grid-template-columns: 1fr; }
   /* Full-bleed the month grid to reclaim the content padding so a 7-column grid
      still yields ≥44px-wide event markers at 390/430 without horizontal overflow. */
@@ -139,7 +157,12 @@
   .calv .type-chips .chip { flex: 0 0 auto; }
   .calv .cal-detail-actions .btn { flex: 1 1 120px; }
   .calv .cal-reminder-row .ph { align-items: center; margin-bottom: 0; }
-  .calv .cal-reminder-disclosure { display: inline-flex; padding-inline: 12px; }
+  .calv .cal-reminder-disclosure {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 12px;
+  }
   .calv .cal-reminder-row:not([data-expanded='true']) .cal-reminder-controls,
   .calv .cal-reminder-row:not([data-expanded='true']) .cal-field-help { display: none; }
   .calv .cal-reminder-row[data-expanded='true'] .ph { margin-bottom: 14px; }
