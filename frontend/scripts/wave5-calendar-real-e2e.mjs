@@ -25,11 +25,14 @@ import { chromium, request as playwrightRequest } from 'playwright';
 import axe from 'axe-core';
 import {
   CALENDAR_EVENTS_PATH,
+  calendarEventDetailPath,
   changeTimezoneWithQueryReady,
   encodedTimezoneParam,
+  matchesCalendarEventDetailQuery,
   registerCalendarQueryReady,
   runtimeClean,
   runtimeErrors,
+  saveCalendarEventWithDetailReady,
   settleCalendarQuery,
 } from './lib/wave5_calendar_query_readiness.mjs';
 
@@ -85,6 +88,7 @@ const LEGACY_TIMEZONE_NAVIGATION =
 
 const WIDTHS = [390, 430, 768, 1024, 1440];
 const THEMES = ['light', 'dark'];
+const EXPECTED_ASSERTION_ROWS = 305;
 const report = {
   evidenceClass: 'real-target-runtime-api-postgresql-browser',
   releaseGate: true,
@@ -376,7 +380,34 @@ try {
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   editedTitle = `${editedTitle} edited`;
   await page.getByTestId('ev-title').fill(editedTitle);
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  // Saving invalidates the broad calendar query family. Arm the exact event
+  // detail GET before the PUT, then settle both response bodies before a
+  // reload can cancel the background React Query refetch.
+  const eventDetailPath = calendarEventDetailPath(personalEventId);
+  const { save: editSave, detailReady: editedDetailReady } = await saveCalendarEventWithDetailReady({
+    page,
+    eventId: personalEventId,
+    applySave: () => page.getByRole('button', { name: 'Save changes', exact: true }).click(),
+    savePredicate: (response) => new URL(response.url()).pathname === eventDetailPath
+      && response.request().method() === 'PUT'
+      && response.status() === 200,
+  });
+  if (editSave.status() !== 200
+    || !editedDetailReady
+    || !matchesCalendarEventDetailQuery(
+      {
+        url: editedDetailReady.url(),
+        method: editedDetailReady.request().method(),
+        status: editedDetailReady.status(),
+      },
+      personalEventId,
+    )) {
+    throw new Error(
+      'post-edit readiness contract violated before reload: expected completed '
+      + `PUT and GET ${eventDetailPath}`,
+    );
+  }
+  await waitReady(page);
   await page.getByText(editedTitle, { exact: true }).waitFor({ timeout: 20_000 });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitReady(page);
@@ -830,6 +861,11 @@ try {
 report.finishedAt = new Date().toISOString();
 report.total = report.rows.length;
 report.passed = report.rows.filter((row) => row.pass).length;
+if (report.total !== EXPECTED_ASSERTION_ROWS) {
+  report.failures.push(
+    `assertion-row contract violated: expected ${EXPECTED_ASSERTION_ROWS}, got ${report.total}`,
+  );
+}
 report.failed = report.failures.length;
 report.fatalError = fatalError;
 report.screenshots = screenshotsCaptured;

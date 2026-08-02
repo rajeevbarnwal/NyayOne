@@ -31,6 +31,14 @@
 export const CALENDAR_EVENTS_PATH = '/api/v1/calendar/events';
 export const READY_TIMEOUT_MS = 20_000;
 
+/** The exact API pathname for one opaque calendar event identifier. */
+export function calendarEventDetailPath(eventId) {
+  if (typeof eventId !== 'string' || !eventId.trim()) {
+    throw new Error('calendar event id is required');
+  }
+  return `${CALENDAR_EVENTS_PATH}/${encodeURIComponent(eventId)}`;
+}
+
 /** The exact wire form the SPA emits, e.g. `timezone=Asia%2FDubai`. */
 export function encodedTimezoneParam(timezone) {
   return `timezone=${encodeURIComponent(timezone)}`;
@@ -54,6 +62,25 @@ export function matchesCalendarEventsQuery(candidate, timezone) {
     && candidate.status === 200;
 }
 
+/**
+ * True only for a successful GET of the requested event-detail resource.
+ * Query-bearing or prefix/suffix matches are rejected so an unrelated request
+ * can never satisfy the navigation-readiness contract.
+ * @param {{url: string, method?: string, status: number}} candidate
+ */
+export function matchesCalendarEventDetailQuery(candidate, eventId) {
+  let parsed;
+  try {
+    parsed = new URL(candidate.url);
+  } catch {
+    return false;
+  }
+  return parsed.pathname === calendarEventDetailPath(eventId)
+    && parsed.search === ''
+    && (candidate.method ?? 'GET').toUpperCase() === 'GET'
+    && candidate.status === 200;
+}
+
 /** Registers the wait. MUST be called BEFORE the mutation that triggers it. */
 export function registerCalendarQueryReady(page, timezone, timeout = READY_TIMEOUT_MS) {
   return page.waitForResponse(
@@ -69,17 +96,41 @@ export function registerCalendarQueryReady(page, timezone, timeout = READY_TIMEO
   );
 }
 
-/** Awaits the response AND its body, so a later navigation cannot abort it. */
-export async function settleCalendarQuery(pending) {
+/** Registers the event-detail wait. MUST be called before the save mutation. */
+export function registerCalendarEventDetailReady(page, eventId, timeout = READY_TIMEOUT_MS) {
+  return page.waitForResponse(
+    (response) => matchesCalendarEventDetailQuery(
+      {
+        url: response.url(),
+        method: response.request().method(),
+        status: response.status(),
+      },
+      eventId,
+    ),
+    { timeout },
+  );
+}
+
+async function settleResponse(pending, label) {
   const response = await pending;
   const completionError = await response.finished();
   if (completionError) {
     throw new Error(
-      `calendar-events response did not finish cleanly: ${completionError.message}`,
+      `${label} response did not finish cleanly: ${completionError.message}`,
       { cause: completionError },
     );
   }
   return response;
+}
+
+/** Awaits the response AND its body, so a later navigation cannot abort it. */
+export async function settleCalendarQuery(pending) {
+  return settleResponse(pending, 'calendar-events');
+}
+
+/** Awaits the exact detail response and its body before route transition. */
+export async function settleCalendarEventDetail(pending) {
+  return settleResponse(pending, 'calendar-event detail');
 }
 
 /**
@@ -114,6 +165,43 @@ export async function changeTimezoneWithQueryReady({
   const queryReady = await settleCalendarQuery(pendingQuery);
   await page.waitForLoadState('networkidle', { timeout });
   return { save, queryReady };
+}
+
+/**
+ * Save an existing event and return only after the mutation-triggered detail
+ * refetch has fully completed. `legacyNavigateImmediately` exists solely for
+ * the seeded regression that proves the previous sequence fails closed.
+ *
+ * @returns {Promise<{save: object, detailReady: object|null}>}
+ */
+export async function saveCalendarEventWithDetailReady({
+  page,
+  eventId,
+  applySave,
+  savePredicate,
+  timeout = READY_TIMEOUT_MS,
+  legacyNavigateImmediately = false,
+}) {
+  if (legacyNavigateImmediately) {
+    const [save] = await Promise.all([
+      page.waitForResponse(savePredicate, { timeout }),
+      applySave(),
+    ]);
+    await page.waitForLoadState('networkidle', { timeout });
+    return { save, detailReady: null };
+  }
+
+  const pendingDetail = registerCalendarEventDetailReady(page, eventId, timeout);
+  const [save] = await Promise.all([
+    page.waitForResponse(savePredicate, { timeout }),
+    applySave(),
+  ]);
+  const [settledSave, detailReady] = await Promise.all([
+    settleResponse(Promise.resolve(save), 'calendar-event save'),
+    settleCalendarEventDetail(pendingDetail),
+  ]);
+  await page.waitForLoadState('networkidle', { timeout });
+  return { save: settledSave, detailReady };
 }
 
 /** The runtime oracle. Kept pure so the seeded regression asserts the real one. */
