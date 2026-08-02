@@ -28,7 +28,9 @@ def test_upgrade_from_parent_creates_login_tables_constraints_and_indexes(tmp_pa
     database = tmp_path / "login-upgrade.db"
     parent = _alembic(database, "upgrade", PARENT)
     assert parent.returncode == 0, parent.stderr
-    upgraded = _alembic(database, "upgrade", "head")
+    # This test owns revision 0010 specifically. Later feature migrations must
+    # not change the revision whose schema is being proved here.
+    upgraded = _alembic(database, "upgrade", REVISION)
     assert upgraded.returncode == 0, upgraded.stderr
 
     engine = create_engine(f"sqlite+pysqlite:///{database}")
