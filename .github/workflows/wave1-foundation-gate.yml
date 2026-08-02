@@ -1,6 +1,6 @@
 name: wave1-foundation-gate
 
-# SAATHI-58 / SAATHI-63 — Wave 1 foundation gate. Runs the frontend native gates
+# Trigger CI check run for PR #16 (SAATHI-60)
 # and the SAME backend DB gate as scripts/db_gate.sh against the TARGET database
 # (PostgreSQL 16 + pgvector) on every push/PR touching Wave 1 surfaces.
 # Supplements (does not weaken) the existing registration-db-gate workflow.
