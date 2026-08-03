@@ -906,10 +906,12 @@ def test_renderer_url_and_key_rules(monkeypatch):
 
 
 def test_renderer_writes_the_secret_file_private_and_the_other_readable(tmp_path):
+    import os
     module = _renderer()
     written = module.write(tmp_path / "out", module.render("forced-turn", _base_env()))
     modes = {p.name: p.stat().st_mode & 0o777 for p in written}
-    # Holds LIVEKIT_API_SECRET; the livekit image runs as root and can read 0600.
+    if os.name == "nt":
+        pytest.skip("POSIX permission bits not supported on Windows")
     assert modes["livekit.yaml"] == 0o600
     # Holds no secret; coturn runs as `nobody` and could not read 0600.
     assert modes["turnserver.conf"] == 0o644
