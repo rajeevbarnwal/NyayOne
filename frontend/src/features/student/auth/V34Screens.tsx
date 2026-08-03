@@ -227,7 +227,7 @@ export function V34AuthGate(props: ScreenProps) {
   const [lastName, setLastName] = useState('');
   const [regMobile, setRegMobile] = useState(locState?.mobile || '');
   const [dob, setDob] = useState('');
-  const [consentAccepted, setConsentAccepted] = useState(true);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [regBusy, setRegBusy] = useState(false);
   const [regErrors, setRegErrors] = useState<Record<string, string>>(
     locState?.message ? { submit: locState.message } : {}
@@ -792,9 +792,8 @@ export function V34PasswordReset() {
     setBusy(true);
     try {
       await verifyRecovery(recoveryId, code);
-      await completeRecovery(recoveryId);
       setStep('password');
-      setMessage('Recovery verified. You may now sign in again.');
+      setMessage('Recovery verified. Choose a new password.');
     } catch {
       setError('Recovery could not be verified. Check the code or request a new one.');
     } finally {
@@ -1201,8 +1200,10 @@ export function V34ProfileStep1() {
           institutionalEmail,
           barEnrolmentNumber,
         });
-      } catch {
-        // Fallback gracefully to local navigation if session is mock/offline
+      } catch (err) {
+        const msg = err instanceof RegistrationApiError ? err.message : 'Could not save academic profile. Please retry.';
+        setAcademicErrors({ submit: msg });
+        return;
       }
     }
     setActiveStep(3);

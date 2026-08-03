@@ -51,6 +51,7 @@ from app.services import (
     recovery_service,
     registration_service,
 )
+from app.core.auth import ActorContext, require_authenticated
 from app.services.otp_sender import OtpSender, OtpSendError, build_otp_sender
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import deliver_after_response
@@ -144,27 +145,15 @@ class CheckMobileRequest(BaseModel):
 
 @router.post("/check-mobile")
 def check_mobile(payload: CheckMobileRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
-    from sqlalchemy import select
-    digits = "".join(c for c in payload.mobile if c.isdigit())
-    if not re.match(r"^\d{10}$", digits):
+    if not _MOBILE_RE.match(payload.mobile):
         return {"exists": False, "registered": False}
-    reg = registration_service.find_by_mobile(session, digits)
+    reg = registration_service.find_by_mobile(session, payload.mobile)
     if reg is None:
         return {"exists": False, "registered": False}
 
-    profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
-    has_academic = profile is not None and bool(profile.college and profile.year_of_study and profile.enrolment_ct)
-    has_prefs = profile is not None and bool(getattr(profile, "career_goal", None) or getattr(profile, "interests", None))
-    is_complete = has_academic and has_prefs
-    guardian_pending = bool(reg.is_minor and not getattr(reg, "guardian_consent_received", False))
-
     return {
         "exists": True,
-        "registered": True,
-        "status": reg.status,
-        "registration_id": str(reg.id),
-        "is_profile_complete": is_complete,
-        "guardian_consent_pending": guardian_pending,
+        "registered": reg.status in ("otp_verified", "active"),
     }
 
 
@@ -444,7 +433,8 @@ def recovery_complete(
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
     try:
-        raw_token = recovery_service.complete(session, payload.recovery_id, _now())
+        new_pw = getattr(payload, "new_password", None)
+        raw_token = recovery_service.complete(session, payload.recovery_id, _now(), new_password=new_pw)
     except recovery_service.RecoveryError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from exc
     if raw_token:
@@ -539,11 +529,15 @@ class GuardianCompleteRequest(BaseModel):
 
 @router.post("/guardian-consent/complete")
 def guardian_consent_complete(
-    payload: GuardianCompleteRequest, session: Session = Depends(get_session)
+    payload: GuardianCompleteRequest,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(require_authenticated),
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, payload.registration_id)
     if reg is None:
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
+    if reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
     from sqlalchemy import select
@@ -646,15 +640,27 @@ def request_institutional_email_verification(
 
 
 @router.get("/verification/status")
-def verification_status(registration_id: uuid.UUID, session: Session = Depends(get_session)) -> dict[str, str]:
+def verification_status(
+    registration_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(require_authenticated),
+) -> dict[str, str]:
+    reg = session.get(StudentRegistration, registration_id)
+    if reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, registration_id)
     return {"status": ver.status, "method": ver.method}
 
 
 @router.post("/verification/status")
 def verification_transition(
-    payload: VerificationTransitionRequest, session: Session = Depends(get_session)
+    payload: VerificationTransitionRequest,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(require_authenticated),
 ) -> dict[str, str]:
+    reg = session.get(StudentRegistration, payload.registration_id)
+    if reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, payload.registration_id)
     allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
     if payload.status != ver.status and payload.status not in allowed:
