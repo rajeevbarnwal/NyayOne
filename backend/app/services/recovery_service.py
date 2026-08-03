@@ -139,13 +139,15 @@ def complete(session: Session, opaque_id: str, now: datetime, new_password: str 
         raise RecoveryError(401, "recovery_failed")
 
     reg = session.get(StudentRegistration, rs.registration_id)
-    if reg is None or reg.status == "otp_pending":
+    if reg is None:
         raise RecoveryError(401, "recovery_failed")
 
     rs.status = "consumed"
     rs.consumed_at = now
 
     raw_token: str | None = None
+    if reg.status == "otp_pending":
+        reg.status = "otp_verified"
     user = session.get(User, reg.user_id) if reg is not None else None
     if user is not None and reg is not None and user.status not in {"suspended", "deleted"}:
         reg.status = "active"

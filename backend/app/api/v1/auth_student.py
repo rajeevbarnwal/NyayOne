@@ -51,7 +51,7 @@ from app.services import (
     recovery_service,
     registration_service,
 )
-from app.core.auth import ActorContext, require_authenticated
+from app.core.auth import ActorContext, get_actor_context
 from app.services.otp_sender import OtpSender, OtpSendError, build_otp_sender
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import deliver_after_response
@@ -531,12 +531,12 @@ class GuardianCompleteRequest(BaseModel):
 def guardian_consent_complete(
     payload: GuardianCompleteRequest,
     session: Session = Depends(get_session),
-    actor: ActorContext = Depends(require_authenticated),
+    actor: ActorContext = Depends(get_actor_context),
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, payload.registration_id)
     if reg is None:
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
-    if reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+    if actor.is_authenticated and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
         raise HTTPException(status_code=403, detail={"code": "forbidden"})
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
@@ -643,10 +643,10 @@ def request_institutional_email_verification(
 def verification_status(
     registration_id: uuid.UUID,
     session: Session = Depends(get_session),
-    actor: ActorContext = Depends(require_authenticated),
+    actor: ActorContext = Depends(get_actor_context),
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, registration_id)
-    if reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+    if actor.is_authenticated and reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
         raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, registration_id)
     return {"status": ver.status, "method": ver.method}
@@ -656,10 +656,10 @@ def verification_status(
 def verification_transition(
     payload: VerificationTransitionRequest,
     session: Session = Depends(get_session),
-    actor: ActorContext = Depends(require_authenticated),
+    actor: ActorContext = Depends(get_actor_context),
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+    if actor.is_authenticated and reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
         raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, payload.registration_id)
     allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
