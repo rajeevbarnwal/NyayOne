@@ -36,6 +36,8 @@ import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
 import { COLLEGE_OPTIONS } from '../lib/catalog';
 import { profileCompletionPct } from '../lib/dashboard';
+import { ProfileStep2 } from '../profile/ProfileScreens';
+import { InfoTooltip } from '../components';
 
 function formatDDMMYYYY(dateStr: string): string {
   if (!dateStr) return '';
@@ -138,7 +140,7 @@ function Field({ id, label, value, onChange, type = 'text', inputMode, autoCompl
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
   placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; disabled?: boolean; readOnly?: boolean;
 }) {
-  const describedBy = error ? `${id}-error` : help ? `${id}-help` : undefined;
+  const describedBy = error ? `${id}-error` : undefined;
   return (
     <label className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`} htmlFor={id}>
       <span className="v34-field__top"><span>{label}</span>{optional && <small>OPTIONAL</small>}</span>
@@ -991,7 +993,7 @@ export function V34Register(props: ScreenProps) {
     <Screen id="S-08" aside={<AuthAside title="The years before the bar, organised." copy="Five core details now, then verification. Optional fields may stay empty."/>}>
       <Pane><PaneHead id="S-08 · STEP 1 OF 2" back={() => nav('/s-03')}><ThemeButton {...props}/></PaneHead><main className="v34-main">
         <div><h1 id="S-08-title" className="v34-title">Create your student account</h1><p className="v34-copy">Critical legacy fields are preserved: legal name, DOB, institutional email, college, year and optional Bar enrolment.</p></div>
-        <div className="v34-fieldset"><div className="v34-row v34-row--three"><Field id="v34-first" label="FIRST NAME" value={firstName} onChange={setFirstName} autoComplete="given-name" maxLength={60} error={errors.firstName}/><Field id="v34-middle" label="MIDDLE NAME" value={middleName} onChange={setMiddleName} autoComplete="additional-name" maxLength={60} optional error={errors.middleName}/><Field id="v34-last" label="LAST NAME" value={lastName} onChange={setLastName} autoComplete="family-name" maxLength={60} error={errors.lastName}/></div>
+        <div className="v34-fieldset"><div className="v34-row v34-row--three"><Field id="v34-first" label="FIRST NAME" value={firstName} onChange={setFirstName} autoComplete="given-name" error={errors.firstName}/><Field id="v34-middle" label="MIDDLE NAME" value={middleName} onChange={setMiddleName} autoComplete="additional-name" optional error={errors.middleName}/><Field id="v34-last" label="LAST NAME" value={lastName} onChange={setLastName} autoComplete="family-name" error={errors.lastName}/></div>
           <div className="v34-row"><Field id="v34-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" maxLength={15} error={errors.mobile} help="Exactly 10 digits. The one time code is sent here."/><Field id="v34-email" label="INSTITUTIONAL EMAIL" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" maxLength={254} error={errors.email}/></div>
           <div className="v34-row"><Field id="v34-dob" label="DATE OF BIRTH" value={dob} onChange={setDob} type="date" error={errors.dob} help={`Required for eligibility; must be on or before ${todayLocalISO()}.`}/><Select id="v34-college" label="COLLEGE OR UNIVERSITY" value={college} onChange={setCollege} options={COLLEGES} error={errors.college}/><Select id="v34-year" label="YEAR OF STUDY" value={year} onChange={setYear} options={YEARS} error={errors.year}/></div>
           <Field id="v34-bar" label="BAR ENROLMENT" value={bar} onChange={setBar} optional maxLength={120} placeholder="Leave blank if not enrolled"/>

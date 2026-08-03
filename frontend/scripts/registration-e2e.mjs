@@ -5,6 +5,7 @@ import path from 'node:path';
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1043';
 const capture = process.env.QA_OTP_CAPTURE_URL ?? 'http://127.0.0.1:1099';
 const evidence = process.env.QA_EVIDENCE_DIR ?? path.resolve('../QA/registration_closure');
+const ignoreHTTPSErrors = process.env.QA_ALLOW_SELF_SIGNED_TLS === 'true';
 await fs.mkdir(evidence, { recursive: true });
 
 const results = [];
@@ -28,7 +29,7 @@ const resetOtp = async () => {
 const browser = await chromium.launch({ headless: true });
 
 async function fresh(viewport = { width: 1440, height: 1000 }) {
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({ viewport, ignoreHTTPSErrors });
   const page = await context.newPage();
   const consoleErrors = [];
   const networkErrors = [];
@@ -44,9 +45,9 @@ async function fillBase(page, {
   await page.getByLabel('FIRST NAME').fill(first);
   await page.getByLabel('MIDDLE NAME').fill(middle);
   await page.getByLabel('LAST NAME').fill(last);
-  await page.getByLabel('MOBILE NUMBER').fill(mobile);
+  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill(mobile);
   await page.getByLabel('INSTITUTIONAL EMAIL').fill('aditi@nls.ac.in');
-  await page.getByLabel('DATE OF BIRTH').fill(dob);
+  await page.getByLabel('DATE OF BIRTH', { exact: true }).fill(dob);
   await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
   await page.getByLabel('YEAR OF STUDY').selectOption('3');
   await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
@@ -60,30 +61,62 @@ for (const [name, values, expected] of [
   ['mobile_12_digits', { mobile: '987654321012' }, 'Mobile number must be exactly 10 digits.'],
   ['future_dob', { mobile: '9000000001', dob: '2030-01-01' }, 'Enter a valid date of birth that is not in the future.'],
   ['empty_first_name', { mobile: '9000000002', first: '' }, 'Enter your first name.'],
-  ['special_name', { mobile: '9000000003', first: '<script>' }, 'contains characters'],
-  ['name_61_chars', { mobile: '9000000004', first: 'A'.repeat(61) }, 'capped at 60 characters'],
+  ['empty_last_name', { mobile: '9000000008', last: '' }, 'Enter your last name.'],
 ]) {
   const { context, page } = await fresh();
   await fillBase(page, values);
-  if (name === 'name_61_chars') {
-    const length = (await page.getByLabel('FIRST NAME').inputValue()).length;
-    record(name, expected, `${length} characters`, length === 60);
-  } else {
-    await page.getByRole('button', { name: 'Send one time code' }).click();
-    const text = await page.locator('body').innerText();
-    record(name, expected, text.includes(expected), text.includes(expected));
-    record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
-  }
+  await page.getByRole('button', { name: 'Send one time code' }).click();
+  const text = await page.locator('body').innerText();
+  record(name, expected, text.includes(expected), text.includes(expected));
+  record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
   await context.close();
 }
 
-// Maximum allowed boundary: exactly 60 characters is accepted.
+// Name-character validation must target the correct split field.
 {
   const { context, page } = await fresh();
-  await fillBase(page, { first: 'A'.repeat(60), mobile: '9000000005' });
+  const outcomes = {};
+  const blocked = {};
+  for (const field of ['first', 'middle', 'last']) {
+    await fillBase(page, { mobile: '9000000003', [field]: '<script>' });
+    await page.getByRole('button', { name: 'Send one time code' }).click();
+    outcomes[field] = (await page.locator('body').innerText()).includes('contains characters');
+    blocked[field] = new URL(page.url()).pathname === '/s-08';
+  }
+  record('special_name_all_fields', 'first/middle/last reject special characters on the correct field', outcomes,
+    Object.values(outcomes).every(Boolean));
+  record('special_name_all_fields_blocked', 'every invalid split-name submission remains /s-08', blocked,
+    Object.values(blocked).every(Boolean));
+  await context.close();
+}
+
+// The UI must not silently truncate maximum+1; the domain validator owns the error.
+{
+  const { context, page } = await fresh();
+  const outcomes = {};
+  for (const [field, label] of [['first', 'FIRST NAME'], ['middle', 'MIDDLE NAME'], ['last', 'LAST NAME']]) {
+    await fillBase(page, { mobile: '9000000004', [field]: 'A'.repeat(61) });
+    const attemptedLength = (await page.getByLabel(label).inputValue()).length;
+    await page.getByRole('button', { name: 'Send one time code' }).click();
+    outcomes[field] = {
+      attemptedLength,
+      correctError: (await page.locator('body').innerText()).includes('60 characters or fewer'),
+      path: new URL(page.url()).pathname,
+    };
+  }
+  record('name_61_chars_all_fields', '61 retained then rejected for first/middle/last; no truncation', outcomes,
+    Object.values(outcomes).every((value) => value.attemptedLength === 61 && value.correctError && value.path === '/s-08'));
+  await context.close();
+}
+
+// Maximum allowed boundary: exactly 60 characters in every split field is accepted.
+{
+  const { context, page } = await fresh();
+  await fillBase(page, { first: 'A'.repeat(60), middle: 'B'.repeat(60), last: 'C'.repeat(60), mobile: '9000000005' });
   await page.getByRole('button', { name: 'Send one time code' }).click();
   await page.waitForURL('**/s-09');
-  record('name_60_chars', 'accepted and routed to /s-09', new URL(page.url()).pathname, true);
+  record('name_60_chars_all_fields', 'exactly 60 first/middle/last accepted and routed to /s-09', new URL(page.url()).pathname,
+    new URL(page.url()).pathname === '/s-09');
   await context.close();
 }
 
@@ -183,7 +216,7 @@ for (const [name, values, expected] of [
     if (r.url().includes('/api/v1/auth/student/recovery/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
   await page.goto(`${base}/s-06`);
-  await page.getByLabel('MOBILE NUMBER').fill('9000000006');
+  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill('9000000006');
   await resetOtp();
   await page.getByRole('button', { name: 'Send the code' }).click();
   await page.getByText('If an account matches, a six digit recovery code has been sent.').waitFor();
@@ -209,6 +242,13 @@ for (const width of [390, 430, 768, 1024, 1440]) {
     await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
     const action = page.getByRole('button', { name: 'Send one time code' });
+    const helpButton = page.getByRole('button', { name: 'More information about MOBILE NUMBER' });
+    await helpButton.focus();
+    const tooltip = page.getByRole('tooltip');
+    await tooltip.waitFor({ state: 'visible' });
+    const tooltipText = (await tooltip.textContent() ?? '').trim();
+    await page.keyboard.press('Escape');
+    const tooltipDismissed = await tooltip.isHidden();
     const actionBox = await action.boundingBox();
     const metrics = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -221,6 +261,7 @@ for (const width of [390, 430, 768, 1024, 1440]) {
       { metrics, actionBox },
       metrics.width <= width
       && metrics.iconActions.every((item) => item.width >= 44 && item.height >= 44 && item.aria && item.tip === item.aria && item.svg === 1)
+      && tooltipText === 'Exactly 10 digits. The one time code is sent here.' && tooltipDismissed
       && !!actionBox && actionBox.x >= 0 && actionBox.x + actionBox.width <= width
       && consoleErrors.length === 0);
     const file = `s08_v34_${width}_${theme}.png`;

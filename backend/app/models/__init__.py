@@ -51,6 +51,16 @@ from app.models.wave4 import (  # noqa: F401
     RiskSignal,
     RiskSignalApproval,
 )
+from app.models.calendar import (  # noqa: F401
+    CalendarConflict,
+    CalendarEvent,
+    CalendarEventSource,
+    CalendarExportRevocation,
+    CalendarExportSubscription,
+    CalendarExportToken,
+    CalendarReminderPreference,
+    CalendarViewPreference,
+)
 
 __all__ = [
     "User",
@@ -114,4 +124,13 @@ __all__ = [
     "RiskSignal",
     "RiskSignalApproval",
     "ModerationNotificationOutbox",
+    # Wave 5 unified calendar and interoperability (SAATHI-285/290/295)
+    "CalendarEventSource",
+    "CalendarEvent",
+    "CalendarViewPreference",
+    "CalendarReminderPreference",
+    "CalendarConflict",
+    "CalendarExportSubscription",
+    "CalendarExportToken",
+    "CalendarExportRevocation",
 ]

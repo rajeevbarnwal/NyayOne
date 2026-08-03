@@ -112,30 +112,41 @@ def main():
         "Authorization": basic_auth(email, token),
     }
 
-    # SAATHI-60 Comment
+    # SAATHI-60 Comment — PR#16 Remediation
     saathi_60_comment = (
-        "✅ RESOLUTION UPDATE (SAATHI-60):\n"
-        "1. S-04 Inline OTP Input Field Fix:\n"
-        "   - Added inline OTP state and rendered 6-digit OTP text box inline on S-04 with 'Verify OTP & Sign In' button.\n"
-        "   - Verified with Vitest suite (65 test files, 649 tests passed).\n"
-        "   - Commit: 6abda6b (fix(S-04): implement inline OTP verification text box)\n\n"
-        "2. Student Profile Greeting & Session Resolution Fix:\n"
-        "   - Updated login_service.py session_claims to accept 'otp_verified' or 'active' registrations.\n"
-        "   - Updated recovery_service.py to set active status and last_seen_at timestamp on AuthSession.\n"
-        "   - Updated auth_student.py RecoveryRef Pydantic schema to accept optional new_password parameter.\n"
-        "   - Commit: c17e055 (fix(S-06): resolve RecoveryRef payload schema and AuthSession last_seen_at constraint)\n"
-        "   - Verified S-14 greeting now displays actual user name ('Good evening, Sumit.')."
+        "✅ PR#16 REMEDIATION UPDATE (SAATHI-60):\n"
+        "1. P0 Pre-Auth Account Enumeration Fix:\n"
+        "   - /check-mobile now returns strictly { exists: bool, registered: bool }.\n"
+        "   - Removed pre-auth registration_id UUID leakage.\n\n"
+        "2. P0 Actor Ownership Enforcement:\n"
+        "   - guardian-consent/complete, GET/POST verification/status now require\n"
+        "     require_authenticated and validate session.actor_id == registration.user_id.\n\n"
+        "3. P1 DPDP Affirmative Consent:\n"
+        "   - DPDP consent checkbox default changed from true (pre-checked) to false.\n\n"
+        "4. P1 S-10 Error Swallowing:\n"
+        "   - handleAcademicSubmit catch block now displays typed error and returns early\n"
+        "     instead of silently proceeding to next step.\n\n"
+        "5. Alembic Migration Renumber:\n"
+        "   - 0013_student_profile_preferences → 0014 to prevent dual-head collision.\n\n"
+        "   - Commit: 59adfab on feature/v34-s03-unregistered-signin-routing\n"
+        "   - Verified: tsc 0 errors, 665/665 Vitest tests pass."
     )
 
-    # SAATHI-62 Comment
+    # SAATHI-62 Comment — PR#16 Remediation
     saathi_62_comment = (
-        "✅ RESOLUTION UPDATE (SAATHI-62):\n"
-        "1. 3-Step Account Recovery & Password Reset Flow (Screen S-06):\n"
-        "   - Refactored V34PasswordReset into a 3-step wizard (Mobile Input -> 6-digit OTP Verification -> Set New Password & Auto-Login).\n"
-        "   - Backend /api/v1/auth/student/recovery/complete updated to return active AuthSession cookie upon password update.\n"
-        "   - Verified full end-to-end flow with browser subagent: verified recovery code, updated password, and auto-logged in directly to S-14 Student Dashboard.\n"
-        "   - Commit: 1f0621b (feat(S-06): implement 3-step password reset and auto-login)\n"
-        "   - Automated Vitest Suite: 65 test files passed (649 tests passed)."
+        "✅ PR#16 REMEDIATION UPDATE (SAATHI-62):\n"
+        "1. P0 Recovery Double-Call Fix (S-06):\n"
+        "   - Removed premature completeRecovery(recoveryId) call during OTP verify step.\n"
+        "   - Recovery session is now consumed only once when user submits Save Password.\n\n"
+        "2. P0 Concurrency & Row Locking:\n"
+        "   - recovery_service.complete() uses with_for_update() row lock on RecoverySession.\n"
+        "   - Re-verifies expires_at > now inside the locked transaction.\n"
+        "   - Blocks recovery on unverified otp_pending registrations.\n\n"
+        "3. P0 Password Hashing:\n"
+        "   - recovery_service.complete() accepts new_password parameter and\n"
+        "     dispatches to single atomic password update call.\n\n"
+        "   - Commit: 59adfab on feature/v34-s03-unregistered-signin-routing\n"
+        "   - Verified: tsc 0 errors, 665/665 Vitest tests pass."
     )
 
     update_ticket(base_url, headers, "SAATHI-60", saathi_60_comment)
