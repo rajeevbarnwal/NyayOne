@@ -1,6 +1,6 @@
 name: wave1-foundation-gate
 
-# Trigger CI check run for PR #16 (SAATHI-60)
+# SAATHI-58 / SAATHI-63 — Wave 1 foundation gate. Runs the frontend native gates
 # and the SAME backend DB gate as scripts/db_gate.sh against the TARGET database
 # (PostgreSQL 16 + pgvector) on every push/PR touching Wave 1 surfaces.
 # Supplements (does not weaken) the existing registration-db-gate workflow.
@@ -71,7 +71,8 @@ jobs:
           python-version: "3.12"
       - run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.lock
+          pip install -r requirements.txt
+          pip install pytest httpx
       - name: Enable pgvector
         run: |
           PGPASSWORD=legalsaathi psql -h localhost -p 1032 -U legalsaathi -d legalsaathi \
