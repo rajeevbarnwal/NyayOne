@@ -51,7 +51,12 @@ import { BookingHoldScreen, SessionConfirmed } from './tutoring/BookingScreens';
 import { SessionLifecycle } from './tutoring/SessionScreens';
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
 import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
-import { CalendarMonth, CalendarAdd } from './calendar/CalendarScreens';
+import {
+  CalendarMonth,
+  CalendarAdd,
+  CalendarConflictScreen,
+  CalendarPreferencesScreen,
+} from './calendar/CalendarScreens';
 import {
   CredentialWallet,
   CredentialAdd,
@@ -141,10 +146,10 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   // S18 Wave 4 private internship reporting (SAATHI-269): reporter-owned only.
   'S-86': InternshipReportCreate,
   'S-87': InternshipReportStatus,
-  // S19.1 cross-module calendar (SAATHI-286)
   'S-90': CalendarMonth,
   'S-91': CalendarAdd,
-  // Legal terms & privacy docs
+  'S-92': CalendarConflictScreen,
+  'S-93': CalendarPreferencesScreen,
   'S-94': TermsScreen,
   'S-95': PrivacyScreen,
 };

@@ -11,45 +11,87 @@ import {
 } from '../lib/dashboard';
 import { profileTier, TIER_LABELS } from '../lib/profile';
 import { getProfileDraft } from '../lib/profileStore';
-import { getStudentProfile, PROFILE_KEY } from '../lib/settingsApi';
-import { aggregate, localDateDisplay, localDateKey, localTime, resolveEventBadge, sampleSourceResults, SOURCE_LABELS } from '../lib/calendar';
+import { DEFAULT_TZ, localDateKey, localTime, SOURCE_LABELS, type CalendarEventStatus } from '../lib/calendar';
+import { getCalendarViewPreferences, listCalendarEvents, type CalendarEventRecord } from '../lib/calendarApi';
 import { SAMPLE_ENTRIES, totalHours } from '../lib/clinical';
 
-const DASHBOARD_WEEK_START = new Date('2026-07-19T00:00:00.000Z');
+export function dashboardWeekday(now: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: timezone }).format(now);
+}
+
+export function calendarStatusPresentation(status: CalendarEventStatus): {
+  chip: string;
+  tone: 'info' | 'warn' | 'ok';
+} {
+  if (status === 'deadline') return { chip: 'Deadline', tone: 'warn' };
+  if (status === 'tentative') return { chip: 'Tentative', tone: 'info' };
+  if (status === 'done') return { chip: 'Done', tone: 'ok' };
+  if (status === 'cancelled') return { chip: 'Cancelled', tone: 'warn' };
+  return { chip: 'Scheduled', tone: 'info' };
+}
+
+export function currentWeek(now = new Date(), timezone = DEFAULT_TZ) {
+  // Convert the current instant to a calendar date in the product timezone,
+  // then perform date-only arithmetic at UTC noon.  Noon avoids DST/date-edge
+  // rollover while localDateKey remains the authority for event matching.
+  const todayKey = localDateKey(now.toISOString(), timezone);
+  const cursor = new Date(`${todayKey}T12:00:00.000Z`);
+  const daysSinceMonday = (cursor.getUTCDay() + 6) % 7;
+  cursor.setUTCDate(cursor.getUTCDate() - daysSinceMonday);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(cursor);
+    date.setUTCDate(cursor.getUTCDate() + index);
+    return date;
+  });
+}
+
+export function buildDashboardWeek(now: Date, timezone: string, events: readonly CalendarEventRecord[]) {
+  return currentWeek(now, timezone).map((date) => {
+    const key = date.toISOString().slice(0, 10);
+    const event = events.find((item) => localDateKey(item.startsAt, timezone) === key);
+    return {
+      key,
+      dow: date.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }).toUpperCase(),
+      date: date.getUTCDate(),
+      event: event ? `${event.title} · ${localTime(event.startsAt, timezone)}` : undefined,
+    };
+  });
+}
 
 export function Dashboard() {
   const nav = useNavigate();
   const profile = getProfileDraft();
   const tier = profileTier(profile);
-
-  const profileQuery = useQuery({
-    queryKey: PROFILE_KEY,
-    queryFn: getStudentProfile,
-    retry: false,
-  });
-  const serverFirstName = profileQuery.data?.firstName;
-  const firstName = profile.firstName?.trim() || profile.fullName?.trim()?.split(/\s+/)[0] || serverFirstName || 'Student';
+  const firstName = profile.fullName.trim().split(/\s+/)[0] || 'Student';
   const live = availableModules(CURRENT_RELEASE);
   const soon = upcomingModules(CURRENT_RELEASE);
-  const events = aggregate(sampleSourceResults()).events;
-  const week = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(DASHBOARD_WEEK_START);
-    date.setUTCDate(date.getUTCDate() + i);
-    const key = date.toISOString().slice(0, 10);
-    const event = events.find((e) => localDateKey(e.startsAt, e.timezone) === key);
-    return {
-      dow: date.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }).toUpperCase(),
-      date: date.getUTCDate(),
-      event: event ? `${event.title} · ${localTime(event.startsAt, event.timezone)}` : undefined,
-    };
+  const calendarPreferences = useQuery({
+    queryKey: ['calendar', 'view-preferences'],
+    queryFn: getCalendarViewPreferences,
+    retry: false,
   });
+  const timezone = calendarPreferences.data?.timezone ?? DEFAULT_TZ;
+  const calendar = useQuery({
+    queryKey: ['calendar', 'dashboard-events', timezone],
+    queryFn: () => listCalendarEvents({ timezone }),
+    enabled: !calendarPreferences.isPending,
+    retry: false,
+  });
+  const events = calendar.data?.items ?? [];
+  const now = new Date();
+  const week = buildDashboardWeek(now, timezone, events);
+  const weekday = dashboardWeekday(now, timezone);
+  const hour = Number(new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit', hourCycle: 'h23', timeZone: timezone,
+  }).format(now));
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const nextActions = events.slice(0, 4).map((e) => {
-    const badge = resolveEventBadge(e);
+    const presentation = calendarStatusPresentation(e.status);
     return {
       title: e.title,
-      meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateDisplay(e.startsAt, e.timezone)} · ${localTime(e.startsAt, e.timezone)}`,
-      chip: badge.label,
-      status: badge.status,
+      meta: `${SOURCE_LABELS[e.sourceType]} · ${localDateKey(e.startsAt, timezone)} · ${localTime(e.startsAt, timezone)}`,
+      chip: presentation.chip,
+      status: presentation.tone,
     };
   });
   const completion = profileCompletionPct(profile);
@@ -59,31 +101,14 @@ export function Dashboard() {
     <StudentScreen screenId="S-14" className="st-dash">
       <div className="st-dash__head">
         <div>
-          <p className="st-eyebrow">Saturday · your week, one place</p>
-          <h1>Good evening, {firstName}.</h1>
+          <p className="st-eyebrow">{weekday} · your week, one place</p>
+          <h1>{greeting}, {firstName}.</h1>
           <p className="st-metatag" style={{ marginTop: 8 }}>Your deadlines, sessions and applications stay together without exposing private activity.</p>
         </div>
-        <span className={`st-badge ${completion < 100 ? 'st-badge--warning' : ''}`} style={completion < 100 ? { backgroundColor: '#fffbe6', borderColor: '#ffe58f', color: '#d46b08' } : undefined}>
-          <span aria-hidden>{completion === 100 ? '✓' : '⚠️'}</span> {completion === 100 ? TIER_LABELS[tier] : `Profile incomplete (${completion}%)`}
+        <span className="st-badge">
+          <span aria-hidden>✓</span> {TIER_LABELS[tier]}
         </span>
       </div>
-
-      {completion < 100 && (
-        <div style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong style={{ color: '#873800' }}>Your profile setup is {completion}% complete</strong>
-            <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#595959' }}>Finish setting up your academic details to unlock full internship applications.</p>
-          </div>
-          <button
-            type="button"
-            className="v34-submit-btn"
-            style={{ width: 'auto', padding: '8px 16px', fontSize: '13px' }}
-            onClick={() => nav(`/s-10?step=${!profile.college ? 'academic' : 'interests'}`)}
-          >
-            Finish Profile Setup
-          </button>
-        </div>
-      )}
 
       {/* Unified calendar strip */}
       <details className="v34c-mobile-disclosure">
@@ -97,7 +122,7 @@ export function Dashboard() {
           </div>
           <div className="st-week">
             {week.map((d) => (
-              <div className="st-week__day" key={d.dow}>
+              <div className="st-week__day" key={d.key}>
                 <div className="st-week__dow">
                   {d.dow} {d.date}
                 </div>
@@ -105,6 +130,8 @@ export function Dashboard() {
               </div>
             ))}
           </div>
+          {(calendarPreferences.isPending || calendar.isPending) && <p className="st-item__meta" role="status">Loading calendar…</p>}
+          {(calendarPreferences.isError || calendar.isError) && <p className="st-item__meta" role="alert">Calendar preview is unavailable. Open Calendar to retry.</p>}
         </section>
       </details>
 

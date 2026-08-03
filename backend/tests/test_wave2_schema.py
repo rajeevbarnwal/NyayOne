@@ -61,11 +61,18 @@ MIGRATION_0008 = (
 
 WAVE2_REVISION = "0008_wave2_tutoring"
 PARENT_REVISION = "0007_wave3_credentials"
-#: Current head. 0009 adds server-authoritative session pricing, 0010 adds
-#: student login/session tables, 0011 adds private reporting and 0012 adds
-#: internal moderation. Therefore the revision an
-#: upgrade lands on differs from the revision that created the 17 Wave 2 tables.
-HEAD_REVISION = "0013_student_profile_preferences"
+def _expected_alembic_head() -> str:
+    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
+    numbered = [
+        p.stem
+        for p in versions_dir.glob("*.py")
+        if p.name[0].isdigit() and not p.name.startswith("__")
+    ]
+    assert numbered, f"No alembic version files found in {versions_dir}"
+    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
+
+
+HEAD_REVISION = _expected_alembic_head()
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",
@@ -86,6 +93,14 @@ POST_WAVE2_TABLES = {
     "risk_signals",
     "risk_signal_approvals",
     "moderation_notification_outbox",
+    "calendar_event_sources",
+    "calendar_events",
+    "calendar_view_preferences",
+    "calendar_reminder_preferences",
+    "calendar_conflicts",
+    "calendar_export_subscriptions",
+    "calendar_export_tokens",
+    "calendar_export_revocations",
 }
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently

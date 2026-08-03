@@ -19,6 +19,7 @@ def redact_sensitive_path(path: str) -> str:
     """Keep bearer/share tokens out of ordinary request logs."""
     for prefix in (
         "/api/v1/public/credential-verifications/",
+        "/api/v1/public/calendar-feeds/",
         "/verify/",
     ):
         if path.startswith(prefix):

@@ -107,6 +107,10 @@
 .v34-row > * { flex: 1; min-width: 0; }
 .v34-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .v34-field__top { min-height: 20px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--v34-muted); font: 700 11px var(--v34-display); letter-spacing: .12em; }
+.v34-field__top > label { cursor: pointer; }
+.v34-field__meta { display: inline-flex; align-items: center; gap: 6px; }
+.v34-field__meta .st-info__btn { width: 44px; height: 44px; color: var(--v34-muted); background: var(--v34-paper); border-color: var(--v34-line2); }
+.v34-field__meta .st-info__panel { color: var(--v34-ink); background: var(--v34-paper); border-color: var(--v34-line2); font-family: var(--v34-display); letter-spacing: normal; text-transform: none; }
 .v34-field__top small { font: 500 10px var(--v34-display); letter-spacing: .06em; }
 .v34-field__control { min-height: 44px; display: flex; align-items: center; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--v34-line2); font-size: 16px; }
 .v34-field--optional .v34-field__control { border-bottom-style: dashed; }
