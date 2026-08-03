@@ -64,9 +64,10 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: Current head. 0009 adds server-authoritative session pricing, 0010 adds
 #: student login/session tables, 0011 adds private reporting, 0012 adds
 #: internal moderation, 0013 adds calendar interoperability and 0014 adds the
-#: SAATHI-60 internship catalogue. Therefore the revision an upgrade lands on
-#: differs from the revision that created the 17 Wave 2 tables.
-HEAD_REVISION = "0014_saathi60_internships"
+#: SAATHI-60 internship catalogue, and 0015 adds governed public-risk and
+#: right-of-reply tables. Therefore the revision an upgrade lands on differs
+#: from the revision that created the 17 Wave 2 tables.
+HEAD_REVISION = "0015_wave4_public_risk_labels"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",
@@ -97,6 +98,12 @@ POST_WAVE2_TABLES = {
     "calendar_export_revocations",
     "internship_listings",
     "saved_internships",
+    "published_risk_labels",
+    "publication_decisions",
+    "organisation_response_requests",
+    "organisation_responses",
+    "response_moderation",
+    "notification_outbox",
 }
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently

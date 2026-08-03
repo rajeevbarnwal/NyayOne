@@ -22,7 +22,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 BLOCKED = 78
-HEAD = "0014_saathi60_internships"
+HEAD = "0015_wave4_public_risk_labels"
 PARENT = "0012_wave4_moderation"
 TABLES = {
     "calendar_event_sources",

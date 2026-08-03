@@ -13,7 +13,7 @@ from app.models.wave4 import (
     REPORT_CATEGORIES,
 )
 
-_UNSAFE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f<>]")
+_UNSAFE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f<>]")
 
 
 class ModerationQueueItemOut(BaseModel):
@@ -49,7 +49,7 @@ class ModerationActionIn(BaseModel):
 
     action: str
     reason_code: str
-    reason_detail: str = Field(min_length=10, max_length=1000)
+    reason_detail: str
     expected_version: int = Field(ge=1)
 
     @field_validator("action")
@@ -70,6 +70,8 @@ class ModerationActionIn(BaseModel):
     @classmethod
     def safe_reason(cls, value: str) -> str:
         value = value.strip()
+        if not 10 <= len(value) <= 1000:
+            raise ValueError("moderation_reason_detail_length")
         if _UNSAFE.search(value):
             raise ValueError("unsafe_reason_detail")
         return value
@@ -122,7 +124,7 @@ class RiskSignalApprovalIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
-    reason_code: str = Field(min_length=3, max_length=64)
+    reason_code: str
 
     @field_validator("decision")
     @classmethod
@@ -135,8 +137,14 @@ class RiskSignalApprovalIn(BaseModel):
     @classmethod
     def safe_reason(cls, value: str) -> str:
         value = value.strip()
-        if _UNSAFE.search(value):
-            raise ValueError("unsafe_approval_reason")
+        if value not in {
+            "moderator_policy_check",
+            "safety_policy_check",
+            "qa_target_gate_approval",
+            "qa_publication_veto",
+            "risk_signal_veto",
+        }:
+            raise ValueError("unsupported_approval_reason")
         return value
 
 
@@ -158,3 +166,48 @@ class RiskClusterOut(BaseModel):
     neutral_label: str
     version: int
 
+
+class IdentityAccessRequestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason_detail: str
+
+    @field_validator("reason_detail")
+    @classmethod
+    def safe_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not 20 <= len(value) <= 1000:
+            raise ValueError("identity_access_reason_length")
+        if _UNSAFE.search(value):
+            raise ValueError("unsafe_identity_access_reason")
+        return value
+
+
+class IdentityAccessApprovalIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str
+    expected_version: int = Field(ge=1)
+
+    @field_validator("decision")
+    @classmethod
+    def valid_decision(cls, value: str) -> str:
+        if value not in {"approve", "reject"}:
+            raise ValueError("unsupported_identity_access_decision")
+        return value
+
+
+class IdentityAccessRequestOut(BaseModel):
+    id: uuid.UUID
+    report_id: uuid.UUID
+    state: str
+    approval_count: int = Field(ge=0)
+    version: int = Field(ge=1)
+    expires_at: datetime
+    created_at: datetime
+
+
+class IdentityAccessExecutionOut(BaseModel):
+    request_id: uuid.UUID
+    state: str
+    reporter_identity: str

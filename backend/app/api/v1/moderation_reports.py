@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth import ActorContext, get_actor_context
@@ -13,6 +13,10 @@ from app.schemas.moderation import (
     ModerationActionOut,
     ModerationCaseOut,
     ModerationQueueOut,
+    IdentityAccessApprovalIn,
+    IdentityAccessExecutionOut,
+    IdentityAccessRequestIn,
+    IdentityAccessRequestOut,
     RiskClusterCreate,
     RiskClusterOut,
     RiskSignalApprovalIn,
@@ -25,6 +29,9 @@ from app.services.moderation_service import (
     get_case,
     get_cluster,
     list_cases,
+    request_identity_access,
+    decide_identity_access,
+    execute_identity_access,
 )
 
 router = APIRouter(prefix="/moderation", tags=["internship-report-moderation"])
@@ -111,5 +118,58 @@ def risk_cluster_approval(
 ) -> RiskClusterOut:
     try:
         return approve_cluster(session, actor, cluster_id, payload)
+    except ModerationError as error:
+        _raise(error)
+
+
+@router.post(
+    "/internship-reports/{report_id}/identity-access-requests",
+    response_model=IdentityAccessRequestOut,
+    status_code=201,
+)
+def identity_access_request_create(
+    report_id: uuid.UUID,
+    payload: IdentityAccessRequestIn,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
+) -> IdentityAccessRequestOut:
+    try:
+        return request_identity_access(session, actor, report_id, payload, idempotency_key)
+    except ModerationError as error:
+        _raise(error)
+
+
+@router.post(
+    "/identity-access-requests/{request_id}/approvals",
+    response_model=IdentityAccessRequestOut,
+)
+def identity_access_request_approval(
+    request_id: uuid.UUID,
+    payload: IdentityAccessApprovalIn,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
+) -> IdentityAccessRequestOut:
+    try:
+        return decide_identity_access(session, actor, request_id, payload, idempotency_key)
+    except ModerationError as error:
+        _raise(error)
+
+
+@router.post(
+    "/identity-access-requests/{request_id}/execute",
+    response_model=IdentityAccessExecutionOut,
+)
+def identity_access_request_execute(
+    request_id: uuid.UUID,
+    response: Response,
+    expected_version: int = Query(ge=1),
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
+) -> IdentityAccessExecutionOut:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return execute_identity_access(session, actor, request_id, expected_version)
     except ModerationError as error:
         _raise(error)

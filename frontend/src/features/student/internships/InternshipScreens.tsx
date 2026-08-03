@@ -31,6 +31,7 @@ import {
   saveInternship,
   unsaveInternship,
 } from '../lib/internshipsApi';
+import { PublicRiskLabelPanel } from '../reporting/RiskLabelScreens';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -309,6 +310,8 @@ export function InternshipDetail() {
                 Back to listings
               </button>
             </div>
+            {/* Defaults to a zero-DOM/zero-request result until both release gates open. */}
+            <PublicRiskLabelPanel organisationId={l.organisationId} organisationName={l.org} compact />
           </section>
         </div>
         <DpdpFootnote>

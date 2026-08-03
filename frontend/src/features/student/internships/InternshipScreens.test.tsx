@@ -23,13 +23,13 @@ const STUDENT: AuthState = {
 };
 
 const CAM: InternshipListing = {
-  id: 'cam', role: 'Summer Associate, disputes', org: 'Cyril Amarchand Mangaldas', location: 'Mumbai',
+  id: 'cam', organisationId: '00000000-0000-4000-8000-000000000061', role: 'Summer Associate, disputes', org: 'Cyril Amarchand Mangaldas', location: 'Mumbai',
   stipendMonthlyPaise: 4_000_000, verificationStatus: 'verified', deadline: '9 Jul',
   eligibility: '3rd–4th year', tags: ['Disputes'], description: 'Commercial disputes work.',
   source: { name: 'CAM careers', url: null, retrievedAt: '2026-06-28T00:00:00+05:30', verifiedAt: '2026-06-28T00:00:00+05:30' },
 };
 const MENON: InternshipListing = {
-  id: 'menon', role: 'Judicial research assistant', org: 'Chambers of Sr. Adv. R. Menon', location: 'Delhi HC',
+  id: 'menon', organisationId: '00000000-0000-4000-8000-000000000062', role: 'Judicial research assistant', org: 'Chambers of Sr. Adv. R. Menon', location: 'Delhi HC',
   stipendMonthlyPaise: 1_500_000, verificationStatus: 'unverified', deadline: '8 Jul',
   eligibility: '2nd year+', tags: ['Research'], description: 'Judicial research support.',
   source: { name: 'Sample fixture', url: null, retrievedAt: null, verifiedAt: null },
@@ -74,6 +74,8 @@ describe('SAATHI-60 internship screens', () => {
     expect(html).toContain('Chambers of Sr. Adv. R. Menon');
     expect(html).not.toContain('Cyril Amarchand Mangaldas');
     expect(html).toContain('Source: Sample fixture · unverified · not affiliated');
+    expect(html).not.toContain('Approved aggregate');
+    expect(html).not.toContain('Safety signals for');
   });
 
   it('keeps the selected Menon identity in the application flow', () => {

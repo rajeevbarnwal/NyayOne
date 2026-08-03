@@ -32,11 +32,17 @@
 .mod-actions textarea { min-height:120px; resize:vertical; }
 .mod-action-row { display:flex; flex-wrap:wrap; gap:10px; }
 .mod-back { color:var(--accent); font-weight:800; width:max-content; }
+.mod-case-background { min-width:0; display:grid; gap:24px; }
+.mod-case-background[inert] { pointer-events:none; user-select:none; }
 .mod-detail { display:flex; justify-content:space-between; gap:24px; }
 .mod-detail .mod-meta { min-width:min(100%,420px); }
 .mod-narrative p { white-space:pre-wrap; line-height:1.65; }
 .mod-notice,.mod-error { padding:16px; border-radius:14px; border:1px solid var(--line); background:var(--panel); }
+.mod-notice { display:grid; gap:5px; }
 .mod-error { border-color:color-mix(in srgb,var(--risk) 45%,var(--line)); color:var(--risk); }
+.mod-dialog-backdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:color-mix(in srgb,black 56%,transparent); }
+.mod-dialog { width:min(100%,560px); max-height:calc(100dvh - 40px); overflow:auto; display:grid; gap:18px; padding:24px; border:1px solid var(--line); border-radius:20px; background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
+.mod-dialog h2,.mod-dialog p { margin:0; }
 .mod-risk { display:grid; gap:18px; }
 .mod-risk__numbers { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
 .mod-risk__numbers div { display:grid; gap:4px; padding:16px; background:var(--panel); border-radius:16px; }
@@ -45,4 +51,4 @@
 .mod-checks li { padding:10px 12px 10px 38px; position:relative; border:1px solid var(--line); border-radius:12px; }
 .mod-checks li::before { content:'×'; position:absolute; left:13px; font-weight:900; color:var(--risk); }
 .mod-checks li[data-pass='true']::before { content:'✓'; color:var(--ok); }
-@media (max-width:700px) { .mod-shell { padding:16px; gap:16px; } .mod-header,.mod-detail { display:grid; padding:20px; } .mod-kill { width:auto; } .mod-card__top { display:grid; } .mod-risk__numbers { grid-template-columns:1fr; } .mod-action-row>* { width:100%; } }
+@media (max-width:700px) { .mod-shell,.mod-case-background { gap:16px; } .mod-shell { padding:16px; } .mod-header,.mod-detail { display:grid; padding:20px; } .mod-kill { width:auto; } .mod-card__top { display:grid; } .mod-risk__numbers { grid-template-columns:1fr; } .mod-action-row>* { width:100%; } .mod-dialog { padding:20px; } }

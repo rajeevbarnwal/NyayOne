@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Literal
+import uuid
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +17,7 @@ class InternshipSourceOut(BaseModel):
 
 class InternshipListingOut(BaseModel):
     id: str
+    organisation_id: uuid.UUID
     role: str
     organisation: str
     location: str

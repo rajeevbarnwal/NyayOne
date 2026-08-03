@@ -26,6 +26,7 @@ from app.models.wave4 import (
     DuplicateClusterMember,
     InternshipReport,
     InternshipReportCategory,
+    InternshipReportEvidence,
     ModerationAction,
     ModerationAssignment,
     ModerationCase,
@@ -36,6 +37,7 @@ from app.models.wave4 import (
     RiskSignalApproval,
 )
 from tests import apptemplate, dbtemplate
+from app.services.moderation_service import _months_ago
 from scripts.seed_wave4_moderation_e2e import assert_isolated_target, provision
 from scripts.wave4_postgres_gate import is_isolated_gate_target
 
@@ -44,19 +46,30 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 def test_postgres_gate_requires_loopback_qa_name_test_env_and_opt_in():
     safe = "postgresql+psycopg://user:secret@127.0.0.1:5432/saathi274_qa"
-    assert is_isolated_gate_target(safe, "testing", True)
-    assert not is_isolated_gate_target(safe, "production", True)
-    assert not is_isolated_gate_target(safe, "testing", False)
+    assert is_isolated_gate_target(safe, safe, "testing", True)
+    assert not is_isolated_gate_target(safe, "", "testing", True)
+    assert not is_isolated_gate_target(safe, safe + "_other", "testing", True)
+    assert not is_isolated_gate_target(safe, safe, "production", True)
+    assert not is_isolated_gate_target(safe, safe, "testing", False)
     assert not is_isolated_gate_target(
+        "postgresql+psycopg://user:secret@db.internal:5432/saathi274_qa",
         "postgresql+psycopg://user:secret@db.internal:5432/saathi274_qa",
         "testing",
         True,
     )
     assert not is_isolated_gate_target(
         "postgresql+psycopg://user:secret@127.0.0.1:5432/production",
+        "postgresql+psycopg://user:secret@127.0.0.1:5432/production",
         "testing",
         True,
     )
+    for target in ("production_qa", "legalsaathi_prod_test", "staging_e2e"):
+        unsafe = (
+            "postgresql+psycopg://user:secret@127.0.0.1:5432/" + target
+        )
+        assert not is_isolated_gate_target(unsafe, unsafe, "testing", True)
+    encoded = "postgresql+psycopg://user:secret@127.0.0.1:5432/%70roduction_qa"
+    assert not is_isolated_gate_target(encoded, encoded, "testing", True)
 
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
@@ -116,6 +129,7 @@ def _seed_report(
     reporter: str | None = None,
     state: str = "pending",
     experience_date: date | None = None,
+    evidence_state: str | None = "clean",
 ) -> uuid.UUID:
     reporter = reporter or str(uuid.uuid4())
     experience_date = experience_date or (date.today() - timedelta(days=30))
@@ -137,6 +151,18 @@ def _seed_report(
         session.add(report)
         session.flush()
         session.add(InternshipReportCategory(report_id=report.id, category=category))
+        if evidence_state is not None:
+            digest = uuid.uuid4().hex + uuid.uuid4().hex
+            session.add(InternshipReportEvidence(
+                report_id=report.id,
+                object_ref=f"quarantine/{uuid.uuid4()}",
+                mime_type="application/pdf",
+                size_bytes=128,
+                checksum_sha256=digest,
+                scan_state=evidence_state,
+                scanner_result_code="fixture",
+                retention_policy="configured",
+            ))
         reporter_ct = encrypt(reporter)
         session.add(
             ReporterIdentityVault(
@@ -383,6 +409,63 @@ def test_cluster_requires_org_category_time_and_aggregate_approval(ctx):
     assert response.status_code == 422 and response.json()["detail"]["code"] == "cluster_outside_time_window"
 
 
+def test_calendar_month_cutoff_is_inclusive_and_one_day_before_is_rejected(ctx):
+    client, SessionLocal, ids = ctx
+    cutoff = _months_ago(date.today(), settings.internship_risk_window_months)
+    exact = [
+        _seed_report(
+            SessionLocal,
+            ids["moderator"],
+            reporter=f"cutoff-exact-{index}",
+            state="approved_aggregate_only",
+            experience_date=cutoff,
+        )
+        for index in range(3)
+    ]
+    accepted = client.post(
+        "/api/v1/moderation/risk-clusters",
+        headers={
+            **_claims(ids["moderator"], "moderator"),
+            "Idempotency-Key": "cluster-exact-cutoff-0001",
+        },
+        json={"report_ids": [str(value) for value in exact], "category": "unsafe_environment"},
+    )
+    assert accepted.status_code == 201, accepted.text
+    before = [
+        _seed_report(
+            SessionLocal,
+            ids["moderator"],
+            reporter=f"cutoff-before-{index}",
+            state="approved_aggregate_only",
+            experience_date=cutoff - timedelta(days=1),
+        )
+        for index in range(3)
+    ]
+    rejected = client.post(
+        "/api/v1/moderation/risk-clusters",
+        headers={
+            **_claims(ids["moderator"], "moderator"),
+            "Idempotency-Key": "cluster-before-cutoff-0001",
+        },
+        json={"report_ids": [str(value) for value in before], "category": "unsafe_environment"},
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["detail"]["code"] == "cluster_outside_time_window"
+
+
+@pytest.mark.parametrize(
+    ("today", "months", "expected"),
+    [
+        (date(2024, 2, 29), 12, date(2023, 2, 28)),
+        (date(2024, 3, 31), 1, date(2024, 2, 29)),
+        (date(2023, 3, 31), 1, date(2023, 2, 28)),
+        (date(2026, 8, 31), 24, date(2024, 8, 31)),
+    ],
+)
+def test_month_cutoff_handles_leap_year_and_month_end(today, months, expected):
+    assert _months_ago(today, months) == expected
+
+
 def test_threshold_small_count_suppression_approvals_and_publication_kill_switch(ctx):
     client, SessionLocal, ids = ctx
     reports = [
@@ -417,7 +500,7 @@ def test_threshold_small_count_suppression_approvals_and_publication_kill_switch
     denied = client.post(
         f"/api/v1/moderation/risk-clusters/{cluster_id}/approvals",
         headers=_claims(ids["student"], "student"),
-        json={"decision": "approve", "reason_code": "not_allowed"},
+        json={"decision": "approve", "reason_code": "moderator_policy_check"},
     )
     assert denied.status_code == 403
     with SessionLocal() as session:
@@ -529,9 +612,16 @@ def test_e2e_seed_refuses_non_test_or_ambiguous_database(monkeypatch):
     with pytest.raises(RuntimeError, match="APP_ENV"):
         assert_isolated_target("postgresql://user:secret@db/production")
     monkeypatch.setenv("APP_ENV", "testing")
-    with pytest.raises(RuntimeError, match="isolated QA"):
-        assert_isolated_target("postgresql://user:secret@db/production")
-    assert_isolated_target("postgresql://user:secret@db/legalsaathi_saathi274_qa")
+    remote = "postgresql://user:secret@db.example/legalsaathi_saathi274_qa"
+    monkeypatch.setenv("TEST_DATABASE_URL", remote)
+    with pytest.raises(RuntimeError, match="isolated local"):
+        assert_isolated_target(remote)
+    local = "postgresql://user:secret@localhost/legalsaathi_saathi274_qa"
+    monkeypatch.setenv("TEST_DATABASE_URL", "postgresql://user:secret@localhost/other_qa")
+    with pytest.raises(RuntimeError, match="exactly equal"):
+        assert_isolated_target(local)
+    monkeypatch.setenv("TEST_DATABASE_URL", local)
+    assert_isolated_target(local)
 
 
 def test_e2e_fixture_is_idempotent_and_stores_only_session_hash(ctx):

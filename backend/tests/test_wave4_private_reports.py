@@ -457,7 +457,12 @@ def test_clamav_network_failure_remains_quarantined(monkeypatch):
         ClamAVReportEvidenceScanner("scanner.internal", 3310).scan(_pdf())
 
 
-def test_no_public_risk_label_route_exists(ctx):
+def test_public_risk_label_route_is_present_but_fails_closed(ctx):
     client, _, _, _, _ = ctx
     response = client.get(f"/api/v1/public/internship-risk-labels/{uuid.uuid4()}")
-    assert response.status_code == 404
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "risk_labels_unavailable",
+        "message": "Public internship risk labels are not available",
+        "retryable": False,
+    }

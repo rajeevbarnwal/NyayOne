@@ -19,6 +19,7 @@ function response(body: unknown, status = 200): Response {
 
 const LISTING = {
   id: 'menon',
+  organisation_id: '00000000-0000-4000-8000-000000000060',
   role: 'Judicial research assistant',
   organisation: 'Chambers of Sr. Adv. R. Menon',
   location: 'Delhi HC',
@@ -40,7 +41,7 @@ describe('internship catalogue and saved-list API', () => {
 
     expect(result).toEqual({
       items: [expect.objectContaining({
-        id: 'menon', org: LISTING.organisation, stipendMonthlyPaise: 1_500_000,
+        id: 'menon', organisationId: LISTING.organisation_id, org: LISTING.organisation, stipendMonthlyPaise: 1_500_000,
         verificationStatus: 'unverified', deadline: '8 Jul', source: expect.objectContaining({ name: 'Sample fixture' }),
       })],
       total: 1,
