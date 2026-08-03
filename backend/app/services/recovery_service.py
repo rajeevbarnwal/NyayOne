@@ -123,17 +123,29 @@ def verify(session: Session, opaque_id: str, code: str, now: datetime) -> None:
     session.commit()
 
 
-def complete(session: Session, opaque_id: str, now: datetime) -> str | None:
+def complete(session: Session, opaque_id: str, now: datetime, new_password: str | None = None) -> str | None:
     """Consume a verified recovery session and return an active auth session token."""
     now = _as_utc(now)
-    rs = session.scalar(select(RecoverySession).where(RecoverySession.opaque_id == opaque_id))
+    rs = session.scalar(
+        select(RecoverySession)
+        .where(RecoverySession.opaque_id == opaque_id)
+        .with_for_update()
+    )
     if rs is None or rs.registration_id is None or rs.status != "verified":
         raise RecoveryError(401, "recovery_failed")
+    if _as_utc(rs.expires_at) <= now:
+        rs.status = "expired"
+        session.commit()
+        raise RecoveryError(401, "recovery_failed")
+
+    reg = session.get(StudentRegistration, rs.registration_id)
+    if reg is None or reg.status == "otp_pending":
+        raise RecoveryError(401, "recovery_failed")
+
     rs.status = "consumed"
     rs.consumed_at = now
 
     raw_token: str | None = None
-    reg = session.get(StudentRegistration, rs.registration_id)
     user = session.get(User, reg.user_id) if reg is not None else None
     if user is not None and reg is not None and user.status not in {"suspended", "deleted"}:
         reg.status = "active"
