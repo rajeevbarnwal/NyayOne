@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,10 +17,15 @@ from sqlalchemy.orm import Session
 import app.models  # noqa: F401
 from app.models.internships import InternshipListing, SavedInternship
 from app.models.registration import User
-from app.services.internship_service import CATALOGUE_SEED, seed_internship_catalogue
+from app.core.config import settings
+from app.services.internship_service import (
+    CATALOGUE_SEED,
+    listing_out,
+    seed_internship_catalogue,
+)
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD = "0014_saathi60_internships"
+HEAD = "0015_wave4_public_risk_labels"
 PARENT = "0013_wave5_calendar_interop"
 
 
@@ -44,7 +50,11 @@ def test_real_migration_has_tables_constraints_indexes_and_seed(alembic_snapshot
     assert {
         "ix_internship_listings_verification_status",
         "ix_internship_listings_application_deadline",
+        "ix_internship_listings_organisation_public_id",
     } <= {item["name"] for item in inspector.get_indexes("internship_listings")}
+    assert "organisation_public_id" in {
+        item["name"] for item in inspector.get_columns("internship_listings")
+    }
     assert {
         "ix_saved_internships_user_id",
         "ix_saved_internships_listing_id",
@@ -94,6 +104,7 @@ def test_migration_seed_matches_service_seed(alembic_snapshots, tmp_path):
             "id",
             "role",
             "organisation",
+            "organisation_public_id",
             "location",
             "stipend_monthly_paise",
             "verification_status",
@@ -187,3 +198,20 @@ def test_service_catalogue_seed_is_idempotent(db_session):
             select(InternshipListing).order_by(InternshipListing.sort_order)
         ).all()
     ] == ["cam", "menon", "vidhi"]
+
+
+def test_catalogue_public_organisation_id_survives_display_name_rename(
+    db_session, monkeypatch
+):
+    seed_internship_catalogue(db_session)
+    listing = db_session.scalar(
+        select(InternshipListing).where(InternshipListing.slug == "cam")
+    )
+    before = listing_out(listing).organisation_id
+    listing.organisation = "CAM — renamed display label"
+    monkeypatch.setattr(
+        settings, "registration_lookup_secret", SecretStr("rotated-catalogue-secret")
+    )
+    db_session.flush()
+    after = listing_out(listing).organisation_id
+    assert before == after == listing.organisation_public_id

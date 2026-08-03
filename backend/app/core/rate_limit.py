@@ -59,6 +59,16 @@ class RateLimit:
 TUTOR_SEARCH = RateLimit("tutoring.tutor_search", "rate_limit_tutor_search_per_min", 60)
 BOOKING = RateLimit("tutoring.booking", "rate_limit_booking_per_min", 60)
 REVIEW = RateLimit("tutoring.review", "rate_limit_review_per_hour", 3600)
+WAVE4_RESPONSE_TOKEN = RateLimit(
+    "wave4.organisation_response_token",
+    "internship_response_token_rate_per_minute",
+    60,
+)
+WAVE4_RESPONSE_IP = RateLimit(
+    "wave4.organisation_response_ip",
+    "internship_response_ip_rate_per_minute",
+    60,
+)
 
 
 class RateLimitExceeded(Exception):
