@@ -14,16 +14,14 @@ superseded by the active signup challenge.
 """
 from __future__ import annotations
 
-import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.crypto import decrypt, keyed_hash
-from app.models.registration import AuthSession, OtpChallenge, RecoverySession, StudentRegistration, User
+from app.models.registration import OtpChallenge, RecoverySession, StudentRegistration
 from app.services import otp_outbox, otp_service
 
 RECOVERY_TTL_SECONDS = 600
@@ -123,52 +121,12 @@ def verify(session: Session, opaque_id: str, code: str, now: datetime) -> None:
     session.commit()
 
 
-def complete(session: Session, opaque_id: str, now: datetime, new_password: str | None = None) -> str | None:
-    """Consume a verified recovery session and return an active auth session token."""
+def complete(session: Session, opaque_id: str, now: datetime) -> None:
+    """Consume a verified recovery session (where a real reset would occur)."""
     now = _as_utc(now)
-    rs = session.scalar(
-        select(RecoverySession)
-        .where(RecoverySession.opaque_id == opaque_id)
-        .with_for_update()
-    )
+    rs = session.scalar(select(RecoverySession).where(RecoverySession.opaque_id == opaque_id))
     if rs is None or rs.registration_id is None or rs.status != "verified":
         raise RecoveryError(401, "recovery_failed")
-    if _as_utc(rs.expires_at) <= now:
-        rs.status = "expired"
-        session.commit()
-        raise RecoveryError(401, "recovery_failed")
-
-    reg = session.get(StudentRegistration, rs.registration_id)
-    if reg is None:
-        raise RecoveryError(401, "recovery_failed")
-
     rs.status = "consumed"
     rs.consumed_at = now
-
-    raw_token: str | None = None
-    if reg.status == "otp_pending":
-        reg.status = "otp_verified"
-    user = session.get(User, reg.user_id) if reg is not None else None
-    if user is not None and reg is not None and user.status not in {"suspended", "deleted"}:
-        reg.status = "active"
-        user.status = "active"
-        for prior in session.scalars(
-            select(AuthSession)
-            .where(AuthSession.user_id == user.id, AuthSession.status == "active")
-        ):
-            prior.status = "revoked"
-            prior.revoked_at = now
-
-        raw_token = secrets.token_urlsafe(32)
-        auth_session = AuthSession(
-            user_id=user.id,
-            token_hash=keyed_hash(raw_token),
-            status="active",
-            expires_at=now + timedelta(seconds=settings.auth_session_ttl_seconds),
-            last_seen_at=now,
-        )
-        session.add(auth_session)
-
     session.commit()
-    return raw_token
-

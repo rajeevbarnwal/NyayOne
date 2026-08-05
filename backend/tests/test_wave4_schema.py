@@ -44,14 +44,6 @@ def _alembic(database: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _expected_alembic_head() -> str:
-    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
-    files = [p.stem for p in versions_dir.glob("*.py")]
-    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
-    assert numbered, f"No alembic version files found in {versions_dir}"
-    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
-
-
 def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
     alembic_snapshots, tmp_path
 ):
@@ -61,7 +53,7 @@ def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
     inspector = inspect(engine)
     assert TABLES <= set(inspector.get_table_names())
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == _expected_alembic_head()
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == HEAD_REVISION
 
     report_columns = {item["name"] for item in inspector.get_columns("internship_reports")}
     assert {

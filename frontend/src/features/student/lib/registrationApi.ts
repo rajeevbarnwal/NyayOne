@@ -9,9 +9,6 @@ export interface RegistrationSession {
   issuedAt: number;
   isMinor: boolean;
   guardianConsentPending: boolean;
-  isLoginFlow?: boolean;
-  isProfileComplete?: boolean;
-  flowOrigin?: 'register' | 'login';
 }
 
 export interface RegisterStudentInput {
@@ -31,8 +28,6 @@ export interface AcademicProfileInput {
   enrolmentNumber: string;
   institutionalEmail: string;
   barEnrolmentNumber?: string;
-  interests?: string[];
-  careerGoal?: string;
 }
 
 export interface StudentSessionActor {
@@ -104,67 +99,20 @@ export async function registerStudent(
   });
 }
 
-export interface CheckMobileResult {
-  exists: boolean;
-  registered: boolean;
-  status?: 'otp_pending' | 'otp_verified' | 'active' | string;
-  registrationId?: string;
-  isProfileComplete?: boolean;
-  guardianConsentPending?: boolean;
-}
-
-export async function checkMobile(mobile: string): Promise<CheckMobileResult> {
-  const result = await jsonRequest<{
-    exists: boolean;
-    registered: boolean;
-    status?: string;
-    registration_id?: string;
-    is_profile_complete?: boolean;
-    guardian_consent_pending?: boolean;
-  }>('/api/v1/auth/student/check-mobile', {
-    method: 'POST',
-    body: JSON.stringify({ mobile }),
-  });
-  return {
-    exists: result.exists,
-    registered: result.registered,
-    status: result.status,
-    registrationId: result.registration_id,
-    isProfileComplete: result.is_profile_complete,
-    guardianConsentPending: result.guardian_consent_pending,
-  };
-}
-
-export interface VerifyStudentOtpResult {
-  status: string;
-  isProfileComplete: boolean;
-}
-
 export async function verifyStudentOtp(
   registrationId: string,
   code: string,
-): Promise<VerifyStudentOtpResult> {
-  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationId);
-  const validId = isValidUuid
-    ? registrationId
-    : '00000000-0000-4000-8000-' + registrationId.replace(/\D/g, '').padStart(12, '0').slice(-12);
-
-  const res = await jsonRequest<{ status: string; is_profile_complete?: boolean }>('/api/v1/auth/student/otp/verify', {
+): Promise<void> {
+  await jsonRequest('/api/v1/auth/student/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: validId, code }),
+    body: JSON.stringify({ registration_id: registrationId, code }),
   });
-  return { status: res.status, isProfileComplete: Boolean(res.is_profile_complete) };
 }
 
 export async function resendStudentOtp(registrationId: string): Promise<void> {
-  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationId);
-  const validId = isValidUuid
-    ? registrationId
-    : '00000000-0000-4000-8000-' + registrationId.replace(/\D/g, '').padStart(12, '0').slice(-12);
-
   await jsonRequest('/api/v1/auth/student/otp/resend', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: validId }),
+    body: JSON.stringify({ registration_id: registrationId }),
   });
 }
 
@@ -180,8 +128,6 @@ export async function saveAcademicProfile(
       enrolment_number: input.enrolmentNumber,
       institutional_email: input.institutionalEmail,
       bar_enrolment_number: input.barEnrolmentNumber || null,
-      interests: Array.isArray(input.interests) ? input.interests.join(', ') : input.interests || null,
-      career_goal: input.careerGoal || null,
     }),
   });
 }
@@ -217,10 +163,10 @@ export async function verifyRecovery(
   });
 }
 
-export async function completeRecovery(recoveryId: string, newPassword?: string): Promise<void> {
+export async function completeRecovery(recoveryId: string): Promise<void> {
   await jsonRequest('/api/v1/auth/student/recovery/complete', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId, new_password: newPassword || null }),
+    body: JSON.stringify({ recovery_id: recoveryId }),
   });
 }
 
@@ -291,46 +237,4 @@ export function loadRegistrationSession(): RegistrationSession | null {
 export function clearRegistrationSession(): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(SESSION_KEY);
-}
-
-
-
-export async function checkMobileRegistered(mobile: string): Promise<CheckMobileResult> {
-  try {
-    const res = await jsonRequest<{
-      exists?: boolean;
-      registered: boolean;
-      status?: 'otp_pending' | 'otp_verified' | 'active';
-      registration_id?: string;
-      first_name?: string;
-      middle_name?: string;
-      last_name?: string;
-      dob?: string;
-      preferred_language?: string;
-      college?: string;
-      year_of_study?: string;
-      enrolment_number?: string;
-      institutional_email?: string;
-      bar_enrolment_number?: string;
-      interests?: string;
-      career_goal?: string;
-      is_profile_complete?: boolean;
-      guardian_consent_pending?: boolean;
-    }>('/api/v1/auth/student/check-mobile', {
-      method: 'POST',
-      body: JSON.stringify({ mobile }),
-    });
-    const exists = typeof res.exists === 'boolean' ? res.exists : res.registered;
-    return {
-      exists,
-      registered: res.registered,
-      status: res.status,
-      registrationId: res.registration_id,
-      isProfileComplete: res.is_profile_complete,
-      guardianConsentPending: res.guardian_consent_pending,
-    };
-  } catch {
-    // Fallback if backend API is offline/unreachable: permit login flow
-    return { exists: true, registered: true };
-  }
 }

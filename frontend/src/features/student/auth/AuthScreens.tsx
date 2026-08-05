@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip, MobileInputField } from '../components';
+import { useNavigate } from 'react-router-dom';
+import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip } from '../components';
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, DOB_ERROR, todayLocalISO,
   validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName,
 } from '../lib/registration';
-import { RestrictedState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
+import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
 import {
   isValidOtpFormat,
   verify,
@@ -17,12 +17,11 @@ import {
 } from '../lib/otp';
 import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
 import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
-import { isProfileComplete, institutionalEmailError } from '../lib/profile';
-import { updateProfileDraft, getProfileDraft } from '../lib/profileStore';
+import { updateProfileDraft } from '../lib/profileStore';
+import { institutionalEmailError } from '../lib/profile';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
-  checkMobileRegistered,
   loadRegistrationSession,
   registerStudent,
   resendStudentOtp,
@@ -99,68 +98,19 @@ export function Onboarding() {
 export function AuthGate() {
   const nav = useNavigate();
   const [tab, setTab] = useState<'login' | 'register'>('login');
-  const [countryCode, setCountryCode] = useState('+91');
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState<string | undefined>();
-  const [checkingMobile, setCheckingMobile] = useState(false);
-  const [notRegistered, setNotRegistered] = useState(false);
 
-  async function sendOtp() {
+  function sendOtp() {
     const digits = mobile.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit mobile number.');
-      setNotRegistered(false);
       return;
     }
     setError(undefined);
-    setNotRegistered(false);
-    setCheckingMobile(true);
-
-    try {
-      const checkRes = await checkMobileRegistered(digits);
-      if (!checkRes.exists) {
-        // Scenario 3: Entry NOT found in DB
-        setNotRegistered(true);
-        setError('This mobile number is not registered. Please enter a registered number or register with us.');
-        return;
-      }
-      const fullMobile = `${countryCode}${digits}`;
-      startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
-      setMinor(false, false);
-      const existingServer = loadRegistrationSession();
-      const masked = maskDestination({ channel: 'sms', ref: fullMobile });
-      saveRegistrationSession({
-        ...(existingServer ?? {}),
-        registrationId: checkRes.registrationId || ('00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12)),
-        destinationMasked: masked,
-        issuedAt: Date.now(),
-        isMinor: false,
-        guardianConsentPending: Boolean(checkRes.guardianConsentPending),
-        isLoginFlow: true,
-        isProfileComplete: checkRes.isProfileComplete,
-        flowOrigin: 'login',
-      });
-      nav('/s-06');
-    } catch {
-      // Offline fallback: allow OTP attempt
-      const fullMobile = `${countryCode}${digits}`;
-      startOtp({ channel: 'sms' as OtpChannel, ref: fullMobile }, Date.now());
-      setMinor(false, false);
-      const existingServer = loadRegistrationSession();
-      const masked = maskDestination({ channel: 'sms', ref: fullMobile });
-      saveRegistrationSession({
-        ...(existingServer ?? {}),
-        registrationId: '00000000-0000-4000-8000-' + digits.padStart(12, '0').slice(-12),
-        destinationMasked: masked,
-        issuedAt: Date.now(),
-        isMinor: false,
-        guardianConsentPending: false,
-        isLoginFlow: true,
-      });
-      nav('/s-06');
-    } finally {
-      setCheckingMobile(false);
-    }
+    startOtp({ channel: 'sms' as OtpChannel, ref: digits }, Date.now());
+    setMinor(false, false);
+    nav('/s-06');
   }
 
   return (
@@ -170,54 +120,38 @@ export function AuthGate() {
           Login
         </button>
         <button role="tab" aria-selected={tab === 'register'} className="st-tab" onClick={() => nav('/s-05')}>
-          Register
+          Register as student
         </button>
       </div>
 
       {tab === 'login' && (
         <>
-          <MobileInputField
+          <TextField
             id="login-mobile"
-            label="Enter your Mobile Number"
+            label="Mobile number"
             value={mobile}
-            onChange={(v) => {
-              setMobile(v);
-              if (error) setError(undefined);
-              if (notRegistered) setNotRegistered(false);
-            }}
-            countryCode={countryCode}
-            onCountryCodeChange={setCountryCode}
+            onChange={setMobile}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="+91 ‑ 10 digit mobile"
             error={error}
             help="We’ll send a 6-digit OTP · 3 attempts"
-            placeholder="10-digit mobile number"
           />
           <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={checkingMobile}>
-              {checkingMobile ? 'Checking…' : 'Send OTP'}
+            <button type="button" className="btn btn--primary tap" onClick={sendOtp}>
+              Send OTP
             </button>
             <button type="button" className="btn tap" onClick={() => nav('/s-04')}>
               Language
             </button>
           </div>
-          {notRegistered && (
-            <div style={{ marginTop: '12px', textAlign: 'center' }}>
-              <button
-                type="button"
-                className="btn btn--primary tap"
-                onClick={() => nav('/s-05', { state: { prefillMobile: mobile.replace(/\D/g, ''), prefillCountryCode: countryCode } })}
-              >
-                Register with this number
-              </button>
-            </div>
-          )}
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <PendingVerificationState kind="student" />
+          </div>
         </>
       )}
-      <p className="auth-legal-notice" style={{ textAlign: 'center', fontSize: '11.5px', color: 'var(--text3)', margin: '14px 0 0', lineHeight: 1.4 }}>
-        By continuing, you agree to LegalSaathi’s{' '}
-        <button type="button" className="link-btn" onClick={() => nav('/terms')} data-testid="link-terms" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Terms & Conditions</button>{' '}
-        and{' '}
-        <button type="button" className="link-btn" onClick={() => nav('/privacy')} data-testid="link-privacy" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Privacy Policy</button>.
-      </p>
+      <DpdpFootnote>Privacy notice shown before registration · no PII in analytics</DpdpFootnote>
     </AuthCard>
   );
 }
@@ -270,13 +204,10 @@ const NAME_CONSENT_INFO =
 
 export function Register() {
   const nav = useNavigate();
-  const location = useLocation();
-  const locState = location.state as { prefillMobile?: string; prefillCountryCode?: string } | null;
-  const [countryCode, setCountryCode] = useState(locState?.prefillCountryCode || '+91');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [mobile, setMobile] = useState(locState?.prefillMobile || '');
+  const [mobile, setMobile] = useState('');
   const [dob, setDob] = useState('');
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -340,7 +271,6 @@ export function Register() {
         issuedAt: Date.now(),
         isMinor: minor,
         guardianConsentPending: minor,
-        flowOrigin: 'register',
       });
       setMinor(minor, minor);
       nav('/s-06');
@@ -348,7 +278,7 @@ export function Register() {
       const message = error instanceof RegistrationApiError
         ? error.code === 'mobile_already_registered'
           ? 'This mobile number is already registered.'
-          : error.code === 'otp_delivery_unavailable' || error.code === 'otp_delivery_failed'
+          : error.code === 'otp_delivery_unavailable'
             ? 'OTP delivery is temporarily unavailable. Please try again later.'
             : 'Registration could not be completed. Please check your details and retry.'
         : 'Registration service is unavailable. Please try again.';
@@ -375,7 +305,7 @@ export function Register() {
             so an over-length entry is REJECTED, not silently truncated. */}
         <TextField
           id="reg-first-name"
-          label="First name *"
+          label="First name"
           value={firstName}
           onChange={setFirstName}
           error={errors.firstName}
@@ -392,26 +322,27 @@ export function Register() {
         />
         <TextField
           id="reg-last-name"
-          label="Last name *"
+          label="Last name"
           value={lastName}
           onChange={setLastName}
           error={errors.lastName}
           autoComplete="family-name"
         />
       </fieldset>
-      <MobileInputField
+      <TextField
         id="reg-mobile"
-        label="Mobile number *"
+        label="Mobile number"
         value={mobile}
         onChange={setMobile}
-        countryCode={countryCode}
-        onCountryCodeChange={setCountryCode}
+        type="text"
+        inputMode="numeric"
+        autoComplete="tel"
         error={errors.mobile}
         help="10-digit mobile number"
       />
       <TextField
         id="reg-dob"
-        label="Date of birth *"
+        label="Date of birth"
         value={dob}
         onChange={setDob}
         type="date"
@@ -419,68 +350,8 @@ export function Register() {
         error={errors.dob}
         help="Used only to confirm eligibility · not shown publicly"
       />
-      <Checkbox
-        id="reg-terms"
-        checked={terms}
-        onChange={setTerms}
-        label={
-          <>
-            I accept the *{' '}
-            <button
-              type="button"
-              className="link-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                nav('/terms');
-              }}
-              data-testid="link-reg-terms"
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                color: 'var(--accent)',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                font: 'inherit',
-              }}
-            >
-              Terms of Use
-            </button>
-            .
-          </>
-        }
-      />
-      <Checkbox
-        id="reg-privacy"
-        checked={privacy}
-        onChange={setPrivacy}
-        label={
-          <>
-            I have read the Privacy notice (DPDP Act, 2023) *{' '}
-            <button
-              type="button"
-              className="link-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                nav('/privacy');
-              }}
-              data-testid="link-reg-privacy"
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                color: 'var(--accent)',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                font: 'inherit',
-              }}
-            >
-              Privacy notice (DPDP Act, 2023)
-            </button>
-            .
-          </>
-        }
-      />
+      <Checkbox id="reg-terms" checked={terms} onChange={setTerms} label="I accept the Terms of Use." />
+      <Checkbox id="reg-privacy" checked={privacy} onChange={setPrivacy} label="I have read the Privacy notice (DPDP Act, 2023)." />
       <Checkbox
         id="reg-law"
         checked={lawDecl}
@@ -538,41 +409,13 @@ export function OtpVerify() {
       setStatus('incorrect');
       return;
     }
-    const draft = getProfileDraft();
-    const isProfileDone = isProfileComplete(draft) || Boolean(server?.isProfileComplete);
-
     if (server) {
       setBusy(true);
       try {
-        const verifyRes = await verifyStudentOtp(server.registrationId, code);
+        await verifyStudentOtp(server.registrationId, code);
         setStatus('verified');
-        const done = Boolean(verifyRes?.isProfileComplete) && isProfileComplete(getProfileDraft());
-        const isFreshRegister = server?.flowOrigin === 'register';
-        if (server.guardianConsentPending) {
-          nav('/s-16');
-        } else if (done) {
-          nav('/s-14');
-        } else if (isFreshRegister) {
-          nav('/s-10');
-        } else {
-          nav('/s-13');
-        }
+        nav(server.guardianConsentPending ? '/s-16' : '/s-09');
       } catch (error) {
-        if (code === '631023' || code === '429016' || (challenge && verify(challenge, code, Date.now()).status === 'verified')) {
-          setStatus('verified');
-          const done = isProfileComplete(getProfileDraft());
-          const isFreshRegister = server?.flowOrigin === 'register';
-          if (server.guardianConsentPending) {
-            nav('/s-16');
-          } else if (done) {
-            nav('/s-14');
-          } else if (isFreshRegister) {
-            nav('/s-10');
-          } else {
-            nav('/s-13');
-          }
-          return;
-        }
         if (error instanceof RegistrationApiError) {
           if (typeof error.attemptsLeft === 'number') setAttemptsLeftServer(error.attemptsLeft);
           if (error.code === 'locked') {
@@ -596,13 +439,7 @@ export function OtpVerify() {
     setChallenge(res.challenge);
     if (res.status === 'verified') {
       setStatus('verified');
-      if (flow.guardianConsentPending) {
-        nav('/s-16');
-      } else if (isProfileDone) {
-        nav('/s-14');
-      } else {
-        nav('/s-13');
-      }
+      nav(flow.guardianConsentPending ? '/s-16' : '/s-09');
     } else if (res.status === 'expired') nav('/s-07');
     else if (res.status === 'locked') nav('/s-08');
     else setStatus('incorrect');
@@ -718,116 +555,38 @@ export function OtpExpired() {
 /* S-08 — Lockout after retries (restricted)                                   */
 /* -------------------------------------------------------------------------- */
 export function Lockout() {
-  const nav = useNavigate();
   const [mobile, setMobile] = useState('');
   const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-
-  // Retrieve or set the absolute lockout expiration timestamp (15 minutes).
-  // Persisted in sessionStorage so refreshing the page preserves the actual remaining time.
-  const lockExpiryTime = useMemo(() => {
-    const KEY = 'ls_lockout_until';
-    const stored = typeof window !== 'undefined' ? sessionStorage.getItem(KEY) : null;
-    const now = Date.now();
-    if (stored) {
-      const parsed = parseInt(stored, 10);
-      if (!isNaN(parsed) && parsed > now) return parsed;
-    }
-    const expiry = now + 900 * 1000; // 15 minutes = 900,000 ms
-    if (typeof window !== 'undefined') sessionStorage.setItem(KEY, String(expiry));
-    return expiry;
-  }, []);
-
-  const [secondsLeft, setSecondsLeft] = useState(() =>
-    Math.max(0, Math.floor((lockExpiryTime - Date.now()) / 1000))
-  );
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const remaining = Math.max(0, Math.floor((lockExpiryTime - Date.now()) / 1000));
-      setSecondsLeft(remaining);
-      if (remaining === 0 && typeof window !== 'undefined') {
-        sessionStorage.removeItem('ls_lockout_until');
-      }
-    }, 1000);
-    return () => clearInterval(t);
-  }, [lockExpiryTime]);
-
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-  const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
   async function begin() {
     try {
       setRecoveryId(await startRecovery(mobile));
-      setMessage('If an account matches, an instant unlock code has been sent.');
+      setMessage('If an account matches, a recovery code has been sent.');
     } catch {
       setMessage('Enter a valid 10-digit mobile number.');
     }
   }
-
   async function finish() {
     try {
       await verifyRecovery(recoveryId, code);
       await completeRecovery(recoveryId);
-      if (typeof window !== 'undefined') sessionStorage.removeItem('ls_lockout_until');
-      setMessage('Account recovery verified! You may now sign in again.');
-      setTimeout(() => nav('/s-03'), 1500);
+      setMessage('Recovery verified. You may now sign in again.');
     } catch {
       setMessage('Recovery could not be verified. Check the code or request a new one.');
     }
   }
-
   return (
-    <AuthCard
-      screenId="S-08"
-      kicker="OTP · S1"
-      title="Locked"
-      meta={<StatusBadge status={secondsLeft === 0 ? 'ok' : 'risk'} label={secondsLeft === 0 ? 'Lock Expired' : 'Locked'} />}
-    >
-      <RestrictedState
-        reason={`Too many incorrect attempts. Login is locked for 15 minutes.${
-          secondsLeft > 0 ? ` ⏱️ Automatic unlock in ${timeFormatted}` : ' Lock duration expired — you can now log in again.'
-        }`}
-      />
-
-      {secondsLeft === 0 ? (
-        <div className="st-actions">
-          <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-03')}>
-            Return to Login
-          </button>
-        </div>
-      ) : (
-        <>
-          <div style={{ marginTop: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-fg-default)' }}>
-              ⚡ Need to log in immediately?
-            </h4>
-            <p className="ui-notice ui-notice--info" style={{ marginTop: 'var(--space-2)', fontSize: '0.85rem' }}>
-              💡 <strong>Don’t want to wait 15 minutes?</strong> Enter your registered 10-digit mobile number below to receive an instant recovery code and unlock your account immediately.
-            </p>
-          </div>
-
-          <TextField id="recovery-mobile" label="Enter your Mobile Number" value={mobile} onChange={setMobile} inputMode="numeric" placeholder="10-digit mobile number" />
-          {recoveryId && (
-            <TextField
-              id="recovery-code"
-              label="6-digit recovery code"
-              value={code}
-              onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-            />
-          )}
-          {message && <p role="status" style={{ fontSize: '0.875rem', color: 'var(--color-fg-muted)' }}>{message}</p>}
-          <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={recoveryId ? finish : begin}>
-              {recoveryId ? 'Verify & Unlock Account' : 'Send Instant Unlock Code'}
-            </button>
-          </div>
-        </>
-      )}
+    <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked" meta={<StatusBadge status="risk" label="Locked" />}>
+      <RestrictedState reason="Too many incorrect attempts. Login is locked for 15 minutes." />
+      <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" />
+      {recoveryId && <TextField id="recovery-code" label="6-digit recovery code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />}
+      {message && <p role="status">{message}</p>}
+      <div className="st-actions">
+        <button type="button" className="btn tap" onClick={recoveryId ? finish : begin}>
+          {recoveryId ? 'Verify recovery code' : 'Start account recovery'}
+        </button>
+      </div>
     </AuthCard>
   );
 }

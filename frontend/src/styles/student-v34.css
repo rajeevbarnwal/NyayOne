@@ -146,14 +146,6 @@
 .v34-onboard__top { display: flex; align-items: center; gap: 12px; }.v34-meter { flex: 1; height: 3px; background: var(--v34-line); }.v34-meter i { display: block; height: 100%; background: var(--v34-rule); }
 .v34-illustration { min-height: 220px; display: grid; place-items: center; border: 1px solid var(--v34-line); border-radius: 10px; background: repeating-linear-gradient(45deg, var(--v34-well) 0 8px, var(--v34-surface) 8px 16px); color: var(--v34-muted); font: 700 11px var(--v34-display); letter-spacing: .12em; text-align: center; }
 .v34-chips { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 10px; }.v34-chips button { min-height: 44px; padding: 0 18px; border: 1px solid var(--v34-line); border-radius: 8px; background: var(--v34-surface); }.v34-chips button.is-on { border: 2px solid var(--v34-accent-text); font-weight: 700; }
-.v34-auth-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--v34-line); border-radius: 10px; background: var(--v34-well); margin: 12px 0 16px; }
-.v34-auth-tabs button { flex: 1; min-height: 44px; border: 0; border-radius: 7px; background: transparent; color: var(--v34-body); font: 700 14px var(--v34-display); cursor: pointer; transition: all .15s ease; }
-.v34-auth-tabs button.is-active { background: var(--v34-accent-text, #1b365d); color: #ffffff !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
-.v34-submit-btn { width: 100%; min-height: 48px; margin-top: 16px; border: 0; border-radius: 8px; background: var(--v34-accent-text, #1b365d); color: #ffffff !important; font: 700 15px var(--v34-display); cursor: pointer; transition: opacity .15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-.v34-submit-btn:hover { opacity: 0.92; }
-.v34-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.v34-submit-btn:hover { opacity: 0.92; }
-.v34-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .v34-sidenav { display: none; }
 .v34-appbar { min-height: 70px; display: flex; align-items: center; gap: 14px; padding: 12px 22px; border-bottom: 1px solid var(--v34-line); }
