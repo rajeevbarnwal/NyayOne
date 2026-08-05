@@ -161,12 +161,6 @@ def test_register_conflict_and_idempotent_replay(ctx):
     b = client.post("/api/v1/auth/student/register", headers={"Idempotency-Key": "k1"}, json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "9876543210", "dob": "2004-03-14", "consent": {"accepted": True}})
     assert b.status_code == 201 and b.json()["registration_id"] == a.json()["registration_id"]  # idempotent replay
-    reg_id = uuid.UUID(a.json()["registration_id"])
-    with _fresh(SessionLocal) as s:
-        reg = s.get(StudentRegistration, reg_id)
-        if reg:
-            reg.status = "otp_verified"
-            s.commit()
     c = client.post("/api/v1/auth/student/register", json={
         "first_name": "Other", "last_name": "Person", "mobile": "9876543210", "dob": "2001-01-01", "consent": {"accepted": True}})
     assert c.status_code == 409  # mobile conflict

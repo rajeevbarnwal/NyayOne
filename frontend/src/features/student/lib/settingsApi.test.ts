@@ -59,11 +59,6 @@ describe('server-authoritative student profile API (SAATHI-58)', () => {
       lastName: 'Nair',
       college: 'NLSIU',
       yearOfStudy: '3rd year',
-      enrolmentNumber: null,
-      institutionalEmail: null,
-      barEnrolmentNumber: null,
-      interests: null,
-      careerGoal: null,
       maskedMobile: '••••••3210',
     });
   });

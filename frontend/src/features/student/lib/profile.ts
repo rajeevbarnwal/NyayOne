@@ -20,9 +20,6 @@ export interface ProfileDraft {
   fullName: string;
   preferredLanguage: string;
   dateOfBirth: string; // yyyy-mm-dd
-  city?: string;
-  pronouns?: string;
-  avatarUrl?: string;
   // Step 2 — academic
   college: string;
   yearOfStudy: string;
@@ -41,9 +38,6 @@ export const EMPTY_PROFILE: ProfileDraft = {
   fullName: '',
   preferredLanguage: 'en',
   dateOfBirth: '',
-  city: '',
-  pronouns: '',
-  avatarUrl: '',
   college: '',
   yearOfStudy: '',
   enrolmentNumber: '',
@@ -155,6 +149,6 @@ export function profileTier(d: ProfileDraft): ProfileTier {
 }
 
 export const TIER_LABELS: Record<ProfileTier, string> = {
-  incomplete: 'Profile completed',
-  verified_student: 'Profile completed',
+  incomplete: 'Setup incomplete',
+  verified_student: 'Verified Student',
 };

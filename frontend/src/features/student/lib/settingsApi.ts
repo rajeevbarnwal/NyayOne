@@ -30,13 +30,8 @@ export interface StudentProfile {
   firstName: string;
   middleName: string | null;
   lastName: string;
-  college: string | null;
-  yearOfStudy: string | null;
-  enrolmentNumber?: string | null;
-  institutionalEmail?: string | null;
-  barEnrolmentNumber?: string | null;
-  interests?: string | null;
-  careerGoal?: string | null;
+  college: string;
+  yearOfStudy: string;
   maskedMobile: string;
 }
 
@@ -120,13 +115,8 @@ interface ProfileWire {
   first_name: string;
   middle_name: string | null;
   last_name: string;
-  college: string | null;
-  year_of_study: string | null;
-  enrolment_number?: string | null;
-  institutional_email?: string | null;
-  bar_enrolment_number?: string | null;
-  interests?: string | null;
-  career_goal?: string | null;
+  college: string;
+  year_of_study: string;
   masked_mobile: string;
 }
 
@@ -152,13 +142,8 @@ function mapProfile(wire: ProfileWire): StudentProfile {
     firstName: wire.first_name,
     middleName: wire.middle_name,
     lastName: wire.last_name,
-    college: wire.college ?? null,
-    yearOfStudy: wire.year_of_study ?? null,
-    enrolmentNumber: wire.enrolment_number ?? null,
-    institutionalEmail: wire.institutional_email ?? null,
-    barEnrolmentNumber: wire.bar_enrolment_number ?? null,
-    interests: wire.interests ?? null,
-    careerGoal: wire.career_goal ?? null,
+    college: wire.college,
+    yearOfStudy: wire.year_of_study,
     maskedMobile: wire.masked_mobile,
   };
 }
@@ -176,7 +161,6 @@ function mapSettings(wire: SettingsWire): StudentSettings {
 }
 
 /* --------------------------------- profile -------------------------------- */
-export const PROFILE_KEY = ['student-profile'] as const;
 
 export async function getStudentProfile(): Promise<StudentProfile> {
   return mapProfile(

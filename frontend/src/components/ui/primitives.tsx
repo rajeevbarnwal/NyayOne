@@ -63,7 +63,7 @@ export function ValidationState({ message, fieldId }: { message: string; fieldId
 }
 
 export function RestrictedState({ reason = 'You do not have access to this area.' }: { reason?: string }) {
-  return <StateBlock role="alert" title="Access restricted">{reason}</StateBlock>;
+  return <StateBlock role="alert" eyebrow="Restricted" title="Access restricted">{reason}</StateBlock>;
 }
 
 export function PendingVerificationState({ kind = 'student' }: { kind?: 'student' | 'lawyer' }) {

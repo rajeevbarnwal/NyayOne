@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { ThemeMode } from '../../../hooks/useTheme';
 import { useAuth } from '../../../app/authContext';
@@ -19,7 +19,6 @@ import {
   loadRegistrationSession,
   registerStudent,
   resendStudentOtp,
-  saveAcademicProfile,
   saveRegistrationSession,
   startLoginOtp,
   startRecovery,
@@ -29,24 +28,12 @@ import {
   verifyStudentOtp,
   logoutStudent,
   notifyStudentAuthChanged,
-  checkMobile,
 } from '../lib/registrationApi';
 import { setMinor } from '../lib/authFlow';
 import { isValidOtpFormat, maskDestination } from '../lib/otp';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
-import { COLLEGE_OPTIONS } from '../lib/catalog';
-import { profileCompletionPct } from '../lib/dashboard';
 import { ProfileStep2 } from '../profile/ProfileScreens';
 import { InfoTooltip } from '../components';
-
-function formatDDMMYYYY(dateStr: string): string {
-  if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  if (parts.length === 3 && parts[0].length === 4) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
-  }
-  return dateStr;
-}
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 type IconName = 'add' | 'back' | 'check' | 'forward' | 'key' | 'moon' | 'retry' | 'save' | 'send' | 'sun' | 'verify';
@@ -136,17 +123,23 @@ function Footer({ hint, children }: { hint: ReactNode; children: ReactNode }) {
   return <footer className="v34-footer"><div className="v34-actions"><span className="v34-actions__hint">{hint}</span>{children}</div></footer>;
 }
 
-function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, error, help, max, maxLength, prefix, disabled, readOnly }: {
+function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, error, help, max, maxLength, prefix }: {
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
-  placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; disabled?: boolean; readOnly?: boolean;
+  placeholder?: string; optional?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string;
 }) {
   const describedBy = error ? `${id}-error` : undefined;
   return (
-    <label className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`} htmlFor={id}>
-      <span className="v34-field__top"><span>{label}</span>{optional && <small>OPTIONAL</small>}</span>
-      <span className="v34-field__control">{prefix && <span>{prefix}</span>}<input id={id} value={value} type={type} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} max={max} maxLength={maxLength} disabled={disabled} readOnly={readOnly} aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)}/></span>
-      {error ? <span id={`${id}-error`} className="v34-field__error" role="alert">{error}</span> : help && <span id={`${id}-help`} className="v34-field__help">{help}</span>}
-    </label>
+    <div className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`}>
+      <span className="v34-field__top">
+        <label htmlFor={id}>{label}</label>
+        <span className="v34-field__meta">
+          {optional && <small>OPTIONAL</small>}
+          {help && <InfoTooltip label={`More information about ${label}`} text={help}/>}
+        </span>
+      </span>
+      <span className="v34-field__control">{prefix && <span>{prefix}</span>}<input id={id} value={value} type={type} inputMode={inputMode} autoComplete={autoComplete} placeholder={placeholder} max={max} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)}/></span>
+      {error && <span id={`${id}-error`} className="v34-field__error" role="alert">{error}</span>}
+    </div>
   );
 }
 
@@ -207,534 +200,57 @@ export function V34Onboarding() {
 
 export function V34AuthGate(props: ScreenProps) {
   const nav = useNavigate();
-  const location = useLocation();
-  const locState = (location.state as { mobile?: string; tab?: 'signin' | 'register'; message?: string } | null);
-
   const [language, setLanguage] = useState('English');
-  const [activeTab, setActiveTab] = useState<'signin' | 'register'>(locState?.tab || 'signin');
-
-  // Sign In state
-  const [loginMobile, setLoginMobile] = useState('');
-  const [loginOtpSent, setLoginOtpSent] = useState(false);
-  const [loginOtpId, setLoginOtpId] = useState('');
-  const loginOtpIdRef = useRef<string>('');
-  const [loginOtpCode, setLoginOtpCode] = useState('');
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginResendCooldown, setLoginResendCooldown] = useState<number>(0);
-  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
-
-  // Register state
-  const [firstName, setFirstName] = useState('');
-  const [middleName, setMiddleName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [regMobile, setRegMobile] = useState(locState?.mobile || '');
-  const [dob, setDob] = useState('');
-  const [consentAccepted, setConsentAccepted] = useState(false);
-  const [regBusy, setRegBusy] = useState(false);
-  const [regErrors, setRegErrors] = useState<Record<string, string>>(
-    locState?.message ? { submit: locState.message } : {}
-  );
-  const [regOtpSent, setRegOtpSent] = useState(false);
-  const [registrationId, setRegistrationId] = useState('');
-  const [regOtpCode, setRegOtpCode] = useState('');
-
-  useEffect(() => {
-    if (loginResendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setLoginResendCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [loginResendCooldown]);
-
-  async function handleResendLoginOtp() {
-    if (loginResendCooldown > 0 || loginBusy) return;
-    setLoginBusy(true);
-    try {
-      const loginId = await startLoginOtp(loginMobile);
-      loginOtpIdRef.current = loginId;
-      setLoginOtpId(loginId);
-      setLoginResendCooldown(30);
-      setLoginErrors({ submit: '✓ A new code was sent to your mobile.' });
-      setTimeout(() => setLoginErrors({}), 4000);
-    } catch {
-      setLoginErrors({ submit: 'Could not resend OTP code. Please retry.' });
-    } finally {
-      setLoginBusy(false);
-    }
-  }
-
-  async function handleLoginSubmit() {
-    const next: Record<string, string> = {};
-    if (!isValidMobile(loginMobile)) next.mobile = MOBILE_ERROR;
-    if (loginOtpSent && !/^\d{6}$/.test(loginOtpCode)) {
-      next.otp = 'Enter the complete 6-digit one time code.';
-    }
-    setLoginErrors(next);
-    if (Object.keys(next).length) return;
-
-    setLoginBusy(true);
-    try {
-      if (!loginOtpSent) {
-        const check = await checkMobile(loginMobile);
-        if (!check.registered) {
-          setRegMobile(loginMobile);
-          setActiveTab('register');
-          setRegErrors({
-            submit: 'No existing account found for this mobile number. Complete registration below to create your student account.'
-          });
-          return;
-        }
-        const loginId = await startLoginOtp(loginMobile);
-        loginOtpIdRef.current = loginId;
-        setLoginOtpId(loginId);
-        setLoginOtpSent(true);
-        setLoginResendCooldown(30);
-        setLoginErrors({});
-      } else {
-        const activeLoginId = loginOtpIdRef.current || loginOtpId;
-        await verifyLoginOtp(activeLoginId, loginOtpCode);
-        notifyStudentAuthChanged();
-        const currentDraft = getProfileDraft();
-        const pct = profileCompletionPct(currentDraft);
-        if (pct < 100) {
-          const nextStep = !currentDraft.college ? 'academic' : 'interests';
-          nav(`/s-10?step=${nextStep}`, { replace: true });
-        } else {
-          nav('/s-14', { replace: true });
-        }
-      }
-    } catch {
-      setLoginErrors({
-        submit: !loginOtpSent
-          ? 'A one time code could not be requested. Please retry.'
-          : 'Invalid or expired one time code. Please re-enter or request a new code.',
-      });
-    } finally {
-      setLoginBusy(false);
-    }
-  }
-
-  async function handleRegisterSubmit() {
-    if (regOtpSent) {
-      if (!/^\d{6}$/.test(regOtpCode)) {
-        setRegErrors({ otp: 'Enter the complete 6-digit registration code.' });
-        return;
-      }
-      setRegErrors({});
-      setRegBusy(true);
-      try {
-        await verifyStudentOtp(registrationId, regOtpCode);
-        updateProfileDraft({ firstName, middleName, lastName, dateOfBirth: dob });
-        notifyStudentAuthChanged();
-        nav('/s-10');
-      } catch (error) {
-        setRegErrors({
-          submit:
-            error instanceof RegistrationApiError && error.code === 'otp_max_attempts'
-              ? 'Maximum attempts reached. Please register again.'
-              : 'Invalid or expired code. Please re-enter the 6-digit code.',
-        });
-      } finally {
-        setRegBusy(false);
-      }
-      return;
-    }
-
-    const p = { firstName, middleName, lastName };
-    const nameErr = validateNameParts(p);
-    const next: Record<string, string> = {};
-    if (nameErr.firstName) next.firstName = nameErrorMessage('firstName', nameErr.firstName);
-    if (nameErr.middleName) next.middleName = nameErrorMessage('middleName', nameErr.middleName);
-    if (nameErr.lastName) next.lastName = nameErrorMessage('lastName', nameErr.lastName);
-    if (!isValidMobile(regMobile)) next.mobile = MOBILE_ERROR;
-    if (!isRegistrableDob(dob)) next.dob = DOB_ERROR;
-    if (!consentAccepted) next.consent = 'You must accept the terms and privacy notice to create an account.';
-
-    setRegErrors(next);
-    if (Object.keys(next).length) return;
-
-    setRegBusy(true);
-    try {
-      const payload = namePartsToPayload(p);
-      const minor = isMinor(dob, new Date().toISOString());
-      const created = await registerStudent({
-        firstName: payload.firstName,
-        middleName: payload.middleName,
-        lastName: payload.lastName,
-        mobile: regMobile,
-        dob,
-        policyVersion: CONSENT_VERSION,
-      });
-
-      setRegistrationId(created.registration_id);
-      saveRegistrationSession({
-        registrationId: created.registration_id,
-        destinationMasked: maskDestination({ channel: 'sms', ref: regMobile }),
-        issuedAt: Date.now(),
-        isMinor: minor,
-        guardianConsentPending: minor,
-        flowOrigin: 'register',
-      });
-
-      setMinor(minor, minor);
-      setRegOtpSent(true);
-      setRegErrors({});
-    } catch (error) {
-      const message =
-        error instanceof RegistrationApiError
-          ? error.code === 'mobile_already_registered'
-            ? 'Mobile number is already registered. Switch to Sign In.'
-            : error.message
-          : 'Could not create account right now. Please retry.';
-      setRegErrors({ submit: message });
-    } finally {
-      setRegBusy(false);
-    }
-  }
-
   return (
     <Screen id="S-03" aside={<AuthAside title="The years before the bar, organised." copy="Built for students in India, not adapted from a firm tool."/>}>
-      <Pane>
-        <main className="v34-main">
-          <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
-          <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
-          <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p>
-
-          <div className="v34-auth-tabs" role="tablist" aria-label="Authentication Mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'signin'}
-              className={activeTab === 'signin' ? 'is-active' : ''}
-              onClick={() => setActiveTab('signin')}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'register'}
-              className={activeTab === 'register' ? 'is-active' : ''}
-              onClick={() => setActiveTab('register')}
-            >
-              Register
-            </button>
-          </div>
-
-          {activeTab === 'signin' ? (
-            <div className="v34-fieldset" key="signin-fields">
-              <Field
-                id="s03-login-mobile"
-                label="MOBILE NUMBER *"
-                value={loginMobile}
-                onChange={setLoginMobile}
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel-national"
-                prefix="+91"
-                error={loginErrors.mobile}
-                maxLength={15}
-                disabled={loginOtpSent}
-              />
-              {!loginOtpSent && (
-                <div className="v34-well" style={{ marginBottom: '12px' }}>
-                  Enter your mobile number and click <strong>Send One-Time OTP Code</strong> to receive your 6-digit verification code via SMS.
-                </div>
-              )}
-              {loginOtpSent && (
-                <>
-                  <div className="v34-well" style={{ marginBottom: '12px' }}>
-                    Six-digit code sent via SMS to {loginMobile ? maskDestination({ channel: 'sms', ref: loginMobile }) : 'your mobile'}. Enter your code below to sign in.
-                  </div>
-                  <Field
-                    id="s03-login-otp"
-                    label="6-DIGIT ONE-TIME CODE *"
-                    value={loginOtpCode}
-                    onChange={(val) => setLoginOtpCode(val.replace(/\D/g, '').slice(0, 6))}
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    error={loginErrors.otp}
-                    maxLength={6}
-                    placeholder="Enter 6-digit OTP code"
-                  />
-                  <div className="v34-card v34-kv" style={{ marginTop: '12px', padding: '12px' }}>
-                    <span>Resend available in: <b>{loginResendCooldown > 0 ? `00:${String(loginResendCooldown).padStart(2, '0')}` : 'Ready'}</b></span>
-                    <span>
-                      <button
-                        type="button"
-                        className="v34-textlink"
-                        disabled={loginResendCooldown > 0 || loginBusy}
-                        onClick={handleResendLoginOtp}
-                      >
-                        {loginResendCooldown > 0 ? 'Wait to resend' : 'Resend OTP now'}
-                      </button>
-                    </span>
-                  </div>
-                </>
-              )}
-              {loginErrors.submit && <span className="v34-field__error" role="alert">{loginErrors.submit}</span>}
-              {loginOtpSent && (
-                <div className="v34-inlineactions">
-                  <button
-                    type="button"
-                    className="v34-hit v34-linkbtn"
-                    onClick={() => {
-                      setLoginOtpSent(false);
-                      setLoginOtpCode('');
-                      setLoginErrors({});
-                    }}
-                  >
-                    Change mobile number
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                className="v34-submit-btn"
-                onClick={handleLoginSubmit}
-                disabled={loginBusy}
-              >
-                {loginOtpSent ? 'Verify OTP & Sign In' : 'Send One-Time OTP Code'}
-              </button>
-            </div>
-          ) : (
-            <div className="v34-fieldset" key="register-fields">
-              <Field
-                id="s03-reg-firstname"
-                label="FIRST NAME *"
-                value={firstName}
-                onChange={setFirstName}
-                autoComplete="given-name"
-                error={regErrors.firstName}
-                maxLength={60}
-              />
-              <Field
-                id="s03-reg-middlename"
-                label="MIDDLE NAME"
-                optional
-                value={middleName}
-                onChange={setMiddleName}
-                autoComplete="additional-name"
-                error={regErrors.middleName}
-                maxLength={60}
-              />
-              <Field
-                id="s03-reg-lastname"
-                label="LAST NAME *"
-                value={lastName}
-                onChange={setLastName}
-                autoComplete="family-name"
-                error={regErrors.lastName}
-                maxLength={60}
-              />
-              <Field
-                id="s03-reg-mobile"
-                label="MOBILE NUMBER *"
-                value={regMobile}
-                onChange={setRegMobile}
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel-national"
-                prefix="+91"
-                error={regErrors.mobile}
-                maxLength={15}
-              />
-              <Field
-                id="s03-reg-dob"
-                label="DATE OF BIRTH *"
-                value={dob}
-                onChange={setDob}
-                type="date"
-                max={todayLocalISO()}
-                error={regErrors.dob}
-                help="Real date of birth in local timezone (YYYY-MM-DD)"
-              />
-              <label htmlFor="s03-reg-consent" style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0', fontSize: '13px' }}>
-                <input
-                  id="s03-reg-consent"
-                  type="checkbox"
-                  checked={consentAccepted}
-                  onChange={(e) => setConsentAccepted(e.target.checked)}
-                />
-                <span>I agree to the Terms of Service * and Privacy Notice *</span>
-              </label>
-              {regOtpSent && (
-                <>
-                  <div className="v34-well" style={{ marginBottom: '12px' }}>
-                    Registration code sent via SMS to {maskDestination({ channel: 'sms', ref: regMobile })}. Enter your 6-digit code below to verify your account.
-                  </div>
-                  <Field
-                    id="s03-reg-otp"
-                    label="6-DIGIT VERIFICATION CODE *"
-                    value={regOtpCode}
-                    onChange={(val) => setRegOtpCode(val.replace(/\D/g, '').slice(0, 6))}
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    error={regErrors.otp}
-                    maxLength={6}
-                    placeholder="Enter 6-digit OTP code"
-                  />
-                </>
-              )}
-              {regErrors.consent && <span className="v34-field__error" role="alert">{regErrors.consent}</span>}
-              {regErrors.submit && <span className="v34-field__error" role="alert">{regErrors.submit}</span>}
-              <button
-                type="button"
-                className="v34-submit-btn"
-                onClick={handleRegisterSubmit}
-                disabled={regBusy}
-              >
-                {regOtpSent ? 'Verify OTP & Complete Registration' : 'Create account and send OTP'}
-              </button>
-            </div>
-          )}
-
-          <div className="v34-rule" />
-          <div>
-            <span className="v34-mono">LANGUAGE</span>
-            <div className="v34-chips" role="radiogroup" aria-label="Language">
-              {['English', 'हिंदी', 'More'].map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  role="radio"
-                  aria-checked={language === name}
-                  className={language === name ? 'is-on' : ''}
-                  onClick={() => setLanguage(name)}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <span className="v34-grow" />
-        </main>
-        <Footer hint={<>Sign in or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}>
-          <span />
-        </Footer>
-      </Pane>
+      <Pane><main className="v34-main">
+        <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
+        <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
+        <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p><div className="v34-rule"/>
+        <div><span className="v34-mono">LANGUAGE</span><div className="v34-chips" role="radiogroup" aria-label="Language">{['English', 'हिंदी', 'More'].map((name) => <button key={name} type="button" role="radio" aria-checked={language === name} className={language === name ? 'is-on' : ''} onClick={() => setLanguage(name)}>{name}</button>)}</div></div><span className="v34-grow"/>
+      </main><Footer hint={<>Sign in, or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}><IconAction secondary label="Register as a student" icon="add" onClick={() => nav('/s-08')}/><IconAction label="Sign in" icon="key" onClick={() => nav('/s-04')}/></Footer></Pane>
     </Screen>
   );
 }
 
 export function V34Login() {
   const nav = useNavigate();
-  const location = useLocation();
-  const locationState = (location.state as { mobile?: string; password?: string } | null);
-  const [mobile, setMobile] = useState(locationState?.mobile || '');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpId, setOtpId] = useState('');
-  const [otpCode, setOtpCode] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   async function submit() {
     const next: Record<string, string> = {};
     if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR;
-    if (otpSent && !/^\d{6}$/.test(otpCode)) {
-      next.otp = 'Enter the complete 6-digit one time code.';
-    }
+    if (mode === 'password' && (password.length < 8 || password.length > 128)) next.password = 'Password must be between 8 and 128 characters.';
     setErrors(next);
     if (Object.keys(next).length) return;
-
+    if (mode === 'password') { nav('/s-05'); return; }
     setBusy(true);
     try {
-      if (!otpSent) {
-        const check = await checkMobile(mobile);
-        if (!check.registered) {
-          nav('/s-03', {
-            state: {
-              mobile,
-              tab: 'register',
-              message: 'No existing account found. Complete registration below to create your student account.',
-            },
-          });
-          return;
-        }
-        const loginId = await startLoginOtp(mobile);
-        setOtpId(loginId);
-        setOtpSent(true);
-        setErrors({});
-      } else {
-        await verifyLoginOtp(otpId, otpCode);
-        notifyStudentAuthChanged();
-        nav('/s-14');
-      }
-    } catch {
-      setErrors({
-        submit: !otpSent
-          ? 'A one time code could not be requested. Please retry.'
-          : 'Invalid or expired one time code. Please re-enter or request a new code.',
+      const loginId = await startLoginOtp(mobile);
+      nav('/s-09', {
+        state: {
+          loginId,
+          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
+          issuedAt: Date.now(),
+        },
       });
+    } catch {
+      setErrors({ submit: 'A one time code could not be requested. Please retry.' });
     } finally {
       setBusy(false);
     }
   }
-
   return (
     <Screen id="S-04" aside={<AuthAside title="Welcome back." copy="Sign in with the mobile number on your account. A one time code is available instead of a password."/>}>
-      <Pane>
-        <PaneHead id="S-04 · SIGN IN" back={() => nav('/s-03')}/>
-        <main className="v34-main">
-          <h1 id="S-04-title" className="v34-title">Sign in</h1>
-          <div className="v34-fieldset">
-            <Field
-              id="v34-login-mobile"
-              label="MOBILE NUMBER"
-              value={mobile}
-              onChange={setMobile}
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              prefix="+91"
-              error={errors.mobile}
-              maxLength={15}
-              disabled={otpSent}
-            />
-            {otpSent && (
-              <Field
-                id="v34-login-otp"
-                label="6-DIGIT ONE-TIME CODE *"
-                value={otpCode}
-                onChange={(val) => setOtpCode(val.replace(/\D/g, '').slice(0, 6))}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                error={errors.otp}
-                maxLength={6}
-                placeholder="Enter 6-digit OTP code"
-              />
-            )}
-          </div>
-          {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
-          {otpSent && (
-            <div className="v34-inlineactions">
-              <button
-                type="button"
-                className="v34-hit v34-linkbtn"
-                onClick={() => {
-                  setOtpSent(false);
-                  setOtpCode('');
-                  setErrors({});
-                }}
-              >
-                Change mobile number
-              </button>
-            </div>
-          )}
-          <span className="v34-grow"/>
-        </main>
-        <Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}>
-          <IconAction
-            label={otpSent ? 'Verify OTP & Sign In' : 'Send one time code'}
-            icon={otpSent ? 'verify' : 'send'}
-            onClick={submit}
-            disabled={busy}
-          />
-        </Footer>
-      </Pane>
+      <Pane><PaneHead id="S-04 · SIGN IN" back={() => nav('/s-03')}/><main className="v34-main">
+        <h1 id="S-04-title" className="v34-title">Sign in</h1><div className="v34-fieldset">
+          <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15}/>
+          {mode === 'password' && <Field id="v34-login-password" label="PASSWORD" value={password} onChange={setPassword} type="password" autoComplete="current-password" error={errors.password} maxLength={128}/>} 
+        </div>{errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}<div className="v34-inlineactions"><button className="v34-hit v34-linkbtn" onClick={() => { setErrors({}); setMode((value) => value === 'password' ? 'otp' : 'password'); }}>{mode === 'password' ? 'Use a one time code' : 'Use password'}</button><button className="v34-hit" onClick={() => nav('/s-06')}>Forgot password</button></div><span className="v34-grow"/>
+      </main><Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}><IconAction label={mode === 'otp' ? 'Send one time code' : 'Sign in'} icon={mode === 'otp' ? 'send' : 'key'} onClick={submit} disabled={busy}/></Footer></Pane>
     </Screen>
   );
 }
@@ -754,192 +270,36 @@ export function V34LoginFailure() {
 
 export function V34PasswordReset() {
   const nav = useNavigate();
-  const [step, setStep] = useState<'mobile' | 'otp' | 'password'>('mobile');
   const [mobile, setMobile] = useState('');
   const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-
-  async function handleSend() {
-    if (!isValidMobile(mobile)) {
-      setError(MOBILE_ERROR);
-      return;
-    }
+  async function send() {
+    if (!isValidMobile(mobile)) { setError(MOBILE_ERROR); return; }
     setError('');
-    setBusy(true);
-    try {
-      const id = await startRecovery(mobile);
-      setRecoveryId(id);
-      setStep('otp');
-      setMessage('If an account matches, a six digit recovery code has been sent.');
-    } catch {
-      /* non-enumerating response intentionally remains identical */
-      setMessage('If an account matches, a six digit recovery code has been sent.');
-      setStep('otp');
-    } finally {
-      setBusy(false);
-    }
+    try { setRecoveryId(await startRecovery(mobile)); } catch { /* non-enumerating response intentionally remains identical */ }
+    setMessage('If an account matches, a six digit recovery code has been sent.');
   }
-
-  async function handleVerifyCode() {
-    if (!/^\d{6}$/.test(code)) {
-      setError('Enter the complete 6-digit recovery code.');
-      return;
-    }
-    setError('');
-    setBusy(true);
+  async function verifyCode() {
+    if (!/^\d{6}$/.test(code)) { setError('Enter the complete 6-digit recovery code.'); return; }
     try {
       await verifyRecovery(recoveryId, code);
-      setStep('password');
-      setMessage('Recovery verified. Choose a new password.');
+      await completeRecovery(recoveryId);
+      setError('');
+      setMessage('Recovery verified. You may now sign in again.');
     } catch {
       setError('Recovery could not be verified. Check the code or request a new one.');
-    } finally {
-      setBusy(false);
     }
   }
-
-  async function handleSavePassword() {
-    if (newPassword.length < 8 || newPassword.length > 128) {
-      setError('Password must be between 8 and 128 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match. Re-enter confirm password.');
-      return;
-    }
-    setError('');
-    setBusy(true);
-    try {
-      await completeRecovery(recoveryId, newPassword);
-      notifyStudentAuthChanged();
-      nav('/s-14');
-    } catch {
-      setError('Could not update password. Please retry.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
-    <Screen
-      id="S-06"
-      aside={
-        <AuthAside
-          title="Reset your password."
-          copy="The response stays identical whether or not the number is registered."
-        />
-      }
-    >
-      <Pane>
-        <PaneHead id="S-06 · RESET" back={() => nav('/s-04')} />
-        <main className="v34-main">
-          <h1 id="S-06-title" className="v34-title">
-            Reset your password
-          </h1>
-          <p className="v34-lede">
-            {step === 'mobile'
-              ? 'Tell us the mobile number on the account. We will send a six digit code.'
-              : step === 'otp'
-              ? `Six digit recovery code sent to ${mobile ? maskDestination({ channel: 'sms', ref: mobile }) : 'your mobile'}.`
-              : 'Choose a strong password with at least 8 characters.'}
-          </p>
-
-          <div className="v34-fieldset">
-            <Field
-              id="v34-reset-mobile"
-              label="MOBILE NUMBER"
-              value={mobile}
-              onChange={setMobile}
-              type="tel"
-              inputMode="numeric"
-              prefix="+91"
-              placeholder="10 digit number"
-              maxLength={15}
-              disabled={step !== 'mobile'}
-            />
-
-            {step === 'otp' && (
-              <Field
-                id="v34-recovery-code"
-                label="6-DIGIT RECOVERY CODE"
-                value={code}
-                onChange={(val) => setCode(val.replace(/\D/g, '').slice(0, 6))}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="Enter 6-digit code"
-              />
-            )}
-
-            {step === 'password' && (
-              <>
-                <Field
-                  id="v34-new-password"
-                  label="NEW PASSWORD"
-                  value={newPassword}
-                  onChange={setNewPassword}
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                  maxLength={128}
-                />
-                <Field
-                  id="v34-confirm-password"
-                  label="CONFIRM NEW PASSWORD"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Re-enter new password"
-                  maxLength={128}
-                />
-              </>
-            )}
-          </div>
-
-          {error && <span className="v34-field__error" role="alert">{error}</span>}
-          {message && !error && <div className="v34-well" role="status">{message}</div>}
-
-          <div className="v34-rule" />
-          <div>
-            <span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span>
-            <p className="v34-copy">
-              The same confirmation protects your identity from anyone probing mobile numbers.
-            </p>
-          </div>
-          <span className="v34-grow" />
-
-          <button
-            type="button"
-            className="v34-submit-btn"
-            disabled={busy}
-            onClick={step === 'mobile' ? handleSend : step === 'otp' ? handleVerifyCode : handleSavePassword}
-            style={{ marginBottom: '16px' }}
-          >
-            {step === 'mobile'
-              ? 'Send the code'
-              : step === 'otp'
-              ? 'Verify recovery code'
-              : 'Save Password & Sign In'}
-          </button>
-        </main>
-        <Footer
-          hint={
-            step === 'mobile'
-              ? 'We will text a six digit code to that number.'
-              : step === 'otp'
-              ? 'Use the latest recovery code. It can only be consumed once.'
-              : 'Create a new secure password for your account.'
-          }
-        >
-          <span />
-        </Footer>
-      </Pane>
+    <Screen id="S-06" aside={<AuthAside title="Reset your password." copy="The response stays identical whether or not the number is registered."/>}>
+      <Pane><PaneHead id="S-06 · RESET" back={() => nav('/s-04')}/><main className="v34-main">
+        <h1 id="S-06-title" className="v34-title">Reset your password</h1><p className="v34-lede">Tell us the mobile number on the account. We will send a six digit code.</p>
+        <Field id="v34-reset-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" prefix="+91" placeholder="10 digit number" maxLength={15} error={error}/>
+        {recoveryId && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>} 
+        {message && <div className="v34-well" role="status">{message}</div>}<div className="v34-rule"/><div><span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span><p className="v34-copy">The same confirmation protects your identity from anyone probing mobile numbers.</p></div><span className="v34-grow"/>
+      </main><Footer hint={recoveryId ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><IconAction label={recoveryId ? 'Verify recovery code' : 'Send the code'} icon={recoveryId ? 'verify' : 'send'} onClick={recoveryId ? verifyCode : send}/></Footer></Pane>
     </Screen>
   );
 }
@@ -1051,511 +411,26 @@ export function V34OtpVerify() {
 }
 
 export function V34ProfileStep1() {
-  const nav = useNavigate();
   const location = useLocation();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const draft = getProfileDraft();
+  if (query.get('step') === 'academic') return <ProfileStep2/>;
+  return <V34PersonalProfileStep/>;
+}
 
-  const initialStep = query.get('step') === 'academic' ? 2 : 1;
-  const [activeStep, setActiveStep] = useState<number>(initialStep);
-  const [savedBanner, setSavedBanner] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (query.get('step') === 'academic') setActiveStep(2);
-    const current = getProfileDraft();
-    if (current.firstName && !firstName) setFirstName(current.firstName);
-    if (current.middleName && !middleName) setMiddleName(current.middleName);
-    if (current.lastName && !lastName) setLastName(current.lastName);
-    if (current.dateOfBirth && !dateOfBirth) setDob(current.dateOfBirth);
-    if (current.city && !city) setCity(current.city);
-    if (current.pronouns && !pronouns) setPronouns(current.pronouns);
-    if (current.avatarUrl && !photoPreview) setPhotoPreview(current.avatarUrl);
-    if (current.college && !college) setCollege(current.college);
-    if (current.yearOfStudy && !yearOfStudy) setYear(current.yearOfStudy);
-    if (current.enrolmentNumber && !enrolmentNumber) setEnrolmentNumber(current.enrolmentNumber);
-    if (current.interests?.length && !selectedInterests.length) setSelectedInterests(current.interests);
-    if (current.careerGoal && !careerGoal) setCareerGoal(current.careerGoal);
-  }, [location.search]);
-
-  // Step 1: Personal State
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(draft.avatarUrl || null);
-  const [firstName, setFirstName] = useState(draft.firstName || '');
-  const [middleName, setMiddleName] = useState(draft.middleName || '');
-  const [lastName, setLastName] = useState(draft.lastName || '');
-  const [dateOfBirth, setDob] = useState(draft.dateOfBirth || '');
-  const [city, setCity] = useState(draft.city || '');
-  const [pronouns, setPronouns] = useState(draft.pronouns || '');
-  const [personalErrors, setPersonalErrors] = useState<Record<string, string>>({});
-
-  // Step 2: Academic State
-  const [college, setCollege] = useState(draft.college || '');
-  const [yearOfStudy, setYear] = useState(draft.yearOfStudy || '');
-  const [enrolmentNumber, setEnrolmentNumber] = useState(draft.enrolmentNumber || '');
-  const [institutionalEmail, setInstitutionalEmail] = useState(draft.institutionalEmail || '');
-  const [barEnrolmentNumber, setBarEnrolmentNumber] = useState(draft.barEnrolmentNumber || '');
-  const [academicErrors, setAcademicErrors] = useState<Record<string, string>>({});
-
-  // Step 3: Interests & Goals State
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(draft.interests || []);
-  const [careerGoal, setCareerGoal] = useState<string>(draft.careerGoal || '');
-
-  const calculatedPct = useMemo(() => {
-    let score = 0;
-    if (firstName.trim()) score += 6;
-    if (lastName.trim()) score += 6;
-    if (dateOfBirth) score += 12;
-    if (city) score += 10;
-
-    if (college) score += 18;
-    if (yearOfStudy) score += 10;
-    if (enrolmentNumber.trim()) score += 5;
-
-    if (selectedInterests.length > 0) score += 18;
-    if (careerGoal) score += 15;
-
-    return Math.min(100, score);
-  }, [firstName, lastName, dateOfBirth, city, college, yearOfStudy, enrolmentNumber, selectedInterests, careerGoal]);
-
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const url = event.target?.result as string;
-        setPhotoPreview(url);
-        updateProfileDraft({ avatarUrl: url });
-      };
-      reader.readAsDataURL(file);
-    }
+function V34PersonalProfileStep() {
+  const nav = useNavigate();
+  const draft = getProfileDraft(); const [preferredName, setPreferredName] = useState(draft.firstName || ''); const [dateOfBirth, setDob] = useState(draft.dateOfBirth || ''); const [city, setCity] = useState(''); const [pronouns, setPronouns] = useState(''); const [errors, setErrors] = useState<Record<string, string>>({});
+  function save(finishLater = false) {
+    const next: Record<string, string> = {}; if (!preferredName.trim()) next.name = 'Enter your preferred name.'; else if (preferredName.trim().length > 60) next.name = 'Preferred name must be 60 characters or fewer.'; if (!dateOfBirth) next.dob = 'Enter your date of birth.'; else if (!isRegistrableDob(dateOfBirth, new Date())) next.dob = DOB_ERROR; if (!city) next.city = 'Choose your city.'; if (pronouns.length > 60) next.pronouns = 'Pronouns must be 60 characters or fewer.'; setErrors(next); if (Object.keys(next).length) return;
+    updateProfileDraft({ firstName: preferredName.trim(), fullName: composeDisplayName({ firstName: preferredName.trim(), middleName: draft.middleName, lastName: draft.lastName }), dateOfBirth });
+    nav(finishLater ? '/s-13' : '/s-10?step=academic');
   }
-
-  function saveInPlace() {
-    updateProfileDraft({
-      firstName: firstName.trim() || draft.firstName,
-      middleName: middleName.trim() || draft.middleName,
-      lastName: lastName.trim() || draft.lastName,
-      fullName: composeDisplayName({ firstName: firstName.trim() || draft.firstName, middleName: middleName.trim() || draft.middleName, lastName: lastName.trim() || draft.lastName }),
-      dateOfBirth: dateOfBirth || draft.dateOfBirth,
-      city: city || draft.city,
-      pronouns: pronouns || draft.pronouns,
-      avatarUrl: photoPreview || draft.avatarUrl,
-      college: college || draft.college,
-      yearOfStudy: yearOfStudy || draft.yearOfStudy,
-      enrolmentNumber: enrolmentNumber || draft.enrolmentNumber,
-      interests: selectedInterests,
-      careerGoal: careerGoal || draft.careerGoal,
-    });
-    setSavedBanner('✓ Progress saved. Your draft will stay saved whenever you return.');
-    setTimeout(() => setSavedBanner(null), 4000);
-  }
-
-  function handlePersonalSubmit() {
-    const next: Record<string, string> = {};
-    if (!firstName.trim()) next.firstName = 'Enter your first name.';
-    else if (firstName.trim().length > 60) next.firstName = 'First name must be 60 characters or fewer.';
-    if (!lastName.trim()) next.lastName = 'Enter your last name.';
-    else if (lastName.trim().length > 60) next.lastName = 'Last name must be 60 characters or fewer.';
-    if (!dateOfBirth) next.dob = 'Enter your date of birth.';
-    else if (!isRegistrableDob(dateOfBirth, new Date())) next.dob = DOB_ERROR;
-    if (!city) next.city = 'Choose your city.';
-    if (pronouns.length > 60) next.pronouns = 'Pronouns must be 60 characters or fewer.';
-    setPersonalErrors(next);
-    if (Object.keys(next).length) return;
-
-    updateProfileDraft({
-      firstName: firstName.trim(),
-      middleName: middleName.trim(),
-      lastName: lastName.trim(),
-      fullName: composeDisplayName({ firstName: firstName.trim(), middleName: middleName.trim(), lastName: lastName.trim() }),
-      dateOfBirth,
-      city,
-      pronouns,
-      avatarUrl: photoPreview || undefined,
-    });
-    setActiveStep(2);
-    nav('/s-10?step=academic', { replace: true });
-  }
-
-  async function handleAcademicSubmit() {
-    const next: Record<string, string> = {};
-    if (!college) next.college = 'Choose your college.';
-    if (!yearOfStudy) next.year = 'Choose your year of study.';
-    setAcademicErrors(next);
-    if (Object.keys(next).length) return;
-
-    updateProfileDraft({
-      college,
-      yearOfStudy,
-      enrolmentNumber,
-      institutionalEmail,
-      barEnrolmentNumber,
-    });
-    const reg = loadRegistrationSession();
-    if (reg?.registrationId) {
-      try {
-        await saveAcademicProfile({
-          registrationId: reg.registrationId,
-          college,
-          yearOfStudy,
-          enrolmentNumber,
-          institutionalEmail,
-          barEnrolmentNumber,
-        });
-      } catch (err) {
-        const msg = err instanceof RegistrationApiError ? err.message : 'Could not save academic profile. Please retry.';
-        setAcademicErrors({ submit: msg });
-        return;
-      }
-    }
-    setActiveStep(3);
-    nav('/s-11');
-  }
-
-  function handleInterestsSubmit() {
-    updateProfileDraft({
-      interests: selectedInterests,
-    });
-    setActiveStep(4);
-    nav('/s-10?step=confirmation', { replace: true });
-  }
-
-  function toggleInterest(item: string) {
-    setSelectedInterests((prev) =>
-      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
-    );
-  }
-
-  const stepsList = [
-    { num: 1, label: 'Personal', desc: 'Name, date of birth, city' },
-    { num: 2, label: 'Academic', desc: 'College, year, enrolment' },
-    { num: 3, label: 'Interests', desc: 'Practice areas, cities' },
-  ];
-
   return (
-    <Screen
-      id="S-10"
-      variant="wizard"
-      aside={
-        <aside className="v34-profile-rail">
-          <span className="v34-mono">PROFILE SETUP</span>
-          {stepsList.map((stepItem) => (
-            <div
-              key={stepItem.label}
-              className={`v34-hit ${activeStep === stepItem.num ? 'is-on' : ''}`}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setActiveStep(stepItem.num)}
-            >
-              <b>{stepItem.num}</b>
-              <span>
-                {stepItem.label}
-                <small>{stepItem.desc}</small>
-              </span>
-            </div>
-          ))}
-          <div className="v34-rule" />
-          <strong className="v34-stat">{calculatedPct}%</strong>
-          <small>We ask for the minimum. No marks or Aadhaar.</small>
-        </aside>
-      }
-    >
-      <Pane>
-        <div className="v34-steps">
-          <i className={activeStep >= 1 ? 'is-on' : ''} />
-          <i className={activeStep >= 2 ? 'is-on' : ''} />
-          <i className={activeStep >= 3 ? 'is-on' : ''} />
-          <span>STEP {Math.min(activeStep, 3)} OF 3</span>
-        </div>
-        <main className="v34-main">
-          {savedBanner && (
-            <div className="v34-well" style={{ backgroundColor: '#eefbfa', borderColor: '#2ba89c', color: '#0d5c54', fontWeight: 500, marginBottom: '16px' }}>
-              {savedBanner}
-            </div>
-          )}
-
-          {activeStep === 1 ? (
-            <>
-              <div>
-                <h1 id="S-10-title" className="v34-title">About you</h1>
-                <p className="v34-copy">Shapes which internships, tutors and digests you see first. Editable later.</p>
-              </div>
-              <div className="v34-card v34-photo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <input
-                  ref={fileInputRef}
-                  id="v34-photo-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  style={{ display: 'none' }}
-                />
-                {photoPreview ? (
-                  <img
-                    src={photoPreview}
-                    alt="Profile photo preview"
-                    style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <span aria-hidden="true">◎</span>
-                )}
-                <p style={{ flex: 1, margin: 0 }}>Photo is optional. Only tutors you book can see it.</p>
-                <button type="button" className="v34-hit" onClick={() => fileInputRef.current?.click()}>
-                  {photoPreview ? 'Change' : 'Add'}
-                </button>
-              </div>
-              <div className="v34-fieldset">
-                <Field
-                  id="v34-firstname"
-                  label="FIRST NAME *"
-                  value={firstName}
-                  onChange={setFirstName}
-                  maxLength={60}
-                  error={personalErrors.firstName}
-                />
-                <div className="v34-row">
-                  <Field
-                    id="v34-middlename"
-                    label="MIDDLE NAME"
-                    value={middleName}
-                    onChange={setMiddleName}
-                    optional
-                    maxLength={60}
-                    error={personalErrors.middleName}
-                  />
-                  <Field
-                    id="v34-lastname"
-                    label="LAST NAME *"
-                    value={lastName}
-                    onChange={setLastName}
-                    maxLength={60}
-                    error={personalErrors.lastName}
-                  />
-                </div>
-                <div className="v34-row">
-                  <Field
-                    id="v34-profile-dob"
-                    label="DATE OF BIRTH *"
-                    value={dateOfBirth}
-                    onChange={setDob}
-                    type="date"
-                    error={personalErrors.dob}
-                  />
-                  <Select
-                    id="v34-city"
-                    label="CITY *"
-                    value={city}
-                    onChange={setCity}
-                    options={[
-                      { value: 'Bengaluru', label: 'Bengaluru' },
-                      { value: 'New Delhi', label: 'New Delhi' },
-                      { value: 'Mumbai', label: 'Mumbai' },
-                      { value: 'Kolkata', label: 'Kolkata' },
-                      { value: 'Chennai', label: 'Chennai' },
-                      { value: 'Hyderabad', label: 'Hyderabad' },
-                      { value: 'Pune', label: 'Pune' },
-                    ]}
-                    error={personalErrors.city}
-                  />
-                </div>
-                <Field
-                  id="v34-pronouns"
-                  label="PRONOUNS"
-                  value={pronouns}
-                  onChange={setPronouns}
-                  optional
-                  maxLength={60}
-                  placeholder="Prefer not to say"
-                  error={personalErrors.pronouns}
-                />
-              </div>
-              <div className="v34-rule" />
-              <div className="v34-complete">
-                <strong>{calculatedPct}%</strong>
-                <span>
-                  profile complete<small>All three steps open internship applications.</small>
-                </span>
-              </div>
-            </>
-          ) : activeStep === 2 ? (
-            <>
-              <div>
-                <h1 id="S-10-title" className="v34-title">Academic profile</h1>
-                <p className="v34-copy">Verify your law school, course year, and enrolment details.</p>
-              </div>
-              <div className="v34-fieldset">
-                <Select
-                  id="v34-college"
-                  label="College / University"
-                  value={college}
-                  onChange={setCollege}
-                  options={[
-                    { value: 'NLSIU', label: 'National Law School of India University (NLSIU)' },
-                    { value: 'NALSAR', label: 'NALSAR University of Law' },
-                    { value: 'WBNUJS', label: 'The West Bengal NUJS' },
-                    { value: 'NLUD', label: 'National Law University, Delhi' },
-                    { value: 'GLC', label: 'Government Law College, Mumbai' },
-                    { value: 'Other', label: 'Other' },
-                  ]}
-                  error={academicErrors.college}
-                />
-                <div className="v34-row">
-                  <Select
-                    id="v34-year"
-                    label="Year of study"
-                    value={yearOfStudy}
-                    onChange={setYear}
-                    options={[
-                      { value: '1st', label: '1st year' },
-                      { value: '2nd', label: '2nd year' },
-                      { value: '3rd', label: '3rd year' },
-                      { value: '4th', label: '4th year' },
-                      { value: '5th', label: '5th year' },
-                      { value: 'llm', label: 'LL.M.' },
-                    ]}
-                    error={academicErrors.year}
-                  />
-                  <Field
-                    id="v34-enrolment"
-                    label="College enrolment number"
-                    optional
-                    value={enrolmentNumber}
-                    onChange={setEnrolmentNumber}
-                    placeholder="e.g. 2023/BALLB/042"
-                    maxLength={40}
-                  />
-                </div>
-                <div className="v34-row">
-                  <Field
-                    id="v34-institutional-email"
-                    label="Institutional email"
-                    optional
-                    value={institutionalEmail}
-                    onChange={setInstitutionalEmail}
-                    placeholder="e.g. aditi@nls.ac.in"
-                    maxLength={254}
-                  />
-                  <Field
-                    id="v34-bar-enrolment"
-                    label="Bar enrolment number"
-                    optional
-                    value={barEnrolmentNumber}
-                    onChange={setBarEnrolmentNumber}
-                    placeholder="Leave blank if not enrolled"
-                    maxLength={120}
-                  />
-                </div>
-              </div>
-              <div className="v34-rule" />
-              <div className="v34-complete">
-                <strong>{calculatedPct}%</strong>
-                <span>
-                  profile complete<small>One final step remaining to unlock all features.</small>
-                </span>
-              </div>
-            </>
-          ) : activeStep === 3 ? (
-            <>
-              <div>
-                <h1 id="S-10-title" className="v34-title">Interests & career goals</h1>
-                <p className="v34-copy">Select your legal practice interests and target career paths.</p>
-              </div>
-              <div className="v34-fieldset">
-                <div>
-                  <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PRACTICE INTERESTS *</span>
-                  <div className="v34-chips" role="group" aria-label="Practice interests">
-                    {['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy', 'Intellectual Property', 'Environmental'].map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        className={selectedInterests.includes(item) ? 'is-on' : ''}
-                        onClick={() => toggleInterest(item)}
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Select
-                  id="v34-career-goal"
-                  label="CAREER ASPIRATION *"
-                  value={careerGoal}
-                  onChange={setCareerGoal}
-                  options={[
-                    { value: 'Litigation & judiciary', label: 'Litigation & Judiciary' },
-                    { value: 'Corporate / in-house', label: 'Corporate / In-House Counsel' },
-                    { value: 'Policy & academia', label: 'Policy & Academia' },
-                    { value: 'Undecided', label: 'Undecided / Exploring' },
-                  ]}
-                />
-              </div>
-              <div className="v34-rule" />
-              <div className="v34-complete">
-                <strong>{calculatedPct}%</strong>
-                <span>
-                  profile complete<small>Ready to unlock your student dashboard.</small>
-                </span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ textAlign: 'center', padding: '24px 12px' }}>
-                <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>🎉</span>
-                <h1 id="S-10-title" className="v34-title" style={{ fontSize: '24px', marginBottom: '8px' }}>Profile Setup Complete!</h1>
-                <p className="v34-copy" style={{ maxWidth: '460px', margin: '0 auto 24px auto' }}>
-                  Your student profile has been saved. Your personalized dashboard with tailored internships, tutors, and legal digests is ready.
-                </p>
-
-                <div className="v34-card" style={{ textAlign: 'left', maxWidth: '440px', margin: '0 auto 24px auto', padding: '16px' }}>
-                  <span className="v34-mono" style={{ display: 'block', marginBottom: '8px' }}>PROFILE SUMMARY</span>
-                  <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
-                    <div><strong>Name:</strong> {[firstName, middleName, lastName].filter(Boolean).join(' ') || draft.fullName || 'Student'}</div>
-                    <div><strong>Date of Birth:</strong> {formatDDMMYYYY(dateOfBirth || draft.dateOfBirth || '')}</div>
-                    <div><strong>City:</strong> {city || draft.city || 'Bengaluru'}</div>
-                    <div><strong>College:</strong> {COLLEGE_OPTIONS.find(c => c.value === college || c.value === draft.college)?.label || college || draft.college || 'Recognized Law College'}</div>
-                    <div><strong>Year of Study:</strong> {yearOfStudy || draft.yearOfStudy || '1'}{/^\d+$/.test(yearOfStudy || draft.yearOfStudy || '1') ? (yearOfStudy === '1' ? 'st Year' : yearOfStudy === '2' ? 'nd Year' : yearOfStudy === '3' ? 'rd Year' : 'th Year') : ''}</div>
-                    <div><strong>Practice Interests:</strong> {selectedInterests.join(', ') || 'General Law'}</div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="v34-submit-btn"
-                  style={{ width: 'auto', padding: '12px 36px', fontSize: '15px', display: 'inline-block' }}
-                  onClick={() => {
-                    notifyStudentAuthChanged();
-                    nav('/s-14', { replace: true });
-                  }}
-                >
-                  Go to Dashboard
-                </button>
-              </div>
-            </>
-          )}
-
-          <span className="v34-grow" />
-        </main>
-        {activeStep <= 3 && (
-          <Footer hint={activeStep === 1 ? 'Step 1: Save your personal details to progress your profile.' : activeStep === 2 ? 'Step 2 connects you with law school resources and tutors.' : 'Step 3 customizes your feed and internship recommendations.'}>
-            <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button
-                type="button"
-                className="v34-hit v34-linkbtn"
-                style={{ padding: '8px 16px', cursor: 'pointer' }}
-                onClick={activeStep === 1 ? saveInPlace : () => setActiveStep(activeStep - 1)}
-              >
-                {activeStep === 1 ? 'Save and finish later' : activeStep === 2 ? 'Back to personal' : 'Back to academics'}
-              </button>
-              <button
-                type="button"
-                className="v34-submit-btn"
-                style={{ padding: '10px 24px', width: 'auto' }}
-                onClick={activeStep === 1 ? handlePersonalSubmit : activeStep === 2 ? handleAcademicSubmit : handleInterestsSubmit}
-              >
-                {activeStep === 1 ? 'Continue to academics' : activeStep === 2 ? 'Save & continue' : 'Complete profile'}
-              </button>
-            </div>
-          </Footer>
-        )}
-      </Pane>
+    <Screen id="S-10" variant="wizard" aside={<aside className="v34-profile-rail"><span className="v34-mono">PROFILE SETUP</span>{['Personal', 'Academic', 'Interests'].map((label, index) => <div key={label} className={index === 0 ? 'is-on' : ''}><b>{index + 1}</b><span>{label}<small>{index === 0 ? 'Name, date of birth, city' : index === 1 ? 'College, year, enrolment' : 'Practice areas, cities'}</small></span></div>)}<div className="v34-rule"/><strong className="v34-stat">34%</strong><small>We ask for the minimum. No marks or Aadhaar.</small></aside>}>
+      <Pane><div className="v34-steps"><i className="is-on"/><i/><i/><span>STEP 1 OF 3</span></div><main className="v34-main">
+        <div><h1 id="S-10-title" className="v34-title">About you</h1><p className="v34-copy">Shapes which internships, tutors and digests you see first. Editable later.</p></div><div className="v34-card v34-photo"><span aria-hidden="true">◎</span><p>Photo is optional. Only tutors you book can see it.</p><button className="v34-hit">Add</button></div>
+        <div className="v34-fieldset"><Field id="v34-preferred" label="PREFERRED NAME" value={preferredName} onChange={setPreferredName} maxLength={60} error={errors.name}/><div className="v34-row"><Field id="v34-profile-dob" label="DATE OF BIRTH" value={dateOfBirth} onChange={setDob} type="date" error={errors.dob}/><Select id="v34-city" label="CITY" value={city} onChange={setCity} options={[{ value: 'Bengaluru', label: 'Bengaluru' }, { value: 'New Delhi', label: 'New Delhi' }, { value: 'Mumbai', label: 'Mumbai' }]} error={errors.city}/></div><Field id="v34-pronouns" label="PRONOUNS" value={pronouns} onChange={setPronouns} optional maxLength={60} placeholder="Prefer not to say" error={errors.pronouns}/></div><div className="v34-rule"/><div className="v34-complete"><strong>34%</strong><span>profile complete<small>All three steps open internship applications.</small></span></div><span className="v34-grow"/>
+      </main><Footer hint="Step 1 stays in memory while this account setup is open."><IconAction secondary label="Save and finish later" icon="save" onClick={() => save(true)}/><IconAction label="Continue to academics" icon="forward" onClick={() => save(false)}/></Footer></Pane>
     </Screen>
   );
 }

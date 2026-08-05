@@ -79,10 +79,7 @@ def test_requirements_txt_is_constrained_by_the_lock_and_does_not_float():
 
 def test_this_interpreter_satisfies_the_lock(capsys):
     """The suite is running on a declared, in-pin interpreter — or it says so."""
-    rc = main(["--lock", str(LOCK)])
-    out = capsys.readouterr().out
-    if os.getenv("CI") and rc != 0:
-        pytest.fail(f"Interpreter lock mismatch in CI: {out}")
+    assert main(["--lock", str(LOCK)]) == 0, capsys.readouterr().out
 
 
 @pytest.mark.parametrize("runner", [FULL_SUITE, BROWSER_GATE], ids=["suite", "gate"])
@@ -516,7 +513,8 @@ def test_platform_failure_names_the_exact_rebuild_command(tmp_path, capsys):
     host = current_host()
     scoped = f".venv-{host.system}-{host.machine}"
     assert scoped == host.venv_dir_name
-    assert scoped in err
+    assert f"python3 -m venv {tmp_path / 'proj' / scoped}" in err
+    assert f"{tmp_path / 'proj' / scoped}/bin/python -m pip install -r " in err
     assert ".venv-$(uname -s)-$(uname -m)" in err
 
 
@@ -550,8 +548,7 @@ def test_pyvenv_cfg_home_interpreter_of_the_wrong_version_is_detected(tmp_path):
         abi=host.ext_tag.replace("cpython-", ""),
         libdir=f"python{host.short_version}",
     )
-    if os.name == "nt":
-        pytest.skip("Shell script shims not executable on Windows")
+    report = platform_report(venv, host=host)
     assert any(
         "which is Python 3.7.17" in p and "not the" in p for p in report.problems
     ), report.problems
@@ -629,10 +626,8 @@ def test_platform_scoped_venv_directories_are_gitignored():
 
 def test_the_platform_and_venv_platform_reach_the_gate_log_header(capsys):
     """F5.4: every gate log's runtime header names BOTH platforms."""
-    rc = main(["--header", "--only", "fastapi", "--lock", str(LOCK)])
+    assert main(["--header", "--only", "fastapi", "--lock", str(LOCK)]) == 0
     out = capsys.readouterr().out
-    if os.getenv("CI") and rc != 0:
-        pytest.fail(f"Interpreter lock mismatch in CI: {out}")
     header = out.splitlines()
     assert header[0].startswith("python=")
     assert header[1].startswith("host-platform="), header[:2]
