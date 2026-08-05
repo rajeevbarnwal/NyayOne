@@ -101,6 +101,8 @@ POST_WAVE2_TABLES = {
     "calendar_export_subscriptions",
     "calendar_export_tokens",
     "calendar_export_revocations",
+    "internship_listings",
+    "saved_internships",
 }
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently

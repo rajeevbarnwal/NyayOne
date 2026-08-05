@@ -81,6 +81,39 @@ export function matchesCalendarEventDetailQuery(candidate, eventId) {
     && candidate.status === 200;
 }
 
+/**
+ * True only for a successful GET of one concrete event-detail resource.
+ * This is used while creating an event, before the server-generated id is
+ * known. Callers MUST reconcile the returned URL with the create response and
+ * the SPA route before treating it as ready.
+ * @param {{url: string, method?: string, status: number}} candidate
+ */
+export function matchesCreatedCalendarEventDetailQuery(candidate) {
+  let parsed;
+  try {
+    parsed = new URL(candidate.url);
+  } catch {
+    return false;
+  }
+  const prefix = `${CALENDAR_EVENTS_PATH}/`;
+  const encodedId = parsed.pathname.startsWith(prefix)
+    ? parsed.pathname.slice(prefix.length)
+    : '';
+  return Boolean(encodedId)
+    && !encodedId.includes('/')
+    && parsed.search === ''
+    && (candidate.method ?? 'GET').toUpperCase() === 'GET'
+    && candidate.status === 200;
+}
+
+/** Reconciles the POST body, SPA route, and completed detail response. */
+export function createdCalendarEventIdentityMatches({ createdId, routeId, detail }) {
+  return typeof createdId === 'string'
+    && createdId.length > 0
+    && createdId === routeId
+    && matchesCalendarEventDetailQuery(detail, routeId);
+}
+
 /** Registers the wait. MUST be called BEFORE the mutation that triggers it. */
 export function registerCalendarQueryReady(page, timezone, timeout = READY_TIMEOUT_MS) {
   return page.waitForResponse(
@@ -111,6 +144,18 @@ export function registerCalendarEventDetailReady(page, eventId, timeout = READY_
   );
 }
 
+/** Registers the post-create detail wait before the server-generated id exists. */
+export function registerCreatedCalendarEventDetailReady(page, timeout = READY_TIMEOUT_MS) {
+  return page.waitForResponse(
+    (response) => matchesCreatedCalendarEventDetailQuery({
+      url: response.url(),
+      method: response.request().method(),
+      status: response.status(),
+    }),
+    { timeout },
+  );
+}
+
 async function settleResponse(pending, label) {
   const response = await pending;
   const completionError = await response.finished();
@@ -131,6 +176,43 @@ export async function settleCalendarQuery(pending) {
 /** Awaits the exact detail response and its body before route transition. */
 export async function settleCalendarEventDetail(pending) {
   return settleResponse(pending, 'calendar-event detail');
+}
+
+/**
+ * Create an event and return only after the SPA's new event-detail GET has
+ * fully completed. The exact id is validated by the runner against both the
+ * create response and the route, because it is not known when the wait is
+ * registered.
+ *
+ * @returns {Promise<{create: object, detailReady: object|null}>}
+ */
+export async function createCalendarEventWithDetailReady({
+  page,
+  applyCreate,
+  createPredicate,
+  timeout = READY_TIMEOUT_MS,
+  legacyNavigateImmediately = false,
+}) {
+  if (legacyNavigateImmediately) {
+    const [create] = await Promise.all([
+      page.waitForResponse(createPredicate, { timeout }),
+      applyCreate(),
+    ]);
+    await page.waitForLoadState('networkidle', { timeout });
+    return { create, detailReady: null };
+  }
+
+  const pendingDetail = registerCreatedCalendarEventDetailReady(page, timeout);
+  const [create] = await Promise.all([
+    page.waitForResponse(createPredicate, { timeout }),
+    applyCreate(),
+  ]);
+  const [settledCreate, detailReady] = await Promise.all([
+    settleResponse(Promise.resolve(create), 'calendar-event create'),
+    settleCalendarEventDetail(pendingDetail),
+  ]);
+  await page.waitForLoadState('networkidle', { timeout });
+  return { create: settledCreate, detailReady };
 }
 
 /**

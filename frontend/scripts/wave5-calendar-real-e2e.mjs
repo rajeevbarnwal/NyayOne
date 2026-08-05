@@ -27,6 +27,8 @@ import {
   CALENDAR_EVENTS_PATH,
   calendarEventDetailPath,
   changeTimezoneWithQueryReady,
+  createCalendarEventWithDetailReady,
+  createdCalendarEventIdentityMatches,
   encodedTimezoneParam,
   matchesCalendarEventDetailQuery,
   registerCalendarQueryReady,
@@ -368,9 +370,48 @@ try {
   await page.getByTestId('ev-title').fill(editedTitle);
   await page.getByTestId('ev-date').fill(local.date);
   await page.getByTestId('ev-time').fill(local.time);
-  await page.getByTestId('ev-add').click();
+  // The route id does not exist until the POST completes. Register a strict
+  // successful detail-resource wait before clicking, then settle both response
+  // bodies before any reload. A later identity check binds the generic
+  // pre-registered GET to the POST response and the actual SPA route.
+  const { create: createSave, detailReady: createdDetailReady } =
+    await createCalendarEventWithDetailReady({
+      page,
+      applyCreate: () => page.getByTestId('ev-add').click(),
+      createPredicate: (response) => new URL(response.url()).pathname === CALENDAR_EVENTS_PATH
+        && response.request().method() === 'POST'
+        && response.status() === 201,
+    });
   await page.waitForURL((url) => url.pathname === '/s-91' && Boolean(url.searchParams.get('event')), { timeout: 20_000 });
   personalEventId = new URL(page.url()).searchParams.get('event');
+  const createdBody = await createSave.json();
+  if (createSave.status() !== 201
+    || createdBody?.id !== personalEventId
+    || !createdDetailReady
+    || !createdCalendarEventIdentityMatches({
+      createdId: createdBody?.id,
+      routeId: personalEventId,
+      detail: {
+        url: createdDetailReady.url(),
+        method: createdDetailReady.request().method(),
+        status: createdDetailReady.status(),
+      },
+    })) {
+    throw new Error(
+      'post-create readiness contract violated before reload: expected completed '
+      + `POST ${CALENDAR_EVENTS_PATH} and matching 200 GET ${calendarEventDetailPath(personalEventId ?? '')}`,
+    );
+  }
+  await page.waitForFunction(
+    (eventId) => {
+      const region = document.querySelector('main.calv');
+      return region instanceof HTMLElement
+        && region.dataset.wave5EventId === eventId
+        && region.dataset.wave5Ready === 'ready';
+    },
+    personalEventId,
+    { timeout: 20_000 },
+  );
   assert('S-91 create navigation', 'opaque event id', personalEventId ?? 'missing', Boolean(personalEventId));
   await waitReady(page);
   await page.reload({ waitUntil: 'domcontentloaded' });

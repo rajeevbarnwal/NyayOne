@@ -29,6 +29,37 @@ jobs:
       - run: npm run lint
       - run: npm run test:run
       - run: npm run build
+      - name: Install Chromium for the S-11–S-26 contract gate
+        run: npx playwright install --with-deps chromium
+      - name: S-11–S-26 responsive, accessibility, runtime, and API-readiness gate
+        run: |
+          npm run preview -- --port 4177 > "${RUNNER_TEMP}/v34-preview.log" 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "${PREVIEW_PID}" 2>/dev/null || true' EXIT
+
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:4177/ >/dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "${READY}" -ne 1 ]; then
+            cat "${RUNNER_TEMP}/v34-preview.log"
+            exit 1
+          fi
+
+          V34_BASE_URL=http://127.0.0.1:4177 \
+          V34_EVIDENCE_DIR="${RUNNER_TEMP}/v34-s11-s26" \
+          npm run qa:v34:s11-s26
+      - name: Upload S-11–S-26 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v34-s11-s26-browser-evidence
+          path: ${{ runner.temp }}/v34-s11-s26
+          if-no-files-found: error
 
   backend-postgres16-gate:
     runs-on: ubuntu-latest
@@ -79,6 +110,15 @@ jobs:
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)
         run: PYTHON=python bash scripts/db_gate.sh
+      - name: SAATHI-60 owner-scoped save concurrency (isolated PostgreSQL database)
+        run: |
+          PGPASSWORD=legalsaathi psql -h localhost -p 1032 -U legalsaathi -d postgres \
+            -c "CREATE DATABASE legalsaathi_saathi60_ci_qa OWNER legalsaathi;"
+          DATABASE_URL=postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi_saathi60_ci_qa \
+            python -m alembic upgrade head
+          SAATHI60_POSTGRES_TEST_URL=postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi_saathi60_ci_qa \
+            python -m pytest -q \
+              tests/test_saathi60_internships.py::test_parallel_save_is_one_row_and_one_audit_on_postgresql
       - name: Provision deterministic E2E actors (idempotent — run twice, F1)
         # SAATHI-120 F1: the law-school E2E suite requires the dev-claims
         # actors (…00de/…00b2/…00c3) as users rows. This is the explicit

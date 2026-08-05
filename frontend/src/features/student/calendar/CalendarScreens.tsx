@@ -478,7 +478,8 @@ function CalendarEventScreen() {
 
   return (
     <StudentScreen screenId="S-91" className="calv-screen">
-      <main className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature" data-wave5-ready={ready}>
+      <main className="calv" data-testid="cal-feature-region" data-qa-crop="calendar-feature"
+        data-wave5-event-id={eventId ?? 'new'} data-wave5-ready={ready}>
         <CalSubnav active={eventId ? undefined : 'add'} />
         <h1 className="lede">{eventId ? 'Event details' : 'Add event'} <span className="m">· S-91</span></h1>
         <p className="stand ident">{eventId ? 'Open the source, or manage a personal event you created.' : 'Add a private personal event to your unified calendar.'}</p>

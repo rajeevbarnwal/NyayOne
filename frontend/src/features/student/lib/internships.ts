@@ -12,13 +12,18 @@ export interface InternshipListing {
   readonly role: string;
   readonly org: string;
   readonly location: string;
-  readonly stipendMonthly: number | null; // null = unpaid
-  readonly verified: boolean;
+  readonly stipendMonthlyPaise: number | null; // null = unpaid; integer paise, never float money
+  readonly verificationStatus: 'verified' | 'unverified';
   readonly deadline: string; // display, e.g. "9 Jul"
   readonly eligibility: string;
   readonly tags: readonly string[];
   readonly description: string;
-  readonly sourceLabel: string; // provenance, always shown
+  readonly source: {
+    readonly name: string;
+    readonly url: string | null;
+    readonly retrievedAt: string | null;
+    readonly verifiedAt: string | null;
+  };
 }
 
 /** Application lifecycle. `action_needed`/`closed` are terminal-ish display states. */
@@ -83,7 +88,22 @@ export function statusChip(s: ApplicationStatus): { kind: ChipKind; label: strin
 }
 
 export function stipendText(l: InternshipListing): string {
-  return l.stipendMonthly === null ? 'unpaid' : `₹${l.stipendMonthly.toLocaleString('en-IN')}/mo`;
+  return l.stipendMonthlyPaise === null
+    ? 'unpaid'
+    : `${(l.stipendMonthlyPaise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}/mo`;
+}
+
+export function isVerifiedListing(listing: InternshipListing): boolean {
+  return listing.verificationStatus === 'verified';
+}
+
+/** A single structured status owns both the badge and the provenance sentence. */
+export function listingSourceLabel(listing: InternshipListing): string {
+  if (listing.verificationStatus === 'verified') {
+    const checked = listing.source.verifiedAt ?? listing.source.retrievedAt;
+    return `Source: ${listing.source.name} · verified${checked ? ` ${new Date(checked).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}` : ''} · not affiliated`;
+  }
+  return `Source: ${listing.source.name} · unverified · not affiliated`;
 }
 
 /** Filter listings by free-text query, stipend, and verified-only. */
@@ -95,15 +115,11 @@ export function filterListings(
   const stipend = opts.stipend ?? 'any';
   return list.filter((l) => {
     if (q && ![l.role, l.org, l.location].some((f) => f.toLowerCase().includes(q))) return false;
-    if (stipend === 'paid' && l.stipendMonthly === null) return false;
-    if (stipend === 'unpaid' && l.stipendMonthly !== null) return false;
-    if (opts.verifiedOnly && !l.verified) return false;
+    if (stipend === 'paid' && l.stipendMonthlyPaise === null) return false;
+    if (stipend === 'unpaid' && l.stipendMonthlyPaise !== null) return false;
+    if (opts.verifiedOnly && !isVerifiedListing(l)) return false;
     return true;
   });
-}
-
-export function toggleSave(saved: readonly string[], id: string): string[] {
-  return saved.includes(id) ? saved.filter((x) => x !== id) : [...saved, id];
 }
 
 let refSeq = 4820;
@@ -151,7 +167,6 @@ export function validateApplicationPdf(
 }
 
 const SUBMITTED_KEY = 'legalsaathi.internship.applications.v1';
-const SAVED_KEY = 'legalsaathi.internship.saved.v1';
 
 export function saveSubmittedApplication(application: Application): void {
   if (typeof window === 'undefined') return;
@@ -177,73 +192,60 @@ export function loadLatestSubmittedApplication(): Application | null {
   return loadSubmittedApplications()[0] ?? null;
 }
 
-/** Listing IDs are non-sensitive UI state. `null` distinguishes never seeded from deliberately empty. */
-export function loadSavedListingIds(): string[] | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(SAVED_KEY);
-    if (raw === null) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string') ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveSavedListingIds(ids: readonly string[]): void {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(SAVED_KEY, JSON.stringify([...new Set(ids)])); } catch { /* storage denial keeps the in-memory UI usable */ }
-}
-
 export const SAMPLE_LISTINGS: readonly InternshipListing[] = [
   {
     id: 'cam',
-    role: 'Summer Associate',
+    role: 'Summer Associate, disputes',
     org: 'Cyril Amarchand Mangaldas',
     location: 'Mumbai',
-    stipendMonthly: 40000,
-    verified: true,
+    stipendMonthlyPaise: 4000000,
+    verificationStatus: 'verified',
     deadline: '9 Jul',
     eligibility: '3rd–4th year · apply by 9 Jul · joins Dec 2026',
     tags: ['Disputes', 'Mumbai', '6 weeks'],
     description:
       '6-week summer internship with the disputes team, Mumbai. Research, drafting and hearing support. Stipend ₹40,000/month.',
-    sourceLabel: 'Source: firm career pages · unverified · not affiliated',
+    source: {
+      name: 'Cyril Amarchand Mangaldas careers',
+      url: 'https://www.cyrilshroff.com/careers/',
+      retrievedAt: '2026-06-28T00:00:00+05:30',
+      verifiedAt: '2026-06-28T00:00:00+05:30',
+    },
   },
   {
     id: 'menon',
-    role: 'Judicial research',
+    role: 'Judicial research assistant',
     org: 'Chambers of Sr. Adv. R. Menon',
     location: 'Delhi HC',
-    stipendMonthly: 15000,
-    verified: false,
+    stipendMonthlyPaise: 1500000,
+    verificationStatus: 'unverified',
     deadline: '8 Jul',
     eligibility: '2nd year+ · rolling',
     tags: ['Research', 'Delhi'],
     description: 'Judicial research support with a senior advocate’s chambers at the Delhi High Court.',
-    sourceLabel: 'Source: firm career pages · unverified · not affiliated',
+    source: { name: 'Sample fixture', url: null, retrievedAt: null, verifiedAt: null },
   },
   {
     id: 'vidhi',
-    role: 'Policy intern',
+    role: 'Research fellowship, policy',
     org: 'Vidhi Centre for Legal Policy',
     location: 'New Delhi',
-    stipendMonthly: null,
-    verified: false,
+    stipendMonthlyPaise: null,
+    verificationStatus: 'unverified',
     deadline: '15 Jul',
     eligibility: 'All years · certificate',
     tags: ['Policy', 'Research'],
     description: 'Legal-policy research internship; certificate on completion. Unpaid.',
-    sourceLabel: 'Source: firm career pages · unverified · not affiliated',
+    source: { name: 'Sample fixture', url: null, retrievedAt: null, verifiedAt: null },
   },
 ];
 
 export const SAMPLE_APPLICATIONS: readonly Application[] = [
-  { id: 'a1', listingId: 'cam', org: 'Cyril Amarchand Mangaldas', role: 'Summer Associate', meta: 'Mumbai · ₹40,000/mo', status: 'interview', note: 'Interview Wed 9' },
+  { id: 'a1', listingId: 'cam', org: 'Cyril Amarchand Mangaldas', role: 'Summer Associate, disputes', meta: 'Mumbai · ₹40,000/mo', status: 'interview', note: 'Interview Wed 9' },
   { id: 'a2', listingId: 'azb', org: 'AZB & Partners', role: 'Pre-Placement', meta: 'Bengaluru · ₹35,000/mo', status: 'under_review' },
-  { id: 'a3', listingId: 'menon', org: 'Chambers of Sr. Adv. R. Menon', role: 'Judicial research', meta: 'Delhi HC · ₹15,000/mo', status: 'action_needed', note: 'Upload transcript by 8 Jul' },
+  { id: 'a3', listingId: 'menon', org: 'Chambers of Sr. Adv. R. Menon', role: 'Judicial research assistant', meta: 'Delhi HC · ₹15,000/mo', status: 'action_needed', note: 'Upload transcript by 8 Jul' },
   { id: 'a4', listingId: 'trilegal', org: 'Trilegal', role: 'Corporate', meta: 'Bengaluru · ₹30,000/mo', status: 'applied', note: 'Applied 2 Jul' },
-  { id: 'a5', listingId: 'vidhi', org: 'Vidhi Centre for Legal Policy', role: 'Research fellowship', meta: 'not selected · recorded 28 Jun', status: 'closed' },
+  { id: 'a5', listingId: 'vidhi', org: 'Vidhi Centre for Legal Policy', role: 'Research fellowship, policy', meta: 'not selected · recorded 28 Jun', status: 'closed' },
 ];
 
 export const APPLY_DPDP = 'Documents leave LegalSaathi only when you submit';
