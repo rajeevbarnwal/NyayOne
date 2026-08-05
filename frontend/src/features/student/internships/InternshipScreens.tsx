@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { StudentScreen, DpdpFootnote } from '../components';
-import { StatusBadge, EmptyState, ValidationState } from '../../../components/ui/primitives';
+import { useAuth } from '../../../app/authContext';
+import { StatusBadge, EmptyState, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
   filterListings,
-  toggleSave,
   stipendText,
+  isVerifiedListing,
+  listingSourceLabel,
   stepForStatus,
   statusChip,
   newApplicationRef,
@@ -14,14 +17,20 @@ import {
   saveSubmittedApplication,
   loadSubmittedApplications,
   loadLatestSubmittedApplication,
-  loadSavedListingIds,
-  saveSavedListingIds,
   APPLICATION_STAGES,
-  SAMPLE_LISTINGS,
   SAMPLE_APPLICATIONS,
+  type InternshipListing,
   type StipendFilter,
   type Application,
 } from '../lib/internships';
+import {
+  InternshipsApiError,
+  getInternship,
+  listInternships,
+  listSavedInternships,
+  saveInternship,
+  unsaveInternship,
+} from '../lib/internshipsApi';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -33,17 +42,130 @@ function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; s
   );
 }
 
+const CATALOGUE_KEY = ['internships-catalogue'] as const;
+
+function useWideInternshipLayout(): boolean {
+  const query = '(min-width: 821px)';
+  const [wide, setWide] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia(query).matches
+  ));
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return wide;
+}
+
+function internshipFailureCopy(
+  error: unknown,
+  fallback = 'The internship service could not complete this request. Please retry.',
+): string {
+  if (error instanceof InternshipsApiError) {
+    if (error.status === 401) return 'Sign in to use your private saved-internship list.';
+    if (error.status === 403) return 'Saved internships are available only to student accounts.';
+    if (error.status === 404) return 'This internship listing is no longer available.';
+    if (error.status === 409) return 'The saved list changed elsewhere. Reload it and try again.';
+  }
+  return fallback;
+}
+
+function useSavedInternships() {
+  const auth = useAuth();
+  const client = useQueryClient();
+  const [failure, setFailure] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const canSave = auth.isAuthenticated && auth.roles.includes('student') && Boolean(auth.userId);
+  const access = !auth.isAuthenticated
+    ? {
+        title: 'Sign in to view saved internships',
+        hint: 'Your private saved list is tied to your student account.',
+        offerSignIn: true,
+      }
+    : !auth.roles.includes('student')
+      ? {
+          title: 'Student account required',
+          hint: 'Saved internships are available only to student accounts.',
+          offerSignIn: false,
+        }
+      : !auth.userId
+        ? {
+            title: 'Session unavailable',
+            hint: 'Your session has no account identity. Sign in again before using saved internships.',
+            offerSignIn: true,
+          }
+        : null;
+  const key = ['internships-saved', auth.userId] as const;
+  const query = useQuery({
+    queryKey: key,
+    queryFn: listSavedInternships,
+    enabled: canSave,
+    retry: false,
+  });
+  const mutation = useMutation({
+    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean }) => (
+      wasSaved ? unsaveInternship(listing.id) : saveInternship(listing.id)
+    ),
+    onSuccess: (result, variables) => {
+      client.setQueryData<InternshipListing[]>(key, (current = []) => (
+        result.saved
+          ? [variables.listing, ...current.filter((item) => item.id !== variables.listing.id)]
+          : current.filter((item) => item.id !== variables.listing.id)
+      ));
+      setFailure(null);
+      setMessage(result.saved
+        ? 'Saved privately to your account. The organisation is not notified.'
+        : 'Removed from your saved internships.');
+    },
+    onError: (error) => {
+      setMessage(null);
+      setFailure(internshipFailureCopy(
+        error,
+        'We could not update your saved internships. Nothing was changed; please retry.',
+      ));
+    },
+  });
+
+  const savedIds = new Set((query.data ?? []).map((listing) => listing.id));
+  function toggle(listing: InternshipListing): void {
+    setFailure(null);
+    setMessage(null);
+    if (!canSave) {
+      setFailure(access?.hint ?? 'Saved internships are unavailable for this session.');
+      return;
+    }
+    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id) });
+  }
+  return {
+    canSave,
+    access,
+    query,
+    savedIds,
+    toggle,
+    failure,
+    message,
+    pendingId: mutation.isPending ? mutation.variables?.listing.id ?? null : null,
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* S-20 — Browse & filter                                                      */
 /* -------------------------------------------------------------------------- */
 export function InternshipBrowse() {
   const nav = useNavigate();
+  const wideLayout = useWideInternshipLayout();
   const [query, setQuery] = useState('');
   const [stipend, setStipend] = useState<StipendFilter>('any');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [saved, setSaved] = useState<string[]>(() => loadSavedListingIds() ?? SAMPLE_LISTINGS.filter((listing) => listing.verified).map((listing) => listing.id));
-  const results = useMemo(() => filterListings(SAMPLE_LISTINGS, { query, stipend, verifiedOnly }), [query, stipend, verifiedOnly]);
-  const listingRow = (l: (typeof SAMPLE_LISTINGS)[number]) => (
+  const catalogue = useQuery({ queryKey: CATALOGUE_KEY, queryFn: listInternships, retry: false });
+  const saved = useSavedInternships();
+  const results = useMemo(
+    () => filterListings(catalogue.data?.items ?? [], { query, stipend, verifiedOnly }),
+    [catalogue.data?.items, query, stipend, verifiedOnly],
+  );
+  const listingRow = (l: InternshipListing) => (
     <li className="st-item" key={l.id}>
       <div>
         <div>{l.role} — {l.org}</div>
@@ -52,15 +174,17 @@ export function InternshipBrowse() {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-        <StatusBadge status={l.verified ? 'ok' : 'info'} label={l.verified ? 'Verified listing' : 'Open'} />
-        <button type="button" className="btn tap" aria-pressed={saved.includes(l.id)} onClick={() => setSaved((current) => {
-          const next = toggleSave(current, l.id);
-          saveSavedListingIds(next);
-          return next;
-        })}>
-          {saved.includes(l.id) ? 'Saved' : 'Save'}
+        <StatusBadge status={isVerifiedListing(l) ? 'ok' : 'info'} label={isVerifiedListing(l) ? 'Verified listing' : 'Unverified listing'} />
+        <button
+          type="button"
+          className="btn tap"
+          aria-pressed={saved.savedIds.has(l.id)}
+          disabled={saved.pendingId === l.id || (saved.canSave && saved.query.isPending)}
+          onClick={() => saved.toggle(l)}
+        >
+          {saved.pendingId === l.id ? 'Saving…' : saved.savedIds.has(l.id) ? 'Saved' : 'Save'}
         </button>
-        <button type="button" className="btn tap" onClick={() => nav('/s-21')}>View</button>
+        <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}`)}>View</button>
       </div>
     </li>
   );
@@ -69,6 +193,9 @@ export function InternshipBrowse() {
     <StudentScreen screenId="S-20">
       <div className="st-stack">
         <ModuleHead eyebrow="Internships · S4" title="Internship Hub" sub="discover · filter · save" />
+        {saved.failure && <ValidationState message={saved.failure} />}
+        {saved.query.isError && <ValidationState message={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} />}
+        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
         <input
           className="st-search"
           type="search"
@@ -93,13 +220,15 @@ export function InternshipBrowse() {
             <h2 className="st-panel__title">Open listings</h2>
             <span className="st-metatag">{results.length} shown</span>
           </div>
-          {results.length === 0 ? (
+          {catalogue.isPending ? <LoadingState label="Loading internships…" /> : catalogue.isError ? (
+            <ErrorState title="Could not load internships" detail="Check your connection and retry." onRetry={() => void catalogue.refetch()} />
+          ) : results.length === 0 ? (
             <EmptyState title="No matching listings" hint="Try clearing filters or a different search." />
           ) : (
             <>
               <ul className="st-list">{results.slice(0, 1).map(listingRow)}</ul>
               {results.length > 1 && (
-                <details className="v34c-mobile-disclosure">
+                <details className="v34c-mobile-disclosure" open={wideLayout}>
                   <summary>More listings <span>{results.length - 1} more</span></summary>
                   <ul className="st-list">{results.slice(1).map(listingRow)}</ul>
                 </details>
@@ -107,7 +236,7 @@ export function InternshipBrowse() {
             </>
           )}
         </section>
-        <DpdpFootnote>Source: firm career pages · unverified · not affiliated</DpdpFootnote>
+        <DpdpFootnote>Each listing shows its own verification status and source. Sample and unverified listings are not affiliated with the organisation.</DpdpFootnote>
       </div>
     </StudentScreen>
   );
@@ -118,16 +247,35 @@ export function InternshipBrowse() {
 /* -------------------------------------------------------------------------- */
 export function InternshipDetail() {
   const nav = useNavigate();
-  const l = SAMPLE_LISTINGS[0];
+  const [params] = useSearchParams();
+  const listingId = params.get('listing')?.trim() ?? '';
+  const detail = useQuery({
+    queryKey: ['internship', listingId],
+    queryFn: () => getInternship(listingId),
+    enabled: Boolean(listingId),
+    retry: false,
+  });
+  const saved = useSavedInternships();
+  const l = detail.data;
   return (
     <StudentScreen screenId="S-21">
       <div className="st-stack">
+        {!listingId ? (
+          <ErrorState title="Listing unavailable" detail="This listing link is incomplete. Return to internships and select a listing." />
+        ) : detail.isPending ? (
+          <LoadingState label="Loading internship…" />
+        ) : detail.isError || !l ? (
+          <ErrorState title="Listing unavailable" detail={internshipFailureCopy(detail.error, 'We could not load this internship. Please retry.')} onRetry={() => void detail.refetch()} />
+        ) : <>
         <ModuleHead eyebrow="Internships · S4" title={l.role} sub={l.org} />
+        {saved.failure && <ValidationState message={saved.failure} />}
+        {saved.query.isError && <ValidationState message={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} />}
+        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
         <div className="st-grid">
           <section className="st-panel">
             <div className="st-panel__head">
               <h2 className="st-panel__title">Role</h2>
-              <span className="st-metatag">sample listing</span>
+              <span className="st-metatag">{isVerifiedListing(l) ? 'verified source' : 'unverified source'}</span>
             </div>
             <p>{l.description}</p>
             <div className="st-chips" style={{ marginTop: 'var(--space-3)' }}>
@@ -145,8 +293,17 @@ export function InternshipDetail() {
             <h2 className="st-panel__title">Eligibility &amp; dates</h2>
             <p className="st-item__meta">{l.eligibility}</p>
             <div className="st-actions">
-              <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-22')}>
+              <button type="button" className="btn btn--primary tap" onClick={() => nav(`/s-22?listing=${encodeURIComponent(l.id)}`)}>
                 Apply now
+              </button>
+              <button
+                type="button"
+                className="btn tap"
+                aria-pressed={saved.savedIds.has(l.id)}
+                disabled={saved.pendingId === l.id || (saved.canSave && saved.query.isPending)}
+                onClick={() => saved.toggle(l)}
+              >
+                {saved.pendingId === l.id ? 'Saving…' : saved.savedIds.has(l.id) ? 'Saved' : 'Save'}
               </button>
               <button type="button" className="btn tap" onClick={() => nav('/s-20')}>
                 Back to listings
@@ -154,7 +311,11 @@ export function InternshipDetail() {
             </div>
           </section>
         </div>
-        <DpdpFootnote>{l.sourceLabel}</DpdpFootnote>
+        <DpdpFootnote>
+          {listingSourceLabel(l)}
+          {l.source.url && <> · <a href={l.source.url} target="_blank" rel="noreferrer">Open source</a></>}
+        </DpdpFootnote>
+        </>}
       </div>
     </StudentScreen>
   );
@@ -165,6 +326,15 @@ export function InternshipDetail() {
 /* -------------------------------------------------------------------------- */
 export function InternshipApply() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const listingId = params.get('listing')?.trim() ?? '';
+  const detail = useQuery({
+    queryKey: ['internship', listingId],
+    queryFn: () => getInternship(listingId),
+    enabled: Boolean(listingId),
+    retry: false,
+  });
+  const listing = detail.data;
   const [stage, setStage] = useState<'answers' | 'documents' | 'review'>('answers');
   const [cover, setCover] = useState('I am a 4th-year student at NLSIU focused on disputes, with a moot and legal-aid clinic behind me.');
   const [resume, setResume] = useState<File | null>(null);
@@ -195,25 +365,33 @@ export function InternshipApply() {
   }
 
   function submit() {
+    if (!listing) return;
     const coverOk = validateAnswers();
     const documentsOk = validateDocuments();
     if (!coverOk || !documentsOk) { setStage(!coverOk ? 'answers' : 'documents'); return; }
     const ref = newApplicationRef();
     saveSubmittedApplication({
       id: ref,
-      listingId: 'cam',
-      org: 'Cyril Amarchand Mangaldas',
-      role: 'Summer Associate',
-      meta: `Mumbai · submitted ${new Date().toLocaleDateString('en-IN')}`,
+      listingId: listing.id,
+      org: listing.org,
+      role: listing.role,
+      meta: `${listing.location} · submitted ${new Date().toLocaleDateString('en-IN')}`,
       status: 'applied',
       note: `Reference ${ref}`,
     });
-    nav('/s-23');
+    nav(`/s-23?listing=${encodeURIComponent(listing.id)}`);
   }
   return (
     <StudentScreen screenId="S-22">
       <div className="st-stack">
-        <ModuleHead eyebrow="Cyril Amarchand Mangaldas · Summer Associate" title="Resume, transcript, cover note" sub="Three deliberate steps · nothing leaves LegalSaathi until review and send" />
+        {!listingId ? (
+          <ErrorState title="Listing unavailable" detail="Choose an internship before starting an application." />
+        ) : detail.isPending ? (
+          <LoadingState label="Loading internship application…" />
+        ) : detail.isError || !listing ? (
+          <ErrorState title="Listing unavailable" detail={internshipFailureCopy(detail.error, 'We could not load this internship. Please retry.')} onRetry={() => void detail.refetch()} />
+        ) : <>
+        <ModuleHead eyebrow={`${listing.org} · ${listing.role}`} title="Resume, transcript, cover note" sub="Three deliberate steps · nothing leaves LegalSaathi until review and send" />
         <div className="v34c-stages" role="tablist" aria-label="Application steps">
           {(['answers', 'documents', 'review'] as const).map((name, index) => (
             <button key={name} type="button" role="tab" aria-selected={stage === name} onClick={() => goTo(name)}>
@@ -263,6 +441,7 @@ export function InternshipApply() {
           </section>
         )}
         <DpdpFootnote>Documents leave LegalSaathi only when you submit</DpdpFootnote>
+        </>}
       </div>
     </StudentScreen>
   );
@@ -279,13 +458,15 @@ export function InternshipConfirm() {
     <StudentScreen screenId="S-23" className="st-authwrap">
       <div className="st-card">
         <p className="st-card__kicker">Application submitted</p>
-        <h1 className="st-card__title">You’ve applied — CAM Summer Associate</h1>
+        <h1 className="st-card__title">
+          {submitted ? `You’ve applied — ${submitted.org} · ${submitted.role}` : 'Application confirmation unavailable'}
+        </h1>
         <p className="st-card__sub">
-          Reference <span className="st-price">#{ref}</span>.
+          {submitted ? <>Reference <span className="st-price">#{ref}</span>.</> : 'Return to internships and submit an application to receive a reference.'}
         </p>
         <div className="st-actions">
-          <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-24')}>
-            Open tracker
+          <button type="button" className="btn btn--primary tap" onClick={() => nav(submitted ? '/s-24' : '/s-20')}>
+            {submitted ? 'Open tracker' : 'Browse internships'}
           </button>
         </div>
       </div>
@@ -363,34 +544,41 @@ export function InternshipTracker() {
 /* -------------------------------------------------------------------------- */
 export function InternshipSaved() {
   const nav = useNavigate();
-  const [savedIds, setSavedIds] = useState<string[]>(() => loadSavedListingIds() ?? SAMPLE_LISTINGS.filter((listing) => listing.verified).map((listing) => listing.id));
-  const saved = SAMPLE_LISTINGS.filter((listing) => savedIds.includes(listing.id));
-  function remove(id: string): void {
-    const next = savedIds.filter((savedId) => savedId !== id);
-    setSavedIds(next);
-    saveSavedListingIds(next);
-  }
+  const saved = useSavedInternships();
+  const items = saved.query.data ?? [];
   return (
     <StudentScreen screenId="S-25">
       <div className="st-stack">
-        <ModuleHead eyebrow="Internships · S4" title="Saved internships" sub="synced to your account" />
+        <ModuleHead eyebrow="Internships · S4" title="Saved internships" sub="Private to your account · organisations are not notified" />
+        {saved.failure && <ValidationState message={saved.failure} />}
+        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
         <section className="st-panel">
           <h2 className="st-panel__title">Saved</h2>
-          {saved.length === 0 ? <EmptyState title="No saved internships yet" hint="Browse listings and save the ones you like." /> : <ul className="st-list">
-            {saved.map((l) => (
+          {!saved.canSave ? (
+            <EmptyState
+              title={saved.access?.title ?? 'Saved internships unavailable'}
+              hint={saved.access?.hint ?? 'Saved internships are unavailable for this session.'}
+              action={saved.access?.offerSignIn ? <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button> : undefined}
+            />
+          ) : saved.query.isPending ? (
+            <LoadingState label="Loading saved internships…" />
+          ) : saved.query.isError ? (
+            <ErrorState title="Could not load saved internships" detail={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} onRetry={() => void saved.query.refetch()} />
+          ) : items.length === 0 ? <EmptyState title="No saved internships yet" hint="Browse listings and save the ones you like." action={<button type="button" className="btn tap" onClick={() => nav('/s-20')}>Browse internships</button>} /> : <ul className="st-list">
+            {items.map((l) => (
               <li className="st-item" key={l.id}>
                 <div>
                   <div>{l.role} — {l.org}</div>
                   <div className="st-item__meta">{l.location} · <span className="st-price">{stipendText(l)}</span></div>
                 </div>
-                <div className="st-actions"><button type="button" className="btn tap" onClick={() => remove(l.id)}>Remove</button><button type="button" className="btn tap" onClick={() => nav('/s-21')}>View</button></div>
+                <div className="st-actions">
+                  <button type="button" className="btn tap" disabled={saved.pendingId === l.id} onClick={() => saved.toggle(l)}>{saved.pendingId === l.id ? 'Removing…' : 'Remove'}</button>
+                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}`)}>View</button>
+                </div>
               </li>
             ))}
           </ul>}
         </section>
-        <div className="st-actions">
-          <button type="button" className="btn tap" onClick={() => nav('/s-26')}>See empty state</button>
-        </div>
       </div>
     </StudentScreen>
   );
@@ -401,11 +589,20 @@ export function InternshipSaved() {
 /* -------------------------------------------------------------------------- */
 export function InternshipEmpty() {
   const nav = useNavigate();
+  const saved = useSavedInternships();
   return (
     <StudentScreen screenId="S-26">
       <div className="st-stack">
         <ModuleHead eyebrow="Internships · S4" title="Saved internships" />
-        <EmptyState
+        {!saved.canSave ? <EmptyState
+          title={saved.access?.title ?? 'Saved internships unavailable'}
+          hint={saved.access?.hint ?? 'Saved internships are unavailable for this session.'}
+          action={saved.access?.offerSignIn ? <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button> : undefined}
+        /> : saved.query.isPending ? <LoadingState label="Loading saved internships…" /> : saved.query.isError ? <ErrorState title="Could not load saved internships" detail={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} onRetry={() => void saved.query.refetch()} /> : (saved.query.data?.length ?? 0) > 0 ? <EmptyState
+          title="Your saved list is not empty"
+          hint="Open your private saved list to view or remove internships."
+          action={<button type="button" className="btn btn--primary tap" onClick={() => nav('/s-25')}>Open saved internships</button>}
+        /> : <EmptyState
           title="No saved internships yet"
           hint="Browse listings and save the ones you like."
           action={
@@ -413,7 +610,7 @@ export function InternshipEmpty() {
               Browse listings
             </button>
           }
-        />
+        />}
       </div>
     </StudentScreen>
   );

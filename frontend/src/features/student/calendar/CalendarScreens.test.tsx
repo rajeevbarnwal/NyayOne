@@ -63,6 +63,7 @@ describe('Wave 5 S-90–S-93 calendar screens', () => {
   it('renders S91 strict personal-event fields and no device-storage success copy', () => {
     const html = render('/s-91', <CalendarAdd />);
     expect(html).toContain('data-screen="S-91"');
+    expect(html).toContain('data-wave5-event-id="new"');
     expect(html).toContain('maxLength="160"');
     expect(html).toContain('type="date"');
     expect(html).toContain('Timezone');
@@ -96,6 +97,7 @@ describe('Wave 5 S-90–S-93 calendar screens', () => {
         { ...EVENT_DETAIL, sourceType, sourceUrl: sourceType === 'reminder' ? '/s-82' : '/s-35' },
       ));
       expect(html).toContain('Go to source');
+      expect(html).toContain('data-wave5-event-id="event-1"');
       expect(html).not.toContain('>Edit<');
       expect(html).not.toContain('>Delete<');
     }

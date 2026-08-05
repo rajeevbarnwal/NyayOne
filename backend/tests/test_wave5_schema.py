@@ -26,7 +26,7 @@ from scripts.wave5_postgres_gate import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "0013_wave5_calendar_interop"
+HEAD_REVISION = "0014_saathi60_internships"
 PARENT_REVISION = "0012_wave4_moderation"
 
 #: The exact ordered composite-index contract this migration owes its FKs.

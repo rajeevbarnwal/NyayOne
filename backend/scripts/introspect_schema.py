@@ -24,6 +24,8 @@ EXPECTED_TABLES = {
     "user_settings", "privacy_preferences", "data_subject_requests", "export_jobs", "deletion_jobs",
     "law_schools", "law_school_programmes", "law_school_facts", "law_school_sources",
     "saved_law_schools", "law_school_follows", "comparison_sets", "comparison_items",
+    # SAATHI-60 internship discovery and saved listings
+    "internship_listings", "saved_internships",
 }
 
 

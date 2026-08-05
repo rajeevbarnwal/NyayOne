@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, inspect, text
 
 BACKEND = Path(__file__).resolve().parents[1]
 WAVE4_REVISION = "0012_wave4_moderation"
-HEAD_REVISION = "0013_wave5_calendar_interop"
+HEAD_REVISION = "0014_saathi60_internships"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",

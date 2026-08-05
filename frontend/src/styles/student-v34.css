@@ -454,6 +454,14 @@
 .v34-screen--continuation .st-item--dim .st-item__meta,
 .v34-screen--continuation .st-item--dim .st-steps__node { color: var(--v34-body); }
 .v34-screen--continuation .st-dpdp { color: var(--v34-muted); border-color: var(--v34-line); }
+.v34-screen--continuation .st-dpdp a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--v34-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .v34-screen--continuation .st-set, .v34-screen--continuation .st-dash, .v34-screen--continuation .st-stack { gap: 18px; }
 .v34-screen--continuation .st-week__day { border-color: var(--v34-line); background: var(--v34-bg); }
 .v34-screen--continuation .st-ring { border-color: var(--v34-rule); color: var(--v34-accent-text); }
