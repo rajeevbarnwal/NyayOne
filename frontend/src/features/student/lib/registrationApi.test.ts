@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  checkMobileRegistered,
   loadRegistrationSession,
   getStudentSession,
   logoutStudent,
@@ -69,6 +70,8 @@ describe('server-authoritative student registration API', () => {
       enrolment_number: 'KA/1234/2023',
       institutional_email: 'aditi@nls.ac.in',
       bar_enrolment_number: 'D/1234/2024',
+      interests: null,
+      career_goal: null,
     });
   });
 
@@ -117,9 +120,14 @@ describe('server-authoritative student registration API', () => {
       issuedAt: 123,
       isMinor: false,
       guardianConsentPending: false,
+      isLoginFlow: true,
+      isProfileComplete: true,
     });
 
-    expect(loadRegistrationSession()?.registrationId).toBe('opaque-registration-id');
+    const loaded = loadRegistrationSession();
+    expect(loaded?.registrationId).toBe('opaque-registration-id');
+    expect(loaded?.isLoginFlow).toBe(true);
+    expect(loaded?.isProfileComplete).toBe(true);
     expect(local.has('legalsaathi.student.profile.v1')).toBe(false);
     const serialized = [...session.values()].join(' ');
     expect(serialized).not.toContain('9876543210');
@@ -148,6 +156,33 @@ describe('server-authoritative student registration API', () => {
       code: 'validation_error',
       field: 'mobile',
     }));
+  });
+
+  describe('checkMobileRegistered', () => {
+    it('returns true when backend reports mobile is registered', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+        JSON.stringify({ registered: true, registration_id: 'real-uuid' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )));
+      const res = await checkMobileRegistered('9876543210');
+      expect(res.registered).toBe(true);
+      expect(res.registrationId).toBe('real-uuid');
+    });
+
+    it('returns false when backend reports mobile is unregistered', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+        JSON.stringify({ registered: false }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )));
+      const res = await checkMobileRegistered('9999999999');
+      expect(res.registered).toBe(false);
+    });
+
+    it('falls back to true on fetch/network failure', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+      const res = await checkMobileRegistered('9876543210');
+      expect(res.registered).toBe(true);
+    });
   });
 
   it('uses the real cookie-backed login/session/logout endpoints without exposing a token', async () => {

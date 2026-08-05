@@ -339,3 +339,137 @@ export function DpdpFootnote({ children }: { children: ReactNode }) {
     </p>
   );
 }
+
+export interface CountryOption {
+  code: string;
+  flag: string;
+  name: string;
+}
+
+export const COUNTRY_CODES: CountryOption[] = [
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+1', flag: '🇺🇸', name: 'USA/Canada' },
+  { code: '+44', flag: '🇬🇧', name: 'UK' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' },
+  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '+977', flag: '🇳🇵', name: 'Nepal' },
+];
+
+/** Auto-sanitizes pasted numbers: strips non-digits, leading +91/91, or leading 0 */
+export function normalizeIndianMobile(raw: string, countryCode = '+91'): string {
+  const digits = raw.replace(/\D/g, '');
+  if (countryCode === '+91') {
+    if (digits.length === 12 && digits.startsWith('91')) {
+      return digits.slice(2);
+    }
+    if (digits.length === 11 && digits.startsWith('0')) {
+      return digits.slice(1);
+    }
+  }
+  return digits;
+}
+
+export function CountryCodeSelect({
+  value,
+  onChange,
+  id = 'country-code-select',
+}: {
+  value: string;
+  onChange: (code: string) => void;
+  id?: string;
+}) {
+  return (
+    <div className="st-country-select">
+      <label htmlFor={id} className="sr-only">
+        Country Code
+      </label>
+      <select
+        id={id}
+        className="st-country-select__select"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Select Country Code"
+      >
+        {COUNTRY_CODES.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.flag} {c.code}
+          </option>
+        ))}
+      </select>
+      <span className="st-country-select__arrow" aria-hidden>
+        ▾
+      </span>
+    </div>
+  );
+}
+
+export function MobileInputField({
+  id,
+  label = 'Mobile number',
+  value,
+  onChange,
+  countryCode = '+91',
+  onCountryCodeChange,
+  error,
+  help,
+  placeholder = '10-digit mobile number',
+}: {
+  id: string;
+  label?: string;
+  value: string;
+  onChange: (val: string) => void;
+  countryCode?: string;
+  onCountryCodeChange?: (cc: string) => void;
+  error?: string;
+  help?: string;
+  placeholder?: string;
+}) {
+  const errId = error ? `${id}-error` : undefined;
+  const helpId = help ? `${id}-help` : undefined;
+
+  function handleInputChange(rawVal: string) {
+    const sanitized = normalizeIndianMobile(rawVal, countryCode);
+    onChange(sanitized);
+  }
+
+  return (
+    <div className="st-field st-field--mobile">
+      <label className="st-field__label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="st-mobile-group">
+        <CountryCodeSelect
+          id={`${id}-country`}
+          value={countryCode}
+          onChange={(cc) => onCountryCodeChange?.(cc)}
+        />
+        <input
+          id={id}
+          className="st-input st-input--mobile"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={value}
+          placeholder={placeholder}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={[errId, helpId].filter(Boolean).join(' ') || undefined}
+          onChange={(e) => handleInputChange(e.target.value)}
+        />
+      </div>
+      {error && (
+        <span className="ui-validation" role="alert" id={errId}>
+          <span className="ui-validation__mark" aria-hidden>
+            !
+          </span>{' '}
+          {error}
+        </span>
+      )}
+      {help && !error && (
+        <span className="st-field__help" id={helpId}>
+          {help}
+        </span>
+      )}
+    </div>
+  );
+}

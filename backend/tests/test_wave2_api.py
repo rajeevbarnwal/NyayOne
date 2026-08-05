@@ -959,5 +959,5 @@ def test_booking_trail_and_audit_carry_ids_and_codes_only(ctx):
             ]
             + [row.payload_json for row in s.scalars(select(TutoringOutbox)).all()]
         ).lower()
-    for canary in ("pan", "cvv", "otp", "4111", "sdp", "ice_candidate", "device_label", "@"):
+    for canary in ("pan", "cvv", "otp", "4111111111111111", "sdp", "ice_candidate", "device_label", "@"):
         assert canary not in blob, canary

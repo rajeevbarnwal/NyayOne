@@ -101,9 +101,9 @@ class StudentRegisterResponse(BaseModel):
 
 
 class StudentAcademicProfileRequest(BaseModel):
-    """S-10 academic profile payload; unknown fields are rejected."""
+    """S-10 academic profile payload."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     registration_id: uuid.UUID
     college: str
@@ -111,6 +111,8 @@ class StudentAcademicProfileRequest(BaseModel):
     enrolment_number: str
     institutional_email: str
     bar_enrolment_number: str | None = None
+    interests: str | None = None
+    career_goal: str | None = None
 
     @field_validator("college")
     @classmethod

@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable
 
 from fastapi import (
     APIRouter,
@@ -51,6 +51,7 @@ from app.services import (
     recovery_service,
     registration_service,
 )
+from app.core.auth import ActorContext, get_actor_context
 from app.services.otp_sender import OtpSender, OtpSendError, build_otp_sender
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import deliver_after_response
@@ -137,6 +138,25 @@ def register(
     return StudentRegisterResponse(registration_id=reg.id, status=reg.status)
 
 
+class CheckMobileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mobile: str
+
+
+@router.post("/check-mobile")
+def check_mobile(payload: CheckMobileRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
+    if not _MOBILE_RE.match(payload.mobile):
+        return {"exists": False, "registered": False}
+    reg = registration_service.find_by_mobile(session, payload.mobile)
+    if reg is None:
+        return {"exists": False, "registered": False}
+
+    return {
+        "exists": True,
+        "registered": reg.status in ("otp_verified", "active"),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # OTP verify / resend                                                         #
 # --------------------------------------------------------------------------- #
@@ -168,12 +188,18 @@ def _otp_error(exc: otp_service.OtpError) -> HTTPException:
 
 
 @router.post("/otp/verify")
-def otp_verify(payload: OtpVerifyRequest, session: Session = Depends(get_session)) -> dict[str, str]:
+def otp_verify(payload: OtpVerifyRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
+    from sqlalchemy import select
     try:
         otp_service.verify(session, payload.registration_id, payload.code, _now(), purpose="signup")
     except otp_service.OtpError as exc:
         raise _otp_error(exc) from exc
-    return {"status": "verified"}
+    session.commit()
+    profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == payload.registration_id))
+    has_academic = profile is not None and bool(profile.college and profile.year_of_study and profile.enrolment_ct)
+    has_prefs = profile is not None and bool(getattr(profile, "career_goal", None) or getattr(profile, "interests", None))
+    is_complete = has_academic and has_prefs
+    return {"status": "verified", "is_profile_complete": is_complete}
 
 
 @router.post("/otp/resend", status_code=202)
@@ -245,6 +271,10 @@ def update_academic_profile(
         if payload.bar_enrolment_number
         else None
     )
+    if getattr(payload, "interests", None) is not None:
+        profile.interests = payload.interests
+    if getattr(payload, "career_goal", None) is not None:
+        profile.career_goal = payload.career_goal
     profile.key_version = active_key_version()
     reg.institution_ref = payload.college
     session.flush()
@@ -296,6 +326,7 @@ class RecoveryVerifyRequest(BaseModel):
 class RecoveryRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
     recovery_id: str
+    new_password: str | None = None
 
 
 class LoginStartRequest(BaseModel):
@@ -396,11 +427,18 @@ def recovery_verify(payload: RecoveryVerifyRequest, session: Session = Depends(g
 
 
 @router.post("/recovery/complete")
-def recovery_complete(payload: RecoveryRef, session: Session = Depends(get_session)) -> dict[str, str]:
+def recovery_complete(
+    payload: RecoveryRef,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
     try:
-        recovery_service.complete(session, payload.recovery_id, _now())
+        new_pw = getattr(payload, "new_password", None)
+        raw_token = recovery_service.complete(session, payload.recovery_id, _now(), new_password=new_pw)
     except recovery_service.RecoveryError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from exc
+    if raw_token:
+        _set_session_cookie(response, raw_token)
     return {"status": "recovered"}
 
 
@@ -491,11 +529,15 @@ class GuardianCompleteRequest(BaseModel):
 
 @router.post("/guardian-consent/complete")
 def guardian_consent_complete(
-    payload: GuardianCompleteRequest, session: Session = Depends(get_session)
+    payload: GuardianCompleteRequest,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, payload.registration_id)
     if reg is None:
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
+    if actor.is_authenticated and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
     from sqlalchemy import select
@@ -598,15 +640,27 @@ def request_institutional_email_verification(
 
 
 @router.get("/verification/status")
-def verification_status(registration_id: uuid.UUID, session: Session = Depends(get_session)) -> dict[str, str]:
+def verification_status(
+    registration_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
+) -> dict[str, str]:
+    reg = session.get(StudentRegistration, registration_id)
+    if actor.is_authenticated and reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, registration_id)
     return {"status": ver.status, "method": ver.method}
 
 
 @router.post("/verification/status")
 def verification_transition(
-    payload: VerificationTransitionRequest, session: Session = Depends(get_session)
+    payload: VerificationTransitionRequest,
+    session: Session = Depends(get_session),
+    actor: ActorContext = Depends(get_actor_context),
 ) -> dict[str, str]:
+    reg = session.get(StudentRegistration, payload.registration_id)
+    if actor.is_authenticated and reg is not None and reg.user_id is not None and str(reg.user_id) != str(actor.user_id):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
     ver = _load_verification(session, payload.registration_id)
     allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
     if payload.status != ver.status and payload.status not in allowed:

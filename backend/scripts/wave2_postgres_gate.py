@@ -76,6 +76,14 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+
+def _expected_alembic_head() -> str:
+    versions_dir = BACKEND / "app" / "db" / "migrations" / "versions"
+    files = [p.stem for p in versions_dir.glob("*.py")]
+    numbered = [f for f in files if f.split("_", 1)[0].isdigit()]
+    assert numbered, f"No alembic version files found in {versions_dir}"
+    return max(numbered, key=lambda s: int(s.split("_", 1)[0]))
+
 #: EX_CONFIG. Distinct from 0 (pass) and 1 (assertion failure).
 BLOCKED_EXIT = 78
 BLOCKED_PREFIX = "BLOCKED: prerequisite runtime absent"
@@ -1074,12 +1082,13 @@ def main(argv: list[str] | None = None) -> int:
                             text("SELECT version_num FROM alembic_version")
                         )
                     scratch_engine.dispose()
-                same = heads["a"] == heads["b"] == "0014_saathi60_internships"
+                expected = _expected_alembic_head()
+                same = heads["a"] == heads["b"] == expected
                 return same, heads
 
             rec.guard(
                 "A1.3",
-                "both paths land on head 0014_saathi60_internships",
+                "both paths land on expected head revision",
                 a1_3,
             )
 
