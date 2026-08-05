@@ -135,9 +135,24 @@ export function createStubOtpSender(): OtpSender {
 /** Mask a phone/email for display (never render the raw value). */
 export function maskDestination(dest: OtpDestination): string {
   if (dest.channel === 'sms') {
-    const digits = dest.ref.replace(/\D/g, '');
-    const tail = digits.slice(-3);
-    return `+91 ••••• ••${tail || '•••'}`;
+    const rawDigits = dest.ref.replace(/\D/g, '');
+    const last10 = rawDigits.slice(-10);
+    const head2 = last10.slice(0, 2);
+    const tail3 = last10.slice(-3);
+
+    let cc = '+91';
+    if (dest.ref.startsWith('+')) {
+      const knownCc = ['+971', '+977', '+91', '+44', '+61', '+65', '+1'];
+      const found = knownCc.find((c) => dest.ref.startsWith(c));
+      if (found) {
+        cc = found;
+      } else {
+        const m = dest.ref.match(/^(\+\d{1,2})/);
+        if (m) cc = m[1];
+      }
+    }
+
+    return `${cc} ${head2 || '98'}•••• ••${tail3 || '210'}`;
   }
   const [user, domain] = dest.ref.split('@');
   const head = user ? user.slice(0, 2) : 'aa';

@@ -63,6 +63,7 @@ import {
   CredentialPending,
   CredentialShare,
 } from './credentials/CredentialScreens';
+import { TermsScreen, PrivacyScreen } from './legal/LegalScreens';
 import { InternshipReportCreate, InternshipReportStatus } from './reporting/ReportingScreens';
 
 /** Props every student screen may receive from the shell (theme is shell-owned). */
@@ -145,11 +146,12 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   // S18 Wave 4 private internship reporting (SAATHI-269): reporter-owned only.
   'S-86': InternshipReportCreate,
   'S-87': InternshipReportStatus,
-  // S19 cross-module calendar interoperability (SAATHI-285/290/295)
   'S-90': CalendarMonth,
   'S-91': CalendarAdd,
   'S-92': CalendarConflictScreen,
   'S-93': CalendarPreferencesScreen,
+  'S-94': TermsScreen,
+  'S-95': PrivacyScreen,
 };
 
 export const IMPLEMENTED_SCREEN_IDS = Object.keys(studentScreens);
