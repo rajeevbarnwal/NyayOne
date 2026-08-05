@@ -18,6 +18,7 @@
     "qa:registration": "node scripts/registration-e2e.mjs",
     "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",
+    "qa:saathi60:real": "node scripts/saathi60-internship-real-e2e.mjs",
     "qa:lawschool": "node scripts/lawschool-e2e.mjs",
     "qa:credentials": "node scripts/credential-e2e.mjs",
     "qa:wave4-reporting": "node scripts/wave4-reporting-e2e.mjs",

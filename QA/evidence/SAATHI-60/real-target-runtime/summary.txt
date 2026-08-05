@@ -1,0 +1,5 @@
+SAATHI-60 real target-runtime internship gate
+total=275
+passed=275
+failed=0
+screenshots=40

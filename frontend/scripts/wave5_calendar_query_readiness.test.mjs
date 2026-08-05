@@ -19,8 +19,11 @@ import { describe, expect, it } from 'vitest';
 import {
   calendarEventDetailPath,
   changeTimezoneWithQueryReady,
+  createCalendarEventWithDetailReady,
+  createdCalendarEventIdentityMatches,
   encodedTimezoneParam,
   matchesCalendarEventDetailQuery,
+  matchesCreatedCalendarEventDetailQuery,
   matchesCalendarEventsQuery,
   runtimeClean,
   runtimeErrors,
@@ -140,6 +143,16 @@ function applyEventSave(page, eventId = EVENT_ID) {
   };
 }
 
+/** Create one event, then start its route-owned detail query later. */
+function applyEventCreate(page, eventId = EVENT_ID) {
+  return async () => {
+    const post = page.startRequest(`${API}/api/v1/calendar/events`, 'POST');
+    page.completeRequest(post, 201);
+    const detail = page.startRequest(eventDetailUrl(eventId), 'GET');
+    setTimeout(() => page.completeRequest(detail, 200), REFETCH_MS);
+  };
+}
+
 const savePredicate = (response) => response.url().endsWith('/api/v1/calendar/view-preferences')
   && response.request().method() === 'PUT';
 
@@ -173,6 +186,23 @@ async function runEventDetailSequence({ legacyNavigateImmediately }) {
     legacyNavigateImmediately,
   });
   // This models the real runner's immediate post-edit reload.
+  await page.goto(`${WEB}/s-91?event=${EVENT_ID}`);
+  page.dispose();
+  return { page, result };
+}
+
+async function runEventCreateSequence({ legacyNavigateImmediately }) {
+  const page = fakePage();
+  const result = await createCalendarEventWithDetailReady({
+    page,
+    applyCreate: applyEventCreate(page),
+    createPredicate: (response) => response.url() === `${API}/api/v1/calendar/events`
+      && response.request().method() === 'POST'
+      && response.status() === 201,
+    timeout: 5_000,
+    legacyNavigateImmediately,
+  });
+  // This models the real runner's first refresh after create/navigation.
   await page.goto(`${WEB}/s-91?event=${EVENT_ID}`);
   page.dispose();
   return { page, result };
@@ -240,6 +270,29 @@ describe('calendar-events query matcher', () => {
 });
 
 describe('S-91 event-detail readiness contract', () => {
+  it('the OLD post-create sequence aborts the route-owned event-detail GET', async () => {
+    const { page, result } = await runEventCreateSequence({ legacyNavigateImmediately: true });
+    expect(result.detailReady).toBeNull();
+    expect(runtimeClean(page.state)).toBe(false);
+    expect(runtimeErrors(page.state).failedRequests).toEqual([
+      `GET ${eventDetailUrl()} net::ERR_ABORTED`,
+    ]);
+  });
+
+  it('settles the post-create event-detail GET before the first refresh', async () => {
+    const { page, result } = await runEventCreateSequence({ legacyNavigateImmediately: false });
+    expect(result.create.status()).toBe(201);
+    expect(result.create.isFinished()).toBe(true);
+    expect(result.detailReady.status()).toBe(200);
+    expect(result.detailReady.isFinished()).toBe(true);
+    expect(matchesCreatedCalendarEventDetailQuery({
+      url: result.detailReady.url(), method: 'GET', status: 200,
+    })).toBe(true);
+    expect(page.inflightCount()).toBe(0);
+    expect(runtimeErrors(page.state).failedRequests).toEqual([]);
+    expect(runtimeClean(page.state)).toBe(true);
+  });
+
   it('the OLD immediate-reload sequence aborts the exact event-detail GET', async () => {
     const { page, result } = await runEventDetailSequence({ legacyNavigateImmediately: true });
     expect(result.detailReady).toBeNull();
@@ -289,5 +342,35 @@ describe('S-91 event-detail readiness contract', () => {
     expect(matchesCalendarEventDetailQuery({ ...ok, status: 500 }, EVENT_ID)).toBe(false);
     expect(matchesCalendarEventDetailQuery({ ...ok, url: 'not-a-url' }, EVENT_ID)).toBe(false);
     expect(() => calendarEventDetailPath('')).toThrow('calendar event id is required');
+  });
+
+  it('matches only one successful created event-detail resource', () => {
+    const ok = { url: eventDetailUrl(), method: 'GET', status: 200 };
+    expect(matchesCreatedCalendarEventDetailQuery(ok)).toBe(true);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, url: `${eventDetailUrl()}/nested` })).toBe(false);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, url: `${eventDetailUrl()}?expand=true` })).toBe(false);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, url: eventsUrl(TIMEZONE) })).toBe(false);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, method: 'POST' })).toBe(false);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, status: 304 })).toBe(false);
+    expect(matchesCreatedCalendarEventDetailQuery({ ...ok, url: 'not-a-url' })).toBe(false);
+  });
+
+  it('requires the POST body id, SPA route id, and detail id to agree', () => {
+    const detail = { url: eventDetailUrl(), method: 'GET', status: 200 };
+    expect(createdCalendarEventIdentityMatches({
+      createdId: EVENT_ID, routeId: EVENT_ID, detail,
+    })).toBe(true);
+    expect(createdCalendarEventIdentityMatches({
+      createdId: 'wrong-id', routeId: EVENT_ID, detail,
+    })).toBe(false);
+    expect(createdCalendarEventIdentityMatches({
+      createdId: EVENT_ID, routeId: 'wrong-id', detail,
+    })).toBe(false);
+    expect(createdCalendarEventIdentityMatches({
+      createdId: EVENT_ID, routeId: EVENT_ID, detail: { ...detail, url: eventDetailUrl('wrong-id') },
+    })).toBe(false);
+    expect(createdCalendarEventIdentityMatches({
+      createdId: EVENT_ID, routeId: EVENT_ID, detail: { ...detail, status: 500 },
+    })).toBe(false);
   });
 });
