@@ -36,15 +36,17 @@ jobs:
           - 3310:3310
     env:
       DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave4_qa
+      TEST_DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave4_qa
       APP_ENV: testing
       WAVE4_GATE_ALLOW_MUTATION: "true"
+      INTERNSHIP_RISK_LABELS_ENABLED: "false"
       REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
       REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
       INTERNSHIP_REPORT_STORAGE_ROOT: ${{ github.workspace }}/test-results/report-evidence
       INTERNSHIP_REPORT_SCANNER_PROVIDER: clamav
       INTERNSHIP_REPORT_CLAMAV_HOST: 127.0.0.1
       INTERNSHIP_REPORT_CLAMAV_PORT: 3310
-      CORS_ORIGINS: '["http://127.0.0.1:1260","http://localhost:1260"]'
+      CORS_ORIGINS: '["http://127.0.0.1:1260","http://localhost:1260","http://127.0.0.1:1263","http://localhost:1263"]'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -127,17 +129,49 @@ jobs:
           (cd frontend && npm run typecheck && npm run lint && npm run test:run && npm run build)
       - name: PostgreSQL 16 + pgvector Wave 4 gate
         working-directory: backend
+        env:
+          WAVE4_GATE_ALLOW_PUBLICATION_TEST: "true"
+          WAVE4_SECURITY_APPROVAL_REF: QA-SECURITY-TARGET-RUNTIME-ONLY
+          WAVE4_POLICY_APPROVAL_REF: QA-POLICY-TARGET-RUNTIME-ONLY
+          WAVE4_TARGET_RUNTIME_GATE_REF: QA-WAVE4-POSTGRES-CHROMIUM
         run: PYTHON=python bash scripts/wave4_db_gate.sh "$GITHUB_WORKSPACE/test-results/wave4-postgres/summary.json"
-      - name: Seed actors and start app
+      - name: Generate environment-only Wave 4 browser credentials
+        run: |
+          python - <<'PY'
+          import os
+          import secrets
+
+          names = (
+              "WAVE4_E2E_SESSION_TOKEN",
+              "WAVE4_E2E_SAFETY_SESSION_TOKEN",
+              "WAVE4_E2E_LEGAL_SESSION_TOKEN",
+              "WAVE4_E2E_RESPONSE_TOKEN",
+              "WAVE4_E2E_EXPIRED_RESPONSE_TOKEN",
+              "WAVE4_E2E_BOUNDARY_RESPONSE_TOKEN",
+          )
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              for name in names:
+                  value = secrets.token_urlsafe(48)
+                  # Register the value with GitHub's log masker before any
+                  # downstream process can accidentally echo it.
+                  print(f"::add-mask::{value}")
+                  output.write(f"{name}={value}\n")
+          print("Generated six isolated credentials; raw values were not logged")
+          PY
+      - name: Seed actors and moderation fixtures, then start app boundaries
         env:
           WAVE4_E2E_ALLOW_SEED: "true"
-          WAVE4_E2E_SESSION_TOKEN: wave4-ci-opaque-session-token-at-least-32-characters
         run: |
+          mkdir -p test-results
           (cd backend && python scripts/seed_e2e_actors.py)
-          (cd backend && python scripts/seed_wave4_moderation_e2e.py)
-          (cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 1261 > ../test-results/wave4-backend.log 2>&1 &)
-          (cd frontend && VITE_API_BASE_URL=http://127.0.0.1:1261 npm run dev -- --host 127.0.0.1 --port 1260 > ../test-results/wave4-frontend.log 2>&1 &)
-          for url in http://127.0.0.1:1261/health http://127.0.0.1:1260/s-86; do
+          (cd backend && python -m scripts.seed_wave4_moderation_e2e)
+          (cd frontend && VITE_INTERNSHIP_RISK_LABELS_ENABLED=true VITE_API_BASE_URL=http://127.0.0.1:1261 npx vite build --outDir "$RUNNER_TEMP/wave4-frontend-enabled")
+          (cd frontend && VITE_INTERNSHIP_RISK_LABELS_ENABLED=false VITE_API_BASE_URL=http://127.0.0.1:1262 npx vite build --outDir "$RUNNER_TEMP/wave4-frontend-disabled")
+          (cd backend && env -u WAVE4_E2E_ALLOW_SEED WAVE4_GATE_ALLOW_PUBLICATION_TEST=true WAVE4_SECURITY_APPROVAL_REF=QA-SECURITY-TARGET-RUNTIME-ONLY WAVE4_POLICY_APPROVAL_REF=QA-POLICY-TARGET-RUNTIME-ONLY WAVE4_TARGET_RUNTIME_GATE_REF=QA-WAVE4-POSTGRES-CHROMIUM python -m uvicorn app.main:app --host 127.0.0.1 --port 1261 > ../test-results/wave4-backend-enabled.log 2>&1 &)
+          (cd backend && env -u WAVE4_E2E_ALLOW_SEED WAVE4_GATE_ALLOW_PUBLICATION_TEST=false python -m uvicorn app.main:app --host 127.0.0.1 --port 1262 > ../test-results/wave4-backend-disabled.log 2>&1 &)
+          (cd frontend && npx vite preview --host 127.0.0.1 --port 1260 --strictPort --outDir "$RUNNER_TEMP/wave4-frontend-enabled" > ../test-results/wave4-frontend-enabled.log 2>&1 &)
+          (cd frontend && npx vite preview --host 127.0.0.1 --port 1263 --strictPort --outDir "$RUNNER_TEMP/wave4-frontend-disabled" > ../test-results/wave4-frontend-disabled.log 2>&1 &)
+          for url in http://127.0.0.1:1261/health http://127.0.0.1:1262/health http://127.0.0.1:1260/s-86 http://127.0.0.1:1263/s-88; do
             for attempt in {1..60}; do curl --fail --silent "$url" >/dev/null && break; test "$attempt" = 60 && exit 1; sleep 1; done
           done
       - name: S-86/S-87 Chromium and negative matrix
@@ -151,11 +185,69 @@ jobs:
         working-directory: frontend
         env:
           WAVE4_E2E_ALLOW_RUN: "true"
-          WAVE4_E2E_SESSION_TOKEN: wave4-ci-opaque-session-token-at-least-32-characters
+          WAVE4_E2E_PUBLICATION_GATE_OPEN: "true"
           E2E_WEB_URL: http://127.0.0.1:1260
           E2E_API_URL: http://127.0.0.1:1261
           E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave4-moderation-browser
         run: npm run qa:wave4-moderation
+      - name: Seed governed risk-label fixtures after moderation
+        env:
+          WAVE4_E2E_ALLOW_SEED: "true"
+          WAVE4_GATE_ALLOW_PUBLICATION_TEST: "true"
+          WAVE4_SECURITY_APPROVAL_REF: QA-SECURITY-TARGET-RUNTIME-ONLY
+          WAVE4_POLICY_APPROVAL_REF: QA-POLICY-TARGET-RUNTIME-ONLY
+          WAVE4_TARGET_RUNTIME_GATE_REF: QA-WAVE4-POSTGRES-CHROMIUM
+          WAVE4_E2E_FIXTURE_OUTPUT: ${{ github.workspace }}/test-results/wave4-risk-label-fixture.json
+        run: (cd backend && python -m scripts.seed_wave4_risk_labels_e2e)
+      - name: S-88/S-89 public projection and right-of-reply Chromium matrix
+        working-directory: frontend
+        env:
+          WAVE4_E2E_ALLOW_RUN: "true"
+          WAVE4_E2E_ALLOW_DELIVERY_CAPTURE: "true"
+          WAVE4_E2E_ALLOW_SOURCE_INVALIDATION: "true"
+          WAVE4_E2E_DATABASE_DIALECT: postgresql
+          WAVE4_E2E_FIXTURE_PATH: ${{ github.workspace }}/test-results/wave4-risk-label-fixture.json
+          E2E_WEB_URL: http://127.0.0.1:1260
+          E2E_API_URL: http://127.0.0.1:1261
+          E2E_DISABLED_WEB_URL: http://127.0.0.1:1263
+          E2E_DISABLED_API_URL: http://127.0.0.1:1262
+          E2E_OUTPUT_DIR: ${{ github.workspace }}/test-results/wave4-risk-label-browser
+        run: npm run qa:wave4-risk-labels
+      - name: Prove invitation and session credentials are absent from evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          names = (
+              "WAVE4_E2E_SESSION_TOKEN",
+              "WAVE4_E2E_SAFETY_SESSION_TOKEN",
+              "WAVE4_E2E_LEGAL_SESSION_TOKEN",
+              "WAVE4_E2E_RESPONSE_TOKEN",
+              "WAVE4_E2E_EXPIRED_RESPONSE_TOKEN",
+              "WAVE4_E2E_BOUNDARY_RESPONSE_TOKEN",
+          )
+          secrets = {
+              name: os.environ[name].encode()
+              for name in names
+              if os.environ.get(name)
+          }
+          if not secrets:
+              print("No Wave 4 browser credentials were generated before this failed gate")
+              raise SystemExit(0)
+          leaks = []
+          for item in Path("test-results").rglob("*"):
+              if not item.is_file():
+                  continue
+              data = item.read_bytes()
+              for name, secret in secrets.items():
+                  if secret in data:
+                      leaks.append(f"{item}:{name}")
+          if leaks:
+              raise SystemExit("Raw credential found in evidence: " + ", ".join(leaks))
+          print("Privacy scan passed: no raw Wave 4 browser credential in evidence")
+          PY
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

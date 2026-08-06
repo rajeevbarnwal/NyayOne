@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hasRole, useAuth } from '../../app/authContext';
@@ -80,6 +80,12 @@ export function ModerationQueueScreen() {
       <section className="mod-toolbar" aria-label="Moderation queue summary"><strong>{items.length} cases</strong><span>{items.filter((item) => item.state === 'pending').length} awaiting claim</span><span>{items.filter((item) => item.state === 'approved_aggregate_only').length} aggregate-approved</span></section>
       {query.isPending && <p role="status">Loading the private queue…</p>}
       {query.isError && <ErrorNotice error={query.error} />}
+      {query.isSuccess && items.length === 0 && (
+        <section className="mod-notice" role="status" data-testid="moderation-empty">
+          <strong>No reports need moderation.</strong>
+          <span>The queue is clear. New private reports will appear here after submission.</span>
+        </section>
+      )}
       <div className="mod-grid">{items.map((item) => <CaseRow key={item.reportId} item={item} selected={selected.includes(item.reportId)} onSelect={(checked) => toggle(item.reportId, checked)} />)}</div>
       <section className="mod-cluster" aria-labelledby="mod-cluster-title">
         <div><p className="mod-eyebrow">Internal aggregate preview</p><h2 id="mod-cluster-title">Compare corroborating signals</h2></div>
@@ -96,18 +102,78 @@ export function ModerationCaseScreen() {
   const { reportId = '' } = useParams();
   const client = useQueryClient();
   const [reason, setReason] = useState('Reviewed against the approved internal moderation policy.');
+  const [pendingAction, setPendingAction] = useState<'needs_information' | 'approve_aggregate_only' | 'reject' | null>(null);
+  const confirmationTrigger = useRef<HTMLButtonElement | null>(null);
   const query = useQuery({ queryKey: ['moderation-case', reportId], queryFn: () => getModerationCase(reportId), enabled: Boolean(reportId), retry: false });
   const action = useMutation({ mutationFn: (value: 'claim' | 'needs_information' | 'approve_aggregate_only' | 'reject') => actOnModerationCase(reportId, query.data!.version, value, value === 'claim' ? 'Beginning independent internal review.' : reason), onSuccess: async () => { await query.refetch(); await client.invalidateQueries({ queryKey: ['moderation-cases'] }); } });
   const item = query.data;
   const terminal = useMemo(() => item && ['approved_aggregate_only', 'rejected', 'needs_information'].includes(item.state), [item]);
+  const actionLabels = {
+    needs_information: 'request more information',
+    approve_aggregate_only: 'approve aggregate-only use',
+    reject: 'reject this report',
+  } as const;
+  useEffect(() => {
+    if (!pendingAction) confirmationTrigger.current?.focus();
+  }, [pendingAction]);
+  const openConfirmation = (
+    value: 'needs_information' | 'approve_aggregate_only' | 'reject',
+    trigger: HTMLButtonElement,
+  ) => {
+    confirmationTrigger.current = trigger;
+    setPendingAction(value);
+  };
+  const closeConfirmation = () => setPendingAction(null);
+  const handleConfirmationKeys = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeConfirmation();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled)')];
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   return (
     <main className="mod-shell" data-screen="MOD-02">
-      <Link className="mod-back" to="/moderation/internship-reports">← Queue</Link>
-      <Header title="Private report review" intro="The narrative is visible here only for internal moderation. Reporter identity is not part of this projection." />
-      {query.isPending && <p role="status">Loading the case…</p>}{query.isError && <ErrorNotice error={query.error} />}
-      {item && <><section className="mod-detail"><div><span className={`mod-state mod-state--${item.state}`}>{item.state.replace(/_/g, ' ')}</span><h2>{item.organisationName}</h2><p>{item.listingApplicationRef}</p></div><dl className="mod-meta"><div><dt>Privacy</dt><dd>{item.privacyMode.replace(/_/g, ' ')}</dd></div><div><dt>Evidence scans</dt><dd>{item.scanStates.length ? item.scanStates.join(', ') : 'No files'}</dd></div><div><dt>Version</dt><dd>{item.version}</dd></div></dl></section>
-        <section className="mod-narrative" aria-labelledby="mod-narrative-title"><h2 id="mod-narrative-title">Factual account</h2><p>{item.narrative}</p></section>
-        {!terminal && <section className="mod-actions" aria-labelledby="mod-actions-title"><h2 id="mod-actions-title">Record an auditable action</h2>{item.state === 'pending' ? <button className="mod-button" type="button" disabled={action.isPending} onClick={() => action.mutate('claim')}>Claim this case</button> : <><label>Decision rationale (10–1,000 characters)<textarea value={reason} minLength={10} maxLength={1000} onChange={(event) => setReason(event.target.value)} /></label><div className="mod-action-row"><button className="mod-button mod-button--quiet" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={() => action.mutate('needs_information')}>Request information</button><button className="mod-button" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={() => action.mutate('approve_aggregate_only')}>Approve aggregate-only</button><button className="mod-button mod-button--danger" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={() => action.mutate('reject')}>Reject report</button></div></>}{action.isError && <ErrorNotice error={action.error} />}</section>}</>}
+      <div
+        className="mod-case-background"
+        data-moderation-background
+        inert={pendingAction ? true : undefined}
+        aria-hidden={pendingAction ? 'true' : undefined}
+      >
+        <Link className="mod-back" to="/moderation/internship-reports">← Queue</Link>
+        <Header title="Private report review" intro="The narrative is visible here only for internal moderation. Reporter identity is not part of this projection." />
+        {query.isPending && <p role="status">Loading the case…</p>}{query.isError && <ErrorNotice error={query.error} />}
+        {item && <><section className="mod-detail"><div><span className={`mod-state mod-state--${item.state}`}>{item.state.replace(/_/g, ' ')}</span><h2>{item.organisationName}</h2><p>{item.listingApplicationRef}</p></div><dl className="mod-meta"><div><dt>Privacy</dt><dd>{item.privacyMode.replace(/_/g, ' ')}</dd></div><div><dt>Evidence scans</dt><dd>{item.scanStates.length ? item.scanStates.join(', ') : 'No files'}</dd></div><div><dt>Version</dt><dd>{item.version}</dd></div></dl></section>
+          <section className="mod-narrative" aria-labelledby="mod-narrative-title"><h2 id="mod-narrative-title">Factual account</h2><p>{item.narrative}</p></section>
+          {!terminal && <section className="mod-actions" aria-labelledby="mod-actions-title"><h2 id="mod-actions-title">Record an auditable action</h2>{item.state === 'pending' ? <button className="mod-button" type="button" disabled={action.isPending} onClick={() => action.mutate('claim')}>Claim this case</button> : <><label>Decision rationale (10–1,000 characters)<textarea value={reason} minLength={10} maxLength={1000} onChange={(event) => setReason(event.target.value)} /></label><div className="mod-action-row"><button className="mod-button mod-button--quiet" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={(event) => openConfirmation('needs_information', event.currentTarget)}>Request information</button><button className="mod-button" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={(event) => openConfirmation('approve_aggregate_only', event.currentTarget)}>Approve aggregate-only</button><button className="mod-button mod-button--danger" type="button" disabled={reason.trim().length < 10 || action.isPending} onClick={(event) => openConfirmation('reject', event.currentTarget)}>Reject report</button></div></>}{action.isError && <ErrorNotice error={action.error} />}</section>}</>}
+      </div>
+      {pendingAction && (
+        <div className="mod-dialog-backdrop" role="presentation">
+          <section className="mod-dialog" role="alertdialog" aria-modal="true" aria-labelledby="mod-confirm-title" aria-describedby="mod-confirm-copy" onKeyDown={handleConfirmationKeys}>
+            <h2 id="mod-confirm-title">Confirm moderation action</h2>
+            <p id="mod-confirm-copy">You are about to {actionLabels[pendingAction]}. The rationale and actor will be written to the append-only audit trail.</p>
+            <div className="mod-action-row">
+              <button className="mod-button mod-button--quiet" type="button" autoFocus onClick={closeConfirmation}>Go back</button>
+              <button className="mod-button" type="button" disabled={action.isPending} onClick={() => {
+                const confirmed = pendingAction;
+                setPendingAction(null);
+                action.mutate(confirmed);
+              }}>Confirm {actionLabels[pendingAction]}</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -117,9 +183,9 @@ export function RiskClusterScreen() {
   const query = useQuery({ queryKey: ['risk-cluster', clusterId], queryFn: () => getRiskCluster(clusterId), enabled: Boolean(clusterId), retry: false });
   const cluster = query.data;
   return (
-    <main className="mod-shell" data-screen="MOD-03"><Link className="mod-back" to="/moderation/internship-reports">← Queue</Link><Header title="Privacy-safe risk preview" intro="This internal candidate is not a public label. Publication is structurally disabled in this release." />
+    <main className="mod-shell" data-screen="MOD-03"><Link className="mod-back" to="/moderation/internship-reports">← Queue</Link><Header title="Privacy-safe risk preview" intro="This internal candidate is not a public label. Production publication remains fail-closed until its external approval gate is complete." />
       {query.isPending && <p role="status">Loading the aggregate preview…</p>}{query.isError && <ErrorNotice error={query.error} />}
-      {cluster && <section className="mod-risk"><span className={`mod-state mod-state--${cluster.state}`}>{cluster.state}</span><h2>{cluster.neutralLabel}</h2><p>{cluster.organisationName} · {CATEGORY_LABELS[cluster.category] ?? cluster.category}</p><div className="mod-risk__numbers"><div><strong>{cluster.reportCount}</strong><span>source reports</span></div><div><strong>{cluster.distinctReporterCount}</strong><span>distinct reporters</span></div><div><strong>{cluster.publicCount ?? 'Suppressed'}</strong><span>public count</span></div></div><ul className="mod-checks"><li data-pass={cluster.thresholdMet}>Minimum distinct-report threshold</li><li data-pass={cluster.moderatorApproved}>Moderator approval</li><li data-pass={cluster.safetyLegalApproved}>Safety or legal approval</li><li data-pass="false">Public publication kill-switch: OFF</li></ul><p className="mod-notice"><strong>Not public.</strong> Even if approvals are recorded, <code>publication_ready</code> remains false until SAATHI-279 and SAATHI-452 receive Product, Safety and Legal approval.</p></section>}
+      {cluster && <section className="mod-risk"><span className={`mod-state mod-state--${cluster.state}`}>{cluster.state}</span><h2>{cluster.neutralLabel}</h2><p>{cluster.organisationName} · {CATEGORY_LABELS[cluster.category] ?? cluster.category}</p><div className="mod-risk__numbers"><div><strong>{cluster.reportCount}</strong><span>source reports</span></div><div><strong>{cluster.distinctReporterCount}</strong><span>distinct reporters</span></div><div><strong>{cluster.publicCount ?? 'Suppressed'}</strong><span>public count</span></div></div><ul className="mod-checks"><li data-pass={cluster.thresholdMet}>Minimum distinct-report threshold</li><li data-pass={cluster.moderatorApproved}>Moderator approval</li><li data-pass={cluster.safetyLegalApproved}>Safety or legal approval</li><li data-pass="false">Public publication kill-switch: OFF</li></ul><p className="mod-notice"><strong>Not public.</strong> SAATHI-279 implementation and Product-approved safe defaults are complete. In production, <code>publication_ready</code> remains false until SAATHI-452 records Counsel/Policy and Security/Privacy approval and all target-runtime gates pass.</p></section>}
     </main>
   );
 }

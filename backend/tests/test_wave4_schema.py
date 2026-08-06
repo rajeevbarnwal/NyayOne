@@ -8,10 +8,14 @@ import sys
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import AddConstraint, CreateIndex
+
+from app.models.wave4 import OrganisationResponseRequest
 
 BACKEND = Path(__file__).resolve().parents[1]
 WAVE4_REVISION = "0012_wave4_moderation"
-HEAD_REVISION = "0014_saathi60_internships"
+HEAD_REVISION = "0015_wave4_public_risk_labels"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
@@ -31,7 +35,26 @@ TABLES = {
     "risk_signals",
     "risk_signal_approvals",
     "moderation_notification_outbox",
+    "published_risk_labels",
+    "publication_decisions",
+    "organisation_response_requests",
+    "organisation_responses",
+    "response_moderation",
+    "notification_outbox",
 }
+
+
+def test_response_request_identifiers_compile_for_postgresql() -> None:
+    """Catch explicit identifiers that exceed PostgreSQL's 63-byte limit."""
+    table = OrganisationResponseRequest.__table__
+    dialect = postgresql.dialect()
+    for index in table.indexes:
+        rendered = str(CreateIndex(index).compile(dialect=dialect))
+        assert rendered.startswith("CREATE ")
+    for constraint in table.constraints:
+        if constraint.name:
+            rendered = str(AddConstraint(constraint).compile(dialect=dialect))
+            assert rendered.startswith("ALTER TABLE organisation_response_requests")
 
 
 def _alembic(database: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -80,6 +103,34 @@ def test_real_upgrade_has_all_tables_constraints_indexes_and_privacy_boundaries(
     evidence_columns = {item["name"] for item in inspector.get_columns("internship_report_evidence")}
     assert {"object_ref", "mime_type", "size_bytes", "checksum_sha256", "scan_state"} <= evidence_columns
     assert not evidence_columns & {"filename", "file_bytes", "content", "raw_file"}
+
+    response_request_checks = {
+        item["name"] for item in inspector.get_check_constraints("organisation_response_requests")
+    }
+    assert any("representative_verification_method" in name for name in response_request_checks)
+    assert any("target_response_matches_kind" in name for name in response_request_checks)
+    response_request_indexes = {
+        item["name"] for item in inspector.get_indexes("organisation_response_requests")
+    }
+    assert "ix_organisation_response_requests_target_response_id" in response_request_indexes
+    assert "uq_response_requests_pending_initial_label" in response_request_indexes
+    response_request_foreign_keys = {
+        item["name"] for item in inspector.get_foreign_keys("organisation_response_requests")
+    }
+    assert (
+        "fk_org_response_requests_target_response"
+        in response_request_foreign_keys
+    )
+    response_indexes = {item["name"] for item in inspector.get_indexes("organisation_responses")}
+    assert "uq_organisation_responses_current_label" in response_indexes
+    member_indexes = {item["name"] for item in inspector.get_indexes("duplicate_cluster_members")}
+    assert "uq_report_risk_cluster_category_active" in member_indexes
+    outbox_columns = {item["name"] for item in inspector.get_columns("notification_outbox")}
+    assert {"claimed_at", "claim_token", "secret_ciphertext", "secret_key_version"} <= outbox_columns
+    listing_columns = {item["name"] for item in inspector.get_columns("internship_listings")}
+    listing_indexes = {item["name"] for item in inspector.get_indexes("internship_listings")}
+    assert "organisation_public_id" in listing_columns
+    assert "ix_internship_listings_organisation_public_id" in listing_indexes
 
     for table in TABLES:
         index_columns = {

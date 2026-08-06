@@ -35,6 +35,11 @@ class InternshipListing(TimestampedBase):
     slug: Mapped[str] = mapped_column(String(64), nullable=False)
     role: Mapped[str] = mapped_column(String(160), nullable=False)
     organisation: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Immutable route identity: display-name corrections must not orphan
+    # public risk-label URLs or saved catalogue references.
+    organisation_public_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
     location: Mapped[str] = mapped_column(String(120), nullable=False)
     stipend_monthly_paise: Mapped[int | None] = mapped_column(Integer, nullable=True)
     verification_status: Mapped[str] = mapped_column(

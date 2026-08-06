@@ -23,6 +23,7 @@
     "qa:credentials": "node scripts/credential-e2e.mjs",
     "qa:wave4-reporting": "node scripts/wave4-reporting-e2e.mjs",
     "qa:wave4-moderation": "node scripts/wave4-moderation-e2e.mjs",
+    "qa:wave4-risk-labels": "node scripts/wave4-risk-labels-e2e.mjs",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",
