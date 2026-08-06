@@ -59,6 +59,15 @@ describe('SAATHI-274 internal moderation screens', () => {
     expect(html).not.toMatch(/publish organisation|publish label|public allegation/i);
   });
 
+  it('renders a truthful empty queue after the server returns zero cases', () => {
+    const html = render('/moderation/internship-reports', MODERATOR, <ModerationGuard><ModerationQueueScreen /></ModerationGuard>, (client) => {
+      client.setQueryData(['moderation-cases'], []);
+    });
+    expect(html).toContain('data-testid="moderation-empty"');
+    expect(html).toContain('No reports need moderation.');
+    expect(html).not.toContain('Review private case');
+  });
+
   it('renders suppression and the hard publication kill-switch in the risk preview', () => {
     const cluster: RiskCluster = {
       id: 'cluster-1', organisationName: 'Nyaya Legal Foundation', category: 'unsafe_environment',
@@ -76,5 +85,8 @@ describe('SAATHI-274 internal moderation screens', () => {
     expect(html).toContain('Suppressed');
     expect(html).toContain('Public publication kill-switch: OFF');
     expect(html).toContain('publication_ready');
+    expect(html).toContain('SAATHI-279 implementation and Product-approved safe defaults are complete.');
+    expect(html).toContain('SAATHI-452 records Counsel/Policy and Security/Privacy approval');
+    expect(html).not.toContain('until SAATHI-279 and SAATHI-452 receive');
   });
 });

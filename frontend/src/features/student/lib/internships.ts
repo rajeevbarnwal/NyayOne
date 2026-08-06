@@ -9,6 +9,8 @@ export type StipendFilter = 'any' | 'paid' | 'unpaid';
 
 export interface InternshipListing {
   readonly id: string;
+  /** Stable opaque identity used only by the gated aggregate projection. */
+  readonly organisationId?: string;
   readonly role: string;
   readonly org: string;
   readonly location: string;

@@ -24,6 +24,7 @@ interface SourceWire {
 
 interface ListingWire {
   id: string;
+  organisation_id: string;
   role: string;
   organisation: string;
   location: string;
@@ -69,6 +70,7 @@ function mapListing(wire: ListingWire): InternshipListing {
     : wire.application_deadline;
   return {
     id: wire.id,
+    organisationId: wire.organisation_id,
     role: wire.role,
     org: wire.organisation,
     location: wire.location,

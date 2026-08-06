@@ -64,6 +64,7 @@ import {
   CredentialShare,
 } from './credentials/CredentialScreens';
 import { InternshipReportCreate, InternshipReportStatus } from './reporting/ReportingScreens';
+import { InternshipRiskSignals, OrganisationResponse } from './reporting/RiskLabelScreens';
 
 /** Props every student screen may receive from the shell (theme is shell-owned). */
 export interface StudentScreenProps {
@@ -142,9 +143,11 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-83': CredentialAdd,
   'S-84': CredentialPending,
   'S-85': CredentialShare,
-  // S18 Wave 4 private internship reporting (SAATHI-269): reporter-owned only.
+  // S18 Wave 4 private reporting + disabled-by-default public projection/right of reply.
   'S-86': InternshipReportCreate,
   'S-87': InternshipReportStatus,
+  'S-88': InternshipRiskSignals,
+  'S-89': OrganisationResponse,
   // S19 cross-module calendar interoperability (SAATHI-285/290/295)
   'S-90': CalendarMonth,
   'S-91': CalendarAdd,

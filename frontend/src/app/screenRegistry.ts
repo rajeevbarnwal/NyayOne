@@ -43,6 +43,8 @@ const FEATURE_STATE_LABELS: Record<string, string> = {
   'S-85': 'wallet/share',
   'S-86': 'internship-report/create',
   'S-87': 'internship-report/status',
+  'S-88': 'internship-risk/aggregate',
+  'S-89': 'internship-risk/organisation-response',
   'S-90': 'calendar/month',
   'S-91': 'calendar/event',
   'S-92': 'calendar/conflicts',

@@ -14,24 +14,36 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
+
+BACKEND = Path(__file__).resolve().parent.parent
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+from app.core.config import is_isolated_wave4_database_url
 
 MODERATOR_ID = uuid.UUID("00000000-0000-4000-8000-0000000000c4")
 REPORT_IDS = tuple(uuid.UUID(f"00000000-0000-4000-8000-{2740 + index:012d}") for index in range(4))
 REPORTER_IDS = tuple(uuid.UUID(f"00000000-0000-4000-8000-{8600 + index:012d}") for index in range(4))
 
 
-def assert_isolated_target(database_url: str) -> None:
+def assert_isolated_target(
+    database_url: str,
+    *,
+    opt_in_env: str = "WAVE4_E2E_ALLOW_SEED",
+) -> None:
     if os.getenv("APP_ENV", "").strip().lower() not in {"test", "testing"}:
         raise RuntimeError("refusing E2E seed outside APP_ENV=testing")
-    if os.getenv("WAVE4_E2E_ALLOW_SEED", "").strip().lower() != "true":
-        raise RuntimeError("WAVE4_E2E_ALLOW_SEED=true is required")
-    parsed = make_url(database_url)
-    target = (parsed.database or "").casefold()
-    isolated_markers = ("test", "qa", "e2e", "saathi274", "wave4")
-    if not target or not any(marker in target for marker in isolated_markers):
-        raise RuntimeError("database path/name must visibly identify an isolated QA target")
+    if os.getenv(opt_in_env, "").strip().lower() != "true":
+        raise RuntimeError(f"{opt_in_env}=true is required")
+    test_database_url = os.getenv("TEST_DATABASE_URL", "").strip()
+    actual_database_url = (database_url or "").strip()
+    if not test_database_url or test_database_url != actual_database_url:
+        raise RuntimeError("TEST_DATABASE_URL must exactly equal DATABASE_URL")
+    if not is_isolated_wave4_database_url(actual_database_url):
+        raise RuntimeError(
+            "database target must be an isolated local Wave 4 QA database"
+        )
 
 
 def provision(session: Session, raw_session_token: str) -> dict[str, int]:
@@ -42,6 +54,7 @@ def provision(session: Session, raw_session_token: str) -> dict[str, int]:
     from app.models.wave4 import (
         InternshipReport,
         InternshipReportCategory,
+        InternshipReportEvidence,
         ModerationCase,
         ModerationHandoff,
         ReporterIdentityVault,
@@ -56,6 +69,10 @@ def provision(session: Session, raw_session_token: str) -> dict[str, int]:
     else:
         moderator.role = "moderator"
         moderator.status = "active"
+    # The seed must also work on a genuinely empty PostgreSQL database.  Flush
+    # the principal before looking up or inserting its session so the FK order
+    # never depends on dialect-specific unit-of-work ordering.
+    session.flush()
 
     now = datetime.now(timezone.utc)
     token_hash = keyed_hash(raw_session_token)
@@ -94,6 +111,20 @@ def provision(session: Session, raw_session_token: str) -> dict[str, int]:
             InternshipReportCategory.category == "unsafe_environment",
         )) is None:
             session.add(InternshipReportCategory(report_id=report_id, category="unsafe_environment"))
+        if session.scalar(select(InternshipReportEvidence).where(
+            InternshipReportEvidence.report_id == report_id,
+            InternshipReportEvidence.scan_state == "clean",
+        )) is None:
+            session.add(InternshipReportEvidence(
+                report_id=report_id,
+                object_ref=f"wave4-e2e/{report_id}",
+                mime_type="application/pdf",
+                size_bytes=1024,
+                checksum_sha256=f"{index + 1:064x}",
+                scan_state="clean",
+                scanner_result_code="fixture_clean",
+                retention_policy="configured",
+            ))
         if session.scalar(select(ReporterIdentityVault).where(ReporterIdentityVault.report_id == report_id)) is None:
             reporter_ct = encrypt(str(reporter_id))
             session.add(ReporterIdentityVault(
@@ -117,9 +148,6 @@ def provision(session: Session, raw_session_token: str) -> dict[str, int]:
 
 
 def main() -> int:
-    backend = str(Path(__file__).resolve().parent.parent)
-    if backend not in sys.path:
-        sys.path.insert(0, backend)
     database_url = os.getenv("DATABASE_URL", "")
     token = os.getenv("WAVE4_E2E_SESSION_TOKEN", "")
     try:

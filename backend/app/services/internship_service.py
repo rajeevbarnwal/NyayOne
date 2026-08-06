@@ -12,6 +12,7 @@ from app.models.internships import InternshipListing, SavedInternship
 from app.models.registration import User
 from app.schemas.internships import InternshipListingOut, InternshipSourceOut
 from app.services.audit_service import record_audit_event
+from app.services.organisation_identity import public_organisation_id
 
 CATALOGUE_IDS = {
     "cam": uuid.UUID("60000000-0000-4000-8000-000000000001"),
@@ -28,6 +29,7 @@ CATALOGUE_SEED: tuple[dict, ...] = (
         "slug": "cam",
         "role": "Summer Associate, disputes",
         "organisation": "Cyril Amarchand Mangaldas",
+        "organisation_public_id": public_organisation_id("Cyril Amarchand Mangaldas"),
         "location": "Mumbai",
         "stipend_monthly_paise": 4_000_000,
         "verification_status": "verified",
@@ -50,6 +52,7 @@ CATALOGUE_SEED: tuple[dict, ...] = (
         "slug": "menon",
         "role": "Judicial research assistant",
         "organisation": "Chambers of Sr. Adv. R. Menon",
+        "organisation_public_id": public_organisation_id("Chambers of Sr. Adv. R. Menon"),
         "location": "Delhi High Court",
         "stipend_monthly_paise": 1_500_000,
         "verification_status": "unverified",
@@ -72,6 +75,7 @@ CATALOGUE_SEED: tuple[dict, ...] = (
         "slug": "vidhi",
         "role": "Research fellowship, policy",
         "organisation": "Vidhi Centre for Legal Policy",
+        "organisation_public_id": public_organisation_id("Vidhi Centre for Legal Policy"),
         "location": "New Delhi",
         "stipend_monthly_paise": None,
         "verification_status": "unverified",
@@ -105,6 +109,7 @@ def seed_internship_catalogue(session: Session) -> None:
 def listing_out(listing: InternshipListing) -> InternshipListingOut:
     return InternshipListingOut(
         id=listing.slug,
+        organisation_id=listing.organisation_public_id,
         role=listing.role,
         organisation=listing.organisation,
         location=listing.location,

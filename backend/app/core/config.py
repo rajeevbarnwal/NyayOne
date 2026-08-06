@@ -1,5 +1,8 @@
 from ipaddress import ip_address
-from urllib.parse import urlsplit
+from pathlib import Path
+import re
+import tempfile
+from urllib.parse import unquote, urlsplit
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,6 +38,60 @@ VIDEO_PROVIDER_CHOICES = ("deterministic", "livekit", "none")
 VIDEO_ICE_TRANSPORT_POLICY_CHOICES = ("all", "relay")
 #: The only reminder offsets ``session_reminder_jobs.offset_kind`` accepts.
 REMINDER_OFFSET_CHOICES = ("7d", "1d", "3h")
+
+
+def is_isolated_wave4_database_url(value: str | None) -> bool:
+    """Recognise an explicit local QA/test target, never credentials/query.
+
+    Merely searching the full URL would allow a username, password or query
+    parameter containing ``test`` to open the publication seam.  Only the final
+    path component (the PostgreSQL database or SQLite filename) is considered,
+    and the marker must be a delimited token rather than a substring. Remote
+    databases are rejected even when named ``wave4_qa``; publication testing is
+    intentionally limited to loopback PostgreSQL or an explicit temp SQLite
+    file on this host.
+    """
+    if not value:
+        return False
+    parsed = urlsplit(value)
+    decoded_path = unquote(parsed.path)
+    target = (decoded_path.rsplit("/", 1)[-1] or "").casefold()
+    tokens = {item for item in re.split(r"[^a-z0-9]+", target) if item}
+    # A feature/ticket name is not an isolation claim.  Destructive seed and
+    # target-runtime gates require an explicit environment token in the actual
+    # database name/path; credentials and query parameters never participate.
+    if not tokens & {"test", "testing", "qa", "e2e"}:
+        return False
+    # Never let a positive QA token override an explicit production/staging
+    # token (for example ``production_qa`` or ``legalsaathi_prod_test``).
+    if tokens & {"prod", "production", "stage", "staging"}:
+        return False
+    scheme = parsed.scheme.casefold()
+    if scheme.startswith("postgresql") or scheme.startswith("postgres"):
+        host = (parsed.hostname or "").casefold()
+        if host == "localhost":
+            return True
+        try:
+            return ip_address(host).is_loopback
+        except ValueError:
+            return False
+    if scheme.startswith("sqlite"):
+        if target == ":memory:":
+            return True
+        raw_path = decoded_path
+        if not raw_path:
+            return False
+        try:
+            resolved = Path(raw_path).expanduser().resolve()
+            temp_roots = {
+                Path(tempfile.gettempdir()).resolve(),
+                Path("/tmp").resolve(),
+                Path("/private/tmp").resolve(),
+            }
+            return any(resolved == root or resolved.is_relative_to(root) for root in temp_roots)
+        except (OSError, RuntimeError):
+            return False
+    return False
 
 
 def _is_placeholder_secret(secret: "SecretStr | str | None") -> bool:
@@ -198,6 +255,18 @@ class Settings(BaseSettings):
     # Product approval W4-PRODUCT-APPROVAL-20260801 permits implementation but
     # explicitly forbids activation until counsel/security + target gates pass.
     internship_risk_labels_enabled: bool = False
+    # Isolated gate-runner seam. This does not authorize a deployment and is
+    # rejected unless APP_ENV=testing and TEST_DATABASE_URL clearly names an
+    # isolated QA/test database.
+    wave4_gate_allow_publication_test: bool = False
+    wave4_security_approval_ref: str | None = None
+    wave4_policy_approval_ref: str | None = None
+    wave4_target_runtime_gate_ref: str | None = None
+    internship_response_token_rate_per_minute: int = 10
+    internship_response_ip_rate_per_minute: int = 60
+    internship_identity_access_ttl_minutes: int = 30
+    internship_response_public_base_url: str = "https://localhost:1030/s-89"
+    internship_response_notification_provider: str = "none"
     # Approved SAATHI-452 internal aggregation defaults. These values may build
     # a privacy-safe candidate but never enable a public projection.
     internship_risk_min_distinct_reporters: int = 3
@@ -464,6 +533,9 @@ class Settings(BaseSettings):
             "internship_risk_min_distinct_reporters",
             "internship_risk_window_months",
             "internship_risk_public_count_suppression",
+            "internship_response_token_rate_per_minute",
+            "internship_response_ip_rate_per_minute",
+            "internship_identity_access_ttl_minutes",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -491,11 +563,80 @@ class Settings(BaseSettings):
             )
         if not (self.internship_report_consent_version or "").strip():
             problems.append("internship_report_consent_version must not be empty")
+        if self.internship_response_notification_provider not in {"none", "deterministic"}:
+            problems.append(
+                "internship_response_notification_provider must be none or deterministic"
+            )
+        response_base = urlsplit(self.internship_response_public_base_url)
+        if (
+            response_base.scheme not in {"http", "https"}
+            or not response_base.hostname
+            or response_base.username
+            or response_base.password
+            or response_base.query
+            or response_base.fragment
+            or not response_base.path.rstrip("/").endswith("/s-89")
+        ):
+            problems.append(
+                "internship_response_public_base_url must be an absolute S-89 URL without credentials, query or fragment"
+            )
+        environment = (self.app_env or "").strip().casefold()
+        if environment not in {"test", "testing", "development", "dev", "local"} \
+                and self.internship_response_notification_provider != "none":
+            problems.append(
+                "internship_response_notification_provider must be none outside local/test"
+            )
+        if environment not in {"test", "testing", "development", "dev", "local"} \
+                and response_base.scheme != "https":
+            problems.append(
+                "internship_response_public_base_url must use HTTPS outside local/test"
+            )
         if self.internship_risk_labels_enabled:
             problems.append(
                 "internship_risk_labels_enabled must remain false until "
                 "counsel/security approval and all target-runtime gates pass"
             )
+        if self.internship_risk_min_distinct_reporters < 3:
+            problems.append(
+                "internship_risk_min_distinct_reporters must be at least 3"
+            )
+        if not 1 <= self.internship_risk_window_months <= 24:
+            problems.append(
+                "internship_risk_window_months must be between 1 and 24"
+            )
+        if (
+            self.internship_risk_public_count_suppression < 5
+            or self.internship_risk_public_count_suppression
+            < self.internship_risk_min_distinct_reporters
+        ):
+            problems.append(
+                "internship_risk_public_count_suppression must be at least 5 "
+                "and not less than internship_risk_min_distinct_reporters"
+            )
+        if self.wave4_gate_allow_publication_test:
+            environment = (self.app_env or "").strip().casefold()
+            test_url = (self.test_database_url or "").strip()
+            actual_url = (self.database_url or "").strip()
+            if environment not in {"test", "testing"}:
+                problems.append(
+                    "wave4_gate_allow_publication_test is allowed only in testing"
+                )
+            if not is_isolated_wave4_database_url(actual_url):
+                problems.append(
+                    "wave4_gate_allow_publication_test requires an isolated test/qa DATABASE_URL"
+                )
+            if not test_url or test_url != actual_url:
+                problems.append(
+                    "wave4_gate_allow_publication_test requires TEST_DATABASE_URL to equal DATABASE_URL"
+                )
+            for name in (
+                "wave4_security_approval_ref",
+                "wave4_policy_approval_ref",
+                "wave4_target_runtime_gate_ref",
+            ):
+                value = (getattr(self, name) or "").strip()
+                if not value.startswith("QA-"):
+                    problems.append(f"{name} requires an explicit QA-only reference")
         if problems:
             raise ConfigurationError(
                 "Wave 4 configuration is invalid; refusing to start: "
