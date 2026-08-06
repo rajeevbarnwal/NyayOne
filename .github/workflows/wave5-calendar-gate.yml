@@ -45,7 +45,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend
         working-directory: backend
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements.txt -c requirements.lock pytest
       - name: Enable pgvector
         run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi_wave5_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Native calendar and migration regression
