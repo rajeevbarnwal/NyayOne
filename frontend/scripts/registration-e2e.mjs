@@ -198,7 +198,7 @@ for (const [name, values, expected] of [
     const local = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
     const session = Object.fromEntries(Object.keys(sessionStorage).map((key) => [key, sessionStorage.getItem(key)]));
     const serialized = JSON.stringify({ local, session });
-    let registrationSchemaValid = false;
+    let registrationSchemaValid;
     try {
       const parsed = JSON.parse(session[registrationKey] ?? 'null');
       const keys = parsed && typeof parsed === 'object' ? Object.keys(parsed).sort() : [];
