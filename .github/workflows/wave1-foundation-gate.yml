@@ -7,19 +7,31 @@ name: wave1-foundation-gate
 
 on:
   push:
-    paths: ["backend/**", "frontend/**", ".github/workflows/wave1-foundation-gate.yml"]
+    branches: [main]
   pull_request:
-    paths: ["backend/**", "frontend/**", ".github/workflows/wave1-foundation-gate.yml"]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   frontend-native:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -30,7 +42,7 @@ jobs:
       - run: npm run test:run
       - run: npm run build
       - name: Install Chromium for the S-11–S-26 contract gate
-        run: npx playwright install --with-deps chromium
+        run: npm exec -- playwright install --with-deps chromium
       - name: S-11–S-26 responsive, accessibility, runtime, and API-readiness gate
         run: |
           npm run preview -- --port 4177 > "${RUNNER_TEMP}/v34-preview.log" 2>&1 &
@@ -53,19 +65,32 @@ jobs:
           V34_BASE_URL=http://127.0.0.1:4177 \
           V34_EVIDENCE_DIR="${RUNNER_TEMP}/v34-s11-s26" \
           npm run qa:v34:s11-s26
+      - name: Verify S-11–S-26 evidence manifest
+        run: |
+          cd "$RUNNER_TEMP/v34-s11-s26"
+          sha256sum --check SHA256SUMS.txt
+      - name: Scan S-11–S-26 browser evidence for credentials
+        id: evidence_privacy
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/scan_evidence.py"
+          "$RUNNER_TEMP/v34-s11-s26"
       - name: Upload S-11–S-26 browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: ${{ always() && steps.evidence_privacy.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v34-s11-s26-browser-evidence
           path: ${{ runner.temp }}/v34-s11-s26
           if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
 
   backend-postgres16-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
           POSTGRES_USER: legalsaathi
           POSTGRES_PASSWORD: legalsaathi
@@ -96,14 +121,15 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -c requirements.lock pytest httpx
+          pip install -r requirements.txt -c requirements.lock pytest httpx
       - name: Enable pgvector
         run: |
           PGPASSWORD=legalsaathi psql -h localhost -p 1032 -U legalsaathi -d legalsaathi \
@@ -128,3 +154,25 @@ jobs:
         run: |
           python scripts/seed_e2e_actors.py
           python scripts/seed_e2e_actors.py
+
+  required:
+    name: nyayone-wave1-required
+    if: ${{ always() }}
+    needs: [frontend-native, backend-postgres16-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every upstream job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          results = {
+              name: value["result"]
+              for name, value in json.loads(os.environ["RESULTS"]).items()
+          }
+          print(results)
+          if not results or any(value != "success" for value in results.values()):
+              sys.exit("one or more required jobs did not succeed")
+          PY
