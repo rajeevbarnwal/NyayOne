@@ -259,21 +259,24 @@ def test_the_whole_repo_gate_calls_the_wave2_stage_rather_than_forking_it():
 
 def test_ci_runs_the_wave2_postgres_gate_on_push_and_pull_request():
     text = _read(CI_WORKFLOW)
-    assert "pgvector/pgvector:pg16" in text, "CI must use the repo's pinned PG16 image"
+    assert (
+        "image: pgvector/pgvector@sha256:"
+        "ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b"
+    ) in text, "CI must use the reviewed immutable PG16 + pgvector image digest"
     assert re.search(r"^on:\s*$", text, re.M)
     assert re.search(r"^  push:\s*$", text, re.M), "the gate must run on push"
     assert re.search(r"^  pull_request:\s*$", text, re.M), "the gate must run on PR"
+    assert text.count("    branches: [main]") >= 2
+    assert "    paths:" not in text, (
+        "required Wave 2 CI must be present on every PR rather than skipped by paths"
+    )
+    assert "    paths-ignore:" not in text, (
+        "required Wave 2 CI must not be skipped by paths-ignore"
+    )
     assert "bash scripts/wave2_db_gate.sh" in text
     # CI must refuse a BLOCKED result: on a runner that HAS PostgreSQL, blocked
     # means broken.
     assert "did not execute to a PASS" in text
-    for path in (
-        "backend/app/models/wave2.py",
-        "backend/app/services/tutoring/**",
-        "backend/app/db/migrations/versions/**",
-        "infra/video/**",
-    ):
-        assert path in text, f"CI does not trigger on {path}"
 
 
 def test_ci_asserts_the_media_smoke_refuses_in_an_environment_without_a_media_plane():
