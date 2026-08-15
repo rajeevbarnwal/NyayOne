@@ -114,9 +114,9 @@ try {
   const fillRequired = async ({ first = 'Rajeev', last = 'Barnwal', mobile = '9876543210', dob = '2000-01-01' } = {}) => {
     await page.getByLabel('FIRST NAME').fill(first);
     await page.getByLabel('LAST NAME').fill(last);
-    await page.getByLabel('MOBILE NUMBER').fill(mobile);
+    await page.locator('#v34-mobile').fill(mobile);
     await page.getByLabel('INSTITUTIONAL EMAIL').fill('student@nls.ac.in');
-    await page.getByLabel('DATE OF BIRTH').fill(dob);
+    await page.locator('#v34-dob').fill(dob);
     await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
     await page.getByLabel('YEAR OF STUDY').selectOption('4');
     await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
@@ -159,9 +159,16 @@ try {
   record('split_name_payload', 'first/middle/last mapped independently', capturedPayload, capturedPayload?.first_name === sixty && capturedPayload?.middle_name === null && capturedPayload?.last_name === sixty);
 
   await loadRegistration();
-  await page.getByLabel('FIRST NAME').fill('B'.repeat(61));
+  await fillRequired({ first: 'B'.repeat(61) });
   const maxLengthActual = await page.getByLabel('FIRST NAME').inputValue();
-  record('name_61_boundary', 'input capped at 60', maxLengthActual.length, maxLengthActual.length === 60);
+  await submit();
+  record('name_61_boundary', '61 characters retained, rejected, and remain S-08', {
+    length: maxLengthActual.length,
+    alerts: await page.getByRole('alert').allTextContents(),
+    path: new URL(page.url()).pathname,
+  }, maxLengthActual.length === 61
+    && await page.getByText(/60 characters or fewer/i).isVisible()
+    && new URL(page.url()).pathname === '/s-08');
 
   const criticalSelectors = {
     'INSTITUTIONAL EMAIL': '#v34-email',
@@ -187,7 +194,7 @@ try {
   });
   await page.goto(`${base}/s-04`);
   await page.getByRole('button', { name: 'Use a one time code' }).click();
-  await page.getByLabel('MOBILE NUMBER').fill(loginMobile);
+  await page.locator('#v34-login-mobile').fill(loginMobile);
   await page.getByRole('button', { name: 'Send one time code' }).click();
   await page.waitForURL('**/s-09');
   const loginCode = await latestOtp();
@@ -198,28 +205,59 @@ try {
     const response = await fetch(sessionUrl, { credentials: 'include' });
     return { status: response.status, body: await response.json() };
   }, `${apiBase}/api/v1/auth/student/session`);
-  const loginBrowserState = await page.evaluate(() => ({
-    local: JSON.stringify(localStorage),
-    session: JSON.stringify(sessionStorage),
-    visibleCookies: document.cookie,
-  }));
+  const loginBrowserState = await page.evaluate(({ mobile, otp }) => {
+    const registrationKey = 'legalsaathi.student.registration.v2';
+    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedSessionKeys = new Set([registrationKey]);
+    const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
+    const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
+    const local = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
+    const session = Object.fromEntries(Object.keys(sessionStorage).map((key) => [key, sessionStorage.getItem(key)]));
+    const serialized = JSON.stringify({ local, session, cookie: document.cookie });
+    const visibleCookieNames = document.cookie
+      .split(';')
+      .map((entry) => entry.trim().split('=', 1)[0])
+      .filter(Boolean)
+      .sort();
+    const nonRegistrationValues = Object.entries({ ...local, ...session })
+      .filter(([key]) => key !== registrationKey)
+      .map(([, value]) => String(value ?? ''));
+    return {
+      localKeys: Object.keys(local).sort(),
+      sessionKeys: Object.keys(session).sort(),
+      visibleCookieNames,
+      secretLeak: serialized.includes(mobile) || serialized.includes(otp),
+      unexpectedLocalKeys: Object.keys(local).filter((key) => !allowedLocalKeys.has(key)),
+      unexpectedSessionKeys: Object.keys(session).filter((key) => !allowedSessionKeys.has(key)),
+      credentialKeyLeak: [...Object.keys(local), ...Object.keys(session)].some((key) => forbiddenKey.test(key)),
+      credentialValueLeak: nonRegistrationValues.some((value) => credentialValue.test(value)),
+      authCookieVisible: visibleCookieNames.some((name) => /(?:session|auth|token|bearer)/i.test(name)),
+    };
+  }, { mobile: loginMobile, otp: loginCode });
   record('login_otp_server_lifecycle', 'real start + verify + cookie session endpoints', { loginCalls, authenticated },
     loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/start'))
       && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/verify'))
       && authenticated.status === 200
       && authenticated.body?.actor?.roles?.includes('student'));
   record('login_secret_storage_privacy', 'no raw mobile, OTP, or session cookie visible to JavaScript storage', loginBrowserState,
-    !JSON.stringify(loginBrowserState).includes(loginMobile)
-      && !JSON.stringify(loginBrowserState).includes(loginCode)
-      && !loginBrowserState.visibleCookies.includes('legalsaathi_session'));
+    loginBrowserState.secretLeak === false
+      && loginBrowserState.credentialKeyLeak === false
+      && loginBrowserState.credentialValueLeak === false
+      && loginBrowserState.authCookieVisible === false
+      && loginBrowserState.unexpectedLocalKeys.length === 0
+      && loginBrowserState.unexpectedSessionKeys.length === 0);
   await page.screenshot({ path: resolve(screenshotsDir, 'S-07__login-authenticated__mobile__light.png'), fullPage: true });
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.waitForURL('**/s-03');
-  const afterLogout = await page.evaluate(async (sessionUrl) => (
-    await fetch(sessionUrl, { credentials: 'include' })
-  ).status, `${apiBase}/api/v1/auth/student/session`);
-  record('logout_revokes_session', 'S-03 and anonymous session probe after logout', { path: new URL(page.url()).pathname, status: afterLogout },
-    new URL(page.url()).pathname === '/s-03' && afterLogout === 200);
+  const afterLogout = await page.evaluate(async (sessionUrl) => {
+    const response = await fetch(sessionUrl, { credentials: 'include' });
+    return { status: response.status, body: await response.json() };
+  }, `${apiBase}/api/v1/auth/student/session`);
+  record('logout_clears_browser_session', 'S-03 and anonymous browser session probe after logout', { path: new URL(page.url()).pathname, ...afterLogout },
+    new URL(page.url()).pathname === '/s-03'
+      && afterLogout.status === 200
+      && afterLogout.body?.authenticated === false
+      && afterLogout.body?.actor === null);
   await context.close();
 } finally {
   await browser.close();

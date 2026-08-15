@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -188,16 +189,58 @@ for (const [name, values, expected] of [
   await page.getByRole('button', { name: /Save & continue/ }).click();
   await page.waitForURL('**/s-11');
 
-  const storage = await page.evaluate(() => ({
-    local: Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)])),
-    session: Object.fromEntries(Object.keys(sessionStorage).map((k) => [k, sessionStorage.getItem(k)])),
-  }));
-  const serialized = JSON.stringify(storage);
-  record('no_browser_pii', 'no names/mobile/DOB/academic PII in browser storage', serialized,
-    !['Aditi', '9000000006', '2004-03-14', 'KA/1234/2023', 'aditi@nls.ac.in'].some((v) => serialized.includes(v)));
-  record('opaque_session_only', 'opaque registration state present',
-    storage.session['legalsaathi.student.registration.v2'],
-    !!storage.session['legalsaathi.student.registration.v2']);
+  const storage = await page.evaluate((canaries) => {
+    const registrationKey = 'legalsaathi.student.registration.v2';
+    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedSessionKeys = new Set([registrationKey]);
+    const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
+    const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
+    const local = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
+    const session = Object.fromEntries(Object.keys(sessionStorage).map((key) => [key, sessionStorage.getItem(key)]));
+    const serialized = JSON.stringify({ local, session });
+    let registrationSchemaValid;
+    try {
+      const parsed = JSON.parse(session[registrationKey] ?? 'null');
+      const keys = parsed && typeof parsed === 'object' ? Object.keys(parsed).sort() : [];
+      registrationSchemaValid = JSON.stringify(keys) === JSON.stringify([
+        'destinationMasked',
+        'guardianConsentPending',
+        'isMinor',
+        'issuedAt',
+        'registrationId',
+      ])
+        && typeof parsed.registrationId === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.registrationId)
+        && typeof parsed.destinationMasked === 'string'
+        && typeof parsed.issuedAt === 'number'
+        && typeof parsed.isMinor === 'boolean'
+        && typeof parsed.guardianConsentPending === 'boolean';
+    } catch {
+      registrationSchemaValid = false;
+    }
+    const nonRegistrationValues = Object.entries({ ...local, ...session })
+      .filter(([key]) => key !== registrationKey)
+      .map(([, value]) => String(value ?? ''));
+    return {
+      localKeys: Object.keys(local).sort(),
+      sessionKeys: Object.keys(session).sort(),
+      piiLeak: canaries.some((value) => serialized.includes(value)),
+      unexpectedLocalKeys: Object.keys(local).filter((key) => !allowedLocalKeys.has(key)),
+      unexpectedSessionKeys: Object.keys(session).filter((key) => !allowedSessionKeys.has(key)),
+      credentialKeyLeak: [...Object.keys(local), ...Object.keys(session)].some((key) => forbiddenKey.test(key)),
+      credentialValueLeak: nonRegistrationValues.some((value) => credentialValue.test(value)),
+      registrationSchemaValid,
+    };
+  }, ['Aditi', '9000000006', '2004-03-14', 'KA/1234/2023', 'aditi@nls.ac.in']);
+  record('no_browser_pii', 'no names/mobile/DOB/academic PII in browser storage', storage,
+    storage.piiLeak === false
+      && storage.credentialKeyLeak === false
+      && storage.credentialValueLeak === false
+      && storage.unexpectedLocalKeys.length === 0
+      && storage.unexpectedSessionKeys.length === 0);
+  record('registration_context_schema_inventory', 'temporary PR25 registration context matches its known schema; this is not an authentication/security assertion',
+    { sessionKeys: storage.sessionKeys, schemaValid: storage.registrationSchemaValid },
+    storage.registrationSchemaValid);
   record('registration_api_called', 'POST /register', requests, requests.some((r) => r.includes('POST /api/v1/auth/student/register')));
   record('otp_api_called', 'POST /otp/verify', requests, requests.some((r) => r.includes('POST /api/v1/auth/student/otp/verify')));
   record('profile_api_called', 'PATCH /profile', requests, requests.some((r) => r.includes('PATCH /api/v1/auth/student/profile')));
@@ -308,4 +351,14 @@ const report = {
   results,
 };
 await fs.writeFile(path.join(evidence, 'registration_e2e_report.json'), JSON.stringify(report, null, 2));
+const manifestFiles = (await fs.readdir(evidence, { withFileTypes: true }))
+  .filter((entry) => entry.isFile() && entry.name !== 'SHA256SUMS.txt')
+  .map((entry) => entry.name)
+  .sort();
+const manifest = [];
+for (const file of manifestFiles) {
+  const digest = createHash('sha256').update(await fs.readFile(path.join(evidence, file))).digest('hex');
+  manifest.push(`${digest}  ${file}`);
+}
+await fs.writeFile(path.join(evidence, 'SHA256SUMS.txt'), `${manifest.join('\n')}\n`, 'utf8');
 console.log(JSON.stringify({ passed: report.passed, failed: report.failed, evidence }, null, 2));
