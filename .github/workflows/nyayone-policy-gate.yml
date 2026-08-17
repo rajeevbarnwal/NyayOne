@@ -38,6 +38,13 @@ jobs:
         run: |
           python scripts/ci/verify_nyayone_ci.py
           python scripts/ci/test_ci_policies.py
+      - name: Validate NyayOne runtime and Compose isolation
+        run: |
+          cp .env.example .env
+          trap 'rm -f .env' EXIT
+          docker compose config --format json > "$RUNNER_TEMP/nyayone-compose.json"
+          python scripts/ci/check_nyayone_runtime_identity.py \
+            --compose-json "$RUNNER_TEMP/nyayone-compose.json"
       - name: Enforce forward-only migration history
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

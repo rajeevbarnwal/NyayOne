@@ -10,7 +10,7 @@ from app.core.middleware import RequestIDMiddleware
 
 def create_app() -> FastAPI:
     configure_logging(settings.log_level, settings.log_file_path)
-    logger = get_logger("legalsaathi.app")
+    logger = get_logger("nyayone.app")
 
     # Fail closed if registration crypto is misconfigured in prod/staging
     # (absent or the known dev default). No-op in development.
@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
     # Root liveness probe (no prefix) + versioned API surface.
     @app.get("/health", tags=["health"])
     def liveness() -> dict[str, str]:
-        return {"status": "ok", "service": "legalsaathi-backend"}
+        return {"status": "ok", "service": "nyayone-backend"}
 
     app.include_router(api_router, prefix="/api/v1")
 

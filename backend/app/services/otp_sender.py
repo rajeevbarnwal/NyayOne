@@ -57,7 +57,7 @@ class HttpOtpSender:
         try:
             resp = httpx.post(
                 self._url,
-                json={"to": destination, "message": f"Your LegalSaathi verification code is {code}"},
+                json={"to": destination, "message": f"Your NyayOne verification code is {code}"},
                 headers=headers,
                 timeout=self._timeout_s,
             )

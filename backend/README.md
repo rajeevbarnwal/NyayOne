@@ -1,6 +1,6 @@
-# LegalSaathi Backend
+# NyayOne Backend
 
-FastAPI backend for LegalSaathi APIs, legal workflows, document ingestion, RAG/search, and persistence.
+FastAPI backend for NyayOne APIs, legal workflows, document ingestion, RAG/search, and persistence.
 
 ## Structure
 
@@ -15,16 +15,16 @@ app/
   services/  Business services used by APIs
 ```
 
-## Local Run (dev port 1031)
+## Local Run (host dev port 1131)
 
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 1031
+uvicorn app.main:app --reload --host 0.0.0.0 --port 1131
 ```
 
-- Liveness: `GET http://localhost:1031/health`
-- API v1 health: `GET http://localhost:1031/api/v1/health`
+- Liveness: `GET http://localhost:1131/health`
+- API v1 health: `GET http://localhost:1131/api/v1/health`
 
 Run tests:
 
@@ -36,8 +36,8 @@ Requires Python >= 3.12. Every response carries an `X-Request-ID` correlation he
 
 ## Database (PostgreSQL + pgvector)
 
-Local dev uses PostgreSQL 16 with the `pgvector` extension, on host port **1032 → 5432**
-(LegalSaathi 1030-series convention). SQLAlchemy 2.x models share conventions in
+Local dev uses PostgreSQL 16 with the `pgvector` extension, on host port **1132 → 5432**
+(NyayOne 1130-series convention). SQLAlchemy 2.x models share conventions in
 `app/db/base.py` (UUID PK, `created_at`/`updated_at`, `deleted_at` soft-delete,
 `metadata_json` audit field). The engine/session live in `app/db/session.py` (lazy —
 no connection at import).
@@ -45,11 +45,11 @@ no connection at import).
 ### Start the database
 
 ```bash
-docker compose up -d postgres      # exposes localhost:1032
+docker compose up -d postgres      # exposes localhost:1132
 ```
 
 `DATABASE_URL` (see `.env.example`) defaults to:
-`postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi`
+`postgresql+psycopg://nyayone:nyayone_dev_only@localhost:1132/nyayone`
 
 ### Migrations (Alembic)
 
@@ -71,7 +71,7 @@ cd backend && python -m alembic upgrade head
 
 ### Database probe & tests
 
-- Reachability probe: `GET http://localhost:1031/api/v1/health/db` (reports `ok`/`unavailable`, never crashes).
+- Reachability probe: `GET http://localhost:1131/api/v1/health/db` (reports `ok`/`unavailable`, never crashes).
 - Tests run against **SQLite in-memory** by default (no Postgres needed): `python -m pytest -q`.
   Set `TEST_DATABASE_URL` to run the suite against a real Postgres instead.
 
@@ -104,5 +104,4 @@ CI runs the PostgreSQL gate on push and pull request against
 fails the build if it reports BLOCKED there, because on a runner that HAS the
 database, blocked means broken. The media smoke has no runtime in CI; CI asserts
 that it refuses with 78, which is the only honest thing to assert.
-
 

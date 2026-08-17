@@ -38,18 +38,22 @@ from app.services import calendar_service
 from scripts.wave5_postgres_gate import is_isolated_gate_target, privacy_canary_hits
 from tests import apptemplate, dbtemplate
 
+NON_DEV_DATABASE_URL = (
+    "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
+)
+
 
 def _claims(user_id: uuid.UUID) -> dict[str, str]:
     return {"X-Actor-Claims": json.dumps({"sub": str(user_id), "roles": ["student"]})}
 
 
 def test_postgres_gate_requires_loopback_qa_target_test_env_and_opt_in():
-    safe = "postgresql+psycopg://user:secret@127.0.0.1:5432/legalsaathi_wave5_qa"
+    safe = "postgresql+psycopg://user:secret@127.0.0.1:5432/nyayone_wave5_qa"
     assert is_isolated_gate_target(safe, "testing", True)
     assert not is_isolated_gate_target(safe, "production", True)
     assert not is_isolated_gate_target(safe, "testing", False)
     assert not is_isolated_gate_target(
-        "postgresql+psycopg://user:secret@db.internal:5432/legalsaathi_wave5_qa",
+        "postgresql+psycopg://user:secret@db.internal:5432/nyayone_wave5_qa",
         "testing",
         True,
     )
@@ -70,11 +74,13 @@ def test_calendar_public_origin_is_loopback_only_in_local_or_test_environments()
         Settings(
             _env_file=None,
             app_env="preview",
+            database_url=NON_DEV_DATABASE_URL,
             calendar_public_base_url="https://localhost:1030",
         )
     configured = Settings(
         _env_file=None,
         app_env="preview",
+        database_url=NON_DEV_DATABASE_URL,
         calendar_public_base_url="https://calendar.example.test",
     )
     assert configured.calendar_public_base_url == "https://calendar.example.test"
@@ -99,6 +105,7 @@ _STAGING_WORKFLOWS = (
 def _staging_settings(**overrides: object) -> Settings:
     # `staging` also activates the Wave 4 scanner contract; select the same real
     # seam the workflows select so this test isolates the Wave 5 origin rule.
+    overrides.setdefault("database_url", NON_DEV_DATABASE_URL)
     return Settings(
         _env_file=None,
         app_env="staging",
@@ -155,6 +162,7 @@ def test_staging_rejects_loopback_calendar_origin_and_accepts_the_ci_origin(monk
         Settings(
             _env_file=None,
             app_env="production",
+            database_url=NON_DEV_DATABASE_URL,
             internship_report_scanner_provider="clamav",
             calendar_public_base_url="https://127.0.0.1:1030",
         )
@@ -506,7 +514,7 @@ def test_view_and_reminder_defaults_save_refresh_and_stale_version(ctx):
     assert enabled_preview.status_code == 200
     assert enabled_preview.json()["scheduling_eligible"] is True
     assert enabled_preview.json()["reason_code"] == "eligible"
-    assert enabled_preview.json()["preview"] == "An upcoming LegalSaathi event has a reminder."
+    assert enabled_preview.json()["preview"] == "An upcoming NyayOne event has a reminder."
     assert all(
         marker not in json.dumps(enabled_preview.json())
         for marker in ("9876543210", "student@example.com", "ENROL-PRIVATE")
@@ -795,7 +803,7 @@ def test_export_one_time_secret_rotation_ics_privacy_and_revocation(ctx):
     assert feed.status_code == 200
     assert feed.headers["cache-control"] == "private, no-store"
     assert feed.headers["referrer-policy"] == "no-referrer"
-    assert "Private LegalSaathi event" in feed.text
+    assert "Private NyayOne event" in feed.text
     assert "9876543210" not in feed.text and "lawyer@example.com" not in feed.text
     assert all(canary not in feed.text for canary in ("ENROL-2026-999", "BAR/DL/1234/2020", "123e4567-e89b-12d3-a456-426614174000"))
     assert "Personal calendar event" in feed.text
@@ -1553,7 +1561,7 @@ def test_negative_n35_empty_calendar_is_valid_crlf_vcalendar(ctx):
     assert "BEGIN:VEVENT" not in feed.text
     assert _unfold_ics_lines(feed.text)[0:2] == [
         "BEGIN:VCALENDAR",
-        "PRODID:-//LegalSaathi//Private Calendar Feed//EN",
+        "PRODID:-//NyayOne//Private Calendar Feed//EN",
     ]
 
 
@@ -1572,7 +1580,7 @@ def test_negative_n36_replay_dedupes_vevent_and_uid_is_stable_nonreversible(ctx)
     assert first_feed.count("BEGIN:VEVENT") == second_feed.count("BEGIN:VEVENT") == 1
     first_uid = next(line.removeprefix("UID:") for line in _unfold_ics_lines(first_feed) if line.startswith("UID:"))
     second_uid = next(line.removeprefix("UID:") for line in _unfold_ics_lines(second_feed) if line.startswith("UID:"))
-    assert first_uid == second_uid == f"{keyed_hash(first['id'])}@calendar.legalsaathi.local"
+    assert first_uid == second_uid == f"{keyed_hash(first['id'])}@calendar.nyayone.local"
     assert first["id"] not in first_uid
 
 

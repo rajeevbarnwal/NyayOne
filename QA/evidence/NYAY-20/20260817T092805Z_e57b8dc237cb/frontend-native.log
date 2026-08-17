@@ -1,0 +1,46 @@
+
+> legalsaathi-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> legalsaathi-frontend@0.1.0 lint
+> eslint .
+
+
+> legalsaathi-frontend@0.1.0 test:run
+> vitest --run
+
+
+ RUN  v4.1.10 /private/tmp/nyayone-sprint1.6Pzc2w/frontend
+
+
+ Test Files  75 passed (75)
+      Tests  706 passed | 1 skipped (707)
+   Start at  15:09:16
+   Duration  3.41s (transform 4.35s, setup 0ms, import 8.81s, tests 2.91s, environment 6ms)
+
+
+> legalsaathi-frontend@0.1.0 build
+> tsc && vite build
+
+vite v8.1.3 building client environment for production...
+transforming...✓ 1948 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                   0.78 kB │ gzip:   0.48 kB
+dist/assets/index-Pjibt4Ox.css                  139.12 kB │ gzip:  25.90 kB
+dist/assets/ScreenPlaceholder-CW0zhXrt.js         0.46 kB │ gzip:   0.31 kB
+dist/assets/TokenShowcase-hDvNWR3N.js             2.49 kB │ gzip:   0.87 kB
+dist/assets/fakeVideoRoomClient-Ccb6LVvg.js       4.29 kB │ gzip:   1.48 kB
+dist/assets/livekitVideoRoomClient-CusRWyaQ.js    4.73 kB │ gzip:   1.58 kB
+dist/assets/livekit-client.esm-CQKX8Beq.js      527.10 kB │ gzip: 136.47 kB
+dist/assets/index-B5aKKzS-.js                   849.58 kB │ gzip: 241.27 kB
+
+✓ built in 505ms
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+EXIT_CODE=0

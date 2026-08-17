@@ -1,0 +1,15 @@
+PREVIOUS_HEAD=0edfdaec82b53a8cb5d1c8aff3b25734c9801e68
+SOURCE=e429d2e06752cb0ba38835fcd709b96a0ad08e7e
+EVIDENCE_DIR=QA/evidence/NYAY-20/20260817T095152Z_e429d2e06752
+
+.venv/bin/python -m pytest -q backend/tests/test_nyayone_runtime_isolation.py backend/tests/test_config.py
+(cd backend && ../.venv/bin/python -m pytest -q)
+python3 scripts/ci/check_nyayone_runtime_identity.py
+python3 scripts/ci/test_ci_policies.py
+python3 scripts/ci/verify_nyayone_ci.py
+python3 scripts/ci/verify_sha256_manifests.py
+git diff --check "${PREVIOUS_HEAD}...${SOURCE}"
+git diff --name-only "${PREVIOUS_HEAD}...${SOURCE}"
+python3 scripts/ci/scan_evidence.py "${EVIDENCE_DIR}"
+(cd "${EVIDENCE_DIR}" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 shasum -a 256 | sed 's#  \./#  #' > SHA256SUMS.txt)
+(cd "${EVIDENCE_DIR}" && shasum -a 256 -c SHA256SUMS.txt)

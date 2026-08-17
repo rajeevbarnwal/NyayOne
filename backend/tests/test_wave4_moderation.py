@@ -63,7 +63,7 @@ def test_postgres_gate_requires_loopback_qa_name_test_env_and_opt_in():
         "testing",
         True,
     )
-    for target in ("production_qa", "legalsaathi_prod_test", "staging_e2e"):
+    for target in ("production_qa", "nyayone_prod_test", "staging_e2e"):
         unsafe = (
             "postgresql+psycopg://user:secret@127.0.0.1:5432/" + target
         )
@@ -612,11 +612,11 @@ def test_e2e_seed_refuses_non_test_or_ambiguous_database(monkeypatch):
     with pytest.raises(RuntimeError, match="APP_ENV"):
         assert_isolated_target("postgresql://user:secret@db/production")
     monkeypatch.setenv("APP_ENV", "testing")
-    remote = "postgresql://user:secret@db.example/legalsaathi_saathi274_qa"
+    remote = "postgresql://user:secret@db.example/nyayone_saathi274_qa"
     monkeypatch.setenv("TEST_DATABASE_URL", remote)
     with pytest.raises(RuntimeError, match="isolated local"):
         assert_isolated_target(remote)
-    local = "postgresql://user:secret@localhost/legalsaathi_saathi274_qa"
+    local = "postgresql://user:secret@localhost/nyayone_saathi274_qa"
     monkeypatch.setenv("TEST_DATABASE_URL", "postgresql://user:secret@localhost/other_qa")
     with pytest.raises(RuntimeError, match="exactly equal"):
         assert_isolated_target(local)

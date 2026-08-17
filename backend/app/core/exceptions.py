@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.logging import get_logger, request_id_ctx
 
-logger = get_logger("legalsaathi.error")
+logger = get_logger("nyayone.error")
 
 
 def _detail_body(detail: Mapping[str, object]) -> dict[str, object]:

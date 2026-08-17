@@ -240,7 +240,7 @@ def _hmac_hex(secret: bytes, raw_body: bytes) -> str:
 #: publicly-known TEST value: the adapter is only ever selected when
 #: ``settings.payment_provider == "deterministic"``, which production must not
 #: use. Tests forge both valid and invalid signatures with ``sign()``.
-DETERMINISTIC_SIGNING_KEY = b"legalsaathi-deterministic-payment-test-key"
+DETERMINISTIC_SIGNING_KEY = b"nyayone-deterministic-payment-test-key"
 
 
 class DeterministicPaymentAdapter:

@@ -1,11 +1,11 @@
-# LegalSaathi
+# NyayOne
 
-LegalSaathi is a responsive legal-assistance application designed to run on desktop and mobile web, with the same React codebase prepared for native iOS and Android packaging through Capacitor.
+NyayOne is a responsive legal-assistance application designed to run on desktop and mobile web, with the same React codebase prepared for native iOS and Android packaging through Capacitor.
 
 ## Repository Layout
 
 ```text
-LegalSaathi/
+NyayOne/
   frontend/              React/Vite app, Capacitor-ready for iOS and Android
   backend/               FastAPI service for APIs, RAG, legal workflows, and storage
   docs/                  Product, architecture, domain, and release notes
@@ -30,8 +30,8 @@ The structure is scaffolded first. Dependencies can be installed once implementa
 
 ```bash
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run dev -- --port 1130
 ```
 
 ```bash
@@ -39,7 +39,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 1131
 ```
 
 ## Mobile Packaging Plan
@@ -58,8 +58,8 @@ The generated `ios/` and `android/` folders can then be opened in Xcode and Andr
 
 ## Project Integrations
 
-- GitHub: `rajeevbarnwal/legalsaathi`
-- Jira: `SAATHI` project on `https://legalsaathi.atlassian.net`, board `2`
+- GitHub: `rajeevbarnwal/NyayOne`
+- Jira: `NYAY` project on the approved shared `https://legalsaathi.atlassian.net` tenant, board `68`
 - Details: see `docs/integrations/github-jira.md`
 
 Run `./scripts/check_integrations.py` after creating a local `.env` with any required API tokens.

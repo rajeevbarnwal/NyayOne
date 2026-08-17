@@ -8,7 +8,7 @@ const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1270').replace(/\/$/, 
 const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1271').replace(/\/$/, '');
 const OUT = path.resolve(process.env.E2E_OUTPUT_DIR ?? 'test-results/wave4-moderation-e2e');
 const TOKEN = process.env.WAVE4_E2E_SESSION_TOKEN ?? '';
-const COOKIE = process.env.AUTH_SESSION_COOKIE_NAME ?? 'legalsaathi_session';
+const COOKIE = process.env.AUTH_SESSION_COOKIE_NAME ?? 'nyayone_session';
 const FIXTURE_REPORTS = Array.from(
   { length: 4 },
   (_, index) => `00000000-0000-4000-8000-${String(2740 + index).padStart(12, '0')}`,

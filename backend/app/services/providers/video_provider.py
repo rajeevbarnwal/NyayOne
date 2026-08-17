@@ -330,7 +330,7 @@ class VideoSessionProvider(Protocol):
 
 #: Fixed TEST signing key; the deterministic adapter is only selected when
 #: ``settings.video_provider == "deterministic"``.
-DETERMINISTIC_SIGNING_KEY = b"legalsaathi-deterministic-video-test-key"
+DETERMINISTIC_SIGNING_KEY = b"nyayone-deterministic-video-test-key"
 
 
 class DeterministicVideoAdapter:

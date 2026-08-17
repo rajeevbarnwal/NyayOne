@@ -25,7 +25,7 @@ def build_runner() -> WorkerRunner:
 
 def main() -> None:
     configure_logging(settings.log_level)
-    log = get_logger("legalsaathi.worker")
+    log = get_logger("nyayone.worker")
     build_runner()
     scheme = settings.worker_broker_url.split("://", 1)[0]
     log.info(

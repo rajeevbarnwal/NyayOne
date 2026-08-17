@@ -151,7 +151,7 @@ function runtimeClean(runtime) {
 
 async function addSessionCookies(context, api) {
   const state = await api.storageState();
-  const cookies = state.cookies.filter((cookie) => cookie.name === 'legalsaathi_session');
+  const cookies = state.cookies.filter((cookie) => cookie.name === 'nyayone_session');
   if (cookies.length !== 1) throw new Error('login did not produce exactly one session cookie');
   secrets.add(cookies[0].value);
   await context.addCookies(cookies);
@@ -395,7 +395,7 @@ try {
         !Object.hasOwn(storage.local, 'legalsaathi.internship.saved.v1')
           && !serialized.includes('otp')
           && !serialized.includes('mobile')
-          && !serialized.includes('legalsaathi_session'));
+          && !serialized.includes('nyayone_session'));
       record(`runtime:empty:${viewport.name}:${theme}`, '0 console/page/request/HTTP errors', emptyRuntime, runtimeClean(emptyRuntime));
       await emptyContext.close();
     }

@@ -1,1 +1,1 @@
-"""External service integrations for LegalSaathi."""
+"""External service integrations for NyayOne."""

@@ -10,7 +10,7 @@
 # proven the relay works and want the lower latency.
 #
 # It must be paired with infra/video/docker-compose.video.direct.yml, which is
-# what publishes the RTC media ports (1040/tcp and 1041/udp unchanged through
+# what publishes the RTC media ports (1140/tcp and 1141/udp unchanged through
 # Docker NAT, so the advertised ICE candidates remain truthful).
 # Rendering this template without that overlay produces a server that advertises
 # a candidate address nothing can reach.
@@ -22,10 +22,10 @@ prometheus_port: 6789
 
 rtc:
   # DIRECT MODE: these are deliberately identical inside and outside Docker.
-  # LiveKit advertises candidate ports in SDP; a 1041:7882 mapping would expose
+  # LiveKit advertises candidate ports in SDP; a 1141:7882 mapping would expose
   # one port while advertising another and the browser could never reach it.
-  tcp_port: 1040
-  udp_port: 1041
+  tcp_port: 1140
+  udp_port: 1141
   # DIRECT MODE (1/2): the advertised address must be one the CLIENT can reach —
   # the host's LAN address for a local smoke test, the node's public address in
   # staging. The renderer refuses to build a direct-mode config without it.
@@ -66,7 +66,7 @@ room:
 logging:
   # Info-level participant-init records include SDP/ICE diagnostics. Those are
   # operationally useful, but they are forbidden sensitive media metadata in
-  # LegalSaathi's log boundary. Keep the normal runtime at warning or above.
+  # NyayOne's log boundary. Keep the normal runtime at warning or above.
   level: warn
   json: true
 
