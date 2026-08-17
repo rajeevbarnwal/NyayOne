@@ -67,6 +67,10 @@ from app.services.risk_notification_relay import (
 from app.workers.risk_notification_outbox_relay import relay_once
 from tests import apptemplate, dbtemplate
 
+NON_DEV_DATABASE_URL = (
+    "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
+)
+
 
 def test_ci_runs_moderation_before_seeding_risk_label_cluster() -> None:
     workflow = (
@@ -87,7 +91,7 @@ def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
 
 
 def _open_qa_gate(monkeypatch: pytest.MonkeyPatch) -> None:
-    database_url = "sqlite+pysqlite:////tmp/legalsaathi_wave4_qa.db"
+    database_url = "sqlite+pysqlite:////tmp/nyayone_wave4_qa.db"
     monkeypatch.setattr(settings, "app_env", "testing")
     monkeypatch.setattr(settings, "database_url", database_url)
     monkeypatch.setattr(settings, "test_database_url", database_url)
@@ -140,8 +144,8 @@ def test_publication_gate_requires_every_qa_condition_and_exact_database_match()
     base = {
         "_env_file": None,
         "app_env": "testing",
-        "database_url": "sqlite+pysqlite:////tmp/legalsaathi_wave4_qa.db",
-        "test_database_url": "sqlite+pysqlite:////tmp/legalsaathi_wave4_qa.db",
+        "database_url": "sqlite+pysqlite:////tmp/nyayone_wave4_qa.db",
+        "test_database_url": "sqlite+pysqlite:////tmp/nyayone_wave4_qa.db",
         "wave4_gate_allow_publication_test": True,
         "wave4_security_approval_ref": "QA-SECURITY",
         "wave4_policy_approval_ref": "QA-POLICY",
@@ -172,7 +176,7 @@ def test_publication_gate_requires_every_qa_condition_and_exact_database_match()
 @pytest.mark.parametrize(
     "database_url",
     [
-        "postgresql://qa:secret@db.example/legalsaathi_wave4_qa",
+        "postgresql://qa:secret@db.example/nyayone_wave4_qa",
         "postgresql://wave4:qa@production.example/production",
         "postgresql://user:secret@production.example/production?target=wave4_qa",
         "postgresql://qa:test@127.0.0.1/production_wave4",
@@ -181,11 +185,11 @@ def test_publication_gate_requires_every_qa_condition_and_exact_database_match()
         "postgresql://user:secret@127.0.0.1/production?environment=e2e",
         "sqlite+pysqlite:////Users/example/production/wave4_qa.db",
         "postgresql://qa:test@127.0.0.1/production_qa",
-        "postgresql://qa:test@127.0.0.1/legalsaathi_prod_test",
-        "sqlite+pysqlite:////tmp/legalsaathi_production_qa.db",
-        "sqlite+pysqlite:////tmp/legalsaathi_staging_e2e.db",
+        "postgresql://qa:test@127.0.0.1/nyayone_prod_test",
+        "sqlite+pysqlite:////tmp/nyayone_production_qa.db",
+        "sqlite+pysqlite:////tmp/nyayone_staging_e2e.db",
         "postgresql://qa:test@127.0.0.1/%70roduction_qa",
-        "sqlite+pysqlite:////tmp/legalsaathi_%70roduction_qa.db",
+        "sqlite+pysqlite:////tmp/nyayone_%70roduction_qa.db",
     ],
 )
 def test_publication_gate_rejects_remote_or_non_temp_qa_looking_database(database_url):
@@ -205,10 +209,10 @@ def test_publication_gate_rejects_remote_or_non_temp_qa_looking_database(databas
 @pytest.mark.parametrize(
     "database_url",
     [
-        "postgresql://qa:secret@localhost/legalsaathi_wave4_qa",
-        "postgresql://qa:secret@127.0.0.1/legalsaathi_saathi279_e2e",
-        "postgresql://qa:secret@[::1]/legalsaathi_wave4_test",
-        "sqlite+pysqlite:////tmp/legalsaathi_wave4_qa.db",
+        "postgresql://qa:secret@localhost/nyayone_wave4_qa",
+        "postgresql://qa:secret@127.0.0.1/nyayone_saathi279_e2e",
+        "postgresql://qa:secret@[::1]/nyayone_wave4_test",
+        "sqlite+pysqlite:////tmp/nyayone_wave4_qa.db",
     ],
 )
 def test_publication_gate_accepts_only_explicit_loopback_or_temp_qa_targets(database_url):
@@ -298,8 +302,9 @@ def test_deterministic_response_notification_provider_is_local_test_only(environ
     common = {
         "_env_file": None,
         "app_env": environment,
+        "database_url": NON_DEV_DATABASE_URL,
         "internship_report_scanner_provider": "clamav",
-        "calendar_public_base_url": "https://calendar.legalsaathi.example",
+        "calendar_public_base_url": "https://calendar.nyayone.example",
     }
     with pytest.raises(ConfigurationError, match="notification_provider must be none"):
         Settings(

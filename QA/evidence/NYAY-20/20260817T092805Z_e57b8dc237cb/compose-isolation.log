@@ -1,0 +1,135 @@
+ROOT_COMPOSE_POLICY
+NyayOne runtime identity policy passed
+ROOT_COMPOSE_SANITIZED_SUMMARY
+{
+  "name": "nyayone",
+  "service_names": [
+    "backend",
+    "frontend",
+    "logstash",
+    "postgres"
+  ],
+  "ports": {
+    "backend": [
+      {
+        "mode": "ingress",
+        "target": 1031,
+        "published": "1131",
+        "protocol": "tcp"
+      }
+    ],
+    "frontend": [
+      {
+        "mode": "ingress",
+        "target": 1030,
+        "published": "1130",
+        "protocol": "tcp"
+      }
+    ],
+    "logstash": [
+      {
+        "mode": "ingress",
+        "target": 9600,
+        "published": "1138",
+        "protocol": "tcp"
+      }
+    ],
+    "postgres": [
+      {
+        "mode": "ingress",
+        "target": 5432,
+        "published": "1132",
+        "protocol": "tcp"
+      }
+    ]
+  },
+  "postgres": {
+    "user": "nyayone",
+    "database": "nyayone"
+  },
+  "frontend_api": "http://localhost:1131",
+  "network_names": [
+    "default"
+  ],
+  "volume_names": [
+    "nyayone_pgdata"
+  ]
+}
+VIDEO_COMPOSE_POLICY
+NyayOne runtime identity policy passed
+VIDEO_COMPOSE_SANITIZED_SUMMARY
+{
+  "name": "nyayone",
+  "service_names": [
+    "backend",
+    "coturn",
+    "frontend",
+    "livekit",
+    "logstash",
+    "postgres"
+  ],
+  "livekit_ports": [
+    {
+      "mode": "ingress",
+      "target": 7880,
+      "published": "1139",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 6789,
+      "published": "1142",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 1140,
+      "published": "1140",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 1141,
+      "published": "1141",
+      "protocol": "udp"
+    }
+  ],
+  "coturn_control_ports": [
+    {
+      "mode": "ingress",
+      "target": 3478,
+      "published": "1143",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 3478,
+      "published": "1143",
+      "protocol": "udp"
+    }
+  ],
+  "coturn_relay": {
+    "count": 50,
+    "min": 21500,
+    "max": 21549,
+    "protocols": [
+      "udp"
+    ]
+  },
+  "video_network": {
+    "name": "nyayone_video",
+    "driver": "bridge",
+    "ipam": {
+      "config": [
+        {
+          "subnet": "172.29.31.0/24"
+        }
+      ]
+    }
+  },
+  "volume_names": [
+    "coturn_state",
+    "nyayone_pgdata"
+  ]
+}
+EXIT_CODE=0

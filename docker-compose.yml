@@ -1,29 +1,31 @@
-# LegalSaathi local dev — standardized on host port range 1030-1049.
-# Reserved: frontend 1030, backend 1031, Postgres 1032, Valkey 1033,
-# SeaweedFS S3 API 1035, SeaweedFS admin/UI 1036, LLM Gateway 1037,
-# Logstash monitoring API 1038.
+# NyayOne local dev — isolated on host port range 1130-1149.
+# Reserved: frontend 1130, backend 1131, Postgres 1132, Valkey 1133,
+# SeaweedFS S3 API 1135, SeaweedFS admin/UI 1136, LLM Gateway 1137,
+# Logstash monitoring API 1138.
 # Wave 2 video plane (SAATHI-451), defined in the OVERLAY
 # infra/video/docker-compose.video.yml and brought up with `--profile video`:
-#   LiveKit signalling/Twirp 1039, LiveKit RTC/TCP 1040 and RTC/UDP 1041 (both
+#   LiveKit signalling/Twirp 1139, LiveKit RTC/TCP 1140 and RTC/UDP 1141 (both
 #   published only by the opt-in docker-compose.video.direct.yml overlay),
-#   LiveKit Prometheus 1042, coturn STUN/TURN 1043 (tcp+udp),
-#   coturn TURN/TLS 1044 (reserved, not published — needs certificates).
-# Plus 20500-20549/udp for coturn relay allocations: a TURN relay needs one
+#   LiveKit Prometheus 1142, coturn STUN/TURN 1143 (tcp+udp),
+#   coturn TURN/TLS 1144 (reserved, not published — needs certificates).
+# Plus 21500-21549/udp for coturn relay allocations: a TURN relay needs one
 # contiguous UDP port per allocation, which cannot fit inside the 20-port dev
 # range, so that block is reserved here alongside everything else.
+name: nyayone
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: legalsaathi
-      POSTGRES_PASSWORD: legalsaathi
-      POSTGRES_DB: legalsaathi
+      POSTGRES_USER: nyayone
+      POSTGRES_PASSWORD: nyayone_dev_only
+      POSTGRES_DB: nyayone
     ports:
-      - "1032:5432"
+      - "1132:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - nyayone_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U legalsaathi"]
+      test: ["CMD-SHELL", "pg_isready -U nyayone -d nyayone"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -36,8 +38,9 @@ services:
       - .env
     environment:
       LOG_FILE_PATH: /workspace/Logs/app/backend.jsonl
+      DATABASE_URL: postgresql+psycopg://nyayone:nyayone_dev_only@postgres:5432/nyayone
     ports:
-      - "1031:1031"
+      - "1131:1031"
     volumes:
       - ./backend:/app
       - ./storage:/workspace/storage
@@ -52,7 +55,10 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
     ports:
-      - "1030:1030"
+      - "1130:1030"
+    environment:
+      VITE_API_BASE_URL: http://localhost:1131
+      VITE_APP_NAME: NyayOne
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -62,7 +68,7 @@ services:
   logstash:
     image: ${LOGSTASH_IMAGE:-docker.elastic.co/logstash/logstash:8.15.3}
     ports:
-      - "1038:9600"
+      - "1138:9600"
     environment:
       LS_JAVA_OPTS: "-Xms256m -Xmx256m"
     volumes:
@@ -71,4 +77,5 @@ services:
       - ./Logs/logstash/pipeline:/usr/share/logstash/pipeline:ro
 
 volumes:
-  pgdata:
+  nyayone_pgdata:
+    name: nyayone_pgdata

@@ -53,6 +53,9 @@ LIVEKIT_URL = "https://livekit.legalsaathi.example"
 LIVEKIT_KEY = "APIabcLiveKeyValue987"
 LIVEKIT_SECRET = "sTvUxYzabcdefGHIJKlmnopQRS"
 SECRETS = (KEY_ID, KEY_SECRET, LIVEKIT_KEY, LIVEKIT_SECRET)
+NON_DEV_DATABASE_URL = (
+    "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
+)
 
 POSITIVE_INT_SETTINGS = (
     "booking_hold_minutes",
@@ -162,6 +165,7 @@ def test_deterministic_video_is_forbidden_in_staging_and_production():
         message = _refuses(
             names=("video_provider", "deterministic"),
             app_env=environment,
+            database_url=NON_DEV_DATABASE_URL,
             video_calls_enabled=True,
             video_provider="deterministic",
         )
@@ -184,6 +188,7 @@ def test_enabled_livekit_requires_a_browser_facing_websocket_url():
 def test_production_livekit_requires_wss_and_never_echoes_userinfo():
     common = {
         "app_env": "production",
+        "database_url": NON_DEV_DATABASE_URL,
         "calendar_public_base_url": "https://calendar.example.test",
         # Production construction must satisfy every fail-closed subsystem,
         # including the Wave 4 malware-screening boundary.  The dedicated

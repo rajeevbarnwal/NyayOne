@@ -1,10 +1,10 @@
 /**
  * Fetch client foundation (SAATHI-346). Adds an X-Request-ID correlation header
  * (matching the backend's header) so a request can be traced end-to-end, and
- * base-URLs against the configured API origin (port 1031).
+ * base-URLs against the configured NyayOne API origin (host port 1131).
  */
 const API_BASE = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL
-  ?? 'http://localhost:1031';
+  ?? 'http://localhost:1131';
 
 export const REQUEST_ID_HEADER = 'X-Request-ID';
 

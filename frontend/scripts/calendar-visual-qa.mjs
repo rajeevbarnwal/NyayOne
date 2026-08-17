@@ -25,9 +25,9 @@
  *     and matched to the manifest; missing/extra/changed files fail.
  *
  * Run against a built preview server:
- *   npm run build && npm run preview &                 # serves on :1030
+ *   npm run build && npm run preview &                 # serves on :1130
  *   GIT_COMMIT=$(git rev-parse HEAD) MODE=generate \
- *   BASE_URL=http://localhost:1030 BASELINE_DIR=tests/visual-baseline/s91-v3.2a \
+ *   BASE_URL=http://localhost:1130 BASELINE_DIR=tests/visual-baseline/s91-v3.2a \
  *   node scripts/calendar-visual-qa.mjs                # writes candidates + manifest
  *   # → Product approves the candidate pack, records approvalCommentId, sets approved
  *   MODE=verify … node scripts/calendar-visual-qa.mjs  # enforces all 20 < 2%
@@ -39,7 +39,7 @@ import { createHash } from 'node:crypto';
 import { diffPngBuffers, sideBySide, diffOverlay } from './lib/png.mjs';
 
 const MODE = process.env.MODE || 'verify';
-const BASE = process.env.BASE_URL || 'http://localhost:1030';
+const BASE = process.env.BASE_URL || 'http://localhost:1130';
 const BASELINE_DIR = resolve(process.env.BASELINE_DIR || 'tests/visual-baseline/s91-v3.2a');
 const OUT_DIR = resolve(process.env.OUT_DIR || 'tests/visual-out');
 const THRESHOLD = 2.0;

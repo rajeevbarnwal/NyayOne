@@ -60,7 +60,7 @@ class FilesystemStorageAdapter(StorageAdapter):
     """Local dev/test adapter. Signed URLs are opaque local tokens (not real S3
     presigned URLs) — sufficient for dev; the S3 adapter overrides this later."""
 
-    def __init__(self, root: str | os.PathLike[str], public_base_url: str = "http://localhost:1035"):
+    def __init__(self, root: str | os.PathLike[str], public_base_url: str = "http://localhost:1135"):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.public_base_url = public_base_url.rstrip("/")
@@ -121,4 +121,4 @@ class RetentionPolicy:
 def get_storage_adapter(root: str | os.PathLike[str] | None = None) -> StorageAdapter:
     """Factory. Dev/test → filesystem. Production S3/SeaweedFS adapter added later
     behind this same call, selected by settings."""
-    return FilesystemStorageAdapter(root or "/tmp/legalsaathi_storage")
+    return FilesystemStorageAdapter(root or "/tmp/nyayone_storage")

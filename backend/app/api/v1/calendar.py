@@ -288,6 +288,6 @@ def calendar_public_feed(
             "Cache-Control": "private, no-store",
             "Referrer-Policy": "no-referrer",
             "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": 'inline; filename="legalsaathi-private-calendar.ics"',
+            "Content-Disposition": 'inline; filename="nyayone-private-calendar.ics"',
         },
     )

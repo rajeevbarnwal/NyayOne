@@ -33,5 +33,5 @@ services:
       # Keep the host and container ports identical. LiveKit places these port
       # numbers in its ICE candidates; Docker NAT cannot rewrite an SDP
       # candidate when ``rtc.use_external_ip`` is false.
-      - "1040:1040"
-      - "1041:1041/udp"
+      - "1140:1140"
+      - "1141:1141/udp"

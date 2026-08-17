@@ -1,4 +1,4 @@
-"""Document ingestion entrypoint placeholder for LegalSaathi."""
+"""Document ingestion entrypoint placeholder for NyayOne."""
 
 
 def main() -> None:

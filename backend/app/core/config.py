@@ -168,7 +168,7 @@ def _livekit_public_url_problem(url: "str | None", *, production: bool) -> str |
 
 class Settings(BaseSettings):
     # Application
-    app_name: str = "LegalSaathi"
+    app_name: str = "NyayOne"
     app_version: str = "0.1.0"
     app_env: str = "development"
     log_level: str = "INFO"
@@ -176,40 +176,40 @@ class Settings(BaseSettings):
     # Keep stdout JSON logging enabled; this adds a second local file handler.
     log_file_path: str | None = None
 
-    # CORS: frontend dev server runs on 1030 (LegalSaathi local dev port range 1030-1049)
-    cors_origins: list[str] = ["http://localhost:1030", "http://127.0.0.1:1030"]
+    # CORS: frontend is published on NyayOne's isolated host port 1130.
+    cors_origins: list[str] = ["http://localhost:1130", "http://127.0.0.1:1130"]
 
-    # --- Database (Postgres + pgvector; host port 1032 -> container 5432) ---
+    # --- Database (Postgres + pgvector; host port 1132 -> container 5432) ---
     # Default targets the local docker-compose Postgres. Override via DATABASE_URL.
-    database_url: str = "postgresql+psycopg://legalsaathi:legalsaathi@localhost:1032/legalsaathi"
+    database_url: str = "postgresql+psycopg://nyayone:nyayone_dev_only@localhost:1132/nyayone"
     # Optional separate URL used by the test suite; when unset, tests use SQLite in-memory.
     test_database_url: str | None = None
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_echo: bool = False
 
-    # --- Worker / broker (Valkey-preferred; host port 1033) ---
+    # --- Worker / broker (Valkey-preferred; host port 1133) ---
     # Broker URL for the worker; Valkey is the default (BSD, Redis-compatible).
     # No Redis-specific product assumptions. Not connected in the foundation stage.
-    worker_broker_url: str = "valkey://localhost:1033/0"
+    worker_broker_url: str = "valkey://localhost:1133/0"
     worker_max_attempts: int = 3
     worker_base_delay_s: float = 0.5
     worker_backoff_factor: float = 2.0
 
     # --- Config-ready placeholders (declared here, not wired in the foundation tickets) ---
-    # Cache / queue broker. Valkey is the default (BSD-licensed, Redis-compatible); host port 1033
+    # Cache / queue broker. Valkey is the default (BSD-licensed, Redis-compatible); host port 1133
     valkey_url: str | None = None
-    # Object storage: S3-compatible abstraction. Local default SeaweedFS S3 API on host port 1035
+    # Object storage: S3-compatible abstraction. Local default SeaweedFS S3 API on host port 1135
     storage_endpoint_url: str | None = None
     storage_bucket: str | None = None
     storage_access_key: SecretStr | None = None
     storage_secret_key: SecretStr | None = None
-    # Internal LLM Gateway fronting local open-weight inference (Ollama dev, vLLM prod); host port 1037
+    # Internal LLM Gateway fronting local open-weight inference (Ollama dev, vLLM prod); host port 1137
     llm_gateway_url: str | None = None
 
     # Existing integrations
-    github_repository: str = "rajeevbarnwal/legalsaathi"
-    github_repo_url: str = "https://github.com/rajeevbarnwal/legalsaathi"
+    github_repository: str = "rajeevbarnwal/NyayOne"
+    github_repo_url: str = "https://github.com/rajeevbarnwal/NyayOne"
     github_token: SecretStr | None = None
     # Registration crypto (SAATHI-366/448): key material for keyed lookup hashes
     # and Fernet ciphertext of sensitive registration fields. Override in prod.
@@ -236,16 +236,16 @@ class Settings(BaseSettings):
     credential_max_evidence_files: int = 5
     credential_token_lifetime_days: int = 90
     credential_public_rate_per_minute: int = 30
-    credential_storage_root: str = "/tmp/legalsaathi_credential_storage"
+    credential_storage_root: str = "/tmp/nyayone_credential_storage"
     credential_scanner_provider: str = "deterministic"
-    credential_public_base_url: str = "https://localhost:1030/verify"
+    credential_public_base_url: str = "https://localhost:1130/verify"
     retention_days_credential_audit: int | None = None
     retention_days_credential_evidence: int | None = None
 
     # --- Wave 4 private internship reporting (SAATHI-269 / SAATHI-450) ----
     internship_report_max_file_bytes: int = 5 * 1024 * 1024
     internship_report_max_evidence_files: int = 5
-    internship_report_storage_root: str = "/tmp/legalsaathi_internship_report_storage"
+    internship_report_storage_root: str = "/tmp/nyayone_internship_report_storage"
     internship_report_scanner_provider: str = "deterministic"
     internship_report_clamav_host: str = "127.0.0.1"
     internship_report_clamav_port: int = 3310
@@ -265,7 +265,7 @@ class Settings(BaseSettings):
     internship_response_token_rate_per_minute: int = 10
     internship_response_ip_rate_per_minute: int = 60
     internship_identity_access_ttl_minutes: int = 30
-    internship_response_public_base_url: str = "https://localhost:1030/s-89"
+    internship_response_public_base_url: str = "https://localhost:1130/s-89"
     internship_response_notification_provider: str = "none"
     # Approved SAATHI-452 internal aggregation defaults. These values may build
     # a privacy-safe candidate but never enable a public projection.
@@ -279,7 +279,7 @@ class Settings(BaseSettings):
     calendar_export_token_ttl_days: int = 90
     # Absolute subscriber-facing origin. It is non-secret; the bearer token is
     # appended only to the one-time response and never persisted or logged.
-    calendar_public_base_url: str = "https://localhost:1030"
+    calendar_public_base_url: str = "https://localhost:1130"
 
     # --- Wave 2 tutoring marketplace (SAATHI-123 / SAATHI-127) -------------
     # Booking hold TTL: how long a slot stays reserved while the student pays.
@@ -337,7 +337,7 @@ class Settings(BaseSettings):
     # --- Student OTP login + cookie session --------------------------------
     # Login challenges remain separate from signup/recovery challenges. The
     # browser receives only an HttpOnly cookie; the database stores its hash.
-    auth_session_cookie_name: str = "legalsaathi_session"
+    auth_session_cookie_name: str = "nyayone_session"
     auth_session_ttl_seconds: int = 7 * 24 * 60 * 60
     login_attempt_ttl_seconds: int = 10 * 60
 
@@ -356,10 +356,98 @@ class Settings(BaseSettings):
     retention_mode: str = "anonymise"
 
     jira_base_url: str = "https://legalsaathi.atlassian.net"
-    jira_project_key: str = "SAATHI"
-    jira_board_id: int = 2
+    jira_project_key: str = "NYAY"
+    jira_board_id: int = 68
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def reject_legacy_runtime_defaults(self) -> "Settings":
+        """Reject known LegalSaathi operational defaults without echoing values.
+
+        NyayOne deliberately shares one approved Atlassian tenant. Its exact
+        HTTPS origin is enforced alongside the NyayOne project and board
+        identities; arbitrary Jira origins are refused to protect credentials.
+        """
+        problems: list[str] = []
+        if (self.app_name or "").strip() != "NyayOne":
+            problems.append("app_name must use the NyayOne application identity")
+
+        environment = (self.app_env or "").strip().casefold()
+        for setting_name in ("database_url", "test_database_url"):
+            raw_url = getattr(self, setting_name)
+            if not raw_url:
+                continue
+            database = urlsplit(raw_url)
+            database_name = unquote(database.path).rstrip("/").rsplit("/", 1)[-1]
+            if (
+                unquote(database.username or "").casefold() == "legalsaathi"
+                or database_name.casefold() == "legalsaathi"
+                or database_name.casefold().startswith("legalsaathi_")
+            ):
+                problems.append(
+                    f"{setting_name} must not use the legacy database identity"
+                )
+            if (
+                setting_name == "database_url"
+                and environment not in {"development", "dev", "local", "test", "testing"}
+                and unquote(database.password or "") == "nyayone_dev_only"
+            ):
+                problems.append(
+                    "database_url must not use development credentials outside local/test"
+                )
+
+        if (self.auth_session_cookie_name or "").strip() != "nyayone_session":
+            problems.append("auth_session_cookie_name must use the NyayOne cookie identity")
+        if (self.github_repository or "").strip().casefold() != "rajeevbarnwal/nyayone":
+            problems.append("github_repository must identify the NyayOne repository")
+        github_url = urlsplit(self.github_repo_url or "")
+        github_path = github_url.path.strip("/").casefold()
+        try:
+            github_port = github_url.port
+        except ValueError:
+            github_port = -1
+        if (
+            github_url.scheme.casefold() != "https"
+            or (github_url.hostname or "").casefold() != "github.com"
+            or github_port not in {None, 443}
+            or github_url.username
+            or github_url.password
+            or github_url.query
+            or github_url.fragment
+            or github_path.removesuffix(".git") != "rajeevbarnwal/nyayone"
+        ):
+            problems.append("github_repo_url must identify the NyayOne repository")
+        if (self.jira_project_key or "").strip().casefold() != "nyay":
+            problems.append("jira_project_key must identify the NyayOne project")
+        if self.jira_board_id != 68:
+            problems.append("jira_board_id must identify the NyayOne board")
+        jira_url = urlsplit(self.jira_base_url or "")
+        try:
+            jira_port = jira_url.port
+        except ValueError:
+            jira_port = -1
+        if (
+            jira_url.scheme.casefold() != "https"
+            or (jira_url.hostname or "").casefold() != "legalsaathi.atlassian.net"
+            or jira_port not in {None, 443}
+            or jira_url.username
+            or jira_url.password
+            or jira_url.path.rstrip("/")
+            or jira_url.query
+            or jira_url.fragment
+        ):
+            problems.append("jira_base_url must identify the approved shared Atlassian tenant")
+        for name in ("credential_storage_root", "internship_report_storage_root"):
+            if "legalsaathi" in (getattr(self, name) or "").casefold():
+                problems.append(f"{name} must not use the legacy storage namespace")
+
+        if problems:
+            raise ConfigurationError(
+                "NyayOne runtime identity is invalid; refusing to start: "
+                + "; ".join(problems)
+            )
+        return self
 
     @field_validator("credential_public_base_url")
     @classmethod

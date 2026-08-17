@@ -55,7 +55,7 @@ if (process.env.WAVE5_E2E_ALLOW_REAL !== 'true') {
 
 const SESSION_TOKEN = process.env.WAVE5_E2E_SESSION_TOKEN;
 if (SESSION_TOKEN.length < 32) throw new Error('WAVE5_E2E_SESSION_TOKEN must be at least 32 characters');
-const COOKIE_NAME = process.env.WAVE5_E2E_COOKIE_NAME?.trim() || 'legalsaathi_session';
+const COOKIE_NAME = process.env.WAVE5_E2E_COOKIE_NAME?.trim() || 'nyayone_session';
 const IGNORE_LOOPBACK_TLS = process.env.WAVE5_E2E_ALLOW_SELF_SIGNED_TLS === 'true';
 const WEB = loopbackOrigin('E2E_WEB_URL', process.env.E2E_WEB_URL);
 const API = loopbackOrigin('E2E_API_URL', process.env.E2E_API_URL);

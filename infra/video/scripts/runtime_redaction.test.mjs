@@ -6,7 +6,7 @@ import { redactMediaRuntimeMessage } from './runtime_redaction.mjs';
 const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHVkZW50In0.signature0123456789';
 
 test('redacts LiveKit access_token and join_request query values', () => {
-  const raw = `WebSocket failed ws://127.0.0.1:1039/rtc/v1?access_token=${jwt}&join_request=opaque-sdp-ice-payload`;
+  const raw = `WebSocket failed ws://127.0.0.1:1139/rtc/v1?access_token=${jwt}&join_request=opaque-sdp-ice-payload`;
   const safe = redactMediaRuntimeMessage(raw);
   assert.equal(safe.includes(jwt), false);
   assert.equal(safe.includes('opaque-sdp-ice-payload'), false);

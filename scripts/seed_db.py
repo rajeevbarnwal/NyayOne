@@ -1,4 +1,4 @@
-"""Database seed entrypoint placeholder for LegalSaathi."""
+"""Database seed entrypoint placeholder for NyayOne."""
 
 
 def main() -> None:

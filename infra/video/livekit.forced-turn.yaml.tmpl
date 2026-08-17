@@ -15,10 +15,10 @@
 # Three independent mechanisms, so no single mistake re-opens a direct path:
 #
 # 1. NO BROWSER-REACHABLE SFU CANDIDATE. `use_external_ip: false` plus
-#    `node_ip: 172.29.30.10` makes the SFU advertise only its address on the
+#    `node_ip: 172.29.31.10` makes the SFU advertise only its address on the
 #    private `video` docker network. infra/video/docker-compose.video.yml does
 #    not publish 7881/7882 on the host, so nothing outside the docker network
-#    can open a media socket to the SFU at all. coturn (172.29.30.11) is on that
+#    can open a media socket to the SFU at all. coturn (172.29.31.11) is on that
 #    network and is the only thing that can.
 # 2. NO THIRD-PARTY STUN. `stun_servers` points at our own coturn. LiveKit's
 #    documented default when the list is empty is Google's public STUN servers —
@@ -36,7 +36,7 @@
 # the backend verifies it) before you rely on room events.
 # ------------------------------------------------------------------------------
 
-# Signalling + RoomService (Twirp). Published on host 1039.
+# Signalling + RoomService (Twirp). Published on host 1139.
 # LIVEKIT_URL in the backend's environment must point here with an http:// or
 # https:// scheme — LiveKitCommunityAdapter._twirp POSTs to
 # {LIVEKIT_URL}/twirp/livekit.RoomService/... over httpx. A wss:// value is now
@@ -44,7 +44,7 @@
 # every server-side call at runtime.
 port: 7880
 
-# Prometheus metrics on :6789, published on host 1042. This is the readiness
+# Prometheus metrics on :6789, published on host 1142. This is the readiness
 # SCRAPE target (num_participants, TURN allocation counts); the container's own
 # readiness gate is the healthcheck in the compose file.
 prometheus_port: 6789
@@ -63,7 +63,7 @@ rtc:
   # infra/video/docker-compose.video.yml. Hard-coded rather than templated on
   # purpose: an env var here is an env var an operator can use to accidentally
   # advertise a reachable address and silently lose forced-TURN.
-  node_ip: 172.29.30.10
+  node_ip: 172.29.31.10
   # LiveKit is intentionally multi-homed: the default network carries backend
   # webhooks/Twirp while the video network carries RTC. Without an IP filter,
   # Pion opens candidates on both interfaces and Linux can answer a TURN-
@@ -72,7 +72,7 @@ rtc:
   # same fixed address coturn's one-peer ACL permits.
   ips:
     includes:
-      - 172.29.30.10/32
+      - 172.29.31.10/32
   # Our own STUN — see mechanism 2 above.
   stun_servers:
     - ${TURN_PUBLIC_HOST}:${TURN_PUBLIC_PORT}
@@ -122,7 +122,7 @@ room:
 logging:
   # Info-level participant-init records include SDP/ICE diagnostics. Those are
   # operationally useful, but they are forbidden sensitive media metadata in
-  # LegalSaathi's log boundary. Keep the normal runtime at warning or above.
+  # NyayOne's log boundary. Keep the normal runtime at warning or above.
   level: warn
   # JSON so the room trail lands in the same Logstash pipeline as the backend.
   json: true

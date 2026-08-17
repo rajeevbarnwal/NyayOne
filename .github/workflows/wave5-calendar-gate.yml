@@ -22,18 +22,18 @@ jobs:
       postgres:
         image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
-          POSTGRES_USER: legalsaathi
-          POSTGRES_PASSWORD: legalsaathi
-          POSTGRES_DB: legalsaathi_wave5_qa
+          POSTGRES_USER: nyayone_ci
+          POSTGRES_PASSWORD: nyayone_ci_ephemeral
+          POSTGRES_DB: nyayone_wave5_qa
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave5_qa"
+          --health-cmd "pg_isready -U nyayone_ci -d nyayone_wave5_qa"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave5_qa
+      DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave5_qa
       APP_ENV: testing
       WAVE5_GATE_ALLOW_MUTATION: "true"
       REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
@@ -54,7 +54,7 @@ jobs:
         working-directory: backend
         run: pip install -r requirements.txt -c requirements.lock pytest
       - name: Enable pgvector
-        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi_wave5_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
+        run: PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -U nyayone_ci -d nyayone_wave5_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Native calendar and migration regression
         working-directory: backend
         run: python -m pytest -q tests/test_wave5_calendar.py tests/test_wave2_schema.py tests/test_wave4_schema.py
@@ -84,18 +84,18 @@ jobs:
       postgres:
         image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
-          POSTGRES_USER: legalsaathi
-          POSTGRES_PASSWORD: legalsaathi
-          POSTGRES_DB: legalsaathi_wave5_browser_qa
+          POSTGRES_USER: nyayone_ci
+          POSTGRES_PASSWORD: nyayone_ci_ephemeral
+          POSTGRES_DB: nyayone_wave5_browser_qa
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave5_browser_qa"
+          --health-cmd "pg_isready -U nyayone_ci -d nyayone_wave5_browser_qa"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave5_browser_qa
+      DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave5_browser_qa
       APP_ENV: testing
       WAVE5_E2E_ALLOW_SEED: "true"
       REGISTRATION_SECRET: ci-wave5-browser-encryption-secret-not-a-default
@@ -143,8 +143,8 @@ jobs:
       - name: Migrate and seed the isolated PostgreSQL target
         working-directory: backend
         run: |
-          PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi \
-            -d legalsaathi_wave5_browser_qa \
+          PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -U nyayone_ci \
+            -d nyayone_wave5_browser_qa \
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
           alembic upgrade head
           python scripts/seed_wave5_calendar_e2e.py \
