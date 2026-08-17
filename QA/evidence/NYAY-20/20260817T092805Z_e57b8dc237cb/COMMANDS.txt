@@ -1,0 +1,31 @@
+BASE=6bbaaa9e946fc59e7533c655252215d632194103
+SOURCE=e57b8dc237cb562a3c4de224997c06d9cf226f4b
+EVIDENCE_DIR=QA/evidence/NYAY-20/20260817T092805Z_e57b8dc237cb
+
+git diff --check "${BASE}...${SOURCE}"
+git diff --name-only "${BASE}...${SOURCE}"
+.venv/bin/python backend/scripts/check_runtime_lock.py
+cd backend && ../.venv/bin/python -m pytest -q
+cd frontend && CI=1 NO_COLOR=1 FORCE_COLOR=0 npm run typecheck
+cd frontend && CI=1 NO_COLOR=1 FORCE_COLOR=0 npm run lint
+cd frontend && CI=1 NO_COLOR=1 FORCE_COLOR=0 npm run test:run
+cd frontend && CI=1 NO_COLOR=1 FORCE_COLOR=0 npm run build
+perl -pe 's/\e\[[0-9;?]*[ -\/]*[@-~]//g; s/\r//g; s/[ \t]+$//' /private/tmp/nyay20-frontend-native.log > "${EVIDENCE_DIR}/frontend-native.log"
+python3 scripts/ci/check_nyayone_runtime_identity.py
+python3 scripts/ci/test_ci_policies.py
+python3 scripts/ci/verify_nyayone_ci.py
+python3 scripts/ci/verify_sha256_manifests.py
+
+cp .env.example .env
+docker compose --env-file .env.example -f docker-compose.yml config --format json > /private/tmp/nyay20-root-compose.json
+python3 scripts/ci/check_nyayone_runtime_identity.py --compose-json /private/tmp/nyay20-root-compose.json
+jq '{name, service_names: (.services | keys), ports: (.services | with_entries(.value = (.value.ports // []))), postgres: {user: .services.postgres.environment.POSTGRES_USER, database: .services.postgres.environment.POSTGRES_DB}, frontend_api: .services.frontend.environment.VITE_API_BASE_URL, network_names: (.networks | keys), volume_names: (.volumes | keys)}' /private/tmp/nyay20-root-compose.json
+
+docker compose --profile video --env-file infra/video/.env.example -f docker-compose.yml -f infra/video/docker-compose.video.yml -f infra/video/docker-compose.video.direct.yml config --format json > /private/tmp/nyay20-video-compose.json
+python3 scripts/ci/check_nyayone_runtime_identity.py --compose-json /private/tmp/nyay20-video-compose.json
+jq '{name, service_names: (.services | keys), livekit_ports: .services.livekit.ports, coturn_control_ports: [.services.coturn.ports[] | select(((.published | tonumber) < 21500) or ((.published | tonumber) > 21549))], coturn_relay: ([.services.coturn.ports[] | select(((.published | tonumber) >= 21500) and ((.published | tonumber) <= 21549))] | {count: length, min: (map(.published | tonumber) | min), max: (map(.published | tonumber) | max), protocols: (map(.protocol) | unique)}), video_network: .networks.video, volume_names: (.volumes | keys)}' /private/tmp/nyay20-video-compose.json
+rm -f .env
+
+python3 scripts/ci/scan_evidence.py "${EVIDENCE_DIR}"
+(cd "${EVIDENCE_DIR}" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS.txt)
+(cd "${EVIDENCE_DIR}" && shasum -a 256 -c SHA256SUMS.txt)
