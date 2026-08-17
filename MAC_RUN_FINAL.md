@@ -71,7 +71,7 @@ cd backend && DATABASE_URL=sqlite+pysqlite:///$(mktemp -d)/gate.db \
 
 ### 5) Clean PostgreSQL 16 + actor setup (F1 — SELF-CONTAINED, one command each)
 ```
-docker compose up -d db                       # PG16 + pgvector :1032
+docker compose up -d postgres                 # PG16 + pgvector :1132
 cd backend && python -m alembic upgrade head
 python scripts/seed_e2e_actors.py             # idempotent setup seam
 python scripts/seed_e2e_actors.py             # second run: MUST create nothing
@@ -90,8 +90,8 @@ fails, STOP — do not capture anything.
 
 ### 7) One-command law-school suite (functional + preflight)
 ```
-# backend :1031 on PG16, frontend production build served on :1050
-QA_BASE_URL=http://127.0.0.1:1050 QA_API_BASE_URL=http://127.0.0.1:1031 \
+# backend :1131 on PG16, frontend production build served on :1130
+QA_BASE_URL=http://127.0.0.1:1130 QA_API_BASE_URL=http://127.0.0.1:1131 \
 QA_EVIDENCE_DIR=<abs>/QA/mac_final npm run qa:lawschool
 ```
 `PREFLIGHT-ACTORS` must PASS (a clean checkout + steps 5–7 is the whole

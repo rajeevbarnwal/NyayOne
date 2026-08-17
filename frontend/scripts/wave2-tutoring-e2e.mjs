@@ -66,9 +66,9 @@ const REVIEW_LIMIT = Number(process.env.E2E_REVIEW_LIMIT_PER_HOUR || '200');
 const JOIN_TTL = Number(process.env.E2E_JOIN_TTL_SECONDS || '300');
 
 /** Compile-time constants of the deterministic adapters (not env secrets). */
-const PAY_KEY = Buffer.from('legalsaathi-deterministic-payment-test-key');
+const PAY_KEY = Buffer.from('nyayone-deterministic-payment-test-key');
 const PAY_SIG_HEADER = 'X-Payment-Signature';
-const VIDEO_KEY = Buffer.from('legalsaathi-deterministic-video-test-key');
+const VIDEO_KEY = Buffer.from('nyayone-deterministic-video-test-key');
 const VIDEO_SIG_HEADER = 'X-Video-Signature';
 
 const STUDENT = '00000000-0000-4000-8000-0000000000de';
@@ -4354,8 +4354,8 @@ const CANARIES = [
   { id: 'cvv_field', re: /\b(cvv|cvc|card_?verification)\b\s*[:=]?\s*"?\d{3,4}"?/gi, what: 'a CVV/CVC value' },
   { id: 'otp_field', re: /\b(otp|one[_-]?time[_-]?password|2fa_code)\b\s*[:=]\s*"?\d{4,8}"?/gi, what: 'a payment OTP' },
   { id: 'raw_join_token', re: /join_[A-Za-z0-9_-]{20,}/g, what: 'a RAW server-issued join credential' },
-  { id: 'payment_provider_secret', re: /legalsaathi-deterministic-payment-test-key/g, what: 'the payment provider signing key' },
-  { id: 'video_provider_secret', re: /legalsaathi-deterministic-video-test-key/g, what: 'the video provider signing key' },
+  { id: 'payment_provider_secret', re: /nyayone-deterministic-payment-test-key/g, what: 'the payment provider signing key' },
+  { id: 'video_provider_secret', re: /nyayone-deterministic-video-test-key/g, what: 'the video provider signing key' },
   { id: 'razorpay_secret', re: /rzp_(live|test)_[A-Za-z0-9]{6,}/g, what: 'a Razorpay key id' },
   { id: 'sdp_offer', re: /(^|["'\s>])v=0[\r\n]/g, what: 'an SDP session description' },
   { id: 'sdp_media_line', re: /\bm=(audio|video)\s+\d+/g, what: 'an SDP media line' },

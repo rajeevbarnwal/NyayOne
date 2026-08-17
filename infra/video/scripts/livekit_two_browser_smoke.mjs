@@ -51,7 +51,7 @@ const requireFromFrontend = createRequire(
 
 const BLOCKED_EXIT = 78;
 const OUT = process.env.SMOKE_OUT || 'test-results/livekit-smoke';
-const BACKEND_URL = process.env.SMOKE_BACKEND_URL || 'http://localhost:1031';
+const BACKEND_URL = process.env.SMOKE_BACKEND_URL || 'http://localhost:1131';
 const STEPS = (process.env.SMOKE_STEPS || 'S4,S5,S6').split(',').filter(Boolean);
 const BUNDLE_URL =
   process.env.LIVEKIT_CLIENT_BUNDLE ||

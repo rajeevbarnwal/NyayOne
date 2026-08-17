@@ -1,4 +1,4 @@
-# LegalSaathi Wave 2 — self-hosted video plane (SAATHI-451, frozen matrix row H1).
+# NyayOne Wave 2 — self-hosted video plane (SAATHI-451, frozen matrix row H1).
 #
 # WHAT THIS IS. A self-hosted LiveKit SFU plus a coturn TURN relay, sitting behind
 # the already-committed `VideoSessionProvider` seam
@@ -22,22 +22,22 @@
 # infra/video/docker-compose.video.direct.yml. Rationale and proof procedure:
 # infra/video/RUNBOOK.md § "Forced-TURN".
 #
-# HOST PORT ALLOCATION. The repo standardises local dev on 1030-1049 (see the
+# HOST PORT ALLOCATION. NyayOne reserves 1130-1149 for local services (see the
 # header of ../../docker-compose.yml, which is the single source of truth and has
 # been updated to record these). Allocated here:
 #
-#   1039  ->  livekit 7880/tcp   signalling + RoomService (Twirp) + health probe
-#   1042  ->  livekit 6789/tcp   prometheus metrics (readiness scrape target)
-#   1043  ->  coturn  3478/tcp   TURN over TCP  (also the STUN responder)
-#   1043  ->  coturn  3478/udp   TURN over UDP
-#   1040  ->  livekit 7881/tcp   ICE/TCP fallback   — DIRECT overlay only
-#   1041  ->  livekit 7882/udp   RTC UDP mux        — DIRECT overlay only
-#   1044      coturn  5349/tcp   TURN/TLS — RESERVED, deliberately NOT published
+#   1139  ->  livekit 7880/tcp   signalling + RoomService (Twirp) + health probe
+#   1142  ->  livekit 6789/tcp   prometheus metrics (readiness scrape target)
+#   1143  ->  coturn  3478/tcp   TURN over TCP  (also the STUN responder)
+#   1143  ->  coturn  3478/udp   TURN over UDP
+#   1140  ->  livekit 1140/tcp   ICE/TCP fallback   — DIRECT overlay only
+#   1141  ->  livekit 1141/udp   RTC UDP mux        — DIRECT overlay only
+#   1144      coturn  5349/tcp   TURN/TLS — RESERVED, deliberately NOT published
 #                                (needs certs; see RUNBOOK § "TURN over TLS")
-#   20500-20549/udp  coturn relay allocations. This block canNOT live inside
-#                    1030-1049: a TURN relay needs one contiguous UDP port per
+#   21500-21549/udp  coturn relay allocations. This block canNOT live inside
+#                    1130-1149: a TURN relay needs one contiguous UDP port per
 #                    allocation and the whole dev range is only 20 ports wide.
-#                    20500-20549 is therefore reserved for the media plane and
+#                    21500-21549 is therefore reserved for the media plane and
 #                    recorded in ../../docker-compose.yml with the rest.
 #
 # NO SECRET IS COMMITTED. Both config files are RENDERED from
@@ -75,9 +75,9 @@ services:
       - ./infra/video/rendered/turnserver.conf:/etc/coturn/turnserver.conf:ro
       - coturn_state:/var/lib/coturn
     ports:
-      - "1043:3478/tcp"
-      - "1043:3478/udp"
-      - "20500-20549:20500-20549/udp"
+      - "1143:3478/tcp"
+      - "1143:3478/udp"
+      - "21500-21549:21500-21549/udp"
     healthcheck:
       # A real STUN Binding transaction against the listener, not a port poke:
       # turnutils_stunclient ships in the coturn image and exits non-zero when
@@ -89,7 +89,7 @@ services:
       retries: 10
     networks:
       video:
-        ipv4_address: 172.29.30.11
+        ipv4_address: 172.29.31.11
 
   livekit:
     image: livekit/livekit-server:v1.13.5@sha256:3497163e15c48fef6e7830c78716f9e9d5edc28abf7aa90b61c86e93bbc306b1
@@ -99,8 +99,8 @@ services:
     volumes:
       - ./infra/video/rendered/livekit.yaml:/etc/livekit/livekit.yaml:ro
     ports:
-      - "1039:7880"
-      - "1042:6789"
+      - "1139:7880"
+      - "1142:6789"
     healthcheck:
       # LiveKit's own liveness/readiness surface: GET / on the signalling port.
       # This is exactly what the upstream Helm chart probes
@@ -118,7 +118,7 @@ services:
         condition: service_healthy
     networks:
       video:
-        ipv4_address: 172.29.30.10
+        ipv4_address: 172.29.31.10
       # `default` is the root compose project's network: this is how the backend
       # reaches LiveKit for Twirp RoomService calls (LiveKitCommunityAdapter.
       # _twirp) and how LiveKit reaches the backend to POST room events.
@@ -131,10 +131,10 @@ networks:
   video:
     # An explicit, fixed subnet is not decoration: coturn's peer ACL and
     # LiveKit's advertised ICE candidate address are both pinned to
-    # 172.29.30.10, which is what makes "the relay can only ever forward to the
+    # 172.29.31.10, which is what makes "the relay can only ever forward to the
     # SFU" and "the SFU has no browser-reachable candidate" assertable rather
     # than aspirational. Change the subnet in ONE place and re-render.
     driver: bridge
     ipam:
       config:
-        - subnet: 172.29.30.0/24
+        - subnet: 172.29.31.0/24

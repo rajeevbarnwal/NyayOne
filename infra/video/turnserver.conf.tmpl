@@ -17,17 +17,17 @@
 # runs as root.
 
 # --- listeners -----------------------------------------------------------------
-# Published on host 1043 (both tcp and udp). The STUN Binding responder on this
+# Published on host 1143 (both tcp and udp). The STUN Binding responder on this
 # same port is what the compose healthcheck probes with turnutils_stunclient.
 listening-port=3478
-# TURN over TLS. RESERVED on host 1044 and deliberately NOT enabled: it needs a
+# TURN over TLS. RESERVED on host 1144 and deliberately NOT enabled: it needs a
 # real certificate for ${TURN_REALM} and there is no credible way to ship one in
 # a repo. Enabling it is a documented, separate step — RUNBOOK § "TURN over TLS".
 no-tls
 no-dtls
 
 # The address clients must be told to send relayed media to. Coturn discovers
-# and binds its sole real container interface (172.29.30.11) automatically;
+# and binds its sole real container interface (172.29.31.11) automatically;
 # forcing a public/private mapping under Docker Desktop prevents allocations
 # from reaching the host-published UDP range. Only advertise the host-reachable
 # address here and retain coturn's discovered private relay socket.
@@ -46,9 +46,9 @@ stale-nonce=600
 
 # --- relay ---------------------------------------------------------------------
 # One UDP port per allocation. Must match the published range in
-# infra/video/docker-compose.video.yml exactly (20500-20549/udp).
-min-port=20500
-max-port=20549
+# infra/video/docker-compose.video.yml exactly (21500-21549/udp).
+min-port=21500
+max-port=21549
 # We relay UDP media to the SFU only; TURN-TCP *allocations* (RFC 6062) are a
 # different feature and are not needed. TURN-over-TCP for the client side still
 # works — that is the transport to 3478/tcp, not a TCP relay allocation.
@@ -63,7 +63,7 @@ no-tcp-relay
 denied-peer-ip=0.0.0.0-255.255.255.255
 # MUST equal the livekit service's static address in
 # infra/video/docker-compose.video.yml.
-allowed-peer-ip=172.29.30.10
+allowed-peer-ip=172.29.31.10
 no-multicast-peers
 
 # --- quotas --------------------------------------------------------------------

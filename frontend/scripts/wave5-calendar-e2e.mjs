@@ -10,7 +10,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import axe from 'axe-core';
 
-const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1030').replace(/\/$/, '');
+const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1130').replace(/\/$/, '');
 const OUT = path.resolve(process.env.E2E_OUTPUT_DIR ?? 'test-results/wave5-calendar-e2e');
 const WIDTHS = [390, 430, 768, 1024, 1440];
 const THEMES = ['light', 'dark'];

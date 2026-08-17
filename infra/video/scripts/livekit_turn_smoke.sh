@@ -34,7 +34,7 @@
 #   --skip-browser   run without S4/S5/S6 (they need Playwright + a media stack)
 #
 # Environment (all REQUIRED unless noted):
-#   LIVEKIT_URL             http(s) base of the SFU, e.g. http://localhost:1039
+#   LIVEKIT_URL             http(s) base of the SFU, e.g. http://localhost:1139
 #   LIVEKIT_API_KEY         the key in the rendered livekit.yaml `keys:` map
 #   LIVEKIT_API_SECRET      its secret; also verifies webhooks
 #   SMOKE_SESSION_ID        a CONFIRMED, PAID tutoring session id to join
@@ -42,7 +42,7 @@
 #                           participant of that session, e.g.
 #                           'X-Actor-Claims: {"sub":"...","roles":["student"]}'
 #   SMOKE_TUTOR_AUTH_HEADER the same for the other participant (second browser)
-#   BACKEND_URL             default http://localhost:1031
+#   BACKEND_URL             default http://localhost:1131
 #   DATABASE_URL            (S11 only) the backend's PostgreSQL URL
 #   TURN_EXTERNAL_IP        (S9 only) the relay address clients are handed
 #   PYTHON                  interpreter with backend/requirements.txt (S11)
@@ -108,7 +108,7 @@ COMPOSE_BASE=(-f docker-compose.yml -f infra/video/docker-compose.video.yml)
 if [[ -n "${SMOKE_COMPOSE_OVERRIDE:-}" ]]; then
   COMPOSE_BASE+=(-f "$SMOKE_COMPOSE_OVERRIDE")
 fi
-BACKEND_URL="${BACKEND_URL:-http://localhost:1031}"
+BACKEND_URL="${BACKEND_URL:-http://localhost:1131}"
 LIVEKIT_CLIENT_BUNDLE="${LIVEKIT_CLIENT_BUNDLE:-https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js}"
 RESULTS=()
 FAILED=0
@@ -409,7 +409,7 @@ PY
   # live row. Hashes are safe to pass to psql; raw bearers are not.
   FIRST_HASH="$(python3 -c 'import hashlib,json,sys;print(hashlib.sha256(json.load(open(sys.argv[1]))["join_token"].encode()).hexdigest())' "$RE_FILE")"
   SECOND_HASH="$(python3 -c 'import hashlib,json,sys;print(hashlib.sha256(json.load(open(sys.argv[1]))["join_token"].encode()).hexdigest())' "$FINAL_FILE")"
-  docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+  docker compose -f docker-compose.yml exec -T postgres psql -U nyayone -d nyayone -tAc \
     "select count(*) filter (where token_hash in ('$FIRST_HASH') and revoked_at is not null), count(*) filter (where token_hash in ('$SECOND_HASH') and revoked_at is null) from video_session_grants where token_hash in ('$FIRST_HASH','$SECOND_HASH');" \
     > "$OUT/s7-db-state.log" 2>&1 || fail_closed S7 "could not verify the two grant rows"
   [[ "$(tr -d '[:space:]' < "$OUT/s7-db-state.log")" == "1|1" ]] \
@@ -469,7 +469,7 @@ if want S8; then
     fail_closed S8 "the backend refused a genuine delivery with VIDEO_UNVERIFIED (key/secret mismatch — RUNBOOK § 4)"
   fi
   # The event trail must have landed. § 9 item 6's own query.
-  docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+  docker compose -f docker-compose.yml exec -T postgres psql -U nyayone -d nyayone -tAc \
     "select count(*) from session_status_history where reason like 'video:%';" \
     > "$OUT/s8-trail.log" 2>&1 || fail_closed S8 "could not read session_status_history"
   [[ "$(tr -d '[:space:]' < "$OUT/s8-trail.log")" -gt 0 ]] \
@@ -478,7 +478,7 @@ if want S8; then
   # retries on its own; a duplicate application would show up as a second row
   # for one event id, which uq_payment_events_provider_event_id and the video
   # event id guard both forbid.
-  docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+  docker compose -f docker-compose.yml exec -T postgres psql -U nyayone -d nyayone -tAc \
     "select count(*) from (select reason, count(*) c from session_status_history where reason like 'video:%' group by reason having count(*) > 1) d;" \
     > "$OUT/s8-replay.log" 2>&1 || fail_closed S8 "could not run the replay query"
   [[ "$(tr -d '[:space:]' < "$OUT/s8-replay.log")" == "0" ]] \
@@ -491,7 +491,7 @@ fi
 # --------------------------------------------------------------------------- #
 if want S9; then
   step_head S9 "FORCED-TURN smoke test (the media path)"
-  grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml > "$OUT/s9-mode.log" 2>&1
+  grep -m1 'NYAYONE-VIDEO-MODE' infra/video/rendered/livekit.yaml > "$OUT/s9-mode.log" 2>&1
   grep -q 'forced-turn' "$OUT/s9-mode.log" \
     || fail_closed S9 "the rendered config is not in forced-turn mode"
   if docker compose "${COMPOSE_BASE[@]}" port --protocol udp livekit 7882 > "$OUT/s9-port.log" 2>&1; then
@@ -531,21 +531,21 @@ for entry in pairs:
             f"{local!r}, not relay/prflx"
         )
     address = str(entry.get("localAddress") or "")
-    if relay_ip and address and address not in {relay_ip, "172.29.30.11"}:
+    if relay_ip and address and address not in {relay_ip, "172.29.31.11"}:
         problems.append(
             f"{entry.get('participant')}: selected address {address} is neither "
-            f"TURN_EXTERNAL_IP ({relay_ip}) nor coturn 172.29.30.11"
+            f"TURN_EXTERNAL_IP ({relay_ip}) nor coturn 172.29.31.11"
         )
     port = int(entry.get("localPort") or 0)
-    if not 20500 <= port <= 20549:
+    if not 21500 <= port <= 21549:
         problems.append(
             f"{entry.get('participant')}: relay port {port} is outside the "
-            "20500-20549 block"
+            "21500-21549 block"
         )
-    if entry.get("remoteAddress") != "172.29.30.10" or int(entry.get("remotePort") or 0) != 7882:
+    if entry.get("remoteAddress") != "172.29.31.10" or int(entry.get("remotePort") or 0) != 7882:
         problems.append(
             f"{entry.get('participant')}: selected relay peer is "
-            f"{entry.get('remoteAddress')}:{entry.get('remotePort')}, not SFU 172.29.30.10:7882"
+            f"{entry.get('remoteAddress')}:{entry.get('remotePort')}, not SFU 172.29.31.10:7882"
         )
     if not any(str(url).startswith("turn:") for url in entry.get("iceUrls", [])):
         problems.append(f"{entry.get('participant')}: no TURN URL in RTC configuration")
@@ -568,7 +568,7 @@ fi
 # --------------------------------------------------------------------------- #
 if want S10; then
   step_head S10 "provider unreachable, fail-closed"
-  before=$(docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+  before=$(docker compose -f docker-compose.yml exec -T postgres psql -U nyayone -d nyayone -tAc \
     "select count(*) from video_session_grants where session_id = '$SMOKE_SESSION_ID';" 2>/dev/null | tr -d '[:space:]')
   docker compose "${COMPOSE_BASE[@]}" --profile video stop livekit > "$OUT/s10-stop.log" 2>&1 \
     || fail_closed S10 "could not stop the livekit service"
@@ -592,7 +592,7 @@ if want S10; then
     "$BACKEND_URL/api/v1/tutoring/sessions/$SMOKE_SESSION_ID/join-credentials" \
     -H "$SMOKE_AUTH_HEADER" 2>> "$OUT/s10.log")
   docker compose "${COMPOSE_BASE[@]}" --profile video up -d livekit >> "$OUT/s10-stop.log" 2>&1
-  after=$(docker compose -f docker-compose.yml exec -T postgres psql -U legalsaathi -tAc \
+  after=$(docker compose -f docker-compose.yml exec -T postgres psql -U nyayone -d nyayone -tAc \
     "select count(*) from video_session_grants where session_id = '$SMOKE_SESSION_ID';" 2>/dev/null | tr -d '[:space:]')
   [[ "$code" != "500" ]] || fail_closed S10 "the backend answered 500 instead of a typed error"
   grep -q 'PROVIDER_UNAVAILABLE\|PROVIDER_UNREACHABLE' "$OUT/s10-body.json" \

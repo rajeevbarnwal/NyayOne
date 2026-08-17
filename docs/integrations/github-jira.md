@@ -1,14 +1,14 @@
 # GitHub and Jira API Integration
 
-LegalSaathi is configured around these external project systems:
+NyayOne is configured around these external project systems:
 
-- GitHub repository: `rajeevbarnwal/legalsaathi`
-- GitHub API endpoint: `https://api.github.com/repos/rajeevbarnwal/legalsaathi`
+- GitHub repository: `rajeevbarnwal/NyayOne`
+- GitHub API endpoint: `https://api.github.com/repos/rajeevbarnwal/NyayOne`
 - Jira site: `https://legalsaathi.atlassian.net`
-- Jira project key: `SAATHI`
-- Jira board ID: `2`
-- Jira project API endpoint: `https://legalsaathi.atlassian.net/rest/api/3/project/SAATHI`
-- Jira board API endpoint: `https://legalsaathi.atlassian.net/rest/agile/1.0/board/2`
+- Jira project key: `NYAY`
+- Jira board ID: `68`
+- Jira project API endpoint: `https://legalsaathi.atlassian.net/rest/api/3/project/NYAY`
+- Jira board API endpoint: `https://legalsaathi.atlassian.net/rest/agile/1.0/board/68`
 
 ## Local Secrets
 
@@ -39,8 +39,8 @@ The script checks GitHub repository metadata and, when Jira credentials are pres
 Use Jira issue keys in branch names, commits, and pull requests where practical:
 
 ```text
-feature/SAATHI-123-short-description
-fix/SAATHI-124-short-description
+feature/NYAY-123-short-description
+fix/NYAY-124-short-description
 ```
 
 Pull requests should include the Jira issue key so GitHub work remains traceable to Jira planning.

@@ -167,7 +167,7 @@ file uses for Postgres (`interval: 5s`, `timeout: 3s`, `retries: 10`).
 | `coturn` | `turnutils_stunclient -p 3478 127.0.0.1 \| grep -q 'reflexive addr'` | A real STUN Binding transaction against the live listener, not a socket poke. `turnutils_stunclient` ships in the coturn image. This is also why the STUN responder stays enabled even in forced-TURN mode (§ 3). |
 
 Readiness *of the pair* is the compose health state; readiness *trending* is the
-Prometheus endpoint on host 1042.
+Prometheus endpoint on host 1142.
 
 ```bash
 # Container-level health (what depends_on gates on).
@@ -175,20 +175,20 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml ps
 # Expect STATUS "Up (healthy)" for both coturn and livekit.
 
 # LiveKit application health, from the host.
-curl -fsS http://localhost:1039/ ; echo " <- exit $?"
+curl -fsS http://localhost:1139/ ; echo " <- exit $?"
 # Expect: a 2xx (body "OK") and exit 0.
 
 # LiveKit metrics / readiness scrape target.
-curl -fsS http://localhost:1042/metrics | head -20
+curl -fsS http://localhost:1142/metrics | head -20
 # Expect: Prometheus text, including livekit_* series.
 
-# STUN reachability from the host (proves 1043/udp is actually published).
+# STUN reachability from the host (proves 1143/udp is actually published).
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   exec coturn turnutils_stunclient -p 3478 127.0.0.1
 # Expect a line containing "reflexive addr:".
 
 # Backend's own view of the provider seam.
-curl -fsS http://localhost:1031/api/v1/health
+curl -fsS http://localhost:1131/api/v1/health
 ```
 
 If `livekit` is unhealthy, read its log first: a config key the pinned version
@@ -218,14 +218,14 @@ Media **must** traverse the relay because there is no other route, not because a
 client politely chose one. Three independent mechanisms:
 
 1. **No published SFU media ports.** `docker-compose.video.yml` publishes only
-   1039 (signalling) and 1042 (metrics). LiveKit's RTC ports (7881/tcp,
+   1139 (signalling) and 1142 (metrics). LiveKit's RTC ports (7881/tcp,
    7882/udp) stay inside the `video` docker network. Direct media is opt-in via
    `docker-compose.video.direct.yml`, which is the *only* thing that publishes
    them — and because compose merges `ports` by appending, an overlay can never
    silently remove the relay path.
 2. **No browser-reachable candidate.** `rendered/livekit.yaml` sets
-   `rtc.use_external_ip: false`, `rtc.node_ip: 172.29.30.10`, and
-   `rtc.ips.includes: [172.29.30.10/32]` — the SFU's address on the private
+   `rtc.use_external_ip: false`, `rtc.node_ip: 172.29.31.10`, and
+   `rtc.ips.includes: [172.29.31.10/32]` — the SFU's address on the private
    `video` network. The IP filter is load-bearing because LiveKit also shares
    the default network for webhooks; without it, a TURN-forwarded ICE check can
    be answered from the wrong interface and the browser will reject the source
@@ -238,7 +238,7 @@ client politely chose one. Three independent mechanisms:
    produce srflx candidates.
 
 coturn itself is locked to a single destination: `denied-peer-ip=0.0.0.0-255.255.255.255`
-followed by `allowed-peer-ip=172.29.30.10`. The relay can forward to the SFU and
+followed by `allowed-peer-ip=172.29.31.10`. The relay can forward to the SFU and
 to nothing else, in either mode, so a leaked TURN credential does not yield an
 open proxy.
 
@@ -277,13 +277,13 @@ result.**
 
 ```bash
 # CHECK 1 (config). Which mode is deployed?
-grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml
-# Expect: # LEGALSAATHI-VIDEO-MODE: forced-turn
+grep -m1 'NYAYONE-VIDEO-MODE' infra/video/rendered/livekit.yaml
+# Expect: # NYAYONE-VIDEO-MODE: forced-turn
 
 # CHECK 2 (config). The SFU media ports must NOT be published.
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   port --protocol udp livekit 7882
-# Expect: a non-zero exit and no address printed. If it prints "0.0.0.0:1041"
+# Expect: a non-zero exit and no address printed. If it prints "0.0.0.0:1141"
 # you have the direct overlay loaded and media is NOT forced through the relay.
 
 # CHECK 3 (runtime, diagnostic only). coturn allocation messages are absent at
@@ -292,9 +292,9 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 # CHECK 4 (runtime, authoritative). In the browser: chrome://webrtc-internals,
 # select the PeerConnection, read the SELECTED candidate pair.
 # Expect: `iceTransportPolicy=relay`, protocol UDP and an allocation in
-# 20500-20549. Under Docker NAT Chromium may expose the selected post-map
-# candidate as `prflx` on coturn's fixed 172.29.30.11; that is accepted only
-# when policy remains relay and the peer is fixed SFU 172.29.30.10:7882.
+# 21500-21549. Under Docker NAT Chromium may expose the selected post-map
+# candidate as `prflx` on coturn's fixed 172.29.31.11; that is accepted only
+# when policy remains relay and the peer is fixed SFU 172.29.31.10:7882.
 # A `host`/`srflx` candidate or any other peer means forced-TURN is not proved.
 ```
 
@@ -399,7 +399,7 @@ Triage:
 ```bash
 # 1. Is it up at all?
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml ps
-curl -fsS http://localhost:1039/ || echo "signalling port down"
+curl -fsS http://localhost:1139/ || echo "signalling port down"
 
 # 2. Can the BACKEND reach it? (a wss:// LIVEKIT_URL can no longer get this far:
 #    the backend refuses to boot naming LIVEKIT_URL — § 0b)
@@ -462,7 +462,7 @@ What a reconnect looks like end to end:
    Self-hosted LiveKit JWTs are stateless: an already-minted bearer remains
    provider-valid until its five-minute expiry unless RoomService removes the
    participant or room. The TTL is the provider-side replay bound; the database
-   revocation is immediate at LegalSaathi's own validation boundary.
+   revocation is immediate at NyayOne's own validation boundary.
 4. `participant_left` / `participant_joined` are how the trail is recorded, and
    `participant_left` also revokes that participant's grant. Those events land now
    that the signature transports agree (§ 0(a)) — which also means a `room_finished`
@@ -536,7 +536,7 @@ rotated.
 
 ## 8. TURN over TLS (reserved, not enabled)
 
-Host port **1044** is reserved for coturn's 5349/tcp and is deliberately not
+Host port **1144** is reserved for coturn's 5349/tcp and is deliberately not
 published; the rendered config sets `no-tls` and `no-dtls`. TURN/TLS needs a real
 certificate for `TURN_REALM`, and there is no honest way to ship one in a
 repository.
@@ -549,7 +549,7 @@ only outbound 443 will block 3478/udp *and* 3478/tcp. Enabling it later:
    working tree cannot be committed).
 2. Remove `no-tls` / `no-dtls` from `turnserver.conf.tmpl` and add
    `cert=` / `pkey=` and `tls-listening-port=5349`.
-3. Publish `"1044:5349/tcp"` on the coturn service.
+3. Publish `"1144:5349/tcp"` on the coturn service.
 4. Add a third entry to `rtc.turn_servers` in **both** LiveKit templates with
    `protocol: tls` and `port: 5349` (443 in production, if you can have it).
 5. Re-render, recreate, and re-run the § 3 proof — the selected candidate pair
@@ -594,14 +594,14 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   --profile video up -d coturn livekit
 sleep 20
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml ps
-curl -fsS http://localhost:1039/
-curl -fsS http://localhost:1042/metrics | head -20
+curl -fsS http://localhost:1139/
+curl -fsS http://localhost:1142/metrics | head -20
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   exec coturn turnutils_stunclient -p 3478 127.0.0.1
 ```
 
 Pass: `config -q` prints nothing and exits 0; `ps` shows BOTH services
-`Up (healthy)`; `curl` on 1039 exits 0; the 1042 scrape contains `livekit_`
+`Up (healthy)`; `curl` on 1139 exits 0; the 1142 scrape contains `livekit_`
 series; the STUN transaction prints a line containing `reflexive addr`.
 
 ### S2 server-created room — UNEXECUTED
@@ -617,7 +617,7 @@ will not list is a room no participant can join.
 ### S3 short-lived participant-bound join grant — UNEXECUTED
 
 ```bash
-curl -fsS -X POST http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
+curl -fsS -X POST http://localhost:1131/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
   -H "$AUTH_HEADER" -o /tmp/cred.json
 ```
 
@@ -673,7 +673,7 @@ fresh allocation per participant, again with no new credential.
 ### S7 token expiry and revocation — UNEXECUTED
 
 ```bash
-curl -fsS -X POST http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
+curl -fsS -X POST http://localhost:1131/api/v1/tutoring/sessions/$SESSION_ID/join-credentials \
   -H "$AUTH_HEADER" -o /tmp/cred2.json
 lk room join --url "${LIVEKIT_URL/http/ws}" --token "$OLD_TOKEN" "$OLD_ROOM"
 ```
@@ -683,13 +683,13 @@ old/new database rows are revoked/live respectively, both JWTs expire within
 300 seconds, and the real SFU refuses a correctly signed token whose `exp` is in
 the past. The script deliberately does not claim that a still-unexpired
 self-hosted JWT is instantly recalled: LiveKit does not introspect the
-LegalSaathi database. Both transient credential files are deleted afterwards.
+NyayOne database. Both transient credential files are deleted afterwards.
 
 ### S8 webhook verification and replay rejection — UNEXECUTED
 
 ```bash
 docker compose -f docker-compose.yml logs backend | grep -i 'video/webhook'
-docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
+docker compose -f docker-compose.yml exec postgres psql -U nyayone -d nyayone -c \
   "select reason from session_status_history where reason like 'video:%' order by created_at desc limit 5;"
 ```
 
@@ -723,7 +723,7 @@ connects, via the relay.
 
 ```bash
 # a. Which mode is deployed, and are the SFU media ports really unpublished?
-grep -m1 'LEGALSAATHI-VIDEO-MODE' infra/video/rendered/livekit.yaml
+grep -m1 'NYAYONE-VIDEO-MODE' infra/video/rendered/livekit.yaml
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   port --protocol udp livekit 7882; echo "exit=$?"
 
@@ -740,9 +740,9 @@ docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
 Pass, all four: (a) mode is `forced-turn` and the port command prints no address
 and exits non-zero; (b) both join responses carry `relay`; (c) each selected
 LOCAL candidate type is `relay`, its address is `TURN_EXTERNAL_IP`, its port is
-inside 20500-20549, and both `bytesSent` and `bytesReceived` are non-zero; and
+inside 21500-21549, and both `bytesSent` and `bytesReceived` are non-zero; and
 (d) each browser sees the other participant's published tracks. Docker NAT may
-report the selected allocation as `prflx`/172.29.30.11; it is only accepted with
+report the selected allocation as `prflx`/172.29.31.11; it is only accepted with
 the relay-only PC policy, a relay-block port and the fixed SFU peer. Any failure
 means forced-TURN is not proved. Config alone never counts as media proof.
 
@@ -752,8 +752,8 @@ means forced-TURN is not proved. Config alone never counts as media proof.
 docker compose -f docker-compose.yml -f infra/video/docker-compose.video.yml \
   --profile video stop livekit
 curl -sS -o /dev/stderr -w '%{http_code}\n' -X POST \
-  http://localhost:1031/api/v1/tutoring/sessions/$SESSION_ID/join-credentials -H "$AUTH_HEADER"
-docker compose -f docker-compose.yml exec postgres psql -U legalsaathi -c \
+  http://localhost:1131/api/v1/tutoring/sessions/$SESSION_ID/join-credentials -H "$AUTH_HEADER"
+docker compose -f docker-compose.yml exec postgres psql -U nyayone -d nyayone -c \
   "select count(*) from video_session_grants where session_id = '$SESSION_ID';"
 ```
 

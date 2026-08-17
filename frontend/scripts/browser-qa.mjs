@@ -1,7 +1,7 @@
 /**
  * Responsive accessibility/visual QA baseline (SAATHI-347).
  *
- * Runs against a running preview server (default http://localhost:1030) across
+ * Runs against a running preview server (default http://localhost:1130) across
  * 390/430/768/1024/1440 and checks, per the canonical S-01..S-99 routes:
  *   - route renders (no crash, has content)
  *   - no horizontal overflow
@@ -11,14 +11,14 @@
  *   - mobile bottom-nav renders its labels (no dropped item)
  *
  * Usage (local / CI):
- *   npm run build && npm run preview &   # serve on 1030
- *   BASE_URL=http://localhost:1030 QA_ROUTES=all npm run qa
+ *   npm run build && npm run preview &   # serve on 1130
+ *   BASE_URL=http://localhost:1130 QA_ROUTES=all npm run qa
  *
- * Env: BASE_URL (default http://localhost:1030), QA_ROUTES ("all" or a number, default 12 sampled).
+ * Env: BASE_URL (default http://localhost:1130), QA_ROUTES ("all" or a number, default 12 sampled).
  */
 import { chromium } from 'playwright';
 
-const BASE = process.env.BASE_URL || 'http://localhost:1030';
+const BASE = process.env.BASE_URL || 'http://localhost:1130';
 const WIDTHS = [390, 430, 768, 1024, 1440];
 const ALL = Array.from({ length: 99 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`);
 const routeArg = process.env.QA_ROUTES || '12';

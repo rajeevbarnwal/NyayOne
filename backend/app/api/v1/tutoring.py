@@ -76,7 +76,7 @@ from app.services.tutoring import (
 )
 from app.services.tutoring.errors import NotFound, PaymentUnverified, TutoringError
 
-logger = get_logger("legalsaathi.tutoring.api")
+logger = get_logger("nyayone.tutoring.api")
 
 router = APIRouter(tags=["tutoring"])
 

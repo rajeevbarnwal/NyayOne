@@ -23,7 +23,7 @@ class GitHubClient:
     def _headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": "LegalSaathi",
+            "User-Agent": "NyayOne",
         }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"

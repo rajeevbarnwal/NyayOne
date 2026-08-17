@@ -11,7 +11,7 @@ def health_check() -> dict[str, str]:
     """Readiness/liveness detail for the API v1 surface."""
     return {
         "status": "ok",
-        "service": "legalsaathi-backend",
+        "service": "nyayone-backend",
         "version": settings.app_version,
         "environment": settings.app_env,
     }

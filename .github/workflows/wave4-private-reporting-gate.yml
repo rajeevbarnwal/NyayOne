@@ -22,13 +22,13 @@ jobs:
       postgres:
         image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
-          POSTGRES_USER: legalsaathi
-          POSTGRES_PASSWORD: legalsaathi
-          POSTGRES_DB: legalsaathi_wave4_qa
+          POSTGRES_USER: nyayone_ci
+          POSTGRES_PASSWORD: nyayone_ci_ephemeral
+          POSTGRES_DB: nyayone_wave4_qa
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U legalsaathi -d legalsaathi_wave4_qa"
+          --health-cmd "pg_isready -U nyayone_ci -d nyayone_wave4_qa"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -37,8 +37,8 @@ jobs:
         ports:
           - 3310:3310
     env:
-      DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave4_qa
-      TEST_DATABASE_URL: postgresql+psycopg://legalsaathi:legalsaathi@127.0.0.1:5432/legalsaathi_wave4_qa
+      DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave4_qa
+      TEST_DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave4_qa
       APP_ENV: testing
       WAVE4_GATE_ALLOW_MUTATION: "true"
       INTERNSHIP_RISK_LABELS_ENABLED: "false"
@@ -75,7 +75,7 @@ jobs:
           npm ci
           npm exec -- playwright install --with-deps chromium
       - name: Enable pgvector
-        run: PGPASSWORD=legalsaathi psql -h 127.0.0.1 -U legalsaathi -d legalsaathi_wave4_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
+        run: PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -U nyayone_ci -d nyayone_wave4_qa -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Require a live ClamAV engine
         run: |
           python - <<'PY'

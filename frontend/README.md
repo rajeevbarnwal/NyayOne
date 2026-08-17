@@ -1,4 +1,4 @@
-# LegalSaathi Frontend
+# NyayOne Frontend
 
 Responsive React app for desktop web, mobile web, and future native iOS/Android packaging through Capacitor.
 
@@ -23,12 +23,12 @@ src/
   styles/       Global styles and tokens
 ```
 
-## Local Run (dev port 1030)
+## Local Run (host dev port 1130)
 
 ```bash
 cd frontend
-npm install
-npm run dev        # http://localhost:1030
+npm ci
+npm run dev -- --port 1130  # http://localhost:1130
 npm run build      # tsc + vite production build
 npm test           # vitest smoke tests
 ```
@@ -36,4 +36,3 @@ npm test           # vitest smoke tests
 - Server state uses TanStack Query (`src/app/queryClient.ts`).
 - Routing is lazy-loaded against the canonical v3.2 screen registry `S-01…S-99` (`src/app/screenRegistry.ts`).
 - Dark/light theme is driven by `useTheme` (`src/hooks/useTheme.ts`), persisted to `localStorage["ls-theme"]`, applied via `[data-theme]` + CSS-variable tokens in `styles/global.css`.
-

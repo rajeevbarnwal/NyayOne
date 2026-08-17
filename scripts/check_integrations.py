@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check configured GitHub and Jira API access for LegalSaathi.
+"""Check configured GitHub and Jira API access for NyayOne.
 
 This script uses only the Python standard library so it can run before backend
 dependencies are installed. It reads `.env` if present, then falls back to the
@@ -53,9 +53,9 @@ def basic_auth_header(email: str, token: str) -> str:
 
 
 def check_github() -> int:
-    repository = os.getenv("GITHUB_REPOSITORY", "rajeevbarnwal/legalsaathi")
+    repository = os.getenv("GITHUB_REPOSITORY", "rajeevbarnwal/NyayOne")
     token = os.getenv("GITHUB_TOKEN", "")
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "LegalSaathi"}
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "NyayOne"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
@@ -70,8 +70,8 @@ def check_github() -> int:
 
 def check_jira() -> int:
     base_url = os.getenv("JIRA_BASE_URL", "https://legalsaathi.atlassian.net").rstrip("/")
-    project_key = os.getenv("JIRA_PROJECT_KEY", "SAATHI")
-    board_id = os.getenv("JIRA_BOARD_ID", "2")
+    project_key = os.getenv("JIRA_PROJECT_KEY", "NYAY")
+    board_id = os.getenv("JIRA_BOARD_ID", "68")
     email = os.getenv("JIRA_EMAIL", "")
     token = os.getenv("JIRA_API_TOKEN", "")
 

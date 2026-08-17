@@ -103,7 +103,7 @@ def _clean_title(value: str) -> str:
     value = _EMAIL_RE.sub("[private]", value)
     value = _PHONE_RE.sub("[private]", value)
     value = _URL_RE.sub("[private]", value)
-    return " ".join(value.split())[:160] or "LegalSaathi event"
+    return " ".join(value.split())[:160] or "NyayOne event"
 
 
 def _safe_deep_link(value: str) -> str:
@@ -688,7 +688,7 @@ def list_reminder_preferences(session: Session, actor: ActorContext) -> Reminder
     for source_type in CALENDAR_SOURCE_TYPES:
         key = (source_type, "in_app")
         items.append(stored.get(key) or ReminderPreferenceOut(
-            id=uuid.uuid5(uuid.NAMESPACE_URL, f"legalsaathi:calendar-reminder:{owner_id}:{source_type}:in_app"),
+            id=uuid.uuid5(uuid.NAMESPACE_URL, f"nyayone:calendar-reminder:{owner_id}:{source_type}:in_app"),
             source_type=source_type,
             channel="in_app",
             enabled=True,
@@ -829,7 +829,7 @@ def reminder_preview(
         channel=channel,
         scheduling_eligible=True,
         reason_code="eligible",
-        preview="An upcoming LegalSaathi event has a reminder.",
+        preview="An upcoming NyayOne event has a reminder.",
         lead_minutes=row.lead_minutes if row else 30,
         timezone=row.timezone if row else "Asia/Kolkata",
     )
@@ -877,7 +877,7 @@ def check_conflicts(
             )
             session.add(conflict)
             session.flush()
-        ephemeral_id = uuid.uuid5(uuid.NAMESPACE_URL, f"legalsaathi:{owner_id}:{left.id}:{right.id}")
+        ephemeral_id = uuid.uuid5(uuid.NAMESPACE_URL, f"nyayone:{owner_id}:{left.id}:{right.id}")
         pairs.append(ConflictOut(
             id=conflict.id if conflict else ephemeral_id,
             left_event_id=left.id,
@@ -1129,7 +1129,7 @@ def _ics_escape(value: str) -> str:
 def _safe_ics_summary(event: CalendarEvent, source: CalendarEventSource) -> str:
     """Return only an approved category label, never user-entered title text."""
     if event.privacy_classification == "restricted":
-        return "Private LegalSaathi event"
+        return "Private NyayOne event"
     if event.personal_event_kind:
         return {
             "study": "Study block",
@@ -1186,7 +1186,7 @@ def public_ics(session: Session, raw_token: str) -> str:
     )).all()
     lines = [
         "BEGIN:VCALENDAR",
-        "PRODID:-//LegalSaathi//Private Calendar Feed//EN",
+        "PRODID:-//NyayOne//Private Calendar Feed//EN",
         "VERSION:2.0",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
@@ -1197,7 +1197,7 @@ def public_ics(session: Session, raw_token: str) -> str:
         title = _safe_ics_summary(event, source)
         lines.extend([
             "BEGIN:VEVENT",
-            f"UID:{keyed_hash(str(event.id))}@calendar.legalsaathi.local",
+            f"UID:{keyed_hash(str(event.id))}@calendar.nyayone.local",
             f"DTSTAMP:{generated}",
             f"DTSTART:{_utc(event.starts_at).strftime('%Y%m%dT%H%M%SZ')}",
             f"DTEND:{_utc(event.ends_at).strftime('%Y%m%dT%H%M%SZ')}",
