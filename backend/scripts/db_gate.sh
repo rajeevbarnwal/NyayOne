@@ -19,7 +19,13 @@ PY="${PYTHON:-python}"
 : "${DATABASE_URL:?set DATABASE_URL}"
 
 echo "== backend pytest =="
-env -u DATABASE_URL "$PY" -m pytest -q
+# The unit/HTTP-contract suite intentionally runs without the target database
+# URL.  Give that subprocess an explicit test environment as well; otherwise a
+# staging shell would combine the non-local policy with the local-development
+# default URL during module import and fail before the tests can install their
+# explicit test fixtures.  PostgreSQL stages below retain the caller's staging
+# environment and DATABASE_URL.
+env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q
 echo "== alembic upgrade + drift =="
 "$PY" -m alembic upgrade head
 "$PY" -m alembic check
