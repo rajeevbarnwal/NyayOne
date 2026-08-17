@@ -37,6 +37,10 @@ from app.services.report_storage import (
 )
 from tests import apptemplate, dbtemplate
 
+NON_DEV_DATABASE_URL = (
+    "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
+)
+
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
     return {"X-Actor-Claims": json.dumps({"sub": str(user_id), "roles": list(roles)})}
@@ -399,6 +403,7 @@ def test_production_requires_real_clamav_scanner():
         Settings(
             _env_file=None,
             app_env="production",
+            database_url=NON_DEV_DATABASE_URL,
             registration_secret="production-registration-encryption-secret",
             registration_lookup_secret="production-registration-lookup-secret",
             internship_report_scanner_provider="deterministic",

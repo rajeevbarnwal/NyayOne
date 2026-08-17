@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 from app.core.logging import get_logger, request_id_ctx
 
-logger = get_logger("legalsaathi.request")
+logger = get_logger("nyayone.request")
 
 REQUEST_ID_HEADER = "X-Request-ID"
 

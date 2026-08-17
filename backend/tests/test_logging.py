@@ -10,7 +10,7 @@ def test_configure_logging_writes_jsonl_file_with_request_id(tmp_path) -> None:
     configure_logging("INFO", str(log_path))
     token = request_id_ctx.set("req-test-123")
     try:
-        logging.getLogger("legalsaathi.test").info("logstash_probe")
+        logging.getLogger("nyayone.test").info("logstash_probe")
     finally:
         request_id_ctx.reset(token)
 
@@ -19,7 +19,7 @@ def test_configure_logging_writes_jsonl_file_with_request_id(tmp_path) -> None:
 
     event = json.loads(lines[0])
     assert event["level"] == "INFO"
-    assert event["logger"] == "legalsaathi.test"
+    assert event["logger"] == "nyayone.test"
     assert event["message"] == "logstash_probe"
     assert event["request_id"] == "req-test-123"
 

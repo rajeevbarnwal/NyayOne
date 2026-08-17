@@ -3,7 +3,7 @@
  *
  * Runs against the built frontend (QA_BASE_URL, default http://127.0.0.1:1050)
  * with the real FastAPI + PostgreSQL 16 stack behind it (QA_API_BASE_URL,
- * default http://127.0.0.1:1031). The directory is seeded by
+ * default http://127.0.0.1:1131). The directory is seeded by
  * law_school_service.seed_law_schools with a DETERMINISTIC 12-SCHOOL CATALOG
  * (frozen product fact — the catalog size is independent of the config-driven
  * comparison maximum of 4). A fixed 4-school subset is used ONLY as the
@@ -17,7 +17,7 @@
  *
  * Usage (QA rig — requires Chromium system deps and PG16 behind the API):
  *   cd frontend && npm ci && npx playwright install chromium
- *   QA_BASE_URL=http://127.0.0.1:1050 QA_API_BASE_URL=http://127.0.0.1:1031 \
+ *   QA_BASE_URL=http://127.0.0.1:1130 QA_API_BASE_URL=http://127.0.0.1:1131 \
  *   QA_EVIDENCE_DIR=/abs/path/evidence npm run qa:lawschool
  */
 import { chromium } from 'playwright';
@@ -32,7 +32,7 @@ import {
 } from '../src/features/student/schools/lawschoolFormat.mjs';
 
 const base = process.env.QA_BASE_URL ?? 'http://127.0.0.1:1050';
-const api = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:1031';
+const api = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:1131';
 const evidence = process.env.QA_EVIDENCE_DIR ?? path.resolve('../QA/wave1_lawschool_closure');
 const tracesDir = path.join(evidence, 'traces');
 await fs.mkdir(tracesDir, { recursive: true });

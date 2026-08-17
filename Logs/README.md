@@ -1,6 +1,6 @@
-# LegalSaathi Logging
+# NyayOne Logging
 
-This folder contains the local Logstash baseline for LegalSaathi observability.
+This folder contains the local Logstash baseline for NyayOne observability.
 
 The app writes structured JSON logs to stdout. When `LOG_FILE_PATH` is set, the
 backend also writes the same JSON events to a local JSONL file. Logstash tails
@@ -21,14 +21,14 @@ Logs/
 ## Docker Compose
 
 ```bash
-cd /Users/rajeevbarnwal/Desktop/Codes/LegalSaathi
+cd /Users/rajeevbarnwal/Desktop/Codes/NyayOne
 docker compose up logstash
 ```
 
 The Logstash monitoring API is exposed on:
 
 ```text
-http://localhost:1038
+http://localhost:1138
 ```
 
 ## Local Backend With File Logging
@@ -42,12 +42,11 @@ LOG_FILE_PATH=../Logs/app/backend.jsonl
 Example:
 
 ```bash
-cd /Users/rajeevbarnwal/Desktop/Codes/LegalSaathi/backend
+cd /Users/rajeevbarnwal/Desktop/Codes/NyayOne/backend
 source .venv/bin/activate
 LOG_FILE_PATH=../Logs/app/backend.jsonl \
-BACKEND_PORT=1041 \
-CORS_ORIGINS='["http://localhost:1040","http://127.0.0.1:1040"]' \
-uvicorn app.main:app --reload --host 0.0.0.0 --port 1041
+CORS_ORIGINS='["http://localhost:1130","http://127.0.0.1:1130"]' \
+uvicorn app.main:app --reload --host 0.0.0.0 --port 1131
 ```
 
 ## Scope

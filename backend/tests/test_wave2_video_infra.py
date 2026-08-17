@@ -57,13 +57,13 @@ TURN_TEMPLATE = INFRA / "turnserver.conf.tmpl"
 #: The SFU's fixed address on the private ``video`` network. Three files have to
 #: agree on it: the compose static IP, the forced-turn template's ``node_ip`` and
 #: coturn's ``allowed-peer-ip``. That agreement is the whole forced-TURN posture.
-SFU_STATIC_IP = "172.29.30.10"
-TURN_STATIC_IP = "172.29.30.11"
-RELAY_RANGE = (20500, 20549)
+SFU_STATIC_IP = "172.29.31.10"
+TURN_STATIC_IP = "172.29.31.11"
+RELAY_RANGE = (21500, 21549)
 
 #: Host ports the video plane is allowed to take, and which overlay takes them.
-BASE_HOST_PORTS = {1039, 1042, 1043} | set(range(RELAY_RANGE[0], RELAY_RANGE[1] + 1))
-DIRECT_HOST_PORTS = {1040, 1041}
+BASE_HOST_PORTS = {1139, 1142, 1143} | set(range(RELAY_RANGE[0], RELAY_RANGE[1] + 1))
+DIRECT_HOST_PORTS = {1140, 1141}
 
 #: Names the BACKEND reads. Uppercased ``Settings`` field names — pydantic-settings
 #: maps them 1:1, so a typo here is a setting that silently keeps its default.
@@ -152,7 +152,7 @@ def _renderer():
 
 
 def _parse_port_entry(entry: str) -> set[int]:
-    """``"1043:3478/udp"`` -> ``{1043}``; ``"20500-20549:...`` -> the whole range."""
+    """``"1143:3478/udp"`` -> ``{1143}``; ``"21500-21549:...`` -> the whole range."""
     host = str(entry).split(":")[0]
     host = host.split("/")[0]
     if "-" in host:
@@ -198,7 +198,7 @@ def _base_env(**overrides: str) -> dict[str, str]:
         "LIVEKIT_API_KEY": "APIunitTestKeyValue",
         "LIVEKIT_API_SECRET": "0123456789abcdef0123456789abcdef",
         "TURN_PUBLIC_HOST": "turn.unit-test.invalid",
-        "TURN_PUBLIC_PORT": "1043",
+        "TURN_PUBLIC_PORT": "1143",
         "TURN_REALM": "turn.unit-test.invalid",
         "TURN_EXTERNAL_IP": "203.0.113.10",
         "TURN_STATIC_AUTH_SECRET": "fedcba9876543210fedcba9876543210",
@@ -280,7 +280,7 @@ def test_video_host_ports_do_not_collide_with_the_root_compose_stack():
     for ports in _service_host_ports(_load(ROOT_COMPOSE)).values():
         root_ports |= ports
     # Sanity: the fixture we are comparing against is the real thing.
-    assert {1030, 1031, 1032, 1038} <= root_ports
+    assert {1130, 1131, 1132, 1138} <= root_ports
 
     video_ports: set[int] = set()
     for compose in (BASE_COMPOSE, DIRECT_COMPOSE):
@@ -294,8 +294,8 @@ def test_video_host_ports_do_not_collide_with_the_root_compose_stack():
 
 def test_video_host_ports_are_exactly_the_documented_allocation():
     base = _service_host_ports(_load(BASE_COMPOSE))
-    assert base["livekit"] == {1039, 1042}
-    assert base["coturn"] == {1043} | set(
+    assert base["livekit"] == {1139, 1142}
+    assert base["coturn"] == {1143} | set(
         range(RELAY_RANGE[0], RELAY_RANGE[1] + 1)
     )
     direct = _service_host_ports(_load(DIRECT_COMPOSE))
@@ -306,7 +306,7 @@ def test_video_host_ports_are_exactly_the_documented_allocation():
 def test_root_compose_header_records_the_video_port_reservation():
     """The root compose header is the repo's single source of truth for ports."""
     header = ROOT_COMPOSE.read_text(encoding="utf-8").split("services:")[0]
-    for port in (1039, 1040, 1041, 1042, 1043, 1044):
+    for port in (1139, 1140, 1141, 1142, 1143, 1144):
         assert str(port) in header, f"port {port} is not reserved in {ROOT_COMPOSE}"
     assert f"{RELAY_RANGE[0]}-{RELAY_RANGE[1]}" in header
 
@@ -357,7 +357,7 @@ def test_livekit_waits_for_a_healthy_relay():
 
 def test_prometheus_readiness_target_is_published():
     livekit = _load(BASE_COMPOSE)["services"]["livekit"]
-    assert "1042:6789" in [str(p) for p in livekit["ports"]]
+    assert "1142:6789" in [str(p) for p in livekit["ports"]]
     for template in TEMPLATES.values():
         assert "prometheus_port: 6789" in template.read_text(encoding="utf-8")
 
@@ -375,7 +375,7 @@ def test_base_overlay_publishes_no_sfu_media_port():
 
 def test_direct_overlay_is_the_only_thing_that_opens_direct_media():
     entries = [str(p) for p in _load(DIRECT_COMPOSE)["services"]["livekit"]["ports"]]
-    assert entries == ["1040:1040", "1041:1041/udp"]
+    assert entries == ["1140:1140", "1141:1141/udp"]
 
 
 def test_forced_turn_template_hardcodes_the_internal_node_ip():
@@ -399,7 +399,7 @@ def test_compose_static_ips_match_what_the_configs_pin():
     assert services["livekit"]["networks"]["video"]["ipv4_address"] == SFU_STATIC_IP
     assert services["coturn"]["networks"]["video"]["ipv4_address"] == TURN_STATIC_IP
     subnet = _load(BASE_COMPOSE)["networks"]["video"]["ipam"]["config"][0]["subnet"]
-    assert subnet == "172.29.30.0/24"
+    assert subnet == "172.29.31.0/24"
 
 
 def test_turn_peer_acl_allows_the_sfu_and_nothing_else():
@@ -818,15 +818,15 @@ def test_renderer_produces_parseable_configs_for_both_modes():
         out = _render(mode)
         assert "${" not in out["livekit_text"], mode
         assert "${" not in out["coturn_text"], mode
-        assert f"LEGALSAATHI-VIDEO-MODE: {mode}" in out["livekit_text"]
-        assert f"LEGALSAATHI-VIDEO-MODE: {mode}" in out["coturn_text"]
+        assert f"NYAYONE-VIDEO-MODE: {mode}" in out["livekit_text"]
+        assert f"NYAYONE-VIDEO-MODE: {mode}" in out["coturn_text"]
         config = out["livekit"]
         assert config["port"] == 7880
         # INFO participant-init records contain SDP/ICE diagnostics. A normal
         # deployment must not place those media credentials in application
         # logs merely to obtain verbose provider traces.
         assert config["logging"]["level"] == "warn"
-        assert config["rtc"]["udp_port"] == (1041 if mode == "direct" else 7882)
+        assert config["rtc"]["udp_port"] == (1141 if mode == "direct" else 7882)
         # port_range_* must stay unset for udp_port to take effect upstream.
         assert "port_range_start" not in config["rtc"]
         assert "port_range_end" not in config["rtc"]
