@@ -1,0 +1,19 @@
+{
+  "ticket": "NYAY-20",
+  "evidence_class": "local-engineering-ci-remediation",
+  "generated_at_utc": "2026-08-17T09:51:52Z",
+  "base_sha": "0edfdaec82b53a8cb5d1c8aff3b25734c9801e68",
+  "source_sha": "e429d2e06752cb0ba38835fcd709b96a0ad08e7e",
+  "branch": "codex/nyay-20-runtime-isolation",
+  "failed_run_id": 32016852185,
+  "failed_job_id": 95348149620,
+  "failed_check": "backend-postgres16-gate",
+  "migration_files_changed": 0,
+  "remote_head_verified": false,
+  "independent_qa": false,
+  "notes": [
+    "This package records the local remediation of an exact-head GitHub CI failure.",
+    "The preserved Desktop NyayOne checkout was not modified.",
+    "Remote CI and independent QA remain mandatory before Testing."
+  ]
+}
