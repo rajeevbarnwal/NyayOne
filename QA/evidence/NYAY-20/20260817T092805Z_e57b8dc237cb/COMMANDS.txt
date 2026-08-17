@@ -27,5 +27,5 @@ jq '{name, service_names: (.services | keys), livekit_ports: .services.livekit.p
 rm -f .env
 
 python3 scripts/ci/scan_evidence.py "${EVIDENCE_DIR}"
-(cd "${EVIDENCE_DIR}" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS.txt)
+(cd "${EVIDENCE_DIR}" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 shasum -a 256 | sed 's#  \./#  #' > SHA256SUMS.txt)
 (cd "${EVIDENCE_DIR}" && shasum -a 256 -c SHA256SUMS.txt)
