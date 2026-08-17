@@ -160,12 +160,20 @@ for (const [name, values, expected] of [
   await otpControl.fill(otp);
   await page.getByRole('button', { name: 'Verify and continue' }).click();
   await page.waitForURL('**/s-10');
+  const splitNamePayloadValid = registrationPayload?.first_name === 'Aditi'
+    && registrationPayload?.middle_name === 'Rani'
+    && registrationPayload?.last_name === 'Nair'
+    && registrationPayload?.full_name === undefined;
   record('profile_name_split', 'First/Middle/Last are mapped independently to the API payload',
-    registrationPayload,
-    registrationPayload?.first_name === 'Aditi'
-      && registrationPayload?.middle_name === 'Rani'
-      && registrationPayload?.last_name === 'Nair'
-      && registrationPayload?.full_name === undefined);
+    {
+      valid: splitNamePayloadValid,
+      fieldKeys: Object.keys(registrationPayload ?? {}).sort(),
+      firstLength: registrationPayload?.first_name?.length ?? 0,
+      middleLength: registrationPayload?.middle_name?.length ?? 0,
+      lastLength: registrationPayload?.last_name?.length ?? 0,
+      legacyFullNamePresent: registrationPayload?.full_name !== undefined,
+    },
+    splitNamePayloadValid);
   await page.getByLabel('CITY').selectOption('Bengaluru');
   await page.getByLabel('PRONOUNS').fill('She / her');
   await page.getByRole('button', { name: 'Continue to academics' }).click();

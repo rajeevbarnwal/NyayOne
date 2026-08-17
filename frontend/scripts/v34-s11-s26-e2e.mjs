@@ -441,19 +441,26 @@ try {
     await send.click();
     const alertText = await page.getByRole('alert').allTextContents();
     const sentVisible = await page.getByText('Verification link sent — check your inbox.').isVisible().catch(() => false);
+    const errorMatched = alertText.some((text) => text.includes(institutionalEmailError));
     record(
       `S-15_${invalid.name}`,
       'invalid institutional email rejected without a success state',
-      { alertText, sentVisible },
-      alertText.some((text) => text.includes(institutionalEmailError)) && !sentVisible,
+      { errorMatched, sentVisible },
+      errorMatched && !sentVisible,
     );
   }
   await email.fill('student@gmail.com');
   await send.click();
-  record('S-15_consumer_email', 'consumer domain rejected', await page.getByRole('alert').allTextContents(),
-    await page.getByText('Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in').isVisible());
+  const consumerErrorVisible = await page.getByText(institutionalEmailError).isVisible();
+  record('S-15_consumer_email', 'consumer domain rejected', { errorVisible: consumerErrorVisible }, consumerErrorVisible);
   await email.fill('student@nls.ac.in');
-  record('S-15_academic_email', 'academic domain clears local validation', await email.inputValue(), await email.inputValue() === 'student@nls.ac.in');
+  const academicEmailValue = await email.inputValue();
+  record(
+    'S-15_academic_email',
+    'academic domain clears local validation',
+    { accepted: academicEmailValue === 'student@nls.ac.in', valueLength: academicEmailValue.length },
+    academicEmailValue === 'student@nls.ac.in',
+  );
 
   const browseResponses = [
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
@@ -569,10 +576,39 @@ try {
     { deleteButtons: await page.getByRole('button', { name: 'Delete my account' }).count() },
     await page.getByRole('button', { name: 'Delete my account' }).count() === 0);
 
-  const storage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookies: document.cookie }));
-  const serialized = JSON.stringify(storage).toLowerCase();
-  record('browser_storage_privacy', 'no raw mobile, OTP, document bytes or private profile values in browser storage', storage,
-    !serialized.includes('9876543210') && !serialized.includes('student@nls.ac.in') && !serialized.includes('aditi'));
+  const storagePrivacy = await page.evaluate(() => {
+    const local = { ...localStorage };
+    const session = { ...sessionStorage };
+    const serialized = JSON.stringify({ local, session, cookies: document.cookie }).toLowerCase();
+    const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
+    const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
+    const visibleCookieNames = document.cookie
+      .split(';')
+      .map((entry) => entry.trim().split('=', 1)[0])
+      .filter(Boolean)
+      .sort();
+    const values = Object.values({ ...local, ...session }).map((value) => String(value ?? ''));
+    return {
+      localKeys: Object.keys(local).sort(),
+      sessionKeys: Object.keys(session).sort(),
+      visibleCookieNames,
+      privateFixtureLeak: serialized.includes('9876543210')
+        || serialized.includes('student@nls.ac.in')
+        || serialized.includes('aditi'),
+      credentialKeyLeak: [...Object.keys(local), ...Object.keys(session)].some((key) => forbiddenKey.test(key)),
+      credentialValueLeak: values.some((value) => credentialValue.test(value)),
+      authCookieVisible: visibleCookieNames.some((name) => /(?:session|auth|token|bearer)/i.test(name)),
+    };
+  });
+  record(
+    'browser_storage_privacy',
+    'no raw mobile, OTP, credentials or private profile values in browser storage',
+    storagePrivacy,
+    storagePrivacy.privateFixtureLeak === false
+      && storagePrivacy.credentialKeyLeak === false
+      && storagePrivacy.credentialValueLeak === false
+      && storagePrivacy.authCookieVisible === false,
+  );
   record('functional_runtime', '0 console/page/request/HTTP/unmatched-API errors', functionalRuntime,
     functionalRuntime.consoleErrors.length === 0
     && functionalRuntime.pageErrors.length === 0

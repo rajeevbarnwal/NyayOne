@@ -30,14 +30,31 @@ function assertIsolatedLoopback() {
 }
 assertIsolatedLoopback();
 
+function diagnosticSummary(value) {
+  return {
+    present: value !== null && value !== undefined && value !== '',
+    kind: Array.isArray(value) ? 'array' : typeof value,
+    itemCount: Array.isArray(value)
+      ? value.length
+      : value && typeof value === 'object'
+        ? Object.keys(value).length
+        : undefined,
+  };
+}
+
 function record(name, expected, actual, pass) {
-  const row = { name, expected, actual, pass: Boolean(pass) };
+  const row = {
+    name,
+    expected,
+    actualSummary: diagnosticSummary(actual),
+    pass: Boolean(pass),
+  };
   report.rows.push(row);
-  if (!row.pass) report.failures.push(`${name}: expected ${expected}; actual ${actual}`);
+  if (!row.pass) report.failures.push({ name, diagnostic: row.actualSummary });
 }
 function assert(name, condition, expected, actual) {
   record(name, expected, actual, condition);
-  if (!condition) throw new Error(`${name}: expected ${expected}; actual ${actual}`);
+  if (!condition) throw new Error(`${name}: assertion failed`);
 }
 
 async function authenticatedContext(browser, viewport = { width: 1440, height: 900 }, colorScheme = 'light') {
@@ -262,7 +279,12 @@ async function geometryAndA11y(browser) {
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try { await authAndPrivacy(browser); await emptyQueue(browser); await workflow(browser); await geometryAndA11y(browser); }
-catch (error) { report.failures.push(String(error)); }
+catch (error) {
+  report.failures.push({
+    name: 'unhandled browser-gate failure',
+    diagnostic: diagnosticSummary(error),
+  });
+}
 finally { await browser.close(); }
 report.finishedAt = new Date().toISOString();
 await writeFile(path.join(OUT, 'results.json'), `${JSON.stringify(report, null, 2)}\n`);

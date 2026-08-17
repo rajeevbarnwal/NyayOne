@@ -17,10 +17,28 @@ const claims = (sub = ACTOR_A, roles = ['student']) => ({
 });
 const report = { startedAt: new Date().toISOString(), web: WEB, api: API, rows: [], failures: [] };
 
+function diagnosticSummary(value) {
+  return {
+    present: value !== null && value !== undefined && value !== '',
+    kind: Array.isArray(value) ? 'array' : typeof value,
+    itemCount: Array.isArray(value)
+      ? value.length
+      : value && typeof value === 'object'
+        ? Object.keys(value).length
+        : undefined,
+  };
+}
+
 function record(name, expected, actual, pass, extra = {}) {
-  const row = { name, expected, actual, pass: Boolean(pass), ...extra };
+  const row = {
+    name,
+    expectedCategory: diagnosticSummary(expected),
+    actualSummary: diagnosticSummary(actual),
+    pass: Boolean(pass),
+    ...extra,
+  };
   report.rows.push(row);
-  if (!row.pass) report.failures.push(`${name}: expected ${expected}; actual ${actual}`);
+  if (!row.pass) report.failures.push({ name, diagnostic: row.actualSummary });
   return row;
 }
 
@@ -125,7 +143,8 @@ async function negativeApiMatrix(request) {
 
 async function positiveJourney(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+  // A browser trace would retain the private narrative and cookie-auth requests.
+  // Upload only the sanitized assertion report and screenshots.
   const page = await context.newPage();
   const consoleErrors = [];
   const pageErrors = [];
@@ -186,10 +205,23 @@ async function positiveJourney(browser) {
   const noPrivateData = Object.keys(storage.session).length === 0
     && localKeys.every((key) => key === 'ls-theme')
     && !/Example Chambers|APP-W4|private-proof|organisationName|narrative|reportId/i.test(storageText);
-  assert('no reporting data in browser storage', noPrivateData, 'theme preference only; no report fields', storageText);
-  assert('no readable auth/report cookie', !storage.cookies, 'empty document.cookie', storage.cookies || 'empty');
+  assert(
+    'no reporting data in browser storage',
+    noPrivateData,
+    'theme preference only; no report fields',
+    JSON.stringify({
+      localKeys,
+      sessionKeys: Object.keys(storage.session),
+      privateDataDetected: !noPrivateData,
+    }),
+  );
+  assert(
+    'no readable auth/report cookie',
+    !storage.cookies,
+    'empty document.cookie',
+    storage.cookies ? 'cookie-present-redacted' : 'empty',
+  );
   assert('no console/page errors', consoleErrors.length === 0 && pageErrors.length === 0, '0/0', `${consoleErrors.length}/${pageErrors.length}`);
-  await context.tracing.stop({ path: path.join(OUT, 'positive-journey.zip') });
   await context.close();
 }
 
@@ -267,11 +299,11 @@ try {
   await positiveJourney(browser);
   await geometryMatrix(browser);
 } catch (error) {
-  report.failures.push(String(error));
+  report.failures.push({ category: 'qa-error', diagnostic: diagnosticSummary(error) });
 } finally {
   await browser.close();
 }
 report.finishedAt = new Date().toISOString();
 await writeFile(path.join(OUT, 'results.json'), `${JSON.stringify(report, null, 2)}\n`);
-console.log(JSON.stringify({ rows: report.rows.length, failures: report.failures }, null, 2));
+console.log(JSON.stringify({ rows: report.rows.length, failedCount: report.failures.length }, null, 2));
 process.exit(report.failures.length ? 1 : 0);

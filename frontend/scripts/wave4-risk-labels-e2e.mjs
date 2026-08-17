@@ -1403,5 +1403,5 @@ for (const token of TOKENS) {
   if (sealed.includes(token)) report.failures.push('privacy oracle: raw token found in evidence payload');
 }
 await writeFile(path.join(OUT, 'results.json'), `${JSON.stringify(report, null, 2)}\n`);
-console.log(JSON.stringify({ rows: report.rows.length, failures: report.failures }, null, 2));
+console.log(JSON.stringify({ rows: report.rows.length, failedCount: report.failures.length }, null, 2));
 process.exit(report.failures.length ? 1 : 0);
