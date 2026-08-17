@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 
 from app.core.config import Settings
@@ -74,3 +76,9 @@ def test_http_otp_sender_uses_nyayone_message(monkeypatch) -> None:
 def test_deterministic_provider_namespaces_are_nyayone_owned() -> None:
     assert PAYMENT_SIGNING_KEY == b"nyayone-deterministic-payment-test-key"
     assert VIDEO_SIGNING_KEY == b"nyayone-deterministic-video-test-key"
+
+
+def test_database_gate_isolates_the_unit_suite_from_staging_defaults() -> None:
+    gate = Path(__file__).resolve().parents[1] / "scripts" / "db_gate.sh"
+    text = gate.read_text(encoding="utf-8")
+    assert 'env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q' in text
