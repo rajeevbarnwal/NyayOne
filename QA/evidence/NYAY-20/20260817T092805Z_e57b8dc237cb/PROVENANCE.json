@@ -1,0 +1,24 @@
+{
+  "ticket": "NYAY-20",
+  "evidence_class": "local-engineering-pre-publication",
+  "generated_at_utc": "2026-08-17T09:28:05Z",
+  "base_sha": "6bbaaa9e946fc59e7533c655252215d632194103",
+  "source_sha": "e57b8dc237cb562a3c4de224997c06d9cf226f4b",
+  "branch": "codex/nyay-20-runtime-isolation",
+  "base_is_ancestor": true,
+  "operating_system": "macOS 26.4.1 arm64",
+  "git": "2.52.0",
+  "node": "22.21.1",
+  "npm": "10.9.4",
+  "python": "3.13.2",
+  "docker": "29.7.0",
+  "docker_compose": "5.3.1",
+  "migration_files_changed": 0,
+  "remote_head_verified": false,
+  "independent_qa": false,
+  "notes": [
+    "Generated from an isolated checkout under /private/tmp.",
+    "The preserved Desktop NyayOne checkout was not modified.",
+    "This package is engineering evidence, not independent QA or release certification."
+  ]
+}
