@@ -156,7 +156,16 @@ try {
   await submit();
   await page.waitForURL('**/s-09');
   record('name_60_boundary', '60 characters accepted', { firstLength: capturedPayload?.first_name?.length, lastLength: capturedPayload?.last_name?.length }, capturedPayload?.first_name?.length === 60 && capturedPayload?.last_name?.length === 60);
-  record('split_name_payload', 'first/middle/last mapped independently', capturedPayload, capturedPayload?.first_name === sixty && capturedPayload?.middle_name === null && capturedPayload?.last_name === sixty);
+  const splitNamePayloadValid = capturedPayload?.first_name === sixty
+    && capturedPayload?.middle_name === null
+    && capturedPayload?.last_name === sixty;
+  record('split_name_payload', 'first/middle/last mapped independently', {
+    valid: splitNamePayloadValid,
+    fieldKeys: Object.keys(capturedPayload ?? {}).sort(),
+    firstLength: capturedPayload?.first_name?.length ?? 0,
+    middleIsNull: capturedPayload?.middle_name === null,
+    lastLength: capturedPayload?.last_name?.length ?? 0,
+  }, splitNamePayloadValid);
 
   await loadRegistration();
   await fillRequired({ first: 'B'.repeat(61) });

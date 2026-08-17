@@ -61,19 +61,39 @@ jobs:
       - name: PostgreSQL 16 + pgvector calendar gate
         working-directory: backend
         run: python scripts/wave5_postgres_gate.py --output "$GITHUB_WORKSPACE/test-results/wave5-postgres/summary.json"
+      - name: Prepare privacy-safe PostgreSQL evidence attestation
+        id: evidence_prepare
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --profile wave5-postgres "$GITHUB_WORKSPACE/test-results" "$RUNNER_TEMP/wave5-postgres-uploadable"
+      - name: Seal complete evidence inventory
+        id: evidence_manifest
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --seal "$RUNNER_TEMP/wave5-postgres-uploadable"
       - name: Scan evidence for credentials
         id: evidence_privacy
         if: ${{ always() }}
-        run: python scripts/ci/scan_evidence.py test-results
-      - name: Upload evidence
-        if: ${{ always() && steps.evidence_privacy.outcome == 'success' }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/scan_evidence.py" "$RUNNER_TEMP/wave5-postgres-uploadable"
+      - name: Reverify immutable evidence inventory
+        id: evidence_integrity
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --verify "$RUNNER_TEMP/wave5-postgres-uploadable"
+      - name: Validate exact pre-upload evidence schema
+        id: evidence_schema
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --validate-attestation "$RUNNER_TEMP/wave5-postgres-uploadable"
+      - name: Upload PostgreSQL evidence attestation
+        if: ${{ always() && steps.evidence_prepare.outcome == 'success' && steps.evidence_manifest.outcome == 'success' && steps.evidence_privacy.outcome == 'success' && steps.evidence_integrity.outcome == 'success' && steps.evidence_schema.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wave5-calendar-evidence
-          path: test-results
+          name: wave5-calendar-postgres-attestation
+          path: ${{ runner.temp }}/wave5-postgres-uploadable
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: false
+      - name: Require complete passing PostgreSQL producer results
+        id: evidence_result
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --require-pass "$RUNNER_TEMP/wave5-postgres-uploadable"
 
   calendar-real-browser:
     name: Real PostgreSQL + HTTPS + Chromium S-90–S-93
@@ -211,19 +231,39 @@ jobs:
               raise SystemExit(1)
           print("artifact privacy guard: no raw session/feed bearer")
           PY
+      - name: Prepare privacy-safe real-browser evidence attestation
+        id: evidence_prepare
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --profile wave5-real "$GITHUB_WORKSPACE/test-results" "$RUNNER_TEMP/wave5-real-uploadable"
+      - name: Seal complete real-browser evidence inventory
+        id: evidence_manifest
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --seal "$RUNNER_TEMP/wave5-real-uploadable"
       - name: Scan all real-browser evidence for generic credential patterns
         id: evidence_privacy
         if: ${{ always() }}
-        run: python scripts/ci/scan_evidence.py test-results
-      - name: Upload real-browser evidence
-        if: ${{ always() && steps.evidence_privacy.outcome == 'success' }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/scan_evidence.py" "$RUNNER_TEMP/wave5-real-uploadable"
+      - name: Reverify immutable real-browser evidence inventory
+        id: evidence_integrity
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --verify "$RUNNER_TEMP/wave5-real-uploadable"
+      - name: Validate exact pre-upload evidence schema
+        id: evidence_schema
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --validate-attestation "$RUNNER_TEMP/wave5-real-uploadable"
+      - name: Upload real-browser evidence attestation
+        if: ${{ always() && steps.evidence_prepare.outcome == 'success' && steps.evidence_manifest.outcome == 'success' && steps.evidence_privacy.outcome == 'success' && steps.evidence_integrity.outcome == 'success' && steps.evidence_schema.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wave5-calendar-real-browser-evidence
-          path: test-results
+          name: wave5-calendar-real-browser-attestation
+          path: ${{ runner.temp }}/wave5-real-uploadable
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: false
+      - name: Require complete passing browser producer results
+        id: evidence_result
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --require-pass "$RUNNER_TEMP/wave5-real-uploadable"
 
   required:
     name: nyayone-wave5-required

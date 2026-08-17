@@ -36,6 +36,13 @@ const report = {
   failures: [],
 };
 
+function diagnosticSummary(value) {
+  return {
+    present: value !== null && value !== undefined && value !== '',
+    kind: Array.isArray(value) ? 'array' : typeof value,
+  };
+}
+
 function record(group, name, expected, actual, pass, extra = {}) {
   const row = { name, expected, actual, pass, ...extra };
   report[group].push(row);
@@ -179,20 +186,25 @@ async function runApiNegativeMatrix(request) {
 
 async function positiveJourney(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+  // Playwright trace archives retain request bodies and opaque credential URLs.
+  // Keep uploadable proof to the sanitized report and screenshots below.
   const page = await context.newPage();
   const consoleErrors = [];
   const pageErrors = [];
   const badResponses = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error') consoleErrors.push(diagnosticSummary(message.text()));
   });
-  page.on('pageerror', (error) => pageErrors.push(String(error)));
+  page.on('pageerror', (error) => pageErrors.push(diagnosticSummary(error)));
   page.on('response', (response) => {
-    if (response.status() >= 400) badResponses.push({
-      status: response.status(),
-      url: response.url(),
-    });
+    if (response.status() >= 400) {
+      const responseUrl = new URL(response.url());
+      badResponses.push({
+        status: response.status(),
+        pathname: responseUrl.pathname,
+        queryKeys: [...responseUrl.searchParams.keys()].sort(),
+      });
+    }
   });
   await clearWallet(context.request);
   await runApiNegativeMatrix(context.request);
@@ -310,7 +322,7 @@ async function positiveJourney(browser) {
     `${consoleErrors.length} console, ${pageErrors.length} page`,
     { consoleErrors, pageErrors },
   );
-  const unexpected = badResponses.filter(({ url }) => !url.includes('not-a-token'));
+  const unexpected = badResponses.filter(({ pathname }) => !pathname.includes('not-a-token'));
   // Negative API calls use APIRequestContext and therefore do not enter page events.
   check(
     'functional',
@@ -320,7 +332,6 @@ async function positiveJourney(browser) {
     JSON.stringify(unexpected),
   );
 
-  await context.tracing.stop({ path: path.join(OUT, 'positive-journey-trace.zip') });
   await context.close();
   return { credentialId, tokenBody, publicPath };
 }
@@ -334,9 +345,9 @@ async function geometryMatrix(browser, credentialId) {
       const consoleErrors = [];
       const pageErrors = [];
       page.on('console', (message) => {
-        if (message.type() === 'error') consoleErrors.push(message.text());
+        if (message.type() === 'error') consoleErrors.push(diagnosticSummary(message.text()));
       });
-      page.on('pageerror', (error) => pageErrors.push(String(error)));
+      page.on('pageerror', (error) => pageErrors.push(diagnosticSummary(error)));
       const routes = [
         ['s82', '/s-82'],
         ['s83', '/s-83'],
@@ -447,7 +458,7 @@ async function main() {
     await freshContextPersistence(browser, credentialId);
     await geometryMatrix(browser, credentialId);
   } catch (error) {
-    report.failures.push(String(error?.stack ?? error));
+    report.failures.push({ category: 'qa-error', diagnostic: diagnosticSummary(error) });
   } finally {
     await browser.close();
     report.finishedAt = new Date().toISOString();
