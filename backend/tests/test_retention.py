@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401
 from app.core.retention import ANONYMISED, RetentionPolicy, anonymise_registration, purge_expired
-from app.models.registration import StudentRegistration
+from app.models.registration import RegistrationDobReconciliation, StudentRegistration
 from app.schemas.registration import StudentRegisterRequest
 from app.services.registration_service import register_student
 
@@ -48,11 +48,21 @@ def test_pending_registration_anonymised_after_window(db_session: Session):
 
 def test_delete_mode_removes_row(db_session: Session):
     reg = _reg(db_session)
+    db_session.add(
+        RegistrationDobReconciliation(
+            registration_id=reg.id,
+            outcome="reconciled",
+            reason_code="verified_source",
+            source_key_version="v1",
+            source_ciphertext_sha256="a" * 64,
+        )
+    )
     reg.created_at = NOW - timedelta(days=40)
     db_session.flush()
     policy = RetentionPolicy(30, None, None, None, None, "delete")
     purge_expired(db_session, now=NOW, policy=policy)
     assert db_session.get(StudentRegistration, reg.id) is None
+    assert db_session.get(RegistrationDobReconciliation, reg.id) is None
 
 
 def test_direct_anonymise_hook(db_session: Session):

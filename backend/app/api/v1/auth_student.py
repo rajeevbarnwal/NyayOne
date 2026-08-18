@@ -184,7 +184,7 @@ def otp_resend(
 ) -> dict[str, str]:
     provider = _require_sender(sender)
     reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None:
+    if reg is None or reg.dob_hash_state != "verified":
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
     destination = decrypt(reg.mobile_ct)
     try:
@@ -217,7 +217,7 @@ def update_academic_profile(
     from sqlalchemy import select
 
     reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None:
+    if reg is None or reg.dob_hash_state != "verified":
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
     if reg.status not in {"otp_verified", "active"}:
         raise HTTPException(status_code=403, detail={"code": "otp_verification_required"})
@@ -494,7 +494,7 @@ def guardian_consent_complete(
     payload: GuardianCompleteRequest, session: Session = Depends(get_session)
 ) -> dict[str, str]:
     reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None:
+    if reg is None or reg.dob_hash_state != "verified":
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
@@ -526,7 +526,15 @@ def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentV
     from sqlalchemy import select
 
     ver = session.scalar(
-        select(StudentVerification).where(StudentVerification.registration_id == registration_id)
+        select(StudentVerification)
+        .join(
+            StudentRegistration,
+            StudentRegistration.id == StudentVerification.registration_id,
+        )
+        .where(
+            StudentVerification.registration_id == registration_id,
+            StudentRegistration.dob_hash_state == "verified",
+        )
     )
     if ver is None:
         raise HTTPException(status_code=404, detail={"code": "verification_not_found"})
@@ -547,7 +555,7 @@ def request_institutional_email_verification(
     from sqlalchemy import select
 
     reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None:
+    if reg is None or reg.dob_hash_state != "verified":
         raise HTTPException(
             status_code=404,
             detail={"code": "registration_not_found", "message": "Registration was not found"},

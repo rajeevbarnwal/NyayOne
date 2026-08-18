@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "commit": "be979a569118e2538f9572981b7ca731f0902631",
+    "firstRevision": "0001_initial_pgvector",
+    "lastRevision": "0015_wave4_public_risk_labels",
+    "migrationCount": 15,
+    "policy": "immutable-baseline-forward-revisions-only"
+  },
+  "knownHistoricalDrift": [
+    {
+      "revision": "0002_registration_schema",
+      "priorSha256Prefix": "9fa88564",
+      "acceptedSha256": "7af72ddf1f2fb0b62c6cdee96118f0611ad7651747a1345838182d5e4b3bbaec",
+      "acceptedAtCommit": "fd7779fae042aae7f1026f1285db1c949317ee7c",
+      "reason": "metadata-driven create_all was replaced by explicit immutable Alembic operations",
+      "disposition": "accepted-pre-baseline-correction",
+      "priorDigestAuthority": "documented-investigation-prefix-only"
+    },
+    {
+      "revision": "0008_wave2_tutoring",
+      "priorSha256Prefix": "56ff833b",
+      "acceptedSha256": "fff836ccc283f267568def3c2e5f6962bdda1b4f3e016a1aad77933dfa2c50a8",
+      "acceptedAtCommit": "f05654f8dffa6614c4c538e29d9ce822abdd4a5a",
+      "reason": "guarded marker CHECK constraints were repaired to close a SQL three-valued-logic hole",
+      "disposition": "accepted-pre-baseline-correction",
+      "priorDigestAuthority": "documented-investigation-prefix-only"
+    },
+    {
+      "revision": "0013_wave5_calendar_interop",
+      "priorSha256Prefix": "0f18c3e9",
+      "acceptedSha256": "8a9f60b367eeeed423dd37eeb9e91b6602c07ccca3259354a2ba54b6542e9b30",
+      "acceptedAtCommit": "56eadf684e08b21e0351f32d83ec226cfa1ddb63",
+      "reason": "ordered composite indexes were added for owner-scoped composite foreign keys",
+      "disposition": "accepted-pre-baseline-correction",
+      "priorDigestAuthority": "documented-investigation-prefix-only"
+    }
+  ],
+  "migrations": [
+    {
+      "ordinal": 1,
+      "revision": "0001_initial_pgvector",
+      "downRevision": null,
+      "path": "backend/app/db/migrations/versions/0001_initial_pgvector.py",
+      "sha256": "0fcdb6c94a2f31023b262aa7aa1720c9503ad6cf587fadb7c34c74dbda8ed3b6"
+    },
+    {
+      "ordinal": 2,
+      "revision": "0002_registration_schema",
+      "downRevision": "0001_initial_pgvector",
+      "path": "backend/app/db/migrations/versions/0002_registration_schema.py",
+      "sha256": "7af72ddf1f2fb0b62c6cdee96118f0611ad7651747a1345838182d5e4b3bbaec"
+    },
+    {
+      "ordinal": 3,
+      "revision": "0003_registration_security",
+      "downRevision": "0002_registration_schema",
+      "path": "backend/app/db/migrations/versions/0003_registration_security_lifecycle.py",
+      "sha256": "78b9c4b615e22ab16ea117f276b1c6650d824ddf79a93e152ef61fdfd4b43546"
+    },
+    {
+      "ordinal": 4,
+      "revision": "0004_wave1_foundation",
+      "downRevision": "0003_registration_security",
+      "path": "backend/app/db/migrations/versions/0004_wave1_foundation.py",
+      "sha256": "385bb1379543a6218642c6ef6f7edf61721a16ce5472a218008d562a39a908e5"
+    },
+    {
+      "ordinal": 5,
+      "revision": "0005_language_check",
+      "downRevision": "0004_wave1_foundation",
+      "path": "backend/app/db/migrations/versions/0005_language_check.py",
+      "sha256": "40aade919fbe7ea2e9d03901be6969e8ef2799203408f27e6ede1473811fb85f"
+    },
+    {
+      "ordinal": 6,
+      "revision": "0006_lawschool_fact_backfill",
+      "downRevision": "0005_language_check",
+      "path": "backend/app/db/migrations/versions/0006_lawschool_fact_backfill.py",
+      "sha256": "a2df7ac37926b10f24a7c621715de2cf4e10a2c1a3deb7af34a95ccd5698764a"
+    },
+    {
+      "ordinal": 7,
+      "revision": "0007_wave3_credentials",
+      "downRevision": "0006_lawschool_fact_backfill",
+      "path": "backend/app/db/migrations/versions/0007_wave3_credentials.py",
+      "sha256": "da63e6166fb0c1d5598c94e22477cb76903b939c7997996827643c2725c267a8"
+    },
+    {
+      "ordinal": 8,
+      "revision": "0008_wave2_tutoring",
+      "downRevision": "0007_wave3_credentials",
+      "path": "backend/app/db/migrations/versions/0008_wave2_tutoring.py",
+      "sha256": "fff836ccc283f267568def3c2e5f6962bdda1b4f3e016a1aad77933dfa2c50a8"
+    },
+    {
+      "ordinal": 9,
+      "revision": "0009_wave2_session_pricing",
+      "downRevision": "0008_wave2_tutoring",
+      "path": "backend/app/db/migrations/versions/0009_wave2_session_pricing.py",
+      "sha256": "6c6bf34dfe78bc45b82eb3a2418450c0e61e48acf09fb21c42503cd2b308ceb0"
+    },
+    {
+      "ordinal": 10,
+      "revision": "0010_student_login_session",
+      "downRevision": "0009_wave2_session_pricing",
+      "path": "backend/app/db/migrations/versions/0010_student_login_session.py",
+      "sha256": "cbc4cc7e41106eebc79f5cc0cf81a0c4a2b4901a9da55e33fba1e158916cbed6"
+    },
+    {
+      "ordinal": 11,
+      "revision": "0011_wave4_private_reporting",
+      "downRevision": "0010_student_login_session",
+      "path": "backend/app/db/migrations/versions/0011_wave4_private_reporting.py",
+      "sha256": "4feee798862880a5c49d2d188706c7724a7f0f367e26a6e5ed203731a2ea5774"
+    },
+    {
+      "ordinal": 12,
+      "revision": "0012_wave4_moderation",
+      "downRevision": "0011_wave4_private_reporting",
+      "path": "backend/app/db/migrations/versions/0012_wave4_moderation.py",
+      "sha256": "aea2c15c9858c6ea5f2823a9092b3f586f5f8974cdfa603d8e72338433423dbc"
+    },
+    {
+      "ordinal": 13,
+      "revision": "0013_wave5_calendar_interop",
+      "downRevision": "0012_wave4_moderation",
+      "path": "backend/app/db/migrations/versions/0013_wave5_calendar_interop.py",
+      "sha256": "8a9f60b367eeeed423dd37eeb9e91b6602c07ccca3259354a2ba54b6542e9b30"
+    },
+    {
+      "ordinal": 14,
+      "revision": "0014_saathi60_internships",
+      "downRevision": "0013_wave5_calendar_interop",
+      "path": "backend/app/db/migrations/versions/0014_saathi60_internships.py",
+      "sha256": "3fe141f2b45e16d21377d25e7ca99f0015580110c4f2c6fb04d252167718bc14"
+    },
+    {
+      "ordinal": 15,
+      "revision": "0015_wave4_public_risk_labels",
+      "downRevision": "0014_saathi60_internships",
+      "path": "backend/app/db/migrations/versions/0015_wave4_public_risk_labels.py",
+      "sha256": "5b8c01093d062c7281029514ba27c075f0a4f898fb0d078f9dab02243d4f4c6f"
+    }
+  ]
+}

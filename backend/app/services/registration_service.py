@@ -151,6 +151,7 @@ def register_student(
         mobile_ct=encrypt(req.mobile),
         dob_hash=keyed_hash(req.dob.isoformat()),
         dob_ct=encrypt(req.dob.isoformat()),
+        dob_hash_state="verified",
         key_version=key_version,
         institution_ref=req.college,
         status="otp_pending",

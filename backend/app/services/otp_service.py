@@ -136,6 +136,11 @@ def verify(
     commit_on_success: bool = True,
 ) -> OtpChallenge:
     now = _as_utc(now)
+    registration = session.get(StudentRegistration, registration_id)
+    if registration is None or registration.dob_hash_state != "verified":
+        # Match the pre-existing unknown/no-challenge shape so quarantine does
+        # not create a registration-existence oracle.
+        raise OtpError(404, "no_active_challenge")
     ch = _active(
         session,
         registration_id,
@@ -152,9 +157,8 @@ def verify(
     salt = (ch.metadata_json or {}).get("salt", "")
     if otp_verifier(code, salt=salt) == ch.verifier_hash:
         ch.consumed_at = now
-        reg = session.get(StudentRegistration, registration_id)
-        if reg is not None and reg.status == "otp_pending" and purpose == "signup":
-            reg.status = "otp_verified"
+        if registration.status == "otp_pending" and purpose == "signup":
+            registration.status = "otp_verified"
         if commit_on_success:
             session.commit()
         return ch
@@ -196,6 +200,9 @@ def resend(
     destination: str,
     destination_ct: str | None = None,
 ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
+    registration = session.get(StudentRegistration, registration_id)
+    if registration is None or registration.dob_hash_state != "verified":
+        raise OtpError(404, "no_active_challenge")
     if within_cooldown(session, registration_id, now, purpose):
         raise OtpError(429, "resend_cooldown")
     return issue_challenge(

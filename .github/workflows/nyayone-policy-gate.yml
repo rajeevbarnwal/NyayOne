@@ -53,7 +53,9 @@ jobs:
       - name: Enforce forward-only migration history
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: python scripts/ci/check_migration_immutability.py "$BASE_SHA" "$GITHUB_SHA"
+        run: |
+          python scripts/ci/verify_migration_ledger.py
+          python scripts/ci/check_migration_immutability.py "$BASE_SHA" "$GITHUB_SHA"
       - name: Verify every committed evidence manifest
         run: |
           python scripts/ci/verify_sha256_manifests.py

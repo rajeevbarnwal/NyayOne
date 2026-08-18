@@ -69,6 +69,7 @@ def anonymise_registration(session: Session, reg: StudentRegistration) -> None:
     reg.mobile_ct = ANONYMISED
     reg.dob_hash = f"{ANONYMISED}:{reg.id}"
     reg.dob_ct = ANONYMISED
+    reg.dob_hash_state = "erased"
     reg.institution_ref = None
     reg.idempotency_key = None
     reg.first_name = ANONYMISED
@@ -122,6 +123,7 @@ def delete_registration(session: Session, reg: StudentRegistration) -> None:
         Consent,
         GuardianConsent,
         OtpChallenge,
+        RegistrationDobReconciliation,
         StudentVerification,
     )
 
@@ -133,6 +135,7 @@ def delete_registration(session: Session, reg: StudentRegistration) -> None:
         RecoverySession,
         OtpChallenge,
         Consent,
+        RegistrationDobReconciliation,
         StudentProfile,
         StudentVerification,
         GuardianConsent,

@@ -83,11 +83,15 @@ def start(
     now = _as_utc(now)
     lookup = keyed_hash(mobile)
     registration = session.scalar(
-        select(StudentRegistration).where(StudentRegistration.mobile_hash == lookup)
+        select(StudentRegistration).where(
+            StudentRegistration.mobile_hash == lookup,
+            StudentRegistration.dob_hash_state == "verified",
+        )
     )
     user = session.get(User, registration.user_id) if registration is not None else None
     eligible = bool(
         registration
+        and registration.dob_hash_state == "verified"
         and registration.status in {"otp_verified", "active"}
         and user
         and user.role == "student"
@@ -178,6 +182,7 @@ def verify(
         registration is None
         or user is None
         or user.role != "student"
+        or registration.dob_hash_state != "verified"
         or registration.status not in {"otp_verified", "active"}
         or user.status in {"suspended", "deleted"}
     ):
@@ -271,7 +276,11 @@ def session_claims(
         .where(StudentRegistration.user_id == user.id)
         .order_by(StudentRegistration.created_at.desc())
     )
-    if registration is None or registration.status != "active":
+    if (
+        registration is None
+        or registration.status != "active"
+        or registration.dob_hash_state != "verified"
+    ):
         return None
     profile = session.scalar(
         select(StudentProfile).where(StudentProfile.registration_id == registration.id)
