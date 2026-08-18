@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
+import app.services.moderation_service as moderation_service
 from app.core.crypto import decrypt, encrypt, key_version, keyed_hash
 from app.core.config import settings
 from app.db.models.audit import AuditEvent
@@ -409,9 +410,25 @@ def test_cluster_requires_org_category_time_and_aggregate_approval(ctx):
     assert response.status_code == 422 and response.json()["detail"]["code"] == "cluster_outside_time_window"
 
 
-def test_calendar_month_cutoff_is_inclusive_and_one_day_before_is_rejected(ctx):
+def test_calendar_month_cutoff_is_inclusive_and_one_day_before_is_rejected(
+    ctx, monkeypatch
+):
     client, SessionLocal, ids = ctx
-    cutoff = _months_ago(date.today(), settings.internship_risk_window_months)
+    fixed_utc = datetime(2024, 2, 29, 18, 56, tzinfo=timezone.utc)
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz):
+            assert tz is timezone.utc
+            return fixed_utc
+
+    monkeypatch.setattr(moderation_service, "datetime", FixedDateTime)
+    fixed_today = moderation_service._utc_today()
+    assert fixed_today == date(2024, 2, 29)
+    assert fixed_utc.astimezone(timezone(timedelta(hours=5, minutes=30))).date() == date(
+        2024, 3, 1
+    )
+    cutoff = _months_ago(fixed_today, settings.internship_risk_window_months)
     exact = [
         _seed_report(
             SessionLocal,
