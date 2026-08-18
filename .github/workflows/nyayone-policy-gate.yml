@@ -26,6 +26,10 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
+      - name: Install hash-locked workflow policy parser
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes --no-deps -r scripts/ci/policy-requirements.lock
       - name: Reject whitespace and patch corruption
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -38,6 +42,7 @@ jobs:
         run: |
           python scripts/ci/verify_nyayone_ci.py
           python scripts/ci/test_ci_policies.py
+          python scripts/ci/test_evidence_policy.py
       - name: Validate NyayOne runtime and Compose isolation
         run: |
           cp .env.example .env
@@ -50,14 +55,37 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: python scripts/ci/check_migration_immutability.py "$BASE_SHA" "$GITHUB_SHA"
       - name: Verify every committed evidence manifest
-        run: python scripts/ci/verify_sha256_manifests.py
+        run: |
+          python scripts/ci/verify_sha256_manifests.py
+          found=0
+          while IFS= read -r manifest; do
+            found=1
+            package="$(dirname "$manifest")"
+            python scripts/ci/scan_evidence.py "$package"
+          done < <(git ls-files 'QA/evidence/NYAY-*/**/SHA256SUMS.txt')
+          test "$found" = 1
       - name: Prove the evidence scanner fails closed
         run: |
-          mkdir -p "$RUNNER_TEMP/evidence-scanner-selftest"
+          root="$RUNNER_TEMP/evidence-scanner-selftest"
+          if python scripts/ci/scan_evidence.py "$root/missing"; then
+            echo "evidence scanner accepted a missing path" >&2
+            exit 1
+          fi
+          mkdir -p "$root/empty"
+          if python scripts/ci/scan_evidence.py "$root/empty"; then
+            echo "evidence scanner accepted an empty directory" >&2
+            exit 1
+          fi
+          printf '%s\n' 'sanitized evidence' > "$root/not-a-directory.txt"
+          if python scripts/ci/scan_evidence.py "$root/not-a-directory.txt"; then
+            echo "evidence scanner accepted a file as its root" >&2
+            exit 1
+          fi
+          mkdir -p "$root/canaries"
           while IFS= read -r payload; do
-            printf '%s\n' "$payload" > "$RUNNER_TEMP/evidence-scanner-selftest/leak.txt"
-            if python scripts/ci/scan_evidence.py "$RUNNER_TEMP/evidence-scanner-selftest"; then
-              echo "evidence scanner accepted a planted credential: $payload" >&2
+            printf '%s\n' "$payload" > "$root/canaries/leak.txt"
+            if python scripts/ci/scan_evidence.py "$root/canaries"; then
+              echo "evidence scanner accepted a planted privacy canary" >&2
               exit 1
             fi
           done <<'CANARIES'
@@ -65,9 +93,16 @@ jobs:
           {"Authorization":"Bearer nyayone-json-canary-0123456789"}
           {"cookie":"nyayone_session=nyayone-cookie-canary-0123456789"}
           eyJueWF5b25lIjoiY2FuYXJ5In0.eyJzY29wZSI6InRlc3QifQ.c2lnbmF0dXJlLWNhbmFyeQ
+          {"otp":"429016"}
+          {"mobile":"9876543210"}
+          {"institutional_email":"person@nls.ac.in"}
+          {"date_of_birth":"2004-03-14"}
+          {"first_name":"Aditi"}
+          {"localStorage":{"session_token":"opaque-value-123456"}}
+          WAVE4_E2E_SESSION_TOKEN=opaque-env-value-123456
           CANARIES
-          rm "$RUNNER_TEMP/evidence-scanner-selftest/leak.txt"
-          python scripts/ci/scan_evidence.py "$RUNNER_TEMP/evidence-scanner-selftest"
+          printf '%s\n' 'sanitized evidence' > "$root/canaries/leak.txt"
+          python scripts/ci/scan_evidence.py "$root/canaries"
 
   required:
     name: nyayone-policy-required

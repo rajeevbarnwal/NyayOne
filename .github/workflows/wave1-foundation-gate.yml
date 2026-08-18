@@ -69,21 +69,51 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/v34-s11-s26"
           sha256sum --check SHA256SUMS.txt
+      - name: Prepare privacy-safe S-11–S-26 evidence attestation
+        id: evidence_prepare
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --profile wave1
+          "$RUNNER_TEMP/v34-s11-s26" "$RUNNER_TEMP/v34-s11-s26-uploadable"
+      - name: Seal complete S-11–S-26 evidence inventory
+        id: evidence_manifest
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --seal
+          "$RUNNER_TEMP/v34-s11-s26-uploadable"
       - name: Scan S-11–S-26 browser evidence for credentials
         id: evidence_privacy
         if: ${{ always() }}
         run: >-
           python3 "$GITHUB_WORKSPACE/scripts/ci/scan_evidence.py"
-          "$RUNNER_TEMP/v34-s11-s26"
-      - name: Upload S-11–S-26 browser evidence
-        if: ${{ always() && steps.evidence_privacy.outcome == 'success' }}
+          "$RUNNER_TEMP/v34-s11-s26-uploadable"
+      - name: Reverify immutable S-11–S-26 evidence inventory
+        id: evidence_integrity
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --verify
+          "$RUNNER_TEMP/v34-s11-s26-uploadable"
+      - name: Validate exact pre-upload evidence schema
+        id: evidence_schema
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --validate-attestation
+          "$RUNNER_TEMP/v34-s11-s26-uploadable"
+      - name: Upload S-11–S-26 evidence attestation
+        if: ${{ always() && steps.evidence_prepare.outcome == 'success' && steps.evidence_manifest.outcome == 'success' && steps.evidence_privacy.outcome == 'success' && steps.evidence_integrity.outcome == 'success' && steps.evidence_schema.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: v34-s11-s26-browser-evidence
-          path: ${{ runner.temp }}/v34-s11-s26
+          name: v34-s11-s26-browser-attestation
+          path: ${{ runner.temp }}/v34-s11-s26-uploadable
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: false
+      - name: Require complete passing S-11–S-26 producer results
+        id: evidence_result
+        if: ${{ always() }}
+        run: >-
+          python3 "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --require-pass
+          "$RUNNER_TEMP/v34-s11-s26-uploadable"
 
   backend-postgres16-gate:
     runs-on: ubuntu-24.04
