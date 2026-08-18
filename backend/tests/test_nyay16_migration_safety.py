@@ -397,6 +397,56 @@ def test_uuid_parent_type_is_dialect_exact():
     assert not module._type_matches(sa.CHAR(32), "uuid", None, "postgresql")
 
 
+def test_schema_introspection_accepts_one_to_one_reconciliation_primary_key():
+    from scripts import introspect_schema
+    from sqlalchemy.dialects import postgresql
+
+    failures = introspect_schema._table_key_failures(
+        table="registration_dob_reconciliations",
+        dialect="postgresql",
+        columns=[{"name": "registration_id", "type": postgresql.UUID()}],
+        primary_key={"constrained_columns": ["registration_id"]},
+        indexes=[],
+        unique_constraints=[],
+        foreign_keys=[
+            {
+                "constrained_columns": ["registration_id"],
+                "options": {"ondelete": "CASCADE"},
+            }
+        ],
+    )
+    assert failures == []
+
+    wrong_primary_key = introspect_schema._table_key_failures(
+        table="registration_dob_reconciliations",
+        dialect="postgresql",
+        columns=[{"name": "registration_id", "type": postgresql.UUID()}],
+        primary_key={"constrained_columns": []},
+        indexes=[],
+        unique_constraints=[],
+        foreign_keys=[
+            {
+                "constrained_columns": ["registration_id"],
+                "options": {"ondelete": "CASCADE"},
+            }
+        ],
+    )
+    assert wrong_primary_key == [
+        "registration_dob_reconciliations primary key is not exactly registration_id",
+        "registration_dob_reconciliations.registration_id foreign key is not indexed",
+    ]
+
+    assert introspect_schema._table_key_failures(
+        table="users",
+        dialect="postgresql",
+        columns=[{"name": "id", "type": postgresql.UUID()}],
+        primary_key={"constrained_columns": ["id"]},
+        indexes=[],
+        unique_constraints=[],
+        foreign_keys=[],
+    ) == []
+
+
 def test_reconciliation_fk_name_is_dialect_exact_after_pg_truncation():
     module = _module()
     assert module._expected_reconciliation_fk_name("sqlite") == (
