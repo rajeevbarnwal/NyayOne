@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,237 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
+    def test_migration_ledger_accepts_current_tree_and_rejects_byte_drift(self) -> None:
+        verifier = load("verify_migration_ledger")
+        self.assertEqual(verifier.verify(verifier.ROOT), [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = verifier.ROOT / "backend/app/db/migrations"
+            target = root / "backend/app/db/migrations"
+            shutil.copytree(source, target)
+            migration = target / "versions/0002_registration_schema.py"
+            migration.write_bytes(migration.read_bytes() + b"\n# planted drift\n")
+            failures = verifier.verify(root)
+        self.assertTrue(any("SHA-256 mismatch" in item for item in failures), failures)
+
+    def test_migration_ledger_rejects_inventory_and_registry_mutants(self) -> None:
+        verifier = load("verify_migration_ledger")
+        source = verifier.ROOT / "backend/app/db/migrations"
+
+        def copied_root(directory: str) -> Path:
+            root = Path(directory)
+            shutil.copytree(source, root / "backend/app/db/migrations")
+            return root
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = copied_root(directory)
+            (root / "backend/app/db/migrations/versions/0008_wave2_tutoring.py").unlink()
+            failures = verifier.verify(root)
+            self.assertTrue(any("target is missing" in item for item in failures), failures)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = copied_root(directory)
+            ledger = root / verifier.LEDGER_RELATIVE
+            document = json.loads(ledger.read_text(encoding="utf-8"))
+            document["migrations"][1]["path"] = document["migrations"][0]["path"]
+            ledger.write_text(json.dumps(document), encoding="utf-8")
+            failures = verifier.verify(root)
+            self.assertTrue(any("paths must be unique" in item for item in failures), failures)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = copied_root(directory)
+            planted = root / "backend/app/db/migrations/versions/0002_planted.py"
+            planted.write_text(
+                'revision = "0002_planted"\ndown_revision = "0001_initial_pgvector"\n',
+                encoding="utf-8",
+            )
+            failures = verifier.verify(root)
+            self.assertTrue(any("overlaps the frozen baseline" in item for item in failures), failures)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = copied_root(directory)
+            ledger = root / verifier.LEDGER_RELATIVE
+            document = json.loads(ledger.read_text(encoding="utf-8"))
+            document["knownHistoricalDrift"][0]["priorSha256Prefix"] = "00000000"
+            ledger.write_text(json.dumps(document), encoding="utf-8")
+            failures = verifier.verify(root)
+            self.assertTrue(any("drift registry" in item for item in failures), failures)
+
+    def test_migration_ledger_enforces_one_linear_forward_graph(self) -> None:
+        verifier = load("verify_migration_ledger")
+        source = verifier.ROOT / "backend/app/db/migrations"
+
+        def copied_root(directory: str) -> Path:
+            root = Path(directory)
+            shutil.copytree(source, root / "backend/app/db/migrations")
+            return root
+
+        def write_forward(
+            root: Path,
+            filename: str,
+            *,
+            revision: str,
+            down_revision: str,
+            branch_labels: str = "None",
+            depends_on: str = "None",
+        ) -> None:
+            target = root / "backend/app/db/migrations/versions" / filename
+            target.write_text(
+                "\n".join(
+                    (
+                        f"revision = {revision}",
+                        f"down_revision = {down_revision}",
+                        f"branch_labels = {branch_labels}",
+                        f"depends_on = {depends_on}",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+        predecessor = repr("0016_dob_hash_reconcile")
+        with tempfile.TemporaryDirectory() as directory:
+            root = copied_root(directory)
+            write_forward(
+                root,
+                "0017_valid_forward.py",
+                revision=repr("0017_valid_forward"),
+                down_revision=predecessor,
+            )
+            self.assertEqual(verifier.verify(root), [])
+
+        mutants = {
+            "duplicate root": {
+                "filename": "0017_duplicate_root.py",
+                "revision": repr("0017_duplicate_root"),
+                "down_revision": "None",
+                "expected": "exactly one root",
+            },
+            "duplicate revision": {
+                "filename": "0017_duplicate_revision.py",
+                "revision": repr("0016_dob_hash_reconcile"),
+                "down_revision": predecessor,
+                "expected": "duplicate revision id",
+            },
+            "ordinal gap": {
+                "filename": "0018_gap.py",
+                "revision": repr("0018_gap"),
+                "down_revision": predecessor,
+                "expected": "unique and contiguous",
+            },
+            "wrong predecessor": {
+                "filename": "0017_wrong_predecessor.py",
+                "revision": repr("0017_wrong_predecessor"),
+                "down_revision": repr("0015_wave4_public_risk_labels"),
+                "expected": "down_revision must be immediate predecessor",
+            },
+            "branch label": {
+                "filename": "0017_branch.py",
+                "revision": repr("0017_branch"),
+                "down_revision": predecessor,
+                "branch_labels": repr("planted-branch"),
+                "expected": "branch_labels must be literal None",
+            },
+            "dependency": {
+                "filename": "0017_dependency.py",
+                "revision": repr("0017_dependency"),
+                "down_revision": predecessor,
+                "depends_on": predecessor,
+                "expected": "depends_on must be literal None",
+            },
+            "multiple parents": {
+                "filename": "0017_multiple_parents.py",
+                "revision": repr("0017_multiple_parents"),
+                "down_revision": repr(
+                    ("0016_dob_hash_reconcile", "0015_wave4_public_risk_labels")
+                ),
+                "expected": "down_revision must be a literal string or null",
+            },
+        }
+        for label, mutant in mutants.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = copied_root(directory)
+                write_forward(
+                    root,
+                    mutant["filename"],
+                    revision=mutant["revision"],
+                    down_revision=mutant["down_revision"],
+                    branch_labels=mutant.get("branch_labels", "None"),
+                    depends_on=mutant.get("depends_on", "None"),
+                )
+                failures = verifier.verify(root)
+                self.assertTrue(
+                    any(mutant["expected"] in item for item in failures),
+                    failures,
+                )
+
+    def test_migration_immutability_rejects_ledger_and_history_mutants(self) -> None:
+        policy = load("check_migration_immutability")
+        forward = (
+            "A\tbackend/app/db/migrations/versions/0016_nyay16_baseline.py\n"
+            "A\tbackend/app/db/migrations/versions/0017_nyay3_invariants.py"
+        )
+        self.assertEqual(
+            policy.violations_from_name_status(
+                forward,
+                ledger_existed_at_base=True,
+            ),
+            [],
+        )
+        initial_baseline = (
+            "A\tbackend/app/db/migrations/MIGRATION_SHA256_LEDGER.json\n" + forward
+        )
+        self.assertEqual(
+            policy.violations_from_name_status(
+                initial_baseline,
+                ledger_existed_at_base=False,
+            ),
+            [],
+        )
+
+        mutants = {
+            "historical content": "M\tbackend/app/db/migrations/versions/0002_registration_schema.py",
+            "historical deletion": "D\tbackend/app/db/migrations/versions/0008_wave2_tutoring.py",
+            "historical rename": (
+                "R100\tbackend/app/db/migrations/versions/0013_wave5_calendar_interop.py\t"
+                "backend/app/db/migrations/versions/0013_renamed.py"
+            ),
+            "baseline overlap": "A\tbackend/app/db/migrations/versions/0015_planted.py",
+            "noncanonical forward name": "A\tbackend/app/db/migrations/versions/0016-unsafe.py",
+            "ledger content": "M\tbackend/app/db/migrations/MIGRATION_SHA256_LEDGER.json",
+            "ledger deletion": "D\tbackend/app/db/migrations/MIGRATION_SHA256_LEDGER.json",
+            "ledger replacement": "A\tbackend/app/db/migrations/MIGRATION_SHA256_LEDGER.json",
+        }
+        for label, mutant in mutants.items():
+            with self.subTest(label=label):
+                self.assertTrue(
+                    policy.violations_from_name_status(
+                        mutant,
+                        ledger_existed_at_base=True,
+                    ),
+                    label,
+                )
+
+    def test_policy_workflow_requires_the_migration_ledger_verifier(self) -> None:
+        policy = load("verify_nyayone_ci")
+        workflow = policy.ROOT / ".github/workflows/nyayone-policy-gate.yml"
+        original = workflow.read_text(encoding="utf-8")
+        self.assertIn("python scripts/ci/verify_migration_ledger.py", original)
+        self.assertEqual(policy.check_workflow(workflow), [])
+
+        mutated = original.replace(
+            "          python scripts/ci/verify_migration_ledger.py\n",
+            "",
+            1,
+        )
+        self.assertNotEqual(mutated, original)
+        with tempfile.TemporaryDirectory() as directory:
+            planted = Path(directory) / "nyayone-policy-gate.yml"
+            planted.write_text(mutated, encoding="utf-8")
+            failures = policy.check_workflow(planted)
+        self.assertTrue(any("canonical semantic contract" in item for item in failures), failures)
+
     def test_workflow_validator_rejects_partial_green_and_write_authority(self) -> None:
         policy = load("verify_nyayone_ci")
         with tempfile.TemporaryDirectory() as directory:
@@ -515,6 +747,49 @@ jobs:
                     self.assertNotEqual(mutated, original)
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
+
+    def test_nested_database_gate_cannot_drop_or_bypass_nyay16(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = policy.DB_GATE
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_db_gate_contract(source), [])
+        invocation = (
+            'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py \\\n'
+            "  --output test-results/nyay16-postgres/summary.json"
+        )
+        self.assertEqual(original.count(invocation), 1)
+        mutations = {
+            "deleted invocation": original.replace(invocation, "true", 1),
+            "wrong script": original.replace(
+                "scripts/nyay16_postgres_gate.py",
+                "scripts/not-the-nyay16-gate.py",
+                1,
+            ),
+            "missing database opt-in": original.replace(
+                "NYAY16_GATE_ALLOW_DATABASES=true ", "", 1
+            ),
+            "discarded report": original.replace(
+                "test-results/nyay16-postgres/summary.json", "/dev/null", 1
+            ),
+            "conditional bypass": original.replace(
+                invocation,
+                "if false; then\n" + invocation + "\nfi",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / "db_gate.sh"
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_db_gate_contract(candidate)
+                    self.assertTrue(failures, label)
+                    if label == "deleted invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-16" in item for item in failures),
+                            failures,
+                        )
 
     def test_runtime_identity_policy_accepts_the_current_tree(self) -> None:
         policy = load("check_nyayone_runtime_identity")

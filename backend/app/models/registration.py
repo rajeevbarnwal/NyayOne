@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -23,7 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from app.db.base import TimestampedBase
+from app.db.base import Base, TimestampedBase
 
 # --- Permitted finite-domain values (mirrored by DB CHECK constraints) -------
 USER_ROLES = (
@@ -43,6 +44,24 @@ GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
 RECOVERY_STATUSES = ("pending", "verified", "consumed", "expired")
 LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired")
 AUTH_SESSION_STATUSES = ("active", "revoked", "expired")
+DOB_HASH_STATES = ("verified", "quarantined", "erased")
+DOB_RECONCILIATION_OUTCOMES = ("reconciled", "quarantined")
+DOB_RECONCILIATION_REASONS = (
+    "verified_source",
+    "ciphertext_unreadable",
+    "source_not_canonical_date",
+    "source_future_date",
+)
+_DOB_HASH_HEX_ONLY_SQL = "dob_hash"
+for _hex_character in "0123456789abcdef":
+    _DOB_HASH_HEX_ONLY_SQL = (
+        f"replace({_DOB_HASH_HEX_ONLY_SQL}, '{_hex_character}', '')"
+    )
+_DOB_SOURCE_DIGEST_HEX_ONLY_SQL = "source_ciphertext_sha256"
+for _hex_character in "0123456789abcdef":
+    _DOB_SOURCE_DIGEST_HEX_ONLY_SQL = (
+        f"replace({_DOB_SOURCE_DIGEST_HEX_ONLY_SQL}, '{_hex_character}', '')"
+    )
 
 
 def _in(column: str, allowed: tuple[str, ...], name: str) -> CheckConstraint:
@@ -75,6 +94,18 @@ class StudentRegistration(TimestampedBase):
     mobile_ct: Mapped[str] = mapped_column(String(600), nullable=False)
     dob_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     dob_ct: Mapped[str] = mapped_column(String(600), nullable=False)
+    # 0016 makes historical placeholder reconciliation explicit.  Quarantined
+    # rows carry a deterministic non-PII digest in dob_hash and a reason-only
+    # record in registration_dob_reconciliations; raw/ciphertext values are
+    # never copied to that table. Quarantine is terminal in the application:
+    # there is no API transition back to verified. Any future operator repair
+    # must also revoke/rotate auth capability under NYAY-3 session invariants.
+    dob_hash_state: Mapped[str] = mapped_column(
+        String(16),
+        default="verified",
+        index=True,
+        nullable=False,
+    )
     # Encryption key version stamped on this row's ciphertext columns (rotation).
     key_version: Mapped[str] = mapped_column(String(8), default="v1", nullable=False)
     institution_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -85,8 +116,53 @@ class StudentRegistration(TimestampedBase):
         UniqueConstraint("mobile_hash", name="uq_student_registrations_mobile_hash"),
         UniqueConstraint("idempotency_key", name="uq_student_registrations_idempotency_key"),
         _in("status", REGISTRATION_STATUSES, "status"),
+        _in("dob_hash_state", DOB_HASH_STATES, "dob_hash_state"),
+        CheckConstraint(
+            "(dob_hash_state IN ('verified', 'quarantined') AND status <> 'deleted' "
+            "AND length(dob_hash) = 64 "
+            f"AND length({_DOB_HASH_HEX_ONLY_SQL}) = 0) OR "
+            "(dob_hash_state = 'erased' AND status = 'deleted' "
+            "AND mobile_ct = '[erased]' AND dob_ct = '[erased]' "
+            "AND replace(mobile_hash, '-', '') = '[erased]:' || "
+            "replace(CAST(id AS VARCHAR), '-', '') "
+            "AND replace(dob_hash, '-', '') = '[erased]:' || "
+            "replace(CAST(id AS VARCHAR), '-', ''))",
+            name="dob_hash_state_consistency",
+        ),
     )
     profile: Mapped["StudentProfile | None"] = relationship(back_populates="registration", uselist=False)
+
+
+class RegistrationDobReconciliation(Base):
+    """Non-PII disposition for a legacy ``[rehash-required]`` DOB row."""
+
+    __tablename__ = "registration_dob_reconciliations"
+    registration_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("student_registrations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_key_version: Mapped[str] = mapped_column(String(8), nullable=False)
+    source_ciphertext_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    __table_args__ = (
+        _in("outcome", DOB_RECONCILIATION_OUTCOMES, "outcome"),
+        _in("reason_code", DOB_RECONCILIATION_REASONS, "reason_code"),
+        CheckConstraint(
+            "(outcome = 'reconciled' AND reason_code = 'verified_source') OR "
+            "(outcome = 'quarantined' AND reason_code != 'verified_source')",
+            name="outcome_reason",
+        ),
+        CheckConstraint(
+            "length(source_ciphertext_sha256) = 64 AND "
+            f"length({_DOB_SOURCE_DIGEST_HEX_ONLY_SQL}) = 0",
+            name="source_digest_length",
+        ),
+    )
 
 
 class StudentProfile(TimestampedBase):

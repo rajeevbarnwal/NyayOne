@@ -25,7 +25,7 @@ from app.services.internship_service import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD = "0015_wave4_public_risk_labels"
+HEAD = "0016_dob_hash_reconcile"
 PARENT = "0013_wave5_calendar_interop"
 
 
