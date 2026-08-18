@@ -255,19 +255,39 @@ jobs:
               raise SystemExit("Raw credential found in evidence: " + ", ".join(leaks))
           print("Privacy scan passed: no raw Wave 4 browser credential in evidence")
           PY
+      - name: Prepare privacy-safe evidence attestation
+        id: evidence_prepare
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --profile wave4 "$GITHUB_WORKSPACE/test-results" "$RUNNER_TEMP/wave4-uploadable"
+      - name: Seal complete evidence inventory
+        id: evidence_manifest
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --seal "$RUNNER_TEMP/wave4-uploadable"
       - name: Scan all evidence for generic credential patterns
         id: evidence_privacy
         if: ${{ always() }}
-        run: python scripts/ci/scan_evidence.py test-results
-      - name: Upload evidence
-        if: ${{ always() && steps.evidence_privacy.outcome == 'success' }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/scan_evidence.py" "$RUNNER_TEMP/wave4-uploadable"
+      - name: Reverify immutable evidence inventory
+        id: evidence_integrity
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/evidence_manifest.py" --verify "$RUNNER_TEMP/wave4-uploadable"
+      - name: Validate exact pre-upload evidence schema
+        id: evidence_schema
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --validate-attestation "$RUNNER_TEMP/wave4-uploadable"
+      - name: Upload evidence attestation
+        if: ${{ always() && steps.evidence_prepare.outcome == 'success' && steps.evidence_manifest.outcome == 'success' && steps.evidence_privacy.outcome == 'success' && steps.evidence_integrity.outcome == 'success' && steps.evidence_schema.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wave4-private-reporting-evidence
-          path: test-results
+          name: wave4-private-reporting-attestation
+          path: ${{ runner.temp }}/wave4-uploadable
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: false
+      - name: Require complete passing producer results
+        id: evidence_result
+        if: ${{ always() }}
+        run: python "$GITHUB_WORKSPACE/scripts/ci/prepare_uploadable_evidence.py" --require-pass "$RUNNER_TEMP/wave4-uploadable"
 
   required:
     name: nyayone-wave4-required
