@@ -2365,7 +2365,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             for key in ("otp", "session", "guardian", "verification")
         ),
         {
-            key: probes[key]["unexpected_error"]
+            f"{key}_unexpected_errors": probes[key]["unexpected_error"]
             for key in ("otp", "session", "guardian", "verification")
         },
     )

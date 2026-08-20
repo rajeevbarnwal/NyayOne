@@ -370,6 +370,18 @@ def test_unexpected_worker_error_fails_both_modes():
         assert statuses["HARNESS-ERRORS"] == "FAIL"
 
 
+def test_harness_error_evidence_uses_scanner_safe_count_keys():
+    results = _expectation_results(_report(vulnerable=False), "hardened")
+    harness = next(item for item in results if item["id"] == "HARNESS-ERRORS")
+
+    assert harness["observed"] == {
+        "otp_unexpected_errors": 0,
+        "session_unexpected_errors": 0,
+        "guardian_unexpected_errors": 0,
+        "verification_unexpected_errors": 0,
+    }
+
+
 def test_hardened_requires_the_exact_rejection_constraint_multiset():
     for kind, assertion_id in (
         ("otp", "HARD-OTP"),
