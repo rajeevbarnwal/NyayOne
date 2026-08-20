@@ -201,6 +201,14 @@ class OtpChallenge(TimestampedBase):
         CheckConstraint("attempts >= 0", name="attempts_nonneg"),
         CheckConstraint("max_attempts > 0", name="max_positive"),
         CheckConstraint("attempts <= max_attempts", name="attempts_le_max"),
+        sa.Index(
+            "uq_otp_challenges_one_active_per_registration_purpose",
+            "registration_id",
+            "purpose",
+            unique=True,
+            postgresql_where=sa.text("consumed_at IS NULL"),
+            sqlite_where=sa.text("consumed_at IS NULL"),
+        ),
     )
 
 
@@ -282,6 +290,13 @@ class AuthSession(TimestampedBase):
     __table_args__ = (
         UniqueConstraint("token_hash", name="uq_auth_sessions_token_hash"),
         _in("status", AUTH_SESSION_STATUSES, "status"),
+        sa.Index(
+            "uq_auth_sessions_one_active_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=sa.text("status = 'active'"),
+            sqlite_where=sa.text("status = 'active'"),
+        ),
     )
 
 
@@ -333,6 +348,9 @@ class StudentVerification(TimestampedBase):
     method: Mapped[str] = mapped_column(String(32), default="institutional_email", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     __table_args__ = (
+        UniqueConstraint(
+            "registration_id", name="uq_student_verifications_registration_id"
+        ),
         _in("method", VERIFICATION_METHODS, "method"),
         _in("status", VERIFICATION_STATUSES, "status"),
     )
@@ -344,7 +362,15 @@ class GuardianConsent(TimestampedBase):
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     __table_args__ = (
+        UniqueConstraint(
+            "registration_id", name="uq_guardian_consents_registration_id"
+        ),
         _in("status", GUARDIAN_STATUSES, "status"),
+        CheckConstraint(
+            "(status = 'verified' AND verified = true) OR "
+            "(status IN ('pending', 'sent', 'rejected') AND verified = false)",
+            name="verified_matches_status",
+        ),
     )
 
 

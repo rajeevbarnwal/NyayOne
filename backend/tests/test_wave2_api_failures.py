@@ -54,6 +54,14 @@ AMOUNT = W.AMOUNT_PAISE
 PAY_SIG = "X-Payment-Signature"
 
 
+class _FrozenRateLimitClock:
+    """Keep fixed-window boundary tests independent of the wall clock."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return T0 if tz is not None else T0.replace(tzinfo=None)
+
+
 @pytest.fixture(scope="module")
 def rig():
     rig = W.ApiRig()
@@ -63,6 +71,7 @@ def rig():
 
 @pytest.fixture()
 def ctx(monkeypatch, rig):
+    monkeypatch.setattr(rate_limit, "datetime", _FrozenRateLimitClock)
     context = rig.context(monkeypatch, now=T0)
     yield context
     rate_limit.reset()

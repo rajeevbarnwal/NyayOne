@@ -4,10 +4,11 @@
 #   * alembic upgrades to head with no drift and round-trips through base,
 #   * the live schema/constraint/FK-index/version surface is correct,
 #   * (PostgreSQL only) the earlier-wave runtime concurrency + append-only gate,
-#   * the NYAY-16 PostgreSQL 16 populated-migration lifecycle/preflight gate,
 #   * (PostgreSQL only) the WAVE 2 target-runtime gate — see
 #     scripts/wave2_db_gate.sh, which owns assertions A1..A8 and is also
-#     runnable on its own.
+#     runnable on its own,
+#   * the NYAY-16 PostgreSQL 16 populated-migration lifecycle/preflight gate,
+#   * the NYAY-3 PostgreSQL 16 cardinality/concurrency/service-race gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -54,3 +55,7 @@ echo "== NYAY-16 migration lifecycle/preflight gate (exact PostgreSQL 16 + pgvec
 # production/staging-named, query-routed and non-PostgreSQL control URLs.
 NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py \
   --output test-results/nyay16-postgres/summary.json
+echo "== NYAY-3 registration cardinality/concurrency gate (PostgreSQL 16 + pgvector) =="
+"$PY" scripts/nyay3_postgres_characterization.py \
+  --expect hardened \
+  --output test-results/nyay3-postgres/summary.json
