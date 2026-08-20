@@ -13,11 +13,12 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 -- register every mapped table
 from app.api.v1 import auth_student as ep
+from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
-from app.models.registration import StudentVerification
+from app.models.registration import StudentRegistration, StudentVerification
 from app.schemas.registration import InstitutionalEmailVerificationRequest
 
 
@@ -78,10 +79,10 @@ def _registration(client: TestClient, sender: CapturingSender) -> str:
         json={"registration_id": registration_id, "code": sender.sent[-1][1]},
     )
     assert verified.status_code == 200
+    client.headers["Origin"] = settings.cors_origins[0]
     saved = client.patch(
         "/api/v1/auth/student/profile",
         json={
-            "registration_id": registration_id,
             "college": "National Law School of India University",
             "year_of_study": "3rd year",
             "enrolment_number": "KA/1234/2023",
@@ -95,14 +96,10 @@ def _registration(client: TestClient, sender: CapturingSender) -> str:
 def test_email_length_boundary_is_exactly_254():
     suffix = "@nls.ac.in"
     at_limit = f"{'a' * (254 - len(suffix))}{suffix}"
-    request = InstitutionalEmailVerificationRequest(
-        registration_id=uuid.uuid4(), institutional_email=at_limit
-    )
+    request = InstitutionalEmailVerificationRequest(institutional_email=at_limit)
     assert len(request.institutional_email) == 254
     with pytest.raises(ValidationError):
-        InstitutionalEmailVerificationRequest(
-            registration_id=uuid.uuid4(), institutional_email=f"a{at_limit}"
-        )
+        InstitutionalEmailVerificationRequest(institutional_email=f"a{at_limit}")
 
 
 @pytest.mark.parametrize(
@@ -124,10 +121,7 @@ def test_invalid_email_is_typed_422_with_zero_mutation(ctx, invalid_email: str):
 
     response = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={
-            "registration_id": registration_id,
-            "institutional_email": invalid_email,
-        },
+        json={"institutional_email": invalid_email},
     )
 
     assert response.status_code == 422
@@ -151,10 +145,7 @@ def test_valid_saved_email_is_accepted_and_audited_without_pii(ctx):
 
     response = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={
-            "registration_id": registration_id,
-            "institutional_email": "  ADITI@NLS.AC.IN  ",
-        },
+        json={"institutional_email": "  ADITI@NLS.AC.IN  "},
     )
 
     assert response.status_code == 202
@@ -166,6 +157,9 @@ def test_valid_saved_email_is_accepted_and_audited_without_pii(ctx):
             )
         )
         assert audit is not None
+        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
+        assert audit.actor_user_id == registration.user_id
+        assert audit.actor_role == "student"
         assert audit.after_state == {
             "registration_id": registration_id,
             "status": "pending",
@@ -179,10 +173,7 @@ def test_different_email_is_typed_422_and_not_audited(ctx):
 
     response = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={
-            "registration_id": registration_id,
-            "institutional_email": "other@nls.ac.in",
-        },
+        json={"institutional_email": "other@nls.ac.in"},
     )
 
     assert response.status_code == 422

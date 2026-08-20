@@ -217,7 +217,7 @@ try {
   const loginBrowserState = await page.evaluate(({ mobile, otp }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
     const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
-    const allowedSessionKeys = new Set([registrationKey]);
+    const allowedSessionKeys = new Set();
     const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
     const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
     const local = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
@@ -228,9 +228,7 @@ try {
       .map((entry) => entry.trim().split('=', 1)[0])
       .filter(Boolean)
       .sort();
-    const nonRegistrationValues = Object.entries({ ...local, ...session })
-      .filter(([key]) => key !== registrationKey)
-      .map(([, value]) => String(value ?? ''));
+    const browserValues = Object.values({ ...local, ...session }).map((value) => String(value ?? ''));
     return {
       localKeys: Object.keys(local).sort(),
       sessionKeys: Object.keys(session).sort(),
@@ -239,7 +237,8 @@ try {
       unexpectedLocalKeys: Object.keys(local).filter((key) => !allowedLocalKeys.has(key)),
       unexpectedSessionKeys: Object.keys(session).filter((key) => !allowedSessionKeys.has(key)),
       credentialKeyLeak: [...Object.keys(local), ...Object.keys(session)].some((key) => forbiddenKey.test(key)),
-      credentialValueLeak: nonRegistrationValues.some((value) => credentialValue.test(value)),
+      credentialValueLeak: browserValues.some((value) => credentialValue.test(value)),
+      registrationCapabilityLeak: registrationKey in session || serialized.includes(registrationKey),
       authCookieVisible: visibleCookieNames.some((name) => /(?:session|auth|token|bearer)/i.test(name)),
     };
   }, { mobile: loginMobile, otp: loginCode });
@@ -252,6 +251,7 @@ try {
     loginBrowserState.secretLeak === false
       && loginBrowserState.credentialKeyLeak === false
       && loginBrowserState.credentialValueLeak === false
+      && loginBrowserState.registrationCapabilityLeak === false
       && loginBrowserState.authCookieVisible === false
       && loginBrowserState.unexpectedLocalKeys.length === 0
       && loginBrowserState.unexpectedSessionKeys.length === 0);

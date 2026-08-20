@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from urllib.parse import urlsplit
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -76,6 +77,77 @@ class ActorContext:
 
 ANONYMOUS = ActorContext()
 
+_COOKIE_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _canonical_http_origin(value: str | None) -> str | None:
+    """Return a comparison-safe HTTP(S) origin, never a URL prefix."""
+
+    raw = (value or "").strip()
+    if not raw or raw in {"null", "*"}:
+        return None
+    try:
+        parsed = urlsplit(raw)
+        port = parsed.port
+    except ValueError:
+        return None
+    scheme = parsed.scheme.casefold()
+    host = (parsed.hostname or "").casefold()
+    if (
+        scheme not in {"http", "https"}
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path != ""
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    authority_host = f"[{host}]" if ":" in host else host
+    if port is None or (scheme, port) in {("http", 80), ("https", 443)}:
+        authority = authority_host
+    else:
+        authority = f"{authority_host}:{port}"
+    return f"{scheme}://{authority}"
+
+
+def require_trusted_cookie_origin(request: Request) -> None:
+    """Reject cross-origin mutation whenever browser session authority exists.
+
+    Public registration/OTP requests and test-only header actors do not depend
+    on ambient browser credentials, so they remain compatible. Safe reads also
+    remain available without an Origin header.
+    """
+
+    if request.method.upper() not in _COOKIE_MUTATING_METHODS:
+        return
+    if not request.cookies.get(settings.auth_session_cookie_name):
+        return
+
+    origin_headers = request.headers.getlist("origin")
+    if not origin_headers or not origin_headers[0].strip():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "csrf_origin_required"},
+        )
+    if len(origin_headers) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "csrf_origin_untrusted"},
+        )
+    origin_header = origin_headers[0]
+    supplied = _canonical_http_origin(origin_header)
+    trusted = {
+        origin
+        for configured in settings.cors_origins
+        if (origin := _canonical_http_origin(configured)) is not None
+    }
+    if supplied is None or supplied not in trusted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "csrf_origin_untrusted"},
+        )
+
 
 def build_actor_context(claims: dict | None) -> ActorContext:
     """Map verified IdP claims (from P0.1/P0.2) into an ActorContext.
@@ -123,8 +195,14 @@ def get_actor_context(
     cookie = request.cookies.get(settings.auth_session_cookie_name)
     if cookie:
         claims = login_service.session_claims(
-            session, cookie, datetime.now(timezone.utc)
+            session,
+            cookie,
+            datetime.now(timezone.utc),
+            touch=False,
         )
+        if claims is None:
+            return ANONYMOUS
+        require_trusted_cookie_origin(request)
         return build_actor_context(claims)
 
     environment = (settings.app_env or "").strip().lower()

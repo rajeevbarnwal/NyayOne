@@ -14,7 +14,9 @@ import {
 import { STUB_OTP_CODE } from '../student/lib/authFlow';
 import {
   RegistrationApiError,
+  clearRegistrationSession,
   loadRegistrationSession,
+  notifyStudentAuthChanged,
   registerStudent,
   resendStudentOtp,
   saveRegistrationSession,
@@ -103,7 +105,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [sv, setSv] = useState<StudentVerifyInput>(EMPTY_STUDENT_VERIFY);
   const [dob, setDob] = useState('');
   const [srec, setSrec] = useState<StudentVerificationRecord | null>(null);
-  const [guardian, setGuardian] = useState<GuardianConsent | null>(null);
+  const [guardian] = useState<GuardianConsent | null>(null);
   const restoredRegistration = useMemo(() => loadRegistrationSession(), []);
   const [serverRegistrationId, setServerRegistrationId] = useState<string | null>(
     restoredRegistration?.registrationId ?? null,
@@ -201,6 +203,8 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
       setBusy(true);
       try {
         await verifyStudentOtp(serverRegistrationId, otpInput);
+        notifyStudentAuthChanged();
+        setServerRegistrationId(null);
         setOtpMsg(null);
         pushLedger('OTP verified');
         setPhase('consent');
@@ -274,18 +278,11 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     pushLedger(`Student check: ${r.status}`);
     setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
   }
-  function acceptGuardian() {
-    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'verified', withdrawn: false });
-    pushLedger('Guardian consent verified');
-  }
-  function rejectGuardian() {
-    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'rejected', withdrawn: false });
-    pushLedger('Guardian consent rejected');
-  }
   function resetFlow() {
     clearAuthSnapshot(role);
+    clearRegistrationSession();
     setPhase('register'); setChallenge(null); setOtpInput(''); setOtpMsg(null); setDestMasked(null);
-    setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setGuardian(null); setLedger([]);
+    setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setLedger([]);
     setProfile(EMPTY_LAWYER_PROFILE); setSv(EMPTY_STUDENT_VERIFY); setDob('');
     setServerRegistrationId(null); setServerAttemptsLeft(3);
   }
@@ -429,9 +426,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             {minorCtx.isMinor && (
               <div className="ui-banner ui-banner--warn" role="status">
                 <span className="ui-banner__mark" aria-hidden>!</span>
-                <span>Minor detected — guardian consent required.&nbsp;</span>
-                <button type="button" className="btn tap" onClick={acceptGuardian}>Guardian accepts</button>
-                <button type="button" className="btn tap" onClick={rejectGuardian}>Guardian declines</button>
+                <span>Minor detected — guardian consent must be completed through the verified guardian channel. A student cannot approve or decline it.</span>
               </div>
             )}
             <PrivacyNotice>{DPDP_MINIMISATION_NOTICE}</PrivacyNotice>

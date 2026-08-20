@@ -748,7 +748,7 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
-    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_or_nyay3(self) -> None:
+    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_nyay3_or_nyay2(self) -> None:
         policy = load("verify_nyayone_ci")
         source = policy.DB_GATE
         original = source.read_text(encoding="utf-8")
@@ -762,8 +762,13 @@ jobs:
             "  --expect hardened \\\n"
             "  --output test-results/nyay3-postgres/summary.json"
         )
+        nyay2 = (
+            '"$PY" scripts/nyay2_postgres_authorization_gate.py \\\n'
+            "  --report test-results/nyay2-postgres/summary.json"
+        )
         self.assertEqual(original.count(nyay16), 1)
         self.assertEqual(original.count(nyay3), 1)
+        self.assertEqual(original.count(nyay2), 1)
         mutations = {
             "deleted NYAY-16 invocation": original.replace(nyay16, "true", 1),
             "wrong NYAY-16 script": original.replace(
@@ -803,6 +808,37 @@ jobs:
             "NYAY-3 ordered before NYAY-16": original.replace(
                 nyay3, "true", 1
             ).replace(nyay16, nyay3 + "\n" + nyay16, 1),
+            "deleted NYAY-2 invocation": original.replace(nyay2, "true", 1),
+            "duplicated NYAY-2 invocation": original.replace(
+                nyay2, nyay2 + "\n" + nyay2, 1
+            ),
+            "wrong NYAY-2 script": original.replace(
+                "scripts/nyay2_postgres_authorization_gate.py",
+                "scripts/not-the-nyay2-gate.py",
+                1,
+            ),
+            "discarded NYAY-2 output": original.replace(
+                nyay2, nyay2 + " >/dev/null", 1
+            ),
+            "conditional NYAY-2 bypass": original.replace(
+                nyay2, "if false; then\n" + nyay2 + "\nfi", 1
+            ),
+            "NYAY-2 ordered before NYAY-3": original.replace(
+                nyay2, "true", 1
+            ).replace(nyay3, nyay2 + "\n" + nyay3, 1),
+            "altered NYAY-2 report": original.replace(
+                "test-results/nyay2-postgres/summary.json",
+                "test-results/nyay2-postgres/substitute.json",
+                1,
+            ),
+            "NYAY-2 non-executing help mode": original.replace(
+                "  --report test-results/nyay2-postgres/summary.json",
+                "  --help --report test-results/nyay2-postgres/summary.json",
+                1,
+            ),
+            "masked NYAY-2 failure": original.replace(
+                nyay2, nyay2 + " || true", 1
+            ),
         }
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "db_gate.sh"
@@ -820,6 +856,11 @@ jobs:
                     if label == "deleted NYAY-3 invocation":
                         self.assertTrue(
                             any("invoke the exact NYAY-3" in item for item in failures),
+                            failures,
+                        )
+                    if label == "deleted NYAY-2 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-2" in item for item in failures),
                             failures,
                         )
 

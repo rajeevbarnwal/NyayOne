@@ -18,7 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the CI bootstrap
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 DB_GATE = ROOT / "backend" / "scripts" / "db_gate.sh"
-EXPECTED_DB_GATE_SHA256 = "7e994c07495d511eb0126f155f0e87d26c55a90518b42ae2b780257a1611a125"
+EXPECTED_DB_GATE_SHA256 = "2376bb4947b4197a20719f4627638b208cb7bf856b20681299888654d512581c"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -26,6 +26,10 @@ EXPECTED_NYAY16_DB_GATE_COMMAND = (
 EXPECTED_NYAY3_DB_GATE_COMMAND = (
     '"$PY" scripts/nyay3_postgres_characterization.py '
     "--expect hardened --output test-results/nyay3-postgres/summary.json"
+)
+EXPECTED_NYAY2_DB_GATE_COMMAND = (
+    '"$PY" scripts/nyay2_postgres_authorization_gate.py '
+    "--report test-results/nyay2-postgres/summary.json"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
@@ -568,8 +572,8 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
 
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
-    leaving the workflow untouched while deleting/bypassing NYAY-16 or NYAY-3
-    cannot produce a false green.
+    leaving the workflow untouched while deleting/bypassing NYAY-16, NYAY-3,
+    or NYAY-2 cannot produce a false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -591,6 +595,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     canonical = _canonical_shell(executable)
     nyay16 = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
     nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
+    nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
     if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
@@ -598,6 +603,10 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay3) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-3 PostgreSQL gate once"
+        )
+    if canonical.count(nyay2) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-2 PostgreSQL gate once"
         )
     wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
     if (
@@ -615,6 +624,29 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     ):
         failures.append(
             f"{path}: NYAY-3 PostgreSQL gate must remain after the NYAY-16 stage"
+        )
+    if (
+        nyay3 not in canonical
+        or nyay2 not in canonical
+        or canonical.index(nyay2) < canonical.index(nyay3)
+    ):
+        failures.append(
+            f"{path}: NYAY-2 PostgreSQL gate must remain after the NYAY-3 stage"
+        )
+
+    # NYAY-2 is the final mandatory nested stage. Requiring its exact command
+    # to be the last executable line also rejects wrappers such as ``if
+    # false``, ``|| true``, ``--help``, redirection, or a non-executing echo.
+    # With db_gate.sh's set -euo pipefail this keeps BLOCKED (78) and FAIL (1)
+    # fatal instead of allowing a later command to turn the job green.
+    logical_commands = [
+        _canonical_shell(line)
+        for line in re.sub(r"\\\s*\n", " ", executable).splitlines()
+        if line.strip()
+    ]
+    if not logical_commands or logical_commands[-1] != nyay2:
+        failures.append(
+            f"{path}: exact NYAY-2 PostgreSQL gate must be the final unconditional command"
         )
     return failures
 

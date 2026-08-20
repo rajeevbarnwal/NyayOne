@@ -40,6 +40,51 @@ class OtpError(Exception):
         self.attempts_left = attempts_left
 
 
+def registration_is_authorizable(
+    registration: StudentRegistration | None,
+) -> bool:
+    """One fail-closed predicate for every registration-bound capability.
+
+    ``otp_pending`` is intentionally eligible because signup verification uses
+    this boundary. Individual callers apply any narrower lifecycle state they
+    require after deletion/quarantine has been rejected here.
+    """
+
+    return bool(
+        registration is not None
+        and registration.deleted_at is None
+        and registration.status != "deleted"
+        and registration.dob_hash_state == "verified"
+    )
+
+
+def registration_authority_filters() -> tuple[object, ...]:
+    """SQL predicates matching :func:`registration_is_authorizable`.
+
+    Callers that resolve an owner from a non-unique ``user_id`` must filter in
+    SQL *before* applying a two-row ambiguity bound. Filtering Python objects
+    after ``LIMIT 2`` can hide a third eligible row behind an ineligible one.
+    """
+
+    return (
+        StudentRegistration.deleted_at.is_(None),
+        StudentRegistration.status != "deleted",
+        StudentRegistration.dob_hash_state == "verified",
+    )
+
+
+def registration_accepts_otp_purpose(
+    registration: StudentRegistration | None,
+    purpose: str,
+) -> bool:
+    """Bind the one-use signup UUID to the pre-activation lifecycle only."""
+
+    return bool(
+        registration_is_authorizable(registration)
+        and (purpose != "signup" or registration.status == "otp_pending")
+    )
+
+
 def _gen_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
@@ -83,12 +128,13 @@ def lock_registration_for_update(
 ) -> StudentRegistration | None:
     """Lock the stable OTP parent before any child decision or replacement."""
 
-    return session.scalar(
+    registration = session.scalar(
         select(StudentRegistration)
         .where(StudentRegistration.id == registration_id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    return registration if registration_is_authorizable(registration) else None
 
 
 def active_challenges_for_replacement(
@@ -128,7 +174,8 @@ def issue_challenge(
     only an opaque outbox identifier; the delivery payload is encrypted.
     """
     now = _as_utc(now)
-    if lock_registration_for_update(session, registration_id) is None:
+    registration = lock_registration_for_update(session, registration_id)
+    if not registration_accepts_otp_purpose(registration, purpose):
         raise OtpError(404, "no_active_challenge")
 
     try:
@@ -199,7 +246,7 @@ def verify(
     # Use the same stable-parent -> child order as issue/resend so verification
     # cannot deadlock with a concurrent replacement.
     registration = lock_registration_for_update(session, registration_id)
-    if registration is None or registration.dob_hash_state != "verified":
+    if not registration_accepts_otp_purpose(registration, purpose):
         # Match the pre-existing unknown/no-challenge shape so quarantine does
         # not create a registration-existence oracle.
         raise OtpError(404, "no_active_challenge")
@@ -263,7 +310,7 @@ def resend(
     destination_ct: str | None = None,
 ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
     registration = lock_registration_for_update(session, registration_id)
-    if registration is None or registration.dob_hash_state != "verified":
+    if not registration_accepts_otp_purpose(registration, purpose):
         raise OtpError(404, "no_active_challenge")
     if within_cooldown(session, registration_id, now, purpose):
         raise OtpError(429, "resend_cooldown")

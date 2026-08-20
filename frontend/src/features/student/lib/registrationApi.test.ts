@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearRegistrationSession,
   loadRegistrationSession,
   getStudentSession,
   logoutStudent,
@@ -9,9 +10,11 @@ import {
   saveRegistrationSession,
   startLoginOtp,
   verifyLoginOtp,
+  verifyStudentOtp,
 } from './registrationApi';
 
 afterEach(() => {
+  clearRegistrationSession();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -46,7 +49,7 @@ describe('server-authoritative student registration API', () => {
     });
   });
 
-  it('maps every legacy academic field to the profile API', async () => {
+  it('maps every academic field without sending an actor-selected registration UUID', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ status: 'saved' }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -54,7 +57,6 @@ describe('server-authoritative student registration API', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await saveAcademicProfile({
-      registrationId: 'opaque-registration-id',
       college: 'NLSIU',
       yearOfStudy: '3rd year',
       enrolmentNumber: 'KA/1234/2023',
@@ -63,7 +65,6 @@ describe('server-authoritative student registration API', () => {
     });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
-      registration_id: 'opaque-registration-id',
       college: 'NLSIU',
       year_of_study: '3rd year',
       enrolment_number: 'KA/1234/2023',
@@ -80,7 +81,6 @@ describe('server-authoritative student registration API', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(requestInstitutionalEmailVerification(
-      'opaque-registration-id',
       '  aditi@nls.ac.in  ',
     )).resolves.toEqual({ status: 'pending' });
 
@@ -88,13 +88,15 @@ describe('server-authoritative student registration API', () => {
     expect(url).toContain('/api/v1/auth/student/verification/email/request');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({
-      registration_id: 'opaque-registration-id',
       institutional_email: 'aditi@nls.ac.in',
     });
   });
 
-  it('persists only opaque/minimal state and removes the legacy PII draft', () => {
-    const session = new Map<string, string>();
+  it('keeps OTP bootstrap state in memory only and erases retired browser entries', () => {
+    const registrationId = '00000000-0000-4000-8000-000000000123';
+    const session = new Map<string, string>([
+      ['legalsaathi.student.registration.v2', JSON.stringify({ registrationId })],
+    ]);
     const local = new Map<string, string>([
       ['legalsaathi.student.profile.v1', JSON.stringify({ mobile: '9876543210', fullName: 'Aditi Nair' })],
     ]);
@@ -112,18 +114,137 @@ describe('server-authoritative student registration API', () => {
     });
 
     saveRegistrationSession({
-      registrationId: 'opaque-registration-id',
+      registrationId,
       destinationMasked: '••••••3210',
       issuedAt: 123,
       isMinor: false,
       guardianConsentPending: false,
     });
 
-    expect(loadRegistrationSession()?.registrationId).toBe('opaque-registration-id');
+    expect(loadRegistrationSession()?.registrationId).toBe(registrationId);
+    expect(session.has('legalsaathi.student.registration.v2')).toBe(false);
     expect(local.has('legalsaathi.student.profile.v1')).toBe(false);
-    const serialized = [...session.values()].join(' ');
-    expect(serialized).not.toContain('9876543210');
-    expect(serialized).not.toContain('Aditi');
+    const browserState = JSON.stringify({
+      local: Object.fromEntries(local),
+      session: Object.fromEntries(session),
+    });
+    expect(browserState).not.toContain(registrationId);
+    expect(browserState).not.toContain('9876543210');
+    expect(browserState).not.toContain('Aditi');
+  });
+
+  it('clears the in-memory signup reference after OTP authentication', async () => {
+    const registrationId = '00000000-0000-4000-8000-000000000123';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ status: 'authenticated' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    saveRegistrationSession({
+      registrationId,
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
+
+    await verifyStudentOtp(registrationId, '123456');
+
+    expect(loadRegistrationSession()).toBeNull();
+  });
+
+  it('preserves the in-memory signup reference after an incorrect OTP for retry or resend', async () => {
+    const registrationId = '00000000-0000-4000-8000-000000000123';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { code: 'incorrect_otp', attempts_left: 2 },
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } })));
+    saveRegistrationSession({
+      registrationId,
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
+
+    await expect(verifyStudentOtp(registrationId, '000000')).rejects.toEqual(
+      expect.objectContaining({
+        status: 401,
+        code: 'incorrect_otp',
+        attemptsLeft: 2,
+      }),
+    );
+    expect(loadRegistrationSession()?.registrationId).toBe(registrationId);
+  });
+
+  it('never places the bootstrap UUID in protected calls or browser-managed surfaces', async () => {
+    const registrationId = '00000000-0000-4000-8000-000000000123';
+    const local = new Map<string, string>();
+    const session = new Map<string, string>();
+    const storage = (map: Map<string, string>): Storage => ({
+      get length() { return map.size; },
+      clear: () => map.clear(),
+      getItem: (key) => map.get(key) ?? null,
+      key: (index) => [...map.keys()][index] ?? null,
+      removeItem: (key) => { map.delete(key); },
+      setItem: (key, value) => { map.set(key, value); },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ status: 'saved' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+    vi.stubGlobal('window', {
+      localStorage: storage(local),
+      sessionStorage: storage(session),
+    });
+    vi.stubGlobal('document', { cookie: 'ui_preference=compact' });
+    vi.stubGlobal('location', { href: 'https://nyayone.example/s-15' });
+    vi.stubGlobal('fetch', fetchMock);
+    saveRegistrationSession({
+      registrationId,
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
+
+    await saveAcademicProfile({
+      college: 'NLSIU',
+      yearOfStudy: '3rd year',
+      enrolmentNumber: 'KA/1234/2023',
+      institutionalEmail: 'aditi@nls.ac.in',
+    });
+    await requestInstitutionalEmailVerification('aditi@nls.ac.in');
+
+    const transport = JSON.stringify(fetchMock.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      body: String((init as RequestInit).body ?? ''),
+    })));
+    const browserManaged = JSON.stringify({
+      local: Object.fromEntries(local),
+      session: Object.fromEntries(session),
+      cookie: document.cookie,
+      url: location.href,
+    });
+    expect(transport).not.toContain(registrationId);
+    expect(transport).not.toContain('registration_id');
+    expect(browserManaged).not.toContain(registrationId);
+    expect(browserManaged).not.toContain('legalsaathi.student.registration.v2');
+  });
+
+  it('treats typed authentication_required on a protected boundary as revocation', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { code: 'authentication_required' },
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } })));
+    saveRegistrationSession({
+      registrationId: '00000000-0000-4000-8000-000000000123',
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
+
+    await expect(requestInstitutionalEmailVerification('aditi@nls.ac.in'))
+      .rejects.toEqual(expect.objectContaining({ status: 401, code: 'authentication_required' }));
+    expect(loadRegistrationSession()).toBeNull();
   });
 
   it('preserves the production typed field-error contract', async () => {
@@ -169,6 +290,13 @@ describe('server-authoritative student registration API', () => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       }));
     vi.stubGlobal('fetch', fetchMock);
+    saveRegistrationSession({
+      registrationId: '00000000-0000-4000-8000-000000000123',
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
 
     const loginId = await startLoginOtp('9876543210');
     await verifyLoginOtp(loginId, '123456');
@@ -177,6 +305,7 @@ describe('server-authoritative student registration API', () => {
 
     expect(loginId).toBe('a'.repeat(32));
     expect(actor?.sub).toBe('opaque-user-id');
+    expect(loadRegistrationSession()).toBeNull();
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       expect.stringContaining('/api/v1/auth/student/login/otp/start'),
       expect.stringContaining('/api/v1/auth/student/login/otp/verify'),
@@ -197,5 +326,44 @@ describe('server-authoritative student registration API', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(getStudentSession()).resolves.toBeNull();
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('retires legacy UUID storage and module bootstrap on authenticated discovery', async () => {
+    const registrationId = '00000000-0000-4000-8000-000000000123';
+    const local = new Map<string, string>();
+    const session = new Map<string, string>();
+    const storage = (map: Map<string, string>): Storage => ({
+      get length() { return map.size; },
+      clear: () => map.clear(),
+      getItem: (key) => map.get(key) ?? null,
+      key: (index) => [...map.keys()][index] ?? null,
+      removeItem: (key) => { map.delete(key); },
+      setItem: (key, value) => { map.set(key, value); },
+    });
+    vi.stubGlobal('window', {
+      localStorage: storage(local),
+      sessionStorage: storage(session),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      authenticated: true,
+      actor: {
+        sub: 'opaque-user-id', roles: ['student'], student_profile_id: null,
+        student_verification: 'draft', is_minor: false, consent_state: ['registration'],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    saveRegistrationSession({
+      registrationId,
+      destinationMasked: '••••••3210',
+      issuedAt: 123,
+      isMinor: false,
+      guardianConsentPending: false,
+    });
+    session.set('legalsaathi.student.registration.v2', JSON.stringify({ registrationId }));
+
+    await expect(getStudentSession()).resolves.toEqual(
+      expect.objectContaining({ sub: 'opaque-user-id' }),
+    );
+    expect(loadRegistrationSession()).toBeNull();
+    expect(session.has('legalsaathi.student.registration.v2')).toBe(false);
   });
 });

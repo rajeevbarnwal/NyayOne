@@ -17,10 +17,7 @@ import {
   type StudentProfile,
 } from '../lib/settingsApi';
 import { getProfileDraft, updateProfileDraft, seedResumeDraft } from '../lib/profileStore';
-import {
-  loadRegistrationSession,
-  saveAcademicProfile,
-} from '../lib/registrationApi';
+import { RegistrationApiError, saveAcademicProfile } from '../lib/registrationApi';
 import {
   composeDisplayName,
   fullNameToParts,
@@ -137,15 +134,9 @@ function AcademicStep({ screenId }: { screenId: string }) {
     const e = validateStep(2, draft);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    const registration = loadRegistrationSession();
-    if (!registration) {
-      setErrors({ submit: 'Your registration session expired. Return to registration and verify your mobile again.' });
-      return;
-    }
     setSaving(true);
     try {
       await saveAcademicProfile({
-        registrationId: registration.registrationId,
         college,
         yearOfStudy,
         enrolmentNumber,
@@ -153,8 +144,12 @@ function AcademicStep({ screenId }: { screenId: string }) {
         barEnrolmentNumber,
       });
       nav('/s-11');
-    } catch {
-      setErrors({ submit: 'Academic details could not be saved. Please retry.' });
+    } catch (cause) {
+      setErrors({
+        submit: cause instanceof RegistrationApiError && cause.status === 401
+          ? 'Your session expired. Sign in again to save academic details.'
+          : 'Academic details could not be saved. Please retry.',
+      });
     } finally {
       setSaving(false);
     }

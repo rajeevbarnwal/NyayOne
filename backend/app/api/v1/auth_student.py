@@ -16,6 +16,7 @@ from typing import Callable
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Body,
     Depends,
     Header,
     HTTPException,
@@ -23,16 +24,22 @@ from fastapi import (
     Response,
 )
 from pydantic import BaseModel, ConfigDict, field_validator
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.auth import (
+    ActorContext,
+    Role,
+    get_actor_context,
+    require_trusted_cookie_origin,
+)
 from app.core.config import settings
 from app.core.crypto import active_key_version, decrypt, encrypt, keyed_hash
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.db.session import get_sessionmaker
 from app.models.registration import (
-    GuardianConsent,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
@@ -87,6 +94,67 @@ def _require_sender(sender: OtpSender | None) -> OtpSender:
         # Fail closed — never claim an OTP was sent when delivery isn't configured.
         raise HTTPException(status_code=503, detail={"code": "otp_delivery_unavailable"})
     return sender
+
+
+def _require_student_actor(
+    actor: ActorContext = Depends(get_actor_context),
+) -> ActorContext:
+    """Require the server-resolved student session for protected onboarding."""
+
+    if not actor.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "authentication_required"},
+        )
+    if not actor.has_role(Role.STUDENT):
+        raise HTTPException(status_code=403, detail={"code": "forbidden"})
+    return actor
+
+
+def _require_verification_reviewer(
+    actor: ActorContext = Depends(get_actor_context),
+) -> ActorContext:
+    """Require server-authenticated admin or legal-reviewer authority."""
+
+    if not actor.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "authentication_required"},
+        )
+    if not (
+        actor.has_role(Role.ADMIN) or actor.has_role(Role.LEGAL_REVIEWER)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "verification_reviewer_required"},
+        )
+    return actor
+
+
+def _owned_registration(
+    session: Session,
+    actor: ActorContext,
+) -> StudentRegistration:
+    """Resolve exactly one verified registration through its owner identity."""
+
+    candidates = list(
+        session.scalars(
+            select(StudentRegistration)
+            .where(
+                StudentRegistration.user_id == actor.user_id,
+                *otp_service.registration_authority_filters(),
+            )
+            .limit(2)
+        )
+    )
+    if len(candidates) != 1:
+        # Missing, deleted, quarantined, and structurally ambiguous ownership
+        # deliberately share one response and cannot become enumeration oracles.
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "registration_not_found"},
+        )
+    return candidates[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -168,11 +236,43 @@ def _otp_error(exc: otp_service.OtpError) -> HTTPException:
 
 
 @router.post("/otp/verify")
-def otp_verify(payload: OtpVerifyRequest, session: Session = Depends(get_session)) -> dict[str, str]:
+def otp_verify(
+    payload: OtpVerifyRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    now = _now()
     try:
-        otp_service.verify(session, payload.registration_id, payload.code, _now(), purpose="signup")
+        otp_service.verify(
+            session,
+            payload.registration_id,
+            payload.code,
+            now,
+            purpose="signup",
+            commit_on_success=False,
+        )
     except otp_service.OtpError as exc:
         raise _otp_error(exc) from exc
+    # Reuse the identity-map row locked and advanced to ``otp_verified`` by
+    # otp_service.verify. Refreshing here would clobber that uncommitted state
+    # with the database's prior ``otp_pending`` value.
+    registration = session.get(StudentRegistration, payload.registration_id)
+    if not otp_service.registration_is_authorizable(registration):
+        session.rollback()
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "no_active_challenge"},
+        )
+    try:
+        raw_token, _ = login_service.rotate_authenticated_session(
+            session, registration, now
+        )
+    except login_service.LoginError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code},
+        ) from exc
+    _set_session_cookie(response, raw_token)
     return {"status": "verified"}
 
 
@@ -183,8 +283,10 @@ def otp_resend(
     sender: OtpSender | None = Depends(get_otp_sender),
 ) -> dict[str, str]:
     provider = _require_sender(sender)
-    reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None or reg.dob_hash_state != "verified":
+    reg = otp_service.lock_registration_for_update(
+        session, payload.registration_id
+    )
+    if not otp_service.registration_accepts_otp_purpose(reg, "signup"):
         raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
     destination = decrypt(reg.mobile_ct)
     try:
@@ -207,18 +309,12 @@ def otp_resend(
 @router.patch("/profile")
 def update_academic_profile(
     payload: StudentAcademicProfileRequest,
+    actor: ActorContext = Depends(_require_student_actor),
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
-    """Persist the legacy-parity academic fields after OTP verification.
+    """Persist academic fields for the authenticated registration owner."""
 
-    The opaque registration identifier is a short-lived onboarding capability.
-    Academic writes remain blocked until the registration's OTP is verified.
-    """
-    from sqlalchemy import select
-
-    reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None or reg.dob_hash_state != "verified":
-        raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
+    reg = _owned_registration(session, actor)
     if reg.status not in {"otp_verified", "active"}:
         raise HTTPException(status_code=403, detail={"code": "otp_verification_required"})
     profile = session.scalar(
@@ -250,6 +346,7 @@ def update_academic_profile(
     session.flush()
     session.add(
         AuditEvent(
+            actor_user_id=actor.user_id,
             actor_role="student",
             action="student.profile.academic_updated",
             resource_type="student_profile",
@@ -470,6 +567,7 @@ def student_session(
 def student_logout(
     request: Request,
     response: Response,
+    _: None = Depends(require_trusted_cookie_origin),
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
     login_service.logout(
@@ -484,29 +582,27 @@ def student_logout(
 # --------------------------------------------------------------------------- #
 # Guardian consent + verification status                                      #
 # --------------------------------------------------------------------------- #
-class GuardianCompleteRequest(BaseModel):
+class EmptyProtectedRequest(BaseModel):
+    """Explicitly reject legacy UUID capability bodies on selector-free APIs."""
+
     model_config = ConfigDict(extra="forbid")
-    registration_id: uuid.UUID
 
 
 @router.post("/guardian-consent/complete")
 def guardian_consent_complete(
-    payload: GuardianCompleteRequest, session: Session = Depends(get_session)
+    _: EmptyProtectedRequest | None = Body(default=None),
+    actor: ActorContext = Depends(_require_student_actor),
+    session: Session = Depends(get_session),
 ) -> dict[str, str]:
-    reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None or reg.dob_hash_state != "verified":
-        raise HTTPException(status_code=404, detail={"code": "registration_not_found"})
+    reg = _owned_registration(session, actor)
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
-    from sqlalchemy import select
-
-    gc = session.scalar(select(GuardianConsent).where(GuardianConsent.registration_id == reg.id))
-    if gc is None:
-        raise HTTPException(status_code=404, detail={"code": "guardian_consent_not_found"})
-    gc.status = "verified"
-    gc.verified = True
-    session.commit()
-    return {"status": "verified"}
+    # No guardian authentication/proof ceremony exists yet. Student authority
+    # must never be promoted into guardian authority.
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "guardian_self_approval_forbidden"},
+    )
 
 
 class VerificationTransitionRequest(BaseModel):
@@ -523,20 +619,20 @@ class VerificationTransitionRequest(BaseModel):
 
 
 def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentVerification:
-    from sqlalchemy import select
-
+    registration = session.get(
+        StudentRegistration,
+        registration_id,
+        populate_existing=True,
+    )
     ver = session.scalar(
-        select(StudentVerification)
-        .join(
-            StudentRegistration,
-            StudentRegistration.id == StudentVerification.registration_id,
-        )
-        .where(
-            StudentVerification.registration_id == registration_id,
-            StudentRegistration.dob_hash_state == "verified",
+        select(StudentVerification).where(
+            StudentVerification.registration_id == registration_id
         )
     )
-    if ver is None:
+    if (
+        not otp_service.registration_is_authorizable(registration)
+        or ver is None
+    ):
         raise HTTPException(status_code=404, detail={"code": "verification_not_found"})
     return ver
 
@@ -544,22 +640,15 @@ def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentV
 @router.post("/verification/email/request", status_code=202)
 def request_institutional_email_verification(
     payload: InstitutionalEmailVerificationRequest,
+    actor: ActorContext = Depends(_require_student_actor),
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
     """Accept an S-15 verification request only for the saved email.
 
-    The registration identifier is the existing short-lived onboarding
-    capability. Invalid email syntax is rejected by the request schema before
-    this function runs, so it cannot mutate verification or audit state.
+    Invalid email syntax is rejected by the request schema before this function
+    runs, and registration ownership is resolved from the server session.
     """
-    from sqlalchemy import select
-
-    reg = session.get(StudentRegistration, payload.registration_id)
-    if reg is None or reg.dob_hash_state != "verified":
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "registration_not_found", "message": "Registration was not found"},
-        )
+    reg = _owned_registration(session, actor)
     if reg.status not in {"otp_verified", "active"}:
         raise HTTPException(
             status_code=403,
@@ -594,6 +683,7 @@ def request_institutional_email_verification(
     verification.status = "pending"
     session.add(
         AuditEvent(
+            actor_user_id=actor.user_id,
             actor_role="student",
             action="student.verification.email_requested",
             resource_type="student_verification",
@@ -606,14 +696,29 @@ def request_institutional_email_verification(
 
 
 @router.get("/verification/status")
-def verification_status(registration_id: uuid.UUID, session: Session = Depends(get_session)) -> dict[str, str]:
-    ver = _load_verification(session, registration_id)
+def verification_status(
+    request: Request,
+    actor: ActorContext = Depends(_require_student_actor),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    if request.query_params:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "validation_error",
+                "field": "query",
+            },
+        )
+    registration = _owned_registration(session, actor)
+    ver = _load_verification(session, registration.id)
     return {"status": ver.status, "method": ver.method}
 
 
 @router.post("/verification/status")
 def verification_transition(
-    payload: VerificationTransitionRequest, session: Session = Depends(get_session)
+    payload: VerificationTransitionRequest,
+    actor: ActorContext = Depends(_require_verification_reviewer),
+    session: Session = Depends(get_session),
 ) -> dict[str, str]:
     ver = _load_verification(session, payload.registration_id)
     allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
@@ -622,6 +727,23 @@ def verification_transition(
             status_code=409,
             detail={"code": "invalid_transition", "from": ver.status, "to": payload.status},
         )
+    before = ver.status
     ver.status = payload.status
+    reviewer_role = (
+        "legal_reviewer"
+        if actor.has_role(Role.LEGAL_REVIEWER)
+        else "admin"
+    )
+    session.add(
+        AuditEvent(
+            actor_user_id=actor.user_id,
+            actor_role=reviewer_role,
+            action="student.verification.status_changed",
+            resource_type="student_verification",
+            resource_id=ver.id,
+            before_state={"status": before},
+            after_state={"status": ver.status},
+        )
+    )
     session.commit()
     return {"status": ver.status}

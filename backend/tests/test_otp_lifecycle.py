@@ -126,3 +126,92 @@ def test_recovery_and_signup_challenges_independent(db_session: Session):
     _issue(db_session, reg.id, NOW, purpose="recovery")
     ch = otp_service.verify(db_session, reg.id, signup_code, NOW, purpose="signup")
     assert ch.consumed_at is not None
+
+
+def test_activated_registration_cannot_reopen_signup_otp_lifecycle(
+    db_session: Session,
+):
+    reg = _reg(db_session)
+    active_signup = db_session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.registration_id == reg.id,
+            OtpChallenge.purpose == "signup",
+            OtpChallenge.consumed_at.is_(None),
+        )
+    )
+    outbox = db_session.scalar(
+        select(OtpOutbox).where(OtpOutbox.challenge_id == active_signup.id)
+    )
+    signup_code = decrypt(outbox.code_ct or "")
+    otp_service.verify(db_session, reg.id, signup_code, NOW)
+    reg.status = "active"
+    db_session.commit()
+    challenge_before = [
+        (row.id, row.consumed_at, row.attempts, row.locked_until)
+        for row in db_session.scalars(
+            select(OtpChallenge).order_by(OtpChallenge.id)
+        )
+    ]
+    outbox_before = [
+        (row.id, row.status, row.code_ct, row.attempts)
+        for row in db_session.scalars(select(OtpOutbox).order_by(OtpOutbox.id))
+    ]
+
+    for operation in (
+        lambda: otp_service.issue_challenge(
+            db_session,
+            reg.id,
+            NOW + timedelta(minutes=1),
+            purpose="signup",
+            destination="9876543210",
+        ),
+        lambda: otp_service.resend(
+            db_session,
+            reg.id,
+            NOW + timedelta(minutes=1),
+            purpose="signup",
+            destination="9876543210",
+        ),
+        lambda: otp_service.verify(
+            db_session,
+            reg.id,
+            signup_code,
+            NOW + timedelta(minutes=1),
+            purpose="signup",
+        ),
+    ):
+        with pytest.raises(otp_service.OtpError) as error:
+            operation()
+        assert (error.value.status_code, error.value.code) == (
+            404,
+            "no_active_challenge",
+        )
+
+    assert reg.status == "active"
+    assert [
+        (row.id, row.consumed_at, row.attempts, row.locked_until)
+        for row in db_session.scalars(
+            select(OtpChallenge).order_by(OtpChallenge.id)
+        )
+    ] == challenge_before
+    assert [
+        (row.id, row.status, row.code_ct, row.attempts)
+        for row in db_session.scalars(select(OtpOutbox).order_by(OtpOutbox.id))
+    ] == outbox_before
+
+    # Activation closes only the signup capability; authenticated login and
+    # recovery purpose issuance remain available.
+    otp_service.issue_challenge(
+        db_session,
+        reg.id,
+        NOW + timedelta(minutes=2),
+        purpose="login",
+        destination="9876543210",
+    )
+    otp_service.issue_challenge(
+        db_session,
+        reg.id,
+        NOW + timedelta(minutes=2),
+        purpose="recovery",
+        destination="9876543210",
+    )
