@@ -68,13 +68,22 @@ def test_requirements_txt_is_constrained_by_the_lock_and_does_not_float():
     text = REQUIREMENTS.read_text(encoding="utf-8")
     assert "-c requirements.lock" in text, "requirements.txt must apply the lock"
     pinned = {normalise(name) for name, _ in read_pins(LOCK)}
+    direct: set[str] = set()
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line or line.startswith("-"):
             continue
         assert "==" in line, f"{line!r} floats; requirements.txt must not"
         distribution = line.partition("==")[0].split("[")[0].strip()
-        assert normalise(distribution) in pinned, f"{distribution} is not in the lock"
+        normalised = normalise(distribution)
+        direct.add(normalised)
+        assert normalised in pinned, f"{distribution} is not in the lock"
+
+    # SQLAlchemy's transitive dependency marker does not select greenlet on
+    # every supported host (notably macOS arm64), and a constraints file cannot
+    # install an otherwise-unselected distribution.  The runtime checker
+    # requires the lock's greenlet pin everywhere, so it must remain direct.
+    assert "greenlet" in direct, "greenlet must be a direct cross-platform dependency"
 
 
 def test_this_interpreter_satisfies_the_lock(capsys):

@@ -1074,12 +1074,12 @@ def main(argv: list[str] | None = None) -> int:
                             text("SELECT version_num FROM alembic_version")
                         )
                     scratch_engine.dispose()
-                same = heads["a"] == heads["b"] == "0015_wave4_public_risk_labels"
+                same = heads["a"] == heads["b"] == "0016_dob_hash_reconcile"
                 return same, heads
 
             rec.guard(
                 "A1.3",
-                "both paths land on head 0015_wave4_public_risk_labels",
+                "both paths land on head 0016_dob_hash_reconcile",
                 a1_3,
             )
 

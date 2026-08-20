@@ -17,6 +17,12 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the CI bootstrap
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
+DB_GATE = ROOT / "backend" / "scripts" / "db_gate.sh"
+EXPECTED_DB_GATE_SHA256 = "9ca699344cce998bbc9f5a3781fcc0973ba7c729dcfe13a4f9201b33763a48aa"
+EXPECTED_NYAY16_DB_GATE_COMMAND = (
+    'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
+    "--output test-results/nyay16-postgres/summary.json"
+)
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
 PINNED_ACTION = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
@@ -219,7 +225,7 @@ ALLOWED_STEP_CONDITIONS = {
 }
 NO_OP_RUN_COMMANDS = {":", "exit 0", "true"}
 EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
-    ("nyayone-policy-gate.yml", "policy-contracts"): "5799ddec4fe41387b6b5a37bc53f1f47d38358871dbcc8e6b64ce264033e207b",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "151bbfbfcab418fa90213523175b7b50ce0597d6504afcc2f5dd30eb79531838",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "88a98c87a1f5779f8da7a2896e4aa7577fbd770ad730b24e5cbc80636886c7dc",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -551,6 +557,45 @@ def _canonical_shell(command: str) -> str:
     )
     normalized = normalized.replace('"', "").replace("'", "")
     return " ".join(normalized.split())
+
+
+def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
+    """Seal the nested shell gate reached by required registration CI.
+
+    The workflow's semantic digest protects the call *to* db_gate.sh.  This
+    companion contract protects the executable reached through that call, so
+    leaving the workflow untouched while deleting/bypassing NYAY-16 cannot
+    produce a false green.
+    """
+
+    if not path.is_file() or path.is_symlink():
+        return [f"{path}: database gate is missing or unsafe"]
+    try:
+        raw = path.read_bytes()
+        source = raw.decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        return [f"{path}: database gate cannot be read: {type(exc).__name__}"]
+
+    failures: list[str] = []
+    if hashlib.sha256(raw).hexdigest() != EXPECTED_DB_GATE_SHA256:
+        failures.append(f"{path}: database gate SHA-256 differs from the sealed contract")
+
+    executable = "\n".join(
+        line for line in source.splitlines() if not line.lstrip().startswith("#")
+    )
+    executable = re.sub(r"\\\s*\n", " ", executable)
+    canonical = _canonical_shell(executable)
+    expected = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
+    if canonical.count(expected) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
+        )
+    wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
+    if wave2 not in canonical or expected not in canonical or canonical.index(expected) < canonical.index(wave2):
+        failures.append(
+            f"{path}: NYAY-16 PostgreSQL gate must remain after the inherited Wave 2 stage"
+        )
+    return failures
 
 
 def _duplicate_mapping_keys(text: str) -> list[str]:
@@ -944,6 +989,7 @@ def main() -> int:
         failures.append(
             "workflow filename inventory differs from the seven canonical required gates"
         )
+    failures.extend(check_db_gate_contract())
     failures.extend(
         failure for path in workflow_paths for failure in check_workflow(path)
     )

@@ -4,6 +4,7 @@
 #   * alembic upgrades to head with no drift and round-trips through base,
 #   * the live schema/constraint/FK-index/version surface is correct,
 #   * (PostgreSQL only) the earlier-wave runtime concurrency + append-only gate,
+#   * the NYAY-16 PostgreSQL 16 populated-migration lifecycle/preflight gate,
 #   * (PostgreSQL only) the WAVE 2 target-runtime gate — see
 #     scripts/wave2_db_gate.sh, which owns assertions A1..A8 and is also
 #     runnable on its own.
@@ -45,3 +46,11 @@ echo "== Wave 2 target-runtime gate (PostgreSQL 16 + pgvector) =="
 # runtime detection and exits 78 BLOCKED when the runtime is absent, which is a
 # louder and more honest signal than this script quietly printing "skipped".
 PYTHON="$PY" bash scripts/wave2_db_gate.sh
+echo "== NYAY-16 migration lifecycle/preflight gate (exact PostgreSQL 16 + pgvector) =="
+# db_gate.sh is itself the destructive, explicit database-gate entry point: it
+# already downgrades the caller's isolated target through base above.  Its
+# invocation is therefore the mutation opt-in for NYAY-16's additional random
+# scratch databases.  The Python gate still independently rejects remote,
+# production/staging-named, query-routed and non-PostgreSQL control URLs.
+NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py \
+  --output test-results/nyay16-postgres/summary.json
