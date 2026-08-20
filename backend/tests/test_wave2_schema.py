@@ -65,10 +65,11 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: student login/session tables, 0011 adds private reporting, 0012 adds
 #: internal moderation, 0013 adds calendar interoperability and 0014 adds the
 #: SAATHI-60 internship catalogue, and 0015 adds governed public-risk and
-#: right-of-reply tables, and 0016 adds the DOB reconciliation ledger.
+#: right-of-reply tables, 0016 adds the DOB reconciliation ledger, and 0017
+#: adds the registration cardinality invariants.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0016_dob_hash_reconcile"
+HEAD_REVISION = "0017_registration_invariants"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",

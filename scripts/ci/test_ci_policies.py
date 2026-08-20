@@ -116,61 +116,61 @@ class PolicyOracleTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-        predecessor = repr("0016_dob_hash_reconcile")
+        predecessor = repr("0017_registration_invariants")
         with tempfile.TemporaryDirectory() as directory:
             root = copied_root(directory)
             write_forward(
                 root,
-                "0017_valid_forward.py",
-                revision=repr("0017_valid_forward"),
+                "0018_valid_forward.py",
+                revision=repr("0018_valid_forward"),
                 down_revision=predecessor,
             )
             self.assertEqual(verifier.verify(root), [])
 
         mutants = {
             "duplicate root": {
-                "filename": "0017_duplicate_root.py",
-                "revision": repr("0017_duplicate_root"),
+                "filename": "0018_duplicate_root.py",
+                "revision": repr("0018_duplicate_root"),
                 "down_revision": "None",
                 "expected": "exactly one root",
             },
             "duplicate revision": {
-                "filename": "0017_duplicate_revision.py",
-                "revision": repr("0016_dob_hash_reconcile"),
+                "filename": "0018_duplicate_revision.py",
+                "revision": repr("0017_registration_invariants"),
                 "down_revision": predecessor,
                 "expected": "duplicate revision id",
             },
             "ordinal gap": {
-                "filename": "0018_gap.py",
-                "revision": repr("0018_gap"),
+                "filename": "0019_gap.py",
+                "revision": repr("0019_gap"),
                 "down_revision": predecessor,
                 "expected": "unique and contiguous",
             },
             "wrong predecessor": {
-                "filename": "0017_wrong_predecessor.py",
-                "revision": repr("0017_wrong_predecessor"),
-                "down_revision": repr("0015_wave4_public_risk_labels"),
+                "filename": "0018_wrong_predecessor.py",
+                "revision": repr("0018_wrong_predecessor"),
+                "down_revision": repr("0016_dob_hash_reconcile"),
                 "expected": "down_revision must be immediate predecessor",
             },
             "branch label": {
-                "filename": "0017_branch.py",
-                "revision": repr("0017_branch"),
+                "filename": "0018_branch.py",
+                "revision": repr("0018_branch"),
                 "down_revision": predecessor,
                 "branch_labels": repr("planted-branch"),
                 "expected": "branch_labels must be literal None",
             },
             "dependency": {
-                "filename": "0017_dependency.py",
-                "revision": repr("0017_dependency"),
+                "filename": "0018_dependency.py",
+                "revision": repr("0018_dependency"),
                 "down_revision": predecessor,
                 "depends_on": predecessor,
                 "expected": "depends_on must be literal None",
             },
             "multiple parents": {
-                "filename": "0017_multiple_parents.py",
-                "revision": repr("0017_multiple_parents"),
+                "filename": "0018_multiple_parents.py",
+                "revision": repr("0018_multiple_parents"),
                 "down_revision": repr(
-                    ("0016_dob_hash_reconcile", "0015_wave4_public_risk_labels")
+                    ("0017_registration_invariants", "0016_dob_hash_reconcile")
                 ),
                 "expected": "down_revision must be a literal string or null",
             },
@@ -748,34 +748,61 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
-    def test_nested_database_gate_cannot_drop_or_bypass_nyay16(self) -> None:
+    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_or_nyay3(self) -> None:
         policy = load("verify_nyayone_ci")
         source = policy.DB_GATE
         original = source.read_text(encoding="utf-8")
         self.assertEqual(policy.check_db_gate_contract(source), [])
-        invocation = (
+        nyay16 = (
             'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py \\\n'
             "  --output test-results/nyay16-postgres/summary.json"
         )
-        self.assertEqual(original.count(invocation), 1)
+        nyay3 = (
+            '"$PY" scripts/nyay3_postgres_characterization.py \\\n'
+            "  --expect hardened \\\n"
+            "  --output test-results/nyay3-postgres/summary.json"
+        )
+        self.assertEqual(original.count(nyay16), 1)
+        self.assertEqual(original.count(nyay3), 1)
         mutations = {
-            "deleted invocation": original.replace(invocation, "true", 1),
-            "wrong script": original.replace(
+            "deleted NYAY-16 invocation": original.replace(nyay16, "true", 1),
+            "wrong NYAY-16 script": original.replace(
                 "scripts/nyay16_postgres_gate.py",
                 "scripts/not-the-nyay16-gate.py",
                 1,
             ),
-            "missing database opt-in": original.replace(
+            "missing NYAY-16 database opt-in": original.replace(
                 "NYAY16_GATE_ALLOW_DATABASES=true ", "", 1
             ),
-            "discarded report": original.replace(
+            "discarded NYAY-16 report": original.replace(
                 "test-results/nyay16-postgres/summary.json", "/dev/null", 1
             ),
-            "conditional bypass": original.replace(
-                invocation,
-                "if false; then\n" + invocation + "\nfi",
+            "conditional NYAY-16 bypass": original.replace(
+                nyay16,
+                "if false; then\n" + nyay16 + "\nfi",
                 1,
             ),
+            "deleted NYAY-3 invocation": original.replace(nyay3, "true", 1),
+            "wrong NYAY-3 script": original.replace(
+                "scripts/nyay3_postgres_characterization.py",
+                "scripts/not-the-nyay3-gate.py",
+                1,
+            ),
+            "NYAY-3 red mode": original.replace(
+                "--expect hardened", "--expect current-vulnerable", 1
+            ),
+            "discarded NYAY-3 report": original.replace(
+                "test-results/nyay3-postgres/summary.json", "/dev/null", 1
+            ),
+            "duplicated NYAY-3 invocation": original.replace(
+                nyay3, nyay3 + "\n" + nyay3, 1
+            ),
+            "conditional NYAY-3 bypass": original.replace(
+                nyay3, "if false; then\n" + nyay3 + "\nfi", 1
+            ),
+            "NYAY-3 ordered before NYAY-16": original.replace(
+                nyay3, "true", 1
+            ).replace(nyay16, nyay3 + "\n" + nyay16, 1),
         }
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "db_gate.sh"
@@ -785,9 +812,14 @@ jobs:
                     candidate.write_text(mutated, encoding="utf-8")
                     failures = policy.check_db_gate_contract(candidate)
                     self.assertTrue(failures, label)
-                    if label == "deleted invocation":
+                    if label == "deleted NYAY-16 invocation":
                         self.assertTrue(
                             any("invoke the exact NYAY-16" in item for item in failures),
+                            failures,
+                        )
+                    if label == "deleted NYAY-3 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-3" in item for item in failures),
                             failures,
                         )
 

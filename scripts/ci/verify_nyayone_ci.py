@@ -18,10 +18,14 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the CI bootstrap
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 DB_GATE = ROOT / "backend" / "scripts" / "db_gate.sh"
-EXPECTED_DB_GATE_SHA256 = "9ca699344cce998bbc9f5a3781fcc0973ba7c729dcfe13a4f9201b33763a48aa"
+EXPECTED_DB_GATE_SHA256 = "7e994c07495d511eb0126f155f0e87d26c55a90518b42ae2b780257a1611a125"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
+)
+EXPECTED_NYAY3_DB_GATE_COMMAND = (
+    '"$PY" scripts/nyay3_postgres_characterization.py '
+    "--expect hardened --output test-results/nyay3-postgres/summary.json"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
@@ -564,8 +568,8 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
 
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
-    leaving the workflow untouched while deleting/bypassing NYAY-16 cannot
-    produce a false green.
+    leaving the workflow untouched while deleting/bypassing NYAY-16 or NYAY-3
+    cannot produce a false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -585,15 +589,32 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     )
     executable = re.sub(r"\\\s*\n", " ", executable)
     canonical = _canonical_shell(executable)
-    expected = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
-    if canonical.count(expected) != 1:
+    nyay16 = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
+    nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
+    if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
         )
+    if canonical.count(nyay3) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-3 PostgreSQL gate once"
+        )
     wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
-    if wave2 not in canonical or expected not in canonical or canonical.index(expected) < canonical.index(wave2):
+    if (
+        wave2 not in canonical
+        or nyay16 not in canonical
+        or canonical.index(nyay16) < canonical.index(wave2)
+    ):
         failures.append(
             f"{path}: NYAY-16 PostgreSQL gate must remain after the inherited Wave 2 stage"
+        )
+    if (
+        nyay16 not in canonical
+        or nyay3 not in canonical
+        or canonical.index(nyay3) < canonical.index(nyay16)
+    ):
+        failures.append(
+            f"{path}: NYAY-3 PostgreSQL gate must remain after the NYAY-16 stage"
         )
     return failures
 

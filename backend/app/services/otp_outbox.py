@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import active_key_version, decrypt, encrypt
@@ -73,13 +74,42 @@ def run_delivery(
     typed 502 to the user) or returns False (recovery — fire-and-forget so known
     vs unknown stays indistinguishable).
     """
-    row = session.get(OtpOutbox, intent.outbox_id)
+    # Discover only the immutable challenge key without taking the outbox lock.
+    # Delivery and supersession then both acquire challenge -> outbox, avoiding
+    # a lock-order inversion when they race.
+    challenge_id = session.scalar(
+        select(OtpOutbox.challenge_id).where(OtpOutbox.id == intent.outbox_id)
+    )
+    if challenge_id is None:
+        if raise_on_failure:
+            raise OtpSendError("otp delivery intent unavailable")
+        return False
+    challenge = session.scalar(
+        select(OtpChallenge)
+        .where(OtpChallenge.id == challenge_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    row = session.scalar(
+        select(OtpOutbox)
+        .where(OtpOutbox.id == intent.outbox_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if row is None or row.status == "void":
         if raise_on_failure:
             raise OtpSendError("otp delivery intent unavailable")
         return False
     if row.status == "sent":
         return True
+    if challenge is None or challenge.consumed_at is not None:
+        row.status = "void"
+        row.code_ct = None
+        row.last_error = "challenge_inactive"
+        session.commit()
+        if raise_on_failure:
+            raise OtpSendError("otp delivery challenge unavailable")
+        return False
     if not row.code_ct:
         row.status = "void"
         row.last_error = "missing_encrypted_payload"
