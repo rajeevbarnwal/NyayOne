@@ -103,10 +103,15 @@ def test_mobile_conflict(db_session: Session):
 
 
 def test_idempotent_replay_single_row(db_session: Session):
-    a = register_student(db_session, _req(), idempotency_key="req-1").registration
+    first = register_student(db_session, _req(), idempotency_key="req-1")
+    a = first.registration
     b = register_student(db_session, _req(), idempotency_key="req-1")
     assert a.id == b.registration.id
-    assert b.delivery is None  # replay never re-delivers
+    # A still-pending crash-resume returns the same persisted delivery intent;
+    # only the serialized HTTP finalizer can execute it.
+    assert b.replayed is True
+    assert b.delivery is not None and first.delivery is not None
+    assert b.delivery.outbox_id == first.delivery.outbox_id
     rows = db_session.scalars(select(StudentRegistration)).all()
     assert len(rows) == 1
 

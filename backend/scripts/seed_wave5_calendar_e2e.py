@@ -138,6 +138,7 @@ def provision(session, raw_session_token: str) -> dict[str, object]:
             status="active",
             is_minor=False,
             idempotency_key="wave5-calendar-e2e-registration",
+            idempotency_key_legacy=True,
         )
         session.add(registration)
     else:

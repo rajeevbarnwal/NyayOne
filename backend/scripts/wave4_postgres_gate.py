@@ -30,7 +30,7 @@ if str(BACKEND) not in sys.path:
 from app.core.config import is_isolated_wave4_database_url
 
 BLOCKED = 78
-HEAD = "0017_registration_invariants"
+HEAD = "0018_registration_idempotency"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",

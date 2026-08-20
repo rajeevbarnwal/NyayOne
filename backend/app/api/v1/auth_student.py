@@ -58,6 +58,7 @@ from app.services import (
     recovery_service,
     registration_service,
 )
+from app.services.integrity_errors import constraint_name
 from app.services.otp_sender import OtpSender, OtpSendError, build_otp_sender
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import deliver_after_response
@@ -65,6 +66,10 @@ from app.workers.otp_outbox_relay import deliver_after_response
 router = APIRouter(prefix="/auth/student", tags=["auth"])
 _MOBILE_RE = re.compile(r"^\d{10}$")
 _OTP_RE = re.compile(r"^\d{6}$")
+_REGISTRATION_IDEMPOTENCY_CONSTRAINT = (
+    "uq_registration_idempotency_records_idempotency_key_hash"
+)
+_REGISTRATION_MOBILE_CONSTRAINT = "uq_student_registrations_mobile_hash"
 
 # Allowed student-verification status transitions (finite-state machine).
 _VERIFICATION_TRANSITIONS = {
@@ -160,49 +165,158 @@ def _owned_registration(
 # --------------------------------------------------------------------------- #
 # Registration                                                                #
 # --------------------------------------------------------------------------- #
+def _registration_http_error(exc: RegistrationError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "field": exc.field},
+    )
+
+
+def _recover_registration_integrity_conflict(
+    session: Session,
+    payload: StudentRegisterRequest,
+    idempotency_key: str | None,
+    exc: IntegrityError,
+) -> registration_service.RegistrationResult:
+    """Translate only exact named registration invariants after rollback.
+
+    PostgreSQL can surface the losing idempotency race during either ``flush``
+    or ``commit``. In both cases, compare the request against the durable winner
+    before replaying it. Every unrelated integrity failure is re-raised so a
+    schema/programming defect can never masquerade as a product conflict.
+    """
+
+    failed_constraint = constraint_name(exc)
+    session.rollback()
+    if (
+        failed_constraint
+        in {
+            _REGISTRATION_IDEMPOTENCY_CONSTRAINT,
+            _REGISTRATION_MOBILE_CONSTRAINT,
+        }
+        and idempotency_key is not None
+    ):
+        try:
+            winner = registration_service.resolve_idempotent_replay(
+                session, idempotency_key, payload
+            )
+        except RegistrationError as conflict:
+            raise _registration_http_error(conflict) from exc
+        if winner is not None:
+            return winner
+        if failed_constraint == _REGISTRATION_IDEMPOTENCY_CONSTRAINT:
+            raise exc
+    if failed_constraint == _REGISTRATION_MOBILE_CONSTRAINT:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "mobile_already_registered", "field": "mobile"},
+        ) from exc
+    raise exc
+
+
 @router.post("/register", response_model=StudentRegisterResponse, status_code=201)
 def register(
     payload: StudentRegisterRequest,
+    request: Request,
     session: Session = Depends(get_session),
     sender: OtpSender | None = Depends(get_otp_sender),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> StudentRegisterResponse:
-    # Idempotent replay is resolved BEFORE requiring a provider, so a replay
-    # succeeds (201) even if delivery is currently unconfigured and never
-    # re-delivers (SAATHI-448 A3).
+    if len(request.headers.getlist("idempotency-key")) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_idempotency_key",
+                "field": "Idempotency-Key",
+            },
+        )
+    try:
+        idempotency_key = registration_service.validate_idempotency_key(
+            idempotency_key
+        )
+    except RegistrationError as exc:
+        raise _registration_http_error(exc) from exc
+
+    # Resolve the ledger BEFORE requiring a provider. Finalized success/failure
+    # and retired tombstones need no provider; only a crash-pending exact replay
+    # requires one to resume its persisted outbox intent.
     if idempotency_key:
-        existing = registration_service.find_by_idempotency_key(session, idempotency_key)
+        try:
+            existing = registration_service.resolve_idempotent_replay(
+                session, idempotency_key, payload
+            )
+        except RegistrationError as exc:
+            raise _registration_http_error(exc) from exc
         if existing is not None:
-            return StudentRegisterResponse(registration_id=existing.id, status=existing.status)
+            if existing.delivery is None:
+                return StudentRegisterResponse(
+                    registration_id=existing.registration.id,
+                    status="otp_pending",
+                )
+            provider = _require_sender(sender)
+            try:
+                replayed = registration_service.finalize_pending_registration(
+                    session,
+                    registration_service.registration_idempotency_key_hash(
+                        idempotency_key
+                    ),
+                    provider,
+                )
+            except RegistrationError as exc:
+                raise _registration_http_error(exc) from exc
+            return StudentRegisterResponse(
+                registration_id=replayed.id,
+                status="otp_pending",
+            )
 
     provider = _require_sender(sender)
     try:
         result = register_student(session, payload, idempotency_key, now=_now())
     except RegistrationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "field": exc.field}) from exc
-
-    # Commit the registration + challenge + pending-outbox row FIRST. Only after
-    # a durable commit is the OTP handed to the provider.
-    try:
-        session.commit()
+        raise _registration_http_error(exc) from exc
     except IntegrityError as exc:
-        session.rollback()
-        if idempotency_key:
-            existing = registration_service.find_by_idempotency_key(session, idempotency_key)
-            if existing is not None:
-                return StudentRegisterResponse(registration_id=existing.id, status=existing.status)
-        raise HTTPException(status_code=409, detail={"code": "mobile_already_registered", "field": "mobile"}) from exc
+        result = _recover_registration_integrity_conflict(
+            session, payload, idempotency_key, exc
+        )
+    else:
+        # Commit the registration + challenge + pending ledger/outbox graph
+        # FIRST. Only a durable pending claim may reach the provider.
+        try:
+            session.commit()
+        except IntegrityError as exc:
+            result = _recover_registration_integrity_conflict(
+                session, payload, idempotency_key, exc
+            )
 
     reg = result.registration
     if result.delivery is not None:
-        try:
-            otp_outbox.run_delivery(session, result.delivery, provider, raise_on_failure=True)
-        except OtpSendError as exc:
-            # Compensate: remove the registration so no unusable challenge remains
-            # (observable end state = no rows), then surface a typed failure.
-            registration_service.compensate_delete(session, reg.id)
-            raise HTTPException(status_code=502, detail={"code": "otp_delivery_failed"}) from exc
-    return StudentRegisterResponse(registration_id=reg.id, status=reg.status)
+        if idempotency_key and result.idempotency_record is not None:
+            try:
+                reg = registration_service.finalize_pending_registration(
+                    session,
+                    registration_service.registration_idempotency_key_hash(
+                        idempotency_key
+                    ),
+                    provider,
+                )
+            except RegistrationError as exc:
+                raise _registration_http_error(exc) from exc
+        else:
+            try:
+                otp_outbox.run_delivery(
+                    session,
+                    result.delivery,
+                    provider,
+                    raise_on_failure=True,
+                )
+            except OtpSendError as exc:
+                # Non-idempotent legacy path keeps its historical compensation.
+                registration_service.compensate_delete(session, reg.id)
+                raise HTTPException(
+                    status_code=502,
+                    detail={"code": "otp_delivery_failed"},
+                ) from exc
+    return StudentRegisterResponse(registration_id=reg.id, status="otp_pending")
 
 
 # --------------------------------------------------------------------------- #
@@ -297,7 +411,15 @@ def otp_resend(
         raise _otp_error(exc) from exc
     session.commit()  # persist the new challenge + outbox row before delivering
     try:
-        otp_outbox.run_delivery(session, intent, provider, raise_on_failure=True)
+        claimed = registration_service.finalize_pending_resend_if_claimed(
+            session, payload.registration_id, intent, provider
+        )
+        if not claimed:
+            otp_outbox.run_delivery(
+                session, intent, provider, raise_on_failure=True
+            )
+    except RegistrationError as exc:
+        raise _registration_http_error(exc) from exc
     except OtpSendError as exc:
         raise HTTPException(status_code=502, detail={"code": "otp_delivery_failed"}) from exc
     return {"status": "sent"}  # never returns the code

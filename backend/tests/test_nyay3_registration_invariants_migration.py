@@ -432,10 +432,6 @@ def test_clean_populated_upgrade_downgrade_reupgrade_is_lossless(tmp_path):
     first_inventory = _assert_exact_inventory(database)
     assert _snapshot(database) == before
 
-    drift = _alembic(database, "check")
-    assert drift.returncode == 0, drift.stdout[-3000:] + drift.stderr[-3000:]
-    assert "No new upgrade operations detected." in drift.stdout
-
     downgraded = _alembic(database, "downgrade", PARENT)
     assert downgraded.returncode == 0, downgraded.stderr[-3000:]
     assert _revision(database) == PARENT
@@ -448,6 +444,17 @@ def test_clean_populated_upgrade_downgrade_reupgrade_is_lossless(tmp_path):
     assert _assert_exact_inventory(database) == first_inventory
     assert _snapshot(database) == before
     assert all(value for value in ids.values())  # preserve fixture authority
+
+
+def test_historical_revision_is_not_repository_head():
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(BACKEND / "app/db/migrations")
+    )
+    script = ScriptDirectory.from_config(config)
+    assert script.get_current_head() == "0018_registration_idempotency"
+    assert HEAD != script.get_current_head()
+    assert script.get_revision(HEAD).down_revision == PARENT
 
 
 @pytest.mark.parametrize(

@@ -326,6 +326,29 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
     }
 
 
+def _exact_revision_check(engine: Engine, expected: str) -> dict[str, Any]:
+    """Check a historical lifecycle target without consulting repository head.
+
+    ``alembic check`` compares a database to current ORM metadata.  NYAY-3's
+    lifecycle is intentionally pinned to 0017, so that command becomes false
+    evidence as soon as a later ticket adds 0018.  The exact target inventory
+    and schema fingerprints below remain the substantive historical proof.
+    """
+
+    try:
+        with engine.connect() as connection:
+            revision = connection.scalar(
+                text("SELECT version_num FROM alembic_version")
+            )
+    except Exception:  # noqa: BLE001 - evidence remains aggregate-only
+        revision = None
+    return {
+        "arguments": ["exact-revision", expected],
+        "returncode": 0 if revision == expected else 1,
+        "generic_preflight_rejection": False,
+    }
+
+
 def _protect_sql_literals(value: object) -> tuple[str, dict[str, str]]:
     """Replace SQL string literals while preserving every literal byte."""
 
@@ -1017,7 +1040,7 @@ def _run_clean_migration_lifecycle(
         first_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         first_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["first_head"] = first_head
-        commands["check_head"] = _run_alembic(scratch_url, "check")
+        commands["check_head"] = _exact_revision_check(engine, HEAD_REVISION)
 
         commands["downgrade_parent"] = _run_alembic(
             scratch_url, "downgrade", PARENT_REVISION
@@ -1034,7 +1057,9 @@ def _run_clean_migration_lifecycle(
         final_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         final_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["final_head"] = final_head
-        commands["recheck_head"] = _run_alembic(scratch_url, "check")
+        commands["recheck_head"] = _exact_revision_check(
+            engine, HEAD_REVISION
+        )
 
         report["row_preservation"] = {
             "upgrade": first_rows == before_rows,

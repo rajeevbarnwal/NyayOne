@@ -41,9 +41,17 @@ def run_migrations_online() -> None:
     section["sqlalchemy.url"] = settings.database_url
     connectable = engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata, compare_type=True
-        )
+        options = {
+            "connection": connection,
+            "target_metadata": target_metadata,
+            "compare_type": True,
+        }
+        if connection.dialect.name == "sqlite":
+            # Revision 0018 explicitly opens a real DBAPI transaction before
+            # its first DDL. Tell Alembic to own/commit-or-roll-back that
+            # transaction so SQLite batch DDL cannot leave a partial revision.
+            options.update(transactional_ddl=True, transaction_per_migration=True)
+        context.configure(**options)
         with context.begin_transaction():
             context.run_migrations()
 

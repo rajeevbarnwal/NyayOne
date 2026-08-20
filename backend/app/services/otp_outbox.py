@@ -66,6 +66,7 @@ def run_delivery(
     sender: OtpSender,
     *,
     raise_on_failure: bool,
+    commit: bool = True,
 ) -> bool:
     """Deliver AFTER the caller has committed. Updates the outbox in its own txn.
 
@@ -102,18 +103,34 @@ def run_delivery(
         return False
     if row.status == "sent":
         return True
-    if challenge is None or challenge.consumed_at is not None:
+    now = datetime.now(timezone.utc)
+    challenge_expiry = None
+    if challenge is not None:
+        challenge_expiry = challenge.expires_at
+        if challenge_expiry.tzinfo is None:
+            challenge_expiry = challenge_expiry.replace(tzinfo=timezone.utc)
+    if (
+        challenge is None
+        or challenge.consumed_at is not None
+        or challenge_expiry <= now
+    ):
         row.status = "void"
         row.code_ct = None
-        row.last_error = "challenge_inactive"
-        session.commit()
+        row.last_error = (
+            "challenge_expired"
+            if challenge is not None and challenge.consumed_at is None
+            else "challenge_inactive"
+        )
+        if commit:
+            session.commit()
         if raise_on_failure:
             raise OtpSendError("otp delivery challenge unavailable")
         return False
     if not row.code_ct:
         row.status = "void"
         row.last_error = "missing_encrypted_payload"
-        session.commit()
+        if commit:
+            session.commit()
         if raise_on_failure:
             raise OtpSendError("otp delivery payload unavailable")
         return False
@@ -126,7 +143,8 @@ def run_delivery(
         row.status = "failed"
         row.attempts += 1
         row.last_error = "provider_send_failed"
-        session.commit()
+        if commit:
+            session.commit()
         if raise_on_failure:
             raise
         return False
@@ -138,5 +156,6 @@ def run_delivery(
     row.last_error = None
     row.code_ct = None
     row.delivered_at = datetime.now(timezone.utc)
-    session.commit()
+    if commit:
+        session.commit()
     return True

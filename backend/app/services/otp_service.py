@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.crypto import encrypt, otp_verifier
 from app.models.registration import OtpChallenge, OtpOutbox
 from app.models.registration import StudentRegistration
-from app.services import integrity_errors, otp_outbox
+from app.services import integrity_errors, otp_outbox, registration_service
 
 OTP_TTL_SECONDS = 300
 RESEND_COOLDOWN_SECONDS = 30
@@ -128,11 +128,8 @@ def lock_registration_for_update(
 ) -> StudentRegistration | None:
     """Lock the stable OTP parent before any child decision or replacement."""
 
-    registration = session.scalar(
-        select(StudentRegistration)
-        .where(StudentRegistration.id == registration_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+    registration, _ = registration_service.lock_registration_with_idempotency(
+        session, registration_id
     )
     return registration if registration_is_authorizable(registration) else None
 
@@ -174,9 +171,60 @@ def issue_challenge(
     only an opaque outbox identifier; the delivery payload is encrypted.
     """
     now = _as_utc(now)
-    registration = lock_registration_for_update(session, registration_id)
+    registration, idempotency_record = (
+        registration_service.lock_registration_with_idempotency(
+            session, registration_id
+        )
+    )
     if not registration_accepts_otp_purpose(registration, purpose):
         raise OtpError(404, "no_active_challenge")
+
+    if (
+        purpose == "signup"
+        and idempotency_record is not None
+        and idempotency_record.state == "pending"
+    ):
+        if (
+            idempotency_record.registration_id != registration_id
+            or idempotency_record.outbox_id is None
+        ):
+            raise RuntimeError("registration idempotency authority is ambiguous")
+        prior_challenge_id = session.scalar(
+            select(OtpOutbox.challenge_id).where(
+                OtpOutbox.id == idempotency_record.outbox_id
+            )
+        )
+        prior_challenge = session.scalar(
+            select(OtpChallenge)
+            .where(OtpChallenge.id == prior_challenge_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        prior_outbox = session.scalar(
+            select(OtpOutbox)
+            .where(OtpOutbox.id == idempotency_record.outbox_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            prior_challenge is None
+            or prior_outbox is None
+            or prior_challenge.registration_id != registration_id
+            or prior_challenge.purpose != "signup"
+            or prior_challenge.consumed_at is not None
+            or prior_outbox.challenge_id != prior_challenge.id
+            or prior_outbox.purpose != "signup"
+            or prior_outbox.status not in {"pending", "failed", "sent"}
+        ):
+            raise RuntimeError("registration idempotency delivery graph is invalid")
+        if prior_outbox.status == "sent":
+            # A generic relay can durably deliver before the NYAY-17 finalizer
+            # observes the outbox. Close that success authority before issuing
+            # an explicit resend; the replacement is then an OTP lifecycle
+            # action, not a resumed registration claim.
+            idempotency_record.state = "succeeded"
+            idempotency_record.outbox_id = None
+            idempotency_record.updated_at = now
 
     try:
         # The savepoint makes the outer login/recovery attempt transaction
@@ -225,6 +273,21 @@ def issue_challenge(
                 code=code,
                 purpose=purpose,
             )
+            if (
+                purpose == "signup"
+                and idempotency_record is not None
+                and idempotency_record.state == "pending"
+            ):
+                if idempotency_record.registration_id != registration_id:
+                    raise RuntimeError(
+                        "registration idempotency authority is ambiguous"
+                    )
+                # A crash-pending registration may be resent before its first
+                # delivery is finalized. Repoint the durable claim in the same
+                # transaction that voids the old payload and creates the new
+                # one, so exact replay can resume only the live intent.
+                idempotency_record.outbox_id = intent.outbox_id
+                idempotency_record.updated_at = now
     except IntegrityError as exc:
         if integrity_errors.constraint_name(exc) == ACTIVE_OTP_CONSTRAINT:
             raise OtpError(409, "otp_issue_conflict") from exc
@@ -245,7 +308,11 @@ def verify(
     now = _as_utc(now)
     # Use the same stable-parent -> child order as issue/resend so verification
     # cannot deadlock with a concurrent replacement.
-    registration = lock_registration_for_update(session, registration_id)
+    registration, idempotency_record = (
+        registration_service.lock_registration_with_idempotency(
+            session, registration_id
+        )
+    )
     if not registration_accepts_otp_purpose(registration, purpose):
         # Match the pre-existing unknown/no-challenge shape so quarantine does
         # not create a registration-existence oracle.
@@ -266,8 +333,29 @@ def verify(
     salt = (ch.metadata_json or {}).get("salt", "")
     if otp_verifier(code, salt=salt) == ch.verifier_hash:
         ch.consumed_at = now
+        # A provider-accepted/process-crash window can leave the signup outbox
+        # pending even though the user received the code. Verification owns the
+        # challenge lock, so void and erase every still-relayable payload before
+        # retiring the bootstrap ledger and committing activation.
+        for pending in session.scalars(
+            select(OtpOutbox)
+            .where(
+                OtpOutbox.challenge_id == ch.id,
+                OtpOutbox.status.in_(("pending", "failed")),
+            )
+            .with_for_update()
+        ):
+            pending.status = "void"
+            pending.code_ct = None
+            pending.last_error = "challenge_consumed"
         if registration.status == "otp_pending" and purpose == "signup":
             registration.status = "otp_verified"
+            registration_service.terminalize_registration_idempotency(
+                session,
+                registration,
+                state="retired",
+                locked_record=idempotency_record,
+            )
         if commit_on_success:
             session.commit()
         return ch
