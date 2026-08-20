@@ -47,6 +47,20 @@ def test_registration_status_check_constraint(db_session: Session):
         db_session.flush()
 
 
+def test_dob_hash_state_rejects_non_hex_digest(db_session: Session):
+    reg = _reg(db_session)
+    reg.dob_hash = "g" * 64
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_deleted_registration_requires_complete_erased_tuple(db_session: Session):
+    reg = _reg(db_session)
+    reg.status = "deleted"
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
 def test_verification_status_check_constraint(db_session: Session):
     reg = _reg(db_session)
     ver = db_session.scalar(select(StudentVerification).where(StudentVerification.registration_id == reg.id))

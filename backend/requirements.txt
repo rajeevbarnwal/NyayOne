@@ -24,6 +24,11 @@ pydantic-settings==2.14.2
 python-multipart==0.0.32
 httpx==0.28.1
 sqlalchemy==2.0.51
+# SQLAlchemy's transitive greenlet marker excludes some supported platforms
+# (including macOS arm64), while our runtime lock requires one exact,
+# interpreter-independent package set on every host.  A constraints file does
+# not install missing distributions, so keep this dependency direct.
+greenlet==3.5.4
 alembic==1.18.5
 psycopg[binary]==3.3.4
 pgvector==0.5.0

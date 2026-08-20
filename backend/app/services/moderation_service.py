@@ -402,6 +402,11 @@ def _months_ago(today: date, months: int) -> date:
     return date(year, month, day)
 
 
+def _utc_today() -> date:
+    """Return the UTC calendar date through a patchable clock boundary."""
+    return datetime.now(timezone.utc).date()
+
+
 def _cluster_out(session: Session, cluster: DuplicateCluster) -> RiskClusterOut:
     signal = session.scalar(select(RiskSignal).where(RiskSignal.cluster_id == cluster.id))
     members = list(session.scalars(select(DuplicateClusterMember.report_id).where(
@@ -510,9 +515,7 @@ def create_cluster(
     dates = [report.experience_end_date or report.experience_start_date for report in reports]
     if any(value is None for value in dates):
         raise ModerationError(422, "cluster_date_required", "Every report needs an experience date")
-    cutoff = _months_ago(
-        datetime.now(timezone.utc).date(), settings.internship_risk_window_months
-    )
+    cutoff = _months_ago(_utc_today(), settings.internship_risk_window_months)
     if any(value < cutoff for value in dates):
         raise ModerationError(422, "cluster_outside_time_window", "Reports must be inside the rolling time window")
     reporter_hashes = {

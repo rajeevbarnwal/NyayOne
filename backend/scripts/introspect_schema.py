@@ -12,6 +12,7 @@ from app.core.config import settings
 EXPECTED_TABLES = {
     "users",
     "student_registrations",
+    "registration_dob_reconciliations",
     "student_profiles",
     "otp_challenges",
     "otp_outbox",
@@ -27,6 +28,61 @@ EXPECTED_TABLES = {
     # SAATHI-60 internship discovery and saved listings
     "internship_listings", "saved_internships",
 }
+
+# This immutable one-to-one audit table is deliberately keyed by the parent
+# registration UUID.  The primary key is also the physical index that backs
+# its only foreign key; requiring a second surrogate UUID or duplicate index
+# would weaken the one-row-per-registration contract without adding safety.
+PRIMARY_KEY_COLUMNS = {
+    "registration_dob_reconciliations": ("registration_id",),
+}
+
+
+def _table_key_failures(
+    *,
+    table: str,
+    dialect: str,
+    columns: list[dict],
+    primary_key: dict,
+    indexes: list[dict],
+    unique_constraints: list[dict],
+    foreign_keys: list[dict],
+) -> list[str]:
+    """Validate UUID primary keys and indexed, deleting foreign keys."""
+
+    failures: list[str] = []
+    column_types = {
+        column["name"]: str(column["type"]).upper() for column in columns
+    }
+    expected_primary_key = PRIMARY_KEY_COLUMNS.get(table, ("id",))
+    primary_key_columns = tuple(primary_key.get("constrained_columns") or ())
+    primary_uuid_column = expected_primary_key[0]
+    if column_types.get(primary_uuid_column) != "UUID" and dialect == "postgresql":
+        failures.append(f"{table}.{primary_uuid_column} is not UUID")
+    if primary_key_columns != expected_primary_key:
+        failures.append(
+            f"{table} primary key is not exactly {','.join(expected_primary_key)}"
+        )
+
+    # A primary key is already a left-prefix index.  Count it here so a
+    # one-to-one child keyed by its parent UUID does not require a redundant
+    # second index merely to satisfy this introspection gate.
+    indexed_shapes = [
+        tuple(index.get("column_names") or []) for index in indexes
+    ] + [
+        tuple(item.get("column_names") or []) for item in unique_constraints
+    ] + [primary_key_columns]
+    for item in foreign_keys:
+        constrained = tuple(item["constrained_columns"])
+        if not any(shape[: len(constrained)] == constrained for shape in indexed_shapes):
+            failures.append(
+                f"{table}.{','.join(constrained)} foreign key is not indexed"
+            )
+        if not (item.get("options") or {}).get("ondelete"):
+            failures.append(
+                f"{table}.{','.join(constrained)} has no explicit ON DELETE"
+            )
+    return failures
 
 
 def main() -> None:
@@ -113,28 +169,17 @@ def main() -> None:
                 for item in foreign_keys
             ],
         }
-        columns = {column["name"]: str(column["type"]).upper() for column in inspector.get_columns(table)}
-        if columns.get("id") != "UUID" and engine.dialect.name == "postgresql":
-            out["failures"].append(f"{table}.id is not UUID")
-        if primary_key.get("constrained_columns") != ["id"]:
-            out["failures"].append(f"{table} primary key is not exactly id")
-        indexed_shapes = [
-            tuple(index.get("column_names") or [])
-            for index in indexes
-        ] + [
-            tuple(item.get("column_names") or [])
-            for item in unique_constraints
-        ]
-        for item in foreign_keys:
-            constrained = tuple(item["constrained_columns"])
-            if not any(shape[: len(constrained)] == constrained for shape in indexed_shapes):
-                out["failures"].append(
-                    f"{table}.{','.join(constrained)} foreign key is not indexed"
-                )
-            if not (item.get("options") or {}).get("ondelete"):
-                out["failures"].append(
-                    f"{table}.{','.join(constrained)} has no explicit ON DELETE"
-                )
+        out["failures"].extend(
+            _table_key_failures(
+                table=table,
+                dialect=engine.dialect.name,
+                columns=inspector.get_columns(table),
+                primary_key=primary_key,
+                indexes=indexes,
+                unique_constraints=unique_constraints,
+                foreign_keys=foreign_keys,
+            )
+        )
     missing = EXPECTED_TABLES - set(out["tables"])
     out["expected_tables_present"] = not missing
     out["missing_tables"] = sorted(missing)

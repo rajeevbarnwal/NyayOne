@@ -23,7 +23,9 @@ from app.models.registration import (
     AuthSession,
     LoginAttempt,
     OtpChallenge,
+    RecoverySession,
     StudentRegistration,
+    StudentVerification,
     User,
 )
 from tests import dbtemplate
@@ -162,6 +164,263 @@ def test_known_and_unknown_start_are_non_enumerating_and_persist_decoy(ctx):
         assert known_row.registration_id is not None
         assert unknown_row.registration_id is None
         assert len(known_row.lookup_hash) == len(unknown_row.lookup_hash) == 64
+
+
+def test_quarantined_dob_hash_is_symmetric_decoy_for_login_and_recovery(ctx):
+    client, _, factory, sender = ctx
+    _create_account(client, sender)
+    with factory() as session:
+        registration = session.scalar(select(StudentRegistration))
+        registration.dob_hash = "f" * 64
+        registration.dob_hash_state = "quarantined"
+        session.commit()
+
+    sender.sent.clear()
+    known_login, known_code = _start_login(client, sender, "9876543210")
+    unknown_login, unknown_code = _start_login(client, sender, "9999999999")
+    assert known_code is unknown_code is None
+    with factory() as session:
+        attempts = tuple(
+            session.scalars(
+                select(LoginAttempt).where(
+                    LoginAttempt.opaque_id.in_((known_login, unknown_login))
+                )
+            )
+        )
+        assert len(attempts) == 2
+        assert all(attempt.registration_id is None for attempt in attempts)
+
+    known_recovery = client.post(
+        "/api/v1/auth/student/recovery/start", json={"mobile": "9876543210"}
+    )
+    unknown_recovery = client.post(
+        "/api/v1/auth/student/recovery/start", json={"mobile": "9999999999"}
+    )
+    assert known_recovery.status_code == unknown_recovery.status_code == 202
+    assert set(known_recovery.json()) == set(unknown_recovery.json()) == {"recovery_id"}
+    assert sender.sent == []
+
+
+def test_quarantine_change_invalidates_existing_student_session_claims(ctx):
+    client, _, factory, sender = ctx
+    _create_account(client, sender)
+    login_id, code = _start_login(client, sender)
+    assert code is not None
+    authenticated = client.post(
+        "/api/v1/auth/student/login/otp/verify",
+        json={"login_id": login_id, "code": code},
+    )
+    assert authenticated.status_code == 200
+    with factory() as session:
+        registration = session.scalar(select(StudentRegistration))
+        registration.dob_hash = "f" * 64
+        registration.dob_hash_state = "quarantined"
+        session.commit()
+    assert client.get("/api/v1/auth/student/session").json() == {
+        "authenticated": False,
+        "actor": None,
+    }
+
+
+def test_quarantine_change_blocks_pending_login_and_recovery_proofs(ctx):
+    client, _, factory, sender = ctx
+    _create_account(client, sender)
+    login_id, login_code = _start_login(client, sender)
+    recovery_start = client.post(
+        "/api/v1/auth/student/recovery/start", json={"mobile": "9876543210"}
+    )
+    recovery_id = recovery_start.json()["recovery_id"]
+    recovery_code = sender.sent[-1][1]
+    with factory() as session:
+        registration = session.scalar(select(StudentRegistration))
+        registration.dob_hash = "f" * 64
+        registration.dob_hash_state = "quarantined"
+        session.commit()
+
+    login_result = client.post(
+        "/api/v1/auth/student/login/otp/verify",
+        json={"login_id": login_id, "code": login_code},
+    )
+    recovery_result = client.post(
+        "/api/v1/auth/student/recovery/verify",
+        json={"recovery_id": recovery_id, "code": recovery_code},
+    )
+    unknown_login = client.post(
+        "/api/v1/auth/student/login/otp/verify",
+        json={"login_id": uuid.uuid4().hex, "code": login_code},
+    )
+    unknown_recovery = client.post(
+        "/api/v1/auth/student/recovery/verify",
+        json={"recovery_id": uuid.uuid4().hex, "code": recovery_code},
+    )
+    assert login_result.status_code == unknown_login.status_code == 401
+    assert recovery_result.status_code == unknown_recovery.status_code == 401
+    assert login_result.json() == unknown_login.json()
+    assert recovery_result.json() == unknown_recovery.json()
+
+    with factory() as session:
+        recovery = session.scalar(
+            select(RecoverySession).where(RecoverySession.opaque_id == recovery_id)
+        )
+        recovery.status = "verified"
+        session.commit()
+    completion = client.post(
+        "/api/v1/auth/student/recovery/complete",
+        json={"recovery_id": recovery_id},
+    )
+    unknown_completion = client.post(
+        "/api/v1/auth/student/recovery/complete",
+        json={"recovery_id": uuid.uuid4().hex},
+    )
+    assert completion.status_code == unknown_completion.status_code == 401
+    assert completion.json() == unknown_completion.json()
+
+
+def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
+    client, _, factory, sender = ctx
+    registration_id, _ = _create_account(client, sender)
+    with factory() as session:
+        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
+        registration.dob_hash = "f" * 64
+        registration.dob_hash_state = "quarantined"
+        session.commit()
+    missing_id = str(uuid.uuid4())
+
+    quarantined_resend = client.post(
+        "/api/v1/auth/student/otp/resend",
+        json={"registration_id": registration_id},
+    )
+    missing_resend = client.post(
+        "/api/v1/auth/student/otp/resend",
+        json={"registration_id": missing_id},
+    )
+    assert quarantined_resend.status_code == missing_resend.status_code == 404
+    assert quarantined_resend.json() == missing_resend.json()
+    assert quarantined_resend.json()["detail"]["code"] == "registration_not_found"
+
+    profile = {
+        "college": "National Law School of India University",
+        "year_of_study": "3rd year",
+        "enrolment_number": "KA/1234/2023",
+        "institutional_email": "aditi@nls.ac.in",
+    }
+    quarantined_profile = client.patch(
+        "/api/v1/auth/student/profile",
+        json={"registration_id": registration_id, **profile},
+    )
+    missing_profile = client.patch(
+        "/api/v1/auth/student/profile",
+        json={"registration_id": missing_id, **profile},
+    )
+    assert quarantined_profile.status_code == missing_profile.status_code == 404
+    assert quarantined_profile.json() == missing_profile.json()
+    assert quarantined_profile.json()["detail"]["code"] == "registration_not_found"
+
+    guardian = client.post(
+        "/api/v1/auth/student/guardian-consent/complete",
+        json={"registration_id": registration_id},
+    )
+    missing_guardian = client.post(
+        "/api/v1/auth/student/guardian-consent/complete",
+        json={"registration_id": missing_id},
+    )
+    assert guardian.status_code == missing_guardian.status_code == 404
+    assert guardian.json() == missing_guardian.json()
+
+    email_request = client.post(
+        "/api/v1/auth/student/verification/email/request",
+        json={
+            "registration_id": registration_id,
+            "institutional_email": "aditi@nls.ac.in",
+        },
+    )
+    missing_email_request = client.post(
+        "/api/v1/auth/student/verification/email/request",
+        json={
+            "registration_id": missing_id,
+            "institutional_email": "aditi@nls.ac.in",
+        },
+    )
+    assert email_request.status_code == missing_email_request.status_code == 404
+    assert email_request.json() == missing_email_request.json()
+
+    verification = client.get(
+        "/api/v1/auth/student/verification/status",
+        params={"registration_id": registration_id},
+    )
+    missing_verification = client.get(
+        "/api/v1/auth/student/verification/status",
+        params={"registration_id": missing_id},
+    )
+    assert verification.status_code == missing_verification.status_code == 404
+    assert verification.json() == missing_verification.json()
+
+    transition = client.post(
+        "/api/v1/auth/student/verification/status",
+        json={"registration_id": registration_id, "status": "in_review"},
+    )
+    missing_transition = client.post(
+        "/api/v1/auth/student/verification/status",
+        json={"registration_id": missing_id, "status": "in_review"},
+    )
+    assert transition.status_code == missing_transition.status_code == 404
+    assert transition.json() == missing_transition.json()
+    with factory() as session:
+        stored = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        assert stored is not None and stored.status == "pending"
+
+
+def test_quarantined_registration_cannot_consume_active_signup_otp(ctx):
+    client, _, factory, sender = ctx
+    response = client.post(
+        "/api/v1/auth/student/register",
+        json={
+            "first_name": "Aditi",
+            "last_name": "Nair",
+            "mobile": "9876543210",
+            "dob": "2004-03-14",
+            "consent": {"accepted": True},
+        },
+    )
+    assert response.status_code == 201
+    registration_id = response.json()["registration_id"]
+    code = sender.sent[-1][1]
+    with factory() as session:
+        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
+        registration.dob_hash = "f" * 64
+        registration.dob_hash_state = "quarantined"
+        challenge = session.scalar(
+            select(OtpChallenge).where(
+                OtpChallenge.registration_id == registration.id,
+                OtpChallenge.purpose == "signup",
+            )
+        )
+        before = (challenge.attempts, challenge.consumed_at, challenge.locked_until)
+        session.commit()
+
+    blocked = client.post(
+        "/api/v1/auth/student/otp/verify",
+        json={"registration_id": registration_id, "code": code},
+    )
+    missing = client.post(
+        "/api/v1/auth/student/otp/verify",
+        json={"registration_id": str(uuid.uuid4()), "code": code},
+    )
+    assert blocked.status_code == missing.status_code == 404
+    assert blocked.json() == missing.json()
+    assert blocked.json()["detail"]["code"] == "no_active_challenge"
+    with factory() as session:
+        challenge = session.scalar(
+            select(OtpChallenge).where(
+                OtpChallenge.registration_id == uuid.UUID(registration_id),
+                OtpChallenge.purpose == "signup",
+            )
+        )
+        assert (challenge.attempts, challenge.consumed_at, challenge.locked_until) == before
 
 
 def test_signup_or_recovery_code_cannot_authenticate_login(ctx):

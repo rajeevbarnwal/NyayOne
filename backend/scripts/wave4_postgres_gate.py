@@ -30,7 +30,7 @@ if str(BACKEND) not in sys.path:
 from app.core.config import is_isolated_wave4_database_url
 
 BLOCKED = 78
-HEAD = "0015_wave4_public_risk_labels"
+HEAD = "0016_dob_hash_reconcile"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
@@ -336,7 +336,7 @@ def main() -> int:
     results.add("W4PG-02", "all twenty-three Wave 4 tables exist", TABLES <= live_tables, sorted(TABLES - live_tables))
     with engine.connect() as connection:
         head = connection.scalar(text("SELECT version_num FROM alembic_version"))
-    results.add("W4PG-03", "database is at 0015 head", head == HEAD, head)
+    results.add("W4PG-03", "database is at 0016 head", head == HEAD, head)
     results.add("W4PG-04", "PostgreSQL 16 and pgvector active", version_num >= 160000 and bool(vector), {"server": version_num, "pgvector": vector})
 
     report_columns = {column["name"] for column in inspector.get_columns("internship_reports")}
