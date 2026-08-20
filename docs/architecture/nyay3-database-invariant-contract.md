@@ -113,19 +113,22 @@ python scripts/nyay3_postgres_characterization.py \
 
 The supplied URL is never mutated. It must identify a loopback PostgreSQL
 server with permission to create a uniquely named scratch database. The gate
-migrates only that scratch DB, verifies PostgreSQL 16 and pgvector, uses eight
+rejects URL query routing and inherited libpq routing/credential variables,
+migrates only managed scratch DBs, verifies PostgreSQL 16 and pgvector, uses
 independent backend connections, records a bounded schema/result projection,
-and requires fatal cleanup of the scratch DB.
+and requires fatal cleanup of every scratch DB.
 
 `--expect current-vulnerable` remains available only to reproduce the preserved
 pre-0017 red baseline. `PASS_RED_BASELINE` is not a security pass or authority
 to move NYAY-3 to Testing. `BLOCKED` exits 78 and proves nothing.
 
 Only `PASS_HARDENED` may be used as fix-verification evidence. It requires the
-exact constraint definitions, five fail-closed dirty-data classes, row-lossless
-upgrade/downgrade/re-upgrade, real service concurrency, deterministic unsafe
-mutants, and scratch cleanup. Its bounded JSON, exact commit and checksum
-manifest must still be sealed by independent QA before release.
+exact constraint definitions, six fail-closed dirty fixtures covering all five
+preflight classes (including both guardian-state contradiction directions),
+row-lossless empty and populated upgrade/downgrade/re-upgrade, real service
+concurrency, deterministic unsafe mutants, and cleanup of all nine scratch
+databases. Its bounded JSON, exact commit and checksum manifest must still be
+sealed by independent QA before release.
 
 ## Implemented service-level oracle matrix
 
@@ -138,6 +141,12 @@ statement/lock timeouts and distinct backend PIDs:
 - concurrent login/session rotation leaves at most one active session;
 - delivery racing with supersession follows challenge-before-outbox lock order,
   does not deadlock, and leaves at most one deliverable challenge;
+- with the unique OTP index retained but both serialization seams disabled, a
+  real two-connection collision yields one success and one exact typed
+  `409/otp_issue_conflict`, while preserving outer-transaction usability;
+- with the active-session index retained but both rotation seams disabled, a
+  real two-connection collision yields one success and one exact typed
+  `409/login_conflict`, one active session, and one success audit event;
 - seeded unsafe mutants remove both the stable-parent seam and corresponding
   unique index, making the OTP/session oracles deterministically red.
 
