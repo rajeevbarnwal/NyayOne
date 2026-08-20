@@ -54,6 +54,12 @@ def start(session: Session, mobile: str, now: datetime) -> tuple[str, otp_outbox
             StudentRegistration.dob_hash_state == "verified",
         )
     )
+    if reg is not None:
+        # The stable parent lock must cover the recent-request decision, not
+        # merely the later child insert, to prevent duplicate deliveries.
+        reg = otp_service.lock_registration_for_update(session, reg.id)
+        if reg is not None and reg.dob_hash_state != "verified":
+            reg = None
     rs = RecoverySession(
         opaque_id=opaque_id,
         lookup_hash=lookup_hash,
@@ -68,10 +74,22 @@ def start(session: Session, mobile: str, now: datetime) -> tuple[str, otp_outbox
     if reg is not None and not _recent_recovery_excluding(
         session, lookup_hash, rs.id, now
     ):
-        ch, intent = otp_service.issue_challenge(
-            session, reg.id, now, purpose="recovery", destination=decrypt(reg.mobile_ct)
-        )
-        rs.challenge_id = ch.id
+        try:
+            ch, intent = otp_service.issue_challenge(
+                session,
+                reg.id,
+                now,
+                purpose="recovery",
+                destination=decrypt(reg.mobile_ct),
+            )
+        except otp_service.OtpError as exc:
+            if exc.code != "otp_issue_conflict":
+                raise
+            # Keep the known-mobile path indistinguishable from a decoy/cooldown
+            # request while retaining the outer RecoverySession transaction.
+            intent = None
+        else:
+            rs.challenge_id = ch.id
     return opaque_id, intent
 
 

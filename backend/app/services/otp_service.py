@@ -17,17 +17,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt, otp_verifier
-from app.models.registration import OtpChallenge
+from app.models.registration import OtpChallenge, OtpOutbox
 from app.models.registration import StudentRegistration
-from app.services import otp_outbox
+from app.services import integrity_errors, otp_outbox
 
 OTP_TTL_SECONDS = 300
 RESEND_COOLDOWN_SECONDS = 30
 LOCKOUT_SECONDS = 900
 MAX_ATTEMPTS = 3
+ACTIVE_OTP_CONSTRAINT = "uq_otp_challenges_one_active_per_registration_purpose"
 
 
 class OtpError(Exception):
@@ -75,6 +77,41 @@ def _active(
     return session.scalar(statement)
 
 
+def lock_registration_for_update(
+    session: Session,
+    registration_id: uuid.UUID,
+) -> StudentRegistration | None:
+    """Lock the stable OTP parent before any child decision or replacement."""
+
+    return session.scalar(
+        select(StudentRegistration)
+        .where(StudentRegistration.id == registration_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def active_challenges_for_replacement(
+    session: Session,
+    registration_id: uuid.UUID,
+    purpose: str,
+) -> list[OtpChallenge]:
+    """Lock and materialize the child rows replaced by a fresh challenge."""
+
+    return list(
+        session.scalars(
+            select(OtpChallenge)
+            .where(
+                OtpChallenge.registration_id == registration_id,
+                OtpChallenge.purpose == purpose,
+                OtpChallenge.consumed_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+
+
 def issue_challenge(
     session: Session,
     registration_id: uuid.UUID,
@@ -91,37 +128,60 @@ def issue_challenge(
     only an opaque outbox identifier; the delivery payload is encrypted.
     """
     now = _as_utc(now)
-    for prior in session.scalars(
-        select(OtpChallenge).where(
-            OtpChallenge.registration_id == registration_id,
-            OtpChallenge.purpose == purpose,
-            OtpChallenge.consumed_at.is_(None),
-        )
-    ):
-        prior.consumed_at = now
-        meta = dict(prior.metadata_json or {})
-        meta["superseded"] = True
-        prior.metadata_json = meta
-    code = _gen_code()
-    salt = str(uuid.uuid4())
-    ch = OtpChallenge(
-        registration_id=registration_id,
-        purpose=purpose,
-        verifier_hash=otp_verifier(code, salt=salt),
-        attempts=0,
-        max_attempts=MAX_ATTEMPTS,
-        expires_at=now + timedelta(seconds=OTP_TTL_SECONDS),
-        metadata_json={"salt": salt, "issued_at": now.isoformat()},
-    )
-    session.add(ch)
-    session.flush()
-    intent = otp_outbox.enqueue(
-        session,
-        ch,
-        destination_ct=destination_ct if destination_ct is not None else encrypt(destination),
-        code=code,
-        purpose=purpose,
-    )
+    if lock_registration_for_update(session, registration_id) is None:
+        raise OtpError(404, "no_active_challenge")
+
+    try:
+        # The savepoint makes the outer login/recovery attempt transaction
+        # usable after the narrowly translated defensive uniqueness race.
+        with session.begin_nested():
+            for prior in active_challenges_for_replacement(
+                session, registration_id, purpose
+            ):
+                prior.consumed_at = now
+                meta = dict(prior.metadata_json or {})
+                meta["superseded"] = True
+                prior.metadata_json = meta
+                # A consumed challenge must never remain deliverable through
+                # the crash-retry outbox. Erase its encrypted OTP in the same
+                # transaction that installs the replacement.
+                for pending in session.scalars(
+                    select(OtpOutbox).where(
+                        OtpOutbox.challenge_id == prior.id,
+                        OtpOutbox.status.in_(("pending", "failed")),
+                    )
+                ):
+                    pending.status = "void"
+                    pending.code_ct = None
+                    pending.last_error = "challenge_superseded"
+            code = _gen_code()
+            salt = str(uuid.uuid4())
+            ch = OtpChallenge(
+                registration_id=registration_id,
+                purpose=purpose,
+                verifier_hash=otp_verifier(code, salt=salt),
+                attempts=0,
+                max_attempts=MAX_ATTEMPTS,
+                expires_at=now + timedelta(seconds=OTP_TTL_SECONDS),
+                metadata_json={"salt": salt, "issued_at": now.isoformat()},
+            )
+            session.add(ch)
+            session.flush()
+            intent = otp_outbox.enqueue(
+                session,
+                ch,
+                destination_ct=(
+                    destination_ct
+                    if destination_ct is not None
+                    else encrypt(destination)
+                ),
+                code=code,
+                purpose=purpose,
+            )
+    except IntegrityError as exc:
+        if integrity_errors.constraint_name(exc) == ACTIVE_OTP_CONSTRAINT:
+            raise OtpError(409, "otp_issue_conflict") from exc
+        raise
     return ch, intent
 
 
@@ -136,7 +196,9 @@ def verify(
     commit_on_success: bool = True,
 ) -> OtpChallenge:
     now = _as_utc(now)
-    registration = session.get(StudentRegistration, registration_id)
+    # Use the same stable-parent -> child order as issue/resend so verification
+    # cannot deadlock with a concurrent replacement.
+    registration = lock_registration_for_update(session, registration_id)
     if registration is None or registration.dob_hash_state != "verified":
         # Match the pre-existing unknown/no-challenge shape so quarantine does
         # not create a registration-existence oracle.
@@ -200,7 +262,7 @@ def resend(
     destination: str,
     destination_ct: str | None = None,
 ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
-    registration = session.get(StudentRegistration, registration_id)
+    registration = lock_registration_for_update(session, registration_id)
     if registration is None or registration.dob_hash_state != "verified":
         raise OtpError(404, "no_active_challenge")
     if within_cooldown(session, registration_id, now, purpose):

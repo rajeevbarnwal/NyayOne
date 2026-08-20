@@ -63,7 +63,7 @@ IDs without touching a database.
 | --- | --- |
 | N16-PG-01 | PostgreSQL 16 and pgvector are exercised through the real 0001–0016 chain. |
 | N16-PG-02 | The immutable SHA-256 ledger for migrations 0001–0015 verifies before DB work. |
-| N16-PG-03 | Empty 0015 → 0016 → `alembic check` → 0015 → 0016 has stable schema fingerprints. |
+| N16-PG-03 | Empty 0015 → 0016 → exact pinned-revision check → 0015 → 0016 has stable schema fingerprints. The repository-wide `alembic check` runs separately at the current head before this historical gate. |
 | N16-PG-04 | Populated safe, isolated unreadable, noncanonical, future-date, erased and already-valid cases have exact aggregate outcomes under an authoritative present key. |
 | N16-PG-05 | Downgrade rejects a live terminal quarantine without mutation; after those synthetic rows are safely retired, the remaining populated reconciliation downgrades and re-upgrades with the same aggregate fingerprint. |
 | N16-PG-06 | Unexpected hash shape, hash/source mismatch, partial-deleted state, missing/unavailable/padded key provenance, a wrong lookup secret with all DOB hashes still placeholders, known development-default secrets, and a wrong deployment keyring all fail with schema and exact row fingerprints unchanged. |

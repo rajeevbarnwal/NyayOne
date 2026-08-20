@@ -1,14 +1,14 @@
 # NYAY-3 database cardinality and concurrency contract
 
-Status: **implementation-ready red-baseline contract; no fix migration yet**  
-Base: `e91f4febfd0903b79ed8c908fa2a773ddd1bbc3b`  
+Status: **implemented on the NYAY-3 development branch; hardened release verification required**
+Base: `f729d9dcc5a14cae03bc138f19d3fe58eb95a114`
 Runtime authority: PostgreSQL 16 with pgvector
 
-NYAY-16 owns the canonical migration-baseline prerequisite. Until that ticket
-establishes the next safe forward-revision point, NYAY-3 must not add or edit an
-Alembic revision and must not rewrite any historical migration. This document
-and the opt-in characterization gate make the failure modes executable without
-crossing that boundary.
+NYAY-16 established `0016_dob_hash_reconcile` as the canonical migration
+baseline. NYAY-3 adds only `0017_registration_invariants`; it does not edit
+`0016` or any earlier migration. This document defines the implemented database
+and service contract, while the opt-in characterization gate retains both the
+historical red-baseline oracle and the authoritative hardened verification.
 
 ## Invariants to enforce
 
@@ -56,9 +56,9 @@ evidence.
 
 ## Forward-migration preflight and populated-data policy
 
-The future NYAY-3 migration must run explicit preflight queries before creating
-constraints. It must abort, preserving every row, if any of these result sets is
-non-empty:
+The NYAY-3 migration runs every explicit preflight query before creating any
+target constraint. It aborts with a non-identifying error, preserving every row
+and leaving no partial target DDL, if any of these result sets is non-empty:
 
 ```sql
 SELECT registration_id, purpose, count(*)
@@ -90,7 +90,7 @@ deployments require a separately reviewed, checksum-sealed repair plan with
 before/after row identifiers and append-only audit evidence. After repair, the
 same migration is rerun. This fail-closed policy is itself tested.
 
-Required populated-database cases after NYAY-16 unblocks the migration:
+Required populated-database lifecycle cases are:
 
 - clean populated upgrade succeeds and retains every row;
 - each conflict class makes the upgrade fail before any target constraint is
@@ -100,43 +100,46 @@ Required populated-database cases after NYAY-16 unblocks the migration:
   schema inventory on both an empty and a clean populated PostgreSQL 16 DB;
 - no historical migration bytes change.
 
-## Executable red baseline
+## Executable characterization and hardened gate
 
 Run the disposable scratch-database gate from `backend/`:
 
 ```bash
 python scripts/nyay3_postgres_characterization.py \
   --database-url "$DATABASE_URL" \
-  --expect current-vulnerable \
-  --output /tmp/nyay3-red-baseline.json
+  --expect hardened \
+  --output test-results/nyay3-postgres/summary.json
 ```
 
 The supplied URL is never mutated. It must identify a loopback PostgreSQL
 server with permission to create a uniquely named scratch database. The gate
 migrates only that scratch DB, verifies PostgreSQL 16 and pgvector, uses eight
-independent backend connections, records the raw index/constraint inventory,
-and drops the scratch DB.
+independent backend connections, records a bounded schema/result projection,
+and requires fatal cleanup of the scratch DB.
 
-`PASS_RED_BASELINE` means the inherited defects were reproduced. It is not a
-security pass, a fix pass, or authority to move NYAY-3 to Testing. `BLOCKED`
-exits 78 and proves nothing.
+`--expect current-vulnerable` remains available only to reproduce the preserved
+pre-0017 red baseline. `PASS_RED_BASELINE` is not a security pass or authority
+to move NYAY-3 to Testing. `BLOCKED` exits 78 and proves nothing.
 
-After the forward migration and service locking exist, rerun the same command
-with `--expect hardened`. Only `PASS_HARDENED` may be used as database
-fix-verification evidence. The raw JSON, migration logs, schema inventory,
-exact commit, and checksum manifest must then be sealed by independent QA.
+Only `PASS_HARDENED` may be used as fix-verification evidence. It requires the
+exact constraint definitions, five fail-closed dirty-data classes, row-lossless
+upgrade/downgrade/re-upgrade, real service concurrency, deterministic unsafe
+mutants, and scratch cleanup. Its bounded JSON, exact commit and checksum
+manifest must still be sealed by independent QA before release.
 
-## Remaining service-level oracle matrix
+## Implemented service-level oracle matrix
 
-The direct database race is intentionally a minimal characterization seam. The
-fix PR must additionally exercise the real service/API paths:
+The hardened gate exercises the real service paths with bounded PostgreSQL
+statement/lock timeouts and distinct backend PIDs:
 
 - eight concurrent OTP starts yield one deliverable active challenge;
 - concurrent resend plus start cannot leave two active same-purpose challenges;
 - eight concurrent correct verifications yield one consumption/session result;
 - concurrent login/session rotation leaves at most one active session;
-- a seeded unsafe mutant with the parent-row lock and each target constraint
-  removed makes the relevant oracle fail (proving the test is not false-green).
+- delivery racing with supersession follows challenge-before-outbox lock order,
+  does not deadlock, and leaves at most one deliverable challenge;
+- seeded unsafe mutants remove both the stable-parent seam and corresponding
+  unique index, making the OTP/session oracles deterministically red.
 
-Those service probes belong in the NYAY-3 implementation after NYAY-16. They
-must not be claimed by the current direct-insert red baseline.
+The historical direct-insert red mode must not claim these service guarantees;
+they are earned only by the hardened mode.

@@ -60,7 +60,10 @@ _MIGRATION_ADVISORY_LOCK = int.from_bytes(
 ASSERTION_CONTRACT = (
     ("N16-PG-01", "target is PostgreSQL 16 with pgvector migration support"),
     ("N16-PG-02", "inherited migration SHA-256 ledger verifies before DB work"),
-    ("N16-PG-03", "empty 0015 -> 0016 -> check -> 0015 -> 0016 is stable"),
+    (
+        "N16-PG-03",
+        "empty 0015 -> 0016 -> exact-revision check -> 0015 -> 0016 is stable",
+    ),
     ("N16-PG-04", "populated safe, isolated-invalid and erased rows reconcile"),
     (
         "N16-PG-05",
@@ -340,6 +343,18 @@ def _head(engine: Engine) -> str | None:
         return connection.scalar(text("SELECT version_num FROM alembic_version"))
 
 
+def _is_exact_nyay16_revision(engine: Engine) -> bool:
+    """Check the historical gate's pinned revision, not current ORM metadata.
+
+    Once later migrations exist, ``alembic check`` at 0016 correctly reports
+    their pending ORM changes.  NYAY-16 must remain an isolated 0015 <-> 0016
+    lifecycle proof, so its drift boundary is the exact version plus the
+    schema/data fingerprints already compared by each scenario.
+    """
+
+    return _head(engine) == HEAD
+
+
 def _clear_seed_rows(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(text("DELETE FROM users"))
@@ -558,7 +573,7 @@ def _run_empty_lifecycle(url: str, env: dict[str, str]) -> dict[str, Any]:
     try:
         parent_before = _schema_fingerprint(engine)
         up = _run_alembic(url, env, "upgrade", HEAD).returncode
-        check = _run_alembic(url, env, "check").returncode
+        check = 0 if _is_exact_nyay16_revision(engine) else 1
         head_up = _head(engine)
         with engine.connect() as connection:
             pgvector_version = connection.scalar(
@@ -569,7 +584,7 @@ def _run_empty_lifecycle(url: str, env: dict[str, str]) -> dict[str, Any]:
         head_down = _head(engine)
         parent_after = _schema_fingerprint(engine)
         reup = _run_alembic(url, env, "upgrade", HEAD).returncode
-        recheck = _run_alembic(url, env, "check").returncode
+        recheck = 0 if _is_exact_nyay16_revision(engine) else 1
         head_reup = _head(engine)
         schema_reup = _schema_fingerprint(engine)
         return {
@@ -614,7 +629,7 @@ def _run_populated_lifecycle(url: str, env: dict[str, str]) -> dict[str, Any]:
             },
         )
         up = _run_alembic(url, env, "upgrade", HEAD).returncode
-        check = _run_alembic(url, env, "check").returncode
+        check = 0 if _is_exact_nyay16_revision(engine) else 1
         if up != 0:
             return {"upgrade_ok": False, "roundtrip_ok": False, "return_codes": [up, check], "canaries": seed["canaries"]}
         first = _aggregate_data(engine)
@@ -649,7 +664,7 @@ def _run_populated_lifecycle(url: str, env: dict[str, str]) -> dict[str, Any]:
                 or 0
             )
         reup = _run_alembic(url, env, "upgrade", HEAD).returncode
-        recheck = _run_alembic(url, env, "check").returncode
+        recheck = 0 if _is_exact_nyay16_revision(engine) else 1
         second = _aggregate_data(engine) if reup == 0 else {"counts": {}, "fingerprint": ""}
         expected = _expected_populated_counts()
         safe_expected = _expected_safe_roundtrip_counts()
@@ -1053,7 +1068,7 @@ def _run_concurrent(url: str, env: dict[str, str]) -> dict[str, Any]:
             and _nyay16_shape(engine) == {"state_column": True, "reconciliation_table": True}
             and aggregate["counts"] == expected
             and protected_writer_preserved
-            and _run_alembic(url, env, "check").returncode == 0
+            and _is_exact_nyay16_revision(engine)
         )
         return {
             "ok": ok,
