@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -26,9 +27,10 @@ from app.models.registration import (
     StudentVerification,
     User,
 )
-from app.services import otp_outbox, otp_service
+from app.services import integrity_errors, otp_outbox, otp_service
 
 LOGIN_COOLDOWN_SECONDS = 30
+ACTIVE_SESSION_CONSTRAINT = "uq_auth_sessions_one_active_per_user"
 
 
 class LoginError(Exception):
@@ -88,6 +90,12 @@ def start(
             StudentRegistration.dob_hash_state == "verified",
         )
     )
+    if registration is not None:
+        # Serialize the cooldown decision as well as the eventual replacement;
+        # locking only in issue_challenge would allow two deliverable codes.
+        registration = otp_service.lock_registration_for_update(
+            session, registration.id
+        )
     user = session.get(User, registration.user_id) if registration is not None else None
     eligible = bool(
         registration
@@ -112,15 +120,114 @@ def start(
     if eligible and registration is not None and not _recent_attempt(
         session, lookup, attempt.id, now
     ):
-        challenge, intent = otp_service.issue_challenge(
-            session,
-            registration.id,
-            now,
-            purpose="login",
-            destination=decrypt(registration.mobile_ct),
-        )
-        attempt.challenge_id = challenge.id
+        try:
+            challenge, intent = otp_service.issue_challenge(
+                session,
+                registration.id,
+                now,
+                purpose="login",
+                destination=decrypt(registration.mobile_ct),
+            )
+        except otp_service.OtpError as exc:
+            if exc.code != "otp_issue_conflict":
+                raise
+            # Preserve the endpoint's non-enumerating 202 response. The
+            # savepoint in issue_challenge left this attempt transaction usable.
+            intent = None
+        else:
+            attempt.challenge_id = challenge.id
     return attempt.opaque_id, intent
+
+
+def lock_user_for_session_rotation(
+    session: Session,
+    user_id: uuid.UUID,
+) -> User | None:
+    """Lock the stable session parent, including the zero-child case."""
+
+    return session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def active_sessions_for_rotation(
+    session: Session,
+    user_id: uuid.UUID,
+) -> list[AuthSession]:
+    """Materialize the active children only after the stable parent is locked."""
+
+    return list(
+        session.scalars(
+            select(AuthSession).where(
+                AuthSession.user_id == user_id,
+                AuthSession.status == "active",
+            )
+        )
+    )
+
+
+def rotate_authenticated_session(
+    session: Session,
+    registration: StudentRegistration,
+    now: datetime,
+) -> tuple[str, AuthSession]:
+    """Serialize and atomically replace the active session for one user.
+
+    The stable ``users`` row is the lock authority even when no active child
+    session exists.  Keeping this operation separate from OTP proof lets the
+    PostgreSQL gate exercise the rotation invariant directly without weakening
+    the login attempt/challenge boundary.
+    """
+
+    now = _as_utc(now)
+    user = lock_user_for_session_rotation(session, registration.user_id)
+    if (
+        user is None
+        or user.role != "student"
+        or registration.dob_hash_state != "verified"
+        or registration.status not in {"otp_verified", "active"}
+        or user.status in {"suspended", "deleted"}
+    ):
+        session.rollback()
+        raise LoginError()
+
+    for prior in active_sessions_for_rotation(session, user.id):
+        prior.status = "revoked"
+        prior.revoked_at = now
+
+    raw_token = secrets.token_urlsafe(32)
+    auth_session = AuthSession(
+        user_id=user.id,
+        token_hash=keyed_hash(raw_token),
+        status="active",
+        expires_at=now + timedelta(seconds=settings.auth_session_ttl_seconds),
+        last_seen_at=now,
+    )
+    session.add(auth_session)
+    registration.status = "active"
+    user.status = "active"
+    try:
+        session.flush()
+        session.add(
+            AuditEvent(
+                actor_user_id=user.id,
+                actor_role="student",
+                action="student.auth.login_succeeded",
+                resource_type="auth_session",
+                resource_id=auth_session.id,
+                after_state={"method": "otp", "rotated": True},
+            )
+        )
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        if integrity_errors.constraint_name(exc) == ACTIVE_SESSION_CONSTRAINT:
+            raise LoginError(409, "login_conflict") from exc
+        raise
+    return raw_token, auth_session
 
 
 def verify(
@@ -177,52 +284,10 @@ def verify(
         raise LoginError()
 
     registration = session.get(StudentRegistration, attempt.registration_id)
-    user = session.get(User, registration.user_id) if registration is not None else None
-    if (
-        registration is None
-        or user is None
-        or user.role != "student"
-        or registration.dob_hash_state != "verified"
-        or registration.status not in {"otp_verified", "active"}
-        or user.status in {"suspended", "deleted"}
-    ):
+    if registration is None:
         session.rollback()
         raise LoginError()
-
-    # Successful login rotates prior active sessions for this user. This makes
-    # copied/stale cookies stop authorising immediately after a fresh login.
-    for prior in session.scalars(
-        select(AuthSession)
-        .where(AuthSession.user_id == user.id, AuthSession.status == "active")
-        .with_for_update()
-    ):
-        prior.status = "revoked"
-        prior.revoked_at = now
-
-    raw_token = secrets.token_urlsafe(32)
-    auth_session = AuthSession(
-        user_id=user.id,
-        token_hash=keyed_hash(raw_token),
-        status="active",
-        expires_at=now + timedelta(seconds=settings.auth_session_ttl_seconds),
-        last_seen_at=now,
-    )
-    session.add(auth_session)
-    registration.status = "active"
-    user.status = "active"
-    session.flush()
-    session.add(
-        AuditEvent(
-            actor_user_id=user.id,
-            actor_role="student",
-            action="student.auth.login_succeeded",
-            resource_type="auth_session",
-            resource_id=auth_session.id,
-            after_state={"method": "otp", "rotated": True},
-        )
-    )
-    session.commit()
-    return raw_token, auth_session
+    return rotate_authenticated_session(session, registration, now)
 
 
 def _active_session(

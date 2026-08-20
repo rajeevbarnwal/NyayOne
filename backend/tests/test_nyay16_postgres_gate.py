@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
+import scripts.nyay16_postgres_gate as nyay16_gate
 
 from scripts.nyay16_postgres_gate import (
     ASSERTION_CONTRACT,
@@ -19,6 +23,7 @@ from scripts.nyay16_postgres_gate import (
     _expected_concurrent_counts,
     _expected_populated_counts,
     _expected_safe_roundtrip_counts,
+    _is_exact_nyay16_revision,
     is_isolated_control_target,
     is_postgresql_16,
     privacy_canary_hits,
@@ -139,6 +144,42 @@ def test_assertion_contract_is_unique_and_tracks_exact_revision_pair() -> None:
     assert identifiers == [f"N16-PG-{index:02d}" for index in range(1, 11)]
     assert PARENT == "0015_wave4_public_risk_labels"
     assert HEAD == "0016_dob_hash_reconcile"
+
+
+@pytest.mark.parametrize(
+    ("revision", "accepted"),
+    [
+        (HEAD, True),
+        (PARENT, False),
+        ("0017_registration_invariants", False),
+        (None, False),
+    ],
+)
+def test_historical_gate_accepts_only_its_pinned_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    revision: str | None,
+    accepted: bool,
+) -> None:
+    monkeypatch.setattr(nyay16_gate, "_head", lambda _engine: revision)
+    assert _is_exact_nyay16_revision(object()) is accepted
+
+
+def test_historical_gate_revision_is_not_repository_head() -> None:
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(BACKEND / "app" / "db" / "migrations")
+    )
+    script = ScriptDirectory.from_config(config)
+    assert script.get_current_head() == "0017_registration_invariants"
+    assert HEAD != script.get_current_head()
+    assert script.get_revision(HEAD).down_revision == PARENT
+
+
+def test_historical_gate_never_calls_repository_head_or_alembic_check() -> None:
+    source = Path(nyay16_gate.__file__).read_text(encoding="utf-8")
+    assert '_run_alembic(url, env, "check")' not in source
+    assert '_run_alembic(url, env, "upgrade", "head")' not in source
+    assert '_run_alembic(url, env, "downgrade", "head")' not in source
 
 
 def test_cli_lists_contract_without_database_access() -> None:

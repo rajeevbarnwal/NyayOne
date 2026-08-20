@@ -79,6 +79,7 @@ if str(BACKEND) not in sys.path:
 #: EX_CONFIG. Distinct from 0 (pass) and 1 (assertion failure).
 BLOCKED_EXIT = 78
 BLOCKED_PREFIX = "BLOCKED: prerequisite runtime absent"
+HEAD = "0017_registration_invariants"
 
 #: The 17 Wave 2 tables. Pinned here, cross-checked against the ORM at runtime,
 #: so a rename fails the gate rather than silently shrinking its coverage.
@@ -1074,12 +1075,12 @@ def main(argv: list[str] | None = None) -> int:
                             text("SELECT version_num FROM alembic_version")
                         )
                     scratch_engine.dispose()
-                same = heads["a"] == heads["b"] == "0016_dob_hash_reconcile"
+                same = heads["a"] == heads["b"] == HEAD
                 return same, heads
 
             rec.guard(
                 "A1.3",
-                "both paths land on head 0016_dob_hash_reconcile",
+                f"both paths land on head {HEAD}",
                 a1_3,
             )
 
