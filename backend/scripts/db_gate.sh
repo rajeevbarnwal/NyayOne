@@ -9,6 +9,7 @@
 #     runnable on its own,
 #   * the NYAY-16 PostgreSQL 16 populated-migration lifecycle/preflight gate,
 #   * the NYAY-3 PostgreSQL 16 cardinality/concurrency/service-race gate.
+#   * the NYAY-2 PostgreSQL 16 authorization/ownership release gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -59,3 +60,7 @@ echo "== NYAY-3 registration cardinality/concurrency gate (PostgreSQL 16 + pgvec
 "$PY" scripts/nyay3_postgres_characterization.py \
   --expect hardened \
   --output test-results/nyay3-postgres/summary.json
+echo "== NYAY-2 authorization/ownership gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay2-postgres
+"$PY" scripts/nyay2_postgres_authorization_gate.py \
+  --report test-results/nyay2-postgres/summary.json

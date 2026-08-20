@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (register tables)
 from app.api.v1 import auth_student as ep
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_session
 from app.core.crypto import decrypt
@@ -110,6 +111,17 @@ def _register(client, mobile="9876543210", key=None):
         "first_name": "Aditi", "last_name": "Nair", "mobile": mobile,
         "dob": "2004-03-14", "consent": {"accepted": True},
     })
+
+
+def _verify_signup(client, sender, registration_id):
+    verified = client.post(
+        "/api/v1/auth/student/otp/verify",
+        json={"registration_id": registration_id, "code": sender.sent[-1][1]},
+    )
+    assert verified.status_code == 200
+    assert verified.json() == {"status": "verified"}
+    assert "HttpOnly" in verified.headers["set-cookie"]
+    client.headers["Origin"] = settings.cors_origins[0]
 
 
 # --- probe: configured_provider_resolution --------------------------------- #
@@ -377,37 +389,41 @@ def test_recovery_mobile_validation(ctx, bad):
 
 
 # --- guardian consent + verification status endpoints ----------------------- #
-def test_guardian_consent_completion(ctx):
+def test_student_cannot_complete_own_guardian_consent(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = client.post("/api/v1/auth/student/register", json={
         "first_name": "Minor", "last_name": "Student", "mobile": "9000000000",
         "dob": "2012-01-01", "consent": {"accepted": True}})
     reg_id = r.json()["registration_id"]
-    done = client.post("/api/v1/auth/student/guardian-consent/complete", json={"registration_id": reg_id})
-    assert done.status_code == 200 and done.json()["status"] == "verified"
+    _verify_signup(client, sender, reg_id)
+    done = client.post("/api/v1/auth/student/guardian-consent/complete", json={})
+    assert done.status_code == 403
+    assert done.json()["detail"]["code"] == "guardian_self_approval_forbidden"
 
 
 def test_guardian_consent_not_required_for_adult(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
     reg_id = r.json()["registration_id"]
-    resp = client.post("/api/v1/auth/student/guardian-consent/complete", json={"registration_id": reg_id})
+    _verify_signup(client, sender, reg_id)
+    resp = client.post("/api/v1/auth/student/guardian-consent/complete", json={})
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "guardian_consent_not_required"
 
 
-def test_verification_status_transitions(ctx):
+def test_student_can_read_but_cannot_approve_verification_status(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
     reg_id = r.json()["registration_id"]
-    got = client.get("/api/v1/auth/student/verification/status", params={"registration_id": reg_id})
+    _verify_signup(client, sender, reg_id)
+    got = client.get("/api/v1/auth/student/verification/status")
     assert got.status_code == 200 and got.json()["status"] == "pending"
-    ok = client.post("/api/v1/auth/student/verification/status", json={"registration_id": reg_id, "status": "in_review"})
-    assert ok.status_code == 200 and ok.json()["status"] == "in_review"
-    ok2 = client.post("/api/v1/auth/student/verification/status", json={"registration_id": reg_id, "status": "verified"})
-    assert ok2.status_code == 200
-    # verified is terminal — cannot go back to pending
-    bad = client.post("/api/v1/auth/student/verification/status", json={"registration_id": reg_id, "status": "pending"})
-    assert bad.status_code == 409 and bad.json()["detail"]["code"] == "invalid_transition"
+    blocked = client.post(
+        "/api/v1/auth/student/verification/status",
+        json={"registration_id": reg_id, "status": "verified"},
+    )
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "verification_reviewer_required"
+    assert client.get("/api/v1/auth/student/verification/status").json()["status"] == "pending"
 
 
 def test_register_conflict_and_idempotent_replay(ctx):
@@ -429,7 +445,6 @@ def test_academic_profile_requires_verified_otp_and_persists_encrypted(ctx):
     registered = _register(client)
     reg_id = registered.json()["registration_id"]
     payload = {
-        "registration_id": reg_id,
         "college": "National Law School of India University",
         "year_of_study": "3rd year",
         "enrolment_number": "KA/1234/2023",
@@ -437,12 +452,13 @@ def test_academic_profile_requires_verified_otp_and_persists_encrypted(ctx):
         "bar_enrolment_number": "D/1234/2024",
     }
     blocked = client.patch("/api/v1/auth/student/profile", json=payload)
-    assert blocked.status_code == 403
-    verified = client.post(
-        "/api/v1/auth/student/otp/verify",
-        json={"registration_id": reg_id, "code": sender.sent[-1][1]},
+    assert blocked.status_code == 401
+    _verify_signup(client, sender, reg_id)
+    legacy_uuid = client.patch(
+        "/api/v1/auth/student/profile",
+        json={"registration_id": reg_id, **payload},
     )
-    assert verified.status_code == 200
+    assert legacy_uuid.status_code == 422
     saved = client.patch("/api/v1/auth/student/profile", json=payload)
     assert saved.status_code == 200 and saved.json() == {"status": "saved"}
     with _fresh(SessionLocal) as s:

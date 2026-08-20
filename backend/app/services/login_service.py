@@ -85,11 +85,10 @@ def start(
     now = _as_utc(now)
     lookup = keyed_hash(mobile)
     registration = session.scalar(
-        select(StudentRegistration).where(
-            StudentRegistration.mobile_hash == lookup,
-            StudentRegistration.dob_hash_state == "verified",
-        )
+        select(StudentRegistration).where(StudentRegistration.mobile_hash == lookup)
     )
+    if not otp_service.registration_is_authorizable(registration):
+        registration = None
     if registration is not None:
         # Serialize the cooldown decision as well as the eventual replacement;
         # locking only in issue_challenge would allow two deliverable codes.
@@ -99,7 +98,7 @@ def start(
     user = session.get(User, registration.user_id) if registration is not None else None
     eligible = bool(
         registration
-        and registration.dob_hash_state == "verified"
+        and otp_service.registration_is_authorizable(registration)
         and registration.status in {"otp_verified", "active"}
         and user
         and user.role == "student"
@@ -187,7 +186,7 @@ def rotate_authenticated_session(
     if (
         user is None
         or user.role != "student"
-        or registration.dob_hash_state != "verified"
+        or not otp_service.registration_is_authorizable(registration)
         or registration.status not in {"otp_verified", "active"}
         or user.status in {"suspended", "deleted"}
     ):
@@ -284,14 +283,18 @@ def verify(
         raise LoginError()
 
     registration = session.get(StudentRegistration, attempt.registration_id)
-    if registration is None:
+    if not otp_service.registration_is_authorizable(registration):
         session.rollback()
         raise LoginError()
     return rotate_authenticated_session(session, registration, now)
 
 
 def _active_session(
-    session: Session, raw_token: str | None, now: datetime
+    session: Session,
+    raw_token: str | None,
+    now: datetime,
+    *,
+    touch: bool = True,
 ) -> AuthSession | None:
     if not raw_token:
         return None
@@ -302,18 +305,28 @@ def _active_session(
     if row is None or row.status != "active":
         return None
     if _as_utc(row.expires_at) <= now:
-        row.status = "expired"
-        session.commit()
+        if touch:
+            row.status = "expired"
+            session.commit()
         return None
     return row
 
 
 def session_claims(
-    session: Session, raw_token: str | None, now: datetime
+    session: Session,
+    raw_token: str | None,
+    now: datetime,
+    *,
+    touch: bool = True,
 ) -> dict[str, object] | None:
-    """Resolve an HttpOnly-cookie token into the existing actor-claims shape."""
+    """Resolve an HttpOnly-cookie token into the existing actor-claims shape.
+
+    ``touch=False`` is the authorization-dependency path: it must be a pure
+    read so a subsequently denied request cannot change session lifecycle or
+    telemetry. Explicit session discovery retains the default lifecycle touch.
+    """
     now = _as_utc(now)
-    auth_session = _active_session(session, raw_token, now)
+    auth_session = _active_session(session, raw_token, now, touch=touch)
     if auth_session is None:
         return None
     user = session.get(User, auth_session.user_id)
@@ -324,8 +337,9 @@ def session_claims(
     # HttpOnly session record once authenticated, so every downstream endpoint
     # consumes one server-authoritative ActorContext.
     if user.role in {"admin", "moderator", "safety_officer", "legal_reviewer"}:
-        auth_session.last_seen_at = now
-        session.commit()
+        if touch:
+            auth_session.last_seen_at = now
+            session.commit()
         return {
             "sub": str(user.id),
             "roles": [user.role],
@@ -336,15 +350,21 @@ def session_claims(
         }
     if user.role != "student":
         return None
-    registration = session.scalar(
-        select(StudentRegistration)
-        .where(StudentRegistration.user_id == user.id)
-        .order_by(StudentRegistration.created_at.desc())
+    candidates = list(
+        session.scalars(
+            select(StudentRegistration)
+            .where(
+                StudentRegistration.user_id == user.id,
+                *otp_service.registration_authority_filters(),
+            )
+            .order_by(StudentRegistration.created_at.desc())
+            .limit(2)
+        )
     )
+    registration = candidates[0] if len(candidates) == 1 else None
     if (
         registration is None
         or registration.status != "active"
-        or registration.dob_hash_state != "verified"
     ):
         return None
     profile = session.scalar(
@@ -366,8 +386,9 @@ def session_claims(
             )
         }
     )
-    auth_session.last_seen_at = now
-    session.commit()
+    if touch:
+        auth_session.last_seen_at = now
+        session.commit()
     return {
         "sub": str(user.id),
         "roles": [user.role],

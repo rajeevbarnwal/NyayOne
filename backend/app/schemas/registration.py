@@ -101,11 +101,14 @@ class StudentRegisterResponse(BaseModel):
 
 
 class StudentAcademicProfileRequest(BaseModel):
-    """S-10 academic profile payload; unknown fields are rejected."""
+    """S-10 owner-scoped academic profile payload.
+
+    The authenticated server session resolves the registration.  A client
+    registration UUID is deliberately not part of this protected contract.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    registration_id: uuid.UUID
     college: str
     year_of_study: str
     enrolment_number: str
@@ -161,11 +164,14 @@ class StudentAcademicProfileRequest(BaseModel):
 
 
 class InstitutionalEmailVerificationRequest(BaseModel):
-    """S-15 request boundary; raw email is validated before route execution."""
+    """S-15 owner-scoped request boundary.
+
+    Ownership comes from the authenticated server session, never a UUID in the
+    request body. Raw email is validated before route execution.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    registration_id: uuid.UUID
     institutional_email: str
 
     @field_validator("institutional_email")

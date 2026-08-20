@@ -1,7 +1,13 @@
 import { apiFetch, newRequestId } from '../../../lib/apiClient';
 
-const SESSION_KEY = 'legalsaathi.student.registration.v2';
+// A registration UUID is a pre-authentication OTP correlation reference, not an
+// authorization capability. Keep it only in this page-lifetime module slot and
+// never persist it in browser storage, cookies or URLs. A reload intentionally
+// requires the user to restart signup rather than resurrect a bearer-like UUID.
+const RETIRED_SESSION_KEY = 'legalsaathi.student.registration.v2';
 const LEGACY_PII_KEY = 'legalsaathi.student.profile.v1';
+
+let onboardingSession: RegistrationSession | null = null;
 
 export interface RegistrationSession {
   registrationId: string;
@@ -22,7 +28,6 @@ export interface RegisterStudentInput {
 }
 
 export interface AcademicProfileInput {
-  registrationId: string;
   college: string;
   yearOfStudy: string;
   enrolmentNumber: string;
@@ -70,6 +75,14 @@ async function jsonRequest<T>(
     const detail = typeof body.detail === 'object'
       ? body.detail
       : body.error?.detail ?? body.error;
+    // A rejected authenticated boundary is also a revocation signal. Do not
+    // leave any pre-auth correlation reference alive after the server denies
+    // the browser session. HTTP 401 alone is not sufficient: a normal wrong
+    // signup OTP is also 401 and must retain its memory-only correlation value
+    // so the user can retry or resend within the server-owned attempt budget.
+    if (response.status === 401 && detail?.code === 'authentication_required') {
+      clearRegistrationSession();
+    }
     throw new RegistrationApiError(
       response.status,
       detail?.code ?? `http_${response.status}`,
@@ -107,6 +120,9 @@ export async function verifyStudentOtp(
     method: 'POST',
     body: JSON.stringify({ registration_id: registrationId, code }),
   });
+  // Successful signup verification establishes the server-owned authenticated
+  // context. The client must no longer retain the registration reference.
+  clearRegistrationSession();
 }
 
 export async function resendStudentOtp(registrationId: string): Promise<void> {
@@ -122,7 +138,6 @@ export async function saveAcademicProfile(
   await jsonRequest('/api/v1/auth/student/profile', {
     method: 'PATCH',
     body: JSON.stringify({
-      registration_id: input.registrationId,
       college: input.college,
       year_of_study: input.yearOfStudy,
       enrolment_number: input.enrolmentNumber,
@@ -133,13 +148,11 @@ export async function saveAcademicProfile(
 }
 
 export async function requestInstitutionalEmailVerification(
-  registrationId: string,
   institutionalEmail: string,
 ): Promise<{ status: string }> {
   return jsonRequest('/api/v1/auth/student/verification/email/request', {
     method: 'POST',
     body: JSON.stringify({
-      registration_id: registrationId,
       institutional_email: institutionalEmail.trim(),
     }),
   });
@@ -183,6 +196,7 @@ export async function verifyLoginOtp(loginId: string, code: string): Promise<voi
     method: 'POST',
     body: JSON.stringify({ login_id: loginId, code }),
   });
+  clearRegistrationSession();
 }
 
 export async function getStudentSession(): Promise<StudentSessionActor | null> {
@@ -190,14 +204,23 @@ export async function getStudentSession(): Promise<StudentSessionActor | null> {
     authenticated: boolean;
     actor: StudentSessionActor | null;
   }>('/api/v1/auth/student/session', { method: 'GET' });
+  // Session discovery is a bootstrap boundary in both directions. An upgraded
+  // tab may still contain the retired UUID-bearing sessionStorage entry even
+  // when its HttpOnly cookie is valid, so authenticated discovery must retire
+  // it just as aggressively as anonymous discovery.
+  clearRegistrationSession();
   return result.authenticated ? result.actor : null;
 }
 
 export async function logoutStudent(): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/logout', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
+  try {
+    await jsonRequest('/api/v1/auth/student/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  } finally {
+    clearRegistrationSession();
+  }
 }
 
 export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
@@ -209,32 +232,37 @@ export function notifyStudentAuthChanged(): void {
 }
 
 export function saveRegistrationSession(value: RegistrationSession): void {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
-  // Remove the old browser-persisted PII draft whenever the corrected flow runs.
-  window.localStorage.removeItem(LEGACY_PII_KEY);
+  onboardingSession = { ...value };
+  retireBrowserRegistrationState();
 }
 
 export function loadRegistrationSession(): RegistrationSession | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<RegistrationSession>;
-    if (
-      typeof parsed.registrationId !== 'string'
-      || typeof parsed.destinationMasked !== 'string'
-      || typeof parsed.issuedAt !== 'number'
-      || typeof parsed.isMinor !== 'boolean'
-      || typeof parsed.guardianConsentPending !== 'boolean'
-    ) return null;
-    return parsed as RegistrationSession;
-  } catch {
-    return null;
-  }
+  retireBrowserRegistrationState();
+  return onboardingSession ? { ...onboardingSession } : null;
 }
 
 export function clearRegistrationSession(): void {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(SESSION_KEY);
+  onboardingSession = null;
+  retireBrowserRegistrationState();
 }
+
+function retireBrowserRegistrationState(): void {
+  if (typeof window === 'undefined') return;
+  // Delete both the old UUID-bearing session entry and the older PII draft on
+  // every boundary crossing. Neither is migrated into a replacement store.
+  try {
+    window.sessionStorage.removeItem(RETIRED_SESSION_KEY);
+  } catch {
+    // Storage may be unavailable under strict browser privacy settings. The
+    // active reference remains memory-only and is still cleared independently.
+  }
+  try {
+    window.localStorage.removeItem(LEGACY_PII_KEY);
+  } catch {
+    // Same fail-safe handling for the retired legacy PII draft.
+  }
+}
+
+// Erase retired browser-persisted registration/PII state as soon as the new
+// bundle loads, even if the subsequent server-session probe cannot complete.
+retireBrowserRegistrationState();

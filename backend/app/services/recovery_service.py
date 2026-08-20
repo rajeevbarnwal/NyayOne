@@ -50,16 +50,15 @@ def start(session: Session, mobile: str, now: datetime) -> tuple[str, otp_outbox
     lookup_hash = keyed_hash(mobile)
     reg = session.scalar(
         select(StudentRegistration).where(
-            StudentRegistration.mobile_hash == lookup_hash,
-            StudentRegistration.dob_hash_state == "verified",
+            StudentRegistration.mobile_hash == lookup_hash
         )
     )
+    if not otp_service.registration_is_authorizable(reg):
+        reg = None
     if reg is not None:
         # The stable parent lock must cover the recent-request decision, not
         # merely the later child insert, to prevent duplicate deliveries.
         reg = otp_service.lock_registration_for_update(session, reg.id)
-        if reg is not None and reg.dob_hash_state != "verified":
-            reg = None
     rs = RecoverySession(
         opaque_id=opaque_id,
         lookup_hash=lookup_hash,
@@ -120,8 +119,10 @@ def _load_usable(session: Session, opaque_id: str, now: datetime) -> RecoverySes
     rs = session.scalar(select(RecoverySession).where(RecoverySession.opaque_id == opaque_id))
     if rs is None or rs.registration_id is None or rs.challenge_id is None:
         raise RecoveryError(401, "recovery_failed")
-    registration = session.get(StudentRegistration, rs.registration_id)
-    if registration is None or registration.dob_hash_state != "verified":
+    registration = otp_service.lock_registration_for_update(
+        session, rs.registration_id
+    )
+    if registration is None:
         raise RecoveryError(401, "recovery_failed")
     if rs.status == "consumed" or rs.consumed_at is not None:
         raise RecoveryError(401, "recovery_failed")
@@ -151,8 +152,10 @@ def complete(session: Session, opaque_id: str, now: datetime) -> None:
     rs = session.scalar(select(RecoverySession).where(RecoverySession.opaque_id == opaque_id))
     if rs is None or rs.registration_id is None or rs.status != "verified":
         raise RecoveryError(401, "recovery_failed")
-    registration = session.get(StudentRegistration, rs.registration_id)
-    if registration is None or registration.dob_hash_state != "verified":
+    registration = otp_service.lock_registration_for_update(
+        session, rs.registration_id
+    )
+    if registration is None:
         raise RecoveryError(401, "recovery_failed")
     rs.status = "consumed"
     rs.consumed_at = now

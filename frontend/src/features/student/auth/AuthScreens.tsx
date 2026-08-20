@@ -23,6 +23,7 @@ import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
   loadRegistrationSession,
+  notifyStudentAuthChanged,
   registerStudent,
   resendStudentOtp,
   saveRegistrationSession,
@@ -413,6 +414,7 @@ export function OtpVerify() {
       setBusy(true);
       try {
         await verifyStudentOtp(server.registrationId, code);
+        notifyStudentAuthChanged();
         setStatus('verified');
         nav(server.guardianConsentPending ? '/s-16' : '/s-09');
       } catch (error) {
@@ -614,26 +616,16 @@ export function EmailVerify() {
       setSent(false);
       return;
     }
-    const registration = loadRegistrationSession();
-    if (!registration) {
-      setError('Your registration session expired. Return to registration and verify your mobile again.');
-      setSent(false);
-      return;
-    }
     setSubmitting(true);
     setError(undefined);
     setSent(false);
     try {
-      await requestInstitutionalEmailVerification(
-        registration.registrationId,
-        email,
-      );
+      await requestInstitutionalEmailVerification(email);
       setSent(true);
     } catch (cause) {
-      if (
-        cause instanceof RegistrationApiError
-        && cause.field === 'institutional_email'
-      ) {
+      if (cause instanceof RegistrationApiError && cause.status === 401) {
+        setError('Your session expired. Sign in again to request verification.');
+      } else if (cause instanceof RegistrationApiError && cause.field === 'institutional_email') {
         setError('Use the institutional email saved in your academic profile.');
       } else {
         setError('Verification could not be requested. Please retry.');

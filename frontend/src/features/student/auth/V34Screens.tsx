@@ -374,7 +374,11 @@ export function V34OtpVerify() {
   async function submit() {
     if (!isValidOtpFormat(code)) { setStatus('Enter all six digits.'); return; } setBusy(true);
     if (server) {
-      try { await verifyStudentOtp(server.registrationId, code); nav(server.guardianConsentPending ? '/s-16' : '/s-10'); }
+      try {
+        await verifyStudentOtp(server.registrationId, code);
+        notifyStudentAuthChanged();
+        nav(server.guardianConsentPending ? '/s-16' : '/s-10');
+      }
       catch (caught) { if (caught instanceof RegistrationApiError && typeof caught.attemptsLeft === 'number') setAttempts(caught.attemptsLeft); setStatus('That code could not be verified. Check all six digits.'); }
       finally { setBusy(false); } return;
     }
