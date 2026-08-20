@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 import scripts.nyay3_postgres_characterization as gate
+from sqlalchemy import create_engine, text
 
 from scripts.nyay3_postgres_characterization import (
     Blocked,
@@ -23,6 +24,7 @@ from scripts.nyay3_postgres_characterization import (
     _ScratchDatabaseManager,
     _clean_lifecycle_case_passes,
     _dirty_lifecycle_case_passes,
+    _exact_revision_check,
     _expectation_results,
     _finalize_cleanup,
     _normalize_predicate,
@@ -30,6 +32,27 @@ from scripts.nyay3_postgres_characterization import (
     _reject_ambient_libpq_environment,
     _safe_local_postgres_url,
 )
+
+
+def test_historical_lifecycle_revision_check_rejects_future_head():
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num VARCHAR(32))")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version VALUES (:revision)"),
+                {"revision": "0017_registration_invariants"},
+            )
+        assert _exact_revision_check(
+            engine, "0017_registration_invariants"
+        )["returncode"] == 0
+        assert _exact_revision_check(
+            engine, "0018_registration_idempotency"
+        )["returncode"] == 1
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(autouse=True)

@@ -152,6 +152,7 @@ def test_assertion_contract_is_unique_and_tracks_exact_revision_pair() -> None:
         (HEAD, True),
         (PARENT, False),
         ("0017_registration_invariants", False),
+        ("0018_registration_idempotency", False),
         (None, False),
     ],
 )
@@ -170,7 +171,7 @@ def test_historical_gate_revision_is_not_repository_head() -> None:
         "script_location", str(BACKEND / "app" / "db" / "migrations")
     )
     script = ScriptDirectory.from_config(config)
-    assert script.get_current_head() == "0017_registration_invariants"
+    assert script.get_current_head() == "0018_registration_idempotency"
     assert HEAD != script.get_current_head()
     assert script.get_revision(HEAD).down_revision == PARENT
 

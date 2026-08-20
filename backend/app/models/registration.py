@@ -44,6 +44,13 @@ GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
 RECOVERY_STATUSES = ("pending", "verified", "consumed", "expired")
 LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired")
 AUTH_SESSION_STATUSES = ("active", "revoked", "expired")
+REGISTRATION_IDEMPOTENCY_STATES = (
+    "pending",
+    "succeeded",
+    "failed",
+    "retired",
+    "erased",
+)
 DOB_HASH_STATES = ("verified", "quarantined", "erased")
 DOB_RECONCILIATION_OUTCOMES = ("reconciled", "quarantined")
 DOB_RECONCILIATION_REASONS = (
@@ -61,6 +68,17 @@ _DOB_SOURCE_DIGEST_HEX_ONLY_SQL = "source_ciphertext_sha256"
 for _hex_character in "0123456789abcdef":
     _DOB_SOURCE_DIGEST_HEX_ONLY_SQL = (
         f"replace({_DOB_SOURCE_DIGEST_HEX_ONLY_SQL}, '{_hex_character}', '')"
+    )
+_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL = "idempotency_key_hash"
+_REQUEST_FINGERPRINT_HEX_ONLY_SQL = "request_fingerprint"
+for _hex_character in "0123456789abcdef":
+    _IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL = (
+        f"replace({_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _REQUEST_FINGERPRINT_HEX_ONLY_SQL = (
+        f"replace({_REQUEST_FINGERPRINT_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
     )
 
 
@@ -112,11 +130,23 @@ class StudentRegistration(TimestampedBase):
     status: Mapped[str] = mapped_column(String(32), default="otp_pending", nullable=False)
     is_minor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 0018 marks only pre-migration raw idempotency keys as legacy. New code
+    # stores a domain-separated keyed HMAC in registration_idempotency_records
+    # and leaves this raw column NULL. The server default makes an old binary's
+    # post-0018 keyed insert fail the CHECK instead of bypassing the ledger.
+    idempotency_key_legacy: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.false(), nullable=False
+    )
     __table_args__ = (
         UniqueConstraint("mobile_hash", name="uq_student_registrations_mobile_hash"),
         UniqueConstraint("idempotency_key", name="uq_student_registrations_idempotency_key"),
         _in("status", REGISTRATION_STATUSES, "status"),
         _in("dob_hash_state", DOB_HASH_STATES, "dob_hash_state"),
+        CheckConstraint(
+            "(idempotency_key IS NULL AND idempotency_key_legacy = false) OR "
+            "(idempotency_key IS NOT NULL AND idempotency_key_legacy = true)",
+            name="idempotency_key_legacy",
+        ),
         CheckConstraint(
             "(dob_hash_state IN ('verified', 'quarantined') AND status <> 'deleted' "
             "AND length(dob_hash) = 64 "
@@ -131,6 +161,95 @@ class StudentRegistration(TimestampedBase):
         ),
     )
     profile: Mapped["StudentProfile | None"] = relationship(back_populates="registration", uselist=False)
+
+
+class RegistrationIdempotencyRecord(Base):
+    """Durable, non-PII registration request/outcome ledger (NYAY-17)."""
+
+    __tablename__ = "registration_idempotency_records"
+
+    # Domain-separated keyed HMAC of the opaque wire key; raw keys never enter
+    # this table. This is the sole new-registration uniqueness authority.
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_fingerprint_version: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    outcome_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    registration_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "student_registrations.id",
+            name="fk_reg_idem_registration",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    outbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "otp_outbox.id",
+            name="fk_reg_idem_outbox",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+        nullable=False,
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key_hash",
+            name="uq_registration_idempotency_records_idempotency_key_hash",
+        ),
+        UniqueConstraint(
+            "registration_id",
+            name="uq_registration_idempotency_records_registration_id",
+        ),
+        UniqueConstraint(
+            "outbox_id",
+            name="uq_registration_idempotency_records_outbox_id",
+        ),
+        _in("state", REGISTRATION_IDEMPOTENCY_STATES, "state"),
+        CheckConstraint(
+            "length(idempotency_key_hash) = 64 AND "
+            f"length({_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL}) = 0",
+            name="key_hash_shape",
+        ),
+        CheckConstraint(
+            "((state IN ('pending', 'succeeded', 'failed') AND "
+            "request_fingerprint_version = 'v1' AND "
+            "request_fingerprint IS NOT NULL AND "
+            "length(request_fingerprint) = 64 AND "
+            f"length({_REQUEST_FINGERPRINT_HEX_ONLY_SQL}) = 0) OR "
+            "(state IN ('retired', 'erased') AND "
+            "request_fingerprint IS NULL AND "
+            "request_fingerprint_version IS NULL))",
+            name="request_fingerprint_shape",
+        ),
+        CheckConstraint(
+            "(state = 'pending' AND registration_id IS NOT NULL AND "
+            "outbox_id IS NOT NULL AND outcome_code IS NULL) OR "
+            "(state = 'succeeded' AND registration_id IS NOT NULL AND "
+            "outbox_id IS NULL AND outcome_code IS NULL) OR "
+            "(state = 'failed' AND registration_id IS NULL AND "
+            "outbox_id IS NULL AND outcome_code = 'otp_delivery_failed') OR "
+            "(state IN ('retired', 'erased') AND registration_id IS NULL AND "
+            "outbox_id IS NULL AND "
+            "outcome_code = 'registration_replay_expired')",
+            name="state_links",
+        ),
+    )
 
 
 class RegistrationDobReconciliation(Base):

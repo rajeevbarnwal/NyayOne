@@ -49,6 +49,81 @@ describe('server-authoritative student registration API', () => {
     });
   });
 
+  it('reuses one memory-only key after an uncertain transport failure', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('synthetic network failure'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        registration_id: 'opaque-registration-id',
+        status: 'otp_pending',
+      }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const input = {
+      firstName: 'Aditi', middleName: null, lastName: 'Nair',
+      mobile: '9876543210', dob: '2004-03-14', policyVersion: 'dpdp-2023.v1',
+    };
+
+    await expect(registerStudent(input)).rejects.toBeInstanceOf(TypeError);
+    await expect(registerStudent(input)).resolves.toEqual({
+      registration_id: 'opaque-registration-id', status: 'otp_pending',
+    });
+
+    const keys = fetchMock.mock.calls.map(([, init]) => (
+      new Headers((init as RequestInit).headers).get('Idempotency-Key')
+    ));
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('rotates the memory-only key when accepted request content changes', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('synthetic network failure'));
+    vi.stubGlobal('fetch', fetchMock);
+    const input = {
+      firstName: 'Aditi', middleName: null, lastName: 'Nair',
+      mobile: '9876543210', dob: '2004-03-14', policyVersion: 'dpdp-2023.v1',
+    };
+
+    await expect(registerStudent(input)).rejects.toBeInstanceOf(TypeError);
+    await expect(registerStudent({ ...input, lastName: 'Rao' }))
+      .rejects.toBeInstanceOf(TypeError);
+
+    const keys = fetchMock.mock.calls.map(([, init]) => (
+      new Headers((init as RequestInit).headers).get('Idempotency-Key')
+    ));
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBeTruthy();
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
+  it('starts a fresh logical attempt after a typed terminal delivery failure', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { code: 'otp_delivery_failed' },
+      }), { status: 502, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        registration_id: 'opaque-registration-id',
+        status: 'otp_pending',
+      }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const input = {
+      firstName: 'Aditi', middleName: null, lastName: 'Nair',
+      mobile: '9876543210', dob: '2004-03-14', policyVersion: 'dpdp-2023.v1',
+    };
+
+    await expect(registerStudent(input)).rejects.toEqual(expect.objectContaining({
+      status: 502, code: 'otp_delivery_failed',
+    }));
+    await expect(registerStudent(input)).resolves.toEqual({
+      registration_id: 'opaque-registration-id', status: 'otp_pending',
+    });
+
+    const keys = fetchMock.mock.calls.map(([, init]) => (
+      new Headers((init as RequestInit).headers).get('Idempotency-Key')
+    ));
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBeTruthy();
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
   it('maps every academic field without sending an actor-selected registration UUID', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ status: 'saved' }),

@@ -1,0 +1,764 @@
+"""Focused NYAY-17 registration idempotency service/API contracts."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+import uuid
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+import pytest
+from pydantic import ValidationError
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import app.models  # noqa: F401
+from app.api.v1 import auth_student as endpoint
+from app.core.exceptions import register_exception_handlers
+from app.core.retention import RetentionPolicy, purge_expired
+from app.db.models.audit import AuditEvent
+from app.db.session import get_session
+from app.models.registration import (
+    Consent,
+    OtpChallenge,
+    OtpOutbox,
+    RegistrationIdempotencyRecord,
+    StudentProfile,
+    StudentRegistration,
+    StudentVerification,
+    User,
+)
+from app.schemas.registration import StudentRegisterRequest
+from app.services import otp_service, registration_service
+from app.services.otp_sender import OtpSendError
+from tests import dbtemplate
+
+
+NOW = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+KEY = "opaque registration key"
+
+
+def _payload(**changes):
+    payload = {
+        "first_name": "Aditi",
+        "middle_name": "Rani",
+        "last_name": "Nair",
+        "mobile": "9876543210",
+        "dob": "2004-03-14",
+        "consent": {"accepted": True, "policy_version": "dpdp-2023.v1"},
+        "college": "National Law School",
+        "year_of_study": "Third Year",
+        "enrolment_number": "KA/1234/2023",
+        "institutional_email": "aditi@nls.ac.in",
+        "bar_enrolment_number": "D/1/2020",
+    }
+    payload.update(changes)
+    return payload
+
+
+def _request(**changes) -> StudentRegisterRequest:
+    return StudentRegisterRequest(**_payload(**changes))
+
+
+class CapturingSender:
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+
+    def send(self, destination: str, code: str) -> None:
+        self.sent.append((destination, code))
+
+
+class FailingSender:
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def send(self, destination: str, code: str) -> None:
+        self.attempts += 1
+        raise OtpSendError("provider unavailable")
+
+
+@pytest.fixture()
+def http_ctx():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    dbtemplate.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
+
+    def production_session():
+        session = factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    sender = CapturingSender()
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(endpoint.router, prefix="/api/v1")
+    app.dependency_overrides[get_session] = production_session
+    app.dependency_overrides[endpoint.get_otp_sender] = lambda: sender
+    app.dependency_overrides[endpoint.get_outbox_session_factory] = lambda: factory
+    client = TestClient(app, raise_server_exceptions=False)
+    yield client, factory, sender, app
+    engine.dispose()
+
+
+def _counts(session: Session) -> tuple[int, ...]:
+    models = (
+        User,
+        StudentRegistration,
+        Consent,
+        StudentProfile,
+        StudentVerification,
+        OtpChallenge,
+        OtpOutbox,
+        RegistrationIdempotencyRecord,
+        AuditEvent,
+    )
+    return tuple(
+        int(session.scalar(select(func.count()).select_from(model)) or 0)
+        for model in models
+    )
+
+
+MUTATIONS = (
+    ("first_name", "Meera"),
+    ("middle_name", None),
+    ("last_name", "Shah"),
+    ("mobile", "9876543211"),
+    ("dob", "2003-03-14"),
+    ("consent", {"accepted": False, "policy_version": "dpdp-2023.v1"}),
+    ("consent", {"accepted": True, "policy_version": "dpdp-2023.v2"}),
+    ("college", "Another Law School"),
+    ("year_of_study", "Fourth Year"),
+    ("enrolment_number", "KA/9999/2023"),
+    ("institutional_email", "other@nls.ac.in"),
+    ("bar_enrolment_number", "D/2/2020"),
+)
+
+
+@pytest.mark.parametrize(("field", "value"), MUTATIONS)
+def test_v1_fingerprint_binds_every_canonical_leaf(field, value):
+    original = registration_service.registration_request_fingerprint(_request())
+    assert (
+        registration_service.registration_request_fingerprint(
+            _request(**{field: value})
+        )
+        != original
+    )
+
+
+def test_v1_normalization_and_schema_defaults_are_pinned():
+    canonical = _request(
+        first_name="Aditi",
+        college="National Law School",
+        year_of_study="Third Year",
+        institutional_email="aditi@nls.ac.in",
+    )
+    equivalent = _request(
+        first_name="  Aditi  ",
+        college=" National   Law\tSchool ",
+        year_of_study=" Third   Year ",
+        enrolment_number=" KA/1234/2023 ",
+        institutional_email=" ADITI@NLS.AC.IN ",
+        bar_enrolment_number=" D/1/2020 ",
+    )
+    assert registration_service.registration_request_fingerprint(
+        equivalent
+    ) == registration_service.registration_request_fingerprint(canonical)
+    assert set(StudentRegisterRequest.model_fields) == set(
+        registration_service.REGISTRATION_REQUEST_V1_FIELDS
+    )
+    assert StudentRegisterRequest.model_fields["college"].default is None
+    assert canonical.consent.__class__.model_fields["policy_version"].default == (
+        "dpdp-2023.v1"
+    )
+
+
+def test_ascii_mobile_and_exact_opaque_key_boundary():
+    with pytest.raises(ValidationError):
+        _request(mobile="９８７６５４３２１０")
+    for valid in ("k", "opaque internal space", "<opaque>", "x" * 200):
+        assert registration_service.validate_idempotency_key(valid) == valid
+    for invalid in ("", " edge", "edge ", "a\x00b", "a\x7fb", "x" * 201):
+        with pytest.raises(registration_service.RegistrationError) as caught:
+            registration_service.validate_idempotency_key(invalid)
+        assert (caught.value.status_code, caught.value.code) == (
+            422,
+            "invalid_idempotency_key",
+        )
+
+
+def test_exact_replay_and_all_mutations_have_zero_delta(http_ctx):
+    client, factory, sender, _app = http_ctx
+    first = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(),
+    )
+    assert first.status_code == 201
+    with factory() as session:
+        baseline = _counts(session)
+        record = session.scalar(select(RegistrationIdempotencyRecord))
+        registration = session.scalar(select(StudentRegistration))
+        assert record is not None and record.state == "succeeded"
+        assert registration is not None and registration.idempotency_key is None
+        assert KEY not in record.idempotency_key_hash
+        assert record.request_fingerprint not in first.text
+
+    replay = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(),
+    )
+    assert replay.status_code == 201
+    assert replay.json() == first.json()
+    assert replay.json()["status"] == "otp_pending"
+    assert len(sender.sent) == 1
+
+    for field, value in MUTATIONS:
+        conflict = client.post(
+            "/api/v1/auth/student/register",
+            headers={"Idempotency-Key": KEY},
+            json=_payload(**{field: value}),
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"]["code"] == "idempotency_conflict"
+        assert conflict.json()["detail"]["field"] == "Idempotency-Key"
+    with factory() as session:
+        assert _counts(session) == baseline
+    assert len(sender.sent) == 1
+
+
+def test_duplicate_and_invalid_headers_fail_before_db_or_provider(http_ctx):
+    client, factory, sender, _app = http_ctx
+    for values in (("same", "same"), ("one", "two")):
+        response = client.post(
+            "/api/v1/auth/student/register",
+            headers=[
+                ("Idempotency-Key", values[0]),
+                ("Idempotency-Key", values[1]),
+            ],
+            json=_payload(),
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_idempotency_key"
+    oversized = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": "x" * 201},
+        json=_payload(),
+    )
+    assert oversized.status_code == 422
+    with factory() as session:
+        assert _counts(session) == (0,) * 9
+    assert sender.sent == []
+
+
+def test_provider_failure_reserves_key_with_stable_502_and_mismatch_409(http_ctx):
+    client, factory, sender, app = http_ctx
+    failing = FailingSender()
+    app.dependency_overrides[endpoint.get_otp_sender] = lambda: failing
+    first = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(),
+    )
+    assert first.status_code == 502
+    with factory() as session:
+        record = session.scalar(select(RegistrationIdempotencyRecord))
+        assert record is not None and record.state == "failed"
+        assert record.registration_id is None and record.outbox_id is None
+        assert session.scalar(select(StudentRegistration)) is None
+        baseline = _counts(session)
+
+    app.dependency_overrides[endpoint.get_otp_sender] = lambda: sender
+    exact = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(),
+    )
+    mismatch = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(last_name="Shah"),
+    )
+    assert exact.status_code == 502
+    assert mismatch.status_code == 409
+    assert failing.attempts == 1 and sender.sent == []
+    with factory() as session:
+        assert _counts(session) == baseline
+
+
+def test_activation_retires_and_removes_match_oracle(http_ctx):
+    client, factory, sender, _app = http_ctx
+    created = client.post(
+        "/api/v1/auth/student/register",
+        headers={"Idempotency-Key": KEY},
+        json=_payload(),
+    )
+    verified = client.post(
+        "/api/v1/auth/student/otp/verify",
+        json={
+            "registration_id": created.json()["registration_id"],
+            "code": sender.sent[0][1],
+        },
+    )
+    assert verified.status_code == 200
+    with factory() as session:
+        record = session.scalar(select(RegistrationIdempotencyRecord))
+        assert record is not None and record.state == "retired"
+        assert record.request_fingerprint is None
+        assert record.registration_id is None and record.outbox_id is None
+        baseline = _counts(session)
+
+    signatures = []
+    for body in (_payload(), _payload(last_name="Shah")):
+        replay = client.post(
+            "/api/v1/auth/student/register",
+            headers={"Idempotency-Key": KEY},
+            json=body,
+        )
+        signatures.append((replay.status_code, replay.json()))
+    assert signatures[0] == signatures[1]
+    assert signatures[0][0] == 409
+    assert signatures[0][1]["detail"]["code"] == "registration_replay_expired"
+    with factory() as session:
+        assert _counts(session) == baseline
+    assert len(sender.sent) == 1
+
+
+@pytest.mark.parametrize("mode", ("anonymise", "delete"))
+def test_pending_otp_retention_is_uniform_erased_tombstone(db_session, mode):
+    request = _request()
+    result = registration_service.register_student(
+        db_session, request, idempotency_key=KEY, now=NOW
+    )
+    registration_id = result.registration.id
+    challenge = db_session.scalar(
+        select(OtpChallenge).where(OtpChallenge.registration_id == registration_id)
+    )
+    assert challenge is not None
+    challenge.created_at = NOW - timedelta(days=10)
+    db_session.commit()
+
+    counts = purge_expired(
+        db_session,
+        now=NOW,
+        policy=RetentionPolicy(None, None, 1, None, None, mode),
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert counts["registrations"] == 1 and counts["otp_challenges"] == 1
+    assert record is not None and record.state == "erased"
+    assert record.request_fingerprint is None and record.registration_id is None
+    if mode == "delete":
+        assert db_session.get(StudentRegistration, registration_id) is None
+    else:
+        assert db_session.get(StudentRegistration, registration_id).status == "deleted"
+    audit = db_session.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "student.registration.otp_retention_expired"
+        )
+    )
+    assert audit is not None and audit.after_state == {"mode": mode}
+
+    for candidate in (request, _request(last_name="Shah")):
+        with pytest.raises(registration_service.RegistrationError) as caught:
+            registration_service.resolve_idempotent_replay(db_session, KEY, candidate)
+        assert (caught.value.status_code, caught.value.code) == (
+            409,
+            "registration_replay_expired",
+        )
+
+
+def test_succeeded_otp_retention_preserves_registration_and_ledger(db_session):
+    request = _request()
+    result = registration_service.register_student(
+        db_session, request, idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    sender = CapturingSender()
+    registration_service.finalize_pending_registration(
+        db_session,
+        registration_service.registration_idempotency_key_hash(KEY),
+        sender,
+    )
+    registration_id = result.registration.id
+    challenge = db_session.scalar(
+        select(OtpChallenge).where(OtpChallenge.registration_id == registration_id)
+    )
+    challenge.created_at = NOW - timedelta(days=10)
+    db_session.commit()
+
+    counts = purge_expired(
+        db_session,
+        now=NOW,
+        policy=RetentionPolicy(None, None, 1, None, None, "delete"),
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert counts["registrations"] == 0 and counts["otp_challenges"] == 1
+    assert record is not None and record.state == "succeeded"
+    assert db_session.get(StudentRegistration, registration_id) is not None
+    replay = registration_service.resolve_idempotent_replay(db_session, KEY, request)
+    assert replay is not None and replay.delivery is None
+
+
+def test_invalid_retention_mode_rejects_before_mutation(db_session):
+    registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    before = _counts(db_session)
+    with pytest.raises(ValueError, match="retention mode"):
+        purge_expired(
+            db_session,
+            now=NOW,
+            policy=RetentionPolicy(0, 0, 0, 0, None, "unsafe"),
+        )
+    db_session.commit()
+    assert _counts(db_session) == before
+
+
+def test_pending_resend_repoints_claim_and_replay_delivers_only_new_intent(db_session):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    original_outbox = result.delivery.outbox_id
+    original_challenge = db_session.scalar(
+        select(OtpChallenge).where(OtpChallenge.registration_id == result.registration.id)
+    )
+    original_challenge.metadata_json = {
+        **original_challenge.metadata_json,
+        "issued_at": (NOW - timedelta(minutes=2)).isoformat(),
+    }
+    db_session.commit()
+    _challenge, replacement = otp_service.resend(
+        db_session,
+        result.registration.id,
+        NOW,
+        purpose="signup",
+        destination="9876543210",
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert record.outbox_id == replacement.outbox_id != original_outbox
+    assert db_session.get(OtpOutbox, original_outbox).status == "void"
+
+    sender = CapturingSender()
+    registration_service.finalize_pending_registration(
+        db_session,
+        registration_service.registration_idempotency_key_hash(KEY),
+        sender,
+    )
+    assert len(sender.sent) == 1
+    assert db_session.scalar(select(RegistrationIdempotencyRecord)).state == "succeeded"
+
+
+def test_http_resend_closes_crash_pending_claim_without_later_replay(http_ctx):
+    client, factory, sender, _app = http_ctx
+    with factory() as session:
+        result = registration_service.register_student(
+            session, _request(), idempotency_key=KEY, now=NOW
+        )
+        registration_id = result.registration.id
+        challenge = session.scalar(
+            select(OtpChallenge).where(
+                OtpChallenge.registration_id == registration_id
+            )
+        )
+        challenge.metadata_json = {
+            **challenge.metadata_json,
+            "issued_at": "2000-01-01T00:00:00+00:00",
+        }
+        session.commit()
+
+    response = client.post(
+        "/api/v1/auth/student/otp/resend",
+        json={"registration_id": str(registration_id)},
+    )
+    assert response.status_code == 202
+    assert len(sender.sent) == 1
+    with factory() as session:
+        record = session.scalar(select(RegistrationIdempotencyRecord))
+        assert record is not None and record.state == "succeeded"
+        assert record.registration_id == registration_id
+        assert record.outbox_id is None
+
+
+def test_retention_reconciles_pending_sent_window_as_success(db_session):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    registration_id = result.registration.id
+    challenge = db_session.scalar(
+        select(OtpChallenge).where(OtpChallenge.registration_id == registration_id)
+    )
+    outbox = db_session.get(OtpOutbox, result.delivery.outbox_id)
+    challenge.created_at = NOW - timedelta(days=10)
+    outbox.status = "sent"
+    outbox.code_ct = None
+    outbox.delivered_at = NOW - timedelta(days=10)
+    db_session.commit()
+
+    counts = purge_expired(
+        db_session,
+        now=NOW,
+        policy=RetentionPolicy(None, None, 1, None, None, "delete"),
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert counts["registrations"] == 0 and counts["otp_challenges"] == 1
+    assert record is not None and record.state == "succeeded"
+    assert record.registration_id == registration_id and record.outbox_id is None
+    assert db_session.get(StudentRegistration, registration_id) is not None
+
+
+def test_expired_crash_pending_replay_never_sends_unusable_code(db_session):
+    request = _request()
+    result = registration_service.register_student(
+        db_session, request, idempotency_key=KEY, now=NOW
+    )
+    challenge = db_session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.registration_id == result.registration.id
+        )
+    )
+    challenge.expires_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    db_session.commit()
+    sender = CapturingSender()
+    with pytest.raises(registration_service.RegistrationError) as caught:
+        registration_service.finalize_pending_registration(
+            db_session,
+            registration_service.registration_idempotency_key_hash(KEY),
+            sender,
+        )
+    assert (caught.value.status_code, caught.value.code) == (
+        502,
+        "otp_delivery_failed",
+    )
+    assert sender.sent == []
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert record is not None and record.state == "failed"
+    assert db_session.scalar(select(StudentRegistration)) is None
+
+
+def test_retention_after_activation_preserves_retired_first_cause(db_session):
+    request = _request()
+    result = registration_service.register_student(
+        db_session, request, idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    sender = CapturingSender()
+    registration_service.finalize_pending_registration(
+        db_session,
+        registration_service.registration_idempotency_key_hash(KEY),
+        sender,
+    )
+    otp_service.verify(
+        db_session,
+        result.registration.id,
+        sender.sent[0][1],
+        NOW,
+        purpose="signup",
+    )
+    registration = db_session.get(StudentRegistration, result.registration.id)
+    registration.updated_at = NOW - timedelta(days=10)
+    db_session.commit()
+
+    purge_expired(
+        db_session,
+        now=NOW,
+        policy=RetentionPolicy(None, 1, None, None, None, "anonymise"),
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert record is not None and record.state == "retired"
+    assert record.registration_id is None and record.request_fingerprint is None
+
+
+@pytest.mark.parametrize("winner_state", ("failed", "retired", "erased"))
+def test_resend_helper_accepts_only_safe_winner_unlink(
+    db_session, monkeypatch, winner_state
+):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    terminal = RegistrationIdempotencyRecord(
+        idempotency_key_hash=registration_service.registration_idempotency_key_hash(
+            KEY
+        ),
+        request_fingerprint=("a" * 64 if winner_state == "failed" else None),
+        request_fingerprint_version=(
+            registration_service.REGISTRATION_REQUEST_FINGERPRINT_VERSION
+            if winner_state == "failed"
+            else None
+        ),
+        state=winner_state,
+        outcome_code=(
+            "otp_delivery_failed"
+            if winner_state == "failed"
+            else "registration_replay_expired"
+        ),
+        registration_id=None,
+        outbox_id=None,
+    )
+    monkeypatch.setattr(
+        registration_service,
+        "_ledger_by_key_hash",
+        lambda *_args, **_kwargs: terminal,
+    )
+    assert (
+        registration_service.finalize_pending_resend_if_claimed(
+            db_session,
+            result.registration.id,
+            result.delivery,
+            CapturingSender(),
+        )
+        is False
+    )
+
+
+def test_resend_helper_rejects_corrupt_reassignment(db_session, monkeypatch):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    corrupt = db_session.scalar(select(RegistrationIdempotencyRecord))
+    db_session.expunge(corrupt)
+    corrupt.registration_id = uuid.uuid4()
+    monkeypatch.setattr(
+        registration_service,
+        "_ledger_by_key_hash",
+        lambda *_args, **_kwargs: corrupt,
+    )
+    with pytest.raises(RuntimeError):
+        registration_service.finalize_pending_resend_if_claimed(
+            db_session,
+            result.registration.id,
+            result.delivery,
+            CapturingSender(),
+        )
+
+
+def test_corrupt_resend_and_finalizer_fail_without_mutation(db_session):
+    a = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    b = registration_service.register_student(
+        db_session,
+        _request(mobile="9876543211", institutional_email="b@nls.ac.in"),
+        now=NOW,
+    )
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    record.outbox_id = b.delivery.outbox_id
+    db_session.commit()
+    before = (
+        record.state,
+        record.registration_id,
+        record.outbox_id,
+        _counts(db_session),
+    )
+    with pytest.raises(RuntimeError):
+        otp_service.resend(
+            db_session,
+            a.registration.id,
+            NOW + timedelta(minutes=2),
+            purpose="signup",
+            destination="9876543210",
+        )
+    db_session.rollback()
+    sender = CapturingSender()
+    with pytest.raises(RuntimeError):
+        registration_service.finalize_pending_registration(
+            db_session,
+            registration_service.registration_idempotency_key_hash(KEY),
+            sender,
+        )
+    db_session.rollback()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert (
+        record.state,
+        record.registration_id,
+        record.outbox_id,
+        _counts(db_session),
+    ) == before
+    assert sender.sent == []
+
+
+class _Diagnostic:
+    def __init__(self, name: str) -> None:
+        self.constraint_name = name
+
+
+class _DriverFailure(Exception):
+    def __init__(self, name: str) -> None:
+        super().__init__("constraint failure")
+        self.diag = _Diagnostic(name)
+
+
+def _integrity_error(name: str) -> IntegrityError:
+    return IntegrityError("statement redacted", {}, _DriverFailure(name))
+
+
+def test_integrity_recovery_resolves_both_known_constraints_and_reraises_unknown(
+    db_session,
+):
+    request = _request()
+    winner = registration_service.register_student(
+        db_session, request, idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    for name in (
+        endpoint._REGISTRATION_IDEMPOTENCY_CONSTRAINT,
+        endpoint._REGISTRATION_MOBILE_CONSTRAINT,
+    ):
+        recovered = endpoint._recover_registration_integrity_conflict(
+            db_session, request, KEY, _integrity_error(name)
+        )
+        assert recovered.registration.id == winner.registration.id
+        assert recovered.replayed is True
+
+    unknown = _integrity_error("uq_unrelated_private_constraint")
+    with pytest.raises(IntegrityError) as caught:
+        endpoint._recover_registration_integrity_conflict(
+            db_session, request, KEY, unknown
+        )
+    assert caught.value is unknown
+
+
+def test_legacy_terminalization_ambiguity_has_zero_partial_mutation(db_session):
+    first = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    second = registration_service.register_student(
+        db_session,
+        _request(mobile="9876543211", institutional_email="second@nls.ac.in"),
+        now=NOW,
+    ).registration
+    second.idempotency_key = KEY
+    second.idempotency_key_legacy = True
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    before = (record.state, record.registration_id, record.outbox_id, second.idempotency_key)
+
+    with pytest.raises(RuntimeError):
+        registration_service.terminalize_registration_idempotency(
+            db_session, second, state="erased"
+        )
+    # Even a caller that catches and commits cannot persist a partial raw-key clear.
+    db_session.commit()
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    second = db_session.get(StudentRegistration, second.id)
+    assert (record.state, record.registration_id, record.outbox_id, second.idempotency_key) == before
+    assert first.registration.id == record.registration_id

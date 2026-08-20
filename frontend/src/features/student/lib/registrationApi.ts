@@ -8,6 +8,7 @@ const RETIRED_SESSION_KEY = 'legalsaathi.student.registration.v2';
 const LEGACY_PII_KEY = 'legalsaathi.student.profile.v1';
 
 let onboardingSession: RegistrationSession | null = null;
+let registrationAttempt: { body: string; key: string } | null = null;
 
 export interface RegistrationSession {
   registrationId: string;
@@ -95,21 +96,51 @@ async function jsonRequest<T>(
 
 export async function registerStudent(
   input: RegisterStudentInput,
-  idempotencyKey: string = newRequestId(),
+  idempotencyKey?: string,
 ): Promise<{ registration_id: string; status: string }> {
-  return jsonRequest('/api/v1/auth/student/register', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({
-      first_name: input.firstName,
-      middle_name: input.middleName,
-      last_name: input.lastName,
-      mobile: input.mobile,
-      dob: input.dob,
-      college: input.college || undefined,
-      consent: { accepted: true, policy_version: input.policyVersion },
-    }),
+  const body = JSON.stringify({
+    first_name: input.firstName,
+    middle_name: input.middleName,
+    last_name: input.lastName,
+    mobile: input.mobile,
+    dob: input.dob,
+    college: input.college || undefined,
+    consent: { accepted: true, policy_version: input.policyVersion },
   });
+  const explicitKey = idempotencyKey !== undefined;
+  if (!explicitKey && registrationAttempt?.body !== body) {
+    registrationAttempt = { body, key: newRequestId() };
+  }
+  const attemptKey = idempotencyKey ?? registrationAttempt?.key ?? newRequestId();
+
+  try {
+    const result = await jsonRequest<{ registration_id: string; status: string }>(
+      '/api/v1/auth/student/register',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': attemptKey },
+        body,
+      },
+    );
+    if (!explicitKey && registrationAttempt?.key === attemptKey) {
+      registrationAttempt = null;
+    }
+    return result;
+  } catch (error) {
+    // Transport failures retain the same page-memory key so an uncertain
+    // request can replay safely. A typed terminal outcome is known and the
+    // next user retry is a new logical attempt with a fresh key.
+    if (
+      !explicitKey
+      && error instanceof RegistrationApiError
+      && ['idempotency_conflict', 'otp_delivery_failed', 'registration_replay_expired']
+        .includes(error.code)
+      && registrationAttempt?.key === attemptKey
+    ) {
+      registrationAttempt = null;
+    }
+    throw error;
+  }
 }
 
 export async function verifyStudentOtp(
@@ -243,6 +274,7 @@ export function loadRegistrationSession(): RegistrationSession | null {
 
 export function clearRegistrationSession(): void {
   onboardingSession = null;
+  registrationAttempt = null;
   retireBrowserRegistrationState();
 }
 

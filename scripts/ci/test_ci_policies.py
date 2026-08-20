@@ -116,61 +116,61 @@ class PolicyOracleTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-        predecessor = repr("0017_registration_invariants")
+        predecessor = repr("0018_registration_idempotency")
         with tempfile.TemporaryDirectory() as directory:
             root = copied_root(directory)
             write_forward(
                 root,
-                "0018_valid_forward.py",
-                revision=repr("0018_valid_forward"),
+                "0019_valid_forward.py",
+                revision=repr("0019_valid_forward"),
                 down_revision=predecessor,
             )
             self.assertEqual(verifier.verify(root), [])
 
         mutants = {
             "duplicate root": {
-                "filename": "0018_duplicate_root.py",
-                "revision": repr("0018_duplicate_root"),
+                "filename": "0019_duplicate_root.py",
+                "revision": repr("0019_duplicate_root"),
                 "down_revision": "None",
                 "expected": "exactly one root",
             },
             "duplicate revision": {
-                "filename": "0018_duplicate_revision.py",
-                "revision": repr("0017_registration_invariants"),
+                "filename": "0019_duplicate_revision.py",
+                "revision": repr("0018_registration_idempotency"),
                 "down_revision": predecessor,
                 "expected": "duplicate revision id",
             },
             "ordinal gap": {
-                "filename": "0019_gap.py",
-                "revision": repr("0019_gap"),
+                "filename": "0020_gap.py",
+                "revision": repr("0020_gap"),
                 "down_revision": predecessor,
                 "expected": "unique and contiguous",
             },
             "wrong predecessor": {
-                "filename": "0018_wrong_predecessor.py",
-                "revision": repr("0018_wrong_predecessor"),
-                "down_revision": repr("0016_dob_hash_reconcile"),
+                "filename": "0019_wrong_predecessor.py",
+                "revision": repr("0019_wrong_predecessor"),
+                "down_revision": repr("0017_registration_invariants"),
                 "expected": "down_revision must be immediate predecessor",
             },
             "branch label": {
-                "filename": "0018_branch.py",
-                "revision": repr("0018_branch"),
+                "filename": "0019_branch.py",
+                "revision": repr("0019_branch"),
                 "down_revision": predecessor,
                 "branch_labels": repr("planted-branch"),
                 "expected": "branch_labels must be literal None",
             },
             "dependency": {
-                "filename": "0018_dependency.py",
-                "revision": repr("0018_dependency"),
+                "filename": "0019_dependency.py",
+                "revision": repr("0019_dependency"),
                 "down_revision": predecessor,
                 "depends_on": predecessor,
                 "expected": "depends_on must be literal None",
             },
             "multiple parents": {
-                "filename": "0018_multiple_parents.py",
-                "revision": repr("0018_multiple_parents"),
+                "filename": "0019_multiple_parents.py",
+                "revision": repr("0019_multiple_parents"),
                 "down_revision": repr(
-                    ("0017_registration_invariants", "0016_dob_hash_reconcile")
+                    ("0018_registration_idempotency", "0017_registration_invariants")
                 ),
                 "expected": "down_revision must be a literal string or null",
             },
@@ -748,7 +748,7 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
-    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_nyay3_or_nyay2(self) -> None:
+    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_nyay3_nyay2_or_nyay17(self) -> None:
         policy = load("verify_nyayone_ci")
         source = policy.DB_GATE
         original = source.read_text(encoding="utf-8")
@@ -766,9 +766,14 @@ jobs:
             '"$PY" scripts/nyay2_postgres_authorization_gate.py \\\n'
             "  --report test-results/nyay2-postgres/summary.json"
         )
+        nyay17 = (
+            '"$PY" scripts/nyay17_postgres_idempotency_gate.py \\\n'
+            "  --report test-results/nyay17-postgres/summary.json"
+        )
         self.assertEqual(original.count(nyay16), 1)
         self.assertEqual(original.count(nyay3), 1)
         self.assertEqual(original.count(nyay2), 1)
+        self.assertEqual(original.count(nyay17), 1)
         mutations = {
             "deleted NYAY-16 invocation": original.replace(nyay16, "true", 1),
             "wrong NYAY-16 script": original.replace(
@@ -839,6 +844,34 @@ jobs:
             "masked NYAY-2 failure": original.replace(
                 nyay2, nyay2 + " || true", 1
             ),
+            "deleted NYAY-17 invocation": original.replace(nyay17, "true", 1),
+            "duplicated NYAY-17 invocation": original.replace(
+                nyay17, nyay17 + "\n" + nyay17, 1
+            ),
+            "wrong NYAY-17 script": original.replace(
+                "scripts/nyay17_postgres_idempotency_gate.py",
+                "scripts/not-the-nyay17-gate.py",
+                1,
+            ),
+            "altered NYAY-17 report": original.replace(
+                "test-results/nyay17-postgres/summary.json",
+                "test-results/nyay17-postgres/substitute.json",
+                1,
+            ),
+            "NYAY-17 non-executing help mode": original.replace(
+                "  --report test-results/nyay17-postgres/summary.json",
+                "  --help --report test-results/nyay17-postgres/summary.json",
+                1,
+            ),
+            "conditional NYAY-17 bypass": original.replace(
+                nyay17, "if false; then\n" + nyay17 + "\nfi", 1
+            ),
+            "masked NYAY-17 failure": original.replace(
+                nyay17, nyay17 + " || true", 1
+            ),
+            "NYAY-17 ordered before NYAY-2": original.replace(
+                nyay17, "true", 1
+            ).replace(nyay2, nyay17 + "\n" + nyay2, 1),
         }
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "db_gate.sh"
@@ -861,6 +894,11 @@ jobs:
                     if label == "deleted NYAY-2 invocation":
                         self.assertTrue(
                             any("invoke the exact NYAY-2" in item for item in failures),
+                            failures,
+                        )
+                    if label == "deleted NYAY-17 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-17" in item for item in failures),
                             failures,
                         )
 

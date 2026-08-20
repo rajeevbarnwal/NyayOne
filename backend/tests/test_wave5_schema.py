@@ -26,7 +26,7 @@ from scripts.wave5_postgres_gate import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "0017_registration_invariants"
+HEAD_REVISION = "0018_registration_idempotency"
 PARENT_REVISION = "0012_wave4_moderation"
 
 #: The exact ordered composite-index contract this migration owes its FKs.

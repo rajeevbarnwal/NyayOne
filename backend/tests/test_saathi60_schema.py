@@ -25,7 +25,7 @@ from app.services.internship_service import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD = "0017_registration_invariants"
+HEAD = "0018_registration_idempotency"
 PARENT = "0013_wave5_calendar_interop"
 
 
