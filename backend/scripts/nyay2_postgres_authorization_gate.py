@@ -18,6 +18,7 @@ Exit codes:
 * 1: a product assertion, harness assertion, privacy check, or cleanup failed;
 * 78: PostgreSQL 16, pgvector, or scratch-database authority was unavailable.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -152,13 +153,8 @@ class ProductGateFailure(RuntimeError):
 def _reject_ambient_libpq_environment() -> None:
     """Reject libpq routing/credential overrides without echoing their values."""
 
-    if any(
-        key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL")
-        for key in os.environ
-    ):
-        raise Blocked(
-            "ambient libpq routing or credential environment is not allowed"
-        )
+    if any(key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL") for key in os.environ):
+        raise Blocked("ambient libpq routing or credential environment is not allowed")
 
 
 def _safe_local_postgres_url(raw: str) -> URL:
@@ -385,7 +381,9 @@ def _evaluate_assertions(assertions: list[dict[str, Any]]) -> dict[str, Any]:
         item.get("id") if isinstance(item.get("id"), str) else "<invalid>"
         for item in assertions
     ]
-    counts = {identifier: identifiers.count(identifier) for identifier in set(identifiers)}
+    counts = {
+        identifier: identifiers.count(identifier) for identifier in set(identifiers)
+    }
     missing_count = sum(
         identifier not in identifiers for identifier in REQUIRED_ASSERTION_IDS
     )
@@ -429,9 +427,7 @@ def _table_counts(session_factory: sessionmaker[Session]) -> dict[str, int]:
 
     with session_factory() as session:
         return {
-            table: int(
-                session.scalar(text(f'SELECT count(*) FROM "{table}"')) or 0
-            )
+            table: int(session.scalar(text(f'SELECT count(*) FROM "{table}"')) or 0)
             for table in SECURITY_TABLES
         }
 
@@ -530,9 +526,7 @@ def _business_state_digest(session_factory: sessionmaker[Session]) -> str:
                 row.consumed_at.isoformat() if row.consumed_at else None,
                 row.locked_until.isoformat() if row.locked_until else None,
             )
-            for row in session.scalars(
-                select(OtpChallenge).order_by(OtpChallenge.id)
-            )
+            for row in session.scalars(select(OtpChallenge).order_by(OtpChallenge.id))
         )
         rows.extend(
             (
@@ -558,9 +552,7 @@ def _business_state_digest(session_factory: sessionmaker[Session]) -> str:
                 row.last_seen_at.isoformat(),
                 row.revoked_at.isoformat() if row.revoked_at else None,
             )
-            for row in session.scalars(
-                select(AuthSession).order_by(AuthSession.id)
-            )
+            for row in session.scalars(select(AuthSession).order_by(AuthSession.id))
         )
         rows.extend(
             (
@@ -572,9 +564,7 @@ def _business_state_digest(session_factory: sessionmaker[Session]) -> str:
                 row.resource_type,
                 str(row.resource_id) if row.resource_id else None,
             )
-            for row in session.scalars(
-                select(AuditEvent).order_by(AuditEvent.id)
-            )
+            for row in session.scalars(select(AuditEvent).order_by(AuditEvent.id))
         )
     return hashlib.sha256(repr(rows).encode("utf-8")).hexdigest()
 
@@ -584,9 +574,27 @@ class _CapturingSender:
 
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self._idempotent: dict[str, tuple[str, str, str]] = {}
 
     def send(self, destination: str, code: str) -> None:
         self.sent.append((destination, code))
+
+    def send_idempotent(
+        self,
+        destination: str,
+        code: str,
+        *,
+        idempotency_token: str,
+    ) -> str:
+        existing = self._idempotent.get(idempotency_token)
+        if existing is not None:
+            if existing[:2] != (destination, code):
+                raise RuntimeError("OTP provider idempotency conflict")
+            return existing[2]
+        receipt = f"nyay2-gate-receipt-{len(self._idempotent) + 1}"
+        self._idempotent[idempotency_token] = (destination, code, receipt)
+        self.send(destination, code)
+        return receipt
 
 
 def _seed_actor(
@@ -710,9 +718,7 @@ def _profile_payload(marker: str) -> dict[str, Any]:
         "college": f"Gate Institute {marker}",
         "year_of_study": "Year 2",
         "enrolment_number": "QA/42/2026",
-        "institutional_email": (
-            f"gate-{marker}" + chr(64) + "college.invalid"
-        ),
+        "institutional_email": (f"gate-{marker}" + chr(64) + "college.invalid"),
         "bar_enrolment_number": None,
     }
 
@@ -724,7 +730,7 @@ def _run_api_probes(
 
     from app.api.v1 import auth_student as endpoint
     from app.core import auth as core_auth
-    from app.core.auth import ActorContext, Role, get_actor_context
+    from app.core.auth import ActorContext, Role
     from app.core.config import settings
     from app.core.crypto import KeyRing, keyed_hash, otp_verifier, override_keyring
     from app.db.models.audit import AuditEvent
@@ -738,6 +744,7 @@ def _run_api_probes(
         StudentVerification,
     )
     from app.services import login_service, otp_service
+    from app.services.otp_authority import lock_or_create_registration_authority
 
     factory = sessionmaker(
         bind=engine,
@@ -781,9 +788,7 @@ def _run_api_probes(
     metrics: dict[str, Any] = {}
     try:
         cookie_name = settings.auth_session_cookie_name
-        owner_a = _seed_actor(
-            factory, label="owner-a", is_minor=True
-        )
+        owner_a = _seed_actor(factory, label="owner-a", is_minor=True)
         owner_b = _seed_actor(factory, label="owner-b")
         missing = _seed_actor(factory, label="missing", registration=False)
         quarantined = _seed_actor(
@@ -791,12 +796,8 @@ def _run_api_probes(
             label="quarantined",
             dob_hash_state="quarantined",
         )
-        deleted_user = _seed_actor(
-            factory, label="deleted-user", user_status="deleted"
-        )
-        soft_deleted = _seed_actor(
-            factory, label="soft-deleted", soft_deleted=True
-        )
+        deleted_user = _seed_actor(factory, label="deleted-user", user_status="deleted")
+        soft_deleted = _seed_actor(factory, label="soft-deleted", soft_deleted=True)
         registration_deleted = _seed_actor(
             factory,
             label="registration-deleted",
@@ -851,24 +852,37 @@ def _run_api_probes(
         signup_salt = secrets.token_hex(16)
         now = datetime.now(timezone.utc)
         with factory() as session:
+            registration = session.get(
+                StudentRegistration,
+                soft_deleted_verify["registration_id"],
+            )
+            if registration is None:
+                raise ProductGateFailure(
+                    "soft-deleted OTP seed registration is unavailable"
+                )
+            authority = lock_or_create_registration_authority(
+                session, registration, "signup", now
+            )
+            expires_at = now + timedelta(minutes=5)
             session.add(
                 OtpChallenge(
                     registration_id=soft_deleted_verify["registration_id"],
+                    authority_id=authority.id,
                     purpose="signup",
+                    delivery_state="active",
                     verifier_hash=otp_verifier(signup_code, salt=signup_salt),
                     attempts=0,
                     max_attempts=3,
-                    expires_at=now + timedelta(minutes=5),
+                    expires_at=expires_at,
                     metadata_json={
                         "salt": signup_salt,
                         "issued_at": now.isoformat(),
                     },
                 )
             )
+            authority.active_expires_at = expires_at
             session.commit()
-        revoked = _seed_actor(
-            factory, label="revoked", session_status="revoked"
-        )
+        revoked = _seed_actor(factory, label="revoked", session_status="revoked")
         expired = _seed_actor(factory, label="expired", expired=True)
         reviewer = _seed_actor(
             factory, label="reviewer", role="legal_reviewer", registration=False
@@ -893,8 +907,7 @@ def _run_api_probes(
         )
         registration_reference = (
             registered.json().get("registration_id")
-            if registered.status_code == 201
-            and isinstance(registered.json(), dict)
+            if registered.status_code == 201 and isinstance(registered.json(), dict)
             else None
         )
         delivered_code = sender.sent[-1][1] if sender.sent else None
@@ -978,13 +991,11 @@ def _run_api_probes(
             "verify_code": replay_signature.get("code"),
             "challenge_delta": after_counts["otp_challenges"]
             - before_counts["otp_challenges"],
-            "outbox_delta": after_counts["otp_outbox"]
-            - before_counts["otp_outbox"],
+            "outbox_delta": after_counts["otp_outbox"] - before_counts["otp_outbox"],
             "delivery_delta": len(sender.sent) - before_delivery,
             "session_delta": after_counts["auth_sessions"]
             - before_counts["auth_sessions"],
-            "audit_delta": after_counts["audit_events"]
-            - before_counts["audit_events"],
+            "audit_delta": after_counts["audit_events"] - before_counts["audit_events"],
             "all_security_row_deltas_zero": before_counts == after_counts,
             "business_state_unchanged": before_state == after_state,
             "cookie_issued": bool(
@@ -1030,11 +1041,7 @@ def _run_api_probes(
                 "email_request",
                 lambda: anonymous.post(
                     EMAIL_PATH,
-                    json={
-                        "institutional_email": valid_profile[
-                            "institutional_email"
-                        ]
-                    },
+                    json={"institutional_email": valid_profile["institutional_email"]},
                 ),
             ),
             (
@@ -1062,15 +1069,12 @@ def _run_api_probes(
                 {
                     "case": label,
                     "signature": _safe_response_signature(response),
-                    "row_counts_unchanged": before_counts
-                    == _table_counts(factory),
+                    "row_counts_unchanged": before_counts == _table_counts(factory),
                     "business_state_unchanged": before_state
                     == _business_state_digest(factory),
                 }
             )
-        anonymous_signatures = [
-            item["signature"] for item in anonymous_observations
-        ]
+        anonymous_signatures = [item["signature"] for item in anonymous_observations]
         anonymous_passed = bool(
             all(
                 signature.get("status_code") == 401
@@ -1085,8 +1089,7 @@ def _run_api_probes(
             )
             == 1
             and all(
-                item["row_counts_unchanged"]
-                and item["business_state_unchanged"]
+                item["row_counts_unchanged"] and item["business_state_unchanged"]
                 for item in anonymous_observations
             )
         )
@@ -1105,12 +1108,10 @@ def _run_api_probes(
                     == 1
                 ),
                 all_row_counts_unchanged=all(
-                    item["row_counts_unchanged"]
-                    for item in anonymous_observations
+                    item["row_counts_unchanged"] for item in anonymous_observations
                 ),
                 all_business_state_unchanged=all(
-                    item["business_state_unchanged"]
-                    for item in anonymous_observations
+                    item["business_state_unchanged"] for item in anonymous_observations
                 ),
             )
         )
@@ -1246,7 +1247,8 @@ def _run_api_probes(
         legacy_signatures = [item["signature"] for item in legacy_payloads]
         legacy_symmetric = bool(
             all(signature.get("status_code") == 422 for signature in legacy_signatures)
-            and len({json.dumps(item, sort_keys=True) for item in legacy_signatures}) == 1
+            and len({json.dumps(item, sort_keys=True) for item in legacy_signatures})
+            == 1
             and all(item["row_counts_unchanged"] for item in legacy_payloads)
             and all(item["business_state_unchanged"] for item in legacy_payloads)
         )
@@ -1302,8 +1304,7 @@ def _run_api_probes(
             ),
         ]
         protected_uuid_passed = all(
-            response.status_code in {400, 422}
-            for response in protected_uuid_responses
+            response.status_code in {400, 422} for response in protected_uuid_responses
         )
         assertions.append(
             _assertion(
@@ -1362,7 +1363,10 @@ def _run_api_probes(
                 uniform_response=bool(
                     invalid_signatures
                     and len(
-                        {json.dumps(item, sort_keys=True) for item in invalid_signatures}
+                        {
+                            json.dumps(item, sort_keys=True)
+                            for item in invalid_signatures
+                        }
                     )
                     == 1
                 ),
@@ -1383,11 +1387,7 @@ def _run_api_probes(
         before_delivery = len(sender.sent)
         resend_response = preauth_client.post(
             OTP_RESEND_PATH,
-            json={
-                "registration_id": str(
-                    soft_deleted_resend["registration_id"]
-                )
-            },
+            json={"registration_id": str(soft_deleted_resend["registration_id"])},
         )
         preauth_cases.append(
             {
@@ -1407,9 +1407,7 @@ def _run_api_probes(
         verify_deleted_response = preauth_client.post(
             OTP_VERIFY_PATH,
             json={
-                "registration_id": str(
-                    soft_deleted_verify["registration_id"]
-                ),
+                "registration_id": str(soft_deleted_verify["registration_id"]),
                 "code": signup_code,
             },
         )
@@ -1490,8 +1488,7 @@ def _run_api_probes(
                 "case": "recovery_start",
                 "response": _safe_response_signature(recovery_deleted_response),
                 "blocked": bool(
-                    recovery_deleted_response.status_code == 202
-                    and recovery_is_decoy
+                    recovery_deleted_response.status_code == 202 and recovery_is_decoy
                 ),
                 "row_counts_unchanged": before_counts == _table_counts(factory),
                 "business_state_unchanged": before_state
@@ -1569,8 +1566,7 @@ def _run_api_probes(
         guardian_signature = _safe_response_signature(guardian_response)
         guardian_passed = bool(
             guardian_response.status_code == 403
-            and guardian_signature.get("code")
-            == "guardian_self_approval_forbidden"
+            and guardian_signature.get("code") == "guardian_self_approval_forbidden"
             and before_counts == _table_counts(factory)
             and before_state == _business_state_digest(factory)
         )
@@ -1637,8 +1633,7 @@ def _run_api_probes(
             )
             == 1
             and all(
-                item["row_counts_unchanged"]
-                and item["business_state_unchanged"]
+                item["row_counts_unchanged"] and item["business_state_unchanged"]
                 for item in invalid_reviewer_targets
             )
         )
@@ -1648,9 +1643,7 @@ def _run_api_probes(
             json=transition_payload,
         )
         with factory() as session:
-            verification = session.get(
-                StudentVerification, owner_a["verification_id"]
-            )
+            verification = session.get(StudentVerification, owner_a["verification_id"])
             audit = session.scalar(
                 select(AuditEvent)
                 .where(
@@ -1680,8 +1673,7 @@ def _run_api_probes(
                 invalid_target_cases=len(invalid_reviewer_targets),
                 invalid_targets_uniform_no_delta=invalid_reviewer_targets_passed,
                 audit_actor_bound=bool(
-                    audit is not None
-                    and audit.actor_user_id == reviewer["user_id"]
+                    audit is not None and audit.actor_user_id == reviewer["user_id"]
                 ),
                 audit_role_bound=bool(
                     audit is not None and audit.actor_role == "legal_reviewer"
@@ -1753,9 +1745,7 @@ def _run_api_probes(
             session: Session, actor: ActorContext
         ) -> StudentRegistration:
             del actor
-            registration = session.get(
-                StudentRegistration, owner_a["registration_id"]
-            )
+            registration = session.get(StudentRegistration, owner_a["registration_id"])
             assert registration is not None
             return registration
 
@@ -1884,9 +1874,7 @@ def _run_api_probes(
                 json={"registration_id": registration_reference},
             )
             status_mutant_code = (
-                sender.sent[-1][1]
-                if len(sender.sent) > before_delivery
-                else "0" * 6
+                sender.sent[-1][1] if len(sender.sent) > before_delivery else "0" * 6
             )
             status_mutant_verify = status_mutant_client.post(
                 OTP_VERIFY_PATH,
@@ -1903,11 +1891,9 @@ def _run_api_probes(
             status_mutant_resend.status_code == 202
             and status_mutant_verify.status_code == 200
             and status_mutant_client.cookies.get(cookie_name)
-            and after_counts["otp_challenges"]
-            == before_counts["otp_challenges"] + 1
+            and after_counts["otp_challenges"] == before_counts["otp_challenges"] + 1
             and after_counts["otp_outbox"] == before_counts["otp_outbox"] + 1
-            and after_counts["auth_sessions"]
-            == before_counts["auth_sessions"] + 1
+            and after_counts["auth_sessions"] == before_counts["auth_sessions"] + 1
             and after_counts["audit_events"] == before_counts["audit_events"] + 1
             and len(sender.sent) == before_delivery + 1
             and after_state != before_state
@@ -1924,16 +1910,13 @@ def _run_api_probes(
                     == before_counts["otp_challenges"] + 1
                 ),
                 outbox_created=(
-                    after_counts["otp_outbox"]
-                    == before_counts["otp_outbox"] + 1
+                    after_counts["otp_outbox"] == before_counts["otp_outbox"] + 1
                 ),
                 session_rotated=(
-                    after_counts["auth_sessions"]
-                    == before_counts["auth_sessions"] + 1
+                    after_counts["auth_sessions"] == before_counts["auth_sessions"] + 1
                 ),
                 audit_created=(
-                    after_counts["audit_events"]
-                    == before_counts["audit_events"] + 1
+                    after_counts["audit_events"] == before_counts["audit_events"] + 1
                 ),
                 delivery_count_increased=len(sender.sent) == before_delivery + 1,
                 cookie_issued=bool(status_mutant_client.cookies.get(cookie_name)),
@@ -1959,11 +1942,7 @@ def _run_api_probes(
         try:
             deleted_mutant_response = preauth_client.post(
                 OTP_RESEND_PATH,
-                json={
-                    "registration_id": str(
-                        soft_deleted_mutant["registration_id"]
-                    )
-                },
+                json={"registration_id": str(soft_deleted_mutant["registration_id"])},
             )
         finally:
             otp_service.registration_is_authorizable = original_authorizable
@@ -1971,8 +1950,7 @@ def _run_api_probes(
         after_state = _business_state_digest(factory)
         soft_delete_mutant_killed = bool(
             deleted_mutant_response.status_code == 202
-            and after_counts["otp_challenges"]
-            == before_counts["otp_challenges"] + 1
+            and after_counts["otp_challenges"] == before_counts["otp_challenges"] + 1
             and after_counts["otp_outbox"] == before_counts["otp_outbox"] + 1
             and after_state != before_state
             and len(sender.sent) == before_delivery + 1
@@ -1988,8 +1966,7 @@ def _run_api_probes(
                     == before_counts["otp_challenges"] + 1
                 ),
                 outbox_created=(
-                    after_counts["otp_outbox"]
-                    == before_counts["otp_outbox"] + 1
+                    after_counts["otp_outbox"] == before_counts["otp_outbox"] + 1
                 ),
                 delivery_count_increased=len(sender.sent) == before_delivery + 1,
             )
@@ -1999,9 +1976,7 @@ def _run_api_probes(
             "real_http_requests_executed": True,
             "negative_controls_executed": 5,
             "protected_routes_checked": len(anonymous_calls),
-            "protected_uuid_contract_routes_checked": len(
-                protected_uuid_responses
-            ),
+            "protected_uuid_contract_routes_checked": len(protected_uuid_responses),
             "invalid_session_classes_checked": len(invalid_clients),
             "origin_cases_checked": len(origin_cases),
             "soft_deleted_preauth_cases_checked": len(preauth_cases),
@@ -2176,13 +2151,17 @@ def main(argv: list[str] | None = None) -> int:
         else:
             exit_code = BLOCKED_EXIT
     except Exception as exc:  # noqa: BLE001 - fail closed, report class only
-        cleanup = manager.summary() if manager is not None else {
-            "created": 0,
-            "removed": 0,
-            "cleanup_failed": 0,
-            "all_created_removed": True,
-            "purposes": [],
-        }
+        cleanup = (
+            manager.summary()
+            if manager is not None
+            else {
+                "created": 0,
+                "removed": 0,
+                "cleanup_failed": 0,
+                "all_created_removed": True,
+                "purposes": [],
+            }
+        )
         report = {
             "gate": "nyay2_postgres_authorization",
             "status": "FAIL",

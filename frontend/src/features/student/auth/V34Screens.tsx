@@ -13,13 +13,12 @@ import {
   todayLocalISO,
   validateNameParts,
 } from '../lib/registration';
-import { isMinor, CONSENT_VERSION } from '../lib/consent';
+import { CONSENT_VERSION } from '../lib/consent';
 import {
   RegistrationApiError,
-  loadRegistrationSession,
+  getStudentSession,
   registerStudent,
   resendStudentOtp,
-  saveRegistrationSession,
   startLoginOtp,
   startRecovery,
   verifyLoginOtp,
@@ -29,8 +28,8 @@ import {
   logoutStudent,
   notifyStudentAuthChanged,
 } from '../lib/registrationApi';
-import { setMinor } from '../lib/authFlow';
-import { isValidOtpFormat, maskDestination } from '../lib/otp';
+import { useOtpFlowState } from '../lib/useOtpFlowState';
+import { isValidOtpInput } from '../lib/otpInput';
 import { getProfileDraft, updateProfileDraft } from '../lib/profileStore';
 import { ProfileStep2 } from '../profile/ProfileScreens';
 import { InfoTooltip } from '../components';
@@ -229,14 +228,8 @@ export function V34Login() {
     if (mode === 'password') { nav('/s-05'); return; }
     setBusy(true);
     try {
-      const loginId = await startLoginOtp(mobile);
-      nav('/s-09', {
-        state: {
-          loginId,
-          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
-          issuedAt: Date.now(),
-        },
-      });
+      await startLoginOtp(mobile);
+      nav('/s-09');
     } catch {
       setErrors({ submit: 'A one time code could not be requested. Please retry.' });
     } finally {
@@ -258,9 +251,9 @@ export function V34Login() {
 export function V34LoginFailure() {
   const nav = useNavigate();
   return (
-    <Screen id="S-05" aside={<AuthAside title="Welcome back." copy="Five failed attempts lock sign in for 15 minutes. A one time code remains available."/>}>
+    <Screen id="S-05" aside={<AuthAside title="Welcome back." copy="The server controls temporary sign-in locks and one-time-code recovery."/>}>
       <Pane><PaneHead id="S-05 · ERROR" back={() => nav('/s-04')}/><main className="v34-main">
-        <h1 id="S-05-title" className="v34-title">Sign in</h1><div className="v34-banner" role="alert"><b>TWO ATTEMPTS LEFT</b><span>That number and password do not match. We do not disclose whether an account exists.</span></div>
+        <h1 id="S-05-title" className="v34-title">Sign in</h1><div className="v34-banner" role="alert"><b>SIGN-IN NOT COMPLETED</b><span>That number and password do not match. We do not disclose whether an account exists.</span></div>
         <div className="v34-fieldset"><Field id="v34-error-mobile" label="MOBILE NUMBER" value="" onChange={() => undefined} type="tel" prefix="+91" placeholder="Re-enter on the sign-in screen"/><Field id="v34-error-password" label="PASSWORD" value="" onChange={() => undefined} type="password" error="Check your password or use a one time code."/></div>
         <button className="v34-hit v34-linkbtn" onClick={() => nav('/s-04')}>Send a one time code instead</button><span className="v34-grow"/>
       </main><Footer hint={<>Locked out? <button className="v34-textlink" onClick={() => nav('/s-06')}>Reset your password</button></>}><IconAction label="Try again" icon="retry" onClick={() => nav('/s-04')}/></Footer></Pane>
@@ -271,24 +264,34 @@ export function V34LoginFailure() {
 export function V34PasswordReset() {
   const nav = useNavigate();
   const [mobile, setMobile] = useState('');
-  const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const otpFlow = useOtpFlowState();
+  const recoveryPending = otpFlow.state?.status === 'pending'
+    && otpFlow.state.purpose === 'recovery';
   async function send() {
     if (!isValidMobile(mobile)) { setError(MOBILE_ERROR); return; }
     setError('');
-    try { setRecoveryId(await startRecovery(mobile)); } catch { /* non-enumerating response intentionally remains identical */ }
-    setMessage('If an account matches, a six digit recovery code has been sent.');
+    try {
+      otpFlow.adopt(await startRecovery(mobile));
+      setMessage('If an account matches, a six digit recovery code has been sent.');
+    } catch {
+      // Known and decoy identities retain the same user-facing failure shape.
+      setMessage('A recovery code could not be requested. Please retry.');
+    }
   }
   async function verifyCode() {
     if (!/^\d{6}$/.test(code)) { setError('Enter the complete 6-digit recovery code.'); return; }
     try {
-      await verifyRecovery(recoveryId, code);
-      await completeRecovery(recoveryId);
+      otpFlow.adopt(await verifyRecovery(code));
+      otpFlow.adopt(await completeRecovery());
       setError('');
       setMessage('Recovery verified. You may now sign in again.');
-    } catch {
+    } catch (caught) {
+      if (caught instanceof RegistrationApiError && caught.otpState) {
+        otpFlow.adopt(caught.otpState);
+      }
       setError('Recovery could not be verified. Check the code or request a new one.');
     }
   }
@@ -297,9 +300,9 @@ export function V34PasswordReset() {
       <Pane><PaneHead id="S-06 · RESET" back={() => nav('/s-04')}/><main className="v34-main">
         <h1 id="S-06-title" className="v34-title">Reset your password</h1><p className="v34-lede">Tell us the mobile number on the account. We will send a six digit code.</p>
         <Field id="v34-reset-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" prefix="+91" placeholder="10 digit number" maxLength={15} error={error}/>
-        {recoveryId && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>} 
+        {recoveryPending && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>}
         {message && <div className="v34-well" role="status">{message}</div>}<div className="v34-rule"/><div><span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span><p className="v34-copy">The same confirmation protects your identity from anyone probing mobile numbers.</p></div><span className="v34-grow"/>
-      </main><Footer hint={recoveryId ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><IconAction label={recoveryId ? 'Verify recovery code' : 'Send the code'} icon={recoveryId ? 'verify' : 'send'} onClick={recoveryId ? verifyCode : send}/></Footer></Pane>
+      </main><Footer hint={recoveryPending ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><IconAction label={recoveryPending ? 'Verify recovery code' : 'Send the code'} icon={recoveryPending ? 'verify' : 'send'} onClick={recoveryPending ? verifyCode : send}/></Footer></Pane>
     </Screen>
   );
 }
@@ -339,14 +342,13 @@ export function V34Register(props: ScreenProps) {
     if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR; if (!dob) next.dob = 'Enter your date of birth.'; else if (!isRegistrableDob(dob, new Date())) next.dob = DOB_ERROR;
     if (!EMAIL_RE.test(email.trim())) next.email = 'Enter a full institutional email address.'; if (!college) next.college = 'Select your college or university.'; if (!year) next.year = 'Select your year of study.';
     if (!lawDeclaration || !privacy) next.consent = 'Accept the law-student declaration and DPDP notice to continue.'; setErrors(next); if (Object.keys(next).length) return;
-    const payload = namePartsToPayload(parts); const minor = isMinor(dob, new Date().toISOString());
+    const payload = namePartsToPayload(parts);
     updateProfileDraft({ ...parts, fullName: composeDisplayName(parts), dateOfBirth: dob, college, yearOfStudy: year, institutionalEmail: email, barEnrolmentNumber: bar });
     setBusy(true);
     try {
-      const created = await registerStudent({ firstName: payload.firstName, middleName: payload.middleName, lastName: payload.lastName, mobile, dob, policyVersion: CONSENT_VERSION, college });
-      saveRegistrationSession({ registrationId: created.registration_id, destinationMasked: maskDestination({ channel: 'sms', ref: mobile }), issuedAt: Date.now(), isMinor: minor, guardianConsentPending: minor });
-      setMinor(minor, minor); nav('/s-09');
-    } catch (caught) { setErrors({ submit: caught instanceof RegistrationApiError && caught.code === 'mobile_already_registered' ? 'This mobile number is already registered.' : 'The account could not be created. Please retry.' }); }
+      await registerStudent({ firstName: payload.firstName, middleName: payload.middleName, lastName: payload.lastName, mobile, dob, policyVersion: CONSENT_VERSION, college });
+      nav('/s-09');
+    } catch { setErrors({ submit: 'Registration or code delivery could not be completed. Check your details or try again later.' }); }
     finally { setBusy(false); }
   }
   return (
@@ -364,52 +366,91 @@ export function V34Register(props: ScreenProps) {
 }
 
 export function V34OtpVerify() {
-  const nav = useNavigate(); const location = useLocation(); const [now, setNow] = useState(Date.now()); const [code, setCode] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false); const [attempts, setAttempts] = useState(3);
-  const login = location.state as { loginId?: string; destinationMasked?: string; issuedAt?: number } | null;
-  const server = login?.loginId ? null : loadRegistrationSession();
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const issuedAt = login?.issuedAt ?? server?.issuedAt;
-  const expires = issuedAt ? Math.max(0, 600 - Math.floor((now - issuedAt) / 1000)) : 0;
-  const resend = issuedAt ? Math.max(0, 30 - Math.floor((now - issuedAt) / 1000)) : 0;
-  async function submit() {
-    if (!isValidOtpFormat(code)) { setStatus('Enter all six digits.'); return; } setBusy(true);
-    if (server) {
-      try {
-        await verifyStudentOtp(server.registrationId, code);
-        notifyStudentAuthChanged();
-        nav(server.guardianConsentPending ? '/s-16' : '/s-10');
-      }
-      catch (caught) { if (caught instanceof RegistrationApiError && typeof caught.attemptsLeft === 'number') setAttempts(caught.attemptsLeft); setStatus('That code could not be verified. Check all six digits.'); }
-      finally { setBusy(false); } return;
+  const nav = useNavigate();
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  const otpFlow = useOtpFlowState();
+  const flow = otpFlow.state;
+  const expires = flow?.expiresInSeconds ?? 0;
+  const resend = flow?.resendInSeconds ?? 0;
+  const attempts = flow?.attemptsLeft;
+
+  useEffect(() => {
+    if (!otpFlow.loadError) return;
+    setCode('');
+    setStatus('');
+    setBusy(false);
+  }, [otpFlow.loadError]);
+
+  function captureFailure(caught: unknown) {
+    if (caught instanceof RegistrationApiError && caught.otpState) {
+      otpFlow.adopt(caught.otpState);
     }
-    if (login?.loginId) {
-      try {
-        await verifyLoginOtp(login.loginId, code);
-        notifyStudentAuthChanged();
-        nav('/s-07', { replace: true });
-      } catch {
-        setAttempts((value) => Math.max(0, value - 1));
-        setStatus('That code could not be verified. Check all six digits or request a new code.');
-      } finally { setBusy(false); }
+    if (caught instanceof RegistrationApiError && ['locked', 'otp_locked'].includes(caught.code)) {
+      const seconds = caught.otpState?.lockedForSeconds;
+      setStatus(seconds === null || seconds === undefined
+        ? 'Too many attempts. Verification is temporarily locked.'
+        : `Too many attempts. Try again in ${seconds} seconds.`);
+    } else if (caught instanceof RegistrationApiError && ['expired', 'otp_expired'].includes(caught.code)) {
+      setStatus('That code has expired. Request a new code when the server allows it.');
+    } else {
+      setStatus('That code could not be verified. Check all six digits.');
+    }
+  }
+
+  async function submit() {
+    if (!isValidOtpInput(code)) { setStatus('Enter all six digits.'); return; }
+    if (flow?.status !== 'pending' || (flow.purpose !== 'signup' && flow.purpose !== 'login')) {
+      setStatus('Start registration or sign in before entering a code.');
       return;
     }
-    setStatus('Start registration or sign in before entering a code.');
-    setBusy(false);
+    setBusy(true);
+    const purpose = flow.purpose;
+    try {
+      const result = purpose === 'signup'
+        ? await verifyStudentOtp(code)
+        : await verifyLoginOtp(code);
+      otpFlow.adopt(result);
+      notifyStudentAuthChanged();
+      if (purpose === 'login') {
+        nav('/s-07', { replace: true });
+      } else {
+        const actor = await getStudentSession();
+        nav(actor?.is_minor ? '/s-16' : '/s-10');
+      }
+    } catch (caught) {
+      captureFailure(caught);
+    } finally {
+      setBusy(false);
+    }
   }
   async function resendCode() {
-    if (resend > 0) return;
-    if (server) { try { await resendStudentOtp(server.registrationId); saveRegistrationSession({ ...server, issuedAt: Date.now() }); setNow(Date.now()); setCode(''); setStatus('A new code was sent.'); } catch { setStatus('A new code could not be sent yet.'); } }
-    else if (login?.loginId) nav('/s-04', { replace: true });
-    else setStatus('Start registration or sign in before requesting another code.');
+    if (flow?.status !== 'pending' || !flow.resendAllowed) return;
+    setBusy(true);
+    try {
+      otpFlow.adopt(await resendStudentOtp());
+      setCode('');
+      setStatus('A new code was sent.');
+    } catch (caught) {
+      if (caught instanceof RegistrationApiError && caught.otpState) {
+        otpFlow.adopt(caught.otpState);
+      }
+      setStatus('A new code could not be sent yet. Follow the server countdown and retry.');
+    } finally {
+      setBusy(false);
+    }
   }
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? '');
   return (
     <Screen id="S-09" aside={<AuthAside title="One code, then you are in." copy="Codes are short-lived. Repeated wrong entries trigger a temporary lock."/>}>
-      <Pane><PaneHead id="S-09 · STEP 2 OF 2" back={() => nav(server ? '/s-08' : '/s-04')}/><main className="v34-main">
-        <div><h1 id="S-09-title" className="v34-title">Enter the code</h1><p className="v34-lede">Six digits, sent to {login?.destinationMasked ?? server?.destinationMasked ?? 'your mobile'}.</p></div>
+      <Pane><PaneHead id="S-09 · STEP 2 OF 2" back={() => nav(flow?.purpose === 'signup' ? '/s-08' : '/s-04')}/><main className="v34-main">
+        <div><h1 id="S-09-title" className="v34-title">Enter the code</h1><p className="v34-lede">Six digits, sent to {flow?.destinationMasked ?? 'your mobile'}.</p></div>
         <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}/></label>
-        {status && <div className="v34-banner" role="alert">{status}</div>}<div className="v34-card v34-kv"><span>Code expires in <b>{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend available in <button className="v34-textlink" disabled={resend > 0} onClick={resendCode}>{resend > 0 ? `00:${String(resend).padStart(2, '0')}` : 'Resend now'}</button></span><span>Tries left <b>{attempts}</b></span></div><span className="v34-grow"/>
-      </main><Footer hint="Enter all six digits to verify."><IconAction label="Verify and continue" icon="verify" onClick={submit} disabled={busy || code.length !== 6}/></Footer></Pane>
+        {otpFlow.loading && <div className="v34-well" role="status">Restoring the server verification state…</div>}
+        {otpFlow.loadError && <div className="v34-banner" role="alert">Verification state is unavailable. Retry the state check before continuing.</div>}
+        {status && <div className="v34-banner" role="alert">{status}</div>}<div className="v34-card v34-kv"><span>Code expires in <b>{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend available in <button className="v34-textlink" disabled={!flow?.resendAllowed || busy} onClick={resendCode}>{flow?.resendAllowed ? 'Resend now' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</button></span><span>Tries left <b>{attempts ?? '—'}</b></span></div><span className="v34-grow"/>
+      </main><Footer hint="Enter all six digits to verify."><IconAction label="Verify and continue" icon="verify" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}/></Footer></Pane>
     </Screen>
   );
 }

@@ -10,8 +10,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 from types import SimpleNamespace
+import inspect as pyinspect
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Boolean, DateTime, Uuid, VARCHAR
 
 import scripts.nyay17_postgres_idempotency_gate as gate
@@ -51,6 +54,20 @@ def _without_ambient_libpq_authority(monkeypatch):
     for key in tuple(gate.os.environ):
         if key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL"):
             monkeypatch.delenv(key, raising=False)
+
+
+def test_historical_lifecycle_and_current_application_heads_are_separate():
+    assert gate.PREVIOUS_REVISION == "0017_registration_invariants"
+    assert gate.PINNED_HEAD == "0018_registration_idempotency"
+    assert gate.APPLICATION_HEAD == "0019_otp_security_authority"
+    config = Config(str(gate.BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(gate.BACKEND / "app/db/migrations"))
+    scripts = ScriptDirectory.from_config(config)
+    assert scripts.get_heads() == [gate.APPLICATION_HEAD]
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == gate.PINNED_HEAD
+    behavior_source = pyinspect.getsource(gate._execute_behavior)
+    assert '"upgrade", APPLICATION_HEAD' in behavior_source
+    assert '"upgrade", PINNED_HEAD' not in behavior_source
 
 
 @pytest.mark.parametrize(

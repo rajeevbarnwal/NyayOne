@@ -5,6 +5,7 @@ aggregate evidence privacy.  They do not claim PostgreSQL/API behavior; that
 evidence comes only from executing ``scripts/nyay2_postgres_authorization_gate``
 against the disposable PostgreSQL 16 + pgvector runtime.
 """
+
 from __future__ import annotations
 
 import json
@@ -49,9 +50,7 @@ def _without_ambient_libpq_authority(monkeypatch):
     tuple(sorted(LIBPQ_AMBIENT_KEYS))
     + ("PGSSLMODE", "PGSSLCERT", "PGSSLKEY", "PGSSLROOTCERT"),
 )
-def test_ambient_libpq_authority_is_rejected_without_value_disclosure(
-    monkeypatch, key
-):
+def test_ambient_libpq_authority_is_rejected_without_value_disclosure(monkeypatch, key):
     monkeypatch.setenv(key, "sensitive-value-must-not-be-reported")
     with pytest.raises(
         Blocked,
@@ -157,9 +156,7 @@ def test_evaluator_requires_exact_inventory_and_every_true():
 def test_runtime_is_pinned_to_postgresql_major_16_with_pgvector(
     version_num, vector_version, expected
 ):
-    assert (
-        _is_postgresql_16_with_pgvector(version_num, vector_version) is expected
-    )
+    assert _is_postgresql_16_with_pgvector(version_num, vector_version) is expected
 
 
 @pytest.mark.parametrize("identifier", REQUIRED_ASSERTION_IDS)
@@ -239,9 +236,7 @@ def test_bootstrap_expiry_evaluator_accepts_only_exact_bounded_no_delta_case():
         ("cookie_issued", True),
     ),
 )
-def test_each_bootstrap_expiry_false_green_mutation_is_rejected(
-    field, unsafe_value
-):
+def test_each_bootstrap_expiry_false_green_mutation_is_rejected(field, unsafe_value):
     observation = _passing_bootstrap_expiry_observation()
     observation[field] = unsafe_value
     assert _bootstrap_expiry_passes(observation) is False
@@ -297,7 +292,8 @@ def test_business_digest_kills_challenge_authority_mutant(db_session, engine):
     from datetime import datetime, timezone
 
     from app.core.crypto import otp_verifier
-    from app.models.registration import OtpChallenge
+    from app.models.registration import OtpChallenge, StudentRegistration
+    from app.services.otp_authority import lock_or_create_registration_authority
 
     factory = sessionmaker(
         bind=engine,
@@ -309,17 +305,26 @@ def test_business_digest_kills_challenge_authority_mutant(db_session, engine):
     before = _business_state_digest(factory)
     now = datetime.now(timezone.utc)
     with factory() as session:
+        registration = session.get(StudentRegistration, actor["registration_id"])
+        assert registration is not None
+        authority = lock_or_create_registration_authority(
+            session, registration, "signup", now
+        )
+        expires_at = now + timedelta(minutes=5)
         session.add(
             OtpChallenge(
                 registration_id=actor["registration_id"],
+                authority_id=authority.id,
                 purpose="signup",
+                delivery_state="active",
                 verifier_hash=otp_verifier("1" * 6, salt="synthetic-salt"),
                 attempts=0,
                 max_attempts=3,
-                expires_at=now + timedelta(minutes=5),
+                expires_at=expires_at,
                 metadata_json={"salt": "synthetic-salt"},
             )
         )
+        authority.active_expires_at = expires_at
         session.commit()
     assert _business_state_digest(factory) != before
 
@@ -658,9 +663,7 @@ def test_main_cannot_pass_when_assertion_is_missing(monkeypatch, capsys):
 
 def test_main_cannot_pass_privacy_leak(monkeypatch, capsys):
     assertions = _passing_assertions()
-    assertions[0]["metrics"] = {
-        "forbidden": "a2ef7107-0f9b-4b8d-b4a1-22e6c4375e9c"
-    }
+    assertions[0]["metrics"] = {"forbidden": "a2ef7107-0f9b-4b8d-b4a1-22e6c4375e9c"}
     monkeypatch.setattr(gate, "_safe_local_postgres_url", lambda _raw: object())
     monkeypatch.setattr(gate, "_ScratchDatabaseManager", _FakeManager)
     monkeypatch.setattr(

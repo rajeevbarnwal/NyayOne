@@ -1,12 +1,15 @@
 /**
- * Redacted auth-lifecycle persistence (SAATHI-2 / SAATHI-3 remediation).
- * Stores only a secret-free AuthSnapshot so OTP flow state survives refresh /
- * navigation. Backed by the shared KvStore (localStorage in the browser).
+ * Legacy lawyer-demo snapshot persistence.
+ *
+ * Student OTP state must never enter this store. NYAY-4 moves that lifecycle to
+ * the HttpOnly flow cookie and GET /otp/state, so the historical
+ * `ls-auth-student` entry is retired rather than migrated.
  */
 import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
 import type { AuthSnapshot, AuthRole } from './authLifecycle';
 
 const key = (role: AuthRole) => `ls-auth-${role}`;
+export const RETIRED_STUDENT_AUTH_KEY = 'ls-auth-student';
 
 /**
  * In-SPA auth-change signal (SAATHI-337 reactive-auth remediation). Snapshot
@@ -33,11 +36,20 @@ export function subscribeAuthChange(cb: () => void): () => void {
 }
 
 export function saveAuthSnapshot(snap: AuthSnapshot, store: KvStore = defaultKvStore()): void {
+  if (snap.role === 'student') {
+    store.remove(RETIRED_STUDENT_AUTH_KEY);
+    notifyAuthChanged();
+    return;
+  }
   store.set(key(snap.role), snap);
   notifyAuthChanged();
 }
 
 export function loadAuthSnapshot(role: AuthRole, store: KvStore = defaultKvStore()): AuthSnapshot | null {
+  if (role === 'student') {
+    store.remove(RETIRED_STUDENT_AUTH_KEY);
+    return null;
+  }
   return store.get<AuthSnapshot>(key(role));
 }
 
@@ -45,3 +57,11 @@ export function clearAuthSnapshot(role: AuthRole, store: KvStore = defaultKvStor
   store.remove(key(role));
   notifyAuthChanged();
 }
+
+export function retireStudentAuthSnapshot(store: KvStore = defaultKvStore()): void {
+  store.remove(RETIRED_STUDENT_AUTH_KEY);
+}
+
+// Execute at bundle bootstrap. Reload/state discovery paths call this again so
+// late-available Storage implementations cannot resurrect the retired state.
+retireStudentAuthSnapshot();

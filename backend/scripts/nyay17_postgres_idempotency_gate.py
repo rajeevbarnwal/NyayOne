@@ -68,6 +68,10 @@ if str(BACKEND) not in sys.path:
 BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0017_registration_invariants"
 PINNED_HEAD = "0018_registration_idempotency"
+# Historical NYAY-17 migration lifecycle remains sealed at 0018. Current ORM,
+# routes and services must instead execute on the repository head that owns
+# their required OTP-authority columns and cookie-flow contract.
+APPLICATION_HEAD = "0019_otp_security_authority"
 REGISTER_PATH = "/api/v1/auth/student/register"
 RECENT_PROBE_HISTORY_AGE_DAYS = 2
 PENDING_RETENTION_TARGET_AGE_DAYS = 400
@@ -4574,7 +4578,7 @@ def _run_integrity_translation_probe(engine: Engine) -> dict[str, Any]:
 
 def _execute_behavior(scratch_url: str) -> dict[str, Any]:
     migration = {
-        "upgrade": _run_alembic(scratch_url, "upgrade", PINNED_HEAD),
+        "upgrade": _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD),
         "check": None,
     }
     if migration["upgrade"]["returncode"] != 0:
@@ -4640,7 +4644,7 @@ def _execute_behavior(scratch_url: str) -> dict[str, Any]:
             "migration": {
                 "upgrade_returncode": migration["upgrade"]["returncode"],
                 "check_returncode": migration["check"]["returncode"],
-                "current_revision_exact": _current_revision(engine) == PINNED_HEAD,
+                "current_revision_exact": _current_revision(engine) == APPLICATION_HEAD,
                 "revision_rows": revision_rows,
             },
             "schema_exact": schema_exact,

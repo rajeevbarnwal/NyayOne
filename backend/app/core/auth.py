@@ -121,7 +121,19 @@ def require_trusted_cookie_origin(request: Request) -> None:
 
     if request.method.upper() not in _COOKIE_MUTATING_METHODS:
         return
-    if not request.cookies.get(settings.auth_session_cookie_name):
+    if not (
+        request.cookies.get(settings.auth_session_cookie_name)
+        or request.cookies.get(settings.otp_flow_cookie_name)
+    ):
+        return
+
+    require_trusted_mutation_origin(request)
+
+
+def require_trusted_mutation_origin(request: Request) -> None:
+    """Require exactly one allow-listed Origin for a cookie authority mutation."""
+
+    if request.method.upper() not in _COOKIE_MUTATING_METHODS:
         return
 
     origin_headers = request.headers.getlist("origin")

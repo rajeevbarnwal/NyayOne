@@ -10,7 +10,7 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-MOBILE_RE = re.compile(r"^[0-9]{10}$")
+MOBILE_RE = re.compile(r"[0-9]{10}")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
 INSTITUTIONAL_EMAIL_MAX_LENGTH = 254
 CONSUMER_EMAIL_DOMAINS = frozenset(
@@ -93,7 +93,7 @@ class StudentRegisterRequest(BaseModel):
     @field_validator("mobile")
     @classmethod
     def _mobile(cls, v: str) -> str:
-        if not MOBILE_RE.match(v or ""):
+        if not MOBILE_RE.fullmatch(v or ""):
             raise ValueError("Mobile number must be exactly 10 digits.")
         return v
 

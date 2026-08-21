@@ -21,6 +21,7 @@ from sqlalchemy.exc import DBAPIError
 BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0017_registration_invariants"
 HEAD = "0018_registration_idempotency"
+CURRENT_HEAD = "0019_otp_security_authority"
 LEDGER = "registration_idempotency_records"
 TEST_ENV = {
     "APP_ENV": "testing",
@@ -199,7 +200,10 @@ def test_revision_chain_is_single_forward_head():
     revision = scripts.get_revision(HEAD)
     assert revision is not None
     assert revision.down_revision == PARENT
-    assert scripts.get_heads() == [HEAD]
+    current = scripts.get_revision(CURRENT_HEAD)
+    assert current is not None
+    assert current.down_revision == HEAD
+    assert scripts.get_heads() == [CURRENT_HEAD]
 
 
 def test_clean_populated_no_key_roundtrip_and_alembic_check(tmp_path: Path):
@@ -230,6 +234,9 @@ def test_clean_populated_no_key_roundtrip_and_alembic_check(tmp_path: Path):
     assert _alembic(database, "upgrade", HEAD).returncode == 0
     assert _subject_projection(database, ids) == original_subject
     assert _owned_inventory(database) == first_inventory
+    # Alembic ``check`` is defined at the repository's current forward head;
+    # the assertions above still isolate 0018's own round-trip bytes.
+    assert _alembic(database, "upgrade", CURRENT_HEAD).returncode == 0
     check = _alembic(database, "check")
     assert check.returncode == 0, check.stdout + check.stderr
     assert "No new upgrade operations detected" in check.stdout + check.stderr

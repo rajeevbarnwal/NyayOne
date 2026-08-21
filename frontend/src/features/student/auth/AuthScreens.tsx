@@ -6,33 +6,27 @@ import {
   isRegistrableDob, DOB_ERROR, todayLocalISO,
   validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName,
 } from '../lib/registration';
-import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
-import {
-  isValidOtpFormat,
-  verify,
-  secondsUntilResend,
-  secondsUntilExpiry,
-  maskDestination,
-  type OtpChannel,
-} from '../lib/otp';
-import { startOtp, getFlow, setChallenge, setMinor } from '../lib/authFlow';
-import { isMinor, registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
+import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge, ValidationState } from '../../../components/ui/primitives';
+import { isValidOtpInput } from '../lib/otpInput';
+import { registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
 import { updateProfileDraft } from '../lib/profileStore';
 import { institutionalEmailError } from '../lib/profile';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
-  loadRegistrationSession,
+  getStudentSession,
   notifyStudentAuthChanged,
   registerStudent,
   resendStudentOtp,
-  saveRegistrationSession,
+  startLoginOtp,
   startRecovery,
+  verifyLoginOtp,
   verifyRecovery,
   verifyStudentOtp,
   completeRecovery,
   requestInstitutionalEmailVerification,
 } from '../lib/registrationApi';
+import { useOtpFlowState } from '../lib/useOtpFlowState';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
@@ -101,17 +95,24 @@ export function AuthGate() {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
 
-  function sendOtp() {
+  async function sendOtp() {
     const digits = mobile.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit mobile number.');
       return;
     }
     setError(undefined);
-    startOtp({ channel: 'sms' as OtpChannel, ref: digits }, Date.now());
-    setMinor(false, false);
-    nav('/s-06');
+    setBusy(true);
+    try {
+      await startLoginOtp(digits);
+      nav('/s-06');
+    } catch {
+      setError('A one-time code could not be requested. Please retry.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -137,11 +138,11 @@ export function AuthGate() {
             autoComplete="tel"
             placeholder="+91 ‑ 10 digit mobile"
             error={error}
-            help="We’ll send a 6-digit OTP · 3 attempts"
+            help="We’ll send a 6-digit OTP. The server controls the attempt limit."
           />
           <div className="st-actions">
-            <button type="button" className="btn btn--primary tap" onClick={sendOtp}>
-              Send OTP
+            <button type="button" className="btn btn--primary tap" onClick={sendOtp} disabled={busy}>
+              {busy ? 'Sending…' : 'Send OTP'}
             </button>
             <button type="button" className="btn tap" onClick={() => nav('/s-04')}>
               Language
@@ -247,7 +248,6 @@ export function Register() {
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
-    const minor = isMinor(dob, nowISO);
     const payload = namePartsToPayload(parts);
     updateProfileDraft({
       firstName: payload.firstName,
@@ -258,7 +258,7 @@ export function Register() {
     });
     setSubmitting(true);
     try {
-      const created = await registerStudent({
+      await registerStudent({
         firstName: payload.firstName,
         middleName: payload.middleName,
         lastName: payload.lastName,
@@ -266,24 +266,11 @@ export function Register() {
         dob,
         policyVersion: CONSENT_VERSION,
       });
-      saveRegistrationSession({
-        registrationId: created.registration_id,
-        destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
-        issuedAt: Date.now(),
-        isMinor: minor,
-        guardianConsentPending: minor,
-      });
-      setMinor(minor, minor);
       nav('/s-06');
-    } catch (error) {
-      const message = error instanceof RegistrationApiError
-        ? error.code === 'mobile_already_registered'
-          ? 'This mobile number is already registered.'
-          : error.code === 'otp_delivery_unavailable'
-            ? 'OTP delivery is temporarily unavailable. Please try again later.'
-            : 'Registration could not be completed. Please check your details and retry.'
-        : 'Registration service is unavailable. Please try again.';
-      setErrors({ submit: message });
+    } catch {
+      setErrors({
+        submit: 'Registration or code delivery could not be completed. Check your details or try again later.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -384,92 +371,88 @@ export function Register() {
 /* -------------------------------------------------------------------------- */
 export function OtpVerify() {
   const nav = useNavigate();
-  const [now, setNow] = useState(Date.now());
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'incorrect' | 'verified' | 'locked' | 'expired'>('idle');
-  const [attemptsLeftServer, setAttemptsLeftServer] = useState(3);
   const [busy, setBusy] = useState(false);
-  const flow = getFlow();
-  const challenge = flow.challenge;
-  const server = loadRegistrationSession();
+  const otpFlow = useOtpFlowState();
+  const flow = otpFlow.state;
+  const attemptsLeft = flow?.attemptsLeft;
+  const resendIn = flow?.resendInSeconds ?? 0;
+  const expiresIn = flow?.expiresInSeconds ?? 0;
 
-  // Live 1s ticker for the countdowns.
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
+    if (!otpFlow.loadError) return;
+    setCode('');
+    setStatus('idle');
+    setBusy(false);
+  }, [otpFlow.loadError]);
 
-  const attemptsLeft = server ? attemptsLeftServer : challenge?.attemptsLeft ?? 0;
-  const elapsed = server ? Math.max(0, Math.floor((now - server.issuedAt) / 1000)) : 0;
-  const resendIn = server ? Math.max(0, 30 - elapsed) : challenge ? secondsUntilResend(challenge, now) : 0;
-  const expiresIn = server ? Math.max(0, 300 - elapsed) : challenge ? secondsUntilExpiry(challenge, now) : 0;
+  function captureFailure(error: unknown) {
+    if (error instanceof RegistrationApiError && error.otpState) {
+      otpFlow.adopt(error.otpState);
+    }
+    if (error instanceof RegistrationApiError && ['locked', 'otp_locked'].includes(error.code)) {
+      setStatus('locked');
+    } else if (error instanceof RegistrationApiError && ['expired', 'otp_expired'].includes(error.code)) {
+      setStatus('expired');
+    } else {
+      setStatus('incorrect');
+    }
+  }
 
   async function onVerify() {
-    if (!server && !challenge) return;
-    if (!isValidOtpFormat(code)) {
+    if (!isValidOtpInput(code)) {
       setStatus('incorrect');
       return;
     }
-    if (server) {
-      setBusy(true);
-      try {
-        await verifyStudentOtp(server.registrationId, code);
-        notifyStudentAuthChanged();
-        setStatus('verified');
-        nav(server.guardianConsentPending ? '/s-16' : '/s-09');
-      } catch (error) {
-        if (error instanceof RegistrationApiError) {
-          if (typeof error.attemptsLeft === 'number') setAttemptsLeftServer(error.attemptsLeft);
-          if (error.code === 'locked') {
-            setStatus('locked');
-            nav('/s-08');
-          } else if (error.code === 'expired') {
-            setStatus('expired');
-            nav('/s-07');
-          } else {
-            setStatus('incorrect');
-          }
-        } else {
-          setStatus('incorrect');
-        }
-      } finally {
-        setBusy(false);
-      }
+    if (flow?.status !== 'pending' || (flow.purpose !== 'signup' && flow.purpose !== 'login')) {
+      setStatus('expired');
       return;
     }
-    const res = verify(challenge!, code, Date.now());
-    setChallenge(res.challenge);
-    if (res.status === 'verified') {
+    setBusy(true);
+    const purpose = flow.purpose;
+    try {
+      const result = purpose === 'signup'
+        ? await verifyStudentOtp(code)
+        : await verifyLoginOtp(code);
+      otpFlow.adopt(result);
+      notifyStudentAuthChanged();
       setStatus('verified');
-      nav(flow.guardianConsentPending ? '/s-16' : '/s-09');
-    } else if (res.status === 'expired') nav('/s-07');
-    else if (res.status === 'locked') nav('/s-08');
-    else setStatus('incorrect');
+      if (purpose === 'login') {
+        nav('/s-14', { replace: true });
+      } else {
+        const actor = await getStudentSession();
+        nav(actor?.is_minor ? '/s-16' : '/s-09');
+      }
+    } catch (error) {
+      captureFailure(error);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onResend() {
-    if (server) {
-      setBusy(true);
-      try {
-        await resendStudentOtp(server.registrationId);
-        saveRegistrationSession({ ...server, issuedAt: Date.now() });
-        setAttemptsLeftServer(3);
-        setCode('');
-        setStatus('idle');
-      } catch {
-        setStatus('incorrect');
-      } finally {
-        setBusy(false);
-      }
-      return;
+    if (flow?.status !== 'pending' || !flow.resendAllowed) return;
+    setBusy(true);
+    try {
+      otpFlow.adopt(await resendStudentOtp());
+      setCode('');
+      setStatus('idle');
+    } catch (error) {
+      captureFailure(error);
+    } finally {
+      setBusy(false);
     }
-    nav('/s-07');
   }
 
   const helper =
-    status === 'incorrect'
-      ? `Incorrect OTP · ${attemptsLeft} attempts left · ${resendIn > 0 ? `resend in ${resendIn}s` : 'you can resend now'}`
-      : `Enter the 6-digit code · expires in ${expiresIn}s · ${attemptsLeft} attempts left`;
+    status === 'locked'
+      ? `Verification is locked${flow?.lockedForSeconds === null || flow?.lockedForSeconds === undefined ? '' : ` for ${flow.lockedForSeconds}s`}.`
+      : status === 'expired'
+        ? 'This code is no longer available. Request a new code when the server allows it.'
+        : status === 'incorrect'
+          ? `Incorrect OTP · ${attemptsLeft ?? '—'} attempts left · ${flow?.resendAllowed ? 'you can resend now' : `resend in ${resendIn}s`}`
+          : `Enter the 6-digit code · expires in ${expiresIn}s · ${attemptsLeft ?? '—'} attempts left`;
 
   return (
     <AuthCard
@@ -483,11 +466,13 @@ export function OtpVerify() {
         />
       }
     >
-      {(server?.destinationMasked || flow.destination) && (
+      {flow?.destinationMasked && (
         <p className="st-card__sub">
-          Code sent to <strong>{server?.destinationMasked ?? (flow.destination ? maskDestination(flow.destination) : '')}</strong>
+          Code sent to <strong>{flow.destinationMasked}</strong>
         </p>
       )}
+      {otpFlow.loading && <LoadingState label="Restoring verification state…" />}
+      {otpFlow.loadError && <ValidationState message="Verification state is unavailable. Retry before continuing." />}
       <TextField
         id="otp-code"
         label="OTP"
@@ -495,14 +480,14 @@ export function OtpVerify() {
         onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
         inputMode="numeric"
         autoComplete="one-time-code"
-        error={status === 'incorrect' ? helper : undefined}
-        help={status === 'incorrect' ? undefined : helper}
+        error={status === 'incorrect' || status === 'locked' || status === 'expired' ? helper : undefined}
+        help={status === 'incorrect' || status === 'locked' || status === 'expired' ? undefined : helper}
       />
       <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" disabled={resendIn > 0 || busy} onClick={onResend}>
-          {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend OTP'}
+        <button type="button" className="btn tap" disabled={!flow?.resendAllowed || busy} onClick={onResend}>
+          {flow?.resendAllowed ? 'Resend OTP' : `Resend in ${resendIn}s`}
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={onVerify} disabled={busy}>
+        <button type="button" className="btn btn--primary tap" onClick={onVerify} disabled={busy || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}>
           {busy ? 'Verifying…' : 'Verify & continue'}
         </button>
       </div>
@@ -516,20 +501,18 @@ export function OtpVerify() {
 export function OtpExpired() {
   const nav = useNavigate();
   const [message, setMessage] = useState<string | null>(null);
+  const otpFlow = useOtpFlowState();
   async function resend() {
-    const server = loadRegistrationSession();
-    if (server) {
-      try {
-        await resendStudentOtp(server.registrationId);
-        saveRegistrationSession({ ...server, issuedAt: Date.now() });
-        nav('/s-06');
-      } catch {
-        setMessage('A new code could not be sent yet. Please wait and retry.');
+    if (otpFlow.state?.status !== 'pending' || !otpFlow.state.resendAllowed) return;
+    try {
+      otpFlow.adopt(await resendStudentOtp());
+      nav('/s-06');
+    } catch (error) {
+      if (error instanceof RegistrationApiError && error.otpState) {
+        otpFlow.adopt(error.otpState);
       }
-      return;
+      setMessage('A new code could not be sent yet. Follow the server countdown and retry.');
     }
-    startOtp(getFlow().destination ?? { channel: 'sms', ref: '' }, Date.now());
-    nav('/s-06');
   }
   return (
     <AuthCard screenId="S-07" kicker="OTP · S1" title="OTP expired" meta={<StatusBadge status="warn" label="Expired" />}>
@@ -537,7 +520,7 @@ export function OtpExpired() {
         <span className="ui-banner__mark" aria-hidden>
           !
         </span>
-        <span>This code has expired for your security. Codes are valid for 5 minutes.</span>
+        <span>This code has expired for your security. The server controls each code’s lifetime.</span>
       </div>
       {message && <span className="ui-validation" role="alert">{message}</span>}
       <div className="st-actions">
@@ -545,6 +528,7 @@ export function OtpExpired() {
           type="button"
           className="btn btn--primary tap"
           onClick={resend}
+          disabled={!otpFlow.state?.resendAllowed}
         >
           Resend OTP
         </button>
@@ -558,12 +542,19 @@ export function OtpExpired() {
 /* -------------------------------------------------------------------------- */
 export function Lockout() {
   const [mobile, setMobile] = useState('');
-  const [recoveryId, setRecoveryId] = useState('');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const otpFlow = useOtpFlowState();
+  const recoveryPending = otpFlow.state?.status === 'pending'
+    && otpFlow.state.purpose === 'recovery';
+  useEffect(() => {
+    if (!otpFlow.loadError) return;
+    setCode('');
+    setMessage('Recovery state is unavailable. Wait for a successful server state check.');
+  }, [otpFlow.loadError]);
   async function begin() {
     try {
-      setRecoveryId(await startRecovery(mobile));
+      otpFlow.adopt(await startRecovery(mobile));
       setMessage('If an account matches, a recovery code has been sent.');
     } catch {
       setMessage('Enter a valid 10-digit mobile number.');
@@ -571,22 +562,28 @@ export function Lockout() {
   }
   async function finish() {
     try {
-      await verifyRecovery(recoveryId, code);
-      await completeRecovery(recoveryId);
+      otpFlow.adopt(await verifyRecovery(code));
+      otpFlow.adopt(await completeRecovery());
       setMessage('Recovery verified. You may now sign in again.');
-    } catch {
+    } catch (error) {
+      if (error instanceof RegistrationApiError && error.otpState) {
+        otpFlow.adopt(error.otpState);
+      }
       setMessage('Recovery could not be verified. Check the code or request a new one.');
     }
   }
   return (
     <AuthCard screenId="S-08" kicker="OTP · S1" title="Locked" meta={<StatusBadge status="risk" label="Locked" />}>
-      <RestrictedState reason="Too many incorrect attempts. Login is locked for 15 minutes." />
+      <RestrictedState reason={otpFlow.state?.lockedForSeconds === null || otpFlow.state?.lockedForSeconds === undefined
+        ? 'Too many incorrect attempts. Verification is temporarily locked.'
+        : `Too many incorrect attempts. Verification is locked for ${otpFlow.state.lockedForSeconds} seconds.`} />
       <TextField id="recovery-mobile" label="Mobile number" value={mobile} onChange={setMobile} inputMode="numeric" />
-      {recoveryId && <TextField id="recovery-code" label="6-digit recovery code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />}
+      {recoveryPending && <TextField id="recovery-code" label="6-digit recovery code" value={code} onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" />}
+      {otpFlow.loadError && <ValidationState message="Recovery state is unavailable. Retry after the server state check recovers." />}
       {message && <p role="status">{message}</p>}
       <div className="st-actions">
-        <button type="button" className="btn tap" onClick={recoveryId ? finish : begin}>
-          {recoveryId ? 'Verify recovery code' : 'Start account recovery'}
+        <button type="button" className="btn tap" disabled={otpFlow.loadError} onClick={recoveryPending ? finish : begin}>
+          {recoveryPending ? 'Verify recovery code' : 'Start account recovery'}
         </button>
       </div>
     </AuthCard>
@@ -673,8 +670,8 @@ export function EmailVerify() {
 /* -------------------------------------------------------------------------- */
 export function RestrictedDashboard() {
   const nav = useNavigate();
-  const flow = getFlow();
-  const reason = flow.guardianConsentPending
+  const auth = useAuth();
+  const reason = auth.isMinor
     ? 'Your account needs verified guardian consent before full access. Research, community posting, payments and sharing stay locked until then.'
     : 'Your dashboard is limited until verification completes — research, internships and community stay read-only.';
   const restriction = useMemo(() => reason, [reason]);

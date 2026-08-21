@@ -11,6 +11,7 @@
 #   * the NYAY-3 PostgreSQL 16 cardinality/concurrency/service-race gate.
 #   * the NYAY-2 PostgreSQL 16 authorization/ownership release gate.
 #   * the NYAY-17 PostgreSQL 16 registration-idempotency release gate.
+#   * the NYAY-4 PostgreSQL 16 OTP-security authority release gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -69,3 +70,9 @@ echo "== NYAY-17 registration idempotency gate (PostgreSQL 16 + pgvector) =="
 mkdir -p test-results/nyay17-postgres
 "$PY" scripts/nyay17_postgres_idempotency_gate.py \
   --report test-results/nyay17-postgres/summary.json
+echo "== NYAY-4 OTP-security authority gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay4-postgres
+NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py \
+  --execute \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay4-postgres/summary.json

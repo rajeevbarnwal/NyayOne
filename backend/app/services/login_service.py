@@ -22,12 +22,20 @@ from app.models.registration import (
     AuthSession,
     Consent,
     LoginAttempt,
+    OtpChallenge,
+    OtpFlow,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
     User,
 )
-from app.services import integrity_errors, otp_outbox, otp_service
+from app.services import (
+    integrity_errors,
+    otp_authority,
+    otp_flow_service,
+    otp_outbox,
+    otp_service,
+)
 
 LOGIN_COOLDOWN_SECONDS = 30
 ACTIVE_SESSION_CONSTRAINT = "uq_auth_sessions_one_active_per_user"
@@ -85,7 +93,10 @@ def start(
     now = _as_utc(now)
     lookup = keyed_hash(mobile)
     registration = session.scalar(
-        select(StudentRegistration).where(StudentRegistration.mobile_hash == lookup)
+        select(StudentRegistration).where(
+            StudentRegistration.mobile_hash == lookup,
+            *otp_service.registration_authority_filters(),
+        )
     )
     if not otp_service.registration_is_authorizable(registration):
         registration = None
@@ -136,6 +147,156 @@ def start(
         else:
             attempt.challenge_id = challenge.id
     return attempt.opaque_id, intent
+
+
+def start_flow(
+    session: Session,
+    mobile: str,
+    now: datetime,
+) -> tuple[str, OtpFlow, otp_outbox.DeliveryIntent | None]:
+    """Create one cookie-owned real or decoy login flow with identical shape."""
+
+    now = _as_utc(now)
+    lookup = keyed_hash(mobile)
+    subject = otp_authority.authority_subject_from_mobile_hash(lookup)
+    registration = session.scalar(
+        select(StudentRegistration).where(
+            StudentRegistration.mobile_hash == lookup,
+            *otp_service.registration_authority_filters(),
+        )
+    )
+    if registration is not None:
+        registration = otp_service.lock_registration_for_update(
+            session, registration.id
+        )
+    user = session.get(User, registration.user_id) if registration is not None else None
+    eligible = bool(
+        registration is not None
+        and otp_service.registration_is_authorizable(registration)
+        and registration.status in {"otp_verified", "active"}
+        and user is not None
+        and user.role == "student"
+        and user.status not in {"suspended", "deleted"}
+    )
+    if not eligible:
+        # Unknown and ineligible/deleted lookups use the same stable decoy
+        # domain. They must never rediscover an old registration-bound
+        # authority (and its active challenge) with registration_id=None.
+        subject = otp_authority.authority_subject_from_mobile_hash(
+            keyed_hash(f"nyayone:otp-login-decoy:v1:{mobile}")
+        )
+    authority = otp_authority.lock_or_create_authority(
+        session,
+        subject_hash=subject,
+        purpose="login",
+        registration_id=registration.id if eligible and registration else None,
+        now=now,
+    )
+    cooldown = bool(
+        authority.cooldown_until is not None
+        and _as_utc(authority.cooldown_until) > now
+    )
+    locked = otp_authority.locked_for_seconds(authority, now) > 0
+    intent: otp_outbox.DeliveryIntent | None = None
+    candidate = None
+    active = session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.authority_id == authority.id,
+            OtpChallenge.delivery_state == "active",
+        )
+    )
+    repeated_issue = authority.last_issued_at is not None
+    if eligible and registration is not None and not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+            session.flush()
+        generation = authority.generation
+        candidate, intent = otp_service.issue_challenge(
+            session,
+            registration.id,
+            now,
+            purpose="login",
+            destination=decrypt(registration.mobile_ct),
+        )
+        if authority.generation == generation:
+            # Reusing the exact pending provider intent is still a public
+            # issuance and advances the same stable cooldown/window as decoy.
+            otp_service.note_decoy_issue(authority, now=now)
+    elif not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+        otp_service.note_decoy_issue(authority, now=now)
+    raw_token, flow = otp_flow_service.create_flow(
+        session,
+        authority,
+        now=now,
+        destination=mobile,
+        # A staged replacement never displaces the prior usable challenge in
+        # browser authority before provider success.
+        challenge=active or candidate,
+        registration_id=(registration.id if eligible and registration else None),
+    )
+    return raw_token, flow, intent
+
+
+def verify_flow(
+    session: Session,
+    raw_flow_token: str | None,
+    code: str,
+    now: datetime,
+) -> tuple[str, AuthSession, OtpFlow]:
+    """Verify a cookie flow, consuming the same decoy budget on every miss."""
+
+    now = _as_utc(now)
+    graph = otp_flow_service.resolve_flow(session, raw_flow_token)
+    if graph is None:
+        raise LoginError()
+    authority, flow = graph
+    if (
+        flow.purpose != "login"
+        or flow.state not in {"pending", "code_sent", "locked"}
+        or _as_utc(flow.expires_at) <= now
+    ):
+        raise LoginError()
+    if flow.registration_id is None or flow.challenge_id is None:
+        try:
+            otp_service.record_failed_attempt(session, authority, now=now)
+        except otp_service.OtpError as exc:
+            raise LoginError() from exc
+        raise LoginError()
+    try:
+        otp_service.verify(
+            session,
+            flow.registration_id,
+            code,
+            now,
+            purpose="login",
+            challenge_id=flow.challenge_id,
+            commit_on_success=False,
+        )
+    except otp_service.OtpError as exc:
+        if exc.code not in {"incorrect_otp", "locked"}:
+            # An undelivered, missing or expired real verifier must consume the
+            # same stable authority attempt as a decoy.  Otherwise provider
+            # state becomes visible through attempts_left on the uniform API.
+            try:
+                otp_service.record_failed_attempt(
+                    session, authority, now=now
+                )
+            except otp_service.OtpError as uniform_exc:
+                raise LoginError() from uniform_exc
+        raise LoginError() from exc
+    registration = session.get(StudentRegistration, flow.registration_id)
+    if not otp_service.registration_is_authorizable(registration):
+        session.rollback()
+        raise LoginError()
+    # Flow retirement is part of the same commit as challenge consumption and
+    # authenticated-session rotation; no crash window leaves both capabilities.
+    otp_flow_service.mark_authenticated(flow, now=now)
+    raw_session, auth_session = rotate_authenticated_session(
+        session, registration, now  # type: ignore[arg-type]
+    )
+    return raw_session, auth_session, flow
 
 
 def lock_user_for_session_rotation(

@@ -1,17 +1,7 @@
-"""Server-authoritative OTP lifecycle (SAATHI-448 Workstream B).
-
-issue / verify / resend(cooldown) / lockout. Only a keyed verifier is persisted
-in the challenge. A short-lived encrypted OTP outbox payload is created in the
-same transaction and is delivered only AFTER commit; the ciphertext is erased
-after successful delivery. Raw OTP values are never persisted, returned or
-logged. All time comparisons use timezone-aware values supplied by the caller
-(deterministic + testable).
-
-Challenges are scoped by ``purpose`` ("signup" | "recovery" | "login") so a
-code issued for one security boundary can never authenticate another.
-"""
+"""Server-authoritative OTP lifecycle with stable purpose authority (NYAY-4)."""
 from __future__ import annotations
 
+import math
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -20,388 +10,403 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.crypto import encrypt, otp_verifier
-from app.models.registration import OtpChallenge, OtpOutbox
+from app.models.registration import OtpChallenge, OtpOutbox, OtpPurposeAuthority
 from app.models.registration import StudentRegistration
-from app.services import integrity_errors, otp_outbox, registration_service
+from app.services import integrity_errors, otp_authority, otp_outbox
+from app.services import registration_service
 
 OTP_TTL_SECONDS = 300
 RESEND_COOLDOWN_SECONDS = 30
 LOCKOUT_SECONDS = 900
 MAX_ATTEMPTS = 3
 ACTIVE_OTP_CONSTRAINT = "uq_otp_challenges_one_active_per_registration_purpose"
+PENDING_OTP_CONSTRAINT = "uq_otp_challenges_one_pending_delivery_per_authority"
 
 
 class OtpError(Exception):
-    def __init__(self, status_code: int, code: str, attempts_left: int | None = None) -> None:
+    def __init__(self, status_code: int, code: str,
+                 attempts_left: int | None = None, *,
+                 retry_after_seconds: int | None = None) -> None:
         super().__init__(code)
         self.status_code = status_code
         self.code = code
         self.attempts_left = attempts_left
+        self.retry_after_seconds = retry_after_seconds
 
 
-def registration_is_authorizable(
-    registration: StudentRegistration | None,
-) -> bool:
-    """One fail-closed predicate for every registration-bound capability.
-
-    ``otp_pending`` is intentionally eligible because signup verification uses
-    this boundary. Individual callers apply any narrower lifecycle state they
-    require after deletion/quarantine has been rejected here.
-    """
-
-    return bool(
-        registration is not None
-        and registration.deleted_at is None
-        and registration.status != "deleted"
-        and registration.dob_hash_state == "verified"
-    )
+def registration_is_authorizable(registration: StudentRegistration | None) -> bool:
+    return bool(registration is not None and registration.deleted_at is None
+                and registration.status != "deleted"
+                and registration.dob_hash_state == "verified")
 
 
 def registration_authority_filters() -> tuple[object, ...]:
-    """SQL predicates matching :func:`registration_is_authorizable`.
-
-    Callers that resolve an owner from a non-unique ``user_id`` must filter in
-    SQL *before* applying a two-row ambiguity bound. Filtering Python objects
-    after ``LIMIT 2`` can hide a third eligible row behind an ineligible one.
-    """
-
-    return (
-        StudentRegistration.deleted_at.is_(None),
-        StudentRegistration.status != "deleted",
-        StudentRegistration.dob_hash_state == "verified",
-    )
+    return (StudentRegistration.deleted_at.is_(None),
+            StudentRegistration.status != "deleted",
+            StudentRegistration.dob_hash_state == "verified")
 
 
-def registration_accepts_otp_purpose(
-    registration: StudentRegistration | None,
-    purpose: str,
-) -> bool:
-    """Bind the one-use signup UUID to the pre-activation lifecycle only."""
-
-    return bool(
-        registration_is_authorizable(registration)
-        and (purpose != "signup" or registration.status == "otp_pending")
-    )
+def registration_accepts_otp_purpose(registration: StudentRegistration | None,
+                                     purpose: str) -> bool:
+    return bool(registration_is_authorizable(registration)
+                and (purpose != "signup" or registration.status == "otp_pending"))
 
 
 def _gen_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
-def _as_utc(dt: datetime) -> datetime:
-    """Normalize to aware UTC. DB backends (e.g. SQLite) return naive datetimes
-    for stored UTC values; treat those as UTC rather than local (avoids a
-    tz-shift that could falsely expire a challenge)."""
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
-def _active(
-    session: Session,
-    registration_id: uuid.UUID,
-    purpose: str = "signup",
-    *,
-    challenge_id: uuid.UUID | None = None,
-    for_update: bool = False,
-) -> OtpChallenge | None:
-    statement = (
-        select(OtpChallenge)
-        .where(
-            OtpChallenge.registration_id == registration_id,
-            OtpChallenge.purpose == purpose,
-            OtpChallenge.consumed_at.is_(None),
-        )
-        .order_by(OtpChallenge.expires_at.desc())
+def lock_registration_for_update(session: Session, registration_id: uuid.UUID) -> StudentRegistration | None:
+    registration, _ = registration_service.lock_registration_with_idempotency(session, registration_id)
+    return registration if registration_is_authorizable(registration) else None
+
+
+def authority_for_registration(session: Session, registration: StudentRegistration,
+                               purpose: str, now: datetime) -> OtpPurposeAuthority:
+    return otp_authority.lock_or_create_registration_authority(
+        session, registration, purpose, _as_utc(now)
+    )
+
+
+def _active(session: Session, authority: OtpPurposeAuthority, *,
+            challenge_id: uuid.UUID | None = None,
+            for_update: bool = False) -> OtpChallenge | None:
+    statement = select(OtpChallenge).where(
+        OtpChallenge.authority_id == authority.id,
+        OtpChallenge.delivery_state == "active",
+        OtpChallenge.consumed_at.is_(None),
     )
     if challenge_id is not None:
         statement = statement.where(OtpChallenge.id == challenge_id)
     if for_update:
-        # PostgreSQL serialises concurrent verification attempts for the same
-        # challenge, preventing lost attempt increments / lockout bypass.
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return session.scalar(statement)
 
 
-def lock_registration_for_update(
-    session: Session,
-    registration_id: uuid.UUID,
-) -> StudentRegistration | None:
-    """Lock the stable OTP parent before any child decision or replacement."""
-
-    registration, _ = registration_service.lock_registration_with_idempotency(
-        session, registration_id
+def _pending(session: Session, authority: OtpPurposeAuthority,
+             *, for_update: bool = False) -> OtpChallenge | None:
+    statement = select(OtpChallenge).where(
+        OtpChallenge.authority_id == authority.id,
+        OtpChallenge.delivery_state == "pending_delivery",
     )
-    return registration if registration_is_authorizable(registration) else None
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    return session.scalar(statement)
 
 
-def active_challenges_for_replacement(
+def active_challenges_for_replacement(session: Session, registration_id: uuid.UUID,
+                                      purpose: str) -> list[OtpChallenge]:
+    """Compatibility inspection seam; 0019 never replaces before delivery."""
+    return list(session.scalars(select(OtpChallenge).where(
+        OtpChallenge.registration_id == registration_id,
+        OtpChallenge.purpose == purpose,
+        OtpChallenge.delivery_state == "active",
+        OtpChallenge.consumed_at.is_(None),
+    ).with_for_update().execution_options(populate_existing=True)))
+
+
+def _pending_intent(session: Session, authority: OtpPurposeAuthority
+                    ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent] | None:
+    candidate = _pending(session, authority, for_update=True)
+    if candidate is None:
+        return None
+    row = session.scalar(select(OtpOutbox).where(
+        OtpOutbox.challenge_id == candidate.id
+    ).with_for_update().execution_options(populate_existing=True))
+    if (row is None or row.purpose != authority.purpose
+            or row.status not in {"pending", "claimed", "failed"}
+            or row.code_ct is None or row.destination_ct is None):
+        raise RuntimeError("OTP staged delivery graph is invalid")
+    return candidate, otp_outbox.DeliveryIntent(outbox_id=row.id)
+
+
+def _validate_signup_ledger_delivery(
     session: Session,
-    registration_id: uuid.UUID,
-    purpose: str,
-) -> list[OtpChallenge]:
-    """Lock and materialize the child rows replaced by a fresh challenge."""
+    registration: StudentRegistration,
+    authority: OtpPurposeAuthority,
+    idempotency_record,
+) -> None:
+    """Reject a cross-linked NYAY-17 outbox before any resend mutation."""
 
-    return list(
-        session.scalars(
-            select(OtpChallenge)
-            .where(
-                OtpChallenge.registration_id == registration_id,
-                OtpChallenge.purpose == purpose,
-                OtpChallenge.consumed_at.is_(None),
-            )
-            .with_for_update()
-            .execution_options(populate_existing=True)
+    if idempotency_record is None or idempotency_record.state != "pending":
+        return
+    if idempotency_record.outbox_id is None:
+        raise RuntimeError("registration idempotency delivery graph is invalid")
+    graph = session.execute(
+        select(
+            OtpOutbox.challenge_id,
+            OtpOutbox.purpose,
+            OtpChallenge.registration_id,
+            OtpChallenge.authority_id,
+            OtpChallenge.purpose,
         )
-    )
+        .join(OtpChallenge, OtpChallenge.id == OtpOutbox.challenge_id)
+        .where(OtpOutbox.id == idempotency_record.outbox_id)
+    ).one_or_none()
+    if graph is None:
+        raise RuntimeError("registration idempotency delivery graph is invalid")
+    (
+        _,
+        outbox_purpose,
+        challenge_registration_id,
+        challenge_authority_id,
+        challenge_purpose,
+    ) = graph
+    if (
+        challenge_registration_id != registration.id
+        or challenge_authority_id != authority.id
+        or outbox_purpose != "signup"
+        or challenge_purpose != "signup"
+    ):
+        raise RuntimeError("registration idempotency delivery graph is invalid")
 
 
-def issue_challenge(
-    session: Session,
-    registration_id: uuid.UUID,
-    now: datetime,
-    *,
-    purpose: str = "signup",
-    destination: str,
-    destination_ct: str | None = None,
-) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
-    """Issue a fresh challenge of ``purpose`` and enqueue delivery in the outbox.
+def _raise_if_locked(authority: OtpPurposeAuthority, now: datetime) -> None:
+    seconds = otp_authority.locked_for_seconds(authority, now)
+    if seconds:
+        raise OtpError(423, "locked", 0, retry_after_seconds=seconds)
 
-    Supersedes any prior un-consumed challenge OF THE SAME PURPOSE so only one is
-    active per purpose. Returns (challenge, DeliveryIntent). The intent carries
-    only an opaque outbox identifier; the delivery payload is encrypted.
-    """
+
+def issue_challenge(session: Session, registration_id: uuid.UUID, now: datetime, *,
+                    purpose: str = "signup", destination: str,
+                    destination_ct: str | None = None
+                    ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
+    """Stage one candidate; activate it only after fenced provider success."""
     now = _as_utc(now)
-    registration, idempotency_record = (
-        registration_service.lock_registration_with_idempotency(
-            session, registration_id
-        )
+    registration, idempotency_record = registration_service.lock_registration_with_idempotency(
+        session, registration_id
     )
     if not registration_accepts_otp_purpose(registration, purpose):
         raise OtpError(404, "no_active_challenge")
-
-    if (
-        purpose == "signup"
-        and idempotency_record is not None
-        and idempotency_record.state == "pending"
-    ):
-        if (
-            idempotency_record.registration_id != registration_id
-            or idempotency_record.outbox_id is None
-        ):
-            raise RuntimeError("registration idempotency authority is ambiguous")
-        prior_challenge_id = session.scalar(
-            select(OtpOutbox.challenge_id).where(
-                OtpOutbox.id == idempotency_record.outbox_id
-            )
+    assert registration is not None
+    authority = authority_for_registration(session, registration, purpose, now)
+    _raise_if_locked(authority, now)
+    if purpose == "signup":
+        _validate_signup_ledger_delivery(
+            session,
+            registration,
+            authority,
+            idempotency_record,
         )
-        prior_challenge = session.scalar(
-            select(OtpChallenge)
-            .where(OtpChallenge.id == prior_challenge_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        prior_outbox = session.scalar(
-            select(OtpOutbox)
-            .where(OtpOutbox.id == idempotency_record.outbox_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        if (
-            prior_challenge is None
-            or prior_outbox is None
-            or prior_challenge.registration_id != registration_id
-            or prior_challenge.purpose != "signup"
-            or prior_challenge.consumed_at is not None
-            or prior_outbox.challenge_id != prior_challenge.id
-            or prior_outbox.purpose != "signup"
-            or prior_outbox.status not in {"pending", "failed", "sent"}
-        ):
-            raise RuntimeError("registration idempotency delivery graph is invalid")
-        if prior_outbox.status == "sent":
-            # A generic relay can durably deliver before the NYAY-17 finalizer
-            # observes the outbox. Close that success authority before issuing
-            # an explicit resend; the replacement is then an OTP lifecycle
-            # action, not a resumed registration claim.
-            idempotency_record.state = "succeeded"
-            idempotency_record.outbox_id = None
-            idempotency_record.updated_at = now
-
+    existing = _pending_intent(session, authority)
+    if existing is not None:
+        return existing
     try:
-        # The savepoint makes the outer login/recovery attempt transaction
-        # usable after the narrowly translated defensive uniqueness race.
         with session.begin_nested():
-            for prior in active_challenges_for_replacement(
-                session, registration_id, purpose
-            ):
-                prior.consumed_at = now
-                meta = dict(prior.metadata_json or {})
-                meta["superseded"] = True
-                prior.metadata_json = meta
-                # A consumed challenge must never remain deliverable through
-                # the crash-retry outbox. Erase its encrypted OTP in the same
-                # transaction that installs the replacement.
-                for pending in session.scalars(
-                    select(OtpOutbox).where(
-                        OtpOutbox.challenge_id == prior.id,
-                        OtpOutbox.status.in_(("pending", "failed")),
-                    )
-                ):
-                    pending.status = "void"
-                    pending.code_ct = None
-                    pending.last_error = "challenge_superseded"
-            code = _gen_code()
-            salt = str(uuid.uuid4())
-            ch = OtpChallenge(
-                registration_id=registration_id,
-                purpose=purpose,
-                verifier_hash=otp_verifier(code, salt=salt),
-                attempts=0,
-                max_attempts=MAX_ATTEMPTS,
-                expires_at=now + timedelta(seconds=OTP_TTL_SECONDS),
+            code, salt = _gen_code(), str(uuid.uuid4())
+            candidate = OtpChallenge(
+                registration_id=registration_id, authority_id=authority.id,
+                purpose=purpose, verifier_hash=otp_verifier(code, salt=salt),
+                attempts=authority.failed_attempts, max_attempts=authority.max_attempts,
+                expires_at=now + timedelta(seconds=settings.otp_challenge_ttl_seconds),
+                consumed_at=now, locked_until=authority.locked_until,
+                delivery_state="pending_delivery",
                 metadata_json={"salt": salt, "issued_at": now.isoformat()},
             )
-            session.add(ch)
+            session.add(candidate)
             session.flush()
             intent = otp_outbox.enqueue(
-                session,
-                ch,
-                destination_ct=(
-                    destination_ct
-                    if destination_ct is not None
-                    else encrypt(destination)
-                ),
-                code=code,
-                purpose=purpose,
+                session, candidate,
+                destination_ct=destination_ct if destination_ct is not None else encrypt(destination),
+                code=code, purpose=purpose,
             )
-            if (
-                purpose == "signup"
-                and idempotency_record is not None
-                and idempotency_record.state == "pending"
-            ):
+            authority.last_issued_at = now
+            authority.cooldown_until = now + timedelta(seconds=settings.otp_resend_cooldown_seconds)
+            authority.generation += 1
+            authority.updated_at = now
+            if (purpose == "signup" and idempotency_record is not None
+                    and idempotency_record.state == "pending"):
                 if idempotency_record.registration_id != registration_id:
-                    raise RuntimeError(
-                        "registration idempotency authority is ambiguous"
-                    )
-                # A crash-pending registration may be resent before its first
-                # delivery is finalized. Repoint the durable claim in the same
-                # transaction that voids the old payload and creates the new
-                # one, so exact replay can resume only the live intent.
+                    raise RuntimeError("registration idempotency authority is ambiguous")
                 idempotency_record.outbox_id = intent.outbox_id
                 idempotency_record.updated_at = now
     except IntegrityError as exc:
-        if integrity_errors.constraint_name(exc) == ACTIVE_OTP_CONSTRAINT:
+        if integrity_errors.constraint_name(exc) in {ACTIVE_OTP_CONSTRAINT, PENDING_OTP_CONSTRAINT}:
             raise OtpError(409, "otp_issue_conflict") from exc
         raise
-    return ch, intent
+    return candidate, intent
 
 
-def verify(
-    session: Session,
-    registration_id: uuid.UUID,
-    code: str,
-    now: datetime,
-    *,
-    purpose: str = "signup",
-    challenge_id: uuid.UUID | None = None,
-    commit_on_success: bool = True,
-) -> OtpChallenge:
+def _void_relayable_payloads(session: Session, challenge: OtpChallenge) -> None:
+    for row in session.scalars(select(OtpOutbox).where(
+        OtpOutbox.challenge_id == challenge.id,
+        OtpOutbox.status.in_(("pending", "claimed", "failed")),
+    ).with_for_update()):
+        row.status = "void"
+        row.code_ct = row.destination_ct = None
+        row.legacy_destination_retained = False
+        row.claim_token_hash = row.claimed_at = row.lease_expires_at = None
+        row.next_attempt_at = None
+        row.last_error = "challenge_consumed"
+        row.delivered_at = None
+
+
+def verify(session: Session, registration_id: uuid.UUID, code: str, now: datetime, *,
+           purpose: str = "signup", challenge_id: uuid.UUID | None = None,
+           commit_on_success: bool = True) -> OtpChallenge:
     now = _as_utc(now)
-    # Use the same stable-parent -> child order as issue/resend so verification
-    # cannot deadlock with a concurrent replacement.
+    registration, idempotency_record = registration_service.lock_registration_with_idempotency(
+        session, registration_id
+    )
+    if not registration_accepts_otp_purpose(registration, purpose):
+        raise OtpError(404, "no_active_challenge")
+    assert registration is not None
+    authority = authority_for_registration(session, registration, purpose, now)
+    _raise_if_locked(authority, now)
+    challenge = _active(session, authority, challenge_id=challenge_id, for_update=True)
+    if challenge is None:
+        raise OtpError(404, "no_active_challenge")
+    if _as_utc(challenge.expires_at) <= now:
+        challenge.delivery_state, challenge.consumed_at = "void", now
+        authority.active_expires_at = None
+        session.commit()
+        raise OtpError(410, "expired")
+    salt = (challenge.metadata_json or {}).get("salt", "")
+    if otp_verifier(code, salt=salt) == challenge.verifier_hash:
+        challenge.delivery_state, challenge.consumed_at = "consumed", now
+        challenge.attempts, challenge.locked_until = authority.failed_attempts, None
+        authority.failed_attempts = 0
+        authority.locked_until = authority.attempt_window_started_at = None
+        authority.active_expires_at = None
+        authority.updated_at = now
+        _void_relayable_payloads(session, challenge)
+        if registration.status == "otp_pending" and purpose == "signup":
+            registration.status = "otp_verified"
+            registration_service.terminalize_registration_idempotency(
+                session, registration, state="retired", locked_record=idempotency_record
+            )
+        session.commit() if commit_on_success else session.flush()
+        return challenge
+    record_failed_attempt(session, authority, now=now, challenge=challenge)
+    raise AssertionError("failed OTP attempt must raise")
+
+
+def record_failed_attempt(
+    session: Session,
+    authority: OtpPurposeAuthority,
+    *,
+    now: datetime,
+    challenge: OtpChallenge | None = None,
+) -> None:
+    """Consume the stable attempt authority for real and decoy flows alike."""
+
+    now = _as_utc(now)
+    _raise_if_locked(authority, now)
+    started = authority.attempt_window_started_at
+    if started is None or _as_utc(started) + timedelta(seconds=settings.otp_attempt_window_seconds) <= now:
+        authority.failed_attempts = 0
+        authority.attempt_window_started_at = now
+        authority.max_attempts = settings.otp_max_attempts
+    authority.failed_attempts += 1
+    if challenge is not None:
+        challenge.attempts = authority.failed_attempts
+        challenge.max_attempts = authority.max_attempts
+    authority.updated_at = now
+    if authority.failed_attempts >= authority.max_attempts:
+        authority.locked_until = now + timedelta(seconds=settings.otp_lockout_seconds)
+        if challenge is not None:
+            challenge.locked_until = authority.locked_until
+        session.commit()
+        raise OtpError(423, "locked", 0, retry_after_seconds=settings.otp_lockout_seconds)
+    if challenge is not None:
+        challenge.locked_until = None
+    attempts_left = authority.max_attempts - authority.failed_attempts
+    session.commit()
+    raise OtpError(401, "incorrect_otp", attempts_left)
+
+
+def within_cooldown(session: Session, registration_id: uuid.UUID, now: datetime,
+                    purpose: str = "signup") -> bool:
+    registration = session.get(StudentRegistration, registration_id)
+    if not registration_is_authorizable(registration):
+        return False
+    authority = authority_for_registration(session, registration, purpose, now)  # type: ignore[arg-type]
+    return bool(authority.cooldown_until is not None
+                and _as_utc(authority.cooldown_until) > _as_utc(now))
+
+
+def consume_resend_window(authority: OtpPurposeAuthority, now: datetime) -> None:
+    now = _as_utc(now)
+    started = authority.resend_window_started_at
+    if started is None or _as_utc(started) + timedelta(seconds=settings.otp_resend_window_seconds) <= now:
+        authority.resend_window_started_at = now
+        authority.resend_count = 0
+        authority.max_resends = settings.otp_max_resends_per_window
+    if authority.resend_count >= authority.max_resends:
+        end = _as_utc(authority.resend_window_started_at) + timedelta(seconds=settings.otp_resend_window_seconds)  # type: ignore[arg-type]
+        raise OtpError(429, "resend_rate_limited",
+                       retry_after_seconds=max(1, math.ceil((end - now).total_seconds())))
+    authority.resend_count += 1
+    authority.updated_at = now
+
+
+def resend(session: Session, registration_id: uuid.UUID, now: datetime, *,
+           purpose: str = "signup", destination: str,
+           destination_ct: str | None = None
+           ) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
+    now = _as_utc(now)
     registration, idempotency_record = (
         registration_service.lock_registration_with_idempotency(
             session, registration_id
         )
     )
     if not registration_accepts_otp_purpose(registration, purpose):
-        # Match the pre-existing unknown/no-challenge shape so quarantine does
-        # not create a registration-existence oracle.
         raise OtpError(404, "no_active_challenge")
-    ch = _active(
-        session,
-        registration_id,
-        purpose,
-        challenge_id=challenge_id,
-        for_update=True,
-    )
-    if ch is None:
-        raise OtpError(404, "no_active_challenge")
-    if ch.locked_until is not None and _as_utc(ch.locked_until) > now:
-        raise OtpError(423, "locked")
-    if _as_utc(ch.expires_at) <= now:
-        raise OtpError(410, "expired")
-    salt = (ch.metadata_json or {}).get("salt", "")
-    if otp_verifier(code, salt=salt) == ch.verifier_hash:
-        ch.consumed_at = now
-        # A provider-accepted/process-crash window can leave the signup outbox
-        # pending even though the user received the code. Verification owns the
-        # challenge lock, so void and erase every still-relayable payload before
-        # retiring the bootstrap ledger and committing activation.
-        for pending in session.scalars(
-            select(OtpOutbox)
-            .where(
-                OtpOutbox.challenge_id == ch.id,
-                OtpOutbox.status.in_(("pending", "failed")),
-            )
-            .with_for_update()
-        ):
-            pending.status = "void"
-            pending.code_ct = None
-            pending.last_error = "challenge_consumed"
-        if registration.status == "otp_pending" and purpose == "signup":
-            registration.status = "otp_verified"
-            registration_service.terminalize_registration_idempotency(
-                session,
-                registration,
-                state="retired",
-                locked_record=idempotency_record,
-            )
-        if commit_on_success:
-            session.commit()
-        return ch
-    # Persist the failed attempt / lockout ATOMICALLY before signalling the
-    # error — the HTTP layer returns an error status and its request-scoped
-    # session would otherwise roll this back (critical #1).
-    ch.attempts += 1
-    if ch.attempts >= ch.max_attempts:
-        ch.locked_until = now + timedelta(seconds=LOCKOUT_SECONDS)
-        session.commit()
-        raise OtpError(423, "locked", attempts_left=0)
-    session.commit()
-    raise OtpError(401, "incorrect_otp", attempts_left=ch.max_attempts - ch.attempts)
+    assert registration is not None
+    authority = authority_for_registration(session, registration, purpose, now)  # type: ignore[arg-type]
+    if purpose == "signup":
+        _validate_signup_ledger_delivery(
+            session,
+            registration,
+            authority,
+            idempotency_record,
+        )
+    _raise_if_locked(authority, now)
+    pending = _pending_intent(session, authority)
+    if authority.cooldown_until is not None and _as_utc(authority.cooldown_until) > now:
+        retry = max(1, math.ceil((_as_utc(authority.cooldown_until) - now).total_seconds()))
+        raise OtpError(429, "resend_cooldown", retry_after_seconds=retry)
+    consume_resend_window(authority, now)
+    if pending is not None:
+        candidate, intent = pending
+        # An explicit retry retains the exact candidate/provider key but applies
+        # the same resend authority as a decoy request. Refresh only its finite
+        # relay deadline; the verifier TTL still begins on provider acceptance.
+        note_decoy_issue(authority, now=now)
+        candidate.expires_at = now + timedelta(
+            seconds=settings.otp_challenge_ttl_seconds
+        )
+        return candidate, intent
+    # ``issue_challenge`` re-enters the canonical registration/authority lock
+    # seam with populate_existing=True. Persist the serialized resend-window
+    # increment first so that refresh cannot restore the pre-increment bytes.
+    session.flush()
+    return issue_challenge(session, registration_id, now, purpose=purpose,
+                           destination=destination, destination_ct=destination_ct)
 
 
-def within_cooldown(session: Session, registration_id: uuid.UUID, now: datetime, purpose: str = "signup") -> bool:
-    """True if the most recent challenge of ``purpose`` is still within cooldown."""
+def note_decoy_issue(authority: OtpPurposeAuthority, *, now: datetime) -> None:
     now = _as_utc(now)
-    last = session.scalar(
-        select(OtpChallenge)
-        .where(OtpChallenge.registration_id == registration_id, OtpChallenge.purpose == purpose)
-        .order_by(OtpChallenge.expires_at.desc())
-    )
-    if last is None:
-        return False
-    issued = (last.metadata_json or {}).get("issued_at")
-    if not issued:
-        return False
-    elapsed = (now - _as_utc(datetime.fromisoformat(issued))).total_seconds()
-    return elapsed < RESEND_COOLDOWN_SECONDS
+    _raise_if_locked(authority, now)
+    authority.last_issued_at = now
+    authority.cooldown_until = now + timedelta(seconds=settings.otp_resend_cooldown_seconds)
+    authority.generation += 1
+    authority.updated_at = now
 
 
-def resend(
-    session: Session,
-    registration_id: uuid.UUID,
-    now: datetime,
-    *,
-    purpose: str = "signup",
-    destination: str,
-    destination_ct: str | None = None,
-) -> tuple[OtpChallenge, otp_outbox.DeliveryIntent]:
-    registration = lock_registration_for_update(session, registration_id)
-    if not registration_accepts_otp_purpose(registration, purpose):
-        raise OtpError(404, "no_active_challenge")
-    if within_cooldown(session, registration_id, now, purpose):
-        raise OtpError(429, "resend_cooldown")
-    return issue_challenge(
-        session, registration_id, now, purpose=purpose, destination=destination, destination_ct=destination_ct
-    )
+def resend_decoy(authority: OtpPurposeAuthority, *, now: datetime) -> None:
+    """Apply the exact lock/cooldown/resend authority to a decoy flow."""
+
+    now = _as_utc(now)
+    _raise_if_locked(authority, now)
+    if authority.cooldown_until is not None and _as_utc(authority.cooldown_until) > now:
+        retry = max(1, math.ceil((_as_utc(authority.cooldown_until) - now).total_seconds()))
+        raise OtpError(429, "resend_cooldown", retry_after_seconds=retry)
+    consume_resend_window(authority, now)
+    note_decoy_issue(authority, now=now)

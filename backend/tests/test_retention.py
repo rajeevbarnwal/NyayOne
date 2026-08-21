@@ -27,7 +27,19 @@ def test_no_window_is_noop(db_session: Session):
     _reg(db_session)
     policy = RetentionPolicy(None, None, None, None, None, "anonymise")
     counts = purge_expired(db_session, now=NOW, policy=policy)
-    assert counts == {"registrations": 0, "otp_challenges": 0, "recovery_sessions": 0}
+    assert counts == {
+        "registrations": 0,
+        "otp_challenges": 0,
+        "recovery_sessions": 0,
+        "otp_flows": 0,
+        "otp_terminal_flows": 0,
+        "otp_authorities": 0,
+        "otp_terminal_challenges": 0,
+        "otp_terminal_outboxes": 0,
+        "otp_expired_registrations": 0,
+        "otp_rate_limit_buckets": 0,
+        "otp_legacy_destinations": 0,
+    }
     assert db_session.scalar(select(StudentRegistration)) is not None
 
 

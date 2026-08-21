@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 
 const base = process.env.V34_BASE_URL ?? 'http://127.0.0.1:4174';
 const apiBase = process.env.V34_API_BASE_URL ?? base;
+const webOrigin = new URL(base).origin;
 const captureBase = process.env.V34_OTP_CAPTURE_URL ?? 'http://127.0.0.1:1099';
 const loginMobile = process.env.V34_LOGIN_MOBILE ?? '9000000042';
 const evidenceDir = resolve(process.env.V34_EVIDENCE_DIR ?? 'test-results/v34-s01-s10');
@@ -29,28 +30,34 @@ const latestOtp = async () => {
 };
 const provisionLoginStudent = async () => {
   await resetOtp();
-  const response = await fetch(`${apiBase}/api/v1/auth/student/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `v34-login-e2e-${loginMobile}` },
-    body: JSON.stringify({
+  const fixtureContext = await browser.newContext();
+  const response = await fixtureContext.request.post(`${apiBase}/api/v1/auth/student/register`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `v34-login-e2e-${loginMobile}`,
+      Origin: webOrigin,
+    },
+    data: {
       first_name: 'Aditi',
       middle_name: null,
       last_name: 'Nair',
       mobile: loginMobile,
       dob: '2004-03-14',
       consent: { accepted: true, policy_version: 'v34-login-e2e' },
-    }),
+    },
   });
-  if (response.status === 409) return;
-  if (response.status !== 201) throw new Error(`login fixture registration failed: ${response.status}`);
-  const registration = await response.json();
+  if (response.status() === 409) {
+    await fixtureContext.close();
+    return;
+  }
+  if (response.status() !== 201) throw new Error(`login fixture registration failed: ${response.status()}`);
   const code = await latestOtp();
-  const verified = await fetch(`${apiBase}/api/v1/auth/student/otp/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ registration_id: registration.registration_id, code }),
+  const verified = await fixtureContext.request.post(`${apiBase}/api/v1/auth/student/otp/verify`, {
+    headers: { 'Content-Type': 'application/json', Origin: webOrigin },
+    data: { code },
   });
-  if (!verified.ok) throw new Error(`login fixture OTP verification failed: ${verified.status}`);
+  if (!verified.ok()) throw new Error(`login fixture OTP verification failed: ${verified.status()}`);
+  await fixtureContext.close();
 };
 
 try {
@@ -104,7 +111,15 @@ try {
   let capturedPayload = null;
   await page.route('**/api/v1/auth/student/register', async (route) => {
     capturedPayload = route.request().postDataJSON();
-    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ registration_id: '00000000-0000-4000-8000-000000000001' }) });
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'pending', purpose: 'signup', destination_masked: '••••••3210',
+        attempts_left: 3, expires_in_seconds: 300, resend_in_seconds: 30,
+        locked_for_seconds: 0, resend_allowed: false,
+      }),
+    });
   });
 
   const loadRegistration = async () => {

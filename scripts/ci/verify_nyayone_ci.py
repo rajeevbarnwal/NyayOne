@@ -18,7 +18,19 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the CI bootstrap
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 DB_GATE = ROOT / "backend" / "scripts" / "db_gate.sh"
-EXPECTED_DB_GATE_SHA256 = "d0971947d5136c918fac197539ca37561cff34c89bc59406bad0b5113d369b9c"
+NYAY4_BROWSER_GATE = ROOT / "frontend" / "scripts" / "nyay4-otp-browser-negative.mjs"
+NYAY4_BROWSER_CONTRACT = (
+    ROOT / "frontend" / "scripts" / "lib" / "nyay4-otp-runner-contract.mjs"
+)
+FRONTEND_PACKAGE = ROOT / "frontend" / "package.json"
+EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
+    "1920889d94816417792dcc9b5a7aa739869b34fcc8616f8c17df3359c58a45b9"
+)
+EXPECTED_NYAY4_BROWSER_CONTRACT_SHA256 = (
+    "c45e97b73d2f180683fe890578fcaac877045f58bc005489c0f7a21939b35b38"
+)
+EXPECTED_NYAY4_PACKAGE_COMMAND = "node scripts/nyay4-otp-browser-negative.mjs"
+EXPECTED_DB_GATE_SHA256 = "739ea87d2723b56ca88c57748724f578424da3f608e10ab362101c48184530a6"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -34,6 +46,11 @@ EXPECTED_NYAY2_DB_GATE_COMMAND = (
 EXPECTED_NYAY17_DB_GATE_COMMAND = (
     '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
     "--report test-results/nyay17-postgres/summary.json"
+)
+EXPECTED_NYAY4_DB_GATE_COMMAND = (
+    'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py '
+    '--execute --database-url "$DATABASE_URL" '
+    "--output test-results/nyay4-postgres/summary.json"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
@@ -90,6 +107,22 @@ print(results)
 if not results or any(value != "success" for value in results.values()):
     sys.exit("one or more required jobs did not succeed")
 PY"""
+EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
+        "NYAY-4 OTP authority Chromium regression",
+    ): {
+        "name": "NYAY-4 OTP authority Chromium regression",
+        "working-directory": "frontend",
+        "env": {
+            "NYAY4_WEB_BASE_URL": "http://127.0.0.1:1170",
+            "NYAY4_API_BASE_URL": "http://127.0.0.1:1171",
+            "NYAY4_OTP_CAPTURE_URL": "http://127.0.0.1:1099",
+        },
+        "run": "npm run qa:nyay4:otp-negative",
+    },
+}
 EVIDENCE_CONTRACTS: dict[str, dict[str, tuple[str, str, str]]] = {
     "wave1-foundation-gate.yml": {
         "frontend-native": (
@@ -160,6 +193,11 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "INTERNSHIP_REPORT_SCANNER_PROVIDER": "clamav",
         "REGISTRATION_SECRET": "ci-registration-secret-not-a-dev-default",
         "REGISTRATION_LOOKUP_SECRET": "ci-registration-lookup-secret-not-a-dev-default",
+        "OTP_DELIVERY_ENABLED": "true",
+        "OTP_PROVIDER": "http",
+        "OTP_PROVIDER_URL": "https://otp-provider.example.test/send",
+        "OTP_PROVIDER_TOKEN": "ci-otp-provider-token-not-a-default",
+        "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY": "true",
     },
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_ci",
@@ -180,7 +218,9 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "CORS_ORIGINS": '["http://127.0.0.1:1170","http://localhost:1170"]',
         "OTP_DELIVERY_ENABLED": "true",
         "OTP_PROVIDER": "http",
-        "OTP_PROVIDER_URL": "http://127.0.0.1:1099/send",
+        "OTP_PROVIDER_URL": "https://otp-provider.example.test/send",
+        "OTP_PROVIDER_TOKEN": "ci-otp-provider-token-not-a-default",
+        "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY": "true",
     },
     ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave4_qa",
@@ -242,11 +282,11 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("registration-db-gate.yml", "postgres-16-pgvector"): "88a98c87a1f5779f8da7a2896e4aa7577fbd770ad730b24e5cbc80636886c7dc",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
     ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "ad44705701627d12ac45e5abc4d6c4380afe42ff997ac49a89c6dfcfc45b8fd9",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "7c3c8d3590339daf512ea1a0dcf0dbe3b0c0aa9783f246be6827d5bd78dfc239",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "e255ab706b9678bab366d87f20298f6296474c7424823db7046d73ba492b5da7",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
-    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "61b9fac6c5d34686fabebbec301daca600aca905dca5823f7654aa6a3f9f41d3",
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "bcad1590f9df82ac1c84b00298983b07afd26df0921f61586bbba60dde5d30b5",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
     ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "cceb5a2e555c76308658da640e5f362804a1df715718c40c153318643f0d9f78",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
@@ -503,6 +543,23 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
                     + ", ".join(extra_keys)
                 )
 
+        exact_steps = {
+            name: contract
+            for (workflow_name, expected_job_id, name), contract
+            in EXPECTED_EXACT_STEPS.items()
+            if workflow_name == path.name and expected_job_id == job_id
+        }
+        for name, contract in exact_steps.items():
+            matching_steps = [
+                step
+                for step in steps
+                if isinstance(step, dict) and step.get("name") == name
+            ]
+            if len(matching_steps) != 1 or matching_steps[0] != contract:
+                failures.append(
+                    f"{path}: job {job_id} step {name!r} differs from the exact required contract"
+                )
+
         if job_id == "required":
             forbidden_required = {
                 "container", "continue-on-error", "defaults", "env", "permissions",
@@ -577,7 +634,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
     leaving the workflow untouched while deleting/bypassing NYAY-16, NYAY-3,
-    NYAY-2, or NYAY-17 cannot produce a false green.
+    NYAY-2, NYAY-17, or NYAY-4 cannot produce a false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -601,6 +658,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
     nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
     nyay17 = _canonical_shell(EXPECTED_NYAY17_DB_GATE_COMMAND)
+    nyay4 = _canonical_shell(EXPECTED_NYAY4_DB_GATE_COMMAND)
     if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
@@ -616,6 +674,10 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay17) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-17 PostgreSQL gate once"
+        )
+    if canonical.count(nyay4) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-4 PostgreSQL gate once"
         )
     wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
     if (
@@ -650,8 +712,16 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         failures.append(
             f"{path}: NYAY-17 PostgreSQL gate must remain after the NYAY-2 stage"
         )
+    if (
+        nyay17 not in canonical
+        or nyay4 not in canonical
+        or canonical.index(nyay4) < canonical.index(nyay17)
+    ):
+        failures.append(
+            f"{path}: NYAY-4 PostgreSQL gate must remain after the NYAY-17 stage"
+        )
 
-    # NYAY-17 is the final mandatory nested stage. Requiring its exact command
+    # NYAY-4 is the final mandatory nested stage. Requiring its exact command
     # to be the last executable line also rejects wrappers such as ``if
     # false``, ``|| true``, ``--help``, redirection, or a non-executing echo.
     # With db_gate.sh's set -euo pipefail this keeps BLOCKED (78) and FAIL (1)
@@ -661,10 +731,61 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         for line in re.sub(r"\\\s*\n", " ", executable).splitlines()
         if line.strip()
     ]
-    if not logical_commands or logical_commands[-1] != nyay17:
+    if not logical_commands or logical_commands[-1] != nyay4:
         failures.append(
-            f"{path}: exact NYAY-17 PostgreSQL gate must be the final unconditional command"
+            f"{path}: exact NYAY-4 PostgreSQL gate must be the final unconditional command"
         )
+    return failures
+
+
+def check_nyay4_browser_gate_contract(
+    browser_path: Path = NYAY4_BROWSER_GATE,
+    contract_path: Path = NYAY4_BROWSER_CONTRACT,
+    package_path: Path = FRONTEND_PACKAGE,
+) -> list[str]:
+    """Pin the executable NYAY-4 browser oracle behind the required CI step."""
+
+    failures: list[str] = []
+    pinned_files = (
+        (
+            browser_path,
+            EXPECTED_NYAY4_BROWSER_GATE_SHA256,
+            "NYAY-4 browser gate",
+        ),
+        (
+            contract_path,
+            EXPECTED_NYAY4_BROWSER_CONTRACT_SHA256,
+            "NYAY-4 browser assertion contract",
+        ),
+    )
+    for path, expected_sha256, label in pinned_files:
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            failures.append(f"{path}: {label} is missing or unreadable")
+            continue
+        if hashlib.sha256(raw).hexdigest() != expected_sha256:
+            failures.append(f"{path}: {label} SHA-256 differs from the sealed contract")
+
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{package_path}: frontend package contract is unreadable")
+        return failures
+    scripts = package.get("scripts") if isinstance(package, dict) else None
+    if not isinstance(scripts, dict):
+        failures.append(f"{package_path}: frontend scripts must be a mapping")
+        return failures
+    gate_name = "qa:nyay4:otp-negative"
+    if scripts.get(gate_name) != EXPECTED_NYAY4_PACKAGE_COMMAND:
+        failures.append(
+            f"{package_path}: NYAY-4 browser package command differs from the exact contract"
+        )
+    for hook in (f"pre{gate_name}", f"post{gate_name}"):
+        if hook in scripts:
+            failures.append(
+                f"{package_path}: NYAY-4 browser package command may not have an npm lifecycle wrapper"
+            )
     return failures
 
 
@@ -1060,6 +1181,7 @@ def main() -> int:
             "workflow filename inventory differs from the seven canonical required gates"
         )
     failures.extend(check_db_gate_contract())
+    failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(
         failure for path in workflow_paths for failure in check_workflow(path)
     )

@@ -5,23 +5,21 @@ import json
 import uuid
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
-from app.api.v1.router import api_router
-from app.db.base import Base
+from app.core.config import settings
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
-from app.models.registration import RecoverySession, StudentRegistration
+from app.models.registration import OtpFlow, StudentRegistration
 from app.models.wave1 import DataSubjectRequest, DeletionJob, ExportJob, UserSettings
 from app.schemas.registration import StudentRegisterRequest
 from app.services.registration_service import register_student
+from app.services import otp_authority, otp_flow_service, otp_service
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Test-suite plumbing: create_all-equivalent schema copies + a module-scoped
 # route-materialised app (see tests/dbtemplate.py, tests/apptemplate.py).
@@ -82,7 +80,7 @@ def test_anonymous_and_wrong_role_rejected(ctx):
 
 def test_profile_get_patch_and_fresh_session(ctx):
     client, SessionLocal, uid, rid = ctx
-    h = _claims(uid)
+    h = {**_claims(uid), "Origin": settings.cors_origins[0]}
     p = client.get("/api/v1/student/profile", headers=h)
     assert p.status_code == 200 and p.json()["first_name"] == "Aditi"
     assert p.json()["masked_mobile"].endswith("3210") and "9876543210" not in p.json()["masked_mobile"]
@@ -146,7 +144,10 @@ def test_cross_user_request_lookup_uniform_404(ctx):
     opaque = r.json()["request_id"]
     with SessionLocal() as s:  # a second student user
         from app.models.registration import User
-        other = User(role="student", status="pending"); s.add(other); s.commit(); other_id = other.id
+        other = User(role="student", status="pending")
+        s.add(other)
+        s.commit()
+        other_id = other.id
     other_view = client.get(f"/api/v1/student/privacy/requests/{opaque}", headers=_claims(other_id))
     missing = client.get(f"/api/v1/student/privacy/requests/{uuid.uuid4().hex}", headers=_claims(other_id))
     assert other_view.status_code == missing.status_code == 404
@@ -155,31 +156,58 @@ def test_cross_user_request_lookup_uniform_404(ctx):
 
 def test_delete_requires_typed_confirmation_and_real_reauth(ctx):
     client, SessionLocal, uid, rid = ctx
-    h = _claims(uid)
+    h = {**_claims(uid), "Origin": settings.cors_origins[0]}
     bad = client.post("/api/v1/student/privacy/delete", headers=h,
-                      json={"confirmation": "delete", "reauth_recovery_id": "x" * 32})
+                      json={"confirmation": "delete"})
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "invalid_confirmation"
     noauth = client.post("/api/v1/student/privacy/delete", headers=h,
-                         json={"confirmation": "DELETE", "reauth_recovery_id": uuid.uuid4().hex})
+                         json={"confirmation": "DELETE"})
     assert noauth.status_code == 401 and noauth.json()["detail"]["code"] == "reauth_required"
-    # Real server-side evidence: a VERIFIED recovery session owned by this user.
+    # Real server-side evidence: a VERIFIED HttpOnly recovery flow owned by
+    # this registration. The raw proof exists only in the browser cookie.
+    raw_token = otp_flow_service.random_flow_token()
     with SessionLocal() as s:
-        from app.core.crypto import keyed_hash
-        rs = RecoverySession(opaque_id=uuid.uuid4().hex, lookup_hash=keyed_hash("9876543210"),
-                             registration_id=rid, status="verified",
-                             expires_at=NOW + timedelta(minutes=10))
-        s.add(rs); s.commit(); rec_id = rs.opaque_id
+        registration = s.get(StudentRegistration, rid)
+        assert registration is not None
+        registration.status = "active"
+        now = datetime.now(timezone.utc)
+        authority = otp_authority.lock_or_create_registration_authority(
+            s, registration, "recovery", now
+        )
+        challenge, _ = otp_service.issue_challenge(
+            s,
+            registration.id,
+            now,
+            purpose="recovery",
+            destination="9876543210",
+        )
+        _, flow = otp_flow_service.create_flow(
+            s,
+            authority,
+            now=now,
+            destination="9876543210",
+            challenge=challenge,
+            registration_id=rid,
+            raw_token=raw_token,
+        )
+        otp_flow_service.mark_recovery_verified(flow, now=now)
+        s.commit()
+    client.cookies.set(
+        settings.otp_flow_cookie_name,
+        raw_token,
+        path="/api/v1",
+    )
     ok = client.post("/api/v1/student/privacy/delete", headers=h,
-                     json={"confirmation": "DELETE", "reauth_recovery_id": rec_id})
+                     json={"confirmation": "DELETE"})
     assert ok.status_code == 202
     with SessionLocal() as s:
         dsr = s.scalar(select(DataSubjectRequest).where(DataSubjectRequest.kind == "delete"))
         assert dsr.reauth_verified is True and dsr.confirmation_hash != "DELETE"
         assert s.scalar(select(DeletionJob).where(DeletionJob.request_id == dsr.id)) is not None
-        rs2 = s.scalar(select(RecoverySession).where(RecoverySession.opaque_id == rec_id))
-        assert rs2.status == "consumed"  # evidence is single-use
+        flow = s.scalar(select(OtpFlow))
+        assert flow is not None and flow.state == "consumed"
     replay = client.post("/api/v1/student/privacy/delete", headers=h,
-                         json={"confirmation": "DELETE", "reauth_recovery_id": rec_id})
+                         json={"confirmation": "DELETE"})
     assert replay.status_code == 401  # consumed evidence cannot be replayed
 
 
@@ -221,7 +249,8 @@ def test_d1_returning_user_reads_canonical_from_legacy_rows(ctx):
         if prof is None:
             prof = StudentProfile(registration_id=rid)
             s.add(prof)
-        prof.college = "NLSIU"; prof.year_of_study = "3rd year"
+        prof.college = "NLSIU"
+        prof.year_of_study = "3rd year"
         s.commit()
     g = client.get("/api/v1/student/profile", headers=_claims(uid))
     assert g.json()["college"] == "National Law School of India University"
@@ -302,25 +331,31 @@ def test_f2_db_check_rejects_noncanonical_language(ctx):
     for bad in ("English", "Hindi", "", "xx", "x" * 16):
         with SessionLocal() as s:
             from app.models.registration import User
-            u = User(role="student", status="pending"); s.add(u); s.flush()
+            u = User(role="student", status="pending")
+            s.add(u)
+            s.flush()
             s.add(UserSettings(user_id=u.id, language=bad))
             with _pytest.raises(IntegrityError):
                 s.flush()
             s.rollback()
     with SessionLocal() as s:  # canonical codes accepted
         from app.models.registration import User
-        u = User(role="student", status="pending"); s.add(u); s.flush()
-        s.add(UserSettings(user_id=u.id, language="hi")); s.flush(); s.rollback()
+        u = User(role="student", status="pending")
+        s.add(u)
+        s.flush()
+        s.add(UserSettings(user_id=u.id, language="hi"))
+        s.flush()
+        s.rollback()
 
 
 def test_f2_migration_maps_legacy_and_guards_unknown(alembic_db):
-    """Upgrade 0004 -> insert legacy rows -> upgrade head maps them; unknown
+    """Upgrade 0004 -> insert legacy rows -> upgrade 0005 maps them; unknown
     values abort the migration with an explicit report.
 
     The two 0004 starting databases come from ``alembic_db`` (a copy of the
     session-scoped snapshot that a real alembic ``upgrade 0004_wave1_foundation``
     produced), instead of re-running that identical upgrade twice here. Every
-    step this test actually asserts on — ``upgrade head``, ``downgrade
+    step this test actually asserts on — ``upgrade 0005_language_check``, ``downgrade
     0004_wave1_foundation``, the clean re-upgrade, and the must-fail upgrade on
     the unmapped value — is still a real ``python -m alembic`` invocation.
     """
@@ -341,12 +376,14 @@ def test_f2_migration_maps_legacy_and_guards_unknown(alembic_db):
         uid_u, uid_s = _uuid.uuid4().hex, _uuid.uuid4().hex
         c.execute("INSERT INTO users (id, role, status, created_at, updated_at) VALUES (?, 'student', 'pending', datetime('now'), datetime('now'))", (uid_u,))
         c.execute("INSERT INTO user_settings (id, user_id, theme, language, notif_email, notif_sms, notif_updates, version, created_at, updated_at) VALUES (?, ?, 'system', ?, 1, 0, 1, 1, datetime('now'), datetime('now'))", (uid_s, uid_u, lang))
-        c.commit(); c.close()
+        c.commit()
+        c.close()
 
     # Case A: legacy labels map to canonical codes.
     db_a = alembic_db("0004_wave1_foundation", name="a")
-    insert(db_a, "English"); insert(db_a, "हिन्दी (Hindi)")
-    up = alembic(db_a, "upgrade", "head")
+    insert(db_a, "English")
+    insert(db_a, "हिन्दी (Hindi)")
+    up = alembic(db_a, "upgrade", "0005_language_check")
     assert up.returncode == 0, up.stderr[-500:]
     langs = sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings"))
     assert langs == ["en", "hi"]
@@ -355,10 +392,10 @@ def test_f2_migration_maps_legacy_and_guards_unknown(alembic_db):
     # constraint downgrade assertion accidentally exercise another revision.
     assert alembic(db_a, "downgrade", "0004_wave1_foundation").returncode == 0
     assert sorted(r[0] for r in sqlite3.connect(db_a).execute("SELECT language FROM user_settings")) == ["en", "hi"]
-    assert alembic(db_a, "upgrade", "head").returncode == 0
+    assert alembic(db_a, "upgrade", "0005_language_check").returncode == 0
 
     # Case B: unknown value aborts loudly (no silent coercion).
     db_b = alembic_db("0004_wave1_foundation", name="b")
     insert(db_b, "Klingon")
-    bad = alembic(db_b, "upgrade", "head")
+    bad = alembic(db_b, "upgrade", "0005_language_check")
     assert bad.returncode != 0 and "unmapped legacy language values" in (bad.stderr + bad.stdout)

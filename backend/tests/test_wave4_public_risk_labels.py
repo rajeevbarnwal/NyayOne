@@ -70,6 +70,13 @@ from tests import apptemplate, dbtemplate
 NON_DEV_DATABASE_URL = (
     "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
 )
+NONLOCAL_OTP_CONFIG = {
+    "otp_delivery_enabled": True,
+    "otp_provider": "http",
+    "otp_provider_url": "https://otp-provider.example.invalid/send",
+    "otp_provider_token": SecretStr("wave4-public-risk-config-token"),
+    "otp_provider_supports_idempotency": True,
+}
 
 
 def test_ci_runs_moderation_before_seeding_risk_label_cluster() -> None:
@@ -305,6 +312,7 @@ def test_deterministic_response_notification_provider_is_local_test_only(environ
         "database_url": NON_DEV_DATABASE_URL,
         "internship_report_scanner_provider": "clamav",
         "calendar_public_base_url": "https://calendar.nyayone.example",
+        **NONLOCAL_OTP_CONFIG,
     }
     with pytest.raises(ConfigurationError, match="notification_provider must be none"):
         Settings(

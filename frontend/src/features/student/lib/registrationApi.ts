@@ -1,22 +1,50 @@
 import { apiFetch, newRequestId } from '../../../lib/apiClient';
 
-// A registration UUID is a pre-authentication OTP correlation reference, not an
-// authorization capability. Keep it only in this page-lifetime module slot and
-// never persist it in browser storage, cookies or URLs. A reload intentionally
-// requires the user to restart signup rather than resurrect a bearer-like UUID.
+// OTP-flow correlation is exclusively server-owned.  The browser receives only
+// an HttpOnly cookie and relative, display-safe state from GET /otp/state.  In
+// particular, JavaScript never receives or persists registration/login/recovery
+// identifiers, counters anchored to wall-clock timestamps, or bearer material.
 const RETIRED_SESSION_KEY = 'legalsaathi.student.registration.v2';
 const LEGACY_PII_KEY = 'legalsaathi.student.profile.v1';
+const RETIRED_STUDENT_AUTH_KEY = 'ls-auth-student';
 
-let onboardingSession: RegistrationSession | null = null;
 let registrationAttempt: { body: string; key: string } | null = null;
 
-export interface RegistrationSession {
-  registrationId: string;
-  destinationMasked: string;
-  issuedAt: number;
-  isMinor: boolean;
-  guardianConsentPending: boolean;
+export type OtpFlowStatus = 'pending' | 'verified' | 'authenticated' | 'unavailable';
+export type OtpFlowPurpose = 'signup' | 'login' | 'recovery' | null;
+
+export interface OtpFlowState {
+  status: OtpFlowStatus;
+  purpose: OtpFlowPurpose;
+  destinationMasked: string | null;
+  attemptsLeft: number | null;
+  expiresInSeconds: number | null;
+  resendInSeconds: number | null;
+  lockedForSeconds: number | null;
+  resendAllowed: boolean;
 }
+
+interface OtpFlowStateWire {
+  status: OtpFlowStatus;
+  purpose: OtpFlowPurpose;
+  destination_masked: string | null;
+  attempts_left: number | null;
+  expires_in_seconds: number | null;
+  resend_in_seconds: number | null;
+  locked_for_seconds: number | null;
+  resend_allowed: boolean;
+}
+
+const OTP_FLOW_STATE_WIRE_KEYS = [
+  'attempts_left',
+  'destination_masked',
+  'expires_in_seconds',
+  'locked_for_seconds',
+  'purpose',
+  'resend_allowed',
+  'resend_in_seconds',
+  'status',
+] as const;
 
 export interface RegisterStudentInput {
   firstName: string;
@@ -50,10 +78,71 @@ export class RegistrationApiError extends Error {
     readonly status: number,
     readonly code: string,
     readonly field?: string,
-    readonly attemptsLeft?: number,
+    readonly otpState?: OtpFlowState,
+    readonly retryAfterSeconds?: number,
   ) {
     super(code);
   }
+
+  get attemptsLeft(): number | undefined {
+    return this.otpState?.attemptsLeft ?? undefined;
+  }
+}
+
+function isOtpFlowStateWire(value: unknown): value is OtpFlowStateWire {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Partial<OtpFlowStateWire>;
+  const keys = Object.keys(value as object).sort();
+  if (
+    keys.length !== OTP_FLOW_STATE_WIRE_KEYS.length
+    || !keys.every((key, index) => key === OTP_FLOW_STATE_WIRE_KEYS[index])
+    || !['pending', 'verified', 'authenticated', 'unavailable'].includes(String(state.status))
+    || typeof state.resend_allowed !== 'boolean'
+  ) return false;
+
+  const relative = [
+    state.attempts_left,
+    state.expires_in_seconds,
+    state.resend_in_seconds,
+    state.locked_for_seconds,
+  ];
+  const hasNoCapabilities = state.destination_masked === null
+    && relative.every((item) => item === null);
+
+  if (state.status === 'pending') {
+    const allRelative = relative.every((item) => Number.isSafeInteger(item) && Number(item) >= 0);
+    if (
+      !['signup', 'login', 'recovery'].includes(String(state.purpose))
+      || typeof state.destination_masked !== 'string'
+      || !/^••••••\d{4}$/u.test(state.destination_masked)
+      || !allRelative
+    ) return false;
+    return !state.resend_allowed || (
+      state.resend_in_seconds === 0
+      && state.locked_for_seconds === 0
+      && Number(state.attempts_left) > 0
+    );
+  }
+
+  if (!hasNoCapabilities || state.resend_allowed) return false;
+  if (state.status === 'verified') return state.purpose === 'recovery';
+  if (state.status === 'authenticated') {
+    return state.purpose === 'signup' || state.purpose === 'login';
+  }
+  return state.status === 'unavailable' && state.purpose === null;
+}
+
+function mapOtpFlowState(value: OtpFlowStateWire): OtpFlowState {
+  return {
+    status: value.status,
+    purpose: value.purpose,
+    destinationMasked: value.destination_masked,
+    attemptsLeft: value.attempts_left,
+    expiresInSeconds: value.expires_in_seconds,
+    resendInSeconds: value.resend_in_seconds,
+    lockedForSeconds: value.locked_for_seconds,
+    resendAllowed: value.resend_allowed,
+  };
 }
 
 async function jsonRequest<T>(
@@ -64,23 +153,28 @@ async function jsonRequest<T>(
   headers.set('Content-Type', 'application/json');
   const response = await apiFetch(path, { ...init, headers });
   const body = (await response.json().catch(() => ({}))) as {
-    detail?: { code?: string; field?: string; attempts_left?: number } | string;
+    detail?: { code?: string; field?: string; otp_state?: OtpFlowStateWire } | string;
     error?: {
       code?: string;
       field?: string;
-      attempts_left?: number;
-      detail?: { code?: string; field?: string; attempts_left?: number };
+      otp_state?: OtpFlowStateWire;
+      detail?: { code?: string; field?: string; otp_state?: OtpFlowStateWire };
     };
   } & T;
   if (!response.ok) {
     const detail = typeof body.detail === 'object'
       ? body.detail
       : body.error?.detail ?? body.error;
-    // A rejected authenticated boundary is also a revocation signal. Do not
-    // leave any pre-auth correlation reference alive after the server denies
-    // the browser session. HTTP 401 alone is not sufficient: a normal wrong
-    // signup OTP is also 401 and must retain its memory-only correlation value
-    // so the user can retry or resend within the server-owned attempt budget.
+    if (
+      detail
+      && Object.prototype.hasOwnProperty.call(detail, 'otp_state')
+      && !isOtpFlowStateWire(detail.otp_state)
+    ) {
+      throw new RegistrationApiError(502, 'invalid_otp_state');
+    }
+    // A rejected authenticated boundary retires any pre-NYAY-4 storage. HTTP
+    // 401 alone is insufficient: an incorrect OTP is also 401 and its HttpOnly
+    // flow cookie must remain wholly server-owned for retry/resend decisions.
     if (response.status === 401 && detail?.code === 'authentication_required') {
       clearRegistrationSession();
     }
@@ -88,16 +182,43 @@ async function jsonRequest<T>(
       response.status,
       detail?.code ?? `http_${response.status}`,
       detail?.field,
-      detail?.attempts_left,
+      detail?.otp_state ? mapOtpFlowState(detail.otp_state) : undefined,
+      parseRetryAfterSeconds(response.headers.get('Retry-After')),
     );
   }
   return body;
 }
 
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+  if (value === null || !/^\d+$/.test(value.trim())) return undefined;
+  return Number.parseInt(value, 10);
+}
+
+export async function getOtpFlowState(): Promise<OtpFlowState> {
+  // Re-run at every reload/bootstrap boundary because tests, embedded webviews,
+  // and privacy-restricted browsers may expose Storage after module evaluation.
+  retireBrowserRegistrationState();
+  const result = await jsonRequest<OtpFlowStateWire>(
+    '/api/v1/auth/student/otp/state',
+    { method: 'GET' },
+  );
+  if (!isOtpFlowStateWire(result)) {
+    throw new RegistrationApiError(502, 'invalid_otp_state');
+  }
+  return mapOtpFlowState(result);
+}
+
+function requireOtpFlowState(result: unknown): OtpFlowState {
+  if (!isOtpFlowStateWire(result)) {
+    throw new RegistrationApiError(502, 'invalid_otp_state');
+  }
+  return mapOtpFlowState(result);
+}
+
 export async function registerStudent(
   input: RegisterStudentInput,
   idempotencyKey?: string,
-): Promise<{ registration_id: string; status: string }> {
+): Promise<OtpFlowState> {
   const body = JSON.stringify({
     first_name: input.firstName,
     middle_name: input.middleName,
@@ -114,7 +235,7 @@ export async function registerStudent(
   const attemptKey = idempotencyKey ?? registrationAttempt?.key ?? newRequestId();
 
   try {
-    const result = await jsonRequest<{ registration_id: string; status: string }>(
+    const result = await jsonRequest<unknown>(
       '/api/v1/auth/student/register',
       {
         method: 'POST',
@@ -125,7 +246,7 @@ export async function registerStudent(
     if (!explicitKey && registrationAttempt?.key === attemptKey) {
       registrationAttempt = null;
     }
-    return result;
+    return requireOtpFlowState(result);
   } catch (error) {
     // Transport failures retain the same page-memory key so an uncertain
     // request can replay safely. A typed terminal outcome is known and the
@@ -144,23 +265,21 @@ export async function registerStudent(
 }
 
 export async function verifyStudentOtp(
-  registrationId: string,
   code: string,
-): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/otp/verify', {
+): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId, code }),
+    body: JSON.stringify({ code }),
   });
-  // Successful signup verification establishes the server-owned authenticated
-  // context. The client must no longer retain the registration reference.
-  clearRegistrationSession();
+  return requireOtpFlowState(result);
 }
 
-export async function resendStudentOtp(registrationId: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/otp/resend', {
+export async function resendStudentOtp(): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/resend', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId }),
+    body: JSON.stringify({}),
   });
+  return requireOtpFlowState(result);
 }
 
 export async function saveAcademicProfile(
@@ -189,45 +308,46 @@ export async function requestInstitutionalEmailVerification(
   });
 }
 
-export async function startRecovery(mobile: string): Promise<string> {
-  const result = await jsonRequest<{ recovery_id: string }>(
+export async function startRecovery(mobile: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/recovery/start',
     { method: 'POST', body: JSON.stringify({ mobile }) },
   );
-  return result.recovery_id;
+  return requireOtpFlowState(result);
 }
 
 export async function verifyRecovery(
-  recoveryId: string,
   code: string,
-): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/recovery/verify', {
+): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/verify', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId, code }),
+    body: JSON.stringify({ code }),
   });
+  return requireOtpFlowState(result);
 }
 
-export async function completeRecovery(recoveryId: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/recovery/complete', {
+export async function completeRecovery(): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/complete', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId }),
+    body: JSON.stringify({}),
   });
+  return requireOtpFlowState(result);
 }
 
-export async function startLoginOtp(mobile: string): Promise<string> {
-  const result = await jsonRequest<{ login_id: string }>(
+export async function startLoginOtp(mobile: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/login/otp/start',
     { method: 'POST', body: JSON.stringify({ mobile }) },
   );
-  return result.login_id;
+  return requireOtpFlowState(result);
 }
 
-export async function verifyLoginOtp(loginId: string, code: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/login/otp/verify', {
+export async function verifyLoginOtp(code: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/login/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ login_id: loginId, code }),
+    body: JSON.stringify({ code }),
   });
-  clearRegistrationSession();
+  return requireOtpFlowState(result);
 }
 
 export async function getStudentSession(): Promise<StudentSessionActor | null> {
@@ -239,7 +359,7 @@ export async function getStudentSession(): Promise<StudentSessionActor | null> {
   // tab may still contain the retired UUID-bearing sessionStorage entry even
   // when its HttpOnly cookie is valid, so authenticated discovery must retire
   // it just as aggressively as anonymous discovery.
-  clearRegistrationSession();
+  retireBrowserRegistrationState();
   return result.authenticated ? result.actor : null;
 }
 
@@ -250,7 +370,7 @@ export async function logoutStudent(): Promise<void> {
       body: JSON.stringify({}),
     });
   } finally {
-    clearRegistrationSession();
+    retireBrowserRegistrationState();
   }
 }
 
@@ -262,18 +382,7 @@ export function notifyStudentAuthChanged(): void {
   }
 }
 
-export function saveRegistrationSession(value: RegistrationSession): void {
-  onboardingSession = { ...value };
-  retireBrowserRegistrationState();
-}
-
-export function loadRegistrationSession(): RegistrationSession | null {
-  retireBrowserRegistrationState();
-  return onboardingSession ? { ...onboardingSession } : null;
-}
-
 export function clearRegistrationSession(): void {
-  onboardingSession = null;
   registrationAttempt = null;
   retireBrowserRegistrationState();
 }
@@ -292,6 +401,11 @@ function retireBrowserRegistrationState(): void {
     window.localStorage.removeItem(LEGACY_PII_KEY);
   } catch {
     // Same fail-safe handling for the retired legacy PII draft.
+  }
+  try {
+    window.localStorage.removeItem(RETIRED_STUDENT_AUTH_KEY);
+  } catch {
+    // The server flow remains authoritative even when storage is inaccessible.
   }
 }
 

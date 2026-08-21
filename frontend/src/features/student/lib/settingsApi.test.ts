@@ -149,19 +149,22 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('idem-1');
   });
 
-  it('posts confirmation + reauth_recovery_id for deletion', async () => {
+  it('posts confirmation only and relies on the HttpOnly recovery proof', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(
       { request_id: 'opaque-delete-1', status: 'pending' },
       202,
     ));
     vi.stubGlobal('fetch', fetchMock);
 
-    await requestAccountDeletion({ confirmation: 'DELETE', reauthRecoveryId: 'recovery-1' });
+    await requestAccountDeletion({ confirmation: 'DELETE' });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
     expect(JSON.parse(String(init.body))).toEqual({
       confirmation: 'DELETE',
-      reauth_recovery_id: 'recovery-1',
     });
+    expect(String(init.body)).not.toMatch(
+      /(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/,
+    );
   });
 
   it('surfaces the typed 401 reauth_required error', async () => {
@@ -169,7 +172,7 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
       { detail: { code: REAUTH_REQUIRED_CODE } },
       401,
     )));
-    await expect(requestAccountDeletion({ confirmation: 'DELETE', reauthRecoveryId: 'stale' }))
+    await expect(requestAccountDeletion({ confirmation: 'DELETE' }))
       .rejects.toEqual(expect.objectContaining({ status: 401, code: REAUTH_REQUIRED_CODE }));
   });
 
@@ -178,7 +181,7 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
       { detail: { code: 'invalid_confirmation', field: 'confirmation' } },
       422,
     )));
-    await expect(requestAccountDeletion({ confirmation: 'delete', reauthRecoveryId: 'recovery-1' }))
+    await expect(requestAccountDeletion({ confirmation: 'delete' }))
       .rejects.toEqual(expect.objectContaining({
         status: 422,
         code: 'invalid_confirmation',
