@@ -60,8 +60,8 @@ VERIFICATION_METHODS = ("institutional_email", "college_id", "manual")
 VERIFICATION_STATUSES = ("pending", "in_review", "verified", "rejected")
 GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
 RECOVERY_STATUSES = ("pending", "verified", "consumed", "expired")
-LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired")
-AUTH_SESSION_STATUSES = ("active", "revoked", "expired")
+LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired", "erased")
+AUTH_SESSION_STATUSES = ("active", "revoked", "expired", "erased")
 REGISTRATION_IDEMPOTENCY_STATES = (
     "pending",
     "succeeded",
@@ -95,6 +95,9 @@ _OTP_FLOW_TOKEN_HEX_ONLY_SQL = "token_hash"
 _OTP_PROVIDER_KEY_HEX_ONLY_SQL = "provider_idempotency_key"
 _OTP_CLAIM_TOKEN_HEX_ONLY_SQL = "claim_token_hash"
 _OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL = "provider_receipt_hash"
+_LOGIN_ATTEMPT_LOOKUP_HEX_ONLY_SQL = "lookup_hash"
+_LOGIN_ATTEMPT_OPAQUE_HEX_ONLY_SQL = "opaque_id"
+_AUTH_SESSION_TOKEN_HEX_ONLY_SQL = "token_hash"
 for _hex_character in "0123456789abcdef":
     _IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL = (
         f"replace({_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL}, "
@@ -122,6 +125,18 @@ for _hex_character in "0123456789abcdef":
     )
     _OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL = (
         f"replace({_OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _LOGIN_ATTEMPT_LOOKUP_HEX_ONLY_SQL = (
+        f"replace({_LOGIN_ATTEMPT_LOOKUP_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _LOGIN_ATTEMPT_OPAQUE_HEX_ONLY_SQL = (
+        f"replace({_LOGIN_ATTEMPT_OPAQUE_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _AUTH_SESSION_TOKEN_HEX_ONLY_SQL = (
+        f"replace({_AUTH_SESSION_TOKEN_HEX_ONLY_SQL}, "
         f"'{_hex_character}', '')"
     )
 
@@ -717,12 +732,38 @@ class LoginAttempt(TimestampedBase):
         index=True,
         nullable=True,
     )
-    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(24), default="pending", server_default="pending", nullable=False
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (
         UniqueConstraint("opaque_id", name="uq_login_attempts_opaque_id"),
         _in("status", LOGIN_ATTEMPT_STATUSES, "status"),
+        CheckConstraint(
+            "length(lookup_hash) = 64 AND "
+            f"length({_LOGIN_ATTEMPT_LOOKUP_HEX_ONLY_SQL}) = 0",
+            name="lookup_hash_shape",
+        ),
+        CheckConstraint(
+            "((status <> 'erased' AND length(opaque_id) = 32) OR "
+            "(status = 'erased' AND length(opaque_id) = 64)) AND "
+            f"length({_LOGIN_ATTEMPT_OPAQUE_HEX_ONLY_SQL}) = 0",
+            name="opaque_id_shape",
+        ),
+        CheckConstraint(
+            "(status = 'pending' AND consumed_at IS NULL AND deleted_at IS NULL) OR "
+            "(status IN ('consumed', 'expired') AND consumed_at IS NOT NULL "
+            "AND deleted_at IS NULL) OR "
+            "(status = 'erased' AND registration_id IS NULL AND challenge_id IS NULL "
+            "AND consumed_at IS NOT NULL AND deleted_at IS NOT NULL "
+            "AND metadata_json IS NULL AND created_at = updated_at "
+            "AND updated_at = expires_at AND expires_at = consumed_at "
+            "AND consumed_at = deleted_at)",
+            name="lifecycle_shape",
+        ),
+        sa.Index("ix_login_attempts_expires_at", "expires_at"),
+        sa.Index("ix_login_attempts_consumed_at", "consumed_at"),
     )
 
 
@@ -734,20 +775,39 @@ class AuthSession(TimestampedBase):
     """
 
     __tablename__ = "auth_sessions"
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
     )
     token_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
-    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(24), default="active", server_default="active", nullable=False
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (
         UniqueConstraint("token_hash", name="uq_auth_sessions_token_hash"),
         _in("status", AUTH_SESSION_STATUSES, "status"),
+        CheckConstraint(
+            "length(token_hash) = 64 AND "
+            f"length({_AUTH_SESSION_TOKEN_HEX_ONLY_SQL}) = 0",
+            name="token_hash_shape",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND user_id IS NOT NULL AND revoked_at IS NULL "
+            "AND deleted_at IS NULL) OR "
+            "(status IN ('revoked', 'expired') AND user_id IS NOT NULL "
+            "AND revoked_at IS NOT NULL AND deleted_at IS NULL) OR "
+            "(status = 'erased' AND user_id IS NULL AND revoked_at IS NOT NULL "
+            "AND deleted_at IS NOT NULL AND metadata_json IS NULL "
+            "AND created_at = updated_at AND updated_at = expires_at "
+            "AND expires_at = last_seen_at AND last_seen_at = revoked_at "
+            "AND revoked_at = deleted_at)",
+            name="lifecycle_shape",
+        ),
         sa.Index(
             "uq_auth_sessions_one_active_per_user",
             "user_id",
@@ -755,6 +815,7 @@ class AuthSession(TimestampedBase):
             postgresql_where=sa.text("status = 'active'"),
             sqlite_where=sa.text("status = 'active'"),
         ),
+        sa.Index("ix_auth_sessions_revoked_at", "revoked_at"),
     )
 
 

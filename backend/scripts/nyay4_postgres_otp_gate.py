@@ -52,6 +52,7 @@ if str(BACKEND) not in sys.path:
 BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0018_registration_idempotency"
 PINNED_HEAD = "0019_otp_security_authority"
+APPLICATION_HEAD = "0020_auth_retention_lifecycle"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 
@@ -2807,7 +2808,41 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
             )
             == parent_rows
         )
-        check = _run_alembic(scratch_url, "check")
+        # The sealed NYAY-4 lifecycle remains exactly 0018 -> 0019, but drift
+        # must be measured against the current ORM at the repository head.
+        # Prove that 0020 is installable and drift-free, then return to a
+        # byte-equivalent 0019 before exercising the historical downgrade.
+        application_upgrade = _run_alembic(
+            scratch_url, "upgrade", APPLICATION_HEAD
+        )
+        application_check = (
+            _run_alembic(scratch_url, "check")
+            if application_upgrade["returncode"] == 0
+            else {"returncode": -1}
+        )
+        application_downgrade = (
+            _run_alembic(scratch_url, "downgrade", PINNED_HEAD)
+            if application_upgrade["returncode"] == 0
+            else {"returncode": -1}
+        )
+        application_head_compatible = bool(
+            application_upgrade["returncode"] == 0
+            and application_check["returncode"] == 0
+            and application_downgrade["returncode"] == 0
+            and _current_revision(engine) == PINNED_HEAD
+            and _schema_digest(engine, changed_tables) == head_schema
+            and _row_projection_digest(
+                engine, "student_registrations", registration_columns
+            )
+            == parent_rows
+        )
+        if (
+            application_upgrade["returncode"] == 0
+            and application_downgrade["returncode"] != 0
+        ):
+            raise ProductGateFailure(
+                "current application head could not return to exact 0019"
+            )
 
         import importlib
 
@@ -2938,11 +2973,11 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
         return {
             "start_revision": PREVIOUS_REVISION,
             "head_revision": _current_revision(engine),
-            "single_head": heads == [PINNED_HEAD],
+            "single_head": heads == [APPLICATION_HEAD],
             "upgrade": bool(upgrade["returncode"] == 0 and upgrade_rows_preserved),
             "downgrade": downgrade_exact,
             "reupgrade": reupgrade_exact,
-            "alembic_check": check["returncode"] == 0,
+            "alembic_check": application_head_compatible,
             "historical_digest_unchanged": (_historical_migration_bytes_unchanged()),
             "row_projection_unchanged": bool(
                 upgrade_rows_preserved and downgrade_exact and reupgrade_exact
@@ -2984,7 +3019,7 @@ def _runtime_probe(base: URL) -> dict[str, Any]:
 
 
 def _require_core_contract() -> None:
-    """Fail closed until the exact 0019 core/model/service seams are importable."""
+    """Fail closed until the sealed 0019 and current runtime are importable."""
 
     try:
         if not _behavior_fixture_mobile_inventory_is_unique():
@@ -2995,8 +3030,15 @@ def _require_core_contract() -> None:
         config = Config(str(BACKEND / "alembic.ini"))
         config.set_main_option("script_location", str(BACKEND / "app/db/migrations"))
         scripts = ScriptDirectory.from_config(config)
-        if scripts.get_heads() != [PINNED_HEAD]:
-            raise ProductGateFailure("NYAY-4 exact Alembic head is unavailable")
+        if scripts.get_heads() != [APPLICATION_HEAD]:
+            raise ProductGateFailure(
+                "NYAY-4 current application Alembic head is unavailable"
+            )
+        application = scripts.get_revision(APPLICATION_HEAD)
+        if application is None or application.down_revision != PINNED_HEAD:
+            raise ProductGateFailure(
+                "NYAY-4 sealed 0019 migration boundary is unavailable"
+            )
         for table in EXPECTED_SCHEMA_TABLES:
             if table not in _expected_metadata_tables():
                 raise ProductGateFailure("NYAY-4 exact model inventory is unavailable")
@@ -6628,6 +6670,10 @@ def _run_maintenance_entrypoint_probe(
             "otp_expired_registrations",
             "otp_rate_limit_buckets",
             "otp_legacy_destinations",
+            "auth_sessions_expired",
+            "login_attempts_expired",
+            "login_attempts",
+            "auth_sessions",
         }
         return {
             "entrypoint_executed": True,
@@ -6660,7 +6706,7 @@ def _clear_behavior_rate_buckets(engine: Engine) -> None:
 
 
 def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
-    """Execute the full real-service behavior matrix on one exact-head DB."""
+    """Execute the real-service matrix on one current application-head DB."""
 
     from app.core.config import settings
     from app.core.crypto import KeyRing, override_keyring
@@ -6696,9 +6742,11 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
             )
         finally:
             parent_engine.dispose()
-        upgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
+        upgrade = _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD)
         if upgrade["returncode"] != 0:
-            raise ProductGateFailure("behavior probe could not install exact 0019")
+            raise ProductGateFailure(
+                "behavior probe could not install current application head"
+            )
         engine = create_engine(scratch_url, poolclass=NullPool)
         schema = _exact_schema_observation(engine)
 

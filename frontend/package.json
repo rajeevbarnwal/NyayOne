@@ -17,6 +17,8 @@
     "qa:wave5-calendar-real": "node scripts/wave5-calendar-real-e2e.mjs",
     "qa:registration": "node scripts/registration-e2e.mjs",
     "qa:nyay4:otp-negative": "node scripts/nyay4-otp-browser-negative.mjs",
+    "qa:nyay19:auth-lifecycle": "node scripts/nyay19-auth-lifecycle-browser.mjs",
+    "test:nyay19:auth-lifecycle-contract": "vitest --run scripts/lib/nyay19-auth-lifecycle-runner-contract.test.mjs",
     "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",
     "qa:saathi60:real": "node scripts/saathi60-internship-real-e2e.mjs",

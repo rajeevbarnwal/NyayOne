@@ -8,7 +8,9 @@
  * server-issued privacy request id may be kept in sessionStorage so polling
  * survives a refresh.
  */
-import { apiFetch, newRequestId } from '../../../lib/apiClient';
+import { newRequestId } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
+import { clearStudentBrowserContext } from './studentBrowserContext';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type PrivacyConsentKind = 'analytics' | 'marketing' | 'share_partners';
@@ -83,7 +85,7 @@ export class SettingsApiError extends Error {
 async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers });
   const body = (await response.json().catch(() => ({}))) as {
     detail?: { code?: string; field?: string } | string;
   } & T;
@@ -229,6 +231,10 @@ export async function requestAccountDeletion(input: {
       }),
     },
   );
+  clearStudentBrowserContext({
+    notifyAuthChanged: true,
+    consumeRegisteredActor: true,
+  });
   return { requestId: wire.request_id, status: wire.status };
 }
 
@@ -254,15 +260,15 @@ function refKey(kind: PrivacyRequestKind): string {
 
 export function savePrivacyRequestRef(kind: PrivacyRequestKind, requestId: string): void {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(refKey(kind), requestId);
+  try { window.sessionStorage.setItem(refKey(kind), requestId); } catch { /* memory polling still works */ }
 }
 
 export function loadPrivacyRequestRef(kind: PrivacyRequestKind): string | null {
   if (typeof window === 'undefined') return null;
-  return window.sessionStorage.getItem(refKey(kind));
+  try { return window.sessionStorage.getItem(refKey(kind)); } catch { return null; }
 }
 
 export function clearPrivacyRequestRef(kind: PrivacyRequestKind): void {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(refKey(kind));
+  try { window.sessionStorage.removeItem(refKey(kind)); } catch { /* already unavailable */ }
 }

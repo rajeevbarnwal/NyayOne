@@ -69,9 +69,9 @@ BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0017_registration_invariants"
 PINNED_HEAD = "0018_registration_idempotency"
 # Historical NYAY-17 migration lifecycle remains sealed at 0018. Current ORM,
-# routes and services must instead execute on the repository head that owns
-# their required OTP-authority columns and cookie-flow contract.
-APPLICATION_HEAD = "0019_otp_security_authority"
+# routes and services must instead execute on the repository head, including
+# the OTP-authority and auth-retention lifecycle contracts added after 0018.
+APPLICATION_HEAD = "0020_auth_retention_lifecycle"
 REGISTER_PATH = "/api/v1/auth/student/register"
 RECENT_PROBE_HISTORY_AGE_DAYS = 2
 PENDING_RETENTION_TARGET_AGE_DAYS = 400

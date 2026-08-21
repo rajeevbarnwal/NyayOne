@@ -359,9 +359,17 @@ export function PrivacySettings() {
 
   const deleteMut = useMutation({
     mutationFn: () => requestAccountDeletion({ confirmation: typed.trim() }),
-    onSuccess: (res) => {
-      deletePoll.track(res.requestId);
+    onSuccess: () => {
+      // Acceptance revokes the authenticated session. The actor-bound polling
+      // API can no longer be used, and retaining its opaque id would recreate
+      // context that requestAccountDeletion just retired.
+      exportPoll.clear();
+      deletePoll.clear();
       setFlowError(null);
+      nav('/s-03', {
+        replace: true,
+        state: { studentDeletionAccepted: true },
+      });
     },
     onError: (error) => {
       if (error instanceof SettingsApiError && (error.status === 401 || error.code === REAUTH_REQUIRED_CODE)) {

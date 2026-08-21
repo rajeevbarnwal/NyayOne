@@ -21,7 +21,8 @@ from sqlalchemy.exc import DBAPIError
 BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0017_registration_invariants"
 HEAD = "0018_registration_idempotency"
-CURRENT_HEAD = "0019_otp_security_authority"
+OTP_HEAD = "0019_otp_security_authority"
+CURRENT_HEAD = "0020_auth_retention_lifecycle"
 LEDGER = "registration_idempotency_records"
 TEST_ENV = {
     "APP_ENV": "testing",
@@ -200,9 +201,12 @@ def test_revision_chain_is_single_forward_head():
     revision = scripts.get_revision(HEAD)
     assert revision is not None
     assert revision.down_revision == PARENT
+    otp_head = scripts.get_revision(OTP_HEAD)
+    assert otp_head is not None
+    assert otp_head.down_revision == HEAD
     current = scripts.get_revision(CURRENT_HEAD)
     assert current is not None
-    assert current.down_revision == HEAD
+    assert current.down_revision == OTP_HEAD
     assert scripts.get_heads() == [CURRENT_HEAD]
 
 

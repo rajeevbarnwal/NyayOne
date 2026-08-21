@@ -13,7 +13,7 @@ import app.models  # noqa: F401
 from app.core.config import settings
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
-from app.models.registration import OtpFlow, StudentRegistration
+from app.models.registration import OtpFlow, StudentRegistration, User
 from app.models.wave1 import DataSubjectRequest, DeletionJob, ExportJob, UserSettings
 from app.schemas.registration import StudentRegisterRequest
 from app.services.registration_service import register_student
@@ -203,9 +203,29 @@ def test_delete_requires_typed_confirmation_and_real_reauth(ctx):
     with SessionLocal() as s:
         dsr = s.scalar(select(DataSubjectRequest).where(DataSubjectRequest.kind == "delete"))
         assert dsr.reauth_verified is True and dsr.confirmation_hash != "DELETE"
-        assert s.scalar(select(DeletionJob).where(DeletionJob.request_id == dsr.id)) is not None
+        job = s.scalar(select(DeletionJob).where(DeletionJob.request_id == dsr.id))
+        assert job is not None and job.mode == settings.retention_mode
         flow = s.scalar(select(OtpFlow))
         assert flow is not None and flow.state == "consumed"
+        assert s.get(StudentRegistration, rid).status == "suspended"
+        assert s.get(User, uid).status == "suspended"
+    deleted_cookies = ok.headers.get_list("set-cookie")
+    assert any(
+        header.startswith(f"{settings.auth_session_cookie_name}=")
+        and "Max-Age=0" in header
+        and "Path=/api/v1" in header
+        and "HttpOnly" in header
+        and "SameSite=strict" in header
+        for header in deleted_cookies
+    )
+    assert any(
+        header.startswith(f"{settings.otp_flow_cookie_name}=")
+        and "Max-Age=0" in header
+        and "Path=/api/v1" in header
+        and "HttpOnly" in header
+        and "SameSite=strict" in header
+        for header in deleted_cookies
+    )
     replay = client.post("/api/v1/student/privacy/delete", headers=h,
                          json={"confirmation": "DELETE"})
     assert replay.status_code == 401  # consumed evidence cannot be replayed

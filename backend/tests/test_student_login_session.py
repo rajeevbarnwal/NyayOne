@@ -34,6 +34,7 @@ from app.models.registration import (
     StudentVerification,
     User,
 )
+from app.models.wave1 import DataSubjectRequest, DeletionJob
 from app.services import otp_authority, otp_flow_service
 from tests import dbtemplate
 
@@ -60,8 +61,8 @@ class CommitFailSession(Session):
     armed = False
 
     def commit(self):  # type: ignore[override]
-        if type(self).armed:
-            type(self).armed = False
+        if CommitFailSession.armed:
+            CommitFailSession.armed = False
             raise RuntimeError("forced commit failure")
         return super().commit()
 
@@ -1624,15 +1625,262 @@ def test_expired_session_and_logout_revoke_authority(ctx):
     logged_out_probe = client.get("/api/v1/auth/student/session")
     assert logged_out_probe.status_code == 200
     assert logged_out_probe.json() == {"authenticated": False, "actor": None}
+    invalidation = logged_out_probe.headers.get_list("set-cookie")
+    assert len(invalidation) == 1
+    assert invalidation[0].startswith(f"{settings.auth_session_cookie_name}=")
+    assert "Max-Age=0" in invalidation[0]
+    assert "Path=/api/v1" in invalidation[0]
+    assert "HttpOnly" in invalidation[0]
+    assert "SameSite=strict" in invalidation[0]
 
     # Logout is idempotent even after expiry and always clears the cookie.
+    client.cookies.set(
+        settings.otp_flow_cookie_name,
+        "stale-flow-cookie",
+        domain="testserver.local",
+        path="/api/v1",
+    )
     logout = client.post(
         "/api/v1/auth/student/logout",
         json={},
         headers={"Origin": settings.cors_origins[0]},
     )
     assert logout.status_code == 200
-    assert "Max-Age=0" in logout.headers["set-cookie"]
+    logout_cookies = logout.headers.get_list("set-cookie")
+    assert {
+        header.split("=", 1)[0] for header in logout_cookies
+    } == {
+        settings.auth_session_cookie_name,
+        settings.otp_flow_cookie_name,
+    }
+    assert all(
+        "Max-Age=0" in header
+        and "Path=/api/v1" in header
+        and "HttpOnly" in header
+        and "SameSite=strict" in header
+        for header in logout_cookies
+    )
+
+
+def test_privacy_delete_freezes_account_revokes_session_and_clears_both_cookies(
+    ctx,
+):
+    client, _, factory, sender = ctx
+    registration_id, auth_token = _signup_session(
+        client, sender, mobile="9876543210"
+    )
+    recovery = client.post(
+        "/api/v1/auth/student/recovery/start",
+        json={"mobile": "9876543210"},
+    )
+    assert recovery.status_code == 202
+    recovery_code = sender.sent[-1][1]
+    verified = client.post(
+        "/api/v1/auth/student/recovery/verify",
+        json={"code": recovery_code},
+    )
+    assert verified.status_code == 200
+    proof_token = client.cookies.get(settings.otp_flow_cookie_name)
+    assert proof_token
+
+    deleted = client.post(
+        "/api/v1/student/privacy/delete",
+        json={"confirmation": "DELETE"},
+        headers={
+            "Origin": settings.cors_origins[0],
+            "Idempotency-Key": "nyay19-delete-1",
+        },
+    )
+    assert deleted.status_code == 202
+    cookie_headers = deleted.headers.get_list("set-cookie")
+    for name in (
+        settings.auth_session_cookie_name,
+        settings.otp_flow_cookie_name,
+    ):
+        matching = [header for header in cookie_headers if header.startswith(f"{name}=")]
+        assert len(matching) == 1
+        assert "Max-Age=0" in matching[0]
+        assert "Path=/api/v1" in matching[0]
+        assert "HttpOnly" in matching[0]
+        assert "SameSite=strict" in matching[0]
+
+    with factory() as session:
+        registration = session.get(
+            StudentRegistration, uuid.UUID(registration_id)
+        )
+        user = session.get(User, registration.user_id)
+        auth_session = session.scalar(
+            select(AuthSession).where(
+                AuthSession.token_hash == keyed_hash(auth_token)
+            )
+        )
+        dsr = session.scalar(
+            select(DataSubjectRequest).where(
+                DataSubjectRequest.idempotency_key == "nyay19-delete-1"
+            )
+        )
+        job = session.scalar(
+            select(DeletionJob).where(DeletionJob.request_id == dsr.id)
+        )
+        assert registration.status == "suspended"
+        assert user.status == "suspended"
+        assert auth_session.status == "revoked"
+        assert auth_session.revoked_at is not None
+        assert job.mode == settings.retention_mode
+        snapshot = (
+            registration.status,
+            user.status,
+            auth_session.status,
+            auth_session.revoked_at,
+            dsr.status,
+            job.status,
+            session.scalar(select(func.count()).select_from(AuditEvent)),
+        )
+
+    client.cookies.set(
+        settings.auth_session_cookie_name,
+        auth_token,
+        domain="testserver.local",
+        path="/api/v1",
+    )
+    client.cookies.set(
+        settings.otp_flow_cookie_name,
+        proof_token,
+        domain="testserver.local",
+        path="/api/v1",
+    )
+    replay = client.post(
+        "/api/v1/student/privacy/delete",
+        json={"confirmation": "DELETE"},
+        headers={
+            "Origin": settings.cors_origins[0],
+            "Idempotency-Key": "nyay19-delete-1",
+        },
+    )
+    assert replay.status_code == 401
+    with factory() as session:
+        registration = session.get(
+            StudentRegistration, uuid.UUID(registration_id)
+        )
+        user = session.get(User, registration.user_id)
+        auth_session = session.scalar(
+            select(AuthSession).where(
+                AuthSession.token_hash == keyed_hash(auth_token)
+            )
+        )
+        dsr = session.scalar(
+            select(DataSubjectRequest).where(
+                DataSubjectRequest.idempotency_key == "nyay19-delete-1"
+            )
+        )
+        job = session.scalar(
+            select(DeletionJob).where(DeletionJob.request_id == dsr.id)
+        )
+        assert (
+            registration.status,
+            user.status,
+            auth_session.status,
+            auth_session.revoked_at,
+            dsr.status,
+            job.status,
+            session.scalar(select(func.count()).select_from(AuditEvent)),
+        ) == snapshot
+
+    client.cookies.clear()
+    delivered = len(sender.sent)
+    assert client.post(
+        "/api/v1/auth/student/login/otp/start",
+        json={"mobile": "9876543210"},
+    ).status_code == 202
+    assert client.post(
+        "/api/v1/auth/student/recovery/start",
+        json={"mobile": "9876543210"},
+    ).status_code == 202
+    assert len(sender.sent) == delivered
+
+
+def test_privacy_delete_commit_failure_rolls_back_proof_job_and_account_freeze():
+    client, engine, factory, sender = _context(CommitFailSession)
+    try:
+        registration_id, auth_token = _signup_session(
+            client, sender, mobile="9876543210"
+        )
+        assert client.post(
+            "/api/v1/auth/student/recovery/start",
+            json={"mobile": "9876543210"},
+        ).status_code == 202
+        recovery_code = sender.sent[-1][1]
+        assert client.post(
+            "/api/v1/auth/student/recovery/verify",
+            json={"code": recovery_code},
+        ).status_code == 200
+        proof_token = client.cookies.get(settings.otp_flow_cookie_name)
+        assert proof_token
+
+        with factory() as session:
+            registration = session.get(
+                StudentRegistration, uuid.UUID(registration_id)
+            )
+            flow = _flow_for_token(session, proof_token)
+            before = (
+                registration.status,
+                session.get(User, registration.user_id).status,
+                session.scalar(
+                    select(AuthSession.status).where(
+                        AuthSession.token_hash == keyed_hash(auth_token)
+                    )
+                ),
+                flow.state,
+                flow.consumed_at,
+                session.scalar(select(func.count()).select_from(DataSubjectRequest)),
+                session.scalar(select(func.count()).select_from(DeletionJob)),
+                session.scalar(select(func.count()).select_from(AuditEvent)),
+            )
+
+        CommitFailSession.armed = True
+        failed = client.post(
+            "/api/v1/student/privacy/delete",
+            json={"confirmation": "DELETE"},
+            headers={
+                "Origin": settings.cors_origins[0],
+                "Idempotency-Key": "nyay19-delete-rollback",
+            },
+        )
+        assert failed.status_code == 500
+        assert not failed.headers.get_list("set-cookie")
+
+        with factory() as session:
+            registration = session.get(
+                StudentRegistration, uuid.UUID(registration_id)
+            )
+            flow = _flow_for_token(session, proof_token)
+            assert (
+                registration.status,
+                session.get(User, registration.user_id).status,
+                session.scalar(
+                    select(AuthSession.status).where(
+                        AuthSession.token_hash == keyed_hash(auth_token)
+                    )
+                ),
+                flow.state,
+                flow.consumed_at,
+                session.scalar(select(func.count()).select_from(DataSubjectRequest)),
+                session.scalar(select(func.count()).select_from(DeletionJob)),
+                session.scalar(select(func.count()).select_from(AuditEvent)),
+            ) == before
+
+        retry = client.post(
+            "/api/v1/student/privacy/delete",
+            json={"confirmation": "DELETE"},
+            headers={
+                "Origin": settings.cors_origins[0],
+                "Idempotency-Key": "nyay19-delete-rollback",
+            },
+        )
+        assert retry.status_code == 202
+    finally:
+        client.close()
+        engine.dispose()
 
 
 def test_commit_failure_leaves_no_session_and_retry_succeeds():

@@ -22,6 +22,23 @@ NYAY4_BROWSER_GATE = ROOT / "frontend" / "scripts" / "nyay4-otp-browser-negative
 NYAY4_BROWSER_CONTRACT = (
     ROOT / "frontend" / "scripts" / "lib" / "nyay4-otp-runner-contract.mjs"
 )
+NYAY19_BROWSER_GATE = (
+    ROOT / "frontend" / "scripts" / "nyay19-auth-lifecycle-browser.mjs"
+)
+NYAY19_BROWSER_CONTRACT = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay19-auth-lifecycle-runner-contract.mjs"
+)
+NYAY19_BROWSER_CONTRACT_TEST = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay19-auth-lifecycle-runner-contract.test.mjs"
+)
 FRONTEND_PACKAGE = ROOT / "frontend" / "package.json"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "1920889d94816417792dcc9b5a7aa739869b34fcc8616f8c17df3359c58a45b9"
@@ -30,7 +47,17 @@ EXPECTED_NYAY4_BROWSER_CONTRACT_SHA256 = (
     "c45e97b73d2f180683fe890578fcaac877045f58bc005489c0f7a21939b35b38"
 )
 EXPECTED_NYAY4_PACKAGE_COMMAND = "node scripts/nyay4-otp-browser-negative.mjs"
-EXPECTED_DB_GATE_SHA256 = "739ea87d2723b56ca88c57748724f578424da3f608e10ab362101c48184530a6"
+EXPECTED_NYAY19_BROWSER_GATE_SHA256 = (
+    "4655412d3e3999d0f8b4133ad24d2922098bfa3847315223ddb07399b11dddfb"
+)
+EXPECTED_NYAY19_BROWSER_CONTRACT_SHA256 = (
+    "4d098f394f6b6f9f9ede4a84925fef46270d7e5f3ad27f21b4f33898e85ebee0"
+)
+EXPECTED_NYAY19_BROWSER_CONTRACT_TEST_SHA256 = (
+    "0adf37901f510e26fe002b1713e126a9203c0dceb4d6680d4fda264b046fe10f"
+)
+EXPECTED_NYAY19_PACKAGE_COMMAND = "node scripts/nyay19-auth-lifecycle-browser.mjs"
+EXPECTED_DB_GATE_SHA256 = "7c7f8ec2b39ac2cc28c7fda8aec158dbb42d1ed57e2bdee60e639d4190671852"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -51,6 +78,12 @@ EXPECTED_NYAY4_DB_GATE_COMMAND = (
     'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py '
     '--execute --database-url "$DATABASE_URL" '
     "--output test-results/nyay4-postgres/summary.json"
+)
+EXPECTED_NYAY19_DB_GATE_COMMAND = (
+    'NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" '
+    "scripts/nyay19_postgres_auth_retention_gate.py "
+    '--execute --database-url "$DATABASE_URL" '
+    "--output test-results/nyay19-postgres/summary.json"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
@@ -107,6 +140,24 @@ print(results)
 if not results or any(value != "success" for value in results.values()):
     sys.exit("one or more required jobs did not succeed")
 PY"""
+EXPECTED_NYAY19_START_RUN = (
+    "(cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 1181 "
+    '> "$RUNNER_TEMP/nyay19-backend.log" 2>&1 &)\n'
+    "(cd frontend && npm run dev -- --host 127.0.0.1 --port 1180 --strictPort "
+    '> "$RUNNER_TEMP/nyay19-frontend.log" 2>&1 &)\n'
+    "for url in \\\n"
+    "  http://127.0.0.1:1181/health \\\n"
+    "  http://127.0.0.1:1180; do\n"
+    "  for attempt in {1..60}; do\n"
+    '    curl --fail --silent "$url" >/dev/null && break\n'
+    '    if [[ "$attempt" == 60 ]]; then\n'
+    '      echo "Timed out waiting for $url"\n'
+    "      exit 1\n"
+    "    fi\n"
+    "    sleep 1\n"
+    "  done\n"
+    "done\n"
+)
 EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
     (
         "wave3-credential-trust-gate.yml",
@@ -121,6 +172,45 @@ EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
             "NYAY4_OTP_CAPTURE_URL": "http://127.0.0.1:1099",
         },
         "run": "npm run qa:nyay4:otp-negative",
+    },
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
+        "Start NYAY-19 isolated auth lifecycle backend and frontend",
+    ): {
+        "name": "Start NYAY-19 isolated auth lifecycle backend and frontend",
+        "env": {
+            "APP_ENV": "test",
+            "CORS_ORIGINS": '["http://127.0.0.1:1180"]',
+            "OTP_DELIVERY_ENABLED": "true",
+            "OTP_PROVIDER": "http",
+            "OTP_PROVIDER_URL": "http://127.0.0.1:1099/send",
+            "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY": "true",
+            "OTP_RESEND_COOLDOWN_SECONDS": "1",
+            "OTP_FLOW_TTL_SECONDS": "600",
+            "OTP_RECOVERY_PROOF_TTL_SECONDS": "300",
+            "AUTH_SESSION_TTL_SECONDS": "20",
+            "VITE_API_BASE_URL": "http://127.0.0.1:1181",
+        },
+        "run": EXPECTED_NYAY19_START_RUN,
+    },
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
+        "NYAY-19 authentication lifecycle Chromium regression",
+    ): {
+        "name": "NYAY-19 authentication lifecycle Chromium regression",
+        "working-directory": "frontend",
+        "env": {
+            "NYAY19_WEB_BASE_URL": "http://127.0.0.1:1180",
+            "NYAY19_API_BASE_URL": "http://127.0.0.1:1181",
+            "NYAY19_OTP_CAPTURE_URL": "http://127.0.0.1:1099",
+            "NYAY19_SESSION_TTL_SECONDS": "20",
+            "NYAY19_OTP_RESEND_COOLDOWN_SECONDS": "1",
+            "NYAY19_OTP_FLOW_TTL_SECONDS": "600",
+            "NYAY19_RECOVERY_PROOF_TTL_SECONDS": "300",
+        },
+        "run": "npm run qa:nyay19:auth-lifecycle",
     },
 }
 EVIDENCE_CONTRACTS: dict[str, dict[str, tuple[str, str, str]]] = {
@@ -286,7 +376,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "e255ab706b9678bab366d87f20298f6296474c7424823db7046d73ba492b5da7",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
-    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "bcad1590f9df82ac1c84b00298983b07afd26df0921f61586bbba60dde5d30b5",
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "b44aae5e834e841ce4c3396456fed7a0088837b739daebc2e4c6948b8149c73f",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
     ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "cceb5a2e555c76308658da640e5f362804a1df715718c40c153318643f0d9f78",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
@@ -560,6 +650,41 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
                     f"{path}: job {job_id} step {name!r} differs from the exact required contract"
                 )
 
+        if (
+            path.name == "wave3-credential-trust-gate.yml"
+            and job_id == "credential-trust-postgres-browser"
+        ):
+            ordered_names = (
+                "NYAY-4 OTP authority Chromium regression",
+                "Start NYAY-19 isolated auth lifecycle backend and frontend",
+                "NYAY-19 authentication lifecycle Chromium regression",
+            )
+            name_indexes = {
+                name: [
+                    index
+                    for index, step in enumerate(steps)
+                    if isinstance(step, dict) and step.get("name") == name
+                ]
+                for name in ordered_names
+            }
+            if any(len(indexes) != 1 for indexes in name_indexes.values()):
+                failures.append(
+                    f"{path}: NYAY-19 isolated startup and browser gate must each "
+                    "appear exactly once after NYAY-4"
+                )
+            else:
+                nyay4_index, startup_index, browser_index = (
+                    name_indexes[name][0] for name in ordered_names
+                )
+                if not (
+                    startup_index == nyay4_index + 1
+                    and browser_index == startup_index + 1
+                ):
+                    failures.append(
+                        f"{path}: NYAY-19 isolated startup and browser gate must be "
+                        "adjacent and immediately follow NYAY-4"
+                    )
+
         if job_id == "required":
             forbidden_required = {
                 "container", "continue-on-error", "defaults", "env", "permissions",
@@ -634,7 +759,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
     leaving the workflow untouched while deleting/bypassing NYAY-16, NYAY-3,
-    NYAY-2, NYAY-17, or NYAY-4 cannot produce a false green.
+    NYAY-2, NYAY-17, NYAY-4, or NYAY-19 cannot produce a false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -659,6 +784,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
     nyay17 = _canonical_shell(EXPECTED_NYAY17_DB_GATE_COMMAND)
     nyay4 = _canonical_shell(EXPECTED_NYAY4_DB_GATE_COMMAND)
+    nyay19 = _canonical_shell(EXPECTED_NYAY19_DB_GATE_COMMAND)
     if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
@@ -678,6 +804,10 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay4) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-4 PostgreSQL gate once"
+        )
+    if canonical.count(nyay19) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-19 PostgreSQL gate once"
         )
     wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
     if (
@@ -720,8 +850,16 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         failures.append(
             f"{path}: NYAY-4 PostgreSQL gate must remain after the NYAY-17 stage"
         )
+    if (
+        nyay4 not in canonical
+        or nyay19 not in canonical
+        or canonical.index(nyay19) < canonical.index(nyay4)
+    ):
+        failures.append(
+            f"{path}: NYAY-19 PostgreSQL gate must remain after the NYAY-4 stage"
+        )
 
-    # NYAY-4 is the final mandatory nested stage. Requiring its exact command
+    # NYAY-19 is the final mandatory nested stage. Requiring its exact command
     # to be the last executable line also rejects wrappers such as ``if
     # false``, ``|| true``, ``--help``, redirection, or a non-executing echo.
     # With db_gate.sh's set -euo pipefail this keeps BLOCKED (78) and FAIL (1)
@@ -731,9 +869,9 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         for line in re.sub(r"\\\s*\n", " ", executable).splitlines()
         if line.strip()
     ]
-    if not logical_commands or logical_commands[-1] != nyay4:
+    if not logical_commands or logical_commands[-1] != nyay19:
         failures.append(
-            f"{path}: exact NYAY-4 PostgreSQL gate must be the final unconditional command"
+            f"{path}: exact NYAY-19 PostgreSQL gate must be the final unconditional command"
         )
     return failures
 
@@ -767,6 +905,9 @@ def check_nyay4_browser_gate_contract(
         if hashlib.sha256(raw).hexdigest() != expected_sha256:
             failures.append(f"{path}: {label} SHA-256 differs from the sealed contract")
 
+    if not package_path.is_file() or package_path.is_symlink():
+        failures.append(f"{package_path}: frontend package contract is missing or unsafe")
+        return failures
     try:
         package = json.loads(package_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -785,6 +926,69 @@ def check_nyay4_browser_gate_contract(
         if hook in scripts:
             failures.append(
                 f"{package_path}: NYAY-4 browser package command may not have an npm lifecycle wrapper"
+            )
+    return failures
+
+
+def check_nyay19_browser_gate_contract(
+    browser_path: Path = NYAY19_BROWSER_GATE,
+    contract_path: Path = NYAY19_BROWSER_CONTRACT,
+    package_path: Path = FRONTEND_PACKAGE,
+    contract_test_path: Path = NYAY19_BROWSER_CONTRACT_TEST,
+) -> list[str]:
+    """Pin the executable NYAY-19 browser oracle behind the required CI step."""
+
+    failures: list[str] = []
+    pinned_files = (
+        (
+            browser_path,
+            EXPECTED_NYAY19_BROWSER_GATE_SHA256,
+            "NYAY-19 browser gate",
+        ),
+        (
+            contract_path,
+            EXPECTED_NYAY19_BROWSER_CONTRACT_SHA256,
+            "NYAY-19 browser assertion contract",
+        ),
+        (
+            contract_test_path,
+            EXPECTED_NYAY19_BROWSER_CONTRACT_TEST_SHA256,
+            "NYAY-19 browser assertion contract tests",
+        ),
+    )
+    for path, expected_sha256, label in pinned_files:
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: {label} is missing or unsafe")
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            failures.append(f"{path}: {label} is unreadable")
+            continue
+        if hashlib.sha256(raw).hexdigest() != expected_sha256:
+            failures.append(f"{path}: {label} SHA-256 differs from the sealed contract")
+
+    if not package_path.is_file() or package_path.is_symlink():
+        failures.append(f"{package_path}: frontend package contract is missing or unsafe")
+        return failures
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{package_path}: frontend package contract is unreadable")
+        return failures
+    scripts = package.get("scripts") if isinstance(package, dict) else None
+    if not isinstance(scripts, dict):
+        failures.append(f"{package_path}: frontend scripts must be a mapping")
+        return failures
+    gate_name = "qa:nyay19:auth-lifecycle"
+    if scripts.get(gate_name) != EXPECTED_NYAY19_PACKAGE_COMMAND:
+        failures.append(
+            f"{package_path}: NYAY-19 browser package command differs from the exact contract"
+        )
+    for hook in (f"pre{gate_name}", f"post{gate_name}"):
+        if hook in scripts:
+            failures.append(
+                f"{package_path}: NYAY-19 browser package command may not have an npm lifecycle wrapper"
             )
     return failures
 
@@ -1182,6 +1386,7 @@ def main() -> int:
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
+    failures.extend(check_nyay19_browser_gate_contract())
     failures.extend(
         failure for path in workflow_paths for failure in check_workflow(path)
     )

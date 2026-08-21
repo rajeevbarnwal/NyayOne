@@ -59,12 +59,14 @@ def _without_ambient_libpq_authority(monkeypatch):
 def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0017_registration_invariants"
     assert gate.PINNED_HEAD == "0018_registration_idempotency"
-    assert gate.APPLICATION_HEAD == "0019_otp_security_authority"
+    assert gate.APPLICATION_HEAD == "0020_auth_retention_lifecycle"
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(gate.BACKEND / "app/db/migrations"))
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
-    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == gate.PINNED_HEAD
+    otp_security_head = scripts.get_revision("0019_otp_security_authority")
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == otp_security_head.revision
+    assert otp_security_head.down_revision == gate.PINNED_HEAD
     behavior_source = pyinspect.getsource(gate._execute_behavior)
     assert '"upgrade", APPLICATION_HEAD' in behavior_source
     assert '"upgrade", PINNED_HEAD' not in behavior_source

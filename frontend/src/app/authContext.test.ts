@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ANONYMOUS_AUTH,
   canUseLawyerFeatures,
@@ -10,7 +10,11 @@ import {
   type AuthState,
 } from './authContext';
 import { InMemoryKvStore } from '../lib/kvStore';
-import { saveAuthSnapshot, clearAuthSnapshot } from '../features/auth/lib/authPersistence';
+import {
+  clearAuthSnapshot,
+  saveAuthSnapshot,
+  subscribeAuthChange,
+} from '../features/auth/lib/authPersistence';
 import type { AuthSnapshot, AuthPhase } from '../features/auth/lib/authLifecycle';
 
 const student: AuthState = {
@@ -22,6 +26,10 @@ const student: AuthState = {
   filingRole: null,
   isMinor: false,
 };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('frontend auth context', () => {
   it('anonymous is not authenticated and guards block', () => {
@@ -142,5 +150,68 @@ describe('retired lawyer snapshot derivation is test-only', () => {
     saveAuthSnapshot(snap('verified', 10_000), store);
     expect(deriveAuthState(store, 10_000)).toEqual(ANONYMOUS_AUTH);
     expect(store.get('ls-auth-lawyer')).toBeNull();
+  });
+
+  it('settles the anonymous StrictMode bootstrap without a third session refresh', () => {
+    const browserWindow = new EventTarget();
+    vi.stubGlobal('window', browserWindow);
+    const store = new InMemoryKvStore();
+    store.set('ls-auth-lawyer', snap('verified', 10_000));
+    let sessionGetCount = 0;
+    let authEventCount = 0;
+    const refresh = () => {
+      authEventCount += 1;
+      sessionGetCount += 1;
+    };
+    const unsubscribe = subscribeAuthChange(refresh);
+
+    // React.StrictMode performs the effect setup twice in development.
+    sessionGetCount += 2;
+    expect(sessionGetCount).toBe(2);
+
+    // The active anonymous completion derives and retires the forbidden legacy
+    // snapshot without publishing AUTH_CHANGE_EVENT back into the subscriber.
+    for (let index = 0; index < 3; index += 1) {
+      expect(deriveAuthState(store, 10_000)).toEqual(ANONYMOUS_AUTH);
+    }
+    expect(store.get('ls-auth-lawyer')).toBeNull();
+    expect(authEventCount).toBe(0);
+    expect(sessionGetCount).toBe(2);
+
+    // Explicit auth mutations still notify exactly once.
+    clearAuthSnapshot('lawyer', store);
+    expect(authEventCount).toBe(1);
+    expect(sessionGetCount).toBe(3);
+    unsubscribe();
+  });
+
+  it('silently retires every invalid derive-time lawyer snapshot path', () => {
+    const browserWindow = new EventTarget();
+    vi.stubGlobal('window', browserWindow);
+    let authEventCount = 0;
+    const unsubscribe = subscribeAuthChange(() => { authEventCount += 1; });
+    const cases: Array<{
+      snapshot: AuthSnapshot;
+      options?: { allowLegacyClientDemo: boolean };
+    }> = [
+      { snapshot: snap('verified', 10_000) },
+      {
+        snapshot: { ...snap('verified', 10_000), role: 'student' },
+        options: legacyDemo,
+      },
+      {
+        snapshot: snap('verified', 10_000, { subjectId: null }),
+        options: legacyDemo,
+      },
+    ];
+
+    for (const entry of cases) {
+      const store = new InMemoryKvStore();
+      store.set('ls-auth-lawyer', entry.snapshot);
+      expect(deriveAuthState(store, 10_000, entry.options)).toEqual(ANONYMOUS_AUTH);
+      expect(store.get('ls-auth-lawyer')).toBeNull();
+    }
+    expect(authEventCount).toBe(0);
+    unsubscribe();
   });
 });

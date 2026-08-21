@@ -788,7 +788,7 @@ def test_recovery_verified_cookie_is_reissued_and_deletion_consumes_proof():
             json={"confirmation": "DELETE"},
         )
         assert replay.status_code == 401
-        assert replay.json()["detail"]["code"] == "reauth_required"
+        assert replay.json()["detail"]["code"] == "authentication_required"
     finally:
         client.close()
         engine.dispose()

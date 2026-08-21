@@ -199,12 +199,22 @@ export function V34Onboarding() {
 
 export function V34AuthGate(props: ScreenProps) {
   const nav = useNavigate();
+  const location = useLocation();
   const [language, setLanguage] = useState('English');
+  const deletionAccepted = Boolean(
+    (location.state as { studentDeletionAccepted?: boolean } | null)?.studentDeletionAccepted,
+  );
   return (
     <Screen id="S-03" aside={<AuthAside title="The years before the bar, organised." copy="Built for students in India, not adapted from a firm tool."/>}>
       <Pane><main className="v34-main">
         <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
         <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
+        {deletionAccepted && (
+          <div className="v34-banner" role="status">
+            <b>DELETION REQUEST ACCEPTED</b>
+            <span>You have been signed out and this browser's student context has been cleared.</span>
+          </div>
+        )}
         <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p><div className="v34-rule"/>
         <div><span className="v34-mono">LANGUAGE</span><div className="v34-chips" role="radiogroup" aria-label="Language">{['English', 'हिंदी', 'More'].map((name) => <button key={name} type="button" role="radio" aria-checked={language === name} className={language === name ? 'is-on' : ''} onClick={() => setLanguage(name)}>{name}</button>)}</div></div><span className="v34-grow"/>
       </main><Footer hint={<>Sign in, or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}><IconAction secondary label="Register as a student" icon="add" onClick={() => nav('/s-08')}/><IconAction label="Sign in" icon="key" onClick={() => nav('/s-04')}/></Footer></Pane>
@@ -312,7 +322,6 @@ export function V34VerifiedHome(props: ScreenProps) {
   const nav = useNavigate();
   async function signOut() {
     try { await logoutStudent(); } finally {
-      notifyStudentAuthChanged();
       nav('/s-03', { replace: true });
     }
   }

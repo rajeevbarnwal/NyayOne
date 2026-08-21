@@ -18,6 +18,8 @@ from types import SimpleNamespace
 from typing import Callable
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -216,6 +218,29 @@ def test_immutable_migration_oracle_pins_every_0001_through_0018_byte(
     mutated["0018_registration_idempotency.py"] = "0" * 64
     monkeypatch.setattr(gate, "POST_LEDGER_HISTORICAL_SHA256", mutated)
     assert not _historical_migration_bytes_unchanged()
+
+
+def test_historical_lifecycle_and_current_application_heads_are_separate():
+    assert gate.PREVIOUS_REVISION == "0018_registration_idempotency"
+    assert gate.PINNED_HEAD == "0019_otp_security_authority"
+    assert gate.APPLICATION_HEAD == "0020_auth_retention_lifecycle"
+
+    config = Config(str(gate.BACKEND / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(gate.BACKEND / "app" / "db" / "migrations")
+    )
+    scripts = ScriptDirectory.from_config(config)
+    assert scripts.get_heads() == [gate.APPLICATION_HEAD]
+    assert (
+        scripts.get_revision(gate.APPLICATION_HEAD).down_revision
+        == gate.PINNED_HEAD
+    )
+
+    lifecycle_source = getsource(gate._run_migration_lifecycle_probe)
+    behavior_source = getsource(gate._run_behavior_probe)
+    assert '"upgrade", PINNED_HEAD' in lifecycle_source
+    assert '"upgrade", APPLICATION_HEAD' in behavior_source
+    assert '"upgrade", PINNED_HEAD' not in behavior_source
 
 
 def test_0019_sqlite_lifecycle_proves_induced_ddl_failures_are_atomic(tmp_path):
@@ -1927,7 +1952,7 @@ def test_scheduled_maintenance_entrypoint_purges_only_aged_security_state(
             )
         finally:
             parent.dispose()
-        assert gate._run_alembic(database_url, "upgrade", gate.PINNED_HEAD)[
+        assert gate._run_alembic(database_url, "upgrade", gate.APPLICATION_HEAD)[
             "returncode"
         ] == 0
         engine = create_engine(database_url)

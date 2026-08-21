@@ -35,10 +35,12 @@ from app.services import (
     otp_flow_service,
     otp_outbox,
     otp_service,
+    registration_service,
 )
 
 LOGIN_COOLDOWN_SECONDS = 30
 ACTIVE_SESSION_CONSTRAINT = "uq_auth_sessions_one_active_per_user"
+ERASED_LIFECYCLE_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 class LoginError(Exception):
@@ -325,8 +327,87 @@ def active_sessions_for_rotation(
                 AuthSession.user_id == user_id,
                 AuthSession.status == "active",
             )
+            .order_by(AuthSession.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     )
+
+
+def erase_login_attempt(attempt: LoginAttempt) -> None:
+    """Replace one terminal attempt with a non-linkable fixed-time tombstone."""
+
+    attempt.opaque_id = keyed_hash(
+        f"nyayone:login-attempt-erased-opaque:v1:{attempt.id}"
+    )
+    attempt.lookup_hash = keyed_hash(
+        f"nyayone:login-attempt-erased-lookup:v1:{attempt.id}"
+    )
+    attempt.registration_id = None
+    attempt.challenge_id = None
+    attempt.status = "erased"
+    attempt.expires_at = ERASED_LIFECYCLE_AT
+    attempt.consumed_at = ERASED_LIFECYCLE_AT
+    attempt.created_at = ERASED_LIFECYCLE_AT
+    attempt.updated_at = ERASED_LIFECYCLE_AT
+    attempt.deleted_at = ERASED_LIFECYCLE_AT
+    attempt.metadata_json = None
+
+
+def erase_auth_session(auth_session: AuthSession) -> None:
+    """Destroy every bearer/user/time link while retaining a unique row."""
+
+    auth_session.user_id = None
+    auth_session.token_hash = keyed_hash(
+        f"nyayone:auth-session-erased-token:v1:{auth_session.id}"
+    )
+    auth_session.status = "erased"
+    auth_session.expires_at = ERASED_LIFECYCLE_AT
+    auth_session.last_seen_at = ERASED_LIFECYCLE_AT
+    auth_session.revoked_at = ERASED_LIFECYCLE_AT
+    auth_session.created_at = ERASED_LIFECYCLE_AT
+    auth_session.updated_at = ERASED_LIFECYCLE_AT
+    auth_session.deleted_at = ERASED_LIFECYCLE_AT
+    auth_session.metadata_json = None
+
+
+def suspend_user_and_revoke_sessions(
+    session: Session,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> int:
+    """Freeze account login authority without committing the caller's unit.
+
+    The stable User row is locked before its session children.  Privacy-delete
+    uses this inside the same transaction as recovery-proof consumption and
+    DSR creation, so failure rolls every part back together.
+    """
+
+    now = _as_utc(now)
+    user = lock_user_for_session_rotation(session, user_id)
+    if user is None:
+        raise LoginError()
+    rows = list(
+        session.scalars(
+            select(AuthSession)
+            .where(
+                AuthSession.user_id == user.id,
+                AuthSession.status == "active",
+            )
+            .order_by(AuthSession.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        if _as_utc(row.expires_at) <= now:
+            row.status = "expired"
+            row.revoked_at = row.expires_at
+        else:
+            row.status = "revoked"
+            row.revoked_at = now
+    user.status = "suspended"
+    return len(rows)
 
 
 def rotate_authenticated_session(
@@ -398,37 +479,83 @@ def verify(
 ) -> tuple[str, AuthSession]:
     """Consume one login attempt and atomically create a rotated auth session."""
     now = _as_utc(now)
-    attempt = session.scalar(
-        select(LoginAttempt)
-        .where(LoginAttempt.opaque_id == opaque_id)
-        .with_for_update()
-    )
+    discovery = session.execute(
+        select(
+            LoginAttempt.id,
+            LoginAttempt.registration_id,
+            LoginAttempt.challenge_id,
+            LoginAttempt.status,
+            LoginAttempt.expires_at,
+            LoginAttempt.consumed_at,
+        ).where(LoginAttempt.opaque_id == opaque_id)
+    ).one_or_none()
     if (
-        attempt is None
-        or attempt.registration_id is None
-        or attempt.challenge_id is None
-        or attempt.status != "pending"
-        or attempt.consumed_at is not None
+        discovery is None
+        or discovery.registration_id is None
+        or discovery.challenge_id is None
+        or discovery.status != "pending"
+        or discovery.consumed_at is not None
     ):
         raise LoginError()
-    if _as_utc(attempt.expires_at) <= now:
+    registration, _ = registration_service.lock_registration_with_idempotency(
+        session, discovery.registration_id
+    )
+    if registration is None:
+        raise LoginError()
+    if _as_utc(discovery.expires_at) <= now:
+        attempt = session.scalar(
+            select(LoginAttempt)
+            .where(LoginAttempt.id == discovery.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            attempt is None
+            or attempt.registration_id != discovery.registration_id
+            or attempt.challenge_id != discovery.challenge_id
+            or attempt.status != "pending"
+            or attempt.consumed_at is not None
+        ):
+            raise LoginError()
         attempt.status = "expired"
+        attempt.consumed_at = attempt.expires_at
         session.commit()
         raise LoginError()
 
     try:
         otp_service.verify(
             session,
-            attempt.registration_id,
+            discovery.registration_id,
             code,
             now,
             purpose="login",
-            challenge_id=attempt.challenge_id,
+            challenge_id=discovery.challenge_id,
             commit_on_success=False,
         )
     except otp_service.OtpError as exc:
         # One typed response for wrong, expired, locked and replayed codes.
         raise LoginError() from exc
+
+    # OTP authority/challenge are locked before the legacy attempt child, the
+    # same order registration erasure uses. A concurrent attempt-retention
+    # winner is revalidated here and causes the whole proof transaction to
+    # roll back instead of minting a session.
+    attempt = session.scalar(
+        select(LoginAttempt)
+        .where(LoginAttempt.id == discovery.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        attempt is None
+        or attempt.registration_id != discovery.registration_id
+        or attempt.challenge_id != discovery.challenge_id
+        or attempt.status != "pending"
+        or attempt.consumed_at is not None
+        or _as_utc(attempt.expires_at) <= now
+    ):
+        session.rollback()
+        raise LoginError()
 
     # Claim-after-proof, exactly once. PostgreSQL's row locks serialise this;
     # the conditional UPDATE additionally makes the invariant executable on
@@ -443,7 +570,6 @@ def verify(
         session.rollback()
         raise LoginError()
 
-    registration = session.get(StudentRegistration, attempt.registration_id)
     if not otp_service.registration_is_authorizable(registration):
         session.rollback()
         raise LoginError()
@@ -460,16 +586,54 @@ def _active_session(
     if not raw_token:
         return None
     now = _as_utc(now)
+    token_hash = keyed_hash(raw_token)
     row = session.scalar(
-        select(AuthSession).where(AuthSession.token_hash == keyed_hash(raw_token))
+        select(AuthSession).where(AuthSession.token_hash == token_hash)
     )
-    if row is None or row.status != "active":
+    if row is None or row.status != "active" or row.user_id is None:
         return None
     if _as_utc(row.expires_at) <= now:
         if touch:
+            user = lock_user_for_session_rotation(session, row.user_id)
+            row = session.scalar(
+                select(AuthSession)
+                .where(
+                    AuthSession.id == row.id,
+                    AuthSession.user_id == row.user_id,
+                    AuthSession.token_hash == token_hash,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if user is None or row is None or row.status != "active":
+                session.rollback()
+                return None
+            if _as_utc(row.expires_at) > now:
+                return row
             row.status = "expired"
+            row.revoked_at = row.expires_at
             session.commit()
         return None
+    if touch:
+        user = lock_user_for_session_rotation(session, row.user_id)
+        row = session.scalar(
+            select(AuthSession)
+            .where(
+                AuthSession.id == row.id,
+                AuthSession.user_id == row.user_id,
+                AuthSession.token_hash == token_hash,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if user is None or row is None or row.status != "active":
+            session.rollback()
+            return None
+        if _as_utc(row.expires_at) <= now:
+            row.status = "expired"
+            row.revoked_at = row.expires_at
+            session.commit()
+            return None
     return row
 
 
@@ -492,6 +656,10 @@ def session_claims(
         return None
     user = session.get(User, auth_session.user_id)
     if user is None or user.status != "active":
+        if touch:
+            auth_session.status = "revoked"
+            auth_session.revoked_at = now
+            session.commit()
         return None
     # Internal identities are provisioned by the trusted staff identity layer,
     # not by the student OTP flow. They still use the same opaque, hashed,
