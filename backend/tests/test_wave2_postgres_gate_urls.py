@@ -8,12 +8,21 @@ import pytest
 from sqlalchemy.engine import make_url
 
 from scripts import wave2_postgres_gate as gate
+from scripts import wave4_postgres_gate, wave5_postgres_gate
 
 
 PASSWORD = "p@ss:/?#% with spaces"
 BASE_URL = make_url(
     "postgresql+psycopg://gate-user@localhost:5432/legalsaathi"
 ).set(password=PASSWORD).render_as_string(hide_password=False)
+
+
+def test_wave_database_gates_target_current_application_head():
+    assert {
+        gate.HEAD,
+        wave4_postgres_gate.HEAD,
+        wave5_postgres_gate.HEAD,
+    } == {"0020_auth_retention_lifecycle"}
 
 
 @pytest.mark.parametrize("database", ["postgres", "qa_scratch_01"])

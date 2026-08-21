@@ -67,10 +67,11 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: SAATHI-60 internship catalogue, and 0015 adds governed public-risk and
 #: right-of-reply tables, 0016 adds the DOB reconciliation ledger, 0017 adds
 #: registration cardinality invariants, 0018 adds request-bound registration
-#: idempotency, and 0019 adds durable OTP security authority.
+#: idempotency, 0019 adds durable OTP security authority, and 0020 adds the
+#: explicit login-attempt/auth-session retention lifecycle.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0019_otp_security_authority"
+HEAD_REVISION = "0020_auth_retention_lifecycle"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",

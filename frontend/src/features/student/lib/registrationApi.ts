@@ -1,15 +1,22 @@
-import { apiFetch, newRequestId } from '../../../lib/apiClient';
+import { newRequestId } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
+import {
+  clearRegistrationAttempt,
+  getRegistrationAttempt,
+  setRegistrationAttempt,
+} from './registrationAttemptStore';
+import {
+  STUDENT_AUTH_CHANGED_EVENT,
+  clearStudentBrowserContext,
+  notifyStudentAuthChanged,
+  observeStudentSessionActor,
+  retireLegacyStudentRegistrationState,
+} from './studentBrowserContext';
 
 // OTP-flow correlation is exclusively server-owned.  The browser receives only
 // an HttpOnly cookie and relative, display-safe state from GET /otp/state.  In
 // particular, JavaScript never receives or persists registration/login/recovery
 // identifiers, counters anchored to wall-clock timestamps, or bearer material.
-const RETIRED_SESSION_KEY = 'legalsaathi.student.registration.v2';
-const LEGACY_PII_KEY = 'legalsaathi.student.profile.v1';
-const RETIRED_STUDENT_AUTH_KEY = 'ls-auth-student';
-
-let registrationAttempt: { body: string; key: string } | null = null;
-
 export type OtpFlowStatus = 'pending' | 'verified' | 'authenticated' | 'unavailable';
 export type OtpFlowPurpose = 'signup' | 'login' | 'recovery' | null;
 
@@ -148,10 +155,11 @@ function mapOtpFlowState(value: OtpFlowStateWire): OtpFlowState {
 async function jsonRequest<T>(
   path: string,
   init: RequestInit,
+  lifecycle: { notifyAuthChanged?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers }, lifecycle);
   const body = (await response.json().catch(() => ({}))) as {
     detail?: { code?: string; field?: string; otp_state?: OtpFlowStateWire } | string;
     error?: {
@@ -172,12 +180,6 @@ async function jsonRequest<T>(
     ) {
       throw new RegistrationApiError(502, 'invalid_otp_state');
     }
-    // A rejected authenticated boundary retires any pre-NYAY-4 storage. HTTP
-    // 401 alone is insufficient: an incorrect OTP is also 401 and its HttpOnly
-    // flow cookie must remain wholly server-owned for retry/resend decisions.
-    if (response.status === 401 && detail?.code === 'authentication_required') {
-      clearRegistrationSession();
-    }
     throw new RegistrationApiError(
       response.status,
       detail?.code ?? `http_${response.status}`,
@@ -197,7 +199,7 @@ function parseRetryAfterSeconds(value: string | null): number | undefined {
 export async function getOtpFlowState(): Promise<OtpFlowState> {
   // Re-run at every reload/bootstrap boundary because tests, embedded webviews,
   // and privacy-restricted browsers may expose Storage after module evaluation.
-  retireBrowserRegistrationState();
+  retireLegacyStudentRegistrationState();
   const result = await jsonRequest<OtpFlowStateWire>(
     '/api/v1/auth/student/otp/state',
     { method: 'GET' },
@@ -229,10 +231,10 @@ export async function registerStudent(
     consent: { accepted: true, policy_version: input.policyVersion },
   });
   const explicitKey = idempotencyKey !== undefined;
-  if (!explicitKey && registrationAttempt?.body !== body) {
-    registrationAttempt = { body, key: newRequestId() };
+  if (!explicitKey && getRegistrationAttempt()?.body !== body) {
+    setRegistrationAttempt({ body, key: newRequestId() });
   }
-  const attemptKey = idempotencyKey ?? registrationAttempt?.key ?? newRequestId();
+  const attemptKey = idempotencyKey ?? getRegistrationAttempt()?.key ?? newRequestId();
 
   try {
     const result = await jsonRequest<unknown>(
@@ -243,8 +245,8 @@ export async function registerStudent(
         body,
       },
     );
-    if (!explicitKey && registrationAttempt?.key === attemptKey) {
-      registrationAttempt = null;
+    if (!explicitKey && getRegistrationAttempt()?.key === attemptKey) {
+      clearRegistrationAttempt();
     }
     return requireOtpFlowState(result);
   } catch (error) {
@@ -256,9 +258,9 @@ export async function registerStudent(
       && error instanceof RegistrationApiError
       && ['idempotency_conflict', 'otp_delivery_failed', 'registration_replay_expired']
         .includes(error.code)
-      && registrationAttempt?.key === attemptKey
+      && getRegistrationAttempt()?.key === attemptKey
     ) {
-      registrationAttempt = null;
+      clearRegistrationAttempt();
     }
     throw error;
   }
@@ -347,68 +349,69 @@ export async function verifyLoginOtp(code: string): Promise<OtpFlowState> {
     method: 'POST',
     body: JSON.stringify({ code }),
   });
-  return requireOtpFlowState(result);
+  const state = requireOtpFlowState(result);
+  if (state.status === 'authenticated' && state.purpose === 'login') {
+    // Clear actor A before the login UI publishes actor B via its auth event.
+    clearStudentBrowserContext();
+  }
+  return state;
 }
 
 export async function getStudentSession(): Promise<StudentSessionActor | null> {
   const result = await jsonRequest<{
     authenticated: boolean;
     actor: StudentSessionActor | null;
-  }>('/api/v1/auth/student/session', { method: 'GET' });
-  // Session discovery is a bootstrap boundary in both directions. An upgraded
-  // tab may still contain the retired UUID-bearing sessionStorage entry even
-  // when its HttpOnly cookie is valid, so authenticated discovery must retire
-  // it just as aggressively as anonymous discovery.
-  retireBrowserRegistrationState();
-  return result.authenticated ? result.actor : null;
+  }>('/api/v1/auth/student/session', { method: 'GET' }, { notifyAuthChanged: false });
+  if (result.authenticated !== true || !isStudentSessionActor(result.actor)) {
+    clearStudentBrowserContext();
+    return null;
+  }
+  retireLegacyStudentRegistrationState();
+  observeStudentSessionActor({
+    subject: result.actor.sub,
+    studentProfileId: result.actor.student_profile_id,
+  });
+  return result.actor;
 }
 
 export async function logoutStudent(): Promise<void> {
+  let accepted = false;
   try {
     await jsonRequest('/api/v1/auth/student/logout', {
       method: 'POST',
       body: JSON.stringify({}),
-    });
+    }, { notifyAuthChanged: false });
+    accepted = true;
   } finally {
-    retireBrowserRegistrationState();
+    clearStudentBrowserContext({
+      notifyAuthChanged: true,
+      consumeRegisteredActor: accepted,
+    });
   }
 }
 
-export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
-
-export function notifyStudentAuthChanged(): void {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(STUDENT_AUTH_CHANGED_EVENT));
-  }
-}
+export { STUDENT_AUTH_CHANGED_EVENT, notifyStudentAuthChanged };
 
 export function clearRegistrationSession(): void {
-  registrationAttempt = null;
-  retireBrowserRegistrationState();
+  clearStudentBrowserContext();
 }
 
-function retireBrowserRegistrationState(): void {
-  if (typeof window === 'undefined') return;
-  // Delete both the old UUID-bearing session entry and the older PII draft on
-  // every boundary crossing. Neither is migrated into a replacement store.
-  try {
-    window.sessionStorage.removeItem(RETIRED_SESSION_KEY);
-  } catch {
-    // Storage may be unavailable under strict browser privacy settings. The
-    // active reference remains memory-only and is still cleared independently.
-  }
-  try {
-    window.localStorage.removeItem(LEGACY_PII_KEY);
-  } catch {
-    // Same fail-safe handling for the retired legacy PII draft.
-  }
-  try {
-    window.localStorage.removeItem(RETIRED_STUDENT_AUTH_KEY);
-  } catch {
-    // The server flow remains authoritative even when storage is inaccessible.
-  }
+function isStudentSessionActor(value: unknown): value is StudentSessionActor {
+  if (!value || typeof value !== 'object') return false;
+  const actor = value as Partial<StudentSessionActor>;
+  return typeof actor.sub === 'string'
+    && actor.sub.trim().length > 0
+    && Array.isArray(actor.roles)
+    && actor.roles.includes('student')
+    && actor.roles.every((role) => typeof role === 'string')
+    && (actor.student_profile_id === null
+      || (typeof actor.student_profile_id === 'string' && actor.student_profile_id.length > 0))
+    && (actor.student_verification === 'draft' || actor.student_verification === 'verified')
+    && typeof actor.is_minor === 'boolean'
+    && Array.isArray(actor.consent_state)
+    && actor.consent_state.every((state) => typeof state === 'string');
 }
 
 // Erase retired browser-persisted registration/PII state as soon as the new
 // bundle loads, even if the subsequent server-session probe cannot complete.
-retireBrowserRegistrationState();
+retireLegacyStudentRegistrationState();

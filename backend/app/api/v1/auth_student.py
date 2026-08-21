@@ -35,6 +35,11 @@ from app.core.auth import (
     require_trusted_cookie_origin,
     require_trusted_mutation_origin,
 )
+from app.core.auth_cookies import (
+    clear_auth_session_cookie,
+    clear_otp_flow_cookie,
+    cookie_secure,
+)
 from app.core.config import settings
 from app.core.crypto import active_key_version, decrypt, encrypt, keyed_hash
 from app.db.models.audit import AuditEvent
@@ -198,13 +203,7 @@ def _set_flow_cookie(
 
 
 def _clear_flow_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=settings.otp_flow_cookie_name,
-        path="/api/v1",
-        secure=_cookie_secure(),
-        httponly=True,
-        samesite="strict",
-    )
+    clear_otp_flow_cookie(response)
 
 
 def _client_ip(request: Request) -> str | None:
@@ -1155,13 +1154,7 @@ class LoginVerifyRequest(BaseModel):
 
 
 def _cookie_secure() -> bool:
-    return (settings.app_env or "").strip().lower() not in {
-        "local",
-        "development",
-        "dev",
-        "test",
-        "testing",
-    }
+    return cookie_secure()
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -1177,13 +1170,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 
 def _clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=settings.auth_session_cookie_name,
-        path="/api/v1",
-        secure=_cookie_secure(),
-        httponly=True,
-        samesite="strict",
-    )
+    clear_auth_session_cookie(response)
 
 
 @router.post("/recovery/start", status_code=202)
@@ -1393,9 +1380,10 @@ def student_session(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     _otp_projection_headers(response)
+    raw_token = request.cookies.get(settings.auth_session_cookie_name)
     claims = login_service.session_claims(
         session,
-        request.cookies.get(settings.auth_session_cookie_name),
+        raw_token,
         _now(),
     )
     if claims is None:
@@ -1403,6 +1391,8 @@ def student_session(
         # app boot does not generate a console/network error. Protected APIs
         # still resolve the same missing/expired cookie to an anonymous actor
         # and return 401 through ``require_authenticated``.
+        if raw_token is not None:
+            _clear_session_cookie(response)
         return {"authenticated": False, "actor": None}
     return {"authenticated": True, "actor": claims}
 
@@ -1420,6 +1410,7 @@ def student_logout(
         _now(),
     )
     _clear_session_cookie(response)
+    _clear_flow_cookie(response)
     return {"status": "logged_out"}
 
 

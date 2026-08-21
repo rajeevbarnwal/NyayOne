@@ -32,7 +32,7 @@ from app.models.registration import (
     User,
 )
 from app.db.models.audit import AuditEvent
-from app.services import otp_authority, otp_outbox, registration_service
+from app.services import login_service, otp_authority, otp_outbox, registration_service
 
 # Marker written into scrubbed ciphertext/hash columns after anonymisation.
 ANONYMISED = "[erased]"
@@ -48,6 +48,8 @@ class RetentionPolicy:
     recovery_session_days: int | None
     audit_events_days: int | None
     mode: str  # "anonymise" | "delete"
+    login_attempt_days: int | None = None
+    auth_session_days: int | None = None
 
     @classmethod
     def from_settings(cls) -> "RetentionPolicy":
@@ -58,6 +60,8 @@ class RetentionPolicy:
             recovery_session_days=settings.retention_days_recovery_session,
             audit_events_days=settings.retention_days_audit_events,
             mode=settings.retention_mode or "anonymise",
+            login_attempt_days=settings.retention_days_login_attempt,
+            auth_session_days=settings.retention_days_auth_session,
         )
 
 
@@ -67,11 +71,235 @@ def _cutoff(now: datetime, days: int | None) -> datetime | None:
     return now - timedelta(days=days)
 
 
+def _validated_policy(policy: RetentionPolicy) -> RetentionPolicy:
+    """Validate every policy value before the first retention mutation."""
+
+    if policy.mode not in {"anonymise", "delete"}:
+        raise ValueError("retention mode must be anonymise or delete")
+    for value in (
+        policy.registration_pending_days,
+        policy.registration_inactive_days,
+        policy.otp_challenge_days,
+        policy.recovery_session_days,
+        policy.audit_events_days,
+        policy.login_attempt_days,
+        policy.auth_session_days,
+    ):
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not 1 <= value <= 36_500
+        ):
+            raise ValueError("retention days must be a positive bounded integer")
+    return policy
+
+
+def _expire_active_auth_sessions(session: Session, *, now: datetime) -> int:
+    """Expire live bearers under the stable User -> AuthSession lock order."""
+
+    candidate_ids = list(
+        session.scalars(
+            select(AuthSession.id)
+            .where(
+                AuthSession.status == "active",
+                AuthSession.expires_at <= now,
+            )
+            .order_by(AuthSession.id)
+        )
+    )
+    expired = 0
+    for session_id in candidate_ids:
+        user_id = session.scalar(
+            select(AuthSession.user_id).where(AuthSession.id == session_id)
+        )
+        if user_id is None:
+            continue
+        user = login_service.lock_user_for_session_rotation(session, user_id)
+        row = session.scalar(
+            select(AuthSession)
+            .where(AuthSession.id == session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            user is None
+            or row is None
+            or row.user_id != user_id
+            or row.status != "active"
+            or _as_retention_utc(row.expires_at) > now
+        ):
+            continue
+        row.status = "expired"
+        row.revoked_at = row.expires_at
+        expired += 1
+    return expired
+
+
+def _as_retention_utc(value: datetime) -> datetime:
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )
+
+
+def _purge_auth_security_history(
+    session: Session,
+    *,
+    now: datetime,
+    policy: RetentionPolicy,
+) -> dict[str, int]:
+    """Apply bounded auth retention and return aggregate counts only."""
+
+    expired_sessions = 0
+    login_attempts = 0
+    auth_sessions = 0
+
+    # Pending real and decoy attempts share the same expiry transition.  This
+    # sweep is security lifecycle, not counsel-selected history erasure.
+    pending_ids = list(
+        session.scalars(
+            select(LoginAttempt.id)
+            .where(
+                LoginAttempt.status == "pending",
+                LoginAttempt.expires_at <= now,
+            )
+            .order_by(LoginAttempt.id)
+        )
+    )
+    expired_attempts = 0
+    for attempt_id in pending_ids:
+        row = session.scalar(
+            select(LoginAttempt)
+            .where(LoginAttempt.id == attempt_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            row is None
+            or row.status != "pending"
+            or _as_retention_utc(row.expires_at) > now
+        ):
+            continue
+        row.status = "expired"
+        row.consumed_at = row.expires_at
+        expired_attempts += 1
+
+    # The session factory deliberately disables autoflush. Persist attempt
+    # expiry before the terminal-history candidate query in this same run.
+    session.flush()
+
+    attempt_cutoff = _cutoff(now, policy.login_attempt_days)
+    if attempt_cutoff is not None:
+        candidate_ids = list(
+            session.scalars(
+                select(LoginAttempt.id)
+                .where(
+                    LoginAttempt.status.in_(("consumed", "expired")),
+                    LoginAttempt.consumed_at < attempt_cutoff,
+                )
+                .order_by(LoginAttempt.id)
+            )
+        )
+        for attempt_id in candidate_ids:
+            row = session.scalar(
+                select(LoginAttempt)
+                .where(LoginAttempt.id == attempt_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if (
+                row is None
+                or row.status not in {"consumed", "expired"}
+                or row.consumed_at is None
+                or _as_retention_utc(row.consumed_at) >= attempt_cutoff
+            ):
+                continue
+            if policy.mode == "delete":
+                session.delete(row)
+            else:
+                login_service.erase_login_attempt(row)
+            login_attempts += 1
+
+    # Preserve the global auth lock order used by login verification and
+    # registration erasure: LoginAttempt precedes User -> AuthSession.  These
+    # locks are retained until the caller commits, so session work must follow
+    # every attempt mutation even though the two scans are otherwise disjoint.
+    expired_sessions = _expire_active_auth_sessions(session, now=now)
+    session.flush()
+
+    session_cutoff = _cutoff(now, policy.auth_session_days)
+    if session_cutoff is not None:
+        candidate_ids = list(
+            session.scalars(
+                select(AuthSession.id)
+                .where(
+                    AuthSession.status.in_(("revoked", "expired")),
+                    AuthSession.revoked_at < session_cutoff,
+                )
+                .order_by(AuthSession.id)
+            )
+        )
+        for auth_session_id in candidate_ids:
+            user_id = session.scalar(
+                select(AuthSession.user_id).where(
+                    AuthSession.id == auth_session_id
+                )
+            )
+            if user_id is None:
+                continue
+            user = login_service.lock_user_for_session_rotation(session, user_id)
+            row = session.scalar(
+                select(AuthSession)
+                .where(AuthSession.id == auth_session_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if (
+                user is None
+                or row is None
+                or row.user_id != user_id
+                or row.status not in {"revoked", "expired"}
+                or row.revoked_at is None
+                or _as_retention_utc(row.revoked_at) >= session_cutoff
+            ):
+                continue
+            if policy.mode == "delete":
+                session.delete(row)
+            else:
+                login_service.erase_auth_session(row)
+            auth_sessions += 1
+
+    if expired_sessions or expired_attempts or login_attempts or auth_sessions:
+        session.add(
+            AuditEvent(
+                actor_role="system",
+                action="student.auth.retention_applied",
+                resource_type="auth_security_history",
+                after_state={
+                    "mode": policy.mode,
+                    "expired_sessions": expired_sessions,
+                    "expired_attempts": expired_attempts,
+                    "login_attempts": login_attempts,
+                    "auth_sessions": auth_sessions,
+                },
+            )
+        )
+    session.flush()
+    return {
+        "auth_sessions_expired": expired_sessions,
+        "login_attempts_expired": expired_attempts,
+        "login_attempts": login_attempts,
+        "auth_sessions": auth_sessions,
+    }
+
+
 def _erase_registration_otp_security_graph(
     session: Session,
     reg: StudentRegistration,
     *,
     original_mobile_hash: str,
+    mode: str,
 ) -> None:
     """Remove every registration-bound OTP/session capability in lock order.
 
@@ -158,12 +386,14 @@ def _erase_registration_otp_security_graph(
             .with_for_update()
         )
     )
+    user = login_service.lock_user_for_session_rotation(session, reg.user_id)
     auth_sessions = list(
         session.scalars(
             select(AuthSession)
             .where(AuthSession.user_id == reg.user_id)
             .order_by(AuthSession.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
     )
     identity_subjects = [
@@ -194,12 +424,20 @@ def _erase_registration_otp_security_graph(
         challenges,
         authorities,
         recovery_rows,
-        login_rows,
-        auth_sessions,
         rate_rows,
     ):
         for row in collection:
             session.delete(row)
+    if mode == "delete":
+        for row in (*login_rows, *auth_sessions):
+            session.delete(row)
+    else:
+        for row in login_rows:
+            login_service.erase_login_attempt(row)
+        for row in auth_sessions:
+            login_service.erase_auth_session(row)
+        if user is not None:
+            user.status = "deleted"
     session.flush()
 
 
@@ -609,6 +847,7 @@ def _anonymise_locked(
         session,
         reg,
         original_mobile_hash=original_mobile_hash,
+        mode="anonymise",
     )
     reg.mobile_hash = f"{ANONYMISED}:{reg.id}"  # keep uniqueness, drop linkability
     reg.mobile_ct = ANONYMISED
@@ -672,6 +911,7 @@ def _delete_locked(
         session,
         reg,
         original_mobile_hash=reg.mobile_hash,
+        mode="delete",
     )
 
     from app.models.registration import (
@@ -882,9 +1122,8 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
     run on a schedule.
     """
     now = now or datetime.now(timezone.utc)
-    policy = policy or RetentionPolicy.from_settings()
-    if policy.mode not in {"anonymise", "delete"}:
-        raise ValueError("retention mode must be anonymise or delete")
+    now = _as_retention_utc(now)
+    policy = _validated_policy(policy or RetentionPolicy.from_settings())
     security_counts = purge_otp_security_state(
         session,
         now=now,
@@ -984,11 +1223,34 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
 
     rec_cut = _cutoff(now, policy.recovery_session_days)
     if rec_cut is not None:
-        for rs in session.scalars(
-            select(RecoverySession).where(RecoverySession.created_at < rec_cut)
-        ):
+        recovery_ids = list(
+            session.scalars(
+                select(RecoverySession.id)
+                .where(RecoverySession.created_at < rec_cut)
+                .order_by(RecoverySession.id)
+            )
+        )
+        for recovery_id in recovery_ids:
+            rs = session.scalar(
+                select(RecoverySession)
+                .where(
+                    RecoverySession.id == recovery_id,
+                    RecoverySession.created_at < rec_cut,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if rs is None or _as_retention_utc(rs.created_at) >= rec_cut:
+                continue
             session.delete(rs)
             counts["recovery_sessions"] += 1
+        # Registration erasure holds RecoverySession before LoginAttempt.
+        # Materialize these deletes before the auth sweep acquires attempt
+        # locks, preventing deferred-flush lock inversion on PostgreSQL.
+        session.flush()
 
+    counts.update(
+        _purge_auth_security_history(session, now=now, policy=policy)
+    )
     session.flush()
     return counts

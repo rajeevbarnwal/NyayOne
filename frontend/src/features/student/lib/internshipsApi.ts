@@ -1,4 +1,4 @@
-import { apiFetch } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 import type { InternshipListing } from './internships';
 
 const BASE = '/api/v1/internships';
@@ -47,7 +47,7 @@ interface ListingPageWire {
 async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers });
   const body = (await response.json().catch(() => ({}))) as T & {
     detail?: { code?: string; message?: string } | string;
   };

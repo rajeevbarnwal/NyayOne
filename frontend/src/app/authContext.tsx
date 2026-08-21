@@ -106,19 +106,27 @@ export function deriveAuthState(
   // The opt-in exists only for isolated unit coverage of the retired lawyer
   // prototype and is never passed by application code.
   if (!options.allowLegacyClientDemo) {
-    clearAuthSnapshot('lawyer', store);
+    // This runs inside the session refresh subscriber. Publishing another auth
+    // event here would recursively start a third anonymous session request.
+    clearAuthSnapshot('lawyer', store, { notifyAuthChanged: false });
     return ANONYMOUS_AUTH;
   }
   const snap = loadAuthSnapshot('lawyer', store);
   if (!snap) return ANONYMOUS_AUTH;
   // Snapshot integrity: a record under the lawyer key MUST carry the lawyer role.
   // Storage-key placement is not authorisation — a mismatched role is malformed.
-  if (snap.role !== 'lawyer') { clearAuthSnapshot('lawyer', store); return ANONYMOUS_AUTH; }
+  if (snap.role !== 'lawyer') {
+    clearAuthSnapshot('lawyer', store, { notifyAuthChanged: false });
+    return ANONYMOUS_AUTH;
+  }
   if (now - snap.updatedAt > SESSION_MAX_AGE_MS) return ANONYMOUS_AUTH; // expired session
   const subjectOk = isOpaqueSubjectId(snap.subjectId, snap.destinationMasked);
   // A verified session without a stable opaque subject id is malformed — never
   // fabricate an identity from a masked contact. Clear + deny.
-  if (snap.phase === 'verified' && !subjectOk) { clearAuthSnapshot('lawyer', store); return ANONYMOUS_AUTH; }
+  if (snap.phase === 'verified' && !subjectOk) {
+    clearAuthSnapshot('lawyer', store, { notifyAuthChanged: false });
+    return ANONYMOUS_AUTH;
+  }
   const lawyerVerification: VerificationStatus =
     snap.phase === 'verified' ? 'verified'
     : snap.phase === 'rejected' ? 'rejected'

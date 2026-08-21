@@ -418,6 +418,8 @@ class Settings(BaseSettings):
     retention_days_registration_inactive: int | None = None
     retention_days_otp_challenge: int | None = None
     retention_days_recovery_session: int | None = None
+    retention_days_login_attempt: int | None = None
+    retention_days_auth_session: int | None = None
     retention_days_audit_events: int | None = None
     # Whether the purge job anonymises (keep row, scrub PII/ciphertext) or hard
     # deletes when a window elapses. "anonymise" is the DPDP-safe default.
@@ -428,6 +430,50 @@ class Settings(BaseSettings):
     jira_board_id: int = 68
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+
+    @field_validator(
+        "retention_days_registration_pending",
+        "retention_days_registration_inactive",
+        "retention_days_otp_challenge",
+        "retention_days_recovery_session",
+        "retention_days_login_attempt",
+        "retention_days_auth_session",
+        "retention_days_audit_events",
+        mode="before",
+    )
+    @classmethod
+    def validate_retention_days(cls, value):
+        """Accept only bounded, canonical whole-day retention windows.
+
+        ``None`` deliberately means that counsel has not authorised an
+        automated terminal-history erasure window.  The upper bound is an
+        arithmetic/operational safety limit, not a statutory recommendation.
+        """
+
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError("retention days must be a positive integer")
+        if isinstance(value, str):
+            if value == "":
+                return None
+            if re.fullmatch(r"[1-9][0-9]*", value) is None:
+                raise ValueError("retention days must be a positive integer")
+            parsed = int(value)
+        elif isinstance(value, int):
+            parsed = value
+        else:
+            raise ValueError("retention days must be a positive integer")
+        if not 1 <= parsed <= 36_500:
+            raise ValueError("retention days exceed the safety range")
+        return parsed
+
+    @field_validator("retention_mode")
+    @classmethod
+    def validate_retention_mode(cls, value: str) -> str:
+        if value not in {"anonymise", "delete"}:
+            raise ValueError("retention_mode must be anonymise or delete")
+        return value
 
     @model_validator(mode="before")
     @classmethod

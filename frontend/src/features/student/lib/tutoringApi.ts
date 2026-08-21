@@ -22,7 +22,8 @@
  *     component memory only. `redactJoinCredential` exists so any diagnostic
  *     rendering of that object cannot leak the token.
  */
-import { apiFetch, newRequestId } from '../../../lib/apiClient';
+import { newRequestId } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 
 /**
  * Dev-stub actor claims (backend auth contract: `X-Actor-Claims` JSON header).
@@ -238,7 +239,7 @@ async function jsonRequest<T>(path: string, init: RequestOptions = {}): Promise<
     headers.set(DEV_ACTOR_CLAIMS_HEADER, DEV_ACTOR_CLAIMS);
   }
   if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
-  const response = await apiFetch(path, { ...rest, headers });
+  const response = await studentApiFetch(path, { ...rest, headers });
   const body: unknown = await response.json().catch(() => ({}));
   if (!response.ok) throw parseErrorBody(response.status, body);
   return body as T;

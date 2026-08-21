@@ -53,9 +53,18 @@ export function loadAuthSnapshot(role: AuthRole, store: KvStore = defaultKvStore
   return store.get<AuthSnapshot>(key(role));
 }
 
-export function clearAuthSnapshot(role: AuthRole, store: KvStore = defaultKvStore()): void {
+export interface ClearAuthSnapshotOptions {
+  /** Derivation-time cleanup is already inside a refresh and must not recurse. */
+  notifyAuthChanged?: boolean;
+}
+
+export function clearAuthSnapshot(
+  role: AuthRole,
+  store: KvStore = defaultKvStore(),
+  options: ClearAuthSnapshotOptions = {},
+): void {
   store.remove(key(role));
-  notifyAuthChanged();
+  if (options.notifyAuthChanged !== false) notifyAuthChanged();
 }
 
 export function retireStudentAuthSnapshot(store: KvStore = defaultKvStore()): void {

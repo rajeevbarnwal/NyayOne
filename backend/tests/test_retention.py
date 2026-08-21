@@ -39,6 +39,10 @@ def test_no_window_is_noop(db_session: Session):
         "otp_expired_registrations": 0,
         "otp_rate_limit_buckets": 0,
         "otp_legacy_destinations": 0,
+        "auth_sessions_expired": 0,
+        "login_attempts_expired": 0,
+        "login_attempts": 0,
+        "auth_sessions": 0,
     }
     assert db_session.scalar(select(StudentRegistration)) is not None
 

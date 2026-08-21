@@ -811,11 +811,19 @@ jobs:
             '  --database-url "$DATABASE_URL" \\\n'
             "  --output test-results/nyay4-postgres/summary.json"
         )
+        nyay19 = (
+            'NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" '
+            "scripts/nyay19_postgres_auth_retention_gate.py \\\n"
+            "  --execute \\\n"
+            '  --database-url "$DATABASE_URL" \\\n'
+            "  --output test-results/nyay19-postgres/summary.json"
+        )
         self.assertEqual(original.count(nyay16), 1)
         self.assertEqual(original.count(nyay3), 1)
         self.assertEqual(original.count(nyay2), 1)
         self.assertEqual(original.count(nyay17), 1)
         self.assertEqual(original.count(nyay4), 1)
+        self.assertEqual(original.count(nyay19), 1)
         mutations = {
             "deleted NYAY-16 invocation": original.replace(nyay16, "true", 1),
             "wrong NYAY-16 script": original.replace(
@@ -951,7 +959,52 @@ jobs:
             "NYAY-4 ordered before NYAY-17": original.replace(
                 nyay4, "true", 1
             ).replace(nyay17, nyay4 + "\n" + nyay17, 1),
-            "NYAY-4 is not final": original + "\ntrue\n",
+            "deleted NYAY-19 invocation": original.replace(nyay19, "true", 1),
+            "duplicated NYAY-19 invocation": original.replace(
+                nyay19, nyay19 + "\n" + nyay19, 1
+            ),
+            "wrong NYAY-19 script": original.replace(
+                "scripts/nyay19_postgres_auth_retention_gate.py",
+                "scripts/not-the-nyay19-gate.py",
+                1,
+            ),
+            "missing NYAY-19 opt-in": original.replace(
+                "NYAY19_POSTGRES_GATE_EXECUTE=1 ", "", 1
+            ),
+            "missing NYAY-19 execute flag": original.replace(
+                nyay19,
+                nyay19.replace("  --execute \\\n", "", 1),
+                1,
+            ),
+            "altered NYAY-19 database authority": original.replace(
+                nyay19,
+                nyay19.replace(
+                    '  --database-url "$DATABASE_URL"',
+                    '  --database-url "postgresql://substitute"',
+                    1,
+                ),
+                1,
+            ),
+            "altered NYAY-19 report": original.replace(
+                "test-results/nyay19-postgres/summary.json",
+                "test-results/nyay19-postgres/substitute.json",
+                1,
+            ),
+            "NYAY-19 non-executing help mode": original.replace(
+                nyay19,
+                nyay19.replace("  --execute \\\n", "  --execute --help \\\n", 1),
+                1,
+            ),
+            "conditional NYAY-19 bypass": original.replace(
+                nyay19, "if false; then\n" + nyay19 + "\nfi", 1
+            ),
+            "masked NYAY-19 failure": original.replace(
+                nyay19, nyay19 + " || true", 1
+            ),
+            "NYAY-19 ordered before NYAY-4": original.replace(
+                nyay19, "true", 1
+            ).replace(nyay4, nyay19 + "\n" + nyay4, 1),
+            "NYAY-19 is not final": original + "\ntrue\n",
         }
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "db_gate.sh"
@@ -984,6 +1037,11 @@ jobs:
                     if label == "deleted NYAY-4 invocation":
                         self.assertTrue(
                             any("invoke the exact NYAY-4" in item for item in failures),
+                            failures,
+                        )
+                    if label == "deleted NYAY-19 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-19" in item for item in failures),
                             failures,
                         )
 
@@ -1094,6 +1152,204 @@ jobs:
             document["scripts"]["preqa:nyay4:otp-negative"] = "true"
             package.write_text(json.dumps(document), encoding="utf-8")
             self.assertTrue(failures())
+
+    def test_wave3_requires_exact_isolated_nyay19_browser_steps(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (
+            HERE.parent.parent / ".github" / "workflows" /
+            "wave3-credential-trust-gate.yml"
+        )
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_workflow(source), [])
+        startup = (
+            "      - name: Start NYAY-19 isolated auth lifecycle backend and frontend\n"
+            "        env:\n"
+            "          APP_ENV: test\n"
+            "          CORS_ORIGINS: '[\"http://127.0.0.1:1180\"]'\n"
+            "          OTP_DELIVERY_ENABLED: \"true\"\n"
+            "          OTP_PROVIDER: http\n"
+            "          OTP_PROVIDER_URL: http://127.0.0.1:1099/send\n"
+            "          OTP_PROVIDER_SUPPORTS_IDEMPOTENCY: \"true\"\n"
+            "          OTP_RESEND_COOLDOWN_SECONDS: \"1\"\n"
+            "          OTP_FLOW_TTL_SECONDS: \"600\"\n"
+            "          OTP_RECOVERY_PROOF_TTL_SECONDS: \"300\"\n"
+            "          AUTH_SESSION_TTL_SECONDS: \"20\"\n"
+            "          VITE_API_BASE_URL: http://127.0.0.1:1181\n"
+            "        run: |\n"
+            "          (cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 1181 > \"$RUNNER_TEMP/nyay19-backend.log\" 2>&1 &)\n"
+            "          (cd frontend && npm run dev -- --host 127.0.0.1 --port 1180 --strictPort > \"$RUNNER_TEMP/nyay19-frontend.log\" 2>&1 &)\n"
+            "          for url in \\\n"
+            "            http://127.0.0.1:1181/health \\\n"
+            "            http://127.0.0.1:1180; do\n"
+            "            for attempt in {1..60}; do\n"
+            "              curl --fail --silent \"$url\" >/dev/null && break\n"
+            "              if [[ \"$attempt\" == 60 ]]; then\n"
+            "                echo \"Timed out waiting for $url\"\n"
+            "                exit 1\n"
+            "              fi\n"
+            "              sleep 1\n"
+            "            done\n"
+            "          done\n\n"
+        )
+        browser = (
+            "      - name: NYAY-19 authentication lifecycle Chromium regression\n"
+            "        working-directory: frontend\n"
+            "        env:\n"
+            "          NYAY19_WEB_BASE_URL: http://127.0.0.1:1180\n"
+            "          NYAY19_API_BASE_URL: http://127.0.0.1:1181\n"
+            "          NYAY19_OTP_CAPTURE_URL: http://127.0.0.1:1099\n"
+            "          NYAY19_SESSION_TTL_SECONDS: \"20\"\n"
+            "          NYAY19_OTP_RESEND_COOLDOWN_SECONDS: \"1\"\n"
+            "          NYAY19_OTP_FLOW_TTL_SECONDS: \"600\"\n"
+            "          NYAY19_RECOVERY_PROOF_TTL_SECONDS: \"300\"\n"
+            "        run: npm run qa:nyay19:auth-lifecycle\n\n"
+        )
+        self.assertEqual(original.count(startup), 1)
+        self.assertEqual(original.count(browser), 1)
+        mutations = {
+            "deleted startup": original.replace(startup, "", 1),
+            "duplicated startup": original.replace(startup, startup + startup, 1),
+            "deleted browser gate": original.replace(browser, "", 1),
+            "duplicated browser gate": original.replace(browser, browser + browser, 1),
+            "wrong isolated backend port": original.replace(
+                startup,
+                startup.replace("--port 1181 >", "--port 9999 >", 1),
+                1,
+            ),
+            "wrong isolated frontend port": original.replace(
+                startup,
+                startup.replace("--port 1180 --strictPort", "--port 9998 --strictPort", 1),
+                1,
+            ),
+            "preview server substituted": original.replace(
+                startup,
+                startup.replace("npm run dev -- --host", "npm run preview -- --host", 1),
+                1,
+            ),
+            "strict port removed": original.replace(
+                startup,
+                startup.replace(" --strictPort", "", 1),
+                1,
+            ),
+            "wrong isolated CORS origin": original.replace(
+                "CORS_ORIGINS: '[\"http://127.0.0.1:1180\"]'",
+                "CORS_ORIGINS: '[\"http://127.0.0.1:1170\"]'",
+                1,
+            ),
+            "wrong browser web authority": original.replace(
+                "NYAY19_WEB_BASE_URL: http://127.0.0.1:1180",
+                "NYAY19_WEB_BASE_URL: http://127.0.0.1:1170",
+                1,
+            ),
+            "wrong browser API authority": original.replace(
+                "NYAY19_API_BASE_URL: http://127.0.0.1:1181",
+                "NYAY19_API_BASE_URL: http://127.0.0.1:1171",
+                1,
+            ),
+            "wrong browser capture authority": original.replace(
+                "NYAY19_OTP_CAPTURE_URL: http://127.0.0.1:1099",
+                "NYAY19_OTP_CAPTURE_URL: http://127.0.0.1:9999",
+                1,
+            ),
+            "deleted browser TTL binding": original.replace(
+                "          NYAY19_SESSION_TTL_SECONDS: \"20\"\n",
+                "",
+                1,
+            ),
+            "duplicate browser env key": original.replace(
+                "          NYAY19_WEB_BASE_URL: http://127.0.0.1:1180\n",
+                "          NYAY19_WEB_BASE_URL: http://127.0.0.1:1180\n"
+                "          NYAY19_WEB_BASE_URL: http://127.0.0.1:1180\n",
+                1,
+            ),
+            "masked browser failure": original.replace(
+                "run: npm run qa:nyay19:auth-lifecycle",
+                "run: npm run qa:nyay19:auth-lifecycle || true",
+                1,
+            ),
+            "conditional browser gate": original.replace(
+                "        run: npm run qa:nyay19:auth-lifecycle",
+                "        if: ${{ always() }}\n"
+                "        run: npm run qa:nyay19:auth-lifecycle",
+                1,
+            ),
+            "reordered startup and browser": original.replace(
+                startup + browser, browser + startup, 1
+            ),
+            "interposed step": original.replace(
+                startup + browser,
+                startup + "      - run: echo interposed\n\n" + browser,
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / source.name
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(failures, label)
+
+    def test_nyay19_browser_executable_contract_rejects_seeded_mutants(self) -> None:
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay19_browser_gate_contract(), [])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            browser = root / "nyay19-auth-lifecycle-browser.mjs"
+            contract = root / "nyay19-auth-lifecycle-runner-contract.mjs"
+            contract_test = root / "nyay19-auth-lifecycle-runner-contract.test.mjs"
+            package = root / "package.json"
+
+            def reset() -> None:
+                browser.write_bytes(policy.NYAY19_BROWSER_GATE.read_bytes())
+                contract.write_bytes(policy.NYAY19_BROWSER_CONTRACT.read_bytes())
+                contract_test.write_bytes(
+                    policy.NYAY19_BROWSER_CONTRACT_TEST.read_bytes()
+                )
+                package.write_bytes(policy.FRONTEND_PACKAGE.read_bytes())
+
+            def failures() -> list[str]:
+                return policy.check_nyay19_browser_gate_contract(
+                    browser, contract, package, contract_test
+                )
+
+            reset()
+            browser.write_bytes(browser.read_bytes() + b"\n// planted no-op drift\n")
+            self.assertTrue(failures())
+
+            reset()
+            contract.write_bytes(contract.read_bytes() + b"\n// planted no-op drift\n")
+            self.assertTrue(failures())
+
+            reset()
+            contract_test.write_bytes(
+                contract_test.read_bytes() + b"\n// planted no-op drift\n"
+            )
+            self.assertTrue(failures())
+
+            reset()
+            document = json.loads(package.read_text(encoding="utf-8"))
+            document["scripts"]["qa:nyay19:auth-lifecycle"] = "true"
+            package.write_text(json.dumps(document), encoding="utf-8")
+            self.assertTrue(failures())
+
+            reset()
+            document = json.loads(package.read_text(encoding="utf-8"))
+            del document["scripts"]["qa:nyay19:auth-lifecycle"]
+            package.write_text(json.dumps(document), encoding="utf-8")
+            self.assertTrue(failures())
+
+            for hook in (
+                "preqa:nyay19:auth-lifecycle",
+                "postqa:nyay19:auth-lifecycle",
+            ):
+                with self.subTest(hook=hook):
+                    reset()
+                    document = json.loads(package.read_text(encoding="utf-8"))
+                    document["scripts"][hook] = "true"
+                    package.write_text(json.dumps(document), encoding="utf-8")
+                    self.assertTrue(failures())
 
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (

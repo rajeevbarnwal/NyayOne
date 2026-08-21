@@ -22,12 +22,13 @@ from app.core.auth import (
     get_actor_context,
     require_trusted_cookie_origin,
 )
+from app.core.auth_cookies import clear_auth_session_cookie, clear_otp_flow_cookie
 from app.core.config import settings
 from app.core.crypto import decrypt, keyed_hash
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.models.registration import StudentProfile, StudentRegistration
-from app.services import otp_flow_service
+from app.services import login_service, otp_flow_service, registration_service
 from app.models.wave1 import (
     PRIVACY_KINDS, THEMES,
     DataSubjectRequest, DeletionJob, ExportJob, PrivacyPreference, UserSettings,
@@ -310,32 +311,63 @@ def privacy_delete(payload: DeleteRequestIn, request: Request, response: Respons
     # HttpOnly OTP-flow cookie. The server proves that the short-lived verified
     # recovery flow belongs to this authenticated registration and consumes it
     # in the same transaction as the deletion request.
-    reg = _registration_for(session, actor)
+    discovered = _registration_for(session, actor)
+    reg, _ = registration_service.lock_registration_with_idempotency(
+        session, discovered.id
+    )
+    if reg is None:
+        raise HTTPException(status_code=404, detail={"code": "profile_not_found"})
+    now = _now()
     try:
         otp_flow_service.consume_recovery_proof(
             session,
             request.cookies.get(settings.otp_flow_cookie_name),
             registration_id=reg.id,
-            now=_now(),
+            now=now,
         )
     except ValueError:
         raise HTTPException(status_code=401, detail={"code": "reauth_required"})
     dsr = _create_dsr(session, actor, "delete", idempotency_key)
-    if session.scalar(select(DeletionJob).where(DeletionJob.request_id == dsr.id)) is None:
+    created_job = (
+        session.scalar(
+            select(DeletionJob).where(DeletionJob.request_id == dsr.id)
+        )
+        is None
+    )
+    if created_job:
         dsr.reauth_verified = True
         dsr.confirmation_hash = keyed_hash(payload.confirmation)
-        session.add(DeletionJob(request_id=dsr.id, status="pending", mode="anonymise"))
-        _audit(session, actor, "student.privacy.delete_requested", "data_subject_request", dsr.id,
-               {"status": dsr.status, "reauth_verified": True})
-    session.commit()
-    response.delete_cookie(
-        key=settings.otp_flow_cookie_name,
-        path="/api/v1",
-        secure=(settings.app_env or "").strip().lower()
-        not in {"local", "development", "dev", "test", "testing"},
-        httponly=True,
-        samesite="strict",
+        session.add(
+            DeletionJob(
+                request_id=dsr.id,
+                status="pending",
+                mode=settings.retention_mode,
+            )
+        )
+    revoked = login_service.suspend_user_and_revoke_sessions(
+        session, reg.user_id, now
     )
+    reg.status = "suspended"
+    if created_job:
+        _audit(session, actor, "student.privacy.delete_requested", "data_subject_request", dsr.id,
+               {
+                   "status": dsr.status,
+                   "reauth_verified": True,
+                   "account_frozen": True,
+                   "sessions_revoked": revoked,
+               })
+    elif revoked:
+        _audit(
+            session,
+            actor,
+            "student.privacy.delete_frozen",
+            "data_subject_request",
+            dsr.id,
+            {"account_frozen": True, "sessions_revoked": revoked},
+        )
+    session.commit()
+    clear_auth_session_cookie(response)
+    clear_otp_flow_cookie(response)
     return {"request_id": dsr.opaque_id, "status": dsr.status}
 
 
