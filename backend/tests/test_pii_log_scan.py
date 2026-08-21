@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -12,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.api.v1 import auth_student as ep
+from app.core.config import settings
 from app.db.base import Base
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
@@ -24,9 +23,17 @@ from tests import dbtemplate
 class Capturing:
     def __init__(self):
         self.sent = []
+        self._receipts = {}
 
-    def send(self, destination, code):
+    def send_idempotent(self, destination, code, *, idempotency_token):
+        existing = self._receipts.get(idempotency_token)
+        if existing is not None:
+            assert existing[:2] == (destination, code)
+            return existing[2]
+        receipt = f"test-{len(self._receipts) + 1}"
+        self._receipts[idempotency_token] = (destination, code, receipt)
         self.sent.append((destination, code))
+        return receipt
 
 
 def _app_ctx():
@@ -50,7 +57,13 @@ def _app_ctx():
     app.include_router(ep.router, prefix="/api/v1")
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
-    return TestClient(app), engine, SessionLocal, sender
+    app.dependency_overrides[ep.get_outbox_session_factory] = lambda: SessionLocal
+    return (
+        TestClient(app, headers={"Origin": settings.cors_origins[0]}),
+        engine,
+        SessionLocal,
+        sender,
+    )
 
 
 def test_no_raw_otp_or_mobile_in_logs_responses_or_audit(caplog):
@@ -61,12 +74,11 @@ def test_no_raw_otp_or_mobile_in_logs_responses_or_audit(caplog):
         "first_name": "Aditi", "last_name": "Nair", "mobile": mobile,
         "dob": "2004-03-14", "consent": {"accepted": True}})
     assert r.status_code == 201
-    reg_id = r.json()["registration_id"]
     code = sender.sent[-1][1]  # the raw code only ever left via the sender
 
     # (1) Response bodies never contain the raw code or mobile.
     assert code not in r.text and mobile not in r.text
-    resend = client.post("/api/v1/auth/student/otp/resend", json={"registration_id": reg_id})
+    resend = client.post("/api/v1/auth/student/otp/resend", json={})
     assert code not in resend.text and mobile not in resend.text
 
     # (2) Captured logs never contain the raw code or mobile.

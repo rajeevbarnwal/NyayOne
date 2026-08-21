@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StudentScreen, TextField, SelectField, DpdpFootnote } from '../components';
@@ -11,6 +11,7 @@ import {
 import type { ThemeMode } from '../../../hooks/useTheme';
 import { canSubmitDelete, DELETE_CONFIRM_PHRASE } from '../lib/dpdp';
 import { startRecovery, verifyRecovery } from '../lib/registrationApi';
+import { useOtpFlowState } from '../lib/useOtpFlowState';
 import {
   getStudentSettings,
   updateStudentSettings,
@@ -285,6 +286,7 @@ function usePrivacyRequestPolling(kind: PrivacyRequestKind) {
 }
 
 type DeleteStage = 'reauth-mobile' | 'reauth-otp' | 'confirm';
+const RECOVERY_STATE_UNAVAILABLE = 'Re-authentication state is unavailable. No deletion can proceed until the server state check recovers.';
 
 export function PrivacySettings() {
   const nav = useNavigate();
@@ -299,9 +301,31 @@ export function PrivacySettings() {
   const [stage, setStage] = useState<DeleteStage>('reauth-mobile');
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
-  const [recoveryId, setRecoveryId] = useState('');
   const [typed, setTyped] = useState('');
   const [flowError, setFlowError] = useState<string | null>(null);
+  const recoveryFlow = useOtpFlowState();
+
+  useEffect(() => {
+    if (recoveryFlow.loadError) {
+      setStage('reauth-mobile');
+      setMobile('');
+      setOtp('');
+      setTyped('');
+      setFlowError(RECOVERY_STATE_UNAVAILABLE);
+      return;
+    }
+    if (recoveryFlow.state?.purpose === 'recovery') {
+      if (recoveryFlow.state.status === 'verified') setStage('confirm');
+      else if (recoveryFlow.state.status === 'pending') setStage('reauth-otp');
+      setFlowError((current) => current === RECOVERY_STATE_UNAVAILABLE ? null : current);
+      return;
+    }
+    if (recoveryFlow.state?.status === 'unavailable') {
+      setStage('reauth-mobile');
+      setOtp('');
+      setTyped('');
+    }
+  }, [recoveryFlow.loadError, recoveryFlow.state]);
 
   const exportMut = useMutation({
     mutationFn: () => requestDataExport(),
@@ -310,25 +334,31 @@ export function PrivacySettings() {
 
   const startMut = useMutation({
     mutationFn: () => startRecovery(mobile.trim()),
-    onSuccess: (id) => {
-      setRecoveryId(id);
-      setStage('reauth-otp');
+    onSuccess: (state) => {
+      recoveryFlow.adopt(state);
+      setStage(state.status === 'verified' ? 'confirm' : 'reauth-otp');
       setFlowError(null);
     },
     onError: () => setFlowError('Could not start re-authentication. Check the mobile number and retry.'),
   });
 
   const verifyMut = useMutation({
-    mutationFn: () => verifyRecovery(recoveryId, otp.trim()),
-    onSuccess: () => {
-      setStage('confirm');
-      setFlowError(null);
+    mutationFn: () => verifyRecovery(otp.trim()),
+    onSuccess: (state) => {
+      recoveryFlow.adopt(state);
+      if (state.status === 'verified' && state.purpose === 'recovery') {
+        setStage('confirm');
+        setFlowError(null);
+      } else {
+        setStage('reauth-mobile');
+        setFlowError('The server did not confirm re-authentication. Start again.');
+      }
     },
     onError: () => setFlowError('That code did not match. Try again.'),
   });
 
   const deleteMut = useMutation({
-    mutationFn: () => requestAccountDeletion({ confirmation: typed.trim(), reauthRecoveryId: recoveryId }),
+    mutationFn: () => requestAccountDeletion({ confirmation: typed.trim() }),
     onSuccess: (res) => {
       deletePoll.track(res.requestId);
       setFlowError(null);
@@ -336,7 +366,6 @@ export function PrivacySettings() {
     onError: (error) => {
       if (error instanceof SettingsApiError && (error.status === 401 || error.code === REAUTH_REQUIRED_CODE)) {
         setStage('reauth-mobile');
-        setRecoveryId('');
         setOtp('');
         setFlowError('Re-authentication expired — verify your mobile again.');
         return;
@@ -349,7 +378,9 @@ export function PrivacySettings() {
     },
   });
 
-  const reauthenticated = stage === 'confirm' && recoveryId !== '';
+  const reauthenticated = stage === 'confirm'
+    && recoveryFlow.state?.status === 'verified'
+    && recoveryFlow.state.purpose === 'recovery';
   const deleteReady = canSubmitDelete({ typedConfirmation: typed, reauthenticated })
     && !deleteMut.isPending && deletePoll.status === null;
 
@@ -480,7 +511,7 @@ export function PrivacySettings() {
                   help="We send a one-time code to re-verify it is you."
                 />
                 <div className="st-actions">
-                  <button type="button" className="btn tap" disabled={startMut.isPending || mobile.trim() === ''} onClick={() => startMut.mutate()}>
+                  <button type="button" className="btn tap" disabled={recoveryFlow.loadError || startMut.isPending || mobile.trim() === ''} onClick={() => startMut.mutate()}>
                     {startMut.isPending ? 'Sending…' : 'Send code'}
                   </button>
                 </div>

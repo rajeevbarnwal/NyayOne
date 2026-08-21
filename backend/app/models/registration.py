@@ -38,6 +38,24 @@ USER_ROLES = (
 USER_STATUSES = ("pending", "active", "suspended", "deleted")
 REGISTRATION_STATUSES = ("otp_pending", "otp_verified", "active", "suspended", "deleted")
 OTP_PURPOSES = ("signup", "recovery", "login")
+OTP_CHALLENGE_DELIVERY_STATES = (
+    "pending_delivery",
+    "active",
+    "consumed",
+    "superseded",
+    "void",
+)
+OTP_RATE_LIMIT_SCOPES = ("identity", "ip", "global")
+OTP_RATE_LIMIT_ACTIONS = ("issue", "resend", "verify")
+OTP_FLOW_STATES = (
+    "pending",
+    "code_sent",
+    "verified",
+    "locked",
+    "expired",
+    "consumed",
+    "failed",
+)
 VERIFICATION_METHODS = ("institutional_email", "college_id", "manual")
 VERIFICATION_STATUSES = ("pending", "in_review", "verified", "rejected")
 GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
@@ -48,6 +66,7 @@ REGISTRATION_IDEMPOTENCY_STATES = (
     "pending",
     "succeeded",
     "failed",
+    "neutralized",
     "retired",
     "erased",
 )
@@ -71,6 +90,11 @@ for _hex_character in "0123456789abcdef":
     )
 _IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL = "idempotency_key_hash"
 _REQUEST_FINGERPRINT_HEX_ONLY_SQL = "request_fingerprint"
+_OTP_RATE_SUBJECT_HEX_ONLY_SQL = "subject_hash"
+_OTP_FLOW_TOKEN_HEX_ONLY_SQL = "token_hash"
+_OTP_PROVIDER_KEY_HEX_ONLY_SQL = "provider_idempotency_key"
+_OTP_CLAIM_TOKEN_HEX_ONLY_SQL = "claim_token_hash"
+_OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL = "provider_receipt_hash"
 for _hex_character in "0123456789abcdef":
     _IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL = (
         f"replace({_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL}, "
@@ -78,6 +102,26 @@ for _hex_character in "0123456789abcdef":
     )
     _REQUEST_FINGERPRINT_HEX_ONLY_SQL = (
         f"replace({_REQUEST_FINGERPRINT_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _OTP_RATE_SUBJECT_HEX_ONLY_SQL = (
+        f"replace({_OTP_RATE_SUBJECT_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _OTP_FLOW_TOKEN_HEX_ONLY_SQL = (
+        f"replace({_OTP_FLOW_TOKEN_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _OTP_PROVIDER_KEY_HEX_ONLY_SQL = (
+        f"replace({_OTP_PROVIDER_KEY_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _OTP_CLAIM_TOKEN_HEX_ONLY_SQL = (
+        f"replace({_OTP_CLAIM_TOKEN_HEX_ONLY_SQL}, "
+        f"'{_hex_character}', '')"
+    )
+    _OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL = (
+        f"replace({_OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL}, "
         f"'{_hex_character}', '')"
     )
 
@@ -227,7 +271,7 @@ class RegistrationIdempotencyRecord(Base):
             name="key_hash_shape",
         ),
         CheckConstraint(
-            "((state IN ('pending', 'succeeded', 'failed') AND "
+            "((state IN ('pending', 'succeeded', 'failed', 'neutralized') AND "
             "request_fingerprint_version = 'v1' AND "
             "request_fingerprint IS NOT NULL AND "
             "length(request_fingerprint) = 64 AND "
@@ -244,6 +288,8 @@ class RegistrationIdempotencyRecord(Base):
             "outbox_id IS NULL AND outcome_code IS NULL) OR "
             "(state = 'failed' AND registration_id IS NULL AND "
             "outbox_id IS NULL AND outcome_code = 'otp_delivery_failed') OR "
+            "(state = 'neutralized' AND registration_id IS NULL AND "
+            "outbox_id IS NULL AND outcome_code = 'registration_neutralized') OR "
             "(state IN ('retired', 'erased') AND registration_id IS NULL AND "
             "outbox_id IS NULL AND "
             "outcome_code = 'registration_replay_expired')",
@@ -258,7 +304,10 @@ class RegistrationDobReconciliation(Base):
     __tablename__ = "registration_dob_reconciliations"
     registration_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("student_registrations.id", ondelete="CASCADE"),
+        ForeignKey(
+            "student_registrations.id",
+            ondelete="CASCADE",
+        ),
         primary_key=True,
     )
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -315,8 +364,41 @@ class OtpChallenge(TimestampedBase):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    authority_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "otp_purpose_authorities.id",
+            name="fk_otp_challenges_authority",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=False,
+    )
+    # 0019 separates provider delivery from verification authority.  A resend
+    # candidate remains non-verifiable until its outbox delivery is accepted;
+    # only then is it atomically swapped with the prior ``active`` challenge.
+    # ``consumed_at`` remains the predicate of the sealed NYAY-3 partial unique
+    # index.  Pending candidates therefore carry a non-NULL reservation value
+    # until activation, while ``delivery_state`` supplies the unambiguous
+    # lifecycle meaning.
+    delivery_state: Mapped[str] = mapped_column(
+        String(24),
+        default="pending_delivery",
+        server_default="pending_delivery",
+        nullable=False,
+    )
     __table_args__ = (
         _in("purpose", OTP_PURPOSES, "purpose"),
+        _in(
+            "delivery_state",
+            OTP_CHALLENGE_DELIVERY_STATES,
+            "delivery_state",
+        ),
+        CheckConstraint(
+            "(delivery_state = 'active' AND consumed_at IS NULL) OR "
+            "(delivery_state <> 'active' AND consumed_at IS NOT NULL)",
+            name="delivery_state_consumed_at",
+        ),
         CheckConstraint("attempts >= 0", name="attempts_nonneg"),
         CheckConstraint("max_attempts > 0", name="max_positive"),
         CheckConstraint("attempts <= max_attempts", name="attempts_le_max"),
@@ -327,6 +409,263 @@ class OtpChallenge(TimestampedBase):
             unique=True,
             postgresql_where=sa.text("consumed_at IS NULL"),
             sqlite_where=sa.text("consumed_at IS NULL"),
+        ),
+        sa.Index(
+            "uq_otp_challenges_one_active_per_authority",
+            "authority_id",
+            unique=True,
+            postgresql_where=sa.text(
+                "authority_id IS NOT NULL AND delivery_state = 'active'"
+            ),
+            sqlite_where=sa.text(
+                "authority_id IS NOT NULL AND delivery_state = 'active'"
+            ),
+        ),
+        sa.Index(
+            "uq_otp_challenges_one_pending_delivery_per_authority",
+            "authority_id",
+            unique=True,
+            postgresql_where=sa.text(
+                "authority_id IS NOT NULL AND delivery_state = 'pending_delivery'"
+            ),
+            sqlite_where=sa.text(
+                "authority_id IS NOT NULL AND delivery_state = 'pending_delivery'"
+            ),
+        ),
+    )
+
+
+class OtpPurposeAuthority(TimestampedBase):
+    """Stable registration+purpose security authority (NYAY-4).
+
+    Challenge material may rotate, but failed-attempt and lockout authority
+    lives here and therefore cannot be reset by resend.  One row is serialized
+    before any challenge replacement or verification decision.
+    """
+
+    __tablename__ = "otp_purpose_authorities"
+    subject_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    registration_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "student_registrations.id",
+            name="fk_otp_authority_registration",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, default=3, server_default="3", nullable=False
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attempt_window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cooldown_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resend_window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resend_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    max_resends: Mapped[int] = mapped_column(
+        Integer, default=3, server_default="3", nullable=False
+    )
+    active_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    generation: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "subject_hash",
+            "purpose",
+            name="uq_otp_purpose_authorities_subject_purpose",
+        ),
+        UniqueConstraint(
+            "registration_id",
+            "purpose",
+            name="uq_otp_purpose_authorities_registration_purpose",
+        ),
+        CheckConstraint(
+            "length(subject_hash) = 64 AND "
+            f"length({_OTP_RATE_SUBJECT_HEX_ONLY_SQL}) = 0",
+            name="subject_hash_shape",
+        ),
+        _in("purpose", OTP_PURPOSES, "purpose"),
+        CheckConstraint("failed_attempts >= 0", name="failed_attempts_nonneg"),
+        CheckConstraint("max_attempts > 0", name="max_attempts_positive"),
+        CheckConstraint("max_attempts <= 10", name="max_attempts_bounded"),
+        CheckConstraint(
+            "failed_attempts <= max_attempts", name="failed_attempts_le_max"
+        ),
+        CheckConstraint("resend_count >= 0", name="resend_count_nonneg"),
+        CheckConstraint("max_resends > 0", name="max_resends_positive"),
+        CheckConstraint("max_resends <= 10", name="max_resends_bounded"),
+        CheckConstraint(
+            "resend_count <= max_resends", name="resend_count_within_limit"
+        ),
+        CheckConstraint("generation >= 0", name="generation_nonneg"),
+    )
+
+
+class OtpRateLimitBucket(Base):
+    """Durable fixed-window OTP abuse budget containing HMAC subjects only."""
+
+    __tablename__ = "otp_rate_limit_buckets"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    window_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_requests: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "scope",
+            "subject_hash",
+            "action",
+            name="uq_otp_rate_limit_buckets_scope_subject_action",
+        ),
+        _in("scope", OTP_RATE_LIMIT_SCOPES, "scope"),
+        _in("action", OTP_RATE_LIMIT_ACTIONS, "action"),
+        CheckConstraint(
+            "length(subject_hash) = 64 AND "
+            f"length({_OTP_RATE_SUBJECT_HEX_ONLY_SQL}) = 0",
+            name="subject_hash_shape",
+        ),
+        CheckConstraint("window_seconds > 0", name="window_seconds_positive"),
+        CheckConstraint("window_seconds <= 86400", name="window_seconds_bounded"),
+        CheckConstraint("request_count >= 0", name="request_count_nonnegative"),
+        CheckConstraint("max_requests > 0", name="max_requests_positive"),
+        CheckConstraint("max_requests <= 100000", name="max_requests_bounded"),
+        CheckConstraint(
+            "request_count <= max_requests", name="request_count_within_limit"
+        ),
+    )
+
+
+class OtpFlow(TimestampedBase):
+    """Reload-safe pre-auth capability; only a keyed cookie-token hash lives here."""
+
+    __tablename__ = "otp_flows"
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    authority_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("otp_purpose_authorities.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    subject_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    registration_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("student_registrations.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    challenge_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("otp_challenges.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    registration_idempotency_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "registration_idempotency_records.id",
+            name="fk_otp_flow_registration_idempotency",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=True,
+    )
+    destination_masked_ct: Mapped[str | None] = mapped_column(
+        String(600), nullable=True
+    )
+    key_version: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_otp_flows_token_hash"),
+        UniqueConstraint(
+            "registration_idempotency_record_id",
+            name="uq_otp_flows_registration_idempotency_record_id",
+        ),
+        _in("purpose", OTP_PURPOSES, "purpose"),
+        _in("state", OTP_FLOW_STATES, "state"),
+        CheckConstraint(
+            "length(token_hash) = 64 AND "
+            f"length({_OTP_FLOW_TOKEN_HEX_ONLY_SQL}) = 0",
+            name="token_hash_shape",
+        ),
+        CheckConstraint(
+            "length(subject_hash) = 64 AND "
+            f"length({_OTP_RATE_SUBJECT_HEX_ONLY_SQL}) = 0",
+            name="subject_hash_shape",
+        ),
+        CheckConstraint(
+            "registration_id IS NOT NULL OR challenge_id IS NULL",
+            name="challenge_requires_registration",
+        ),
+        CheckConstraint(
+            "(state IN ('expired', 'consumed', 'failed') AND "
+            "consumed_at IS NOT NULL) OR "
+            "(state IN ('pending', 'code_sent', 'verified', 'locked') AND "
+            "consumed_at IS NULL)",
+            name="consumption_shape",
+        ),
+        CheckConstraint(
+            "state <> 'verified' OR "
+            "(registration_id IS NOT NULL AND challenge_id IS NOT NULL)",
+            name="verified_links",
+        ),
+        CheckConstraint(
+            "(state IN ('pending', 'code_sent', 'locked') AND "
+            "destination_masked_ct IS NOT NULL AND key_version IS NOT NULL) OR "
+            "(state IN ('verified', 'expired', 'consumed', 'failed') AND "
+            "destination_masked_ct IS NULL AND key_version IS NULL)",
+            name="destination_shape",
+        ),
+        sa.Index(
+            "uq_otp_flows_one_nonterminal_per_authority",
+            "authority_id",
+            unique=True,
+            postgresql_where=sa.text(
+                "state IN ('pending', 'code_sent', 'verified', 'locked')"
+            ),
+            sqlite_where=sa.text(
+                "state IN ('pending', 'code_sent', 'verified', 'locked')"
+            ),
         ),
     )
 
@@ -431,7 +770,7 @@ class OtpOutbox(TimestampedBase):
 
     __tablename__ = "otp_outbox"
     challenge_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("otp_challenges.id", ondelete="CASCADE"), index=True, nullable=False)
-    destination_ct: Mapped[str] = mapped_column(String(600), nullable=False)  # encrypted mobile
+    destination_ct: Mapped[str | None] = mapped_column(String(600), nullable=True)  # encrypted mobile
     code_ct: Mapped[str | None] = mapped_column(String(600), nullable=True)
     key_version: Mapped[str] = mapped_column(String(8), default="v1", nullable=False)
     purpose: Mapped[str] = mapped_column(String(16), default="signup", nullable=False)
@@ -439,12 +778,97 @@ class OtpOutbox(TimestampedBase):
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_error: Mapped[str | None] = mapped_column(String(200), nullable=True)  # never PII/code
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Stable across every lease/retry.  A provider that accepts an attempt and
+    # loses the local acknowledgement must deduplicate the retried request by
+    # this opaque token.
+    provider_idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    claim_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    provider_receipt_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    provider_receipt_key_version: Mapped[str | None] = mapped_column(
+        String(8), nullable=True
+    )
+    # Migration 0019 does not destructively erase historical terminal
+    # ciphertext. New rows are always false and terminalization clears both
+    # payloads; an explicit retention purge may clear grandfathered rows.
+    legacy_destination_retained: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.false(), nullable=False
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, default=5, server_default="5", nullable=False
+    )
     __table_args__ = (
         UniqueConstraint("challenge_id", name="uq_otp_outbox_challenge_id"),
+        UniqueConstraint(
+            "provider_idempotency_key",
+            name="uq_otp_outbox_provider_idempotency_key",
+        ),
         CheckConstraint(
-            "status IN ('pending', 'sent', 'failed', 'void')", name="status"
+            "status IN ('pending', 'claimed', 'sent', 'failed', 'void')",
+            name="status",
         ),
         CheckConstraint("attempts >= 0", name="attempts_nonneg"),
+        CheckConstraint("max_attempts > 0", name="max_attempts_positive"),
+        CheckConstraint("max_attempts <= 10", name="max_attempts_bounded"),
+        CheckConstraint("attempts <= max_attempts", name="attempts_le_max"),
+        CheckConstraint(
+            "length(provider_idempotency_key) = 64 AND "
+            f"length({_OTP_PROVIDER_KEY_HEX_ONLY_SQL}) = 0",
+            name="provider_idempotency_key_shape",
+        ),
+        CheckConstraint(
+            "(status = 'claimed' AND claim_token_hash IS NOT NULL AND "
+            "claimed_at IS NOT NULL AND lease_expires_at IS NOT NULL AND "
+            "lease_expires_at > claimed_at) OR "
+            "(status <> 'claimed' AND claim_token_hash IS NULL AND "
+            "claimed_at IS NULL AND lease_expires_at IS NULL)",
+            name="claim_shape",
+        ),
+        CheckConstraint(
+            "claim_token_hash IS NULL OR (length(claim_token_hash) = 64 AND "
+            f"length({_OTP_CLAIM_TOKEN_HEX_ONLY_SQL}) = 0)",
+            name="claim_token_hash_shape",
+        ),
+        CheckConstraint(
+            "(status IN ('pending', 'claimed', 'failed') AND code_ct IS NOT NULL "
+            "AND destination_ct IS NOT NULL) OR "
+            "(status IN ('sent', 'void') AND code_ct IS NULL AND "
+            "((destination_ct IS NULL AND legacy_destination_retained = false) "
+            "OR (destination_ct IS NOT NULL AND "
+            "legacy_destination_retained = true)))",
+            name="payload_shape",
+        ),
+        CheckConstraint(
+            "legacy_destination_retained = false OR status IN ('sent', 'void')",
+            name="legacy_destination_terminal",
+        ),
+        CheckConstraint(
+            "(status = 'failed' AND next_attempt_at IS NOT NULL) OR "
+            "(status <> 'failed' AND next_attempt_at IS NULL)",
+            name="retry_shape",
+        ),
+        CheckConstraint(
+            "(provider_receipt_hash IS NULL AND provider_receipt_key_version IS NULL) "
+            "OR (status = 'sent' AND provider_receipt_hash IS NOT NULL AND "
+            "provider_receipt_key_version = 'v1')",
+            name="provider_receipt_shape",
+        ),
+        CheckConstraint(
+            "provider_receipt_hash IS NULL OR "
+            "(length(provider_receipt_hash) = 64 AND "
+            f"length({_OTP_PROVIDER_RECEIPT_HEX_ONLY_SQL}) = 0)",
+            name="provider_receipt_hash_shape",
+        ),
     )
 
 

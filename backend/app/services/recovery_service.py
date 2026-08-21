@@ -21,8 +21,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt, keyed_hash
-from app.models.registration import OtpChallenge, RecoverySession, StudentRegistration
-from app.services import otp_outbox, otp_service
+from app.models.registration import (
+    OtpChallenge,
+    OtpFlow,
+    RecoverySession,
+    StudentRegistration,
+)
+from app.services import (
+    otp_authority,
+    otp_flow_service,
+    otp_outbox,
+    otp_service,
+)
 
 RECOVERY_TTL_SECONDS = 600
 RECOVERY_COOLDOWN_SECONDS = 30
@@ -90,6 +100,155 @@ def start(session: Session, mobile: str, now: datetime) -> tuple[str, otp_outbox
         else:
             rs.challenge_id = ch.id
     return opaque_id, intent
+
+
+def start_flow(
+    session: Session,
+    mobile: str,
+    now: datetime,
+) -> tuple[str, OtpFlow, otp_outbox.DeliveryIntent | None]:
+    """Create a cookie-owned real or decoy recovery flow."""
+
+    now = _as_utc(now)
+    lookup = keyed_hash(mobile)
+    subject = otp_authority.authority_subject_from_mobile_hash(lookup)
+    registration = session.scalar(
+        select(StudentRegistration).where(
+            StudentRegistration.mobile_hash == lookup,
+            *otp_service.registration_authority_filters(),
+        )
+    )
+    if registration is not None:
+        registration = otp_service.lock_registration_for_update(
+            session, registration.id
+        )
+    eligible = bool(
+        registration is not None
+        and otp_service.registration_is_authorizable(registration)
+        and registration.status in {"otp_verified", "active"}
+    )
+    if not eligible:
+        subject = otp_authority.authority_subject_from_mobile_hash(
+            keyed_hash(f"nyayone:otp-recovery-decoy:v1:{mobile}")
+        )
+    authority = otp_authority.lock_or_create_authority(
+        session,
+        subject_hash=subject,
+        purpose="recovery",
+        registration_id=registration.id if eligible and registration else None,
+        now=now,
+    )
+    cooldown = bool(
+        authority.cooldown_until is not None
+        and _as_utc(authority.cooldown_until) > now
+    )
+    locked = otp_authority.locked_for_seconds(authority, now) > 0
+    intent: otp_outbox.DeliveryIntent | None = None
+    candidate = None
+    active = session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.authority_id == authority.id,
+            OtpChallenge.delivery_state == "active",
+        )
+    )
+    repeated_issue = authority.last_issued_at is not None
+    if eligible and registration is not None and not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+            session.flush()
+        generation = authority.generation
+        candidate, intent = otp_service.issue_challenge(
+            session,
+            registration.id,
+            now,
+            purpose="recovery",
+            destination=decrypt(registration.mobile_ct),
+        )
+        if authority.generation == generation:
+            otp_service.note_decoy_issue(authority, now=now)
+    elif not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+        otp_service.note_decoy_issue(authority, now=now)
+    raw_token, flow = otp_flow_service.create_flow(
+        session,
+        authority,
+        now=now,
+        destination=mobile,
+        challenge=active or candidate,
+        registration_id=(registration.id if eligible and registration else None),
+    )
+    return raw_token, flow, intent
+
+
+def verify_flow(
+    session: Session,
+    raw_flow_token: str | None,
+    code: str,
+    now: datetime,
+) -> OtpFlow:
+    now = _as_utc(now)
+    graph = otp_flow_service.resolve_flow(session, raw_flow_token)
+    if graph is None:
+        raise RecoveryError(401, "recovery_failed")
+    authority, flow = graph
+    if (
+        flow.purpose != "recovery"
+        or flow.state not in {"pending", "code_sent", "locked"}
+        or _as_utc(flow.expires_at) <= now
+    ):
+        raise RecoveryError(401, "recovery_failed")
+    if flow.registration_id is None or flow.challenge_id is None:
+        try:
+            otp_service.record_failed_attempt(session, authority, now=now)
+        except otp_service.OtpError as exc:
+            raise RecoveryError(401, "recovery_failed") from exc
+        raise RecoveryError(401, "recovery_failed")
+    try:
+        otp_service.verify(
+            session,
+            flow.registration_id,
+            code,
+            now,
+            purpose="recovery",
+            challenge_id=flow.challenge_id,
+            commit_on_success=False,
+        )
+    except otp_service.OtpError as exc:
+        if exc.code not in {"incorrect_otp", "locked"}:
+            try:
+                otp_service.record_failed_attempt(
+                    session, authority, now=now
+                )
+            except otp_service.OtpError as uniform_exc:
+                raise RecoveryError(401, "recovery_failed") from uniform_exc
+        raise RecoveryError(401, "recovery_failed") from exc
+    otp_flow_service.mark_recovery_verified(flow, now=now)
+    session.commit()
+    return flow
+
+
+def complete_flow(
+    session: Session,
+    raw_flow_token: str | None,
+    now: datetime,
+) -> None:
+    graph = otp_flow_service.resolve_flow(session, raw_flow_token)
+    if graph is None:
+        raise RecoveryError(401, "recovery_failed")
+    _, flow = graph
+    if flow.registration_id is None:
+        raise RecoveryError(401, "recovery_failed")
+    try:
+        otp_flow_service.consume_recovery_proof(
+            session,
+            raw_flow_token,
+            registration_id=flow.registration_id,
+            now=now,
+        )
+    except ValueError as exc:
+        raise RecoveryError(401, "recovery_failed") from exc
+    session.commit()
 
 
 def _recent_recovery_excluding(

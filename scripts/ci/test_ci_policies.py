@@ -116,61 +116,80 @@ class PolicyOracleTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-        predecessor = repr("0018_registration_idempotency")
+        version_files = []
+        for candidate in (source / "versions").glob("*.py"):
+            match = verifier.VERSION_FILE.fullmatch(candidate.name)
+            if match and int(match.group("ordinal")) > verifier.BASELINE_LAST_ORDINAL:
+                version_files.append((int(match.group("ordinal")), candidate))
+        version_files.sort()
+        current_ordinal, current_path = version_files[-1]
+        current_revision, current_error = verifier._literal_assignment(
+            current_path, "revision"
+        )
+        prior_revision, prior_error = verifier._literal_assignment(
+            current_path, "down_revision"
+        )
+        self.assertIsNone(current_error)
+        self.assertIsNone(prior_error)
+        self.assertIsInstance(current_revision, str)
+        self.assertIsInstance(prior_revision, str)
+        next_ordinal = current_ordinal + 1
+        next_prefix = f"{next_ordinal:04d}"
+        predecessor = repr(current_revision)
         with tempfile.TemporaryDirectory() as directory:
             root = copied_root(directory)
             write_forward(
                 root,
-                "0019_valid_forward.py",
-                revision=repr("0019_valid_forward"),
+                f"{next_prefix}_valid_forward.py",
+                revision=repr(f"{next_prefix}_valid_forward"),
                 down_revision=predecessor,
             )
             self.assertEqual(verifier.verify(root), [])
 
         mutants = {
             "duplicate root": {
-                "filename": "0019_duplicate_root.py",
-                "revision": repr("0019_duplicate_root"),
+                "filename": f"{next_prefix}_duplicate_root.py",
+                "revision": repr(f"{next_prefix}_duplicate_root"),
                 "down_revision": "None",
                 "expected": "exactly one root",
             },
             "duplicate revision": {
-                "filename": "0019_duplicate_revision.py",
-                "revision": repr("0018_registration_idempotency"),
+                "filename": f"{next_prefix}_duplicate_revision.py",
+                "revision": predecessor,
                 "down_revision": predecessor,
                 "expected": "duplicate revision id",
             },
             "ordinal gap": {
-                "filename": "0020_gap.py",
-                "revision": repr("0020_gap"),
+                "filename": f"{next_ordinal + 1:04d}_gap.py",
+                "revision": repr(f"{next_ordinal + 1:04d}_gap"),
                 "down_revision": predecessor,
                 "expected": "unique and contiguous",
             },
             "wrong predecessor": {
-                "filename": "0019_wrong_predecessor.py",
-                "revision": repr("0019_wrong_predecessor"),
-                "down_revision": repr("0017_registration_invariants"),
+                "filename": f"{next_prefix}_wrong_predecessor.py",
+                "revision": repr(f"{next_prefix}_wrong_predecessor"),
+                "down_revision": repr(prior_revision),
                 "expected": "down_revision must be immediate predecessor",
             },
             "branch label": {
-                "filename": "0019_branch.py",
-                "revision": repr("0019_branch"),
+                "filename": f"{next_prefix}_branch.py",
+                "revision": repr(f"{next_prefix}_branch"),
                 "down_revision": predecessor,
                 "branch_labels": repr("planted-branch"),
                 "expected": "branch_labels must be literal None",
             },
             "dependency": {
-                "filename": "0019_dependency.py",
-                "revision": repr("0019_dependency"),
+                "filename": f"{next_prefix}_dependency.py",
+                "revision": repr(f"{next_prefix}_dependency"),
                 "down_revision": predecessor,
                 "depends_on": predecessor,
                 "expected": "depends_on must be literal None",
             },
             "multiple parents": {
-                "filename": "0019_multiple_parents.py",
-                "revision": repr("0019_multiple_parents"),
+                "filename": f"{next_prefix}_multiple_parents.py",
+                "revision": repr(f"{next_prefix}_multiple_parents"),
                 "down_revision": repr(
-                    ("0018_registration_idempotency", "0017_registration_invariants")
+                    (current_revision, prior_revision)
                 ),
                 "expected": "down_revision must be a literal string or null",
             },
@@ -624,6 +643,22 @@ jobs:
                 ),
                 "canonical semantic contract",
             ),
+            "staging OTP provider downgraded to plaintext": (
+                original.replace(
+                    "OTP_PROVIDER_URL: https://otp-provider.example.test/send",
+                    "OTP_PROVIDER_URL: http://otp-provider.example.test/send",
+                    1,
+                ),
+                "canonical semantic contract",
+            ),
+            "staging OTP idempotency guarantee disabled": (
+                original.replace(
+                    'OTP_PROVIDER_SUPPORTS_IDEMPOTENCY: "true"',
+                    'OTP_PROVIDER_SUPPORTS_IDEMPOTENCY: "false"',
+                    1,
+                ),
+                "canonical semantic contract",
+            ),
             "cache save action": (
                 original.replace(
                     "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
@@ -748,7 +783,7 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
-    def test_nested_database_gate_cannot_drop_or_bypass_nyay16_nyay3_nyay2_or_nyay17(self) -> None:
+    def test_nested_database_gate_cannot_drop_or_bypass_required_native_gates(self) -> None:
         policy = load("verify_nyayone_ci")
         source = policy.DB_GATE
         original = source.read_text(encoding="utf-8")
@@ -770,10 +805,17 @@ jobs:
             '"$PY" scripts/nyay17_postgres_idempotency_gate.py \\\n'
             "  --report test-results/nyay17-postgres/summary.json"
         )
+        nyay4 = (
+            'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py \\\n'
+            "  --execute \\\n"
+            '  --database-url "$DATABASE_URL" \\\n'
+            "  --output test-results/nyay4-postgres/summary.json"
+        )
         self.assertEqual(original.count(nyay16), 1)
         self.assertEqual(original.count(nyay3), 1)
         self.assertEqual(original.count(nyay2), 1)
         self.assertEqual(original.count(nyay17), 1)
+        self.assertEqual(original.count(nyay4), 1)
         mutations = {
             "deleted NYAY-16 invocation": original.replace(nyay16, "true", 1),
             "wrong NYAY-16 script": original.replace(
@@ -872,6 +914,44 @@ jobs:
             "NYAY-17 ordered before NYAY-2": original.replace(
                 nyay17, "true", 1
             ).replace(nyay2, nyay17 + "\n" + nyay2, 1),
+            "deleted NYAY-4 invocation": original.replace(nyay4, "true", 1),
+            "duplicated NYAY-4 invocation": original.replace(
+                nyay4, nyay4 + "\n" + nyay4, 1
+            ),
+            "wrong NYAY-4 script": original.replace(
+                "scripts/nyay4_postgres_otp_gate.py",
+                "scripts/not-the-nyay4-gate.py",
+                1,
+            ),
+            "missing NYAY-4 opt-in": original.replace(
+                "NYAY4_POSTGRES_GATE=1 ", "", 1
+            ),
+            "missing NYAY-4 execute flag": original.replace(
+                "  --execute \\\n", "", 1
+            ),
+            "altered NYAY-4 database authority": original.replace(
+                '  --database-url "$DATABASE_URL"',
+                '  --database-url "postgresql://substitute"',
+                1,
+            ),
+            "altered NYAY-4 report": original.replace(
+                "test-results/nyay4-postgres/summary.json",
+                "test-results/nyay4-postgres/substitute.json",
+                1,
+            ),
+            "NYAY-4 non-executing help mode": original.replace(
+                "  --execute \\\n", "  --execute --help \\\n", 1
+            ),
+            "conditional NYAY-4 bypass": original.replace(
+                nyay4, "if false; then\n" + nyay4 + "\nfi", 1
+            ),
+            "masked NYAY-4 failure": original.replace(
+                nyay4, nyay4 + " || true", 1
+            ),
+            "NYAY-4 ordered before NYAY-17": original.replace(
+                nyay4, "true", 1
+            ).replace(nyay17, nyay4 + "\n" + nyay17, 1),
+            "NYAY-4 is not final": original + "\ntrue\n",
         }
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "db_gate.sh"
@@ -901,6 +981,11 @@ jobs:
                             any("invoke the exact NYAY-17" in item for item in failures),
                             failures,
                         )
+                    if label == "deleted NYAY-4 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-4" in item for item in failures),
+                            failures,
+                        )
 
     def test_runtime_identity_policy_accepts_the_current_tree(self) -> None:
         policy = load("check_nyayone_runtime_identity")
@@ -913,6 +998,102 @@ jobs:
         ).read_text(encoding="utf-8")
         self.assertIn('$RUNNER_TEMP/otp-capture.log', workflow)
         self.assertNotIn('test-results/otp.log', workflow)
+
+    def test_wave3_requires_the_exact_nyay4_browser_gate(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (
+            HERE.parent.parent / ".github" / "workflows" /
+            "wave3-credential-trust-gate.yml"
+        )
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_workflow(source), [])
+        mutations = {
+            "deleted gate": original.replace(
+                "      - name: NYAY-4 OTP authority Chromium regression\n"
+                "        working-directory: frontend\n"
+                "        env:\n"
+                "          NYAY4_WEB_BASE_URL: http://127.0.0.1:1170\n"
+                "          NYAY4_API_BASE_URL: http://127.0.0.1:1171\n"
+                "          NYAY4_OTP_CAPTURE_URL: http://127.0.0.1:1099\n"
+                "        run: npm run qa:nyay4:otp-negative\n\n",
+                "",
+                1,
+            ),
+            "wrong API": original.replace(
+                "NYAY4_API_BASE_URL: http://127.0.0.1:1171",
+                "NYAY4_API_BASE_URL: http://127.0.0.1:9999",
+                1,
+            ),
+            "masked failure": original.replace(
+                "run: npm run qa:nyay4:otp-negative",
+                "run: npm run qa:nyay4:otp-negative || true",
+                1,
+            ),
+            "conditional gate": original.replace(
+                "        run: npm run qa:nyay4:otp-negative",
+                "        if: ${{ always() }}\n"
+                "        run: npm run qa:nyay4:otp-negative",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / source.name
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(failures, label)
+                    self.assertTrue(
+                        any(
+                            "NYAY-4 OTP authority Chromium regression" in item
+                            or "canonical semantic contract" in item
+                            for item in failures
+                        ),
+                        failures,
+                    )
+
+    def test_nyay4_browser_executable_contract_rejects_seeded_mutants(self) -> None:
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay4_browser_gate_contract(), [])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            browser = root / "nyay4-otp-browser-negative.mjs"
+            contract = root / "nyay4-otp-runner-contract.mjs"
+            package = root / "package.json"
+            browser.write_bytes(policy.NYAY4_BROWSER_GATE.read_bytes())
+            contract.write_bytes(policy.NYAY4_BROWSER_CONTRACT.read_bytes())
+            package.write_bytes(policy.FRONTEND_PACKAGE.read_bytes())
+
+            def failures() -> list[str]:
+                return policy.check_nyay4_browser_gate_contract(
+                    browser, contract, package
+                )
+
+            browser.write_bytes(browser.read_bytes() + b"\n// planted no-op drift\n")
+            self.assertTrue(failures())
+            browser.write_bytes(policy.NYAY4_BROWSER_GATE.read_bytes())
+
+            contract.write_text(
+                contract.read_text(encoding="utf-8").replace(
+                    "throw new Error('NYAY4_ASSERTION_INVENTORY_MISMATCH');",
+                    "return;",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(failures())
+            contract.write_bytes(policy.NYAY4_BROWSER_CONTRACT.read_bytes())
+
+            document = json.loads(package.read_text(encoding="utf-8"))
+            document["scripts"]["qa:nyay4:otp-negative"] = "true"
+            package.write_text(json.dumps(document), encoding="utf-8")
+            self.assertTrue(failures())
+
+            document = json.loads(policy.FRONTEND_PACKAGE.read_text(encoding="utf-8"))
+            document["scripts"]["preqa:nyay4:otp-negative"] = "true"
+            package.write_text(json.dumps(document), encoding="utf-8")
+            self.assertTrue(failures())
 
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (

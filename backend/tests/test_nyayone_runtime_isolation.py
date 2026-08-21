@@ -56,6 +56,8 @@ def test_http_otp_sender_uses_nyayone_message(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class Response:
+        headers: dict[str, str] = {"X-Provider-Receipt": "receipt-1"}
+
         def raise_for_status(self) -> None:
             return None
 
@@ -65,12 +67,19 @@ def test_http_otp_sender_uses_nyayone_message(monkeypatch) -> None:
         return Response()
 
     monkeypatch.setattr(httpx, "post", fake_post)
-    HttpOtpSender("https://otp.example.test/send").send("+910000000000", "123456")
+    receipt = HttpOtpSender("https://otp.example.test/send").send_idempotent(
+        "+910000000000",
+        "123456",
+        idempotency_token="a" * 64,
+    )
+    assert receipt == "receipt-1"
     assert captured["url"] == "https://otp.example.test/send"
     assert captured["json"] == {
         "to": "+910000000000",
         "message": "Your NyayOne verification code is 123456",
+        "idempotency_key": "a" * 64,
     }
+    assert captured["headers"] == {"Idempotency-Key": "a" * 64}
 
 
 def test_deterministic_provider_namespaces_are_nyayone_owned() -> None:

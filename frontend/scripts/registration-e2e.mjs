@@ -204,12 +204,15 @@ for (const [name, values, expected] of [
   await send.click();
   const registrationResponse = await registrationResponsePromise;
   const registrationResult = await registrationResponse.json();
-  const signupRegistrationId = registrationResult.registration_id;
   record(
-    'registration_response_identifier_shape',
-    'pre-auth register response supplies one UUID correlation value',
-    { uuidShape: /^[0-9a-f-]{36}$/i.test(signupRegistrationId ?? '') },
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(signupRegistrationId ?? ''),
+    'registration_response_safe_flow_projection',
+    'pre-auth response contains relative state and no correlation identifier',
+    registrationResult,
+    registrationResult?.status === 'pending'
+      && registrationResult?.purpose === 'signup'
+      && Number.isInteger(registrationResult?.attempts_left)
+      && Number.isInteger(registrationResult?.expires_in_seconds)
+      && !/(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/.test(JSON.stringify(registrationResult)),
   );
   await page.waitForURL('**/s-09');
   const otpControl = page.locator('input[aria-label="Six digit code"]');
@@ -235,7 +238,7 @@ for (const [name, values, expected] of [
   const incorrectOtpBody = await incorrectOtpResponse.json();
   const expectedIncorrectOtpNetworkError = `401 ${incorrectOtpResponse.url()}`;
   await page.getByRole('alert').filter({ hasText: 'That code could not be verified' }).waitFor();
-  const serverAttemptsLeft = incorrectOtpBody?.detail?.attempts_left;
+  const serverAttemptsLeft = incorrectOtpBody?.detail?.otp_state?.attempts_left;
   let displayedAttemptsMatch = false;
   if (Number.isInteger(serverAttemptsLeft)) {
     try {
@@ -257,7 +260,7 @@ for (const [name, values, expected] of [
   };
   record(
     'incorrect_otp_preserves_retry_context',
-    '401 incorrect_otp retains the memory-only signup reference, server attempt count and resend control',
+    '401 incorrect_otp retains the cookie-owned flow, server attempt count and resend control',
     JSON.stringify(retryContext),
     retryContext.path === '/s-09'
       && retryContext.serverCode === 'incorrect_otp'
@@ -362,7 +365,7 @@ for (const [name, values, expected] of [
       && statusResult.body?.method === 'institutional_email',
   );
 
-  const storage = await page.evaluate(async ({ canaries, registrationId }) => {
+  const storage = await page.evaluate(async ({ canaries }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
     const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
     const allowedSessionKeys = new Set();
@@ -440,16 +443,12 @@ for (const [name, values, expected] of [
       registrationCapabilityLeak: registrationKey in local
         || registrationKey in session
         || managedSerialized.includes(registrationKey)
-        || serialized.includes(registrationId)
         || uuid.test(managedSerialized),
     };
-  }, { canaries: Object.values(qaPii), registrationId: signupRegistrationId });
+  }, { canaries: Object.values(qaPii) });
   const allCookies = await context.cookies();
   const allCookiePiiLeak = allCookies.some((cookie) => (
     Object.values(qaPii).some((canary) => cookie.value.includes(canary))
-  ));
-  const registrationCookieLeak = allCookies.some((cookie) => (
-    cookie.value.includes(signupRegistrationId)
   ));
   const cookieInventory = allCookies.map((cookie) => ({
     name: cookie.name,
@@ -471,17 +470,16 @@ for (const [name, values, expected] of [
       && storage.unreadableCacheEntryCount === 0
       && storage.windowNameEmpty === true
       && storage.historyStateHasCanary === false);
-  record('no_registration_capability_persistence', 'the exact registration UUID is absent from storage, caches, history, window.name, every cookie, URL and service-worker metadata',
+  record('no_registration_capability_persistence', 'no OTP-flow identifier is exposed to JavaScript storage, caches, history, window.name, URL or service-worker metadata',
     {
       sessionKeys: storage.sessionKeys,
       cacheEntryCount: storage.cacheEntryCount,
       unreadableCacheEntryCount: storage.unreadableCacheEntryCount,
       serviceWorkerRegistrationCount: storage.serviceWorkerRegistrationCount,
       cookieInventory,
-      leak: storage.registrationCapabilityLeak || registrationCookieLeak,
+      leak: storage.registrationCapabilityLeak,
     },
     storage.registrationCapabilityLeak === false
-      && registrationCookieLeak === false
       && storage.unreadableCacheEntryCount === 0);
   const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i;
   const protectedActorReferenceLeak = protectedRequests.some((request) => (
@@ -489,8 +487,6 @@ for (const [name, values, expected] of [
       || request.headerNames.some((name) => /registration[_-]?id/i.test(name))
       || /["']registration[_-]?id["']\s*:/i.test(request.body)
       || uuid.test(`${request.url} ${request.body}`)
-      || request.url.includes(signupRegistrationId)
-      || request.body.includes(signupRegistrationId)
   ));
   const expectedProtectedCalls = [
     'PATCH /api/v1/auth/student/profile',

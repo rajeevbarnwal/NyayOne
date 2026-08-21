@@ -51,6 +51,9 @@ def test_historical_lifecycle_revision_check_rejects_future_head():
         assert _exact_revision_check(
             engine, "0018_registration_idempotency"
         )["returncode"] == 1
+        assert _exact_revision_check(
+            engine, "0019_otp_security_authority"
+        )["returncode"] == 1
     finally:
         engine.dispose()
 

@@ -147,6 +147,15 @@ jobs:
       INTERNSHIP_REPORT_SCANNER_PROVIDER: clamav
       REGISTRATION_SECRET: ci-registration-secret-not-a-dev-default
       REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-dev-default
+      # NYAY-4 startup policy: staging must bind an HTTPS provider that
+      # explicitly guarantees idempotent acceptance. This gate never resolves
+      # the reserved .test endpoint; native delivery behavior uses injected
+      # deterministic senders inside the PostgreSQL characterization.
+      OTP_DELIVERY_ENABLED: "true"
+      OTP_PROVIDER: http
+      OTP_PROVIDER_URL: https://otp-provider.example.test/send
+      OTP_PROVIDER_TOKEN: ci-otp-provider-token-not-a-default
+      OTP_PROVIDER_SUPPORTS_IDEMPOTENCY: "true"
     defaults:
       run:
         working-directory: backend

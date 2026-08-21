@@ -16,18 +16,24 @@ from app.core.crypto import decrypt
 import app.models  # noqa: F401  (register tables on Base.metadata)
 from app.models.registration import OtpChallenge, OtpOutbox
 from app.schemas.registration import StudentRegisterRequest
-from app.services import otp_service
+from app.services import otp_outbox, otp_service
+from app.services.otp_sender import CapturingSender
 from app.services.registration_service import register_student
 
 NOW = datetime(2026, 7, 26, 9, 0, tzinfo=timezone.utc)
 
 
-def _reg(session: Session, mobile: str = "9876543210"):
+def _reg(
+    session: Session,
+    mobile: str = "9876543210",
+    *,
+    now: datetime = NOW,
+):
     req = StudentRegisterRequest(
         first_name="Aditi", last_name="Nair", mobile=mobile, dob="2004-03-14",
         consent={"accepted": True},
     )
-    return register_student(session, req, now=NOW).registration
+    return register_student(session, req, now=now).registration
 
 
 def _issue(session, reg_id, now=NOW, purpose="signup"):
@@ -36,7 +42,16 @@ def _issue(session, reg_id, now=NOW, purpose="signup"):
     )
     outbox = session.get(OtpOutbox, intent.outbox_id)
     assert outbox is not None and outbox.code_ct is not None
-    return decrypt(outbox.code_ct)
+    code = decrypt(outbox.code_ct)
+    delivered = otp_outbox.run_delivery(
+        session,
+        intent,
+        CapturingSender(),
+        raise_on_failure=True,
+        now=now,
+    )
+    assert delivered is True
+    return code
 
 
 def test_verify_correct_marks_consumed_and_status(db_session: Session):
@@ -64,10 +79,16 @@ def test_wrong_code_then_lockout(db_session: Session):
 
 
 def test_expired(db_session: Session):
-    reg = _reg(db_session)
-    code = _issue(db_session, reg.id)
+    issued_at = datetime.now(timezone.utc)
+    reg = _reg(db_session, now=issued_at)
+    code = _issue(db_session, reg.id, issued_at)
     with pytest.raises(otp_service.OtpError) as e:
-        otp_service.verify(db_session, reg.id, code, NOW + timedelta(seconds=301))
+        otp_service.verify(
+            db_session,
+            reg.id,
+            code,
+            issued_at + timedelta(seconds=301),
+        )
     assert e.value.code == "expired"
 
 
@@ -86,7 +107,19 @@ def test_resend_cooldown_then_supersede(db_session: Session):
     with pytest.raises(otp_service.OtpError) as e:
         otp_service.resend(db_session, reg.id, NOW + timedelta(seconds=10), destination="9876543210")
     assert e.value.code == "resend_cooldown"
-    otp_service.resend(db_session, reg.id, NOW + timedelta(seconds=31), destination="9876543210")
+    _, intent = otp_service.resend(
+        db_session,
+        reg.id,
+        NOW + timedelta(seconds=31),
+        destination="9876543210",
+    )
+    assert otp_outbox.run_delivery(
+        db_session,
+        intent,
+        CapturingSender(),
+        raise_on_failure=True,
+        now=NOW + timedelta(seconds=31),
+    )
     active = db_session.scalars(
         select(OtpChallenge).where(
             OtpChallenge.registration_id == reg.id,
@@ -132,6 +165,7 @@ def test_activated_registration_cannot_reopen_signup_otp_lifecycle(
     db_session: Session,
 ):
     reg = _reg(db_session)
+    signup_code = _issue(db_session, reg.id)
     active_signup = db_session.scalar(
         select(OtpChallenge).where(
             OtpChallenge.registration_id == reg.id,
@@ -142,7 +176,7 @@ def test_activated_registration_cannot_reopen_signup_otp_lifecycle(
     outbox = db_session.scalar(
         select(OtpOutbox).where(OtpOutbox.challenge_id == active_signup.id)
     )
-    signup_code = decrypt(outbox.code_ct or "")
+    assert outbox is not None and outbox.code_ct is None
     otp_service.verify(db_session, reg.id, signup_code, NOW)
     reg.status = "active"
     db_session.commit()

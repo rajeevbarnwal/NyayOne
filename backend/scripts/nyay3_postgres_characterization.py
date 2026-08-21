@@ -18,6 +18,7 @@ Exit codes:
 * 1: a product assertion or harness assertion failed;
 * 78: PostgreSQL 16/pgvector or scratch-database authority was unavailable.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -172,13 +173,8 @@ class ScratchCleanupFailure(RuntimeError):
 def _reject_ambient_libpq_environment() -> None:
     """Forbid libpq authority or credential overrides without echoing values."""
 
-    if any(
-        key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL")
-        for key in os.environ
-    ):
-        raise Blocked(
-            "ambient libpq routing or credential environment is not allowed"
-        )
+    if any(key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL") for key in os.environ):
+        raise Blocked("ambient libpq routing or credential environment is not allowed")
 
 
 def _safe_local_postgres_url(raw: str) -> URL:
@@ -320,9 +316,7 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
     return {
         "arguments": list(arguments),
         "returncode": result.returncode,
-        "generic_preflight_rejection": (
-            GENERIC_PREFLIGHT_REJECTION in combined_output
-        ),
+        "generic_preflight_rejection": (GENERIC_PREFLIGHT_REJECTION in combined_output),
     }
 
 
@@ -573,9 +567,7 @@ def _runtime_inventory(engine: Engine) -> dict[str, Any]:
         "constraints": constraints,
         "index_details": index_details,
         "constraint_details": constraint_details,
-        "target_indexes_present": {
-            name: name in indexes for name in TARGET_INDEXES
-        },
+        "target_indexes_present": {name: name in indexes for name in TARGET_INDEXES},
         "target_constraints_present": {
             name: name in constraints for name in TARGET_CONSTRAINTS
         },
@@ -958,11 +950,8 @@ def _clean_lifecycle_case_passes(case: dict[str, Any]) -> bool:
         and observations.get("parent", {}).get("target_objects_absent") is True
         and observations.get("first_head", {}).get("revision") == HEAD_REVISION
         and observations.get("first_head", {}).get("target_objects_exact") is True
-        and observations.get("downgraded_parent", {}).get("revision")
-        == PARENT_REVISION
-        and observations.get("downgraded_parent", {}).get(
-            "target_objects_absent"
-        )
+        and observations.get("downgraded_parent", {}).get("revision") == PARENT_REVISION
+        and observations.get("downgraded_parent", {}).get("target_objects_absent")
         is True
         and observations.get("final_head", {}).get("revision") == HEAD_REVISION
         and observations.get("final_head", {}).get("target_objects_exact") is True
@@ -984,9 +973,7 @@ def _dirty_lifecycle_case_passes(case: dict[str, Any]) -> bool:
     return bool(
         commands.get("setup_parent", {}).get("returncode") == 0
         and commands.get("rejected_upgrade", {}).get("returncode") not in (None, 0)
-        and commands.get("rejected_upgrade", {}).get(
-            "generic_preflight_rejection"
-        )
+        and commands.get("rejected_upgrade", {}).get("generic_preflight_rejection")
         is True
         and observations.get("before", {}).get("revision") == PARENT_REVISION
         and observations.get("before", {}).get("target_objects_absent") is True
@@ -1033,9 +1020,7 @@ def _run_clean_migration_lifecycle(
         parent_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         report["observations"]["parent"] = parent
 
-        commands["upgrade_head"] = _run_alembic(
-            scratch_url, "upgrade", HEAD_REVISION
-        )
+        commands["upgrade_head"] = _run_alembic(scratch_url, "upgrade", HEAD_REVISION)
         first_head, first_fingerprint = _target_inventory_observation(engine)
         first_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         first_rows = _lifecycle_row_snapshot(engine)
@@ -1050,16 +1035,12 @@ def _run_clean_migration_lifecycle(
         downgraded_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["downgraded_parent"] = downgraded
 
-        commands["reupgrade_head"] = _run_alembic(
-            scratch_url, "upgrade", HEAD_REVISION
-        )
+        commands["reupgrade_head"] = _run_alembic(scratch_url, "upgrade", HEAD_REVISION)
         final_head, final_fingerprint = _target_inventory_observation(engine)
         final_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         final_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["final_head"] = final_head
-        commands["recheck_head"] = _exact_revision_check(
-            engine, HEAD_REVISION
-        )
+        commands["recheck_head"] = _exact_revision_check(engine, HEAD_REVISION)
 
         report["row_preservation"] = {
             "upgrade": first_rows == before_rows,
@@ -1300,9 +1281,7 @@ def _run_race(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(
             pool.map(
-                lambda index: _insert_worker(
-                    scratch_url, kind, index, barrier, ids
-                ),
+                lambda index: _insert_worker(scratch_url, kind, index, barrier, ids),
                 range(workers),
             )
         )
@@ -1347,13 +1326,9 @@ def _summarize_race(
         "verification": ids["verification_registration"],
     }[kind]
     with engine.connect() as connection:
-        persisted = int(
-            connection.scalar(text(count_sql), {"owner_id": owner_id}) or 0
-        )
+        persisted = int(connection.scalar(text(count_sql), {"owner_id": owner_id}) or 0)
     outcomes = [item["outcome"] for item in results]
-    pids = sorted(
-        {item["backend_pid"] for item in results if item.get("backend_pid")}
-    )
+    pids = sorted({item["backend_pid"] for item in results if item.get("backend_pid")})
     return {
         "workers": len(results),
         "distinct_backend_pids": pids,
@@ -1450,20 +1425,34 @@ def _seed_login_attempt(
     now: datetime,
 ) -> tuple[uuid.UUID, uuid.UUID, str, str]:
     from app.core.crypto import otp_verifier
-    from app.models.registration import LoginAttempt, OtpChallenge
+    from app.models.registration import (
+        LoginAttempt,
+        OtpChallenge,
+        StudentRegistration,
+    )
+    from app.services.otp_authority import lock_or_create_registration_authority
 
     code = "654321"
     salt = uuid.uuid4().hex
     with Session(engine) as session:
+        registration = session.get(StudentRegistration, registration_id)
+        if registration is None:
+            raise RuntimeError("login seed registration is unavailable")
+        authority = lock_or_create_registration_authority(
+            session, registration, "login", now
+        )
         challenge = OtpChallenge(
             registration_id=registration_id,
+            authority_id=authority.id,
             purpose="login",
+            delivery_state="active",
             verifier_hash=otp_verifier(code, salt=salt),
             attempts=0,
             max_attempts=3,
             expires_at=now + timedelta(minutes=5),
             metadata_json={"salt": salt, "issued_at": now.isoformat()},
         )
+        authority.active_expires_at = challenge.expires_at
         session.add(challenge)
         session.flush()
         attempt = LoginAttempt(
@@ -1513,13 +1502,22 @@ def _outbox_delivery_supersede_probe(
                 raise RuntimeError("bounded sender release was not observed")
             sender_attempts += 1
 
+        def send_idempotent(
+            self,
+            destination: str,
+            code: str,
+            *,
+            idempotency_token: str,
+        ) -> str:
+            del idempotency_token
+            self.send(destination, code)
+            return "nyay3-gate-receipt"
+
     def delivery() -> str:
         local_engine = create_engine(scratch_url, poolclass=NullPool)
         try:
             with Session(local_engine) as session:
-                pids["delivery"] = int(
-                    session.scalar(text("SELECT pg_backend_pid()"))
-                )
+                pids["delivery"] = int(session.scalar(text("SELECT pg_backend_pid()")))
                 session.execute(text("SET LOCAL lock_timeout = '20s'"))
                 session.execute(text("SET LOCAL statement_timeout = '60s'"))
                 delivered = otp_outbox.run_delivery(
@@ -1538,9 +1536,7 @@ def _outbox_delivery_supersede_probe(
         local_engine = create_engine(scratch_url, poolclass=NullPool)
         try:
             with Session(local_engine) as session:
-                pids["supersede"] = int(
-                    session.scalar(text("SELECT pg_backend_pid()"))
-                )
+                pids["supersede"] = int(session.scalar(text("SELECT pg_backend_pid()")))
                 session.execute(text("SET LOCAL lock_timeout = '20s'"))
                 session.execute(text("SET LOCAL statement_timeout = '60s'"))
                 supersede_started.set()
@@ -1761,9 +1757,7 @@ def _service_probes(
             session.rollback()
             return f"login_error:{exc.code}"
 
-    rotation_results = _run_service_race(
-        scratch_url, WORKERS, rotation_operation
-    )
+    rotation_results = _run_service_race(scratch_url, WORKERS, rotation_operation)
     with engine.connect() as connection:
         active_rotations = int(
             connection.scalar(
@@ -2074,9 +2068,7 @@ def rotation_operation_for(
         return f"login_error:{exc.code}"
 
 
-def _guardian_state_matrix(
-    engine: Engine, ids: dict[str, uuid.UUID]
-) -> dict[str, Any]:
+def _guardian_state_matrix(engine: Engine, ids: dict[str, uuid.UUID]) -> dict[str, Any]:
     """Exercise every allowed guardian status in valid and invalid polarity."""
 
     cases: dict[str, dict[str, Any]] = {}
@@ -2116,7 +2108,9 @@ def _guardian_state_matrix(
     return {"cases": cases}
 
 
-def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[str, Any]]:
+def _expectation_results(
+    report: dict[str, Any], expectation: str
+) -> list[dict[str, Any]]:
     probes = report["probes"]
     inventory = report["inventory"]
     results: list[dict[str, Any]] = []
@@ -2153,8 +2147,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             add(
                 ident,
                 f"duplicate {key} rows are accepted",
-                probes[key]["persisted_rows"] == 2
-                and probes[key]["inserted"] == 2,
+                probes[key]["persisted_rows"] == 2 and probes[key]["inserted"] == 2,
                 probes[key],
             )
         add(
@@ -2227,18 +2220,14 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
                 probes[key]["persisted_rows"] == 1
                 and probes[key]["inserted"] == 1
                 and probes[key]["constraint_rejected"] == 1
-                and probes[key]["constraint_names"]
-                == [RACE_CONSTRAINTS[key]],
+                and probes[key]["constraint_names"] == [RACE_CONSTRAINTS[key]],
                 probes[key],
             )
         add(
             "HARD-GUARDIAN-STATE",
             "valid guardian states are accepted and every contradiction is rejected by the intended constraint",
             all(
-                (
-                    case["outcome"] == "inserted"
-                    and case["constraint"] is None
-                )
+                (case["outcome"] == "inserted" and case["constraint"] is None)
                 if case["should_insert"]
                 else (
                     case["outcome"] == "constraint_rejected"
@@ -2283,9 +2272,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             and resend.get("deliverable") == 1
             and sum(resend_outcomes.values()) == 2
             and resend_outcomes.get("success", 0) >= 1
-            and set(resend_outcomes).issubset(
-                {"success", "otp_error:resend_cooldown"}
-            ),
+            and set(resend_outcomes).issubset({"success", "otp_error:resend_cooldown"}),
             resend,
         )
         verify = service.get("otp_verify", {})
@@ -2330,8 +2317,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             "HARD-SERVICE-OTP-CONFLICT-TYPED",
             "constraint-only OTP collision maps to a typed 409 and leaves the savepoint usable",
             otp_conflict.get("workers") == CONFLICT_WORKERS
-            and len(otp_conflict.get("distinct_backend_pids", []))
-            == CONFLICT_WORKERS
+            and len(otp_conflict.get("distinct_backend_pids", [])) == CONFLICT_WORKERS
             and otp_conflict.get("outcomes")
             == {
                 "success": 1,
@@ -2457,9 +2443,7 @@ def _execute(
             )
         probes["guardian_state"] = _guardian_state_matrix(engine, ids)
         service_probes = (
-            _service_probes(scratch_url, engine)
-            if expectation == "hardened"
-            else None
+            _service_probes(scratch_url, engine) if expectation == "hardened" else None
         )
 
         report: dict[str, Any] = {

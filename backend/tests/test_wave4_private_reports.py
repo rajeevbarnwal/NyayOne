@@ -40,6 +40,13 @@ from tests import apptemplate, dbtemplate
 NON_DEV_DATABASE_URL = (
     "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
 )
+NONLOCAL_OTP_CONFIG = {
+    "otp_delivery_enabled": True,
+    "otp_provider": "http",
+    "otp_provider_url": "https://otp-provider.example.invalid/send",
+    "otp_provider_token": "wave4-private-report-config-token",
+    "otp_provider_supports_idempotency": True,
+}
 
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
@@ -407,6 +414,7 @@ def test_production_requires_real_clamav_scanner():
             registration_secret="production-registration-encryption-secret",
             registration_lookup_secret="production-registration-lookup-secret",
             internship_report_scanner_provider="deterministic",
+            **NONLOCAL_OTP_CONFIG,
         )
     assert "must be clamav" in str(refused.value)
 

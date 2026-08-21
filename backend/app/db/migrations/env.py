@@ -47,7 +47,7 @@ def run_migrations_online() -> None:
             "compare_type": True,
         }
         if connection.dialect.name == "sqlite":
-            # Revision 0018 explicitly opens a real DBAPI transaction before
+            # Revisions 0018+ explicitly open a real DBAPI transaction before
             # its first DDL. Tell Alembic to own/commit-or-roll-back that
             # transaction so SQLite batch DDL cannot leave a partial revision.
             options.update(transactional_ddl=True, transaction_per_migration=True)

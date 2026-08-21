@@ -97,7 +97,18 @@ export function isOpaqueSubjectId(subjectId: string | null | undefined, maskedCo
   return true;
 }
 
-export function deriveAuthState(store: KvStore = defaultKvStore(), now: number = Date.now()): AuthState {
+export function deriveAuthState(
+  store: KvStore = defaultKvStore(),
+  now: number = Date.now(),
+  options: { allowLegacyClientDemo?: boolean } = {},
+): AuthState {
+  // Production must never derive identity from a browser-writable snapshot.
+  // The opt-in exists only for isolated unit coverage of the retired lawyer
+  // prototype and is never passed by application code.
+  if (!options.allowLegacyClientDemo) {
+    clearAuthSnapshot('lawyer', store);
+    return ANONYMOUS_AUTH;
+  }
   const snap = loadAuthSnapshot('lawyer', store);
   if (!snap) return ANONYMOUS_AUTH;
   // Snapshot integrity: a record under the lawyer key MUST carry the lawyer role.

@@ -26,22 +26,34 @@ from app.models.registration import (
     GuardianConsent,
     LoginAttempt,
     OtpChallenge,
+    OtpFlow,
     OtpOutbox,
-    RecoverySession,
+    OtpPurposeAuthority,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
     User,
 )
+from app.services import otp_authority, otp_flow_service
 from tests import dbtemplate
 
 
 class CapturingSender:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self._receipts: dict[str, tuple[str, str, str]] = {}
 
-    def send(self, destination: str, code: str) -> None:
+    def send_idempotent(
+        self, destination: str, code: str, *, idempotency_token: str
+    ) -> str:
+        existing = self._receipts.get(idempotency_token)
+        if existing is not None:
+            assert existing[:2] == (destination, code)
+            return existing[2]
+        receipt = f"test-{len(self._receipts) + 1}"
+        self._receipts[idempotency_token] = (destination, code, receipt)
         self.sent.append((destination, code))
+        return receipt
 
 
 class CommitFailSession(Session):
@@ -94,6 +106,7 @@ def _context(
             app,
             base_url=base_url,
             raise_server_exceptions=False,
+            headers={"Origin": settings.cors_origins[0]},
         ),
         engine,
         factory,
@@ -129,16 +142,27 @@ def _create_account(
         },
     )
     assert response.status_code == 201
+    assert response.json()["status"] == "pending"
     signup_code = sender.sent[-1][1]
+    factory = client.app.dependency_overrides[
+        auth_student.get_outbox_session_factory
+    ]()
+    with factory() as session:
+        registration_id = session.scalar(
+            select(StudentRegistration.id).where(
+                StudentRegistration.mobile_hash == keyed_hash(mobile)
+            )
+        )
+    assert registration_id is not None
     verified = client.post(
         "/api/v1/auth/student/otp/verify",
-        json={"registration_id": response.json()["registration_id"], "code": signup_code},
+        json={"code": signup_code},
     )
     assert verified.status_code == 200
     assert "HttpOnly" in verified.headers["set-cookie"]
     if not keep_session:
         client.cookies.clear()
-    return response.json()["registration_id"], signup_code
+    return str(registration_id), signup_code
 
 
 def _start_login(client: TestClient, sender: CapturingSender, mobile="9876543210"):
@@ -147,9 +171,11 @@ def _start_login(client: TestClient, sender: CapturingSender, mobile="9876543210
         "/api/v1/auth/student/login/otp/start", json={"mobile": mobile}
     )
     assert response.status_code == 202
-    assert set(response.json()) == {"login_id"}
+    assert response.json()["status"] == "pending"
+    flow_token = client.cookies.get(settings.otp_flow_cookie_name)
+    assert flow_token
     code = sender.sent[-1][1] if len(sender.sent) > before else None
-    return response.json()["login_id"], code
+    return flow_token, code
 
 
 def _use_session_cookie(client: TestClient, token: str) -> None:
@@ -157,6 +183,26 @@ def _use_session_cookie(client: TestClient, token: str) -> None:
 
     client.cookies.clear()
     client.cookies.set(settings.auth_session_cookie_name, token)
+
+
+def _use_flow_cookie(client: TestClient, token: str) -> None:
+    """Replace the browser OTP-flow cookie for private test interleavings."""
+
+    client.cookies.clear()
+    client.cookies.set(
+        settings.otp_flow_cookie_name,
+        token,
+        domain="testserver.local",
+        path="/api/v1",
+    )
+
+
+def _flow_for_token(session: Session, token: str) -> OtpFlow | None:
+    return session.scalar(
+        select(OtpFlow).where(
+            OtpFlow.token_hash == otp_flow_service.flow_token_hash(token)
+        )
+    )
 
 
 def _set_trusted_origin(client: TestClient) -> None:
@@ -376,9 +422,10 @@ def test_activated_signup_uuid_cannot_resend_reverify_or_rotate_session(ctx):
         "/api/v1/auth/student/otp/verify",
         json={"registration_id": registration_id, "code": signup_code},
     )
-    assert resend.status_code == reverify.status_code == 404
-    assert resend.json()["detail"]["code"] == "registration_not_found"
-    assert reverify.json()["detail"]["code"] == "no_active_challenge"
+    # The retired UUID is no longer an accepted public selector at all.
+    assert resend.status_code == reverify.status_code == 422
+    assert resend.json()["detail"]["code"] == "validation_error"
+    assert reverify.json()["detail"]["code"] == "validation_error"
     assert sender.sent == delivered_before
 
     with factory() as session:
@@ -401,18 +448,15 @@ def test_known_and_unknown_start_are_non_enumerating_and_persist_decoy(ctx):
     _create_account(client, sender)
     known, known_code = _start_login(client, sender, "9876543210")
     unknown, unknown_code = _start_login(client, sender, "9999999999")
-    assert len(known) == len(unknown) == 32
+    assert len(known) == len(unknown) >= 32
     assert known_code is not None and unknown_code is None
     with factory() as session:
-        known_row = session.scalar(
-            select(LoginAttempt).where(LoginAttempt.opaque_id == known)
-        )
-        unknown_row = session.scalar(
-            select(LoginAttempt).where(LoginAttempt.opaque_id == unknown)
-        )
+        known_row = _flow_for_token(session, known)
+        unknown_row = _flow_for_token(session, unknown)
+        assert known_row is not None and unknown_row is not None
         assert known_row.registration_id is not None
         assert unknown_row.registration_id is None
-        assert len(known_row.lookup_hash) == len(unknown_row.lookup_hash) == 64
+        assert len(known_row.subject_hash) == len(unknown_row.subject_hash) == 64
 
 
 def test_quarantined_dob_hash_is_symmetric_decoy_for_login_and_recovery(ctx):
@@ -430,11 +474,12 @@ def test_quarantined_dob_hash_is_symmetric_decoy_for_login_and_recovery(ctx):
     assert known_code is unknown_code is None
     with factory() as session:
         attempts = tuple(
-            session.scalars(
-                select(LoginAttempt).where(
-                    LoginAttempt.opaque_id.in_((known_login, unknown_login))
-                )
+            row
+            for row in (
+                _flow_for_token(session, known_login),
+                _flow_for_token(session, unknown_login),
             )
+            if row is not None
         )
         assert len(attempts) == 2
         assert all(attempt.registration_id is None for attempt in attempts)
@@ -443,10 +488,10 @@ def test_quarantined_dob_hash_is_symmetric_decoy_for_login_and_recovery(ctx):
         "/api/v1/auth/student/recovery/start", json={"mobile": "9876543210"}
     )
     unknown_recovery = client.post(
-        "/api/v1/auth/student/recovery/start", json={"mobile": "9999999999"}
+        "/api/v1/auth/student/recovery/start", json={"mobile": "9999993210"}
     )
     assert known_recovery.status_code == unknown_recovery.status_code == 202
-    assert set(known_recovery.json()) == set(unknown_recovery.json()) == {"recovery_id"}
+    assert known_recovery.json() == unknown_recovery.json()
     assert sender.sent == []
 
 
@@ -472,7 +517,9 @@ def test_quarantine_change_blocks_pending_login_and_recovery_proofs(ctx):
     recovery_start = client.post(
         "/api/v1/auth/student/recovery/start", json={"mobile": "9876543210"}
     )
-    recovery_id = recovery_start.json()["recovery_id"]
+    assert recovery_start.status_code == 202
+    recovery_id = client.cookies.get(settings.otp_flow_cookie_name)
+    assert recovery_id
     recovery_code = sender.sent[-1][1]
     with factory() as session:
         registration = session.scalar(select(StudentRegistration))
@@ -480,44 +527,30 @@ def test_quarantine_change_blocks_pending_login_and_recovery_proofs(ctx):
         registration.dob_hash_state = "quarantined"
         session.commit()
 
+    _use_flow_cookie(client, login_id)
     login_result = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": login_code},
+        json={"code": login_code},
     )
+    _use_flow_cookie(client, recovery_id)
     recovery_result = client.post(
         "/api/v1/auth/student/recovery/verify",
-        json={"recovery_id": recovery_id, "code": recovery_code},
+        json={"code": recovery_code},
     )
+    _use_flow_cookie(client, uuid.uuid4().hex)
     unknown_login = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": uuid.uuid4().hex, "code": login_code},
+        json={"code": login_code},
     )
+    _use_flow_cookie(client, uuid.uuid4().hex)
     unknown_recovery = client.post(
         "/api/v1/auth/student/recovery/verify",
-        json={"recovery_id": uuid.uuid4().hex, "code": recovery_code},
+        json={"code": recovery_code},
     )
     assert login_result.status_code == unknown_login.status_code == 401
     assert recovery_result.status_code == unknown_recovery.status_code == 401
     assert login_result.json() == unknown_login.json()
     assert recovery_result.json() == unknown_recovery.json()
-
-    with factory() as session:
-        recovery = session.scalar(
-            select(RecoverySession).where(RecoverySession.opaque_id == recovery_id)
-        )
-        recovery.status = "verified"
-        session.commit()
-    completion = client.post(
-        "/api/v1/auth/student/recovery/complete",
-        json={"recovery_id": recovery_id},
-    )
-    unknown_completion = client.post(
-        "/api/v1/auth/student/recovery/complete",
-        json={"recovery_id": uuid.uuid4().hex},
-    )
-    assert completion.status_code == unknown_completion.status_code == 401
-    assert completion.json() == unknown_completion.json()
-
 
 def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
     client, _, factory, sender = ctx
@@ -537,9 +570,9 @@ def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
         "/api/v1/auth/student/otp/resend",
         json={"registration_id": missing_id},
     )
-    assert quarantined_resend.status_code == missing_resend.status_code == 404
+    assert quarantined_resend.status_code == missing_resend.status_code == 422
     assert quarantined_resend.json() == missing_resend.json()
-    assert quarantined_resend.json()["detail"]["code"] == "registration_not_found"
+    assert quarantined_resend.json()["detail"]["code"] == "validation_error"
 
     profile = {
         "college": "National Law School of India University",
@@ -632,10 +665,15 @@ def test_quarantined_registration_cannot_consume_active_signup_otp(ctx):
         },
     )
     assert response.status_code == 201
-    registration_id = response.json()["registration_id"]
     code = sender.sent[-1][1]
     with factory() as session:
-        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
+        registration = session.scalar(
+            select(StudentRegistration).where(
+                StudentRegistration.mobile_hash == keyed_hash("9876543210")
+            )
+        )
+        assert registration is not None
+        registration_id = str(registration.id)
         registration.dob_hash = "f" * 64
         registration.dob_hash_state = "quarantined"
         challenge = session.scalar(
@@ -649,15 +687,16 @@ def test_quarantined_registration_cannot_consume_active_signup_otp(ctx):
 
     blocked = client.post(
         "/api/v1/auth/student/otp/verify",
-        json={"registration_id": registration_id, "code": code},
+        json={"code": code},
     )
+    _use_flow_cookie(client, uuid.uuid4().hex)
     missing = client.post(
         "/api/v1/auth/student/otp/verify",
-        json={"registration_id": str(uuid.uuid4()), "code": code},
+        json={"code": code},
     )
-    assert blocked.status_code == missing.status_code == 404
+    assert blocked.status_code == missing.status_code == 401
     assert blocked.json() == missing.json()
-    assert blocked.json()["detail"]["code"] == "no_active_challenge"
+    assert blocked.json()["detail"]["code"] == "otp_failed"
     with factory() as session:
         challenge = session.scalar(
             select(OtpChallenge).where(
@@ -681,12 +720,17 @@ def test_soft_deleted_registration_cannot_use_signup_otp_capability(ctx):
         },
     )
     assert registered.status_code == 201
-    registration_id = registered.json()["registration_id"]
     code = sender.sent[-1][1]
+    flow_token = client.cookies.get(settings.otp_flow_cookie_name)
+    assert flow_token
     with factory() as session:
-        registration = session.get(
-            StudentRegistration, uuid.UUID(registration_id)
+        registration = session.scalar(
+            select(StudentRegistration).where(
+                StudentRegistration.mobile_hash == keyed_hash("9876543210")
+            )
         )
+        assert registration is not None
+        registration_id = str(registration.id)
         registration.deleted_at = datetime.now(timezone.utc)
         session.commit()
         challenge = session.scalar(
@@ -712,26 +756,28 @@ def test_soft_deleted_registration_cannot_use_signup_otp_capability(ctx):
             select(func.count()).select_from(AuthSession)
         )
 
-    missing_id = str(uuid.uuid4())
     deleted_resend = client.post(
         "/api/v1/auth/student/otp/resend",
-        json={"registration_id": registration_id},
+        json={},
     )
+    _use_flow_cookie(client, uuid.uuid4().hex)
     missing_resend = client.post(
         "/api/v1/auth/student/otp/resend",
-        json={"registration_id": missing_id},
+        json={},
     )
-    assert deleted_resend.status_code == missing_resend.status_code == 404
+    assert deleted_resend.status_code == missing_resend.status_code == 401
     assert deleted_resend.json() == missing_resend.json()
+    _use_flow_cookie(client, flow_token)
     deleted_verify = client.post(
         "/api/v1/auth/student/otp/verify",
-        json={"registration_id": registration_id, "code": code},
+        json={"code": code},
     )
+    _use_flow_cookie(client, uuid.uuid4().hex)
     missing_verify = client.post(
         "/api/v1/auth/student/otp/verify",
-        json={"registration_id": missing_id, "code": code},
+        json={"code": code},
     )
-    assert deleted_verify.status_code == missing_verify.status_code == 404
+    assert deleted_verify.status_code == missing_verify.status_code == 401
     assert deleted_verify.json() == missing_verify.json()
 
     with factory() as session:
@@ -767,7 +813,9 @@ def test_soft_deleted_registration_is_decoy_for_login_and_recovery(ctx):
         "/api/v1/auth/student/recovery/start",
         json={"mobile": "9876543210"},
     )
-    recovery_id = recovery_start.json()["recovery_id"]
+    assert recovery_start.status_code == 202
+    recovery_id = client.cookies.get(settings.otp_flow_cookie_name)
+    assert recovery_id
     recovery_code = sender.sent[-1][1]
     with factory() as session:
         registration = session.get(
@@ -788,32 +836,19 @@ def test_soft_deleted_registration_is_decoy_for_login_and_recovery(ctx):
             select(func.count()).select_from(AuditEvent)
         )
 
+    _use_flow_cookie(client, login_id)
     denied_login = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": login_code},
+        json={"code": login_code},
     )
+    _use_flow_cookie(client, recovery_id)
     denied_recovery = client.post(
         "/api/v1/auth/student/recovery/verify",
-        json={"recovery_id": recovery_id, "code": recovery_code},
+        json={"code": recovery_code},
     )
     assert denied_login.status_code == denied_recovery.status_code == 401
     assert denied_login.json()["detail"]["code"] == "login_failed"
     assert denied_recovery.json()["detail"]["code"] == "recovery_failed"
-
-    with factory() as session:
-        recovery = session.scalar(
-            select(RecoverySession).where(
-                RecoverySession.opaque_id == recovery_id
-            )
-        )
-        recovery.status = "verified"
-        session.commit()
-    denied_complete = client.post(
-        "/api/v1/auth/student/recovery/complete",
-        json={"recovery_id": recovery_id},
-    )
-    assert denied_complete.status_code == 401
-    assert denied_complete.json()["detail"]["code"] == "recovery_failed"
 
     sender.sent.clear()
     known_login, known_code = _start_login(client, sender, "9876543210")
@@ -822,37 +857,29 @@ def test_soft_deleted_registration_is_decoy_for_login_and_recovery(ctx):
         "/api/v1/auth/student/recovery/start",
         json={"mobile": "9876543210"},
     )
+    known_recovery_token = client.cookies.get(settings.otp_flow_cookie_name)
+    assert known_recovery_token
     unknown_recovery = client.post(
         "/api/v1/auth/student/recovery/start",
-        json={"mobile": "9999999999"},
+        json={"mobile": "9999993210"},
     )
+    unknown_recovery_token = client.cookies.get(settings.otp_flow_cookie_name)
+    assert unknown_recovery_token
     assert known_code is unknown_code is None
     assert known_recovery.status_code == unknown_recovery.status_code == 202
-    assert set(known_recovery.json()) == set(unknown_recovery.json()) == {
-        "recovery_id"
-    }
+    assert known_recovery.json() == unknown_recovery.json()
     assert sender.sent == []
 
     with factory() as session:
-        login_attempts = list(
-            session.scalars(
-                select(LoginAttempt).where(
-                    LoginAttempt.opaque_id.in_((known_login, unknown_login))
-                )
-            )
-        )
-        recovery_attempts = list(
-            session.scalars(
-                select(RecoverySession).where(
-                    RecoverySession.opaque_id.in_(
-                        (
-                            known_recovery.json()["recovery_id"],
-                            unknown_recovery.json()["recovery_id"],
-                        )
-                    )
-                )
-            )
-        )
+        login_attempts = [
+            _flow_for_token(session, token)
+            for token in (known_login, unknown_login)
+        ]
+        recovery_attempts = [
+            _flow_for_token(session, token)
+            for token in (known_recovery_token, unknown_recovery_token)
+        ]
+        assert all(row is not None for row in login_attempts + recovery_attempts)
         assert all(row.registration_id is None for row in login_attempts)
         assert all(row.challenge_id is None for row in login_attempts)
         assert all(row.registration_id is None for row in recovery_attempts)
@@ -869,12 +896,6 @@ def test_soft_deleted_registration_is_decoy_for_login_and_recovery(ctx):
         assert session.scalar(
             select(func.count()).select_from(AuditEvent)
         ) == audit_count
-        recovery = session.scalar(
-            select(RecoverySession).where(
-                RecoverySession.opaque_id == recovery_id
-            )
-        )
-        assert recovery.status == "verified"
 
 
 # ---------------------------------------------------------------------------
@@ -1366,13 +1387,13 @@ def test_signup_or_recovery_code_cannot_authenticate_login(ctx):
     assert login_code and login_code != signup_code
     rejected = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": signup_code},
+        json={"code": signup_code},
     )
     assert rejected.status_code == 401
     assert rejected.json()["detail"]["code"] == "login_failed"
     accepted = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": login_code},
+        json={"code": login_code},
     )
     assert accepted.status_code == 200
 
@@ -1383,14 +1404,15 @@ def test_success_sets_hardened_cookie_stores_only_hash_and_authenticates(ctx):
     login_id, code = _start_login(client, sender)
     response = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     )
     assert response.status_code == 200
-    assert response.json() == {"status": "authenticated"}
+    assert response.json()["status"] == "authenticated"
+    assert response.json()["purpose"] == "login"
     cookie_header = response.headers["set-cookie"]
     assert "HttpOnly" in cookie_header
-    assert "SameSite=lax" in cookie_header
-    assert "Path=/" in cookie_header
+    assert "SameSite=strict" in cookie_header
+    assert "Path=/api/v1" in cookie_header
     raw_token = client.cookies.get(settings.auth_session_cookie_name)
     assert raw_token and raw_token not in response.text and raw_token not in cookie_header.split(";", 1)[1]
 
@@ -1415,7 +1437,7 @@ def test_non_local_cookie_is_secure_and_authenticates_over_https(monkeypatch):
         login_id, code = _start_login(client, sender)
         response = client.post(
             "/api/v1/auth/student/login/otp/verify",
-            json={"login_id": login_id, "code": code},
+            json={"code": code},
         )
         assert response.status_code == 200
         assert "Secure" in response.headers["set-cookie"]
@@ -1456,7 +1478,7 @@ def test_valid_cookie_overrides_forged_dev_header_and_blocks_cross_user(ctx):
     login_id, code = _start_login(client, sender, "9876543210")
     assert client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     ).status_code == 200
     first_token = client.cookies.get(settings.auth_session_cookie_name)
     _create_account(client, sender, "9123456780")
@@ -1490,15 +1512,17 @@ def test_wrong_expired_and_unknown_attempts_share_uniform_failure(ctx, case):
     submitted = ("111111" if code == "000000" else "000000") if case == "wrong" else code
     if case == "expired":
         with factory() as session:
-            row = session.scalar(select(LoginAttempt).where(LoginAttempt.opaque_id == login_id))
+            row = _flow_for_token(session, login_id)
+            assert row is not None
             row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
             session.commit()
     elif case == "unknown":
         login_id = uuid.uuid4().hex
+        _use_flow_cookie(client, login_id)
         submitted = "000000"
     response = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": submitted},
+        json={"code": submitted},
     )
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "login_failed"
@@ -1513,10 +1537,8 @@ def test_login_resend_cooldown_does_not_issue_a_second_code(ctx):
     assert first_code is not None
     assert second_code is None
     with factory() as session:
-        second = session.scalar(
-            select(LoginAttempt).where(LoginAttempt.opaque_id == second_id)
-        )
-        assert second is not None and second.challenge_id is None
+        second = _flow_for_token(session, second_id)
+        assert second is not None
 
 
 def test_three_wrong_codes_lock_the_login_challenge_and_correct_code_stays_rejected(ctx):
@@ -1527,20 +1549,19 @@ def test_three_wrong_codes_lock_the_login_challenge_and_correct_code_stays_rejec
     for _ in range(3):
         response = client.post(
             "/api/v1/auth/student/login/otp/verify",
-            json={"login_id": login_id, "code": wrong},
+            json={"code": wrong},
         )
         assert response.status_code == 401
         assert response.json()["detail"]["code"] == "login_failed"
     still_locked = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     )
     assert still_locked.status_code == 401
     with factory() as session:
-        attempt = session.scalar(
-            select(LoginAttempt).where(LoginAttempt.opaque_id == login_id)
-        )
-        challenge = session.get(OtpChallenge, attempt.challenge_id)
+        flow = _flow_for_token(session, login_id)
+        assert flow is not None
+        challenge = session.get(OtpChallenge, flow.challenge_id)
         assert challenge.attempts == challenge.max_attempts == 3
         assert challenge.locked_until is not None
         assert session.scalar(
@@ -1556,26 +1577,29 @@ def test_replay_is_rejected_and_fresh_login_rotates_prior_session(ctx):
     login_id, code = _start_login(client, sender)
     assert client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     ).status_code == 200
     first_token = client.cookies.get(settings.auth_session_cookie_name)
     replay = client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     )
     assert replay.status_code == 401
 
     with factory() as session:
-        prior = session.scalar(
-            select(LoginAttempt).where(LoginAttempt.opaque_id == login_id)
+        authority = session.scalar(
+            select(OtpPurposeAuthority).where(
+                OtpPurposeAuthority.purpose == "login"
+            )
         )
-        prior.created_at = datetime.now(timezone.utc) - timedelta(seconds=31)
+        assert authority is not None
+        authority.cooldown_until = datetime.now(timezone.utc) - timedelta(seconds=1)
         session.commit()
     second_id, second_code = _start_login(client, sender)
     assert second_code
     assert client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": second_id, "code": second_code},
+        json={"code": second_code},
     ).status_code == 200
     second_token = client.cookies.get(settings.auth_session_cookie_name)
     assert second_token != first_token
@@ -1591,7 +1615,7 @@ def test_expired_session_and_logout_revoke_authority(ctx):
     login_id, code = _start_login(client, sender)
     client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": code},
+        json={"code": code},
     )
     with factory() as session:
         row = session.scalar(select(AuthSession).where(AuthSession.status == "active"))
@@ -1624,7 +1648,7 @@ def test_commit_failure_leaves_no_session_and_retry_succeeds():
         CommitFailSession.armed = True
         failed = client.post(
             "/api/v1/auth/student/login/otp/verify",
-            json={"login_id": login_id, "code": code},
+            json={"code": code},
         )
         assert failed.status_code == 500
         with factory() as session:
@@ -1632,15 +1656,14 @@ def test_commit_failure_leaves_no_session_and_retry_succeeds():
                 select(AuthSession).where(AuthSession.status == "active")
             )
             assert active is not None and active.id == initial_id
-            attempt = session.scalar(
-                select(LoginAttempt).where(LoginAttempt.opaque_id == login_id)
-            )
-            assert attempt.status == "pending" and attempt.consumed_at is None
-            challenge = session.get(OtpChallenge, attempt.challenge_id)
+            flow = _flow_for_token(session, login_id)
+            assert flow is not None and flow.state in {"pending", "code_sent"}
+            assert flow.consumed_at is None
+            challenge = session.get(OtpChallenge, flow.challenge_id)
             assert challenge.consumed_at is None
         retry = client.post(
             "/api/v1/auth/student/login/otp/verify",
-            json={"login_id": login_id, "code": code},
+            json={"code": code},
         )
         assert retry.status_code == 200
     finally:
@@ -1655,7 +1678,7 @@ def test_no_plaintext_mobile_otp_or_session_token_in_persistent_rows(ctx):
     login_id, login_code = _start_login(client, sender, mobile)
     client.post(
         "/api/v1/auth/student/login/otp/verify",
-        json={"login_id": login_id, "code": login_code},
+        json={"code": login_code},
     )
     token = client.cookies.get(settings.auth_session_cookie_name)
     with factory() as session:
@@ -1676,35 +1699,50 @@ def test_concurrent_correct_verification_mints_exactly_one_session(tmp_path):
     )
     dbtemplate.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
-    sender = CapturingSender()
-
     from app.core.crypto import encrypt, keyed_hash, otp_verifier
     from app.models.registration import Consent
     now = datetime.now(timezone.utc)
     with factory() as session:
         user = User(role="student", status="pending")
-        session.add(user); session.flush()
+        session.add(user)
+        session.flush()
         reg = StudentRegistration(
             user_id=user.id, first_name="Aditi", last_name="Nair",
             mobile_hash=keyed_hash("9876543210"), mobile_ct=encrypt("9876543210"),
             dob_hash=keyed_hash("2004-03-14"), dob_ct=encrypt("2004-03-14"),
             status="otp_verified", is_minor=False,
         )
-        session.add(reg); session.flush()
+        session.add(reg)
+        session.flush()
         session.add(Consent(registration_id=reg.id, accepted=True, policy_version="v1"))
-        salt = uuid.uuid4().hex; code = "654321"
-        challenge = OtpChallenge(
-            registration_id=reg.id, purpose="login",
-            verifier_hash=otp_verifier(code, salt=salt), attempts=0, max_attempts=3,
-            expires_at=now + timedelta(minutes=5), metadata_json={"salt": salt},
+        authority = otp_authority.lock_or_create_authority(
+            session,
+            subject_hash=otp_authority.authority_subject_from_mobile_hash(
+                reg.mobile_hash
+            ),
+            purpose="login",
+            registration_id=reg.id,
+            now=now,
         )
-        session.add(challenge); session.flush()
+        salt = uuid.uuid4().hex
+        code = "654321"
+        challenge = OtpChallenge(
+            registration_id=reg.id, authority_id=authority.id, purpose="login",
+            verifier_hash=otp_verifier(code, salt=salt), attempts=0, max_attempts=3,
+            expires_at=now + timedelta(minutes=5), delivery_state="active",
+            metadata_json={"salt": salt},
+        )
+        authority.active_expires_at = challenge.expires_at
+        session.add(challenge)
+        session.flush()
         attempt = LoginAttempt(
             opaque_id=uuid.uuid4().hex, lookup_hash=reg.mobile_hash,
             registration_id=reg.id, challenge_id=challenge.id, status="pending",
             expires_at=now + timedelta(minutes=10),
         )
-        session.add(attempt); session.commit(); opaque_id = attempt.opaque_id
+        session.add(attempt)
+        session.commit()
+        opaque_id = attempt.opaque_id
 
     def verify_once() -> bool:
         with factory() as session:
