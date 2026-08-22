@@ -2,26 +2,30 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.api.v1.auth_student import router as auth_student_router
 from app.core.crypto import decrypt, keyed_hash, otp_verifier
-from app.db.base import Base
 from app.db.session import get_session
 import app.models  # noqa: F401  (registers tables on Base.metadata)
 from app.db.models.audit import AuditEvent
 from app.models.registration import (
-    GuardianConsent, OtpChallenge, StudentProfile, StudentRegistration, StudentVerification,
+    GuardianConsent,
+    OtpChallenge,
+    OtpOutbox,
+    StudentProfile,
+    StudentRegistration,
+    StudentVerification,
 )
 from app.schemas.registration import StudentRegisterRequest
+from app.services import otp_flow_service, otp_service
 from app.services.registration_service import RegistrationError, register_student
 
 # Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
@@ -103,10 +107,39 @@ def test_mobile_conflict(db_session: Session):
 
 
 def test_idempotent_replay_single_row(db_session: Session):
-    a = register_student(db_session, _req(), idempotency_key="req-1").registration
+    first = register_student(db_session, _req(), idempotency_key="req-1")
+    a = first.registration
+    assert first.delivery is not None
+    outbox = db_session.get(OtpOutbox, first.delivery.outbox_id)
+    assert outbox is not None
+    challenge = db_session.get(OtpChallenge, outbox.challenge_id)
+    assert challenge is not None
+    now = datetime.now(timezone.utc)
+    authority = otp_service.authority_for_registration(
+        db_session, a, "signup", now
+    )
+    otp_flow_service.create_flow(
+        db_session,
+        authority,
+        now=now,
+        destination="9876543210",
+        challenge=challenge,
+        registration_id=a.id,
+        registration_idempotency_record_id=(
+            first.idempotency_record.id
+            if first.idempotency_record is not None
+            else None
+        ),
+        raw_token=otp_flow_service.deterministic_signup_token("req-1"),
+    )
+    db_session.flush()
     b = register_student(db_session, _req(), idempotency_key="req-1")
     assert a.id == b.registration.id
-    assert b.delivery is None  # replay never re-delivers
+    # A still-pending crash-resume returns the same persisted delivery intent;
+    # only the serialized HTTP finalizer can execute it.
+    assert b.replayed is True
+    assert b.delivery is not None and first.delivery is not None
+    assert b.delivery.outbox_id == first.delivery.outbox_id
     rows = db_session.scalars(select(StudentRegistration)).all()
     assert len(rows) == 1
 
@@ -184,23 +217,32 @@ def client(engine):
     from app.api.v1 import auth_student as _ep
 
     class _Cap:
-        def send(self, destination: str, code: str) -> None:  # noqa: D401
-            pass
+        def send_idempotent(
+            self,
+            destination: str,
+            code: str,
+            *,
+            idempotency_token: str,
+        ) -> str:  # noqa: D401
+            return "test-receipt"
 
     app.dependency_overrides[_ep.get_otp_sender] = lambda: _Cap()
-    yield TestClient(app)
+    app.dependency_overrides[_ep.get_outbox_session_factory] = lambda: factory
+    from app.core.config import settings
+
+    yield TestClient(app, headers={"Origin": settings.cors_origins[0]})
     # The shared session engine is reset to an empty schema at the START of
     # every fixture that uses it (conftest.db_session and this fixture), so
     # demolishing it here proved nothing and cost ~10 ms per test.
 
 
-def test_http_201_and_422_and_409(client):
+def test_http_201_and_422_and_neutral_duplicate(client):
     ok = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "9876543210",
         "dob": "2004-03-14", "consent": {"accepted": True},
     })
     assert ok.status_code == 201
-    assert uuid.UUID(ok.json()["registration_id"])
+    assert ok.json()["status"] == "pending"
 
     bad = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "98765",
@@ -212,4 +254,5 @@ def test_http_201_and_422_and_409(client):
         "first_name": "Other", "last_name": "Person", "mobile": "9876543210",
         "dob": "2001-01-01", "consent": {"accepted": True},
     })
-    assert conflict.status_code == 409
+    assert conflict.status_code == 201
+    assert conflict.json().keys() == ok.json().keys()

@@ -23,8 +23,16 @@ class OtpSendError(Exception):
 
 
 @runtime_checkable
-class OtpSender(Protocol):
-    def send(self, destination: str, code: str) -> None: ...
+class IdempotentOtpSender(Protocol):
+    """Provider contract required by non-test deployments (NYAY-4)."""
+
+    def send_idempotent(
+        self,
+        destination: str,
+        code: str,
+        *,
+        idempotency_token: str,
+    ) -> str | None: ...
 
 
 class CapturingSender:
@@ -32,9 +40,24 @@ class CapturingSender:
 
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self._idempotent: dict[str, tuple[str, str, str]] = {}
 
-    def send(self, destination: str, code: str) -> None:
+    def send_idempotent(
+        self,
+        destination: str,
+        code: str,
+        *,
+        idempotency_token: str,
+    ) -> str | None:
+        existing = self._idempotent.get(idempotency_token)
+        if existing is not None:
+            if existing[:2] != (destination, code):
+                raise OtpSendError("otp provider idempotency conflict")
+            return existing[2]
+        receipt = f"capture-{len(self._idempotent) + 1}"
+        self._idempotent[idempotency_token] = (destination, code, receipt)
         self.sent.append((destination, code))
+        return receipt
 
 
 class HttpOtpSender:
@@ -50,23 +73,41 @@ class HttpOtpSender:
         self._token = token
         self._timeout_s = timeout_s
 
-    def send(self, destination: str, code: str) -> None:
+    def send_idempotent(
+        self,
+        destination: str,
+        code: str,
+        *,
+        idempotency_token: str,
+    ) -> str | None:
         import httpx
 
-        headers = {"Authorization": f"Bearer {self._token}"} if self._token else {}
+        headers = {
+            "Idempotency-Key": idempotency_token,
+            **(
+                {"Authorization": f"Bearer {self._token}"}
+                if self._token
+                else {}
+            ),
+        }
         try:
             resp = httpx.post(
                 self._url,
-                json={"to": destination, "message": f"Your NyayOne verification code is {code}"},
+                json={
+                    "to": destination,
+                    "message": f"Your NyayOne verification code is {code}",
+                    "idempotency_key": idempotency_token,
+                },
                 headers=headers,
                 timeout=self._timeout_s,
             )
             resp.raise_for_status()
+            return resp.headers.get("X-Provider-Receipt")
         except Exception as exc:  # normalise everything; never leak the code
             raise OtpSendError(f"otp provider send failed: {type(exc).__name__}") from exc
 
 
-def build_otp_sender() -> OtpSender | None:
+def build_otp_sender() -> IdempotentOtpSender | None:
     """Resolve the configured provider, or None when delivery is not configured.
 
     Contract (SAATHI-448 A1): when delivery is enabled AND a concrete provider is
@@ -77,10 +118,14 @@ def build_otp_sender() -> OtpSender | None:
         return None
     provider = (getattr(settings, "otp_provider", "none") or "none").lower()
     if provider == "capturing":
+        if (settings.app_env or "").strip().casefold() not in {"test", "testing"}:
+            return None
         return CapturingSender()
     if provider == "http":
         if not settings.otp_provider_url:
             # Enabled but not fully configured — fail closed rather than pretend.
+            return None
+        if not getattr(settings, "otp_provider_supports_idempotency", False):
             return None
         token = settings.otp_provider_token.get_secret_value() if settings.otp_provider_token else None
         return HttpOtpSender(settings.otp_provider_url, token, settings.otp_provider_timeout_s)

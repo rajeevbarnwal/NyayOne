@@ -41,6 +41,13 @@ from tests import apptemplate, dbtemplate
 NON_DEV_DATABASE_URL = (
     "postgresql+psycopg://nyayone_runtime:nondev-test-only@db.invalid/nyayone"
 )
+NONLOCAL_OTP_CONFIG = {
+    "otp_delivery_enabled": True,
+    "otp_provider": "http",
+    "otp_provider_url": "https://otp-provider.example.invalid/send",
+    "otp_provider_token": "wave5-calendar-config-token",
+    "otp_provider_supports_idempotency": True,
+}
 
 
 def _claims(user_id: uuid.UUID) -> dict[str, str]:
@@ -76,12 +83,14 @@ def test_calendar_public_origin_is_loopback_only_in_local_or_test_environments()
             app_env="preview",
             database_url=NON_DEV_DATABASE_URL,
             calendar_public_base_url="https://localhost:1030",
+            **NONLOCAL_OTP_CONFIG,
         )
     configured = Settings(
         _env_file=None,
         app_env="preview",
         database_url=NON_DEV_DATABASE_URL,
         calendar_public_base_url="https://calendar.example.test",
+        **NONLOCAL_OTP_CONFIG,
     )
     assert configured.calendar_public_base_url == "https://calendar.example.test"
 
@@ -110,6 +119,7 @@ def _staging_settings(**overrides: object) -> Settings:
         _env_file=None,
         app_env="staging",
         internship_report_scanner_provider="clamav",
+        **NONLOCAL_OTP_CONFIG,
         **overrides,
     )
 
@@ -165,6 +175,7 @@ def test_staging_rejects_loopback_calendar_origin_and_accepts_the_ci_origin(monk
             database_url=NON_DEV_DATABASE_URL,
             internship_report_scanner_provider="clamav",
             calendar_public_base_url="https://127.0.0.1:1030",
+            **NONLOCAL_OTP_CONFIG,
         )
 
 

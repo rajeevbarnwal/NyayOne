@@ -14,12 +14,13 @@ import {
 import { STUB_OTP_CODE } from '../student/lib/authFlow';
 import {
   RegistrationApiError,
-  loadRegistrationSession,
+  clearRegistrationSession,
+  notifyStudentAuthChanged,
   registerStudent,
   resendStudentOtp,
-  saveRegistrationSession,
   verifyStudentOtp,
 } from '../student/lib/registrationApi';
+import { useOtpFlowState } from '../student/lib/useOtpFlowState';
 import { CONSENT_VERSION } from '../student/lib/consent';
 import {
   nextPhase, redactChallenge, AUTH_PHASE_LABELS, type AuthPhase, type AuthRole, type AuthSnapshot,
@@ -103,15 +104,8 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
   const [sv, setSv] = useState<StudentVerifyInput>(EMPTY_STUDENT_VERIFY);
   const [dob, setDob] = useState('');
   const [srec, setSrec] = useState<StudentVerificationRecord | null>(null);
-  const [guardian, setGuardian] = useState<GuardianConsent | null>(null);
-  const restoredRegistration = useMemo(() => loadRegistrationSession(), []);
-  const [serverRegistrationId, setServerRegistrationId] = useState<string | null>(
-    restoredRegistration?.registrationId ?? null,
-  );
-  const [serverIssuedAt, setServerIssuedAt] = useState(
-    restoredRegistration?.issuedAt ?? Date.now(),
-  );
-  const [serverAttemptsLeft, setServerAttemptsLeft] = useState(3);
+  const [guardian] = useState<GuardianConsent | null>(null);
+  const otpFlow = useOtpFlowState();
   const [busy, setBusy] = useState(false);
 
   const minorCtx = useMemo(() => (dob ? minorContextFromDob(dob, nowISO(), guardian) : { isMinor: false, guardianConsent: guardian }), [dob, guardian]);
@@ -163,26 +157,13 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
           policyVersion: CONSENT_VERSION,
           college: sv.collegeName || undefined,
         });
-        const minor = minorContextFromDob(dob, nowISO(), guardian).isMinor;
-        const session = {
-          registrationId: created.registration_id,
-          destinationMasked: maskDestination({ channel: 'sms', ref: mobile }),
-          issuedAt: Date.now(),
-          isMinor: minor,
-          guardianConsentPending: minor,
-        };
-        saveRegistrationSession(session);
-        setServerRegistrationId(created.registration_id);
-        setServerIssuedAt(session.issuedAt);
-        setDestMasked(session.destinationMasked);
+        otpFlow.adopt(created);
+        setDestMasked(created.destinationMasked);
         setOtpMsg(null);
         pushLedger('OTP dispatched');
         setPhase('otp_entry');
-      } catch (error) {
-        const code = error instanceof RegistrationApiError ? error.code : 'unavailable';
-        setErrors({ submit: code === 'mobile_already_registered'
-          ? 'This mobile number is already registered.'
-          : 'Registration or OTP delivery is unavailable. Please retry.' });
+      } catch {
+        setErrors({ submit: 'Registration or code delivery could not be completed. Check your details or try again later.' });
       } finally {
         setBusy(false);
       }
@@ -197,19 +178,23 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     setPhase('otp_entry');
   }
   async function submitOtp() {
-    if (!isLawyer && serverRegistrationId) {
+    if (!isLawyer && otpFlow.state?.status === 'pending' && otpFlow.state.purpose === 'signup') {
       setBusy(true);
       try {
-        await verifyStudentOtp(serverRegistrationId, otpInput);
+        otpFlow.adopt(await verifyStudentOtp(otpInput));
+        notifyStudentAuthChanged();
         setOtpMsg(null);
         pushLedger('OTP verified');
         setPhase('consent');
       } catch (error) {
         if (error instanceof RegistrationApiError) {
-          if (typeof error.attemptsLeft === 'number') setServerAttemptsLeft(error.attemptsLeft);
-          if (error.code === 'locked') setOtpMsg('Too many attempts — locked for 15 minutes.');
-          else if (error.code === 'expired') setOtpMsg('Code expired. Resend a new code.');
-          else setOtpMsg(`Incorrect OTP. ${error.attemptsLeft ?? serverAttemptsLeft} attempt(s) left.`);
+          if (error.otpState) otpFlow.adopt(error.otpState);
+          if (['locked', 'otp_locked'].includes(error.code)) {
+            setOtpMsg(error.otpState?.lockedForSeconds === null || error.otpState?.lockedForSeconds === undefined
+              ? 'Too many attempts — temporarily locked.'
+              : `Too many attempts — locked for ${error.otpState.lockedForSeconds} seconds.`);
+          } else if (['expired', 'otp_expired'].includes(error.code)) setOtpMsg('Code expired. Resend a new code.');
+          else setOtpMsg(`Incorrect OTP. ${error.otpState?.attemptsLeft ?? '—'} attempt(s) left.`);
         } else setOtpMsg('OTP verification is unavailable. Please retry.');
       } finally {
         setBusy(false);
@@ -225,16 +210,15 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     else setOtpMsg(`Incorrect OTP. ${r.challenge.attemptsLeft} attempt(s) left.`);
   }
   async function resendOtp() {
-    if (!isLawyer && serverRegistrationId) {
+    if (!isLawyer && otpFlow.state?.status === 'pending' && otpFlow.state.purpose === 'signup') {
       setBusy(true);
       try {
-        await resendStudentOtp(serverRegistrationId);
-        setServerIssuedAt(Date.now());
-        setServerAttemptsLeft(3);
+        otpFlow.adopt(await resendStudentOtp());
         setOtpMsg(null);
         setOtpInput('');
         pushLedger('OTP resent');
-      } catch {
+      } catch (error) {
+        if (error instanceof RegistrationApiError && error.otpState) otpFlow.adopt(error.otpState);
         setOtpMsg('A new code cannot be sent yet. Wait for the cooldown and retry.');
       } finally {
         setBusy(false);
@@ -274,20 +258,12 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     pushLedger(`Student check: ${r.status}`);
     setPhase(nextPhase('details', r.status === 'verified' ? 'result_verified' : r.status === 'manual_review' ? 'result_manual' : 'result_rejected'));
   }
-  function acceptGuardian() {
-    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'verified', withdrawn: false });
-    pushLedger('Guardian consent verified');
-  }
-  function rejectGuardian() {
-    setGuardian({ guardianName: 'Guardian', relationship: 'parent', consentVersion: 'dpdp-2023.v1', channel: 'email', timestamp: nowISO(), verificationStatus: 'rejected', withdrawn: false });
-    pushLedger('Guardian consent rejected');
-  }
   function resetFlow() {
     clearAuthSnapshot(role);
+    clearRegistrationSession();
     setPhase('register'); setChallenge(null); setOtpInput(''); setOtpMsg(null); setDestMasked(null);
-    setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setGuardian(null); setLedger([]);
+    setConsent(false); setConsentAt(null); setRec(null); setSrec(null); setLedger([]);
     setProfile(EMPTY_LAWYER_PROFILE); setSv(EMPTY_STUDENT_VERIFY); setDob('');
-    setServerRegistrationId(null); setServerAttemptsLeft(3);
   }
 
   // --- derived ---
@@ -370,21 +346,27 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         )}
 
         {/* OTP ENTRY (covers sent / entry / invalid / expired / lockout) */}
-        {(phase === 'otp_sent' || phase === 'otp_entry') && (challenge || serverRegistrationId) && (
+        {(phase === 'otp_sent' || phase === 'otp_entry') && (
+          challenge || (!isLawyer && otpFlow.state?.status === 'pending' && otpFlow.state.purpose === 'signup')
+        ) && (
           <div className="st-stack">
             <h2 className="st-panel__title">Verify OTP</h2>
             <p className="st-item__meta">
               Code sent to {destMasked}. {challenge
                 ? (isLocked(challenge, now) ? 'Locked.' : `Expires in ${secondsUntilExpiry(challenge, now)}s.`)
-                : `Expires in ${Math.max(0, 300 - Math.floor((now - serverIssuedAt) / 1000))}s.`}
+                : `Expires in ${otpFlow.state?.expiresInSeconds ?? 0}s.`}
             </p>
             <TextField id="otp-input" label="6-digit code" value={otpInput} onChange={setOtpInput} inputMode="numeric" autoComplete="one-time-code" help="Enter the one-time code sent by SMS. A wrong code shows the invalid/lockout states." />
             {otpMsg && <ValidationState message={otpMsg} />}
             {challenge && isLocked(challenge, now) && <StatusBadge status={chip('risk')} label="Locked — too many attempts" />}
             <div className="st-actions st-actions--split">
-              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={busy || (!!challenge && isLocked(challenge, now))}>Verify</button>
-              <button type="button" className="btn tap" onClick={resendOtp} disabled={busy || (!!challenge && secondsUntilResend(challenge, now) > 0)}>
-                {challenge && secondsUntilResend(challenge, now) > 0 ? `Resend in ${secondsUntilResend(challenge, now)}s` : 'Resend code'}
+              <button type="button" className="btn btn--primary tap" onClick={submitOtp} disabled={busy || (!!challenge && isLocked(challenge, now)) || (!isLawyer && (otpFlow.state?.lockedForSeconds ?? 0) > 0)}>Verify</button>
+              <button type="button" className="btn tap" onClick={resendOtp} disabled={busy || (!!challenge && secondsUntilResend(challenge, now) > 0) || (!isLawyer && !otpFlow.state?.resendAllowed)}>
+                {challenge && secondsUntilResend(challenge, now) > 0
+                  ? `Resend in ${secondsUntilResend(challenge, now)}s`
+                  : !isLawyer && !otpFlow.state?.resendAllowed
+                    ? `Resend in ${otpFlow.state?.resendInSeconds ?? 0}s`
+                    : 'Resend code'}
               </button>
             </div>
           </div>
@@ -429,9 +411,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
             {minorCtx.isMinor && (
               <div className="ui-banner ui-banner--warn" role="status">
                 <span className="ui-banner__mark" aria-hidden>!</span>
-                <span>Minor detected — guardian consent required.&nbsp;</span>
-                <button type="button" className="btn tap" onClick={acceptGuardian}>Guardian accepts</button>
-                <button type="button" className="btn tap" onClick={rejectGuardian}>Guardian declines</button>
+                <span>Minor detected — guardian consent must be completed through the verified guardian channel. A student cannot approve or decline it.</span>
               </div>
             )}
             <PrivacyNotice>{DPDP_MINIMISATION_NOTICE}</PrivacyNotice>

@@ -75,6 +75,7 @@ def provision(session: Session) -> dict[str, int]:
             status="active",
             is_minor=False,
             idempotency_key="wave3-e2e-registration-v1",
+            idempotency_key_legacy=True,
         )
         session.add(registration)
         created_registration = 1

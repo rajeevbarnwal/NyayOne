@@ -1,15 +1,57 @@
-import { apiFetch, newRequestId } from '../../../lib/apiClient';
+import { newRequestId } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
+import {
+  clearRegistrationAttempt,
+  getRegistrationAttempt,
+  setRegistrationAttempt,
+} from './registrationAttemptStore';
+import {
+  STUDENT_AUTH_CHANGED_EVENT,
+  clearStudentBrowserContext,
+  notifyStudentAuthChanged,
+  observeStudentSessionActor,
+  retireLegacyStudentRegistrationState,
+} from './studentBrowserContext';
 
-const SESSION_KEY = 'legalsaathi.student.registration.v2';
-const LEGACY_PII_KEY = 'legalsaathi.student.profile.v1';
+// OTP-flow correlation is exclusively server-owned.  The browser receives only
+// an HttpOnly cookie and relative, display-safe state from GET /otp/state.  In
+// particular, JavaScript never receives or persists registration/login/recovery
+// identifiers, counters anchored to wall-clock timestamps, or bearer material.
+export type OtpFlowStatus = 'pending' | 'verified' | 'authenticated' | 'unavailable';
+export type OtpFlowPurpose = 'signup' | 'login' | 'recovery' | null;
 
-export interface RegistrationSession {
-  registrationId: string;
-  destinationMasked: string;
-  issuedAt: number;
-  isMinor: boolean;
-  guardianConsentPending: boolean;
+export interface OtpFlowState {
+  status: OtpFlowStatus;
+  purpose: OtpFlowPurpose;
+  destinationMasked: string | null;
+  attemptsLeft: number | null;
+  expiresInSeconds: number | null;
+  resendInSeconds: number | null;
+  lockedForSeconds: number | null;
+  resendAllowed: boolean;
 }
+
+interface OtpFlowStateWire {
+  status: OtpFlowStatus;
+  purpose: OtpFlowPurpose;
+  destination_masked: string | null;
+  attempts_left: number | null;
+  expires_in_seconds: number | null;
+  resend_in_seconds: number | null;
+  locked_for_seconds: number | null;
+  resend_allowed: boolean;
+}
+
+const OTP_FLOW_STATE_WIRE_KEYS = [
+  'attempts_left',
+  'destination_masked',
+  'expires_in_seconds',
+  'locked_for_seconds',
+  'purpose',
+  'resend_allowed',
+  'resend_in_seconds',
+  'status',
+] as const;
 
 export interface RegisterStudentInput {
   firstName: string;
@@ -22,7 +64,6 @@ export interface RegisterStudentInput {
 }
 
 export interface AcademicProfileInput {
-  registrationId: string;
   college: string;
   yearOfStudy: string;
   enrolmentNumber: string;
@@ -44,76 +85,203 @@ export class RegistrationApiError extends Error {
     readonly status: number,
     readonly code: string,
     readonly field?: string,
-    readonly attemptsLeft?: number,
+    readonly otpState?: OtpFlowState,
+    readonly retryAfterSeconds?: number,
   ) {
     super(code);
   }
+
+  get attemptsLeft(): number | undefined {
+    return this.otpState?.attemptsLeft ?? undefined;
+  }
+}
+
+function isOtpFlowStateWire(value: unknown): value is OtpFlowStateWire {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Partial<OtpFlowStateWire>;
+  const keys = Object.keys(value as object).sort();
+  if (
+    keys.length !== OTP_FLOW_STATE_WIRE_KEYS.length
+    || !keys.every((key, index) => key === OTP_FLOW_STATE_WIRE_KEYS[index])
+    || !['pending', 'verified', 'authenticated', 'unavailable'].includes(String(state.status))
+    || typeof state.resend_allowed !== 'boolean'
+  ) return false;
+
+  const relative = [
+    state.attempts_left,
+    state.expires_in_seconds,
+    state.resend_in_seconds,
+    state.locked_for_seconds,
+  ];
+  const hasNoCapabilities = state.destination_masked === null
+    && relative.every((item) => item === null);
+
+  if (state.status === 'pending') {
+    const allRelative = relative.every((item) => Number.isSafeInteger(item) && Number(item) >= 0);
+    if (
+      !['signup', 'login', 'recovery'].includes(String(state.purpose))
+      || typeof state.destination_masked !== 'string'
+      || !/^••••••\d{4}$/u.test(state.destination_masked)
+      || !allRelative
+    ) return false;
+    return !state.resend_allowed || (
+      state.resend_in_seconds === 0
+      && state.locked_for_seconds === 0
+      && Number(state.attempts_left) > 0
+    );
+  }
+
+  if (!hasNoCapabilities || state.resend_allowed) return false;
+  if (state.status === 'verified') return state.purpose === 'recovery';
+  if (state.status === 'authenticated') {
+    return state.purpose === 'signup' || state.purpose === 'login';
+  }
+  return state.status === 'unavailable' && state.purpose === null;
+}
+
+function mapOtpFlowState(value: OtpFlowStateWire): OtpFlowState {
+  return {
+    status: value.status,
+    purpose: value.purpose,
+    destinationMasked: value.destination_masked,
+    attemptsLeft: value.attempts_left,
+    expiresInSeconds: value.expires_in_seconds,
+    resendInSeconds: value.resend_in_seconds,
+    lockedForSeconds: value.locked_for_seconds,
+    resendAllowed: value.resend_allowed,
+  };
 }
 
 async function jsonRequest<T>(
   path: string,
   init: RequestInit,
+  lifecycle: { notifyAuthChanged?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers }, lifecycle);
   const body = (await response.json().catch(() => ({}))) as {
-    detail?: { code?: string; field?: string; attempts_left?: number } | string;
+    detail?: { code?: string; field?: string; otp_state?: OtpFlowStateWire } | string;
     error?: {
       code?: string;
       field?: string;
-      attempts_left?: number;
-      detail?: { code?: string; field?: string; attempts_left?: number };
+      otp_state?: OtpFlowStateWire;
+      detail?: { code?: string; field?: string; otp_state?: OtpFlowStateWire };
     };
   } & T;
   if (!response.ok) {
     const detail = typeof body.detail === 'object'
       ? body.detail
       : body.error?.detail ?? body.error;
+    if (
+      detail
+      && Object.prototype.hasOwnProperty.call(detail, 'otp_state')
+      && !isOtpFlowStateWire(detail.otp_state)
+    ) {
+      throw new RegistrationApiError(502, 'invalid_otp_state');
+    }
     throw new RegistrationApiError(
       response.status,
       detail?.code ?? `http_${response.status}`,
       detail?.field,
-      detail?.attempts_left,
+      detail?.otp_state ? mapOtpFlowState(detail.otp_state) : undefined,
+      parseRetryAfterSeconds(response.headers.get('Retry-After')),
     );
   }
   return body;
 }
 
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+  if (value === null || !/^\d+$/.test(value.trim())) return undefined;
+  return Number.parseInt(value, 10);
+}
+
+export async function getOtpFlowState(): Promise<OtpFlowState> {
+  // Re-run at every reload/bootstrap boundary because tests, embedded webviews,
+  // and privacy-restricted browsers may expose Storage after module evaluation.
+  retireLegacyStudentRegistrationState();
+  const result = await jsonRequest<OtpFlowStateWire>(
+    '/api/v1/auth/student/otp/state',
+    { method: 'GET' },
+  );
+  if (!isOtpFlowStateWire(result)) {
+    throw new RegistrationApiError(502, 'invalid_otp_state');
+  }
+  return mapOtpFlowState(result);
+}
+
+function requireOtpFlowState(result: unknown): OtpFlowState {
+  if (!isOtpFlowStateWire(result)) {
+    throw new RegistrationApiError(502, 'invalid_otp_state');
+  }
+  return mapOtpFlowState(result);
+}
+
 export async function registerStudent(
   input: RegisterStudentInput,
-  idempotencyKey: string = newRequestId(),
-): Promise<{ registration_id: string; status: string }> {
-  return jsonRequest('/api/v1/auth/student/register', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({
-      first_name: input.firstName,
-      middle_name: input.middleName,
-      last_name: input.lastName,
-      mobile: input.mobile,
-      dob: input.dob,
-      college: input.college || undefined,
-      consent: { accepted: true, policy_version: input.policyVersion },
-    }),
+  idempotencyKey?: string,
+): Promise<OtpFlowState> {
+  const body = JSON.stringify({
+    first_name: input.firstName,
+    middle_name: input.middleName,
+    last_name: input.lastName,
+    mobile: input.mobile,
+    dob: input.dob,
+    college: input.college || undefined,
+    consent: { accepted: true, policy_version: input.policyVersion },
   });
+  const explicitKey = idempotencyKey !== undefined;
+  if (!explicitKey && getRegistrationAttempt()?.body !== body) {
+    setRegistrationAttempt({ body, key: newRequestId() });
+  }
+  const attemptKey = idempotencyKey ?? getRegistrationAttempt()?.key ?? newRequestId();
+
+  try {
+    const result = await jsonRequest<unknown>(
+      '/api/v1/auth/student/register',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': attemptKey },
+        body,
+      },
+    );
+    if (!explicitKey && getRegistrationAttempt()?.key === attemptKey) {
+      clearRegistrationAttempt();
+    }
+    return requireOtpFlowState(result);
+  } catch (error) {
+    // Transport failures retain the same page-memory key so an uncertain
+    // request can replay safely. A typed terminal outcome is known and the
+    // next user retry is a new logical attempt with a fresh key.
+    if (
+      !explicitKey
+      && error instanceof RegistrationApiError
+      && ['idempotency_conflict', 'otp_delivery_failed', 'registration_replay_expired']
+        .includes(error.code)
+      && getRegistrationAttempt()?.key === attemptKey
+    ) {
+      clearRegistrationAttempt();
+    }
+    throw error;
+  }
 }
 
 export async function verifyStudentOtp(
-  registrationId: string,
   code: string,
-): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/otp/verify', {
+): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId, code }),
+    body: JSON.stringify({ code }),
   });
+  return requireOtpFlowState(result);
 }
 
-export async function resendStudentOtp(registrationId: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/otp/resend', {
+export async function resendStudentOtp(): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/resend', {
     method: 'POST',
-    body: JSON.stringify({ registration_id: registrationId }),
+    body: JSON.stringify({}),
   });
+  return requireOtpFlowState(result);
 }
 
 export async function saveAcademicProfile(
@@ -122,7 +290,6 @@ export async function saveAcademicProfile(
   await jsonRequest('/api/v1/auth/student/profile', {
     method: 'PATCH',
     body: JSON.stringify({
-      registration_id: input.registrationId,
       college: input.college,
       year_of_study: input.yearOfStudy,
       enrolment_number: input.enrolmentNumber,
@@ -133,108 +300,120 @@ export async function saveAcademicProfile(
 }
 
 export async function requestInstitutionalEmailVerification(
-  registrationId: string,
   institutionalEmail: string,
 ): Promise<{ status: string }> {
   return jsonRequest('/api/v1/auth/student/verification/email/request', {
     method: 'POST',
     body: JSON.stringify({
-      registration_id: registrationId,
       institutional_email: institutionalEmail.trim(),
     }),
   });
 }
 
-export async function startRecovery(mobile: string): Promise<string> {
-  const result = await jsonRequest<{ recovery_id: string }>(
+export async function startRecovery(mobile: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/recovery/start',
     { method: 'POST', body: JSON.stringify({ mobile }) },
   );
-  return result.recovery_id;
+  return requireOtpFlowState(result);
 }
 
 export async function verifyRecovery(
-  recoveryId: string,
   code: string,
-): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/recovery/verify', {
+): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/verify', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId, code }),
+    body: JSON.stringify({ code }),
   });
+  return requireOtpFlowState(result);
 }
 
-export async function completeRecovery(recoveryId: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/recovery/complete', {
+export async function completeRecovery(): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/complete', {
     method: 'POST',
-    body: JSON.stringify({ recovery_id: recoveryId }),
+    body: JSON.stringify({}),
   });
+  return requireOtpFlowState(result);
 }
 
-export async function startLoginOtp(mobile: string): Promise<string> {
-  const result = await jsonRequest<{ login_id: string }>(
+export async function startLoginOtp(mobile: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/login/otp/start',
     { method: 'POST', body: JSON.stringify({ mobile }) },
   );
-  return result.login_id;
+  return requireOtpFlowState(result);
 }
 
-export async function verifyLoginOtp(loginId: string, code: string): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/login/otp/verify', {
+export async function verifyLoginOtp(code: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>('/api/v1/auth/student/login/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ login_id: loginId, code }),
+    body: JSON.stringify({ code }),
   });
+  const state = requireOtpFlowState(result);
+  if (state.status === 'authenticated' && state.purpose === 'login') {
+    // Clear actor A before the login UI publishes actor B via its auth event.
+    clearStudentBrowserContext();
+  }
+  return state;
 }
 
 export async function getStudentSession(): Promise<StudentSessionActor | null> {
   const result = await jsonRequest<{
     authenticated: boolean;
     actor: StudentSessionActor | null;
-  }>('/api/v1/auth/student/session', { method: 'GET' });
-  return result.authenticated ? result.actor : null;
+  }>('/api/v1/auth/student/session', { method: 'GET' }, { notifyAuthChanged: false });
+  if (result.authenticated !== true || !isStudentSessionActor(result.actor)) {
+    clearStudentBrowserContext();
+    return null;
+  }
+  retireLegacyStudentRegistrationState();
+  observeStudentSessionActor({
+    subject: result.actor.sub,
+    studentProfileId: result.actor.student_profile_id,
+  });
+  return result.actor;
 }
 
 export async function logoutStudent(): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/logout', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-}
-
-export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
-
-export function notifyStudentAuthChanged(): void {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(STUDENT_AUTH_CHANGED_EVENT));
-  }
-}
-
-export function saveRegistrationSession(value: RegistrationSession): void {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
-  // Remove the old browser-persisted PII draft whenever the corrected flow runs.
-  window.localStorage.removeItem(LEGACY_PII_KEY);
-}
-
-export function loadRegistrationSession(): RegistrationSession | null {
-  if (typeof window === 'undefined') return null;
+  let accepted = false;
   try {
-    const raw = window.sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<RegistrationSession>;
-    if (
-      typeof parsed.registrationId !== 'string'
-      || typeof parsed.destinationMasked !== 'string'
-      || typeof parsed.issuedAt !== 'number'
-      || typeof parsed.isMinor !== 'boolean'
-      || typeof parsed.guardianConsentPending !== 'boolean'
-    ) return null;
-    return parsed as RegistrationSession;
-  } catch {
-    return null;
+    await jsonRequest('/api/v1/auth/student/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }, { notifyAuthChanged: false });
+    accepted = true;
+  } finally {
+    clearStudentBrowserContext({
+      notifyAuthChanged: true,
+      consumeRegisteredActor: accepted,
+    });
   }
 }
+
+export { STUDENT_AUTH_CHANGED_EVENT, notifyStudentAuthChanged };
 
 export function clearRegistrationSession(): void {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(SESSION_KEY);
+  clearStudentBrowserContext();
 }
+
+function isStudentSessionActor(value: unknown): value is StudentSessionActor {
+  if (!value || typeof value !== 'object') return false;
+  const actor = value as Partial<StudentSessionActor>;
+  const acceptedServerRoles = new Set(['student', 'moderator', 'admin']);
+  return typeof actor.sub === 'string'
+    && actor.sub.trim().length > 0
+    && Array.isArray(actor.roles)
+    && actor.roles.length === 1
+    && typeof actor.roles[0] === 'string'
+    && acceptedServerRoles.has(actor.roles[0])
+    && (actor.student_profile_id === null
+      || (typeof actor.student_profile_id === 'string' && actor.student_profile_id.length > 0))
+    && (actor.student_verification === 'draft' || actor.student_verification === 'verified')
+    && typeof actor.is_minor === 'boolean'
+    && Array.isArray(actor.consent_state)
+    && actor.consent_state.every((state) => typeof state === 'string');
+}
+
+// Erase retired browser-persisted registration/PII state as soon as the new
+// bundle loads, even if the subsequent server-session probe cannot complete.
+retireLegacyStudentRegistrationState();

@@ -30,7 +30,7 @@ if str(BACKEND) not in sys.path:
 from app.core.config import is_isolated_wave4_database_url
 
 BLOCKED = 78
-HEAD = "0017_registration_invariants"
+HEAD = "0020_auth_retention_lifecycle"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
@@ -147,7 +147,12 @@ class Results:
 def run_alembic(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "alembic", *args], cwd=BACKEND,
-        env=os.environ.copy(), capture_output=True, text=True,
+        env={
+            **os.environ,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
+        capture_output=True,
+        text=True,
     )
 
 

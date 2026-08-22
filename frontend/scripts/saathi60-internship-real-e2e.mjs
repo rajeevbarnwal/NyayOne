@@ -229,7 +229,11 @@ async function verifyVisualPage(page, screen, viewport, theme, screenshotPath) {
 const browser = await chromium.launch({ headless: true });
 const api = await playwrightRequest.newContext({
   baseURL: API.origin,
-  extraHTTPHeaders: { Accept: 'application/json', 'Content-Type': 'application/json' },
+  extraHTTPHeaders: {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Origin: WEB.origin,
+  },
 });
 
 try {
@@ -244,11 +248,12 @@ try {
     consent: { accepted: true },
   });
   requireRow('registration:start', 'HTTP 201', registration.status, registration.status === 201);
-  const registrationId = registration.body?.registration_id;
-  if (typeof registrationId !== 'string') throw new Error('registration_id missing');
+  requireRow('registration:flow-projection', 'pending signup state without client handle', registration.body,
+    registration.body?.status === 'pending'
+      && registration.body?.purpose === 'signup'
+      && !/(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/.test(JSON.stringify(registration.body)));
   const registrationCode = await latestOtp();
   const registrationVerify = await apiJson(api, 'POST', '/api/v1/auth/student/otp/verify', {
-    registration_id: registrationId,
     code: registrationCode,
   });
   requireRow('registration:verify', 'HTTP 200', registrationVerify.status, registrationVerify.status === 200);
@@ -256,11 +261,12 @@ try {
   await resetOtp();
   const loginStart = await apiJson(api, 'POST', '/api/v1/auth/student/login/otp/start', { mobile });
   requireRow('login:start', 'non-enumerating HTTP 202', loginStart.status, loginStart.status === 202);
-  const loginId = loginStart.body?.login_id;
-  if (typeof loginId !== 'string') throw new Error('login_id missing');
+  requireRow('login:flow-projection', 'pending login state without client handle', loginStart.body,
+    loginStart.body?.status === 'pending'
+      && loginStart.body?.purpose === 'login'
+      && !/(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/.test(JSON.stringify(loginStart.body)));
   const loginCode = await latestOtp();
   const loginVerify = await apiJson(api, 'POST', '/api/v1/auth/student/login/otp/verify', {
-    login_id: loginId,
     code: loginCode,
   });
   requireRow('login:verify', 'HTTP 200 and authenticated session', loginVerify.status, loginVerify.status === 200);

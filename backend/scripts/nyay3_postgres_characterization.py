@@ -18,6 +18,7 @@ Exit codes:
 * 1: a product assertion or harness assertion failed;
 * 78: PostgreSQL 16/pgvector or scratch-database authority was unavailable.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -124,6 +125,15 @@ TARGET_INDEX_DEFINITIONS = {
         "predicate": "status = 'active'",
     },
 }
+OTP_PENDING_SERVICE_INDEX = (
+    "uq_otp_challenges_one_pending_delivery_per_authority"
+)
+OTP_PENDING_SERVICE_INDEX_DEFINITION = {
+    "columns": ("authority_id",),
+    "predicate": (
+        "authority_id is not null and delivery_state = 'pending_delivery'"
+    ),
+}
 GUARDIAN_STATE_SQL = (
     "(status = 'verified' AND verified = true) OR "
     "(status IN ('pending', 'sent', 'rejected') AND verified = false)"
@@ -172,13 +182,8 @@ class ScratchCleanupFailure(RuntimeError):
 def _reject_ambient_libpq_environment() -> None:
     """Forbid libpq authority or credential overrides without echoing values."""
 
-    if any(
-        key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL")
-        for key in os.environ
-    ):
-        raise Blocked(
-            "ambient libpq routing or credential environment is not allowed"
-        )
+    if any(key in LIBPQ_AMBIENT_KEYS or key.startswith("PGSSL") for key in os.environ):
+        raise Blocked("ambient libpq routing or credential environment is not allowed")
 
 
 def _safe_local_postgres_url(raw: str) -> URL:
@@ -308,6 +313,7 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
             **os.environ,
             "APP_ENV": "testing",
             "DATABASE_URL": scratch_url,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
         },
         capture_output=True,
         text=True,
@@ -320,9 +326,30 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
     return {
         "arguments": list(arguments),
         "returncode": result.returncode,
-        "generic_preflight_rejection": (
-            GENERIC_PREFLIGHT_REJECTION in combined_output
-        ),
+        "generic_preflight_rejection": (GENERIC_PREFLIGHT_REJECTION in combined_output),
+    }
+
+
+def _exact_revision_check(engine: Engine, expected: str) -> dict[str, Any]:
+    """Check a historical lifecycle target without consulting repository head.
+
+    ``alembic check`` compares a database to current ORM metadata.  NYAY-3's
+    lifecycle is intentionally pinned to 0017, so that command becomes false
+    evidence as soon as a later ticket adds 0018.  The exact target inventory
+    and schema fingerprints below remain the substantive historical proof.
+    """
+
+    try:
+        with engine.connect() as connection:
+            revision = connection.scalar(
+                text("SELECT version_num FROM alembic_version")
+            )
+    except Exception:  # noqa: BLE001 - evidence remains aggregate-only
+        revision = None
+    return {
+        "arguments": ["exact-revision", expected],
+        "returncode": 0 if revision == expected else 1,
+        "generic_preflight_rejection": False,
     }
 
 
@@ -469,7 +496,8 @@ def _runtime_inventory(engine: Engine) -> dict[str, Any]:
                     WHERE ns.nspname = current_schema()
                       AND idx.relname IN (
                           'uq_otp_challenges_one_active_per_registration_purpose',
-                          'uq_auth_sessions_one_active_per_user'
+                          'uq_auth_sessions_one_active_per_user',
+                          'uq_otp_challenges_one_pending_delivery_per_authority'
                       )
                     ORDER BY idx.relname
                     """
@@ -541,6 +569,15 @@ def _runtime_inventory(engine: Engine) -> dict[str, Any]:
             and columns_match
             and definition_match
         )
+    pending_service_detail = index_details.get(OTP_PENDING_SERVICE_INDEX)
+    pending_service_index_semantics = bool(
+        pending_service_detail
+        and pending_service_detail["unique"] is True
+        and tuple(pending_service_detail["columns"])
+        == OTP_PENDING_SERVICE_INDEX_DEFINITION["columns"]
+        and pending_service_detail["predicate"]
+        == OTP_PENDING_SERVICE_INDEX_DEFINITION["predicate"]
+    )
     return {
         "server_version_num": server_version_num,
         "postgresql_16_or_newer": server_version_num >= 160000,
@@ -550,14 +587,13 @@ def _runtime_inventory(engine: Engine) -> dict[str, Any]:
         "constraints": constraints,
         "index_details": index_details,
         "constraint_details": constraint_details,
-        "target_indexes_present": {
-            name: name in indexes for name in TARGET_INDEXES
-        },
+        "target_indexes_present": {name: name in indexes for name in TARGET_INDEXES},
         "target_constraints_present": {
             name: name in constraints for name in TARGET_CONSTRAINTS
         },
         "target_index_semantics": target_index_semantics,
         "target_constraint_semantics": target_constraint_semantics,
+        "pending_service_index_semantics": pending_service_index_semantics,
     }
 
 
@@ -567,6 +603,7 @@ def _seed_registration(
     user_id: uuid.UUID,
     registration_id: uuid.UUID,
     discriminator: str,
+    status: str = "active",
 ) -> None:
     with engine.begin() as connection:
         connection.execute(
@@ -586,7 +623,7 @@ def _seed_registration(
                     dob_hash, dob_ct, dob_hash_state, key_version, status, is_minor
                 ) VALUES (
                     :id, :user_id, 'NYAY3', 'Probe', :mobile_hash,
-                    :mobile_ct, :dob_hash, :dob_ct, 'verified', 'v1', 'active', false
+                    :mobile_ct, :dob_hash, :dob_ct, 'verified', 'v1', :status, false
                 )
                 """
             ),
@@ -597,8 +634,88 @@ def _seed_registration(
                 "mobile_ct": f"qa:{discriminator}:ciphertext",
                 "dob_hash": ((discriminator[::-1] or "d") * 64)[:64],
                 "dob_ct": f"qa:{discriminator}:dob-ciphertext",
+                "status": status,
             },
         )
+
+
+_OTP_SIGNUP_SERVICE_OWNERS = frozenset(
+    {
+        "otp_start",
+        "resend",
+        "delivery_race",
+        "otp_conflict",
+        "otp_mutant",
+    }
+)
+
+
+def _service_probe_registration_status(owner: str) -> str:
+    """Return the product-valid lifecycle state for each service fixture."""
+
+    return "otp_pending" if owner in _OTP_SIGNUP_SERVICE_OWNERS else "active"
+
+
+def _seed_current_signup_flow(
+    engine: Engine,
+    *,
+    registration_id: uuid.UUID,
+    now: datetime,
+) -> uuid.UUID:
+    """Attach one real browser flow to a direct service-level OTP fixture."""
+
+    from app.models.registration import StudentRegistration
+    from app.services import otp_flow_service, otp_service
+
+    with Session(engine) as session:
+        registration = session.get(StudentRegistration, registration_id)
+        if registration is None:
+            raise RuntimeError("OTP flow seed registration is unavailable")
+        authority = otp_service.authority_for_registration(
+            session,
+            registration,
+            "signup",
+            now,
+        )
+        _, flow = otp_flow_service.create_flow(
+            session,
+            authority,
+            now=now,
+            destination="9000000000",
+            challenge=None,
+            registration_id=registration_id,
+            raw_token=f"nyay3-service-flow-{registration_id.hex}",
+        )
+        if flow.challenge_id is not None or flow.state != "pending":
+            raise RuntimeError("OTP flow seed is not a pending authority capability")
+        authority_id = authority.id
+        session.commit()
+        return authority_id
+
+
+def _seed_raw_otp_race_authorities(
+    engine: Engine,
+    *,
+    workers: int,
+    now: datetime,
+) -> tuple[uuid.UUID, ...]:
+    """Create distinct valid decoy authorities to isolate the NYAY-3 index."""
+
+    from app.services.otp_authority import lock_or_create_authority
+
+    authority_ids: list[uuid.UUID] = []
+    with Session(engine) as session:
+        for index in range(workers):
+            authority = lock_or_create_authority(
+                session,
+                subject_hash=f"{index + 4096:064x}",
+                purpose="login",
+                registration_id=None,
+                now=now,
+            )
+            authority_ids.append(authority.id)
+        session.commit()
+    return tuple(authority_ids)
 
 
 def _lifecycle_row_snapshot(
@@ -935,11 +1052,8 @@ def _clean_lifecycle_case_passes(case: dict[str, Any]) -> bool:
         and observations.get("parent", {}).get("target_objects_absent") is True
         and observations.get("first_head", {}).get("revision") == HEAD_REVISION
         and observations.get("first_head", {}).get("target_objects_exact") is True
-        and observations.get("downgraded_parent", {}).get("revision")
-        == PARENT_REVISION
-        and observations.get("downgraded_parent", {}).get(
-            "target_objects_absent"
-        )
+        and observations.get("downgraded_parent", {}).get("revision") == PARENT_REVISION
+        and observations.get("downgraded_parent", {}).get("target_objects_absent")
         is True
         and observations.get("final_head", {}).get("revision") == HEAD_REVISION
         and observations.get("final_head", {}).get("target_objects_exact") is True
@@ -961,9 +1075,7 @@ def _dirty_lifecycle_case_passes(case: dict[str, Any]) -> bool:
     return bool(
         commands.get("setup_parent", {}).get("returncode") == 0
         and commands.get("rejected_upgrade", {}).get("returncode") not in (None, 0)
-        and commands.get("rejected_upgrade", {}).get(
-            "generic_preflight_rejection"
-        )
+        and commands.get("rejected_upgrade", {}).get("generic_preflight_rejection")
         is True
         and observations.get("before", {}).get("revision") == PARENT_REVISION
         and observations.get("before", {}).get("target_objects_absent") is True
@@ -1010,14 +1122,12 @@ def _run_clean_migration_lifecycle(
         parent_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         report["observations"]["parent"] = parent
 
-        commands["upgrade_head"] = _run_alembic(
-            scratch_url, "upgrade", HEAD_REVISION
-        )
+        commands["upgrade_head"] = _run_alembic(scratch_url, "upgrade", HEAD_REVISION)
         first_head, first_fingerprint = _target_inventory_observation(engine)
         first_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         first_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["first_head"] = first_head
-        commands["check_head"] = _run_alembic(scratch_url, "check")
+        commands["check_head"] = _exact_revision_check(engine, HEAD_REVISION)
 
         commands["downgrade_parent"] = _run_alembic(
             scratch_url, "downgrade", PARENT_REVISION
@@ -1027,14 +1137,12 @@ def _run_clean_migration_lifecycle(
         downgraded_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["downgraded_parent"] = downgraded
 
-        commands["reupgrade_head"] = _run_alembic(
-            scratch_url, "upgrade", HEAD_REVISION
-        )
+        commands["reupgrade_head"] = _run_alembic(scratch_url, "upgrade", HEAD_REVISION)
         final_head, final_fingerprint = _target_inventory_observation(engine)
         final_schema_fingerprint = _lifecycle_schema_fingerprint(engine)
         final_rows = _lifecycle_row_snapshot(engine)
         report["observations"]["final_head"] = final_head
-        commands["recheck_head"] = _run_alembic(scratch_url, "check")
+        commands["recheck_head"] = _exact_revision_check(engine, HEAD_REVISION)
 
         report["row_preservation"] = {
             "upgrade": first_rows == before_rows,
@@ -1155,7 +1263,7 @@ def _insert_worker(
     kind: str,
     index: int,
     barrier: threading.Barrier,
-    ids: dict[str, uuid.UUID],
+    ids: dict[str, Any],
 ) -> dict[str, Any]:
     """Run one transaction on one physical PostgreSQL connection."""
 
@@ -1168,21 +1276,24 @@ def _insert_worker(
             result["backend_pid"] = connection.scalar(text("SELECT pg_backend_pid()"))
             barrier.wait(timeout=30)
             if kind == "otp":
+                authority_ids = ids["otp_authority_ids"]
                 connection.execute(
                     text(
                         """
                         INSERT INTO otp_challenges (
-                            id, registration_id, purpose, verifier_hash,
-                            attempts, max_attempts, expires_at
+                            id, registration_id, authority_id, purpose,
+                            delivery_state, verifier_hash, attempts,
+                            max_attempts, expires_at
                         ) VALUES (
-                            :id, :registration_id, 'login', :verifier_hash,
-                            0, 3, :expires_at
+                            :id, :registration_id, :authority_id, 'login',
+                            'active', :verifier_hash, 0, 3, :expires_at
                         )
                         """
                     ),
                     {
                         "id": row_id,
                         "registration_id": ids["otp_registration"],
+                        "authority_id": authority_ids[index],
                         "verifier_hash": f"{index:064x}",
                         "expires_at": now + timedelta(minutes=5),
                     },
@@ -1192,18 +1303,19 @@ def _insert_worker(
                         """
                         INSERT INTO otp_outbox (
                             id, challenge_id, destination_ct, code_ct,
-                            key_version, purpose, status, attempts
+                            key_version, purpose, status, attempts,
+                            delivered_at, provider_idempotency_key
                         ) VALUES (
-                            :id, :challenge_id, :destination_ct, :code_ct,
-                            'v1', 'login', 'pending', 0
+                            :id, :challenge_id, NULL, NULL, 'v1', 'login',
+                            'sent', 1, :delivered_at, :provider_key
                         )
                         """
                     ),
                     {
                         "id": uuid.uuid4(),
                         "challenge_id": row_id,
-                        "destination_ct": f"qa:destination:{index}",
-                        "code_ct": f"qa:code:{index}",
+                        "delivered_at": now,
+                        "provider_key": f"{index + 8192:064x}",
                     },
                 )
             elif kind == "session":
@@ -1269,15 +1381,13 @@ def _run_race(
     scratch_url: str,
     kind: str,
     workers: int,
-    ids: dict[str, uuid.UUID],
+    ids: dict[str, Any],
 ) -> list[dict[str, Any]]:
     barrier = threading.Barrier(workers)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(
             pool.map(
-                lambda index: _insert_worker(
-                    scratch_url, kind, index, barrier, ids
-                ),
+                lambda index: _insert_worker(scratch_url, kind, index, barrier, ids),
                 range(workers),
             )
         )
@@ -1289,7 +1399,7 @@ def _summarize_race(
     *,
     kind: str,
     results: list[dict[str, Any]],
-    ids: dict[str, uuid.UUID],
+    ids: dict[str, Any],
 ) -> dict[str, Any]:
     count_sql = {
         "otp": """
@@ -1298,9 +1408,11 @@ def _summarize_race(
             JOIN otp_outbox o ON o.challenge_id = c.id
             WHERE c.registration_id = :owner_id
               AND c.purpose = 'login'
+              AND c.delivery_state = 'active'
               AND c.consumed_at IS NULL
-              AND o.status = 'pending'
-              AND o.code_ct IS NOT NULL
+              AND o.status = 'sent'
+              AND o.code_ct IS NULL
+              AND o.destination_ct IS NULL
         """,
         "session": """
             SELECT count(*) FROM auth_sessions
@@ -1322,13 +1434,9 @@ def _summarize_race(
         "verification": ids["verification_registration"],
     }[kind]
     with engine.connect() as connection:
-        persisted = int(
-            connection.scalar(text(count_sql), {"owner_id": owner_id}) or 0
-        )
+        persisted = int(connection.scalar(text(count_sql), {"owner_id": owner_id}) or 0)
     outcomes = [item["outcome"] for item in results]
-    pids = sorted(
-        {item["backend_pid"] for item in results if item.get("backend_pid")}
-    )
+    pids = sorted({item["backend_pid"] for item in results if item.get("backend_pid")})
     return {
         "workers": len(results),
         "distinct_backend_pids": pids,
@@ -1392,7 +1500,7 @@ def _service_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _deliverable_inventory(
+def _otp_lifecycle_inventory(
     engine: Engine,
     registration_id: uuid.UUID,
     purpose: str,
@@ -1402,12 +1510,21 @@ def _deliverable_inventory(
             text(
                 """
                 SELECT
-                    count(*) FILTER (WHERE c.consumed_at IS NULL) AS active,
                     count(*) FILTER (
-                        WHERE c.consumed_at IS NULL
-                          AND o.status = 'pending'
+                        WHERE c.delivery_state = 'active'
+                          AND c.consumed_at IS NULL
+                    ) AS active,
+                    count(*) FILTER (
+                        WHERE c.delivery_state = 'pending_delivery'
+                          AND c.consumed_at IS NOT NULL
+                    ) AS pending_delivery,
+                    count(*) FILTER (
+                        WHERE c.delivery_state = 'pending_delivery'
+                          AND c.consumed_at IS NOT NULL
+                          AND o.status IN ('pending', 'claimed', 'failed')
                           AND o.code_ct IS NOT NULL
-                    ) AS deliverable
+                          AND o.destination_ct IS NOT NULL
+                    ) AS relayable_pending
                 FROM otp_challenges c
                 LEFT JOIN otp_outbox o ON o.challenge_id = c.id
                 WHERE c.registration_id = :registration_id
@@ -1416,7 +1533,11 @@ def _deliverable_inventory(
             ),
             {"registration_id": registration_id, "purpose": purpose},
         ).one()
-    return {"active": int(row.active or 0), "deliverable": int(row.deliverable or 0)}
+    return {
+        "active": int(row.active or 0),
+        "pending_delivery": int(row.pending_delivery or 0),
+        "relayable_pending": int(row.relayable_pending or 0),
+    }
 
 
 def _seed_login_attempt(
@@ -1425,20 +1546,34 @@ def _seed_login_attempt(
     now: datetime,
 ) -> tuple[uuid.UUID, uuid.UUID, str, str]:
     from app.core.crypto import otp_verifier
-    from app.models.registration import LoginAttempt, OtpChallenge
+    from app.models.registration import (
+        LoginAttempt,
+        OtpChallenge,
+        StudentRegistration,
+    )
+    from app.services.otp_authority import lock_or_create_registration_authority
 
     code = "654321"
     salt = uuid.uuid4().hex
     with Session(engine) as session:
+        registration = session.get(StudentRegistration, registration_id)
+        if registration is None:
+            raise RuntimeError("login seed registration is unavailable")
+        authority = lock_or_create_registration_authority(
+            session, registration, "login", now
+        )
         challenge = OtpChallenge(
             registration_id=registration_id,
+            authority_id=authority.id,
             purpose="login",
+            delivery_state="active",
             verifier_hash=otp_verifier(code, salt=salt),
             attempts=0,
             max_attempts=3,
             expires_at=now + timedelta(minutes=5),
             metadata_json={"salt": salt, "issued_at": now.isoformat()},
         )
+        authority.active_expires_at = challenge.expires_at
         session.add(challenge)
         session.flush()
         attempt = LoginAttempt(
@@ -1460,10 +1595,16 @@ def _outbox_delivery_supersede_probe(
     registration_id: uuid.UUID,
     now: datetime,
 ) -> dict[str, Any]:
-    """Prove delivery/supersession share challenge -> outbox lock order."""
+    """Prove provider I/O is lock-free and reuses the fenced pending intent."""
 
+    from app.core.config import settings
     from app.services import otp_outbox, otp_service
 
+    _seed_current_signup_flow(
+        engine,
+        registration_id=registration_id,
+        now=now,
+    )
     with Session(engine) as session:
         _challenge, intent = otp_service.issue_challenge(
             session,
@@ -1472,6 +1613,7 @@ def _outbox_delivery_supersede_probe(
             purpose="signup",
             destination="9000000000",
         )
+        challenge_id = _challenge.id
         session.commit()
 
     sender_started = threading.Event()
@@ -1488,13 +1630,22 @@ def _outbox_delivery_supersede_probe(
                 raise RuntimeError("bounded sender release was not observed")
             sender_attempts += 1
 
+        def send_idempotent(
+            self,
+            destination: str,
+            code: str,
+            *,
+            idempotency_token: str,
+        ) -> str:
+            del idempotency_token
+            self.send(destination, code)
+            return "nyay3-gate-receipt"
+
     def delivery() -> str:
         local_engine = create_engine(scratch_url, poolclass=NullPool)
         try:
             with Session(local_engine) as session:
-                pids["delivery"] = int(
-                    session.scalar(text("SELECT pg_backend_pid()"))
-                )
+                pids["delivery"] = int(session.scalar(text("SELECT pg_backend_pid()")))
                 session.execute(text("SET LOCAL lock_timeout = '20s'"))
                 session.execute(text("SET LOCAL statement_timeout = '60s'"))
                 delivered = otp_outbox.run_delivery(
@@ -1502,6 +1653,7 @@ def _outbox_delivery_supersede_probe(
                     intent,
                     BlockingSender(),
                     raise_on_failure=True,
+                    now=now,
                 )
                 return "success" if delivered else "not_delivered"
         except Exception as exc:  # noqa: BLE001 - bounded type only
@@ -1509,22 +1661,30 @@ def _outbox_delivery_supersede_probe(
         finally:
             local_engine.dispose()
 
+    same_pending_intent = False
+
     def supersede() -> str:
+        nonlocal same_pending_intent
         local_engine = create_engine(scratch_url, poolclass=NullPool)
         try:
             with Session(local_engine) as session:
-                pids["supersede"] = int(
-                    session.scalar(text("SELECT pg_backend_pid()"))
-                )
+                pids["supersede"] = int(session.scalar(text("SELECT pg_backend_pid()")))
                 session.execute(text("SET LOCAL lock_timeout = '20s'"))
                 session.execute(text("SET LOCAL statement_timeout = '60s'"))
                 supersede_started.set()
-                otp_service.issue_challenge(
+                candidate, observed_intent = otp_service.issue_challenge(
                     session,
                     registration_id,
-                    now + timedelta(seconds=31),
+                    now
+                    + timedelta(
+                        seconds=settings.otp_resend_cooldown_seconds + 1
+                    ),
                     purpose="signup",
                     destination="9000000000",
+                )
+                same_pending_intent = (
+                    candidate.id == challenge_id
+                    and observed_intent.outbox_id == intent.outbox_id
                 )
                 session.commit()
                 return "success"
@@ -1533,7 +1693,6 @@ def _outbox_delivery_supersede_probe(
         finally:
             local_engine.dispose()
 
-    lock_wait_observed = False
     with ThreadPoolExecutor(max_workers=2) as pool:
         delivery_future = pool.submit(delivery)
         if not sender_started.wait(timeout=30):
@@ -1544,21 +1703,9 @@ def _outbox_delivery_supersede_probe(
             sender_release.set()
             raise RuntimeError("supersession did not start")
         deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            supersede_pid = pids.get("supersede")
-            if supersede_pid is not None:
-                with engine.connect() as connection:
-                    wait_type = connection.scalar(
-                        text(
-                            "SELECT wait_event_type FROM pg_stat_activity "
-                            "WHERE pid=:pid"
-                        ),
-                        {"pid": supersede_pid},
-                    )
-                if wait_type == "Lock":
-                    lock_wait_observed = True
-                    break
+        while not supersede_future.done() and time.monotonic() < deadline:
             time.sleep(0.05)
+        supersede_completed_during_provider_io = supersede_future.done()
         sender_release.set()
         delivery_outcome = delivery_future.result(timeout=30)
         supersede_outcome = supersede_future.result(timeout=30)
@@ -1570,13 +1717,16 @@ def _outbox_delivery_supersede_probe(
         ).one()
     return {
         "distinct_backend_pids": sorted(set(pids.values())),
-        "lock_wait_observed": lock_wait_observed,
+        "supersede_completed_during_provider_io": (
+            supersede_completed_during_provider_io
+        ),
+        "same_pending_intent": same_pending_intent,
         "delivery_outcome": delivery_outcome,
         "supersede_outcome": supersede_outcome,
         "sender_attempts": sender_attempts,
         "prior_outbox_status": prior.status,
         "prior_code_erased": prior.code_ct is None,
-        **_deliverable_inventory(engine, registration_id, "signup"),
+        **_otp_lifecycle_inventory(engine, registration_id, "signup"),
     }
 
 
@@ -1586,7 +1736,14 @@ def _service_probes(
 ) -> dict[str, Any]:
     """Exercise the real OTP and session services plus unsafe mutants."""
 
-    from app.models.registration import AuthSession, StudentRegistration, User
+    from app.core.config import settings
+    from app.models.registration import (
+        AuthSession,
+        OtpChallenge,
+        OtpPurposeAuthority,
+        StudentRegistration,
+        User,
+    )
     from app.services import login_service, otp_service
 
     now = datetime.now(timezone.utc)
@@ -1610,6 +1767,7 @@ def _service_probes(
             user_id=user_id,
             registration_id=registration_id,
             discriminator=f"{index + 32:x}",
+            status=_service_probe_registration_status(name),
         )
         owners[name] = (user_id, registration_id)
 
@@ -1631,17 +1789,28 @@ def _service_probes(
 
         return operation
 
+    otp_start_registration = owners["otp_start"][1]
+    _seed_current_signup_flow(
+        engine,
+        registration_id=otp_start_registration,
+        now=now,
+    )
     otp_results = _run_service_race(
         scratch_url,
         WORKERS,
-        issue_operation(owners["otp_start"][1]),
+        issue_operation(otp_start_registration),
     )
     otp_start = {
         **_service_summary(otp_results),
-        **_deliverable_inventory(engine, owners["otp_start"][1], "signup"),
+        **_otp_lifecycle_inventory(engine, otp_start_registration, "signup"),
     }
 
     resend_registration = owners["resend"][1]
+    _seed_current_signup_flow(
+        engine,
+        registration_id=resend_registration,
+        now=now,
+    )
     with Session(engine) as session:
         otp_service.issue_challenge(
             session,
@@ -1658,7 +1827,10 @@ def _service_probes(
                 otp_service.resend(
                     session,
                     resend_registration,
-                    now + timedelta(seconds=31),
+                    now
+                    + timedelta(
+                        seconds=settings.otp_resend_cooldown_seconds + 1
+                    ),
                     purpose="signup",
                     destination="9000000000",
                 )
@@ -1666,7 +1838,10 @@ def _service_probes(
                 otp_service.issue_challenge(
                     session,
                     resend_registration,
-                    now + timedelta(seconds=31),
+                    now
+                    + timedelta(
+                        seconds=settings.otp_resend_cooldown_seconds + 1
+                    ),
                     purpose="signup",
                     destination="9000000000",
                 )
@@ -1679,7 +1854,7 @@ def _service_probes(
     resend_results = _run_service_race(scratch_url, 2, resend_or_start)
     resend = {
         **_service_summary(resend_results),
-        **_deliverable_inventory(engine, resend_registration, "signup"),
+        **_otp_lifecycle_inventory(engine, resend_registration, "signup"),
     }
 
     verify_user, verify_registration = owners["verify"]
@@ -1736,9 +1911,7 @@ def _service_probes(
             session.rollback()
             return f"login_error:{exc.code}"
 
-    rotation_results = _run_service_race(
-        scratch_url, WORKERS, rotation_operation
-    )
+    rotation_results = _run_service_race(scratch_url, WORKERS, rotation_operation)
     with engine.connect() as connection:
         active_rotations = int(
             connection.scalar(
@@ -1762,38 +1935,57 @@ def _service_probes(
         now,
     )
 
-    # Keep each unique index in place while bypassing only the application lock
-    # seams.  A barrier after the unlocked zero-child read deterministically
-    # makes the two transactions collide at the real service flush.  There must
-    # be no post-insert barrier: the losing PostgreSQL backend waits for the
-    # winner's unique-index transaction to finish before it can be classified.
+    # Keep the current pending-delivery index in place while bypassing only the
+    # application locks and pending-intent observation. A barrier after the
+    # unlocked zero-child read makes both transactions collide at the real
+    # service flush. There is intentionally no post-insert barrier: the losing
+    # backend must wait for and classify the unique-index winner.
     otp_conflict_registration = owners["otp_conflict"][1]
-    original_conflict_registration_lock = otp_service.lock_registration_for_update
-    original_conflict_otp_read = otp_service.active_challenges_for_replacement
+    otp_conflict_authority = _seed_current_signup_flow(
+        engine,
+        registration_id=otp_conflict_registration,
+        now=now,
+    )
+    original_conflict_registration_lock = (
+        otp_service.registration_service.lock_registration_with_idempotency
+    )
+    original_conflict_authority_lock = otp_service.authority_for_registration
+    original_conflict_pending_read = otp_service._pending_intent
     otp_conflict_read_barrier = threading.Barrier(CONFLICT_WORKERS)
 
     def conflict_registration_load(
         session: Session,
         registration_id: uuid.UUID,
     ):
-        return session.get(StudentRegistration, registration_id)
+        return session.get(StudentRegistration, registration_id), None
 
-    def conflict_active_otp_read(
+    def conflict_authority_load(
         session: Session,
-        registration_id: uuid.UUID,
+        registration: StudentRegistration,
         purpose: str,
-    ) -> list[Any]:
-        rows = list(
-            session.scalars(
-                select(otp_service.OtpChallenge).where(
-                    otp_service.OtpChallenge.registration_id == registration_id,
-                    otp_service.OtpChallenge.purpose == purpose,
-                    otp_service.OtpChallenge.consumed_at.is_(None),
-                )
+        _now: datetime,
+    ) -> OtpPurposeAuthority:
+        if registration.id != otp_conflict_registration or purpose != "signup":
+            raise RuntimeError("OTP conflict authority request is unexpected")
+        authority = session.get(OtpPurposeAuthority, otp_conflict_authority)
+        if authority is None:
+            raise RuntimeError("OTP conflict authority is unavailable")
+        return authority
+
+    def conflict_pending_read(
+        session: Session,
+        authority: OtpPurposeAuthority,
+    ) -> None:
+        candidate_id = session.scalar(
+            select(OtpChallenge.id).where(
+                OtpChallenge.authority_id == authority.id,
+                OtpChallenge.delivery_state == "pending_delivery",
             )
         )
         otp_conflict_read_barrier.wait(timeout=30)
-        return rows
+        if candidate_id is not None:
+            raise RuntimeError("OTP conflict probe did not start empty")
+        return None
 
     def otp_conflict_operation(session: Session, _index: int) -> str:
         try:
@@ -1807,17 +1999,32 @@ def _service_probes(
             session.commit()
             return "success"
         except otp_service.OtpError as exc:
-            if (exc.status_code, exc.code) == (409, "otp_issue_conflict"):
+            cause = exc.__cause__
+            constraint = (
+                _constraint_name(cause)
+                if isinstance(cause, IntegrityError)
+                else None
+            )
+            if (
+                (exc.status_code, exc.code) == (409, "otp_issue_conflict")
+                and constraint == OTP_PENDING_SERVICE_INDEX
+            ):
                 # The translation is only acceptable if begin_nested() kept the
                 # caller's outer transaction usable after the unique violation.
                 if session.scalar(text("SELECT 1")) == 1:
                     session.rollback()
-                    return "otp_error:otp_issue_conflict:409:savepoint_usable"
+                    return (
+                        "otp_error:otp_issue_conflict:409:"
+                        "pending_index:savepoint_usable"
+                    )
             session.rollback()
             return f"otp_error:{exc.code}:{exc.status_code}:unexpected"
 
-    otp_service.lock_registration_for_update = conflict_registration_load
-    otp_service.active_challenges_for_replacement = conflict_active_otp_read
+    otp_service.registration_service.lock_registration_with_idempotency = (
+        conflict_registration_load
+    )
+    otp_service.authority_for_registration = conflict_authority_load
+    otp_service._pending_intent = conflict_pending_read
     try:
         otp_conflict_results = _run_service_race(
             scratch_url,
@@ -1825,11 +2032,14 @@ def _service_probes(
             otp_conflict_operation,
         )
     finally:
-        otp_service.lock_registration_for_update = original_conflict_registration_lock
-        otp_service.active_challenges_for_replacement = original_conflict_otp_read
+        otp_service.registration_service.lock_registration_with_idempotency = (
+            original_conflict_registration_lock
+        )
+        otp_service.authority_for_registration = original_conflict_authority_lock
+        otp_service._pending_intent = original_conflict_pending_read
     otp_conflict = {
         **_service_summary(otp_conflict_results),
-        **_deliverable_inventory(engine, otp_conflict_registration, "signup"),
+        **_otp_lifecycle_inventory(engine, otp_conflict_registration, "signup"),
     }
 
     session_conflict_user, session_conflict_registration = owners["session_conflict"]
@@ -1897,14 +2107,13 @@ def _service_probes(
     }
 
     conflict_inventory = _runtime_inventory(engine)
-    for probe, index_name in (
-        (otp_conflict, TARGET_INDEXES[0]),
-        (session_conflict, TARGET_INDEXES[1]),
-    ):
-        probe["index_semantics_retained"] = bool(
-            conflict_inventory["target_indexes_present"].get(index_name)
-            and conflict_inventory["target_index_semantics"].get(index_name)
-        )
+    otp_conflict["index_semantics_retained"] = conflict_inventory[
+        "pending_service_index_semantics"
+    ]
+    session_conflict["index_semantics_retained"] = bool(
+        conflict_inventory["target_indexes_present"].get(TARGET_INDEXES[1])
+        and conflict_inventory["target_index_semantics"].get(TARGET_INDEXES[1])
+    )
     typed_conflict_translation = {
         "otp_issue": otp_conflict,
         "session_rotation": session_conflict,
@@ -1913,37 +2122,57 @@ def _service_probes(
     # Deterministic negative controls: remove both protection layers. The
     # barrier-bearing unsafe seams make every worker read the zero-child state
     # before any insert, proving the positive oracle would turn red.
+    otp_mutant_registration = owners["otp_mutant"][1]
+    otp_mutant_authority = _seed_current_signup_flow(
+        engine,
+        registration_id=otp_mutant_registration,
+        now=now,
+    )
     with engine.begin() as connection:
-        connection.execute(text(f'DROP INDEX "{TARGET_INDEXES[0]}"'))
-    original_registration_lock = otp_service.lock_registration_for_update
-    original_active_read = otp_service.active_challenges_for_replacement
-    unsafe_otp_barrier = threading.Barrier(WORKERS)
+        connection.execute(text(f'DROP INDEX "{OTP_PENDING_SERVICE_INDEX}"'))
+    original_registration_lock = (
+        otp_service.registration_service.lock_registration_with_idempotency
+    )
+    original_authority_lock = otp_service.authority_for_registration
+    original_pending_read = otp_service._pending_intent
     unsafe_otp_read_barrier = threading.Barrier(WORKERS)
 
     def unsafe_registration_load(session: Session, registration_id: uuid.UUID):
-        row = session.get(StudentRegistration, registration_id)
-        unsafe_otp_barrier.wait(timeout=30)
-        return row
+        return session.get(StudentRegistration, registration_id), None
 
-    def unsafe_active_read(
+    def unsafe_authority_load(
         session: Session,
-        registration_id: uuid.UUID,
+        registration: StudentRegistration,
         purpose: str,
-    ) -> list[Any]:
-        rows = list(
-            session.scalars(
-                select(otp_service.OtpChallenge).where(
-                    otp_service.OtpChallenge.registration_id == registration_id,
-                    otp_service.OtpChallenge.purpose == purpose,
-                    otp_service.OtpChallenge.consumed_at.is_(None),
-                )
+        _now: datetime,
+    ) -> OtpPurposeAuthority:
+        if registration.id != otp_mutant_registration or purpose != "signup":
+            raise RuntimeError("OTP mutant authority request is unexpected")
+        authority = session.get(OtpPurposeAuthority, otp_mutant_authority)
+        if authority is None:
+            raise RuntimeError("OTP mutant authority is unavailable")
+        return authority
+
+    def unsafe_pending_read(
+        session: Session,
+        authority: OtpPurposeAuthority,
+    ) -> None:
+        candidate_id = session.scalar(
+            select(OtpChallenge.id).where(
+                OtpChallenge.authority_id == authority.id,
+                OtpChallenge.delivery_state == "pending_delivery",
             )
         )
         unsafe_otp_read_barrier.wait(timeout=30)
-        return rows
+        if candidate_id is not None:
+            raise RuntimeError("OTP mutant probe did not start empty")
+        return None
 
-    otp_service.lock_registration_for_update = unsafe_registration_load
-    otp_service.active_challenges_for_replacement = unsafe_active_read
+    otp_service.registration_service.lock_registration_with_idempotency = (
+        unsafe_registration_load
+    )
+    otp_service.authority_for_registration = unsafe_authority_load
+    otp_service._pending_intent = unsafe_pending_read
     try:
         otp_mutant_results = _run_service_race(
             scratch_url,
@@ -1951,11 +2180,14 @@ def _service_probes(
             issue_operation(owners["otp_mutant"][1]),
         )
     finally:
-        otp_service.lock_registration_for_update = original_registration_lock
-        otp_service.active_challenges_for_replacement = original_active_read
+        otp_service.registration_service.lock_registration_with_idempotency = (
+            original_registration_lock
+        )
+        otp_service.authority_for_registration = original_authority_lock
+        otp_service._pending_intent = original_pending_read
     otp_mutant = {
         **_service_summary(otp_mutant_results),
-        **_deliverable_inventory(engine, owners["otp_mutant"][1], "signup"),
+        **_otp_lifecycle_inventory(engine, owners["otp_mutant"][1], "signup"),
     }
 
     with engine.begin() as connection:
@@ -2049,9 +2281,7 @@ def rotation_operation_for(
         return f"login_error:{exc.code}"
 
 
-def _guardian_state_matrix(
-    engine: Engine, ids: dict[str, uuid.UUID]
-) -> dict[str, Any]:
+def _guardian_state_matrix(engine: Engine, ids: dict[str, uuid.UUID]) -> dict[str, Any]:
     """Exercise every allowed guardian status in valid and invalid polarity."""
 
     cases: dict[str, dict[str, Any]] = {}
@@ -2091,7 +2321,9 @@ def _guardian_state_matrix(
     return {"cases": cases}
 
 
-def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[str, Any]]:
+def _expectation_results(
+    report: dict[str, Any], expectation: str
+) -> list[dict[str, Any]]:
     probes = report["probes"]
     inventory = report["inventory"]
     results: list[dict[str, Any]] = []
@@ -2109,7 +2341,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
     if expectation == "current-vulnerable":
         add(
             "RED-OTP",
-            "eight concurrent deliverable active OTP inserts are accepted",
+            "eight concurrent delivered active OTP graphs are accepted",
             probes["otp"]["persisted_rows"] == WORKERS
             and probes["otp"]["inserted"] == WORKERS,
             probes["otp"],
@@ -2128,8 +2360,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             add(
                 ident,
                 f"duplicate {key} rows are accepted",
-                probes[key]["persisted_rows"] == 2
-                and probes[key]["inserted"] == 2,
+                probes[key]["persisted_rows"] == 2 and probes[key]["inserted"] == 2,
                 probes[key],
             )
         add(
@@ -2174,7 +2405,7 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
         service = report.get("service_probes") or {}
         add(
             "HARD-OTP",
-            "exactly one concurrent deliverable active OTP survives",
+            "exactly one concurrent delivered active OTP graph survives",
             probes["otp"]["persisted_rows"] == 1
             and probes["otp"]["inserted"] == 1
             and probes["otp"]["constraint_rejected"] == WORKERS - 1
@@ -2202,18 +2433,14 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
                 probes[key]["persisted_rows"] == 1
                 and probes[key]["inserted"] == 1
                 and probes[key]["constraint_rejected"] == 1
-                and probes[key]["constraint_names"]
-                == [RACE_CONSTRAINTS[key]],
+                and probes[key]["constraint_names"] == [RACE_CONSTRAINTS[key]],
                 probes[key],
             )
         add(
             "HARD-GUARDIAN-STATE",
             "valid guardian states are accepted and every contradiction is rejected by the intended constraint",
             all(
-                (
-                    case["outcome"] == "inserted"
-                    and case["constraint"] is None
-                )
+                (case["outcome"] == "inserted" and case["constraint"] is None)
                 if case["should_insert"]
                 else (
                     case["outcome"] == "constraint_rejected"
@@ -2241,26 +2468,23 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
         otp_start = service.get("otp_start", {})
         add(
             "HARD-SERVICE-OTP-START",
-            "eight real OTP starts serialize to one deliverable active challenge",
+            "eight real OTP starts serialize to one relayable pending candidate",
             otp_start.get("outcomes") == {"success": WORKERS}
             and len(otp_start.get("distinct_backend_pids", [])) == WORKERS
-            and otp_start.get("active") == 1
-            and otp_start.get("deliverable") == 1,
+            and otp_start.get("active") == 0
+            and otp_start.get("pending_delivery") == 1
+            and otp_start.get("relayable_pending") == 1,
             otp_start,
         )
         resend = service.get("resend_start", {})
-        resend_outcomes = resend.get("outcomes", {})
         add(
             "HARD-SERVICE-RESEND-START",
-            "concurrent resend and start retain one deliverable active challenge",
+            "concurrent resend and start reuse one relayable pending candidate",
             len(resend.get("distinct_backend_pids", [])) == 2
-            and resend.get("active") == 1
-            and resend.get("deliverable") == 1
-            and sum(resend_outcomes.values()) == 2
-            and resend_outcomes.get("success", 0) >= 1
-            and set(resend_outcomes).issubset(
-                {"success", "otp_error:resend_cooldown"}
-            ),
+            and resend.get("outcomes") == {"success": 2}
+            and resend.get("active") == 0
+            and resend.get("pending_delivery") == 1
+            and resend.get("relayable_pending") == 1,
             resend,
         )
         verify = service.get("otp_verify", {})
@@ -2287,16 +2511,18 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
         delivery_race = service.get("outbox_delivery_supersede", {})
         add(
             "HARD-SERVICE-OUTBOX-LOCK-ORDER",
-            "delivery and supersession linearize without lock-order deadlock",
+            "provider I/O releases database locks and reuses the fenced intent",
             delivery_race.get("delivery_outcome") == "success"
             and delivery_race.get("supersede_outcome") == "success"
             and len(delivery_race.get("distinct_backend_pids", [])) == 2
-            and delivery_race.get("lock_wait_observed") is True
+            and delivery_race.get("supersede_completed_during_provider_io") is True
+            and delivery_race.get("same_pending_intent") is True
             and delivery_race.get("sender_attempts") == 1
             and delivery_race.get("prior_outbox_status") == "sent"
             and delivery_race.get("prior_code_erased") is True
             and delivery_race.get("active") == 1
-            and delivery_race.get("deliverable") == 1,
+            and delivery_race.get("pending_delivery") == 0
+            and delivery_race.get("relayable_pending") == 0,
             delivery_race,
         )
         typed_conflicts = service.get("typed_conflict_translation", {})
@@ -2305,15 +2531,16 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             "HARD-SERVICE-OTP-CONFLICT-TYPED",
             "constraint-only OTP collision maps to a typed 409 and leaves the savepoint usable",
             otp_conflict.get("workers") == CONFLICT_WORKERS
-            and len(otp_conflict.get("distinct_backend_pids", []))
-            == CONFLICT_WORKERS
+            and len(otp_conflict.get("distinct_backend_pids", [])) == CONFLICT_WORKERS
             and otp_conflict.get("outcomes")
             == {
                 "success": 1,
-                "otp_error:otp_issue_conflict:409:savepoint_usable": 1,
+                "otp_error:otp_issue_conflict:409:pending_index:"
+                "savepoint_usable": 1,
             }
-            and otp_conflict.get("active") == 1
-            and otp_conflict.get("deliverable") == 1
+            and otp_conflict.get("active") == 0
+            and otp_conflict.get("pending_delivery") == 1
+            and otp_conflict.get("relayable_pending") == 1
             and otp_conflict.get("index_semantics_retained") is True,
             otp_conflict,
         )
@@ -2338,8 +2565,10 @@ def _expectation_results(report: dict[str, Any], expectation: str) -> list[dict[
             "HARD-SERVICE-MUTANTS",
             "removing both lock and constraint makes both service oracles red",
             otp_mutant.get("outcomes") == {"success": WORKERS}
-            and otp_mutant.get("active") == WORKERS
-            and otp_mutant.get("deliverable") == WORKERS
+            and len(otp_mutant.get("distinct_backend_pids", [])) == WORKERS
+            and otp_mutant.get("active") == 0
+            and otp_mutant.get("pending_delivery") == WORKERS
+            and otp_mutant.get("relayable_pending") == WORKERS
             and session_mutant.get("outcomes") == {"success": WORKERS}
             and session_mutant.get("active_sessions", 0) > 1,
             {"otp": otp_mutant, "session": session_mutant},
@@ -2390,7 +2619,7 @@ def _execute(
         if not inventory["postgresql_16_or_newer"] or not inventory["pgvector_version"]:
             raise Blocked("PostgreSQL 16 with pgvector is required")
 
-        ids: dict[str, uuid.UUID] = {}
+        ids: dict[str, Any] = {}
         seed_targets = [
             ("otp", "a"),
             ("session", "b"),
@@ -2415,6 +2644,11 @@ def _execute(
             )
             ids[f"{name}_user"] = user_id
             ids[f"{name}_registration"] = registration_id
+        ids["otp_authority_ids"] = _seed_raw_otp_race_authorities(
+            engine,
+            workers=WORKERS,
+            now=datetime.now(timezone.utc),
+        )
 
         probes: dict[str, Any] = {}
         for kind, workers in (
@@ -2432,9 +2666,7 @@ def _execute(
             )
         probes["guardian_state"] = _guardian_state_matrix(engine, ids)
         service_probes = (
-            _service_probes(scratch_url, engine)
-            if expectation == "hardened"
-            else None
+            _service_probes(scratch_url, engine) if expectation == "hardened" else None
         )
 
         report: dict[str, Any] = {

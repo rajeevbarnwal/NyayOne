@@ -15,12 +15,19 @@ from app.models.registration import (
     Consent,
     LoginAttempt,
     OtpChallenge,
+    OtpFlow,
     OtpOutbox,
     StudentRegistration,
     User,
 )
 from app.schemas.registration import StudentRegisterRequest
-from app.services import login_service, otp_outbox, otp_service, recovery_service
+from app.services import (
+    login_service,
+    otp_flow_service,
+    otp_outbox,
+    otp_service,
+    recovery_service,
+)
 from app.services.otp_sender import CapturingSender
 from app.services.registration_service import register_student
 
@@ -55,13 +62,40 @@ def _registered(session: Session, *, login_eligible: bool = False) -> StudentReg
         dob="2004-03-14",
         consent={"accepted": True},
     )
-    registration = register_student(session, request, now=NOW).registration
+    result = register_student(session, request, now=NOW)
+    registration = result.registration
+    assert result.delivery is not None
+    outbox = session.get(OtpOutbox, result.delivery.outbox_id)
+    assert outbox is not None
+    challenge = session.get(OtpChallenge, outbox.challenge_id)
+    assert challenge is not None
+    authority = otp_service.authority_for_registration(
+        session, registration, "signup", NOW
+    )
+    _, flow = otp_flow_service.create_flow(
+        session,
+        authority,
+        now=NOW,
+        destination=MOBILE,
+        challenge=challenge,
+        registration_id=registration.id,
+        raw_token=f"nyay3-service-fixture-{registration.id.hex}",
+    )
+    assert flow.challenge_id == challenge.id
+    assert flow.state == "pending"
     if login_eligible:
         registration.status = "otp_verified"
         user = session.get(User, registration.user_id)
         assert user is not None
         user.status = "active"
     session.commit()
+    assert otp_outbox.run_delivery(
+        session,
+        result.delivery,
+        CapturingSender(),
+        raise_on_failure=True,
+        now=NOW,
+    )
     return registration
 
 
@@ -92,13 +126,21 @@ def _login_attempt(session: Session) -> tuple[str, str]:
     )
     salt = uuid.uuid4().hex
     code = "654321"
+    authority = otp_service.authority_for_registration(
+        session, registration, "login", NOW
+    )
+    authority.last_issued_at = NOW
+    authority.active_expires_at = NOW + timedelta(minutes=5)
+    authority.generation = 1
     challenge = OtpChallenge(
         registration_id=registration.id,
+        authority_id=authority.id,
         purpose="login",
         verifier_hash=otp_verifier(code, salt=salt),
         attempts=0,
         max_attempts=3,
         expires_at=NOW + timedelta(minutes=5),
+        delivery_state="active",
         metadata_json={"salt": salt},
     )
     session.add(challenge)
@@ -271,10 +313,17 @@ def test_superseded_challenge_erases_and_voids_prior_delivery(
     prior_outbox = db_session.scalar(
         select(OtpOutbox).where(OtpOutbox.challenge_id == prior.id)
     )
-    assert prior_outbox is not None and prior_outbox.code_ct is not None
+    assert prior_outbox is not None
+    assert prior_outbox.status == "sent" and prior_outbox.code_ct is None
+    flow = db_session.scalar(
+        select(OtpFlow).where(OtpFlow.authority_id == prior.authority_id)
+    )
+    assert flow is not None
+    assert flow.challenge_id == prior.id and flow.state == "code_sent"
+    flow_id = flow.id
     stale_intent = otp_outbox.DeliveryIntent(outbox_id=prior_outbox.id)
 
-    otp_service.issue_challenge(
+    candidate, replacement_intent = otp_service.issue_challenge(
         db_session,
         registration.id,
         NOW + timedelta(seconds=31),
@@ -283,11 +332,34 @@ def test_superseded_challenge_erases_and_voids_prior_delivery(
     )
     db_session.commit()
 
-    db_session.refresh(prior_outbox)
-    assert prior_outbox.status == "void"
-    assert prior_outbox.code_ct is None
-    assert prior_outbox.last_error == "challenge_superseded"
+    # A resend candidate cannot displace the usable code until its provider
+    # delivery succeeds under the fenced outbox claim.
+    db_session.refresh(prior)
+    assert prior.delivery_state == "active" and prior.consumed_at is None
+    assert candidate.delivery_state == "pending_delivery"
+    assert candidate.consumed_at is not None
     sender = CapturingSender()
+    assert otp_outbox.run_delivery(
+        db_session,
+        replacement_intent,
+        sender,
+        raise_on_failure=True,
+        now=NOW + timedelta(seconds=31),
+    )
+
+    db_session.refresh(prior)
+    db_session.refresh(candidate)
+    db_session.refresh(prior_outbox)
+    db_session.refresh(flow)
+    assert prior.delivery_state == "superseded"
+    assert prior.consumed_at is not None
+    assert candidate.delivery_state == "active"
+    assert candidate.consumed_at is None
+    assert prior_outbox.status == "sent"
+    assert prior_outbox.code_ct is None
+    assert flow.id == flow_id
+    assert flow.challenge_id == candidate.id and flow.state == "code_sent"
+    assert len(sender.sent) == 1
     assert (
         otp_outbox.run_delivery(
             db_session,
@@ -297,4 +369,4 @@ def test_superseded_challenge_erases_and_voids_prior_delivery(
         )
         is False
     )
-    assert sender.sent == []
+    assert len(sender.sent) == 1

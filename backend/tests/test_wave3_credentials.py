@@ -117,6 +117,7 @@ def ctx(tmp_path, _mounted):
                 status="active",
                 is_minor=False,
                 idempotency_key="wave3-student-registration",
+                idempotency_key_legacy=True,
             )
         )
         session.add(

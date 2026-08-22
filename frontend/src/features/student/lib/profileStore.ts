@@ -32,7 +32,12 @@ export function updateProfileDraft(patch: Partial<ProfileDraft>): ProfileDraft {
 
 export function resetProfileDraft(): void {
   draft = { ...EMPTY_PROFILE, interests: [] };
-  if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Browser privacy policy must not prevent the in-memory PII reset above.
+  }
 }
 
 /** Seed a partially-complete draft (used to demonstrate the S-13 resume path). */

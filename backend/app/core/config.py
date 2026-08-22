@@ -1,4 +1,5 @@
 from ipaddress import ip_address
+import math
 from pathlib import Path
 import re
 import tempfile
@@ -31,6 +32,36 @@ _PLACEHOLDER_SECRETS = frozenset(
         "dev-secret", "example", "xxx", "xxxx", "your-key", "your-key-id",
         "your-secret", "razorpay", "livekit", "rzp_test_key", "key", "api_key",
     }
+)
+_OTP_STRICT_INTEGER_FIELDS = (
+    "otp_challenge_ttl_seconds",
+    "otp_resend_cooldown_seconds",
+    "otp_lockout_seconds",
+    "otp_max_attempts",
+    "otp_attempt_window_seconds",
+    "otp_resend_window_seconds",
+    "otp_max_resends_per_window",
+    "otp_issue_rate_window_seconds",
+    "otp_issue_identity_limit",
+    "otp_issue_ip_limit",
+    "otp_issue_global_limit",
+    "otp_resend_rate_window_seconds",
+    "otp_resend_identity_limit",
+    "otp_resend_ip_limit",
+    "otp_resend_global_limit",
+    "otp_verify_rate_window_seconds",
+    "otp_verify_identity_limit",
+    "otp_verify_ip_limit",
+    "otp_verify_global_limit",
+    "otp_outbox_lease_seconds",
+    "otp_outbox_max_attempts",
+    "otp_outbox_retry_base_seconds",
+    "otp_outbox_retry_max_seconds",
+    "otp_rate_bucket_retention_seconds",
+    "otp_security_state_retention_seconds",
+    "otp_outbox_legacy_destination_retention_seconds",
+    "otp_flow_ttl_seconds",
+    "otp_recovery_proof_ttl_seconds",
 )
 #: Wave 2 provider bindings that the code can actually honour.
 PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
@@ -333,6 +364,43 @@ class Settings(BaseSettings):
     otp_provider_url: str | None = None
     otp_provider_token: SecretStr | None = None
     otp_provider_timeout_s: float = 10.0
+    # Deployment acknowledgement that retries with the same delivery key are
+    # deduplicated by the configured provider.
+    otp_provider_supports_idempotency: bool = False
+    # NYAY-4 server authority. Defaults reproduce the approved product
+    # contract (3 attempts, 15-minute lock, 30-second cooldown, 5-minute OTP)
+    # while every abuse/relay budget remains explicit deployment config.
+    otp_challenge_ttl_seconds: int = 5 * 60
+    otp_resend_cooldown_seconds: int = 30
+    otp_lockout_seconds: int = 15 * 60
+    otp_max_attempts: int = 3
+    otp_attempt_window_seconds: int = 15 * 60
+    otp_resend_window_seconds: int = 15 * 60
+    otp_max_resends_per_window: int = 3
+    otp_issue_rate_window_seconds: int = 10 * 60
+    otp_issue_identity_limit: int = 5
+    otp_issue_ip_limit: int = 20
+    otp_issue_global_limit: int = 200
+    otp_resend_rate_window_seconds: int = 15 * 60
+    otp_resend_identity_limit: int = 3
+    otp_resend_ip_limit: int = 10
+    otp_resend_global_limit: int = 100
+    otp_verify_rate_window_seconds: int = 15 * 60
+    otp_verify_identity_limit: int = 10
+    otp_verify_ip_limit: int = 30
+    otp_verify_global_limit: int = 300
+    otp_outbox_lease_seconds: int = 30
+    otp_outbox_max_attempts: int = 5
+    otp_outbox_retry_base_seconds: int = 10
+    otp_outbox_retry_max_seconds: int = 5 * 60
+    otp_rate_bucket_retention_seconds: int = 7 * 24 * 60 * 60
+    # Terminal flow capabilities and inactive subject/purpose authorities are
+    # retained only for this bounded security/audit window.
+    otp_security_state_retention_seconds: int = 7 * 24 * 60 * 60
+    otp_outbox_legacy_destination_retention_seconds: int = 7 * 24 * 60 * 60
+    otp_flow_cookie_name: str = "nyayone_otp_flow"
+    otp_flow_ttl_seconds: int = 10 * 60
+    otp_recovery_proof_ttl_seconds: int = 5 * 60
 
     # --- Student OTP login + cookie session --------------------------------
     # Login challenges remain separate from signup/recovery challenges. The
@@ -350,6 +418,8 @@ class Settings(BaseSettings):
     retention_days_registration_inactive: int | None = None
     retention_days_otp_challenge: int | None = None
     retention_days_recovery_session: int | None = None
+    retention_days_login_attempt: int | None = None
+    retention_days_auth_session: int | None = None
     retention_days_audit_events: int | None = None
     # Whether the purge job anonymises (keep row, scrub PII/ciphertext) or hard
     # deletes when a window elapses. "anonymise" is the DPDP-safe default.
@@ -360,6 +430,77 @@ class Settings(BaseSettings):
     jira_board_id: int = 68
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+
+    @field_validator(
+        "retention_days_registration_pending",
+        "retention_days_registration_inactive",
+        "retention_days_otp_challenge",
+        "retention_days_recovery_session",
+        "retention_days_login_attempt",
+        "retention_days_auth_session",
+        "retention_days_audit_events",
+        mode="before",
+    )
+    @classmethod
+    def validate_retention_days(cls, value):
+        """Accept only bounded, canonical whole-day retention windows.
+
+        ``None`` deliberately means that counsel has not authorised an
+        automated terminal-history erasure window.  The upper bound is an
+        arithmetic/operational safety limit, not a statutory recommendation.
+        """
+
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError("retention days must be a positive integer")
+        if isinstance(value, str):
+            if value == "":
+                return None
+            if re.fullmatch(r"[1-9][0-9]*", value) is None:
+                raise ValueError("retention days must be a positive integer")
+            parsed = int(value)
+        elif isinstance(value, int):
+            parsed = value
+        else:
+            raise ValueError("retention days must be a positive integer")
+        if not 1 <= parsed <= 36_500:
+            raise ValueError("retention days exceed the safety range")
+        return parsed
+
+    @field_validator("retention_mode")
+    @classmethod
+    def validate_retention_mode(cls, value: str) -> str:
+        if value not in {"anonymise", "delete"}:
+            raise ValueError("retention_mode must be anonymise or delete")
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_coerced_otp_numeric_types(cls, values):
+        """Permit only canonical positive decimal source strings or integers."""
+
+        if isinstance(values, dict):
+            for name in _OTP_STRICT_INTEGER_FIELDS:
+                value = values.get(name)
+                invalid_string = isinstance(value, str) and re.fullmatch(
+                    r"[1-9][0-9]*", value
+                ) is None
+                invalid_literal = (
+                    value is not None
+                    and not isinstance(value, (int, str))
+                )
+                if isinstance(value, bool) or invalid_string or invalid_literal:
+                    raise ConfigurationError(
+                        "OTP configuration is invalid; refusing to start: "
+                        f"{name} must be an integer"
+                    )
+            if isinstance(values.get("otp_provider_timeout_s"), bool):
+                raise ConfigurationError(
+                    "OTP configuration is invalid; refusing to start: "
+                    "otp_provider_timeout_s must be numeric, not boolean"
+                )
+        return values
 
     @model_validator(mode="after")
     def reject_legacy_runtime_defaults(self) -> "Settings":
@@ -397,8 +538,10 @@ class Settings(BaseSettings):
                     "database_url must not use development credentials outside local/test"
                 )
 
-        if (self.auth_session_cookie_name or "").strip() != "nyayone_session":
+        if (self.auth_session_cookie_name or "") != "nyayone_session":
             problems.append("auth_session_cookie_name must use the NyayOne cookie identity")
+        if (self.otp_flow_cookie_name or "") != "nyayone_otp_flow":
+            problems.append("otp_flow_cookie_name must use the NyayOne cookie identity")
         if (self.github_repository or "").strip().casefold() != "rajeevbarnwal/nyayone":
             problems.append("github_repository must identify the NyayOne repository")
         github_url = urlsplit(self.github_repo_url or "")
@@ -445,6 +588,208 @@ class Settings(BaseSettings):
         if problems:
             raise ConfigurationError(
                 "NyayOne runtime identity is invalid; refusing to start: "
+                + "; ".join(problems)
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_otp_configuration(self) -> "Settings":
+        """Refuse unsafe OTP budgets or provider bindings at process start."""
+
+        problems: list[str] = []
+        positive_integers = (
+            "otp_challenge_ttl_seconds",
+            "otp_resend_cooldown_seconds",
+            "otp_lockout_seconds",
+            "otp_max_attempts",
+            "otp_attempt_window_seconds",
+            "otp_resend_window_seconds",
+            "otp_max_resends_per_window",
+            "otp_issue_rate_window_seconds",
+            "otp_issue_identity_limit",
+            "otp_issue_ip_limit",
+            "otp_issue_global_limit",
+            "otp_resend_rate_window_seconds",
+            "otp_resend_identity_limit",
+            "otp_resend_ip_limit",
+            "otp_resend_global_limit",
+            "otp_verify_rate_window_seconds",
+            "otp_verify_identity_limit",
+            "otp_verify_ip_limit",
+            "otp_verify_global_limit",
+            "otp_outbox_lease_seconds",
+            "otp_outbox_max_attempts",
+            "otp_outbox_retry_base_seconds",
+            "otp_outbox_retry_max_seconds",
+            "otp_rate_bucket_retention_seconds",
+            "otp_security_state_retention_seconds",
+            "otp_outbox_legacy_destination_retention_seconds",
+            "otp_flow_ttl_seconds",
+            "otp_recovery_proof_ttl_seconds",
+        )
+        for name in positive_integers:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                problems.append(f"{name} must be a strictly positive integer")
+        bounded: dict[str, int] = {
+            "otp_challenge_ttl_seconds": 30 * 60,
+            "otp_resend_cooldown_seconds": 10 * 60,
+            "otp_lockout_seconds": 24 * 60 * 60,
+            "otp_max_attempts": 10,
+            "otp_attempt_window_seconds": 24 * 60 * 60,
+            "otp_resend_window_seconds": 24 * 60 * 60,
+            "otp_max_resends_per_window": 10,
+            "otp_issue_rate_window_seconds": 24 * 60 * 60,
+            "otp_resend_rate_window_seconds": 24 * 60 * 60,
+            "otp_verify_rate_window_seconds": 24 * 60 * 60,
+            "otp_issue_identity_limit": 100,
+            "otp_resend_identity_limit": 100,
+            "otp_verify_identity_limit": 100,
+            "otp_issue_ip_limit": 1_000,
+            "otp_resend_ip_limit": 1_000,
+            "otp_verify_ip_limit": 1_000,
+            "otp_issue_global_limit": 100_000,
+            "otp_resend_global_limit": 100_000,
+            "otp_verify_global_limit": 100_000,
+            "otp_outbox_lease_seconds": 5 * 60,
+            "otp_outbox_max_attempts": 10,
+            "otp_outbox_retry_base_seconds": 15 * 60,
+            "otp_outbox_retry_max_seconds": 60 * 60,
+            "otp_rate_bucket_retention_seconds": 90 * 24 * 60 * 60,
+            "otp_security_state_retention_seconds": 90 * 24 * 60 * 60,
+            "otp_outbox_legacy_destination_retention_seconds": 90 * 24 * 60 * 60,
+            "otp_flow_ttl_seconds": 60 * 60,
+            "otp_recovery_proof_ttl_seconds": 30 * 60,
+        }
+        for name, maximum in bounded.items():
+            value = getattr(self, name)
+            if isinstance(value, int) and not isinstance(value, bool) and value > maximum:
+                problems.append(f"{name} exceeds the fail-closed safety maximum")
+        if self.otp_outbox_retry_max_seconds < self.otp_outbox_retry_base_seconds:
+            problems.append(
+                "otp_outbox_retry_max_seconds must be at least "
+                "otp_outbox_retry_base_seconds"
+            )
+        if self.otp_resend_cooldown_seconds >= self.otp_challenge_ttl_seconds:
+            problems.append("otp_resend_cooldown_seconds must be below the challenge TTL")
+        if self.otp_outbox_lease_seconds >= self.otp_challenge_ttl_seconds:
+            problems.append("otp_outbox_lease_seconds must be below the challenge TTL")
+        if self.otp_flow_ttl_seconds < self.otp_challenge_ttl_seconds:
+            problems.append("otp_flow_ttl_seconds must cover the challenge TTL")
+        if self.otp_recovery_proof_ttl_seconds > self.otp_flow_ttl_seconds:
+            problems.append("otp_recovery_proof_ttl_seconds must not exceed the flow TTL")
+        if self.otp_resend_window_seconds < self.otp_resend_cooldown_seconds:
+            problems.append("otp_resend_window_seconds must cover the resend cooldown")
+        if self.otp_attempt_window_seconds < self.otp_lockout_seconds:
+            problems.append("otp_attempt_window_seconds must cover the lockout window")
+        if self.otp_outbox_retry_max_seconds > self.otp_flow_ttl_seconds:
+            problems.append("otp_outbox_retry_max_seconds must not exceed the flow TTL")
+        for action in ("issue", "resend", "verify"):
+            identity = getattr(self, f"otp_{action}_identity_limit")
+            ip_limit = getattr(self, f"otp_{action}_ip_limit")
+            global_limit = getattr(self, f"otp_{action}_global_limit")
+            if not identity <= ip_limit <= global_limit:
+                problems.append(
+                    f"otp_{action} limits must satisfy identity <= ip <= global"
+                )
+        if self.otp_rate_bucket_retention_seconds < max(
+            self.otp_issue_rate_window_seconds,
+            self.otp_resend_rate_window_seconds,
+            self.otp_verify_rate_window_seconds,
+        ):
+            problems.append("otp_rate_bucket_retention_seconds must cover every rate window")
+        if self.otp_security_state_retention_seconds < self.otp_flow_ttl_seconds:
+            problems.append(
+                "otp_security_state_retention_seconds must cover the flow TTL"
+            )
+
+        raw_provider = self.otp_provider or ""
+        provider = raw_provider.casefold()
+        if raw_provider != provider:
+            problems.append("otp_provider must use canonical lowercase without whitespace")
+        if provider not in {"none", "capturing", "http"}:
+            problems.append("otp_provider must be none, capturing or http")
+        environment = (self.app_env or "").strip().casefold()
+        isolated_test = environment in {"test", "testing"}
+        non_local_environment = environment not in {
+            "development",
+            "dev",
+            "local",
+            "test",
+            "testing",
+        }
+        if non_local_environment and not self.otp_delivery_enabled:
+            problems.append("otp_delivery_enabled must be true outside local/test")
+        if self.otp_delivery_enabled and provider == "none":
+            problems.append("otp_provider must be configured when OTP delivery is enabled")
+        if provider == "capturing" and not isolated_test:
+            problems.append("otp_provider capturing is allowed only in testing")
+        if non_local_environment and provider != "http":
+            problems.append("otp_provider must be http outside local/test")
+        if provider == "http":
+            raw_provider_url = self.otp_provider_url or ""
+            parsed = urlsplit(raw_provider_url)
+            try:
+                provider_port = parsed.port
+            except ValueError:
+                provider_port = -1
+            allowed_schemes = {"http", "https"} if isolated_test else {"https"}
+            unsafe_provider_url_bytes = (
+                not raw_provider_url
+                or any(
+                    not 0x21 <= ord(character) <= 0x7E
+                    for character in raw_provider_url
+                )
+            )
+            if (
+                unsafe_provider_url_bytes
+                or parsed.geturl() != raw_provider_url
+                or
+                parsed.scheme.casefold() not in allowed_schemes
+                or not parsed.hostname
+                or provider_port == -1
+                or (provider_port is not None and not 1 <= provider_port <= 65535)
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
+                problems.append(
+                    "otp_provider_url must be an absolute provider URL without "
+                    "userinfo, query or fragment"
+                )
+            provider_token = (
+                self.otp_provider_token.get_secret_value()
+                if self.otp_provider_token is not None
+                else ""
+            )
+            if not isolated_test and (
+                _is_placeholder_secret(self.otp_provider_token)
+                or provider_token != provider_token.strip()
+                or not 16 <= len(provider_token) <= 4096
+                or any(
+                    not 0x21 <= ord(character) <= 0x7E
+                    for character in provider_token
+                )
+            ):
+                problems.append("otp_provider_token has an unsafe shape outside testing")
+            if not self.otp_provider_supports_idempotency:
+                problems.append(
+                    "otp_provider_supports_idempotency must be explicitly true "
+                    "for the HTTP provider"
+                )
+        if (
+            isinstance(self.otp_provider_timeout_s, bool)
+            or not isinstance(self.otp_provider_timeout_s, (int, float))
+            or not math.isfinite(float(self.otp_provider_timeout_s))
+            or self.otp_provider_timeout_s <= 0
+        ):
+            problems.append("otp_provider_timeout_s must be finite and positive")
+        elif self.otp_provider_timeout_s > 30:
+            problems.append("otp_provider_timeout_s exceeds the safety maximum")
+        if problems:
+            raise ConfigurationError(
+                "OTP configuration is invalid; refusing to start: "
                 + "; ".join(problems)
             )
         return self

@@ -4,12 +4,13 @@ real non-future DOB, affirmative consent."""
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-MOBILE_RE = re.compile(r"^\d{10}$")
+MOBILE_RE = re.compile(r"[0-9]{10}")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
 INSTITUTIONAL_EMAIL_MAX_LENGTH = 254
 CONSUMER_EMAIL_DOMAINS = frozenset(
@@ -27,7 +28,7 @@ INSTITUTIONAL_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 
 def _validate_name(value: str | None, *, required: bool, field: str) -> str | None:
-    v = (value or "").strip()
+    v = unicodedata.normalize("NFC", (value or "").strip())
     if not v:
         if required:
             raise ValueError(f"{field} is required")
@@ -42,8 +43,18 @@ def _validate_name(value: str | None, *, required: bool, field: str) -> str | No
 
 
 class ConsentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     accepted: bool
     policy_version: str = "dpdp-2023.v1"
+
+    @field_validator("policy_version")
+    @classmethod
+    def _policy_version(cls, value: str) -> str:
+        normalized = unicodedata.normalize("NFC", value.strip())
+        if not normalized or len(normalized) > 40:
+            raise ValueError("Consent policy version is required and must be 40 characters or fewer.")
+        return normalized
 
 
 class StudentRegisterRequest(BaseModel):
@@ -82,7 +93,7 @@ class StudentRegisterRequest(BaseModel):
     @field_validator("mobile")
     @classmethod
     def _mobile(cls, v: str) -> str:
-        if not MOBILE_RE.match(v or ""):
+        if not MOBILE_RE.fullmatch(v or ""):
             raise ValueError("Mobile number must be exactly 10 digits.")
         return v
 
@@ -94,6 +105,63 @@ class StudentRegisterRequest(BaseModel):
             raise ValueError("Enter a valid date of birth that is not in the future.")
         return v
 
+    @field_validator("college")
+    @classmethod
+    def _registration_college(cls, value: str | None) -> str | None:
+        normalized = unicodedata.normalize("NFC", (value or "").strip())
+        if not normalized:
+            return None
+        normalized = re.sub(r"\s+", " ", normalized)
+        # ``institution_ref`` is the narrower of the two destination columns.
+        if len(normalized) > 120:
+            raise ValueError("College / institution must be 120 characters or fewer.")
+        return normalized
+
+    @field_validator("year_of_study")
+    @classmethod
+    def _registration_year(cls, value: str | None) -> str | None:
+        normalized = unicodedata.normalize("NFC", (value or "").strip())
+        if not normalized:
+            return None
+        normalized = re.sub(r"\s+", " ", normalized)
+        if len(normalized) > 40:
+            raise ValueError("Year of study must be 40 characters or fewer.")
+        return normalized
+
+    @field_validator("enrolment_number")
+    @classmethod
+    def _registration_enrolment(cls, value: str | None) -> str | None:
+        normalized = unicodedata.normalize("NFC", (value or "").strip())
+        if not normalized:
+            return None
+        if not re.fullmatch(r"[A-Za-z]{2}/\d+/\d{4}", normalized):
+            raise ValueError("College enrolment number must use STATE/ROLL/YEAR.")
+        return normalized
+
+    @field_validator("bar_enrolment_number")
+    @classmethod
+    def _registration_bar_enrolment(cls, value: str | None) -> str | None:
+        normalized = unicodedata.normalize("NFC", (value or "").strip())
+        if not normalized:
+            return None
+        if len(normalized) > 120:
+            raise ValueError("Bar enrolment number must be 120 characters or fewer.")
+        return normalized
+
+    @field_validator("institutional_email")
+    @classmethod
+    def _registration_email(cls, value: str | None) -> str | None:
+        normalized = unicodedata.normalize("NFC", (value or "").strip()).lower()
+        if not normalized:
+            return None
+        if (
+            len(normalized) > INSTITUTIONAL_EMAIL_MAX_LENGTH
+            or not INSTITUTIONAL_EMAIL_RE.fullmatch(normalized)
+            or normalized.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
+        ):
+            raise ValueError("Enter a valid institutional email.")
+        return normalized
+
 
 class StudentRegisterResponse(BaseModel):
     registration_id: uuid.UUID
@@ -101,11 +169,14 @@ class StudentRegisterResponse(BaseModel):
 
 
 class StudentAcademicProfileRequest(BaseModel):
-    """S-10 academic profile payload; unknown fields are rejected."""
+    """S-10 owner-scoped academic profile payload.
+
+    The authenticated server session resolves the registration.  A client
+    registration UUID is deliberately not part of this protected contract.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    registration_id: uuid.UUID
     college: str
     year_of_study: str
     enrolment_number: str
@@ -161,11 +232,14 @@ class StudentAcademicProfileRequest(BaseModel):
 
 
 class InstitutionalEmailVerificationRequest(BaseModel):
-    """S-15 request boundary; raw email is validated before route execution."""
+    """S-15 owner-scoped request boundary.
+
+    Ownership comes from the authenticated server session, never a UUID in the
+    request body. Raw email is validated before route execution.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    registration_id: uuid.UUID
     institutional_email: str
 
     @field_validator("institutional_email")

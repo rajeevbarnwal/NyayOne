@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 import scripts.nyay3_postgres_characterization as gate
+from sqlalchemy import create_engine, text
 
 from scripts.nyay3_postgres_characterization import (
     Blocked,
@@ -23,13 +24,42 @@ from scripts.nyay3_postgres_characterization import (
     _ScratchDatabaseManager,
     _clean_lifecycle_case_passes,
     _dirty_lifecycle_case_passes,
+    _exact_revision_check,
     _expectation_results,
     _finalize_cleanup,
     _normalize_predicate,
     _normalize_constraint_definition,
     _reject_ambient_libpq_environment,
     _safe_local_postgres_url,
+    _service_probe_registration_status,
 )
+
+
+def test_historical_lifecycle_revision_check_rejects_future_head():
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num VARCHAR(32))")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version VALUES (:revision)"),
+                {"revision": "0017_registration_invariants"},
+            )
+        assert _exact_revision_check(
+            engine, "0017_registration_invariants"
+        )["returncode"] == 0
+        assert _exact_revision_check(
+            engine, "0018_registration_idempotency"
+        )["returncode"] == 1
+        assert _exact_revision_check(
+            engine, "0019_otp_security_authority"
+        )["returncode"] == 1
+        assert _exact_revision_check(
+            engine, "0020_auth_retention_lifecycle"
+        )["returncode"] == 1
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -106,6 +136,33 @@ def test_dirty_conflict_inventory_covers_every_preflight_class_and_polarity():
         "guardian_verified_false",
         "guardian_pending_true",
     )
+
+
+def test_service_probe_fixtures_use_product_valid_registration_states():
+    assert {
+        owner: _service_probe_registration_status(owner)
+        for owner in (
+            "otp_start",
+            "resend",
+            "verify",
+            "rotation",
+            "delivery_race",
+            "otp_conflict",
+            "session_conflict",
+            "otp_mutant",
+            "session_mutant",
+        )
+    } == {
+        "otp_start": "otp_pending",
+        "resend": "otp_pending",
+        "verify": "active",
+        "rotation": "active",
+        "delivery_race": "otp_pending",
+        "otp_conflict": "otp_pending",
+        "session_conflict": "active",
+        "otp_mutant": "otp_pending",
+        "session_mutant": "active",
+    }
 
 
 def _command(returncode: int = 0, *, rejected: bool = False) -> dict:
@@ -240,6 +297,7 @@ def _report(*, vulnerable: bool) -> dict:
             "target_constraint_semantics": {
                 name: not vulnerable for name in TARGET_CONSTRAINTS
             },
+            "pending_service_index_semantics": not vulnerable,
         },
         "probes": {
             "otp": race("otp", WORKERS),
@@ -253,15 +311,17 @@ def _report(*, vulnerable: bool) -> dict:
                 "workers": WORKERS,
                 "distinct_backend_pids": list(range(200, 200 + WORKERS)),
                 "outcomes": {"success": WORKERS},
-                "active": 1,
-                "deliverable": 1,
+                "active": 0,
+                "pending_delivery": 1,
+                "relayable_pending": 1,
             },
             "resend_start": {
                 "workers": 2,
                 "distinct_backend_pids": [300, 301],
-                "outcomes": {"success": 1, "otp_error:resend_cooldown": 1},
-                "active": 1,
-                "deliverable": 1,
+                "outcomes": {"success": 2},
+                "active": 0,
+                "pending_delivery": 1,
+                "relayable_pending": 1,
             },
             "otp_verify": {
                 "workers": WORKERS,
@@ -282,14 +342,16 @@ def _report(*, vulnerable: bool) -> dict:
             },
             "outbox_delivery_supersede": {
                 "distinct_backend_pids": [550, 551],
-                "lock_wait_observed": True,
+                "supersede_completed_during_provider_io": True,
+                "same_pending_intent": True,
                 "delivery_outcome": "success",
                 "supersede_outcome": "success",
                 "sender_attempts": 1,
                 "prior_outbox_status": "sent",
                 "prior_code_erased": True,
                 "active": 1,
-                "deliverable": 1,
+                "pending_delivery": 0,
+                "relayable_pending": 0,
             },
             "typed_conflict_translation": {
                 "otp_issue": {
@@ -297,10 +359,12 @@ def _report(*, vulnerable: bool) -> dict:
                     "distinct_backend_pids": [560, 561],
                     "outcomes": {
                         "success": 1,
-                        "otp_error:otp_issue_conflict:409:savepoint_usable": 1,
+                        "otp_error:otp_issue_conflict:409:pending_index:"
+                        "savepoint_usable": 1,
                     },
-                    "active": 1,
-                    "deliverable": 1,
+                    "active": 0,
+                    "pending_delivery": 1,
+                    "relayable_pending": 1,
                     "index_semantics_retained": True,
                 },
                 "session_rotation": {
@@ -320,8 +384,9 @@ def _report(*, vulnerable: bool) -> dict:
                     "workers": WORKERS,
                     "distinct_backend_pids": list(range(600, 600 + WORKERS)),
                     "outcomes": {"success": WORKERS},
-                    "active": WORKERS,
-                    "deliverable": WORKERS,
+                    "active": 0,
+                    "pending_delivery": WORKERS,
+                    "relayable_pending": WORKERS,
                 },
                 "session_rotation": {
                     "workers": WORKERS,
@@ -476,8 +541,33 @@ def test_hardened_now_has_eighteen_assertions():
 
 def test_hardened_requires_each_service_and_mutant_oracle():
     mutations = (
-        ("otp_start", "active", 2, "HARD-SERVICE-OTP-START"),
-        ("resend_start", "deliverable", 2, "HARD-SERVICE-RESEND-START"),
+        ("otp_start", "active", 1, "HARD-SERVICE-OTP-START"),
+        ("otp_start", "pending_delivery", 2, "HARD-SERVICE-OTP-START"),
+        (
+            "otp_start",
+            "relayable_pending",
+            0,
+            "HARD-SERVICE-OTP-START",
+        ),
+        (
+            "resend_start",
+            "outcomes",
+            {"success": 1, "otp_error:resend_cooldown": 1},
+            "HARD-SERVICE-RESEND-START",
+        ),
+        ("resend_start", "active", 1, "HARD-SERVICE-RESEND-START"),
+        (
+            "resend_start",
+            "pending_delivery",
+            0,
+            "HARD-SERVICE-RESEND-START",
+        ),
+        (
+            "resend_start",
+            "relayable_pending",
+            2,
+            "HARD-SERVICE-RESEND-START",
+        ),
         ("otp_verify", "claimed_attempts", 0, "HARD-SERVICE-OTP-VERIFY"),
         (
             "session_rotation",
@@ -487,7 +577,31 @@ def test_hardened_requires_each_service_and_mutant_oracle():
         ),
         (
             "outbox_delivery_supersede",
-            "lock_wait_observed",
+            "supersede_completed_during_provider_io",
+            False,
+            "HARD-SERVICE-OUTBOX-LOCK-ORDER",
+        ),
+        (
+            "outbox_delivery_supersede",
+            "active",
+            0,
+            "HARD-SERVICE-OUTBOX-LOCK-ORDER",
+        ),
+        (
+            "outbox_delivery_supersede",
+            "pending_delivery",
+            1,
+            "HARD-SERVICE-OUTBOX-LOCK-ORDER",
+        ),
+        (
+            "outbox_delivery_supersede",
+            "relayable_pending",
+            1,
+            "HARD-SERVICE-OUTBOX-LOCK-ORDER",
+        ),
+        (
+            "outbox_delivery_supersede",
+            "same_pending_intent",
             False,
             "HARD-SERVICE-OUTBOX-LOCK-ORDER",
         ),
@@ -501,15 +615,21 @@ def test_hardened_requires_each_service_and_mutant_oracle():
         }
         assert statuses[assertion_id] == "FAIL"
 
-    report = _report(vulnerable=False)
-    report["service_probes"]["unsafe_without_lock_and_constraint"][
-        "otp_start"
-    ]["active"] = 1
-    statuses = {
-        item["id"]: item["status"]
-        for item in _expectation_results(report, "hardened")
-    }
-    assert statuses["HARD-SERVICE-MUTANTS"] == "FAIL"
+    for key, value in (
+        ("distinct_backend_pids", [600]),
+        ("active", 1),
+        ("pending_delivery", 1),
+        ("relayable_pending", 1),
+    ):
+        report = _report(vulnerable=False)
+        report["service_probes"]["unsafe_without_lock_and_constraint"][
+            "otp_start"
+        ][key] = value
+        statuses = {
+            item["id"]: item["status"]
+            for item in _expectation_results(report, "hardened")
+        }
+        assert statuses["HARD-SERVICE-MUTANTS"] == "FAIL"
 
 
 @pytest.mark.parametrize(
@@ -542,7 +662,8 @@ def test_hardened_requires_each_service_and_mutant_oracle():
             ("outcomes",),
             {
                 "success": 2,
-                "otp_error:otp_issue_conflict:409:savepoint_usable": 0,
+                "otp_error:otp_issue_conflict:409:pending_index:"
+                "savepoint_usable": 0,
             },
             "HARD-SERVICE-OTP-CONFLICT-TYPED",
         ),
@@ -551,12 +672,24 @@ def test_hardened_requires_each_service_and_mutant_oracle():
             ("outcomes",),
             {
                 "success": 1,
-                "otp_error:otp_issue_conflict:409:savepoint_unusable": 1,
+                "otp_error:otp_issue_conflict:409:pending_index:"
+                "savepoint_unusable": 1,
             },
             "HARD-SERVICE-OTP-CONFLICT-TYPED",
         ),
         ("otp_issue", ("active",), 2, "HARD-SERVICE-OTP-CONFLICT-TYPED"),
-        ("otp_issue", ("deliverable",), 0, "HARD-SERVICE-OTP-CONFLICT-TYPED"),
+        (
+            "otp_issue",
+            ("pending_delivery",),
+            0,
+            "HARD-SERVICE-OTP-CONFLICT-TYPED",
+        ),
+        (
+            "otp_issue",
+            ("relayable_pending",),
+            0,
+            "HARD-SERVICE-OTP-CONFLICT-TYPED",
+        ),
         (
             "otp_issue",
             ("index_semantics_retained",),

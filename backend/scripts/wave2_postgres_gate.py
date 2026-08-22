@@ -79,7 +79,7 @@ if str(BACKEND) not in sys.path:
 #: EX_CONFIG. Distinct from 0 (pass) and 1 (assertion failure).
 BLOCKED_EXIT = 78
 BLOCKED_PREFIX = "BLOCKED: prerequisite runtime absent"
-HEAD = "0017_registration_invariants"
+HEAD = "0020_auth_retention_lifecycle"
 
 #: The 17 Wave 2 tables. Pinned here, cross-checked against the ORM at runtime,
 #: so a rename fails the gate rather than silently shrinking its coverage.
@@ -474,7 +474,7 @@ def run_alembic(args: list[str], url: str) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=str(BACKEND),
-        env=env,
+        env={**env, "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1"},
         capture_output=True,
         text=True,
     )

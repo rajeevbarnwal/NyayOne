@@ -89,7 +89,7 @@ PROFILE_SPECS: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
 }
 
-# Contracts reconstructed from the exact successful PR #3 producer artifacts.
+# Contracts pin each producer's repository-reviewed exact assertion inventory.
 # Only the sorted identity digest is retained here: assertion text and runtime
 # values remain outside uploadable evidence. A PASS cannot shrink, duplicate or
 # substitute its assertion inventory without changing one of these digests.
@@ -103,8 +103,8 @@ INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
         "2618ee569f523fbcf1ee334dd933f908ddae691d7cde1ceabe6d3626f37db027",
     ),
     "registration-browser": (
-        "results", "name", 48,
-        "df6858dec04a7f05aaae2d3239a81d94973879bd802dd91fd1fe6a6eaf874c2e",
+        "results", "name", 54,
+        "f9d114f9dac2d2f158c03d5053645e5c4344884420cce48d1e6cee54692d7997",
     ),
     "auth-browser": (
         "rows", "area", 137,
