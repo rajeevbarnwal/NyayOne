@@ -33,8 +33,14 @@ from app.models.registration import (
     User,
 )
 from app.schemas.registration import StudentRegisterRequest
-from app.services import otp_flow_service, otp_service, registration_service
+from app.services import (
+    otp_flow_service,
+    otp_outbox,
+    otp_service,
+    registration_service,
+)
 from app.services.otp_sender import OtpSendError
+from app.workers import otp_outbox_relay
 from tests import dbtemplate
 
 
@@ -419,7 +425,11 @@ def test_pending_otp_retention_is_uniform_erased_tombstone(db_session, mode):
     record = db_session.scalar(select(RegistrationIdempotencyRecord))
     assert counts["registrations"] == 1
     assert counts["otp_flows"] == 1
+    assert counts["otp_expired_registrations"] == 1
+    assert counts["otp_challenges"] == 0
     assert db_session.scalar(select(OtpChallenge)) is None
+    assert db_session.scalar(select(OtpOutbox)) is None
+    assert db_session.scalar(select(OtpFlow)) is None
     assert record is not None and record.state == "erased"
     assert record.request_fingerprint is None and record.registration_id is None
     if mode == "delete":
@@ -435,7 +445,9 @@ def test_pending_otp_retention_is_uniform_erased_tombstone(db_session, mode):
 
     for candidate in (request, _request(last_name="Shah")):
         with pytest.raises(registration_service.RegistrationError) as caught:
-            registration_service.resolve_idempotent_replay(db_session, KEY, candidate)
+            registration_service.resolve_idempotent_replay(
+                db_session, KEY, candidate, now=NOW
+            )
         assert (caught.value.status_code, caught.value.code) == (
             409,
             "registration_replay_expired",
@@ -454,6 +466,7 @@ def test_succeeded_otp_retention_preserves_registration_and_ledger(db_session):
         db_session,
         registration_service.registration_idempotency_key_hash(KEY),
         sender,
+        now=NOW,
     )
     registration_id = result.registration.id
     challenge = db_session.scalar(
@@ -472,8 +485,198 @@ def test_succeeded_otp_retention_preserves_registration_and_ledger(db_session):
     assert counts["registrations"] == 0 and counts["otp_challenges"] == 1
     assert record is not None and record.state == "succeeded"
     assert db_session.get(StudentRegistration, registration_id) is not None
-    replay = registration_service.resolve_idempotent_replay(db_session, KEY, request)
+    replay = registration_service.resolve_idempotent_replay(
+        db_session, KEY, request, now=NOW
+    )
     assert replay is not None and replay.delivery is None
+
+
+def test_registration_relay_does_not_count_concurrent_terminal_observation(
+    http_ctx,
+    monkeypatch,
+):
+    _client, factory, _request_sender, _app = http_ctx
+    operation_now = datetime.now(timezone.utc)
+    with factory() as session:
+        result = registration_service.register_student(
+            session,
+            _request(),
+            idempotency_key=KEY,
+            now=operation_now,
+        )
+        _attach_signup_flow(session, result, now=operation_now)
+        outbox_id = result.delivery.outbox_id
+        session.commit()
+
+    class ConcurrentWinner:
+        newly_delivered = False
+
+    def observe_concurrent_winner(session, key_hash, _sender):
+        record = session.scalar(
+            select(RegistrationIdempotencyRecord).where(
+                RegistrationIdempotencyRecord.idempotency_key_hash == key_hash
+            )
+        )
+        assert record is not None and record.outbox_id == outbox_id
+        row = session.get(OtpOutbox, outbox_id)
+        assert row is not None
+        row.status = "sent"
+        row.delivered_at = operation_now
+        row.code_ct = None
+        row.destination_ct = None
+        record.state = "succeeded"
+        record.outbox_id = None
+        session.commit()
+        return ConcurrentWinner()
+
+    monkeypatch.setattr(
+        registration_service,
+        "finalize_pending_registration_with_result",
+        observe_concurrent_winner,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        registration_service,
+        "finalize_pending_registration",
+        observe_concurrent_winner,
+    )
+    relay_sender = CapturingSender()
+
+    report = otp_outbox_relay.relay_pending(
+        session_factory=factory,
+        sender=relay_sender,
+    )
+
+    assert report == otp_outbox_relay.RelayResult(
+        examined=1,
+        delivered=0,
+        failed=0,
+    )
+    assert relay_sender.sent == []
+
+
+def test_result_finalizer_reports_only_its_actual_provider_delivery(db_session):
+    result = registration_service.register_student(
+        db_session,
+        _request(),
+        idempotency_key=KEY,
+        now=NOW,
+    )
+    _attach_signup_flow(db_session, result)
+    db_session.commit()
+    sender = CapturingSender()
+    key_hash = registration_service.registration_idempotency_key_hash(KEY)
+
+    first = registration_service.finalize_pending_registration_with_result(
+        db_session,
+        key_hash,
+        sender,
+        now=NOW,
+    )
+    observed = registration_service.finalize_pending_registration_with_result(
+        db_session,
+        key_hash,
+        sender,
+        now=NOW,
+    )
+    public_result = registration_service.finalize_pending_registration(
+        db_session,
+        key_hash,
+        sender,
+        now=NOW,
+    )
+
+    assert first.registration.id == result.registration.id
+    assert first.newly_delivered is True
+    assert observed.registration.id == result.registration.id
+    assert observed.newly_delivered is False
+    assert isinstance(public_result, StudentRegistration)
+    assert public_result.id == result.registration.id
+    assert len(sender.sent) == 1
+
+
+def test_pending_finalizer_retires_expired_flow_without_provider_io(
+    db_session,
+):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    _attach_signup_flow(db_session, result)
+    flow = db_session.scalar(select(OtpFlow))
+    assert flow is not None
+    flow.expires_at = NOW
+    db_session.commit()
+    sender = CapturingSender()
+
+    with pytest.raises(registration_service.RegistrationError) as caught:
+        registration_service.finalize_pending_registration(
+            db_session,
+            registration_service.registration_idempotency_key_hash(KEY),
+            sender,
+            now=NOW,
+        )
+    assert (caught.value.status_code, caught.value.code) == (
+        409,
+        "registration_replay_expired",
+    )
+    assert sender.sent == []
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert record is not None
+    assert record.state == "retired"
+    assert record.registration_id is None and record.outbox_id is None
+    assert record.request_fingerprint is None
+    assert record.request_fingerprint_version is None
+    row = db_session.scalar(select(OtpOutbox))
+    assert row is not None
+    assert (row.status, row.code_ct, row.destination_ct) == (
+        "void",
+        None,
+        None,
+    )
+    assert flow.state == "expired"
+
+
+def test_pending_finalizer_maps_prefenced_claim_race_to_expired(
+    db_session,
+    monkeypatch,
+):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    _attach_signup_flow(db_session, result)
+    db_session.commit()
+    run_delivery = otp_outbox.run_delivery
+
+    def pre_fence_then_claim(session, intent, sender, **kwargs):
+        graph = otp_outbox._locked_graph(session, intent.outbox_id)
+        assert graph is not None
+        otp_outbox._fence_unavailable_delivery(
+            session,
+            graph,
+            now=NOW,
+            reason="otp_flow_expired",
+        )
+        session.commit()
+        return run_delivery(session, intent, sender, **kwargs)
+
+    monkeypatch.setattr(otp_outbox, "run_delivery", pre_fence_then_claim)
+    sender = CapturingSender()
+
+    with pytest.raises(registration_service.RegistrationError) as caught:
+        registration_service.finalize_pending_registration(
+            db_session,
+            registration_service.registration_idempotency_key_hash(KEY),
+            sender,
+            now=NOW,
+        )
+
+    assert (caught.value.status_code, caught.value.code) == (
+        409,
+        "registration_replay_expired",
+    )
+    assert sender.sent == []
+    record = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert record is not None and record.state == "retired"
 
 
 def test_invalid_retention_mode_rejects_before_mutation(db_session):
@@ -496,6 +699,7 @@ def test_pending_resend_reuses_claim_and_replay_delivers_only_once(db_session):
     result = registration_service.register_student(
         db_session, _request(), idempotency_key=KEY, now=NOW
     )
+    _attach_signup_flow(db_session, result)
     original_outbox = result.delivery.outbox_id
     authority = db_session.scalar(
         select(OtpPurposeAuthority).where(
@@ -523,6 +727,7 @@ def test_pending_resend_reuses_claim_and_replay_delivers_only_once(db_session):
         db_session,
         registration_service.registration_idempotency_key_hash(KEY),
         sender,
+        now=NOW,
     )
     assert len(sender.sent) == 1
     assert db_session.scalar(select(RegistrationIdempotencyRecord)).state == "succeeded"
@@ -572,6 +777,7 @@ def test_retention_reconciles_pending_sent_window_as_success(db_session):
     result = registration_service.register_student(
         db_session, _request(), idempotency_key=KEY, now=NOW
     )
+    _attach_signup_flow(db_session, result)
     registration_id = result.registration.id
     challenge = db_session.scalar(
         select(OtpChallenge).where(OtpChallenge.registration_id == registration_id)
@@ -646,18 +852,20 @@ def test_retention_after_activation_preserves_retired_first_cause(db_session):
     result = registration_service.register_student(
         db_session, request, idempotency_key=KEY, now=NOW
     )
+    _attach_signup_flow(db_session, result)
     db_session.commit()
     sender = CapturingSender()
     registration_service.finalize_pending_registration(
         db_session,
         registration_service.registration_idempotency_key_hash(KEY),
         sender,
+        now=NOW,
     )
     otp_service.verify(
         db_session,
         result.registration.id,
         sender.sent[0][1],
-        datetime.now(timezone.utc),
+        NOW,
         purpose="signup",
     )
     registration = db_session.get(StudentRegistration, result.registration.id)
@@ -740,6 +948,72 @@ def test_resend_helper_rejects_corrupt_reassignment(db_session, monkeypatch):
         )
 
 
+def test_resend_helper_threads_one_explicit_operation_clock(
+    db_session, monkeypatch
+):
+    result = registration_service.register_student(
+        db_session, _request(), idempotency_key=KEY, now=NOW
+    )
+    db_session.commit()
+    observed = {}
+
+    def finalize(_session, key_hash, _sender, *, now=None):
+        observed["key_hash"] = key_hash
+        observed["now"] = now
+
+    monkeypatch.setattr(
+        registration_service, "finalize_pending_registration", finalize
+    )
+    assert registration_service.finalize_pending_resend_if_claimed(
+        db_session,
+        result.registration.id,
+        result.delivery,
+        CapturingSender(),
+        now=NOW,
+    )
+    assert observed == {
+        "key_hash": registration_service.registration_idempotency_key_hash(KEY),
+        "now": NOW,
+    }
+
+
+def test_resend_worker_threads_clock_to_claim_and_fallback(monkeypatch):
+    observed = {}
+
+    class Context:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *_args):
+            return False
+
+    def finalize(_session, _registration_id, _intent, _sender, *, now=None):
+        observed["claim_now"] = now
+        return False
+
+    def deliver(_session, _intent, _sender, *, raise_on_failure, now=None):
+        observed["delivery_now"] = now
+        observed["raise_on_failure"] = raise_on_failure
+        return True
+
+    monkeypatch.setattr(
+        registration_service, "finalize_pending_resend_if_claimed", finalize
+    )
+    monkeypatch.setattr(otp_outbox_relay.otp_outbox, "run_delivery", deliver)
+    otp_outbox_relay.deliver_resend_after_response(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        CapturingSender(),
+        lambda: Context(),
+        now=NOW,
+    )
+    assert observed == {
+        "claim_now": NOW,
+        "delivery_now": NOW,
+        "raise_on_failure": False,
+    }
+
+
 def test_corrupt_resend_and_finalizer_fail_without_mutation(db_session):
     a = registration_service.register_student(
         db_session, _request(), idempotency_key=KEY, now=NOW
@@ -747,6 +1021,14 @@ def test_corrupt_resend_and_finalizer_fail_without_mutation(db_session):
     b = registration_service.register_student(
         db_session,
         _request(mobile="9876543211", institutional_email="b@nls.ac.in"),
+        now=NOW,
+    )
+    _attach_signup_flow(db_session, a)
+    endpoint._signup_flow(
+        db_session,
+        b,
+        raw_token="corrupt-resend-fixture-b-flow",
+        destination="9876543211",
         now=NOW,
     )
     db_session.commit()
@@ -774,6 +1056,7 @@ def test_corrupt_resend_and_finalizer_fail_without_mutation(db_session):
             db_session,
             registration_service.registration_idempotency_key_hash(KEY),
             sender,
+            now=NOW,
         )
     db_session.rollback()
     record = db_session.scalar(select(RegistrationIdempotencyRecord))
@@ -815,7 +1098,7 @@ def test_integrity_recovery_resolves_both_known_constraints_and_reraises_unknown
         endpoint._REGISTRATION_MOBILE_CONSTRAINT,
     ):
         recovered = endpoint._recover_registration_integrity_conflict(
-            db_session, request, KEY, _integrity_error(name)
+            db_session, request, KEY, _integrity_error(name), now=NOW
         )
         assert recovered.registration.id == winner.registration.id
         assert recovered.replayed is True
@@ -823,7 +1106,7 @@ def test_integrity_recovery_resolves_both_known_constraints_and_reraises_unknown
     unknown = _integrity_error("uq_unrelated_private_constraint")
     with pytest.raises(IntegrityError) as caught:
         endpoint._recover_registration_integrity_conflict(
-            db_session, request, KEY, unknown
+            db_session, request, KEY, unknown, now=NOW
         )
     assert caught.value is unknown
 
@@ -868,6 +1151,7 @@ def test_integrity_recovery_returns_typed_neutral_winner_or_conflict(
             neutral_request,
             neutral_key,
             _integrity_error(name),
+            now=NOW,
         )
         assert isinstance(
             recovered, registration_service.NeutralizedRegistrationReplay
@@ -880,6 +1164,7 @@ def test_integrity_recovery_returns_typed_neutral_winner_or_conflict(
             _request(first_name="Mutated"),
             neutral_key,
             _integrity_error(endpoint._REGISTRATION_IDEMPOTENCY_CONSTRAINT),
+            now=NOW,
         )
     assert caught.value.status_code == 409
     assert caught.value.detail == {

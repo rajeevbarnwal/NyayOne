@@ -49,6 +49,7 @@ jobs:
       INTERNSHIP_REPORT_CLAMAV_HOST: 127.0.0.1
       INTERNSHIP_REPORT_CLAMAV_PORT: 3310
       CORS_ORIGINS: '["http://127.0.0.1:1260","http://localhost:1260","http://127.0.0.1:1263","http://localhost:1263"]'
+      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

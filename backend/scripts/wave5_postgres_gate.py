@@ -176,7 +176,10 @@ def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=BACKEND,
-        env=os.environ.copy(),
+        env={
+            **os.environ,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
         capture_output=True,
         text=True,
     )

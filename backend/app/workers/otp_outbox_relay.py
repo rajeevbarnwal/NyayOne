@@ -82,6 +82,8 @@ def deliver_resend_after_response(
     outbox_id,
     sender: IdempotentOtpSender,
     session_factory: Callable[[], Session] | None = None,
+    *,
+    now: datetime | None = None,
 ) -> None:
     """Reconcile a signup ledger resend, or deliver an ordinary purpose."""
 
@@ -95,11 +97,15 @@ def deliver_resend_after_response(
     with factory() as session:
         try:
             claimed = finalize_pending_resend_if_claimed(
-                session, registration_id, intent, sender
+                session, registration_id, intent, sender, now=now
             )
             if not claimed:
                 otp_outbox.run_delivery(
-                    session, intent, sender, raise_on_failure=False
+                    session,
+                    intent,
+                    sender,
+                    raise_on_failure=False,
+                    now=now,
                 )
         except RegistrationError:
             session.rollback()
@@ -162,22 +168,20 @@ def relay_pending(
             else:
                 from app.services.registration_service import (
                     RegistrationError,
-                    finalize_pending_registration,
+                    finalize_pending_registration_with_result,
                 )
 
-                before = session.scalar(
-                    select(OtpOutbox.status).where(OtpOutbox.id == outbox_id)
-                )
                 try:
-                    finalize_pending_registration(session, key_hash, provider)
+                    outcome = finalize_pending_registration_with_result(
+                        session,
+                        key_hash,
+                        provider,
+                    )
                 except RegistrationError:
                     session.rollback()
                     ok = False
                 else:
-                    after = session.scalar(
-                        select(OtpOutbox.status).where(OtpOutbox.id == outbox_id)
-                    )
-                    ok = before != "sent" and after == "sent"
+                    ok = outcome.newly_delivered
         if ok:
             delivered += 1
         else:

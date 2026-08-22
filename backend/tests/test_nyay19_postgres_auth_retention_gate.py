@@ -17,13 +17,16 @@ from types import SimpleNamespace
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 import pytest
-from sqlalchemy import DateTime, JSON, String, Uuid
+from sqlalchemy import DateTime, JSON, String, Uuid, make_url
 from sqlalchemy.exc import SQLAlchemyError
 
 import scripts.nyay19_postgres_auth_retention_gate as gate
 from scripts.nyay19_postgres_auth_retention_gate import (
+    DISTINCT_MUTANT_IDS,
     EXPECTED_COOKIE_CONTRACT,
+    EXPECTED_MUTANT_INVENTORY,
     LIBPQ_AMBIENT_KEYS,
+    MUTANT_ALIAS_OF,
     REQUIRED_ASSERTION_IDS,
     REQUIRED_MUTANT_IDS,
     REQUIRED_RACE_CASES,
@@ -46,6 +49,8 @@ from scripts.nyay19_postgres_auth_retention_gate import (
     _is_postgresql_16_with_pgvector,
     _logout_expiry_observation_passes,
     _migration_observation_passes,
+    _mutant_inventory,
+    _mutant_inventory_observation_passes,
     _oracle_baselines,
     _populated_migration_observation_passes,
     _postgresql_auth_check_catalog_sql,
@@ -240,6 +245,47 @@ def test_runtime_pin_is_exact_postgresql_major_16_with_pgvector(
     version_num, vector_version, expected
 ):
     assert _is_postgresql_16_with_pgvector(version_num, vector_version) is expected
+
+
+def test_runtime_probe_checks_pgvector_in_supplied_gate_database(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def scalar(self, statement):
+            sql = str(statement)
+            return "160015" if "server_version_num" in sql else "0.8.6"
+
+    class Engine:
+        def connect(self):
+            return Connection()
+
+        def dispose(self):
+            captured["disposed"] = True
+
+    def create_engine(url, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return Engine()
+
+    monkeypatch.setattr(gate, "create_engine", create_engine)
+    base = make_url(
+        "postgresql+psycopg://gate:secret@127.0.0.1:55489/"
+        "nyay19_corrective_qa"
+    )
+
+    assert gate._runtime_probe(base) == {
+        "server_version_num": 160015,
+        "postgres_major": 16,
+        "pgvector_present": True,
+    }
+    assert make_url(str(captured["url"])).database == "nyay19_corrective_qa"
+    assert captured["disposed"] is True
 
 
 def test_exact_ordered_release_inventory_has_sixteen_unique_rows():
@@ -1594,6 +1640,7 @@ def test_assembled_assertions_are_exact_and_aggregate_only():
     observations = _oracle_baselines()
     harness = {
         "mutants": {identifier: True for identifier in REQUIRED_MUTANT_IDS},
+        "mutant_inventory": dict(EXPECTED_MUTANT_INVENTORY),
         "privacy_scanned": True,
         "privacy_findings": 0,
         "scratch": observations["scratch"],
@@ -1606,13 +1653,41 @@ def test_assembled_assertions_are_exact_and_aggregate_only():
     assert not _privacy_findings({"assertions": assertions})
 
 
-def test_seeded_mutant_inventory_is_exact_and_every_mutant_is_killed():
+def test_seeded_mutant_inventory_distinguishes_names_from_variants():
     results = _seeded_mutant_results()
     assert tuple(results) == REQUIRED_MUTANT_IDS
-    assert len(results) == len(REQUIRED_MUTANT_IDS)
-    assert len(results) >= 50
-    assert all(results.values())
+    assert len(results) == 94
+    assert len(DISTINCT_MUTANT_IDS) == 64
+    assert len(MUTANT_ALIAS_OF) == 30
+    assert len(results) == len(DISTINCT_MUTANT_IDS) + len(MUTANT_ALIAS_OF)
+    assert set(MUTANT_ALIAS_OF).issubset(results)
+    assert set(MUTANT_ALIAS_OF.values()).issubset(DISTINCT_MUTANT_IDS)
+    assert not set(MUTANT_ALIAS_OF.values()).intersection(MUTANT_ALIAS_OF)
+    assert all(
+        results[alias] is results[canonical]
+        for alias, canonical in MUTANT_ALIAS_OF.items()
+    )
+    assert _mutant_inventory(results) == EXPECTED_MUTANT_INVENTORY
+    assert _mutant_inventory_observation_passes(_mutant_inventory(results))
     assert _seeded_mutants_are_killed()
+
+
+@pytest.mark.parametrize(
+    "field",
+    tuple(EXPECTED_MUTANT_INVENTORY),
+)
+def test_mutant_inventory_rejects_missing_wrong_or_truthy_counts(field):
+    inventory = dict(EXPECTED_MUTANT_INVENTORY)
+    inventory.pop(field)
+    assert not _mutant_inventory_observation_passes(inventory)
+
+    inventory = dict(EXPECTED_MUTANT_INVENTORY)
+    inventory[field] += 1
+    assert not _mutant_inventory_observation_passes(inventory)
+
+    inventory = dict(EXPECTED_MUTANT_INVENTORY)
+    inventory[field] = True
+    assert not _mutant_inventory_observation_passes(inventory)
 
 
 @pytest.mark.parametrize(
@@ -1639,7 +1714,7 @@ def test_privacy_scanner_accepts_only_aggregate_release_evidence():
         "status": "PASS",
         "executed": True,
         "assertions": 16,
-        "mutants": len(REQUIRED_MUTANT_IDS),
+        "mutant_inventory": dict(EXPECTED_MUTANT_INVENTORY),
         "scratch": {"created": 3, "removed": 3},
         "privacy_findings": 0,
     }
@@ -1830,6 +1905,7 @@ def test_run_gate_composes_legacy_and_aggregate_evidence_only(monkeypatch):
     assert report["status"] == "PASS"
     assert report["executed"] is True
     assert report["assertion_summary"]["overall_pass"] is True
+    assert report["mutant_inventory"] == EXPECTED_MUTANT_INVENTORY
     assert [row["id"] for row in report["assertions"]] == list(
         REQUIRED_ASSERTION_IDS
     )

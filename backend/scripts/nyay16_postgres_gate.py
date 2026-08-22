@@ -189,7 +189,11 @@ def _run_alembic(database_url: str, env: dict[str, str], *args: str) -> CommandR
     completed = subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=BACKEND,
-        env={**env, "DATABASE_URL": database_url},
+        env={
+            **env,
+            "DATABASE_URL": database_url,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=180,

@@ -9,6 +9,7 @@ emitted only by executing the gate against PostgreSQL 16 + pgvector.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import inspect as pyinspect
 
@@ -26,6 +27,7 @@ from scripts.nyay17_postgres_idempotency_gate import (
     ScratchCleanupFailure,
     _ScratchDatabaseManager,
     _base_registration_payload,
+    _behavior_rate_limit_scope,
     _canonical_equivalent_payloads,
     _canonical_field_mutations,
     _conflict_observation_passes,
@@ -70,6 +72,384 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     behavior_source = pyinspect.getsource(gate._execute_behavior)
     assert '"upgrade", APPLICATION_HEAD' in behavior_source
     assert '"upgrade", PINNED_HEAD' not in behavior_source
+    assert (
+        "_migration_inventory_passes(\n"
+        "            engine, expected_revision=APPLICATION_HEAD\n"
+        "        )"
+    ) in behavior_source
+    integrity_source = pyinspect.getsource(gate._run_integrity_translation_probe)
+    assert "uuid.UUID(str(_response_handle(created)))" not in integrity_source
+    assert "_public_response_handle(created) is None" in integrity_source
+    assert "_ledger_for_key(session, wire_key)" in integrity_source
+    assert "app.state.nyay17_session_factory = factory" in pyinspect.getsource(
+        gate._build_app_context
+    )
+    assert "_attach_private_response_handle" in pyinspect.getsource(
+        gate._post_registration
+    )
+
+
+def test_registration_probe_helpers_supply_trusted_origin_without_collapsing_headers(
+    monkeypatch,
+):
+    from app.core.config import settings
+
+    calls = []
+    response = object()
+
+    class Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def post(self, path, *, json, headers):
+            calls.append((path, json, headers))
+            return response
+
+    monkeypatch.setattr(gate, "TestClient", Client)
+    payload = {"field": "value"}
+
+    assert gate._post_registration(object(), payload, "one-key") is response
+    assert gate._post_registration_headers(
+        object(), payload, [("Idempotency-Key", "a"), ("Idempotency-Key", "b")]
+    ) is response
+    origin = settings.cors_origins[0]
+    assert calls == [
+        (
+            gate.REGISTER_PATH,
+            payload,
+            {"Origin": origin, "Idempotency-Key": "one-key"},
+        ),
+        (
+            gate.REGISTER_PATH,
+            payload,
+            [
+                ("Origin", origin),
+                ("Idempotency-Key", "a"),
+                ("Idempotency-Key", "b"),
+            ],
+        ),
+    ]
+
+
+def test_private_probe_handle_cannot_masquerade_as_public_response_uuid():
+    handle = "c9dc4df2-1641-4d5d-a3c8-8d05691102c2"
+    private = SimpleNamespace(
+        _nyay17_private_registration_id=handle,
+        json=lambda: {"status": "pending"},
+    )
+    leaked = SimpleNamespace(json=lambda: {"registration_id": handle})
+
+    assert gate._response_handle(private) == handle
+    assert gate._public_response_handle(private) is None
+    assert gate._response_handle(leaked) is None
+    assert gate._public_response_handle(leaked) == handle
+
+
+def test_identifier_free_pending_projection_rejects_uuid_in_any_public_field():
+    handle = "c9dc4df2-1641-4d5d-a3c8-8d05691102c2"
+    body = {
+        "status": "pending",
+        "purpose": "signup",
+        "destination_masked": "••••••0101",
+        "attempts_left": 5,
+        "expires_in_seconds": 300,
+        "resend_in_seconds": 30,
+        "locked_for_seconds": 0,
+        "resend_allowed": False,
+    }
+    response = SimpleNamespace(
+        status_code=201,
+        json=lambda: body,
+        _nyay17_private_registration_id=handle,
+    )
+    assert gate._response_is_identifier_free(response, private_handle=handle)
+    assert gate._signup_pending_projection_is_exact(
+        response, private_handle=handle
+    )
+    assert gate._post_response_crash_projection_is_exact(
+        response, private_handle=handle
+    )
+
+    for field, value in (
+        ("registration_id", handle),
+        ("destination_masked", handle),
+        ("destination_masked", handle.replace("-", "")),
+    ):
+        mutated = dict(body)
+        mutated[field] = value
+        leaked = SimpleNamespace(status_code=201, json=lambda value=mutated: value)
+        assert not gate._response_is_identifier_free(
+            leaked, private_handle=handle
+        )
+        assert not gate._signup_pending_projection_is_exact(
+            leaked, private_handle=handle
+        )
+
+    wrong_private = SimpleNamespace(
+        status_code=201,
+        json=lambda: body,
+        _nyay17_private_registration_id="c7b31f6e-9b98-492e-abee-d951498dc279",
+    )
+    assert not gate._post_response_crash_projection_is_exact(
+        wrong_private, private_handle=handle
+    )
+
+
+def test_signup_otp_helpers_use_private_cookie_capability_and_current_payloads(
+    monkeypatch,
+):
+    from app.core.config import settings
+    from app.services import otp_flow_service
+
+    calls = []
+
+    class Cookies:
+        def set(self, name, value, *, path):
+            calls.append(("cookie", name, value, path))
+
+    class Client:
+        def __init__(self, *_args, **_kwargs):
+            self.cookies = Cookies()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def post(self, path, *, json, headers):
+            calls.append(("post", path, json, headers))
+            return object()
+
+    monkeypatch.setattr(gate, "TestClient", Client)
+    monkeypatch.setattr(
+        otp_flow_service,
+        "deterministic_signup_token",
+        lambda key: f"private-{key}",
+    )
+
+    crashed = SimpleNamespace(status_code=500)
+    gate._post_signup_resend(object(), crashed, "opaque-key")
+    gate._post_signup_verify(object(), crashed, "opaque-key", "123456")
+    origin = settings.cors_origins[0]
+    assert calls == [
+        (
+            "cookie",
+            settings.otp_flow_cookie_name,
+            "private-opaque-key",
+            "/api/v1",
+        ),
+        (
+            "post",
+            "/api/v1/auth/student/otp/resend",
+            {},
+            {"Origin": origin},
+        ),
+        (
+            "cookie",
+            settings.otp_flow_cookie_name,
+            "private-opaque-key",
+            "/api/v1",
+        ),
+        (
+            "post",
+            "/api/v1/auth/student/otp/verify",
+            {"code": "123456"},
+            {"Origin": origin},
+        ),
+    ]
+
+    successful_without_cookie = SimpleNamespace(status_code=201)
+    captured = SimpleNamespace(
+        status_code=201,
+        _nyay17_private_flow_token="captured-token",
+    )
+    assert gate._private_flow_token(captured, "opaque-key") == "captured-token"
+    assert gate._private_flow_token(successful_without_cookie, "opaque-key") is None
+    assert gate._private_flow_token(crashed, None) is None
+    assert gate._private_flow_token(crashed, "opaque-key") == "private-opaque-key"
+
+
+def test_behavior_rate_limit_scope_is_exact_and_restores_on_every_exit():
+    from app.core.config import settings
+
+    fields = (
+        "otp_issue_identity_limit",
+        "otp_issue_ip_limit",
+        "otp_issue_global_limit",
+    )
+    original = tuple(getattr(settings, field) for field in fields)
+    seeded = (3, 4, 5)
+    try:
+        for field, value in zip(fields, seeded, strict=True):
+            setattr(settings, field, value)
+        with _behavior_rate_limit_scope():
+            assert tuple(getattr(settings, field) for field in fields) == (
+                100,
+                1000,
+                10000,
+            )
+        assert tuple(getattr(settings, field) for field in fields) == seeded
+
+        with pytest.raises(RuntimeError, match="forced probe failure"):
+            with _behavior_rate_limit_scope():
+                raise RuntimeError("forced probe failure")
+        assert tuple(getattr(settings, field) for field in fields) == seeded
+    finally:
+        for field, value in zip(fields, original, strict=True):
+            setattr(settings, field, value)
+
+    behavior_source = pyinspect.getsource(gate._execute_behavior)
+    assert "with _behavior_rate_limit_scope():" in behavior_source
+
+
+def test_gate_provider_doubles_implement_exact_idempotent_contract():
+    from app.services.otp_sender import OtpSendError
+
+    sender = gate._CapturingSender()
+    first = sender.send_idempotent(
+        "private-destination",
+        "private-code",
+        idempotency_token="opaque-token",
+    )
+    second = sender.send_idempotent(
+        "private-destination",
+        "private-code",
+        idempotency_token="opaque-token",
+    )
+    assert first == second
+    assert sender.count == 1
+    with pytest.raises(OtpSendError, match="idempotency conflict"):
+        sender.send_idempotent(
+            "different-destination",
+            "private-code",
+            idempotency_token="opaque-token",
+        )
+
+    crash = gate._CrashSender()
+    with pytest.raises(RuntimeError, match="post-commit crash"):
+        crash.send_idempotent(
+            "private-destination",
+            "private-code",
+            idempotency_token="opaque-crash",
+        )
+    assert crash.attempts == 1
+    assert crash.count == 0
+
+    accepted = gate._AcceptedCrashSender()
+    with pytest.raises(RuntimeError, match="accepted-before-finalization"):
+        accepted.send_idempotent(
+            "private-destination",
+            "private-code",
+            idempotency_token="opaque-accepted",
+        )
+    assert accepted.attempts == 1
+    assert accepted.count == 1
+    assert accepted.send_idempotent(
+        "private-destination",
+        "private-code",
+        idempotency_token="opaque-accepted",
+    )
+    assert accepted.attempts == 2
+    assert accepted.count == 1
+
+    failing = gate._FailingSender()
+    with pytest.raises(OtpSendError, match="synthetic provider failure"):
+        failing.send_idempotent(
+            "private-destination",
+            "private-code",
+            idempotency_token="opaque-failure",
+        )
+    assert failing.count == 1
+
+    blocking = gate._BlockingSender()
+    blocking.release.set()
+    assert blocking.send_idempotent(
+        "private-destination",
+        "private-code",
+        idempotency_token="opaque-blocking",
+    )
+    assert blocking.entered.is_set()
+    assert blocking.count == 1
+
+
+def test_current_head_neutralized_ledger_shape_is_exact():
+    record = SimpleNamespace(
+        state="neutralized",
+        idempotency_key_hash="a" * 64,
+        request_fingerprint_version="v1",
+        request_fingerprint="b" * 64,
+        registration_id=None,
+        outbox_id=None,
+        outcome_code="registration_neutralized",
+    )
+    assert gate._ledger_state_exact(record, "neutralized")
+    for field, unsafe in (
+        ("request_fingerprint_version", None),
+        ("request_fingerprint", None),
+        ("registration_id", gate.uuid.uuid4()),
+        ("outbox_id", gate.uuid.uuid4()),
+        ("outcome_code", "registration_replay_expired"),
+    ):
+        mutant = SimpleNamespace(**vars(record))
+        setattr(mutant, field, unsafe)
+        assert not gate._ledger_state_exact(mutant, "neutralized")
+
+
+def _neutralized_observation() -> dict:
+    return {
+        "response_status": 201,
+        "projection_exact": True,
+        "projection_matches_real": True,
+        "public_identifier_absent": True,
+        "private_registration_absent": True,
+        "distinct_deterministic_cookie": True,
+        "neutralized_state_exact": True,
+        "neutral_flow_exact": True,
+        "neutral_authority_exact": True,
+        "real_graph_unchanged": True,
+        "real_provider_delta": 0,
+        "ledger_delta": 1,
+        "authority_delta": 1,
+        "flow_delta": 1,
+        "replay_status": 201,
+        "replay_projection_stable": True,
+        "replay_cookie_stable": True,
+        "replay_state_unchanged": True,
+        "replay_provider_delta": 0,
+        "mutation_conflict_exact": True,
+        "mutation_state_unchanged": True,
+        "mutation_provider_delta": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    "field, unsafe",
+    tuple(
+        (field, 409 if field in {"response_status", "replay_status"} else False)
+        for field in _neutralized_observation()
+        if not field.endswith("_delta")
+    )
+    + (
+        ("real_provider_delta", 1),
+        ("ledger_delta", 0),
+        ("authority_delta", 0),
+        ("flow_delta", 0),
+        ("replay_provider_delta", 1),
+        ("mutation_provider_delta", 1),
+    ),
+)
+def test_neutralized_evaluator_rejects_every_false_green(field, unsafe):
+    observation = _neutralized_observation()
+    assert gate._neutralized_observation_passes(observation)
+    observation[field] = unsafe
+    assert not gate._neutralized_observation_passes(observation)
 
 
 @pytest.mark.parametrize(
@@ -386,6 +766,38 @@ def test_schema_inventory_accepts_only_the_exact_reflected_definition(monkeypatc
     assert _migration_inventory_passes(object())
 
 
+def test_schema_inventory_accepts_exact_0019_evolution_at_application_head(
+    monkeypatch,
+):
+    fixture = _SchemaInspectorFixture()
+    otp_migration = gate.importlib.import_module(
+        "app.db.migrations.versions.0019_otp_security_authority"
+    )
+    evolved = {
+        "ck_registration_idempotency_records_state": (
+            otp_migration._LEDGER_STATE_0019
+        ),
+        "ck_registration_idempotency_records_request_fingerprint_shape": (
+            otp_migration._LEDGER_FINGERPRINT_0019
+        ),
+        "ck_registration_idempotency_records_state_links": (
+            otp_migration._LEDGER_LINKS_0019
+        ),
+    }
+    for item in fixture.checks["registration_idempotency_records"]:
+        if item["name"] in evolved:
+            item["sqltext"] = evolved[item["name"]]
+    monkeypatch.setattr(gate, "inspect", lambda _engine: fixture)
+
+    assert not _migration_inventory_passes(object())
+    assert _migration_inventory_passes(
+        object(), expected_revision=gate.APPLICATION_HEAD
+    )
+    assert not _migration_inventory_passes(
+        object(), expected_revision="unknown_revision"
+    )
+
+
 @pytest.mark.parametrize(
     "mutate",
     (
@@ -502,7 +914,8 @@ def _replay() -> dict:
         "first_status": 201,
         "first_literal_pending": True,
         "replay_status": 201,
-        "same_public_handle": True,
+        "public_handles_absent": True,
+        "private_subject_stable": True,
         "initial_graph_delta": _graph(),
         "replay_graph_delta": _graph(False),
         "replay_ledger_delta": 0,
@@ -517,7 +930,8 @@ def _replay() -> dict:
         ("first_status", 200),
         ("first_literal_pending", False),
         ("replay_status", 409),
-        ("same_public_handle", False),
+        ("public_handles_absent", False),
+        ("private_subject_stable", False),
         ("replay_ledger_delta", 1),
         ("replay_delivery_delta", 1),
         ("replay_state_unchanged", False),
@@ -617,7 +1031,8 @@ def _same_race() -> dict:
         "statuses": [201] * 8,
         "conflict_codes": [],
         "conflict_fields": [],
-        "same_public_handle": True,
+        "public_handles_absent": True,
+        "private_winner_exact": True,
         "graph_delta": _graph(),
         "ledger_delta": 1,
         "delivery_delta": 1,
@@ -631,12 +1046,17 @@ def _mismatch_race() -> dict:
         "statuses": [409, 201],
         "conflict_codes": ["idempotency_conflict"],
         "conflict_fields": ["Idempotency-Key"],
-        "same_public_handle": False,
+        "public_handles_absent": True,
+        "private_winner_exact": True,
         "graph_delta": _graph(),
         "ledger_delta": 1,
         "delivery_delta": 1,
         "backend_count": 2,
-        "db_lock_wait_observed": True,
+        "provider_overlap_completed_before_release": True,
+        "winner_blocked_before_release": True,
+        "ledger_lock_wait_observed": True,
+        "ledger_wait_backend_count": 1,
+        "deadlock_free": True,
         "stable_followups": True,
     }
 
@@ -649,6 +1069,8 @@ def test_race_evaluator_requires_exact_same_and_mismatch_cardinality():
         (_mismatch_race(), True),
     ):
         for field, unsafe in (
+            ("public_handles_absent", False),
+            ("private_winner_exact", False),
             ("ledger_delta", 2),
             ("delivery_delta", 2),
             ("backend_count", 1),
@@ -657,34 +1079,72 @@ def test_race_evaluator_requires_exact_same_and_mismatch_cardinality():
             mutant = deepcopy(observation)
             mutant[field] = unsafe
             assert not _race_observation_passes(mutant, mismatched=mismatched)
+    for field, unsafe in (
+        ("provider_overlap_completed_before_release", False),
+        ("winner_blocked_before_release", False),
+        ("ledger_lock_wait_observed", False),
+        ("ledger_wait_backend_count", 2),
+        ("deadlock_free", False),
+    ):
+        mutant = deepcopy(_mismatch_race())
+        mutant[field] = unsafe
+        assert not _race_observation_passes(mutant, mismatched=True)
 
 
 def _failure() -> dict:
     return {
-        "first_status": 502,
-        "replay_status": 502,
-        "same_error_code": True,
-        "error_fields_absent": True,
+        "first_status": 201,
+        "first_projection_exact": True,
+        "replay_status": 201,
+        "replay_projection_exact": True,
+        "public_handles_absent": True,
+        "private_subject_stable": True,
+        "pending_state_exact": True,
+        "failed_delivery_exact": True,
         "ledger_delta": 1,
+        "graph_delta": _graph(),
         "replay_ledger_delta": 0,
         "replay_delivery_delta": 0,
         "replay_graph_delta_zero": True,
         "replay_state_unchanged": True,
+        "mismatch_conflict_exact": True,
+        "mismatch_state_unchanged": True,
+        "recovery_status": 201,
+        "stable_provider_key": True,
+        "succeeded_state_exact": True,
+        "sent_delivery_exact": True,
+        "recovery_provider_acceptances": 1,
+        "recovery_graph_delta_zero": True,
+        "final_replay_stable": True,
     }
 
 
 @pytest.mark.parametrize(
     "field, unsafe",
     (
-        ("first_status", 201),
-        ("replay_status", 201),
-        ("same_error_code", False),
-        ("error_fields_absent", False),
+        ("first_status", 502),
+        ("first_projection_exact", False),
+        ("replay_status", 502),
+        ("replay_projection_exact", False),
+        ("public_handles_absent", False),
+        ("private_subject_stable", False),
+        ("pending_state_exact", False),
+        ("failed_delivery_exact", False),
         ("ledger_delta", 0),
+        ("graph_delta", _graph(False)),
         ("replay_ledger_delta", 1),
         ("replay_delivery_delta", 1),
         ("replay_graph_delta_zero", False),
         ("replay_state_unchanged", False),
+        ("mismatch_conflict_exact", False),
+        ("mismatch_state_unchanged", False),
+        ("recovery_status", 503),
+        ("stable_provider_key", False),
+        ("succeeded_state_exact", False),
+        ("sent_delivery_exact", False),
+        ("recovery_provider_acceptances", 2),
+        ("recovery_graph_delta_zero", False),
+        ("final_replay_stable", False),
     ),
 )
 def test_failure_replay_evaluator_rejects_each_false_green(field, unsafe):
@@ -718,19 +1178,30 @@ def test_ledger_inventory_evaluator_rejects_every_missing_authority(field):
 
 def _pending_resume() -> dict:
     return {
-        "crash_status": 500,
+        "crash_status": 201,
+        "crash_projection_exact": True,
         "pending_state_exact": True,
+        "claimed_delivery_exact": True,
         "pending_mismatch_status": 409,
         "pending_mismatch_code": "idempotency_conflict",
         "pending_mismatch_field": "Idempotency-Key",
+        "pending_mismatch_state_unchanged": True,
+        "immediate_replay_status": 201,
+        "immediate_projection_exact": True,
+        "immediate_delivery_delta": 0,
+        "immediate_state_unchanged": True,
         "resume_status": 201,
-        "resume_same_public_handle": True,
+        "public_handles_absent": True,
+        "private_subject_stable": True,
         "succeeded_state_exact": True,
+        "sent_delivery_exact": True,
+        "stable_provider_key": True,
         "ledger_delta": 1,
         "graph_delta": _graph(),
         "resume_graph_delta_zero": True,
         "crash_provider_invocations": 1,
         "crash_provider_acceptances": 0,
+        "resume_provider_invocations": 1,
         "resume_provider_acceptances": 1,
         "provider_acceptances_total": 1,
         "followup_stable": True,
@@ -740,18 +1211,30 @@ def _pending_resume() -> dict:
 @pytest.mark.parametrize(
     "field, unsafe",
     (
-        ("crash_status", 201),
+        ("crash_status", 500),
+        ("crash_projection_exact", False),
         ("pending_state_exact", False),
+        ("claimed_delivery_exact", False),
         ("pending_mismatch_status", 201),
         ("pending_mismatch_code", "mobile_already_registered"),
         ("pending_mismatch_field", "mobile"),
+        ("pending_mismatch_state_unchanged", False),
+        ("immediate_replay_status", 500),
+        ("immediate_projection_exact", False),
+        ("immediate_delivery_delta", 1),
+        ("immediate_state_unchanged", False),
         ("resume_status", 500),
-        ("resume_same_public_handle", False),
+        ("public_handles_absent", False),
+        ("private_subject_stable", False),
         ("succeeded_state_exact", False),
+        ("sent_delivery_exact", False),
+        ("stable_provider_key", False),
         ("ledger_delta", 2),
+        ("graph_delta", _graph(False)),
         ("resume_graph_delta_zero", False),
         ("crash_provider_invocations", 2),
         ("crash_provider_acceptances", 1),
+        ("resume_provider_invocations", 2),
         ("resume_provider_acceptances", 2),
         ("provider_acceptances_total", 2),
         ("followup_stable", False),
@@ -766,34 +1249,58 @@ def test_pending_resume_evaluator_rejects_every_false_green(field, unsafe):
 
 def _failed_waiters() -> dict:
     return {
-        "statuses": [502, 502],
-        "same_error_code": True,
-        "error_fields_absent": True,
-        "failed_state_exact": True,
+        "statuses": [201, 201],
+        "projections_exact": True,
+        "public_handles_absent": True,
+        "private_subject_stable": True,
+        "peer_completed_before_release": True,
+        "winner_blocked_before_release": True,
+        "pending_state_during_overlap": True,
+        "claimed_delivery_during_overlap": True,
+        "pending_state_exact": True,
+        "failed_delivery_exact": True,
         "ledger_delta": 1,
-        "registration_graph_absent": True,
+        "graph_delta": _graph(),
         "provider_attempt_delta": 1,
         "backend_count": 2,
-        "db_lock_wait_observed": True,
         "stable_failure_replay": True,
         "mismatch_conflict": True,
+        "recovery_status": 201,
+        "stable_provider_key": True,
+        "succeeded_state_exact": True,
+        "sent_delivery_exact": True,
+        "recovery_provider_acceptances": 1,
+        "recovery_graph_delta_zero": True,
+        "final_replay_stable": True,
     }
 
 
 @pytest.mark.parametrize(
     "field, unsafe",
     (
-        ("statuses", [502, 201]),
-        ("same_error_code", False),
-        ("error_fields_absent", False),
-        ("failed_state_exact", False),
+        ("statuses", [201, 502]),
+        ("projections_exact", False),
+        ("public_handles_absent", False),
+        ("private_subject_stable", False),
+        ("peer_completed_before_release", False),
+        ("winner_blocked_before_release", False),
+        ("pending_state_during_overlap", False),
+        ("claimed_delivery_during_overlap", False),
+        ("pending_state_exact", False),
+        ("failed_delivery_exact", False),
         ("ledger_delta", 2),
-        ("registration_graph_absent", False),
+        ("graph_delta", _graph(False)),
         ("provider_attempt_delta", 2),
         ("backend_count", 1),
-        ("db_lock_wait_observed", False),
         ("stable_failure_replay", False),
         ("mismatch_conflict", False),
+        ("recovery_status", 503),
+        ("stable_provider_key", False),
+        ("succeeded_state_exact", False),
+        ("sent_delivery_exact", False),
+        ("recovery_provider_acceptances", 2),
+        ("recovery_graph_delta_zero", False),
+        ("final_replay_stable", False),
     ),
 )
 def test_failed_waiter_evaluator_rejects_every_false_green(field, unsafe):
@@ -807,17 +1314,22 @@ def _pending_resend() -> dict:
     return {
         "resend_status": 202,
         "replay_status": 201,
-        "same_public_handle": True,
-        "ledger_repointed_to_replacement": True,
-        "ledger_succeeded_unlinked_before_replacement": False,
-        "superseded_payload_nonrelayable": True,
+        "public_handles_absent": True,
+        "private_subject_stable": True,
+        "ledger_reused_original_during_send": True,
+        "ledger_repointed_to_replacement_during_send": False,
+        "claimed_delivery_exact": True,
+        "provider_key_authority_exact": True,
+        "claim_fence_exact": True,
+        "original_sent_erased_before_replacement": False,
         "succeeded_state_exact": True,
-        "registration_graph_single": True,
+        "registration_graph_exact": True,
         "active_signup_challenges": 1,
         "relayable_signup_payloads": 0,
         "provider_acceptances": 1,
         "backend_count": 2,
-        "db_lock_wait_observed": True,
+        "peer_completed_before_release": True,
+        "winner_blocked_before_release": True,
     }
 
 
@@ -826,16 +1338,20 @@ def _pending_resend() -> dict:
     (
         ("resend_status", 500),
         ("replay_status", 409),
-        ("same_public_handle", False),
-        ("ledger_repointed_to_replacement", False),
-        ("superseded_payload_nonrelayable", False),
+        ("public_handles_absent", False),
+        ("private_subject_stable", False),
+        ("ledger_reused_original_during_send", False),
+        ("claimed_delivery_exact", False),
+        ("provider_key_authority_exact", False),
+        ("claim_fence_exact", False),
         ("succeeded_state_exact", False),
-        ("registration_graph_single", False),
+        ("registration_graph_exact", False),
         ("active_signup_challenges", 2),
         ("relayable_signup_payloads", 1),
         ("provider_acceptances", 2),
         ("backend_count", 1),
-        ("db_lock_wait_observed", False),
+        ("peer_completed_before_release", False),
+        ("winner_blocked_before_release", False),
     ),
 )
 def test_pending_resend_evaluator_closes_each_ordinary_seam(field, unsafe):
@@ -849,24 +1365,255 @@ def test_pending_sent_resend_requires_succeeded_unlinked_authority_shape():
     observation = _pending_resend()
     observation.update(
         {
-            "ledger_repointed_to_replacement": False,
-            "ledger_succeeded_unlinked_before_replacement": True,
+            "ledger_reused_original_during_send": False,
+            "ledger_repointed_to_replacement_during_send": True,
+            "original_sent_erased_before_replacement": True,
+            "provider_acceptances": 2,
             "backend_count": 0,
-            "db_lock_wait_observed": False,
+            "peer_completed_before_release": False,
+            "winner_blocked_before_release": False,
         }
     )
     assert gate._pending_resend_observation_passes(
         observation, concurrent=False, pre_relay=True
     )
-    observation["ledger_succeeded_unlinked_before_replacement"] = False
+    observation["ledger_repointed_to_replacement_during_send"] = False
     assert not gate._pending_resend_observation_passes(
         observation, concurrent=False, pre_relay=True
     )
 
 
+def test_pending_resend_threads_one_clock_through_background_delivery():
+    source = pyinspect.getsource(gate._run_pending_resend_case)
+    assert "_registration_resend_clock_scope(clock)" in source
+    assert 'clock["now"] = window["operation_now"]' in source
+
+
+def test_pending_sent_retention_relay_opens_the_crash_lease_first():
+    source = pyinspect.getsource(gate._run_pending_sent_retention_purge_probe)
+    open_window = source.index("_open_pending_resend_window(")
+    delivery = source.index("otp_outbox.run_delivery(")
+    assert open_window < delivery
+    assert 'now=window["operation_now"]' in source
+
+
+def _finalizer_retention_race(*, finalizer_first: bool) -> dict:
+    observation = {
+        "setup_projection_exact": True,
+        "initial_pending_exact": True,
+        "initial_failed_delivery_exact": True,
+        "setup_provider_attempts": 1,
+        "bound_flow_boundary_exact": True,
+        "first_waited": True,
+        "both_waited": True,
+        "backend_count": 2,
+        "final_state_exact": True,
+        "terminal_projection_exact": True,
+        "expired_flows": 0 if finalizer_first else 1,
+        "provider_acceptances": 1 if finalizer_first else 0,
+        "followup_delivery_delta": 0,
+        "followup_state_unchanged": True,
+    }
+    if finalizer_first:
+        observation.update(
+            {
+                "provider_entered": True,
+                "claimed_delivery_during_overlap": True,
+                "provider_io_ledger_unlocked": True,
+                "finalizer_succeeded": True,
+                "finalizer_error_exact": False,
+                "purged_challenges": 1,
+                "registration_transitions": 0,
+                "succeeded_state_exact": True,
+                "erased_state_exact": False,
+                "exact_replay_status": 201,
+                "private_subject_stable": True,
+                "mutation_conflict_exact": True,
+                "uniform_terminal_signature": False,
+            }
+        )
+    else:
+        observation.update(
+            {
+                "provider_entered": False,
+                "claimed_delivery_during_overlap": False,
+                "provider_io_ledger_unlocked": False,
+                "finalizer_succeeded": False,
+                "finalizer_error_exact": True,
+                "purged_challenges": 0,
+                "registration_transitions": 1,
+                "succeeded_state_exact": False,
+                "erased_state_exact": True,
+                "exact_replay_status": 409,
+                "private_subject_stable": False,
+                "mutation_conflict_exact": False,
+                "uniform_terminal_signature": True,
+            }
+        )
+    return observation
+
+
+@pytest.mark.parametrize(
+    "finalizer_first",
+    (True, False),
+)
+def test_finalizer_retention_race_evaluator_accepts_only_exact_ordered_outcome(
+    finalizer_first,
+):
+    observation = _finalizer_retention_race(finalizer_first=finalizer_first)
+    assert gate._finalizer_retention_race_observation_passes(
+        observation, finalizer_first=finalizer_first
+    )
+
+
+@pytest.mark.parametrize(
+    "field, unsafe",
+    (
+        ("setup_projection_exact", False),
+        ("initial_pending_exact", False),
+        ("initial_failed_delivery_exact", False),
+        ("setup_provider_attempts", 2),
+        ("bound_flow_boundary_exact", False),
+        ("first_waited", False),
+        ("both_waited", False),
+        ("backend_count", 1),
+        ("final_state_exact", False),
+        ("terminal_projection_exact", False),
+        ("provider_entered", False),
+        ("claimed_delivery_during_overlap", False),
+        ("provider_io_ledger_unlocked", False),
+        ("finalizer_succeeded", False),
+        ("expired_flows", 1),
+        ("purged_challenges", 0),
+        ("registration_transitions", 1),
+        ("succeeded_state_exact", False),
+        ("exact_replay_status", 409),
+        ("private_subject_stable", False),
+        ("mutation_conflict_exact", False),
+        ("provider_acceptances", 0),
+        ("followup_delivery_delta", 1),
+        ("followup_state_unchanged", False),
+    ),
+)
+def test_finalizer_first_retention_evaluator_closes_each_seam(field, unsafe):
+    observation = _finalizer_retention_race(finalizer_first=True)
+    observation[field] = unsafe
+    assert not gate._finalizer_retention_race_observation_passes(
+        observation, finalizer_first=True
+    )
+
+
+@pytest.mark.parametrize(
+    "field, unsafe",
+    (
+        ("setup_projection_exact", False),
+        ("initial_pending_exact", False),
+        ("initial_failed_delivery_exact", False),
+        ("setup_provider_attempts", 2),
+        ("bound_flow_boundary_exact", False),
+        ("first_waited", False),
+        ("both_waited", False),
+        ("backend_count", 1),
+        ("final_state_exact", False),
+        ("terminal_projection_exact", False),
+        ("finalizer_error_exact", False),
+        ("expired_flows", 0),
+        ("purged_challenges", 1),
+        ("registration_transitions", 0),
+        ("erased_state_exact", False),
+        ("exact_replay_status", 201),
+        ("uniform_terminal_signature", False),
+        ("provider_acceptances", 1),
+        ("followup_delivery_delta", 1),
+        ("followup_state_unchanged", False),
+    ),
+)
+def test_retention_first_finalizer_evaluator_closes_each_seam(field, unsafe):
+    observation = _finalizer_retention_race(finalizer_first=False)
+    observation[field] = unsafe
+    assert not gate._finalizer_retention_race_observation_passes(
+        observation, finalizer_first=False
+    )
+
+
+def test_finalizer_retention_race_uses_failed_boundary_and_one_clock():
+    source = pyinspect.getsource(gate._run_finalizer_retention_race_case)
+    open_window = source.index("_open_pending_resend_window(")
+    race = source.index("ThreadPoolExecutor")
+    assert open_window < race
+    assert "_FailingSender()" in source
+    assert "registration_service.finalize_pending_registration(" in source
+    assert 'clock = {"now": window["operation_now"]}' in source
+    assert 'now=clock["now"]' in source
+    assert 'now=clock["now"],' in source
+    assert "sender.entered.wait(" in source
+    assert "claimed_delivery_during_overlap" in source
+    assert "provider_io_ledger_unlocked" in source
+    assert "flow.expires_at = clock[\"now\"] - timedelta(microseconds=1)" in source
+    assert "bound_flow_boundary_exact" in source
+    aggregate_source = pyinspect.getsource(gate._run_retention_purge_probes)
+    assembly_source = pyinspect.getsource(gate._assemble_assertions)
+    assert '"race_finalizer_first_diagnostics"' in aggregate_source
+    assert '"race_retention_first_diagnostics"' in aggregate_source
+    assert "retention_finalizer_first_checks" in assembly_source
+    assert "retention_retention_first_checks" in assembly_source
+
+
+def test_failed_retry_claim_preserves_the_prior_failure_marker_exactly():
+    now = datetime.now(timezone.utc)
+    row = SimpleNamespace(
+        status="claimed",
+        attempts=2,
+        max_attempts=5,
+        provider_idempotency_key="a" * 64,
+        claim_token_hash="b" * 64,
+        claimed_at=now,
+        lease_expires_at=now + timedelta(seconds=30),
+        next_attempt_at=None,
+        code_ct="ciphertext",
+        destination_ct="ciphertext",
+        key_version="v1",
+        last_error="provider_send_failed",
+        delivered_at=None,
+        provider_receipt_hash=None,
+        provider_receipt_key_version=None,
+        legacy_destination_retained=False,
+    )
+    assert not gate._claimed_delivery_state_exact(row, attempts=2)
+    assert gate._claimed_delivery_state_exact(
+        row,
+        attempts=2,
+        expected_last_error="provider_send_failed",
+    )
+
+
+def test_backend_tracker_replaces_a_logical_requests_post_commit_pid():
+    tracker = gate._PgBackendTracker()
+    first_owner = object()
+    second_owner = object()
+    tracker.record(101, owner=first_owner)
+    tracker.record(202, owner=first_owner)
+    assert tracker.count == 1
+    assert tracker.private_snapshot() == {202}
+    tracker.record(303, owner=second_owner)
+    assert tracker.count == 2
+    assert tracker.private_snapshot() == {202, 303}
+
+
+def test_lock_wait_poll_refreshes_replaced_request_pids():
+    source = pyinspect.getsource(gate._wait_for_request_lock)
+    loop = source.index("while time.monotonic() < deadline:")
+    snapshot = source.rindex("tracker.private_snapshot()")
+    assert snapshot > loop
+    assert 'isolation_level="AUTOCOMMIT"' in source
+
+
 def _pending_purge() -> dict:
     return {
-        "purged_challenges": 1,
+        "expired_flows": 1,
+        # Expiring the bound flow performs the registration transition and
+        # removes its OTP graph before the generic challenge sweep runs.
+        "purged_challenges": 0,
         "registration_transitions": 1,
         "erased_state_exact": True,
         "policy_mode_shape_exact": True,
@@ -885,7 +1632,8 @@ def _pending_purge() -> dict:
 @pytest.mark.parametrize(
     "field, unsafe",
     (
-        ("purged_challenges", 0),
+        ("expired_flows", 0),
+        ("purged_challenges", 1),
         ("registration_transitions", 0),
         ("erased_state_exact", False),
         ("policy_mode_shape_exact", False),
@@ -905,6 +1653,20 @@ def test_pending_retention_evaluator_rejects_every_false_green(field, unsafe):
     assert gate._pending_purge_observation_passes(observation)
     observation[field] = unsafe
     assert not gate._pending_purge_observation_passes(observation)
+
+
+def test_pending_retention_expires_the_bound_flow_before_purge():
+    source = pyinspect.getsource(gate._run_pending_retention_purge_case)
+    assert "OtpFlow" in source
+    assert "flow.expires_at = now - timedelta(seconds=1)" in source
+
+
+def test_succeeded_retention_resend_uses_persisted_cooldown_clock():
+    source = pyinspect.getsource(gate._run_succeeded_retention_purge_probe)
+    assert "cooldown_until" in source
+    assert "_registration_request_clock_scope(" in source
+    assert "_registration_resend_clock_scope(resend_clock)" in source
+    assert "authority.cooldown_until =" not in source
 
 
 def test_canonical_inventory_is_exact_and_has_no_derived_fields():

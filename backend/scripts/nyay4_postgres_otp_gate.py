@@ -55,6 +55,10 @@ PINNED_HEAD = "0019_otp_security_authority"
 APPLICATION_HEAD = "0020_auth_retention_lifecycle"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
+COOKIE_TIMING_SAMPLE_ORDER = tuple(
+    ("known", "decoy") if index % 2 == 0 else ("decoy", "known")
+    for index in range(40)
+)
 
 # Every account-bearing fixture below coexists in the one authoritative
 # behavior database. Keeping the inventory centralized makes an accidental
@@ -1463,7 +1467,8 @@ def _cookie_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation["start_statuses"] == [202, 202]
         and observation["start_signatures_equal"] is True
         and observation["timing_ratio_within_bound"] is True
-        and observation["timing_samples_per_class"] >= 8
+        and observation["timing_samples_per_class"]
+        == len(COOKIE_TIMING_SAMPLE_ORDER)
         and 0
         <= observation["timing_p95_ratio_milli"]
         <= observation["timing_bound_milli"]
@@ -1993,7 +1998,12 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
         cwd=BACKEND,
-        env={**os.environ, "APP_ENV": "testing", "DATABASE_URL": scratch_url},
+        env={
+            **os.environ,
+            "APP_ENV": "testing",
+            "DATABASE_URL": scratch_url,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
         capture_output=True,
         text=True,
         timeout=240,
@@ -2998,7 +3008,9 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
 
 
 def _runtime_probe(base: URL) -> dict[str, Any]:
-    engine = create_engine(_database_url(base, "postgres"), poolclass=NullPool)
+    # pgvector is installed per database. Verify the exact supplied control
+    # target; the administrative ``postgres`` database need not carry it.
+    engine = create_engine(base, poolclass=NullPool)
     try:
         with engine.connect() as connection:
             version_num = int(connection.scalar(text("SHOW server_version_num")))
@@ -4295,11 +4307,17 @@ def _run_registration_finalizer_interleaving_probe(engine: Engine) -> bool:
     from concurrent.futures import ThreadPoolExecutor
 
     from app.models.registration import (
+        OtpChallenge,
         OtpOutbox,
         RegistrationIdempotencyRecord,
     )
     from app.schemas.registration import StudentRegisterRequest
-    from app.services import otp_outbox, registration_service
+    from app.services import (
+        otp_flow_service,
+        otp_outbox,
+        otp_service,
+        registration_service,
+    )
 
     factory = sessionmaker(
         bind=engine,
@@ -4318,9 +4336,34 @@ def _run_registration_finalizer_interleaving_probe(engine: Engine) -> bool:
         result = registration_service.register_student(
             session, payload, key, now=now
         )
-        if result.delivery is None:
-            raise ProductGateFailure("registration finalizer staging lost delivery")
+        if result.delivery is None or result.idempotency_record is None:
+            raise ProductGateFailure(
+                "registration finalizer staging lost its pending ledger"
+            )
         intent = result.delivery
+        outbox = session.get(OtpOutbox, intent.outbox_id)
+        challenge = (
+            session.get(OtpChallenge, outbox.challenge_id)
+            if outbox is not None
+            else None
+        )
+        if challenge is None:
+            raise ProductGateFailure(
+                "registration finalizer staging lost its challenge"
+            )
+        authority = otp_service.authority_for_registration(
+            session, result.registration, "signup", now
+        )
+        otp_flow_service.create_flow(
+            session,
+            authority,
+            now=now,
+            destination=payload.mobile,
+            challenge=challenge,
+            registration_id=result.registration.id,
+            registration_idempotency_record_id=result.idempotency_record.id,
+            raw_token=otp_flow_service.deterministic_signup_token(key),
+        )
         session.commit()
 
     callback_entered = threading.Event()
@@ -4338,7 +4381,7 @@ def _run_registration_finalizer_interleaving_probe(engine: Engine) -> bool:
         try:
             with factory() as session:
                 registration_service.finalize_pending_registration(
-                    session, key_hash, provider
+                    session, key_hash, provider, now=now
                 )
             return True
         except Exception:
@@ -5018,10 +5061,42 @@ def _run_rate_budget_probe(engine: Engine) -> dict[str, Any]:
             setattr(settings, name, value)
 
 
+def _timing_ratio_observation(
+    known_durations: list[int], decoy_durations: list[int]
+) -> dict[str, int | bool]:
+    """Build the fail-closed timing oracle from two complete sample sets."""
+
+    import math
+
+    valid = (
+        len(known_durations) == len(decoy_durations)
+        and len(known_durations) == len(COOKIE_TIMING_SAMPLE_ORDER)
+        and all(type(value) is int and value > 0 for value in known_durations)
+        and all(type(value) is int and value > 0 for value in decoy_durations)
+    )
+    if not valid:
+        raise ValueError("timing samples must be equal, positive, and complete")
+
+    def p95(values: list[int]) -> int:
+        return sorted(values)[math.ceil(len(values) * 0.95) - 1]
+
+    known_p95 = p95(known_durations)
+    decoy_p95 = p95(decoy_durations)
+    ratio_milli = math.ceil(
+        max(known_p95, decoy_p95) * 1000 / min(known_p95, decoy_p95)
+    )
+    bound_milli = 2000
+    return {
+        "timing_ratio_within_bound": ratio_milli <= bound_milli,
+        "timing_samples_per_class": len(known_durations),
+        "timing_p95_ratio_milli": ratio_milli,
+        "timing_bound_milli": bound_milli,
+    }
+
+
 def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
     """Compare repeated known/decoy starts, cookies, reload, and Origin."""
 
-    import math
     import time
 
     from app.api.v1 import auth_student as endpoint
@@ -5088,32 +5163,26 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
 
             # The initial provider path is deliberately excluded from timing;
             # repeated cooldown starts execute the stable non-enumerating path.
-            for _ in range(8):
-                # Batch four identical requests per sample so an unrelated
-                # scheduler pause on one sub-millisecond TestClient request
-                # cannot manufacture an account-enumeration failure. The
-                # measured work is still real HTTP/service/DB work in both
-                # classes, and the authoritative PG run retains eight
-                # independent paired samples.
-                known_batch = [start(known_client, known_mobile) for _ in range(4)]
-                decoy_batch = [start(decoy_client, decoy_mobile) for _ in range(4)]
-                known, known_ns = known_batch[-1][0], sum(
-                    item[1] for item in known_batch
-                )
-                decoy, decoy_ns = decoy_batch[-1][0], sum(
-                    item[1] for item in decoy_batch
-                )
+            for first_class, second_class in COOKIE_TIMING_SAMPLE_ORDER:
+                # Alternate which class runs first so scheduler drift cannot
+                # systematically favor either identity. Forty real requests
+                # per class make nearest-rank p95 exclude exactly the worst
+                # five percent while retaining the strict 2x boundary.
+                samples: dict[str, tuple[Any, int]] = {}
+                for class_name in (first_class, second_class):
+                    client, mobile = (
+                        (known_client, known_mobile)
+                        if class_name == "known"
+                        else (decoy_client, decoy_mobile)
+                    )
+                    samples[class_name] = start(client, mobile)
+                known, known_ns = samples["known"]
+                decoy, decoy_ns = samples["decoy"]
                 known_durations.append(known_ns)
                 decoy_durations.append(decoy_ns)
                 exact_pairs.append(
-                    all(item[0].status_code == 202 for item in known_batch)
-                    and all(item[0].status_code == 202 for item in decoy_batch)
-                    and all(
-                        item[0].content == known.content for item in known_batch
-                    )
-                    and all(
-                        item[0].content == decoy.content for item in decoy_batch
-                    )
+                    known.status_code == 202
+                    and decoy.status_code == 202
                     and known.content == decoy.content
                 )
                 for client in (known_client, decoy_client):
@@ -5140,14 +5209,7 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
                 json={},
             )
 
-        def p95(values: list[int]) -> int:
-            return sorted(values)[max(0, math.ceil(len(values) * 0.95) - 1)]
-
-        known_p95 = p95(known_durations)
-        decoy_p95 = p95(decoy_durations)
-        timing_ratio_milli = math.ceil(
-            max(known_p95, decoy_p95) * 1000 / min(known_p95, decoy_p95)
-        )
+        timing = _timing_ratio_observation(known_durations, decoy_durations)
         with factory() as session:
             stored = set(session.scalars(select(OtpFlow.token_hash)))
         raw_flow_token_rows = sum(int(token in stored) for token in raw_tokens)
@@ -5165,10 +5227,7 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
         return {
             "start_statuses": [first_known.status_code, first_decoy.status_code],
             "start_signatures_equal": all(exact_pairs),
-            "timing_ratio_within_bound": timing_ratio_milli <= 2000,
-            "timing_samples_per_class": len(known_durations),
-            "timing_p95_ratio_milli": timing_ratio_milli,
-            "timing_bound_milli": 2000,
+            **timing,
             "cookie_httponly": "httponly" in lower_cookie,
             "cookie_secure_nonlocal": "secure" in lower_cookie,
             "cookie_samesite": (
@@ -6826,6 +6885,67 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
             engine.dispose()
 
 
+def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
+    """Require NYAY-4 followed by the terminal NYAY-19 native gate."""
+
+    expected_nyay17 = (
+        '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
+        '--report test-results/nyay17-postgres/summary.json'
+    )
+    expected_nyay4 = (
+        'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py '
+        '--execute --database-url "$DATABASE_URL" '
+        '--output test-results/nyay4-postgres/summary.json'
+    )
+    expected_nyay19 = (
+        'NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" '
+        'scripts/nyay19_postgres_auth_retention_gate.py '
+        '--execute --database-url "$DATABASE_URL" '
+        '--output test-results/nyay19-postgres/summary.json'
+    )
+    executable = re.sub(r"\\\s*\n", " ", db_gate_source)
+    commands = [
+        " ".join(line.strip().split())
+        for line in executable.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    try:
+        nyay17_positions = [
+            index
+            for index, command in enumerate(commands)
+            if "scripts/nyay17_postgres_idempotency_gate.py" in command
+        ]
+        nyay4_positions = [
+            index
+            for index, command in enumerate(commands)
+            if "scripts/nyay4_postgres_otp_gate.py" in command
+        ]
+        nyay19_positions = [
+            index
+            for index, command in enumerate(commands)
+            if "scripts/nyay19_postgres_auth_retention_gate.py" in command
+        ]
+        fail_fast_positions = [
+            index
+            for index, command in enumerate(commands)
+            if command == "set -euo pipefail"
+        ]
+        return bool(
+            len(nyay17_positions) == 1
+            and len(nyay4_positions) == 1
+            and len(nyay19_positions) == 1
+            and len(fail_fast_positions) == 1
+            and fail_fast_positions[0] < nyay17_positions[0]
+            and nyay17_positions[0] < nyay4_positions[0] < nyay19_positions[0]
+            and commands[nyay17_positions[0]] == expected_nyay17
+            and commands[nyay4_positions[0]] == expected_nyay4
+            and commands[nyay19_positions[0]] == expected_nyay19
+            and commands[-1] == expected_nyay19
+        )
+    except IndexError:
+        return False
+
+
 def _run_harness_source_probe() -> dict[str, bool]:
     """Run the sealed frontend authority tests and pin final DB-gate wiring."""
 
@@ -6887,39 +7007,12 @@ def _run_harness_source_probe() -> dict[str, bool]:
         package_command_exact = False
         browser_ci_unconditional = False
 
-    expected_native = (
-        'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py '
-        '--execute --database-url "$DATABASE_URL" '
-        '--output test-results/nyay4-postgres/summary.json'
-    )
     try:
         db_gate_source = (BACKEND / "scripts/db_gate.sh").read_text(
             encoding="utf-8"
         )
-        executable = re.sub(r"\\\s*\n", " ", db_gate_source)
-        commands = [
-            " ".join(line.strip().split())
-            for line in executable.splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-        nyay17_position = next(
-            index
-            for index, command in enumerate(commands)
-            if "scripts/nyay17_postgres_idempotency_gate.py" in command
-        )
-        nyay4_positions = [
-            index
-            for index, command in enumerate(commands)
-            if "scripts/nyay4_postgres_otp_gate.py" in command
-        ]
-        gate_command_present = bool(
-            len(nyay4_positions) == 1
-            and nyay4_positions[0] > nyay17_position
-            and commands[nyay4_positions[0]] == expected_native
-            and commands[-1] == expected_native
-            and "set -euo pipefail" in commands
-        )
-    except (OSError, StopIteration):
+        gate_command_present = _db_gate_wiring_is_exact(db_gate_source)
+    except OSError:
         gate_command_present = False
 
     return {

@@ -94,6 +94,14 @@ class RegistrationResult:
 
 
 @dataclass(frozen=True)
+class PendingRegistrationFinalization:
+    """One serialized ledger outcome and this invocation's provider effect."""
+
+    registration: StudentRegistration
+    newly_delivered: bool
+
+
+@dataclass(frozen=True)
 class NeutralizedRegistrationReplay:
     """Typed winner for an anti-enumerating registration reservation.
 
@@ -918,52 +926,24 @@ def _locked_registration_delivery_graph(
     session: Session,
     registration: StudentRegistration,
     outbox_id: uuid.UUID,
-) -> tuple[OtpPurposeAuthority, OtpChallenge, OtpOutbox] | None:
+) -> otp_outbox._LockedDeliveryGraph | None:
     """Lock a registration delivery in the canonical domain order.
 
-    The caller already owns ledger -> registration. Immutable child IDs are
-    discovered without child locks, then revalidated after acquiring authority
-    -> challenge -> outbox. This matches the relay and prevents the historical
-    outbox/challenge lock inversion.
+    The caller already owns ledger -> registration. The common relay seam then
+    acquires authority -> flow -> challenge -> outbox and revalidates all
+    immutable links, preventing either finalizer from bypassing flow liveness.
     """
 
-    challenge_id = session.scalar(
-        select(OtpOutbox.challenge_id).where(OtpOutbox.id == outbox_id)
-    )
-    authority_id = (
-        None
-        if challenge_id is None
-        else session.scalar(
-            select(OtpChallenge.authority_id).where(
-                OtpChallenge.id == challenge_id
-            )
-        )
-    )
-    if challenge_id is None or authority_id is None:
+    graph = otp_outbox._locked_graph(session, outbox_id)
+    if graph is None:
         return None
-    authority = session.scalar(
-        select(OtpPurposeAuthority)
-        .where(OtpPurposeAuthority.id == authority_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    challenge = session.scalar(
-        select(OtpChallenge)
-        .where(OtpChallenge.id == challenge_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    outbox = session.scalar(
-        select(OtpOutbox)
-        .where(OtpOutbox.id == outbox_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+    authority, challenge, outbox = (
+        graph.authority,
+        graph.challenge,
+        graph.row,
     )
     if (
-        authority is None
-        or challenge is None
-        or outbox is None
-        or authority.registration_id != registration.id
+        authority.registration_id != registration.id
         or challenge.authority_id != authority.id
         or challenge.registration_id != registration.id
         or outbox.challenge_id != challenge.id
@@ -971,20 +951,107 @@ def _locked_registration_delivery_graph(
         or outbox.purpose != authority.purpose
     ):
         return None
-    return authority, challenge, outbox
+    return graph
 
 
-def finalize_pending_registration(
+def _retire_pending_delivery_record(
+    record: RegistrationIdempotencyRecord,
+    *,
+    now: datetime,
+) -> None:
+    record.state = "retired"
+    record.request_fingerprint = None
+    record.request_fingerprint_version = None
+    record.outcome_code = "registration_replay_expired"
+    record.registration_id = None
+    record.outbox_id = None
+    record.updated_at = now
+
+
+def _reconcile_unavailable_pending_delivery(
+    session: Session,
+    key_hash: str,
+    outbox_id: uuid.UUID,
+    *,
+    reason: str,
+    now: datetime | None,
+) -> StudentRegistration:
+    """Retire one provider-fenced signup flow or return a committed winner."""
+
+    record = _ledger_by_key_hash(session, key_hash, for_update=True)
+    if record is None:
+        raise RuntimeError("registration idempotency ledger row disappeared")
+    if record.state in {"retired", "erased"}:
+        session.commit()
+        raise RegistrationError(
+            409, "registration_replay_expired", "Idempotency-Key"
+        )
+    registration = session.scalar(
+        select(StudentRegistration)
+        .where(StudentRegistration.id == record.registration_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if record.state == "succeeded" and registration is not None:
+        session.commit()
+        return registration
+    if (
+        record.state != "pending"
+        or record.outbox_id != outbox_id
+        or registration is None
+        or record.registration_id != registration.id
+    ):
+        raise RuntimeError("registration idempotency finalization is ambiguous")
+    graph = _locked_registration_delivery_graph(
+        session,
+        registration,
+        outbox_id,
+    )
+    if graph is None:
+        raise RuntimeError("registration idempotency delivery graph disappeared")
+    operation_now = now or datetime.now(timezone.utc)
+    current_reason = otp_outbox._flow_unavailability_reason(
+        graph,
+        now=operation_now,
+    )
+    if current_reason is None:
+        raise RuntimeError("registration OTP flow boundary changed under lock")
+    otp_outbox._fence_unavailable_delivery(
+        session,
+        graph,
+        now=operation_now,
+        reason=reason or current_reason,
+    )
+    _retire_pending_delivery_record(record, now=operation_now)
+    session.commit()
+    raise RegistrationError(
+        409, "registration_replay_expired", "Idempotency-Key"
+    )
+
+
+def finalize_pending_registration_with_result(
     session: Session,
     key_hash: str,
     sender: IdempotentOtpSender,
-) -> StudentRegistration:
+    *,
+    now: datetime | None = None,
+) -> PendingRegistrationFinalization:
     """Durably claim/send first, then reconcile the NYAY-17 ledger.
 
     No registration/ledger/challenge lock is held during provider I/O. Provider
     failure leaves the exact pending graph retryable under the same stable
     provider key; it never deletes the only usable registration flow.
+    ``newly_delivered`` comes directly from the fenced outbox operation; it is
+    never inferred from unlocked before/after snapshots of terminal state.
+    ``now`` is a deterministic operation-clock override for tests and certified
+    probes; production background callers intentionally use fresh wall time.
     """
+
+    if now is not None:
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
 
     record = _ledger_by_key_hash(session, key_hash, for_update=True)
     if record is None:
@@ -1012,7 +1079,7 @@ def finalize_pending_registration(
         )
     if record.state == "succeeded":
         session.commit()
-        return registration
+        return PendingRegistrationFinalization(registration, False)
     if record.state != "pending" or record.outbox_id is None:
         raise RuntimeError("registration idempotency pending state is invalid")
 
@@ -1020,8 +1087,8 @@ def finalize_pending_registration(
     graph = _locked_registration_delivery_graph(
         session, registration, outbox_id
     )
-    challenge = graph[1] if graph is not None else None
-    outbox_snapshot = graph[2] if graph is not None else None
+    challenge = graph.challenge if graph is not None else None
+    outbox_snapshot = graph.row if graph is not None else None
     if (
         challenge is None
         or outbox_snapshot is None
@@ -1032,22 +1099,63 @@ def finalize_pending_registration(
         # Structural drift is not a provider failure. Do not mutate or delete
         # an otherwise valid graph while reporting a recoverable 502.
         raise RuntimeError("registration idempotency delivery graph is invalid")
+    operation_now = now or datetime.now(timezone.utc)
+    unavailable_reason = otp_outbox._flow_unavailability_reason(
+        graph,
+        now=operation_now,
+    )
+    if unavailable_reason is not None:
+        otp_outbox._fence_unavailable_delivery(
+            session,
+            graph,
+            now=operation_now,
+            reason=unavailable_reason,
+        )
+        _retire_pending_delivery_record(record, now=operation_now)
+        session.commit()
+        raise RegistrationError(
+            409, "registration_replay_expired", "Idempotency-Key"
+        )
     # Release every graph lock before the outbox creates and commits its own
     # hashed fencing lease. The provider call occurs only after this commit.
     session.commit()
     try:
-        otp_outbox.run_delivery(
+        newly_delivered = otp_outbox.run_delivery(
             session,
             otp_outbox.DeliveryIntent(outbox_id=outbox_id),
             sender,
             raise_on_failure=True,
+            now=now,
+        )
+    except otp_outbox.OtpFlowUnavailable as exc:
+        return PendingRegistrationFinalization(
+            _reconcile_unavailable_pending_delivery(
+                session,
+                key_hash,
+                outbox_id,
+                reason=exc.reason,
+                now=now,
+            ),
+            False,
         )
     except OtpSendError as exc:
+        winner = _ledger_by_key_hash(session, key_hash, for_update=True)
+        if winner is not None and winner.state in {"retired", "erased"}:
+            session.commit()
+            raise RegistrationError(
+                409, "registration_replay_expired", "Idempotency-Key"
+            ) from exc
+        session.rollback()
         raise RegistrationError(503, "otp_delivery_retryable") from exc
 
     record = _ledger_by_key_hash(session, key_hash, for_update=True)
     if record is None:
         raise RuntimeError("registration idempotency ledger row disappeared")
+    if record.state in {"retired", "erased"}:
+        session.commit()
+        raise RegistrationError(
+            409, "registration_replay_expired", "Idempotency-Key"
+        )
     registration = session.scalar(
         select(StudentRegistration)
         .where(StudentRegistration.id == record.registration_id)
@@ -1058,7 +1166,10 @@ def finalize_pending_registration(
         raise RuntimeError("registration idempotency registration disappeared")
     if record.state == "succeeded":
         session.commit()
-        return registration
+        return PendingRegistrationFinalization(
+            registration,
+            newly_delivered,
+        )
     if (
         record.state != "pending"
         or record.outbox_id != outbox_id
@@ -1068,8 +1179,26 @@ def finalize_pending_registration(
     graph = _locked_registration_delivery_graph(
         session, registration, outbox_id
     )
-    challenge = graph[1] if graph is not None else None
-    outbox_snapshot = graph[2] if graph is not None else None
+    challenge = graph.challenge if graph is not None else None
+    outbox_snapshot = graph.row if graph is not None else None
+    operation_now = now or datetime.now(timezone.utc)
+    unavailable_reason = (
+        otp_outbox._flow_unavailability_reason(graph, now=operation_now)
+        if graph is not None
+        else None
+    )
+    if graph is not None and unavailable_reason is not None:
+        otp_outbox._fence_unavailable_delivery(
+            session,
+            graph,
+            now=operation_now,
+            reason=unavailable_reason,
+        )
+        _retire_pending_delivery_record(record, now=operation_now)
+        session.commit()
+        raise RegistrationError(
+            409, "registration_replay_expired", "Idempotency-Key"
+        )
     if (
         outbox_snapshot is None
         or outbox_snapshot.status != "sent"
@@ -1082,9 +1211,26 @@ def finalize_pending_registration(
     record.state = "succeeded"
     record.outcome_code = None
     record.outbox_id = None
-    record.updated_at = datetime.now(timezone.utc)
+    record.updated_at = operation_now
     session.commit()
-    return registration
+    return PendingRegistrationFinalization(registration, newly_delivered)
+
+
+def finalize_pending_registration(
+    session: Session,
+    key_hash: str,
+    sender: IdempotentOtpSender,
+    *,
+    now: datetime | None = None,
+) -> StudentRegistration:
+    """Finalize one pending registration, preserving the original API."""
+
+    return finalize_pending_registration_with_result(
+        session,
+        key_hash,
+        sender,
+        now=now,
+    ).registration
 
 
 def finalize_pending_resend_if_claimed(
@@ -1092,6 +1238,8 @@ def finalize_pending_resend_if_claimed(
     registration_id: uuid.UUID,
     intent: otp_outbox.DeliveryIntent,
     sender: IdempotentOtpSender,
+    *,
+    now: datetime | None = None,
 ) -> bool:
     """Finalize a replacement outbox through the pending registration claim.
 
@@ -1121,7 +1269,7 @@ def finalize_pending_resend_if_claimed(
         return False
     if record.state != "pending" or record.outbox_id != intent.outbox_id:
         raise RuntimeError("registration idempotency resend state is invalid")
-    finalize_pending_registration(session, key_hash, sender)
+    finalize_pending_registration(session, key_hash, sender, now=now)
     return True
 
 

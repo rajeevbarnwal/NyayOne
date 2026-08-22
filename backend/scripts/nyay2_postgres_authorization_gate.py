@@ -33,6 +33,7 @@ import sys
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta, timezone
+from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from typing import Any
 
@@ -109,7 +110,25 @@ OTP_RESEND_PATH = "/api/v1/auth/student/otp/resend"
 LOGIN_START_PATH = "/api/v1/auth/student/login/otp/start"
 RECOVERY_START_PATH = "/api/v1/auth/student/recovery/start"
 SESSION_PATH = "/api/v1/auth/student/session"
+SIGNUP_IDEMPOTENCY_KEY = "nyay2-postgres-gate-signup-0001"
 TRUSTED_ORIGIN = "http://localhost:1130"
+PRIVATE_CAPABILITY_TABLES = (
+    "otp_purpose_authorities",
+    "otp_flows",
+    "registration_idempotency_records",
+)
+OTP_PUBLIC_STATE_KEYS = frozenset(
+    {
+        "status",
+        "purpose",
+        "destination_masked",
+        "attempts_left",
+        "expires_in_seconds",
+        "resend_in_seconds",
+        "locked_for_seconds",
+        "resend_allowed",
+    }
+)
 ORIGIN_MATRIX_CASES = (
     ("missing", None, False),
     ("null", "null", False),
@@ -276,6 +295,7 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
             **os.environ,
             "APP_ENV": "testing",
             "DATABASE_URL": scratch_url,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
         },
         capture_output=True,
         text=True,
@@ -320,6 +340,243 @@ def _safe_response_signature(response: Any) -> dict[str, Any]:
     return signature
 
 
+def _safe_response_object(response: Any) -> dict[str, Any] | None:
+    """Return only an object response; malformed JSON remains a failed oracle."""
+
+    try:
+        payload = response.json()
+    except Exception:  # noqa: BLE001 - response content is never retained
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _strict_cookie_attributes(
+    raw_header: str,
+    cookie_name: str,
+) -> dict[str, tuple[str | None, ...]] | None:
+    """Parse one Set-Cookie field without last-attribute-wins ambiguity."""
+
+    allowed_attributes = {
+        "domain",
+        "expires",
+        "httponly",
+        "max-age",
+        "partitioned",
+        "path",
+        "samesite",
+        "secure",
+    }
+    if not isinstance(raw_header, str) or not raw_header:
+        return None
+    pieces = raw_header.split(";")
+    cookie_pair = pieces[0].strip()
+    pair_name, separator, pair_value = cookie_pair.partition("=")
+    if (
+        separator != "="
+        or pair_name.strip() != cookie_name
+        or not pair_value
+    ):
+        return None
+
+    attributes: dict[str, list[str | None]] = {}
+    for raw_attribute in pieces[1:]:
+        attribute = raw_attribute.strip()
+        if not attribute:
+            return None
+        name, valued, value = attribute.partition("=")
+        normalized_name = name.strip().casefold()
+        if (
+            not normalized_name
+            or normalized_name not in allowed_attributes
+            or normalized_name in attributes
+        ):
+            return None
+        attributes[normalized_name] = [value.strip() if valued else None]
+
+    required_once = {"httponly", "max-age", "path", "samesite"}
+    if not required_once.issubset(attributes) or "domain" in attributes:
+        return None
+    if attributes["httponly"] != [None]:
+        return None
+    return {name: tuple(values) for name, values in attributes.items()}
+
+
+def _named_cookie_contract(
+    response: Any,
+    cookie_name: str,
+    *,
+    expected_value: str | None,
+) -> dict[str, bool]:
+    """Inspect one named Set-Cookie without retaining its bearer value."""
+
+    result = {
+        "present_once": False,
+        "value_matches": False,
+        "httponly": False,
+        "host_only": False,
+        "expected_path": False,
+        "samesite_strict": False,
+        "persistent": False,
+    }
+    if not cookie_name or not isinstance(expected_value, str) or not expected_value:
+        return result
+    try:
+        values = list(response.headers.get_list("set-cookie"))
+    except Exception:  # noqa: BLE001 - malformed headers fail closed
+        return result
+    matching = []
+    malformed = False
+    for value in values:
+        jar = SimpleCookie()
+        try:
+            jar.load(value)
+        except (CookieError, TypeError, ValueError):
+            malformed = True
+            continue
+        if cookie_name in jar:
+            # A Set-Cookie field is one cookie. Reject an ambiguously combined
+            # field instead of borrowing attributes from an adjacent cookie.
+            if tuple(jar) != (cookie_name,):
+                malformed = True
+                continue
+            attributes = _strict_cookie_attributes(value, cookie_name)
+            if attributes is None:
+                malformed = True
+                continue
+            matching.append((jar[cookie_name], attributes))
+    if malformed or len(matching) != 1:
+        return result
+    morsel, attributes = matching[0]
+    try:
+        persistent = int(str(morsel["max-age"])) > 0
+    except (TypeError, ValueError):
+        persistent = False
+    result.update(
+        {
+            "present_once": True,
+            "value_matches": secrets.compare_digest(
+                str(morsel.value), expected_value
+            ),
+            "httponly": attributes.get("httponly") == (None,),
+            "host_only": "domain" not in attributes,
+            "expected_path": morsel["path"] == "/api/v1",
+            "samesite_strict": str(morsel["samesite"]).casefold() == "strict",
+            "persistent": persistent,
+        }
+    )
+    return result
+
+
+def _cookie_contract_passes(contract: dict[str, Any]) -> bool:
+    """Fail closed on an incomplete or false cookie-attribute contract."""
+
+    expected = {
+        "present_once",
+        "value_matches",
+        "httponly",
+        "host_only",
+        "expected_path",
+        "samesite_strict",
+        "persistent",
+    }
+    return set(contract) == expected and all(
+        contract.get(key) is True for key in expected
+    )
+
+
+def _raw_values_absent_from_json(
+    raw_values: tuple[str | None, ...],
+    payloads: tuple[Any, ...],
+) -> bool:
+    """Compare private values locally; never return or report the values."""
+
+    if not raw_values or any(
+        not isinstance(value, str) or not value for value in raw_values
+    ):
+        return False
+    try:
+        serialized = json.dumps(
+            payloads,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):
+        return False
+    return all(value not in serialized for value in raw_values if value is not None)
+
+
+def _public_otp_responses_match(
+    left: Any,
+    right: Any,
+    *,
+    expected_purpose: str,
+    expected_masked_last4: str,
+) -> bool:
+    """Compare complete public OTP state and its privacy headers in memory."""
+
+    if (
+        expected_purpose not in {"login", "recovery"}
+        or not isinstance(expected_masked_last4, str)
+        or re.fullmatch(r"[0-9]{4}", expected_masked_last4) is None
+    ):
+        return False
+    expected_destination = f"••••••{expected_masked_last4}"
+    left_payload = _safe_response_object(left)
+    right_payload = _safe_response_object(right)
+    if left_payload is None or right_payload is None:
+        return False
+    if (
+        set(left_payload) != OTP_PUBLIC_STATE_KEYS
+        or set(right_payload) != OTP_PUBLIC_STATE_KEYS
+    ):
+        return False
+
+    def is_nonnegative_integer(value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+    def is_live_decoy_projection(payload: dict[str, Any]) -> bool:
+        destination = payload.get("destination_masked")
+        return bool(
+            payload.get("status") == "pending"
+            and payload.get("purpose") == expected_purpose
+            and destination == expected_destination
+            and is_nonnegative_integer(payload.get("attempts_left"))
+            and payload.get("attempts_left", 0) > 0
+            and is_nonnegative_integer(payload.get("expires_in_seconds"))
+            and payload.get("expires_in_seconds", 0) > 0
+            and is_nonnegative_integer(payload.get("resend_in_seconds"))
+            and is_nonnegative_integer(payload.get("locked_for_seconds"))
+            and payload.get("locked_for_seconds") == 0
+            and payload.get("resend_allowed") is False
+        )
+
+    if not is_live_decoy_projection(left_payload):
+        return False
+    if not is_live_decoy_projection(right_payload):
+        return False
+    expected_headers = (
+        "private, no-store",
+        "Cookie",
+        "application/json",
+    )
+
+    def safe_headers(response: Any) -> tuple[str, str, str]:
+        content_type = str(response.headers.get("content-type", ""))
+        return (
+            str(response.headers.get("cache-control", "")),
+            str(response.headers.get("vary", "")),
+            content_type.split(";", 1)[0],
+        )
+
+    return bool(
+        int(left.status_code) == 202
+        and int(right.status_code) == 202
+        and left_payload == right_payload
+        and safe_headers(left) == expected_headers
+        and safe_headers(right) == expected_headers
+    )
+
+
 def _privacy_findings(value: Any, path: str = "report") -> list[str]:
     """Return aggregate finding classes; never copy the offending value."""
 
@@ -356,13 +613,13 @@ def _is_postgresql_16_with_pgvector(
 
 
 def _bootstrap_expiry_passes(observation: dict[str, Any]) -> bool:
-    """Pure fail-closed evaluator for the one-use signup correlation scope."""
+    """Pure fail-closed evaluator for the one-use signup cookie capability."""
 
     return bool(
-        observation.get("resend_status") == 404
-        and observation.get("resend_code") == "registration_not_found"
-        and observation.get("verify_status") == 404
-        and observation.get("verify_code") == "no_active_challenge"
+        observation.get("resend_status") == 401
+        and observation.get("resend_code") == "otp_flow_unavailable"
+        and observation.get("verify_status") == 401
+        and observation.get("verify_code") == "otp_failed"
         and observation.get("challenge_delta") == 0
         and observation.get("outbox_delta") == 0
         and observation.get("delivery_delta") == 0
@@ -370,6 +627,7 @@ def _bootstrap_expiry_passes(observation: dict[str, Any]) -> bool:
         and observation.get("audit_delta") == 0
         and observation.get("all_security_row_deltas_zero") is True
         and observation.get("business_state_unchanged") is True
+        and observation.get("private_capability_state_unchanged") is True
         and observation.get("cookie_issued") is False
     )
 
@@ -569,6 +827,109 @@ def _business_state_digest(session_factory: sessionmaker[Session]) -> str:
     return hashlib.sha256(repr(rows).encode("utf-8")).hexdigest()
 
 
+def _private_capability_snapshot(
+    session_factory: sessionmaker[Session],
+    *,
+    scope: dict[str, tuple[uuid.UUID, ...]] | None = None,
+) -> dict[str, Any]:
+    """Fingerprint only OTP capability/ledger rows; values never leave memory."""
+
+    from app.models.registration import (
+        OtpFlow,
+        OtpPurposeAuthority,
+        RegistrationIdempotencyRecord,
+    )
+
+    models = {
+        "otp_purpose_authorities": OtpPurposeAuthority,
+        "otp_flows": OtpFlow,
+        "registration_idempotency_records": RegistrationIdempotencyRecord,
+    }
+    if scope is not None and set(scope) != set(PRIVATE_CAPABILITY_TABLES):
+        raise ProductGateFailure("private capability snapshot scope is invalid")
+    signatures: list[tuple[Any, ...]] = []
+    selected_counts: dict[str, int] = {}
+    global_counts: dict[str, int] = {}
+    selected_scope: dict[str, tuple[uuid.UUID, ...]] = {}
+    with session_factory() as session:
+        for table_name in PRIVATE_CAPABILITY_TABLES:
+            model = models[table_name]
+            all_rows = list(session.scalars(select(model).order_by(model.id)))
+            global_counts[table_name] = len(all_rows)
+            allowed_ids = (
+                {row.id for row in all_rows}
+                if scope is None
+                else set(scope[table_name])
+            )
+            selected = [row for row in all_rows if row.id in allowed_ids]
+            selected_counts[table_name] = len(selected)
+            selected_scope[table_name] = tuple(row.id for row in selected)
+            for row in selected:
+                signatures.append(
+                    (
+                        table_name,
+                        tuple(
+                            (column.name, getattr(row, column.name))
+                            for column in row.__table__.columns
+                        ),
+                    )
+                )
+    return {
+        "scope": selected_scope,
+        "counts": selected_counts,
+        "global_counts": global_counts,
+        "fingerprint": hashlib.sha256(
+            repr(signatures).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def _private_capability_state_unchanged(
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> bool:
+    """Compare scoped capability state without exposing either fingerprint."""
+
+    before_fingerprint = before.get("fingerprint")
+    after_fingerprint = after.get("fingerprint")
+    return bool(
+        isinstance(before_fingerprint, str)
+        and isinstance(after_fingerprint, str)
+        and before.get("counts") == after.get("counts")
+        and secrets.compare_digest(before_fingerprint, after_fingerprint)
+    )
+
+
+def _private_capability_delta_is_exact(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    *,
+    otp_purpose_authorities: int,
+    otp_flows: int,
+    registration_idempotency_records: int,
+) -> bool:
+    """Require the exact bounded global row delta for intentional decoys."""
+
+    expected = {
+        "otp_purpose_authorities": otp_purpose_authorities,
+        "otp_flows": otp_flows,
+        "registration_idempotency_records": registration_idempotency_records,
+    }
+    before_counts = before.get("global_counts")
+    after_counts = after.get("global_counts")
+    if not isinstance(before_counts, dict) or not isinstance(after_counts, dict):
+        return False
+    if set(before_counts) != set(PRIVATE_CAPABILITY_TABLES):
+        return False
+    if set(after_counts) != set(PRIVATE_CAPABILITY_TABLES):
+        return False
+    return all(
+        after_counts.get(table_name, -1) - before_counts.get(table_name, -1)
+        == delta
+        for table_name, delta in expected.items()
+    )
+
+
 class _CapturingSender:
     """In-memory OTP provider; values never enter the report."""
 
@@ -713,6 +1074,187 @@ def _client(app: FastAPI, cookie_name: str, token: str | None = None) -> TestCli
     return client
 
 
+def _otp_resend_payload() -> dict[str, object]:
+    """Return the exact NYAY-4 resend body; UUID authority is prohibited."""
+
+    return {}
+
+
+def _trusted_mutation_headers() -> dict[str, str]:
+    """Bind every cookie-authority mutation to the exact trusted origin."""
+
+    return {"Origin": TRUSTED_ORIGIN}
+
+
+def _signup_registration_headers() -> dict[str, str]:
+    """Use the current mandatory registration idempotency contract."""
+
+    return {
+        **_trusted_mutation_headers(),
+        "Idempotency-Key": SIGNUP_IDEMPOTENCY_KEY,
+    }
+
+
+def _otp_verify_payload(code: str) -> dict[str, str]:
+    """Return the exact NYAY-4 verification body; the cookie owns authority."""
+
+    return {"code": code}
+
+
+def _require_private_signup_flow(
+    session_factory: sessionmaker[Session],
+    raw_token: str | None,
+) -> dict[str, Any]:
+    """Resolve private graph handles from the cookie hash, never response JSON."""
+
+    from app.models.registration import OtpFlow
+    from app.services.otp_flow_service import flow_token_hash
+
+    if not raw_token:
+        raise ProductGateFailure("signup cookie flow graph is unavailable")
+    with session_factory() as session:
+        flow = session.scalar(
+            select(OtpFlow).where(OtpFlow.token_hash == flow_token_hash(raw_token))
+        )
+        if (
+            flow is None
+            or flow.registration_id is None
+            or flow.authority_id is None
+        ):
+            raise ProductGateFailure("signup cookie flow graph is unavailable")
+        return {
+            "registration_id": flow.registration_id,
+            "authority_id": flow.authority_id,
+            "challenge_id": flow.challenge_id,
+        }
+
+
+def _private_decoy_flow_is_bound(
+    session_factory: sessionmaker[Session],
+    raw_token: str | None,
+    *,
+    purpose: str,
+) -> bool:
+    """Prove a cookie-owned decoy graph has no registration authority."""
+
+    from app.models.registration import OtpFlow, OtpPurposeAuthority
+    from app.services.otp_flow_service import flow_token_hash
+
+    if not raw_token or purpose not in {"login", "recovery"}:
+        return False
+    with session_factory() as session:
+        flow = session.scalar(
+            select(OtpFlow).where(OtpFlow.token_hash == flow_token_hash(raw_token))
+        )
+        authority = (
+            session.get(OtpPurposeAuthority, flow.authority_id)
+            if flow is not None
+            else None
+        )
+        return bool(
+            flow is not None
+            and authority is not None
+            and flow.purpose == purpose
+            and authority.purpose == purpose
+            and flow.authority_id == authority.id
+            and flow.subject_hash == authority.subject_hash
+            and flow.registration_id is None
+            and authority.registration_id is None
+            and flow.challenge_id is None
+            and flow.state == "pending"
+            and flow.consumed_at is None
+        )
+
+
+def _seed_private_signup_flow(
+    session_factory: sessionmaker[Session],
+    registration_id: uuid.UUID,
+    *,
+    destination: str,
+    now: datetime | None = None,
+) -> str:
+    """Create a private stale-capability fixture without serializing its token."""
+
+    from app.models.registration import OtpChallenge, StudentRegistration
+    from app.services import otp_flow_service
+    from app.services.otp_authority import lock_or_create_registration_authority
+
+    now = now or datetime.now(timezone.utc)
+    with session_factory() as session:
+        registration = session.get(StudentRegistration, registration_id)
+        if registration is None:
+            raise ProductGateFailure("signup cookie flow seed is unavailable")
+        authority = lock_or_create_registration_authority(
+            session, registration, "signup", now
+        )
+        challenge = session.scalar(
+            select(OtpChallenge)
+            .where(
+                OtpChallenge.registration_id == registration.id,
+                OtpChallenge.authority_id == authority.id,
+                OtpChallenge.purpose == "signup",
+                OtpChallenge.delivery_state == "active",
+                OtpChallenge.consumed_at.is_(None),
+            )
+            .order_by(OtpChallenge.created_at.desc())
+        )
+        raw_token, _ = otp_flow_service.create_flow(
+            session,
+            authority,
+            now=now,
+            destination=destination,
+            challenge=challenge,
+            registration_id=registration.id,
+        )
+        session.commit()
+        return raw_token
+
+
+def _unsafe_flow_graph_for_mutation(
+    session: Session,
+    raw_token: str | None,
+) -> tuple[Any, Any] | None:
+    """Explicit mutant: retain graph binding but remove account eligibility."""
+
+    from app.models.registration import OtpChallenge, OtpFlow, OtpPurposeAuthority
+    from app.services.otp_flow_service import flow_token_hash
+
+    if not raw_token:
+        return None
+    flow = session.scalar(
+        select(OtpFlow)
+        .where(OtpFlow.token_hash == flow_token_hash(raw_token))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if flow is None or flow.registration_idempotency_record_id is not None:
+        return None
+    authority = session.scalar(
+        select(OtpPurposeAuthority)
+        .where(OtpPurposeAuthority.id == flow.authority_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        authority is None
+        or authority.id != flow.authority_id
+        or authority.subject_hash != flow.subject_hash
+        or authority.purpose != flow.purpose
+        or authority.registration_id != flow.registration_id
+    ):
+        return None
+    if flow.challenge_id is not None:
+        challenge = session.get(OtpChallenge, flow.challenge_id)
+        if (
+            challenge is None
+            or challenge.authority_id != authority.id
+            or challenge.registration_id != flow.registration_id
+            or challenge.purpose != flow.purpose
+        ):
+            return None
+    return authority, flow
+
+
 def _profile_payload(marker: str) -> dict[str, Any]:
     return {
         "college": f"Gate Institute {marker}",
@@ -732,18 +1274,17 @@ def _run_api_probes(
     from app.core import auth as core_auth
     from app.core.auth import ActorContext, Role
     from app.core.config import settings
-    from app.core.crypto import KeyRing, keyed_hash, otp_verifier, override_keyring
+    from app.core.crypto import KeyRing, otp_verifier, override_keyring
     from app.db.models.audit import AuditEvent
     from app.db.session import get_session
     from app.models.registration import (
-        LoginAttempt,
         OtpChallenge,
-        RecoverySession,
+        OtpPurposeAuthority,
         StudentProfile,
         StudentRegistration,
         StudentVerification,
     )
-    from app.services import login_service, otp_service
+    from app.services import login_service, otp_flow_service, otp_service
     from app.services.otp_authority import lock_or_create_registration_authority
 
     factory = sessionmaker(
@@ -788,6 +1329,7 @@ def _run_api_probes(
     metrics: dict[str, Any] = {}
     try:
         cookie_name = settings.auth_session_cookie_name
+        flow_cookie_name = settings.otp_flow_cookie_name
         owner_a = _seed_actor(factory, label="owner-a", is_minor=True)
         owner_b = _seed_actor(factory, label="owner-b")
         missing = _seed_actor(factory, label="missing", registration=False)
@@ -882,6 +1424,24 @@ def _run_api_probes(
             )
             authority.active_expires_at = expires_at
             session.commit()
+        soft_deleted_resend_flow = _seed_private_signup_flow(
+            factory,
+            soft_deleted_resend["registration_id"],
+            destination=str(soft_deleted_resend["mobile"]),
+            now=now,
+        )
+        soft_deleted_verify_flow = _seed_private_signup_flow(
+            factory,
+            soft_deleted_verify["registration_id"],
+            destination=str(soft_deleted_verify["mobile"]),
+            now=now,
+        )
+        soft_deleted_mutant_flow = _seed_private_signup_flow(
+            factory,
+            soft_deleted_mutant["registration_id"],
+            destination=str(soft_deleted_mutant["mobile"]),
+            now=now,
+        )
         revoked = _seed_actor(factory, label="revoked", session_status="revoked")
         expired = _seed_actor(factory, label="expired", expired=True)
         reviewer = _seed_actor(
@@ -897,6 +1457,7 @@ def _run_api_probes(
         signup_mobile = "7" * 10
         registered = signup_client.post(
             REGISTER_PATH,
+            headers=_signup_registration_headers(),
             json={
                 "first_name": "Gate",
                 "last_name": "Signup",
@@ -905,68 +1466,98 @@ def _run_api_probes(
                 "consent": {"accepted": True},
             },
         )
-        registration_reference = (
-            registered.json().get("registration_id")
-            if registered.status_code == 201 and isinstance(registered.json(), dict)
-            else None
+        registered_payload = _safe_response_object(registered)
+        signup_flow_token = signup_client.cookies.get(flow_cookie_name)
+        if (
+            registered.status_code != 201
+            or not isinstance(registered_payload, dict)
+            or not signup_flow_token
+            or len(sender.sent) != 1
+        ):
+            raise ProductGateFailure("signup cookie flow setup failed")
+        registration_id_absent = bool(
+            "registration_id" not in registered_payload
+            and _UUID_TEXT.search(json.dumps(registered_payload, sort_keys=True))
+            is None
         )
-        delivered_code = sender.sent[-1][1] if sender.sent else None
-        verified = (
-            signup_client.post(
-                OTP_VERIFY_PATH,
-                json={
-                    "registration_id": registration_reference,
-                    "code": delivered_code,
-                },
-            )
-            if registration_reference and delivered_code
-            else None
+        flow_cookie_contract = _named_cookie_contract(
+            registered,
+            flow_cookie_name,
+            expected_value=signup_flow_token,
+        )
+        signup_private = _require_private_signup_flow(factory, signup_flow_token)
+        signup_registration_id = signup_private["registration_id"]
+        delivered_code = sender.sent[-1][1]
+        verified = signup_client.post(
+            OTP_VERIFY_PATH,
+            headers=_trusted_mutation_headers(),
+            json=_otp_verify_payload(delivered_code),
         )
         cookie_value = signup_client.cookies.get(cookie_name)
         session_probe = signup_client.get(SESSION_PATH)
-        verify_payload = verified.json() if verified is not None else {}
+        verify_payload = _safe_response_object(verified)
+        session_payload = _safe_response_object(session_probe)
+        session_cookie_contract = _named_cookie_contract(
+            verified,
+            cookie_name,
+            expected_value=cookie_value,
+        )
+        raw_bearers_absent = _raw_values_absent_from_json(
+            (signup_flow_token, cookie_value),
+            (registered_payload, verify_payload, session_payload),
+        )
         signup_passed = bool(
             registered.status_code == 201
+            and registration_id_absent
+            and signup_flow_token
             and len(sender.sent) == 1
-            and verified is not None
             and verified.status_code == 200
+            and isinstance(verify_payload, dict)
             and cookie_value
-            and cookie_value not in json.dumps(verify_payload, sort_keys=True)
-            and "httponly" in (verified.headers.get("set-cookie") or "").casefold()
+            and _cookie_contract_passes(flow_cookie_contract)
+            and _cookie_contract_passes(session_cookie_contract)
+            and raw_bearers_absent
             and session_probe.status_code == 200
-            and session_probe.json().get("authenticated") is True
+            and isinstance(session_payload, dict)
+            and session_payload.get("authenticated") is True
         )
         assertions.append(
             _assertion(
                 "CONTRACT-SIGNUP-MINTS-HTTPONLY-SESSION",
                 signup_passed,
                 register_status=registered.status_code,
-                verify_status=verified.status_code if verified is not None else 0,
+                verify_status=verified.status_code,
                 delivery_count=len(sender.sent),
+                flow_cookie_present=bool(signup_flow_token),
+                registration_id_absent=registration_id_absent,
                 cookie_present=bool(cookie_value),
-                httponly=bool(
-                    verified is not None
-                    and "httponly"
-                    in (verified.headers.get("set-cookie") or "").casefold()
-                ),
+                flow_cookie_contract=flow_cookie_contract,
+                session_cookie_contract=session_cookie_contract,
+                raw_bearers_absent=raw_bearers_absent,
                 session_authenticated=(
                     session_probe.status_code == 200
-                    and session_probe.json().get("authenticated") is True
+                    and isinstance(session_payload, dict)
+                    and session_payload.get("authenticated") is True
                 ),
             )
         )
 
-        # The signup UUID is a correlation reference, not durable authority.
-        # Once its first proof activates the account, resend and replay/verify
-        # must both fail before changing any challenge, delivery, session, or
-        # audit state.
+        # The one-use HttpOnly flow cookie is the only public correlation
+        # authority. Once its first proof activates the account, replaying that
+        # exact private capability must fail before changing any challenge,
+        # delivery, session, audit, or business state.
         bootstrap_client = _client(app, cookie_name)
+        bootstrap_client.cookies.set(
+            flow_cookie_name, signup_flow_token, path="/api/v1"
+        )
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
+        before_private_capabilities = _private_capability_snapshot(factory)
         before_delivery = len(sender.sent)
         bootstrap_resend = bootstrap_client.post(
             OTP_RESEND_PATH,
-            json={"registration_id": registration_reference},
+            headers=_trusted_mutation_headers(),
+            json=_otp_resend_payload(),
         )
         replay_code = (
             sender.sent[-1][1]
@@ -975,13 +1566,12 @@ def _run_api_probes(
         )
         bootstrap_verify = bootstrap_client.post(
             OTP_VERIFY_PATH,
-            json={
-                "registration_id": registration_reference,
-                "code": replay_code,
-            },
+            headers=_trusted_mutation_headers(),
+            json=_otp_verify_payload(replay_code),
         )
         after_counts = _table_counts(factory)
         after_state = _business_state_digest(factory)
+        after_private_capabilities = _private_capability_snapshot(factory)
         resend_signature = _safe_response_signature(bootstrap_resend)
         replay_signature = _safe_response_signature(bootstrap_verify)
         bootstrap_observation = {
@@ -998,6 +1588,12 @@ def _run_api_probes(
             "audit_delta": after_counts["audit_events"] - before_counts["audit_events"],
             "all_security_row_deltas_zero": before_counts == after_counts,
             "business_state_unchanged": before_state == after_state,
+            "private_capability_state_unchanged": (
+                _private_capability_state_unchanged(
+                    before_private_capabilities,
+                    after_private_capabilities,
+                )
+            ),
             "cookie_issued": bool(
                 bootstrap_client.cookies.get(cookie_name)
                 or "set-cookie" in bootstrap_resend.headers
@@ -1021,6 +1617,9 @@ def _run_api_probes(
                 ],
                 business_state_unchanged=bootstrap_observation[
                     "business_state_unchanged"
+                ],
+                private_capability_state_unchanged=bootstrap_observation[
+                    "private_capability_state_unchanged"
                 ],
                 cookie_issued=bootstrap_observation["cookie_issued"],
             )
@@ -1163,10 +1762,12 @@ def _run_api_probes(
             json={"institutional_email": valid_profile["institutional_email"]},
         )
         status_response = owner_a_client.get(STATUS_PATH)
+        status_payload = _safe_response_object(status_response)
         email_status_passed = bool(
             email_response.status_code == 202
             and status_response.status_code == 200
-            and status_response.json().get("status") == "pending"
+            and isinstance(status_payload, dict)
+            and status_payload.get("status") == "pending"
         )
         assertions.append(
             _assertion(
@@ -1377,128 +1978,368 @@ def _run_api_probes(
 
         # Soft deletion revokes every pre-authentication capability, even when
         # legacy state still looks active/verified. Login/recovery retain their
-        # anti-enumerating 202 + decoy-attempt behavior but must create no real
+        # anti-enumerating 202 + cookie-owned decoy-flow behavior but create no real
         # challenge, deliverable outbox row, session, or audit authority.
         preauth_client = _client(app, cookie_name)
         preauth_cases: list[dict[str, Any]] = []
 
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
+        before_private_capabilities = _private_capability_snapshot(factory)
         before_delivery = len(sender.sent)
+        preauth_client.cookies.set(
+            flow_cookie_name, soft_deleted_resend_flow, path="/api/v1"
+        )
         resend_response = preauth_client.post(
             OTP_RESEND_PATH,
-            json={"registration_id": str(soft_deleted_resend["registration_id"])},
+            headers=_trusted_mutation_headers(),
+            json=_otp_resend_payload(),
         )
+        resend_deleted_signature = _safe_response_signature(resend_response)
+        after_private_capabilities = _private_capability_snapshot(factory)
         preauth_cases.append(
             {
                 "case": "signup_resend",
-                "response": _safe_response_signature(resend_response),
-                "blocked": resend_response.status_code == 404,
+                "response": resend_deleted_signature,
+                "blocked": bool(
+                    resend_response.status_code == 401
+                    and resend_deleted_signature.get("code")
+                    == "otp_flow_unavailable"
+                ),
                 "row_counts_unchanged": before_counts == _table_counts(factory),
                 "business_state_unchanged": before_state
                 == _business_state_digest(factory),
+                "private_capabilities_expected": (
+                    _private_capability_state_unchanged(
+                        before_private_capabilities,
+                        after_private_capabilities,
+                    )
+                ),
                 "delivery_count_unchanged": before_delivery == len(sender.sent),
             }
         )
 
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
+        before_private_capabilities = _private_capability_snapshot(factory)
         before_delivery = len(sender.sent)
+        preauth_client.cookies.set(
+            flow_cookie_name, soft_deleted_verify_flow, path="/api/v1"
+        )
         verify_deleted_response = preauth_client.post(
             OTP_VERIFY_PATH,
-            json={
-                "registration_id": str(soft_deleted_verify["registration_id"]),
-                "code": signup_code,
-            },
+            headers=_trusted_mutation_headers(),
+            json=_otp_verify_payload(signup_code),
         )
+        verify_deleted_signature = _safe_response_signature(verify_deleted_response)
+        after_private_capabilities = _private_capability_snapshot(factory)
         preauth_cases.append(
             {
                 "case": "signup_consume",
-                "response": _safe_response_signature(verify_deleted_response),
+                "response": verify_deleted_signature,
                 "blocked": bool(
-                    verify_deleted_response.status_code == 404
+                    verify_deleted_response.status_code == 401
+                    and verify_deleted_signature.get("code") == "otp_failed"
                     and not preauth_client.cookies.get(cookie_name)
                     and "set-cookie" not in verify_deleted_response.headers
                 ),
                 "row_counts_unchanged": before_counts == _table_counts(factory),
                 "business_state_unchanged": before_state
                 == _business_state_digest(factory),
-                "delivery_count_unchanged": before_delivery == len(sender.sent),
-            }
-        )
-
-        before_counts = _table_counts(factory)
-        before_state = _business_state_digest(factory)
-        before_delivery = len(sender.sent)
-        login_deleted_response = preauth_client.post(
-            LOGIN_START_PATH,
-            json={"mobile": soft_deleted_login["mobile"]},
-        )
-        with factory() as session:
-            login_decoy = session.scalar(
-                select(LoginAttempt)
-                .where(
-                    LoginAttempt.lookup_hash
-                    == keyed_hash(str(soft_deleted_login["mobile"]))
-                )
-                .order_by(LoginAttempt.created_at.desc())
-            )
-            login_is_decoy = bool(
-                login_decoy is not None
-                and login_decoy.registration_id is None
-                and login_decoy.challenge_id is None
-            )
-        preauth_cases.append(
-            {
-                "case": "login_start",
-                "response": _safe_response_signature(login_deleted_response),
-                "blocked": bool(
-                    login_deleted_response.status_code == 202 and login_is_decoy
+                "private_capabilities_expected": (
+                    _private_capability_state_unchanged(
+                        before_private_capabilities,
+                        after_private_capabilities,
+                    )
                 ),
-                "row_counts_unchanged": before_counts == _table_counts(factory),
-                "business_state_unchanged": before_state
-                == _business_state_digest(factory),
                 "delivery_count_unchanged": before_delivery == len(sender.sent),
             }
         )
 
-        before_counts = _table_counts(factory)
-        before_state = _business_state_digest(factory)
-        before_delivery = len(sender.sent)
-        recovery_deleted_response = preauth_client.post(
-            RECOVERY_START_PATH,
-            json={"mobile": soft_deleted_recovery["mobile"]},
-        )
-        with factory() as session:
-            recovery_decoy = session.scalar(
-                select(RecoverySession)
-                .where(
-                    RecoverySession.lookup_hash
-                    == keyed_hash(str(soft_deleted_recovery["mobile"]))
+        # Compare deleted-account starts with matched unknown-account controls.
+        # The inputs share only their public last four digits, and the request
+        # clock is held constant so every public state value is exactly equal.
+        unknown_control_cases: list[dict[str, Any]] = []
+        parity_now = datetime.now(timezone.utc)
+        original_request_clock = endpoint._now
+        endpoint._now = lambda: parity_now
+        try:
+            before_counts = _table_counts(factory)
+            before_state = _business_state_digest(factory)
+            before_private_capabilities = _private_capability_snapshot(factory)
+            before_delivery = len(sender.sent)
+            login_deleted_response = preauth_client.post(
+                LOGIN_START_PATH,
+                headers=_trusted_mutation_headers(),
+                json={"mobile": soft_deleted_login["mobile"]},
+            )
+            login_deleted_token = login_deleted_response.cookies.get(flow_cookie_name)
+            login_is_decoy = _private_decoy_flow_is_bound(
+                factory,
+                login_deleted_token,
+                purpose="login",
+            )
+            after_private_capabilities = _private_capability_snapshot(factory)
+            existing_after = _private_capability_snapshot(
+                factory,
+                scope=before_private_capabilities["scope"],
+            )
+            login_private_expected = bool(
+                _private_capability_delta_is_exact(
+                    before_private_capabilities,
+                    after_private_capabilities,
+                    otp_purpose_authorities=1,
+                    otp_flows=1,
+                    registration_idempotency_records=0,
                 )
-                .order_by(RecoverySession.created_at.desc())
+                and _private_capability_state_unchanged(
+                    before_private_capabilities,
+                    existing_after,
+                )
             )
-            recovery_is_decoy = bool(
-                recovery_decoy is not None
-                and recovery_decoy.registration_id is None
-                and recovery_decoy.challenge_id is None
+            preauth_cases.append(
+                {
+                    "case": "login_start",
+                    "response": _safe_response_signature(login_deleted_response),
+                    "blocked": bool(
+                        login_deleted_response.status_code == 202 and login_is_decoy
+                    ),
+                    "row_counts_unchanged": before_counts == _table_counts(factory),
+                    "business_state_unchanged": before_state
+                    == _business_state_digest(factory),
+                    "private_capabilities_expected": login_private_expected,
+                    "delivery_count_unchanged": before_delivery == len(sender.sent),
+                }
             )
-        preauth_cases.append(
-            {
-                "case": "recovery_start",
-                "response": _safe_response_signature(recovery_deleted_response),
-                "blocked": bool(
-                    recovery_deleted_response.status_code == 202 and recovery_is_decoy
+
+            unknown_login_client = _client(app, cookie_name)
+            before_counts = _table_counts(factory)
+            before_state = _business_state_digest(factory)
+            before_private_capabilities = _private_capability_snapshot(factory)
+            before_delivery = len(sender.sent)
+            login_unknown_response = unknown_login_client.post(
+                LOGIN_START_PATH,
+                headers=_trusted_mutation_headers(),
+                json={"mobile": "9444444444"},
+            )
+            login_unknown_token = login_unknown_response.cookies.get(flow_cookie_name)
+            login_unknown_is_decoy = _private_decoy_flow_is_bound(
+                factory,
+                login_unknown_token,
+                purpose="login",
+            )
+            after_private_capabilities = _private_capability_snapshot(factory)
+            existing_after = _private_capability_snapshot(
+                factory,
+                scope=before_private_capabilities["scope"],
+            )
+            login_unknown_private_expected = bool(
+                _private_capability_delta_is_exact(
+                    before_private_capabilities,
+                    after_private_capabilities,
+                    otp_purpose_authorities=1,
+                    otp_flows=1,
+                    registration_idempotency_records=0,
+                )
+                and _private_capability_state_unchanged(
+                    before_private_capabilities,
+                    existing_after,
+                )
+            )
+            login_projection_matches_unknown = _public_otp_responses_match(
+                login_deleted_response,
+                login_unknown_response,
+                expected_purpose="login",
+                expected_masked_last4=str(soft_deleted_login["mobile"])[-4:],
+            )
+            login_cookie_contracts = bool(
+                _cookie_contract_passes(
+                    _named_cookie_contract(
+                        login_deleted_response,
+                        flow_cookie_name,
+                        expected_value=login_deleted_token,
+                    )
+                )
+                and _cookie_contract_passes(
+                    _named_cookie_contract(
+                        login_unknown_response,
+                        flow_cookie_name,
+                        expected_value=login_unknown_token,
+                    )
+                )
+            )
+            login_raw_bearers_absent = _raw_values_absent_from_json(
+                (login_deleted_token, login_unknown_token),
+                (
+                    _safe_response_object(login_deleted_response),
+                    _safe_response_object(login_unknown_response),
                 ),
-                "row_counts_unchanged": before_counts == _table_counts(factory),
-                "business_state_unchanged": before_state
-                == _business_state_digest(factory),
-                "delivery_count_unchanged": before_delivery == len(sender.sent),
-            }
-        )
+            )
+            unknown_control_cases.append(
+                {
+                    "case": "login_unknown_control",
+                    "response": _safe_response_signature(login_unknown_response),
+                    "blocked": bool(
+                        login_unknown_response.status_code == 202
+                        and login_unknown_is_decoy
+                        and login_projection_matches_unknown
+                        and login_cookie_contracts
+                        and login_raw_bearers_absent
+                    ),
+                    "row_counts_unchanged": before_counts == _table_counts(factory),
+                    "business_state_unchanged": before_state
+                    == _business_state_digest(factory),
+                    "private_capabilities_expected": (
+                        login_unknown_private_expected
+                    ),
+                    "delivery_count_unchanged": before_delivery == len(sender.sent),
+                }
+            )
+
+            before_counts = _table_counts(factory)
+            before_state = _business_state_digest(factory)
+            before_private_capabilities = _private_capability_snapshot(factory)
+            before_delivery = len(sender.sent)
+            recovery_deleted_response = preauth_client.post(
+                RECOVERY_START_PATH,
+                headers=_trusted_mutation_headers(),
+                json={"mobile": soft_deleted_recovery["mobile"]},
+            )
+            recovery_deleted_token = recovery_deleted_response.cookies.get(
+                flow_cookie_name
+            )
+            recovery_is_decoy = _private_decoy_flow_is_bound(
+                factory,
+                recovery_deleted_token,
+                purpose="recovery",
+            )
+            after_private_capabilities = _private_capability_snapshot(factory)
+            existing_after = _private_capability_snapshot(
+                factory,
+                scope=before_private_capabilities["scope"],
+            )
+            recovery_private_expected = bool(
+                _private_capability_delta_is_exact(
+                    before_private_capabilities,
+                    after_private_capabilities,
+                    otp_purpose_authorities=1,
+                    otp_flows=1,
+                    registration_idempotency_records=0,
+                )
+                and _private_capability_state_unchanged(
+                    before_private_capabilities,
+                    existing_after,
+                )
+            )
+            preauth_cases.append(
+                {
+                    "case": "recovery_start",
+                    "response": _safe_response_signature(recovery_deleted_response),
+                    "blocked": bool(
+                        recovery_deleted_response.status_code == 202
+                        and recovery_is_decoy
+                    ),
+                    "row_counts_unchanged": before_counts == _table_counts(factory),
+                    "business_state_unchanged": before_state
+                    == _business_state_digest(factory),
+                    "private_capabilities_expected": recovery_private_expected,
+                    "delivery_count_unchanged": before_delivery == len(sender.sent),
+                }
+            )
+
+            unknown_recovery_client = _client(app, cookie_name)
+            before_counts = _table_counts(factory)
+            before_state = _business_state_digest(factory)
+            before_private_capabilities = _private_capability_snapshot(factory)
+            before_delivery = len(sender.sent)
+            recovery_unknown_response = unknown_recovery_client.post(
+                RECOVERY_START_PATH,
+                headers=_trusted_mutation_headers(),
+                json={"mobile": "9333333333"},
+            )
+            recovery_unknown_token = recovery_unknown_response.cookies.get(
+                flow_cookie_name
+            )
+            recovery_unknown_is_decoy = _private_decoy_flow_is_bound(
+                factory,
+                recovery_unknown_token,
+                purpose="recovery",
+            )
+            after_private_capabilities = _private_capability_snapshot(factory)
+            existing_after = _private_capability_snapshot(
+                factory,
+                scope=before_private_capabilities["scope"],
+            )
+            recovery_unknown_private_expected = bool(
+                _private_capability_delta_is_exact(
+                    before_private_capabilities,
+                    after_private_capabilities,
+                    otp_purpose_authorities=1,
+                    otp_flows=1,
+                    registration_idempotency_records=0,
+                )
+                and _private_capability_state_unchanged(
+                    before_private_capabilities,
+                    existing_after,
+                )
+            )
+            recovery_projection_matches_unknown = _public_otp_responses_match(
+                recovery_deleted_response,
+                recovery_unknown_response,
+                expected_purpose="recovery",
+                expected_masked_last4=str(soft_deleted_recovery["mobile"])[-4:],
+            )
+            recovery_cookie_contracts = bool(
+                _cookie_contract_passes(
+                    _named_cookie_contract(
+                        recovery_deleted_response,
+                        flow_cookie_name,
+                        expected_value=recovery_deleted_token,
+                    )
+                )
+                and _cookie_contract_passes(
+                    _named_cookie_contract(
+                        recovery_unknown_response,
+                        flow_cookie_name,
+                        expected_value=recovery_unknown_token,
+                    )
+                )
+            )
+            recovery_raw_bearers_absent = _raw_values_absent_from_json(
+                (recovery_deleted_token, recovery_unknown_token),
+                (
+                    _safe_response_object(recovery_deleted_response),
+                    _safe_response_object(recovery_unknown_response),
+                ),
+            )
+            unknown_control_cases.append(
+                {
+                    "case": "recovery_unknown_control",
+                    "response": _safe_response_signature(
+                        recovery_unknown_response
+                    ),
+                    "blocked": bool(
+                        recovery_unknown_response.status_code == 202
+                        and recovery_unknown_is_decoy
+                        and recovery_projection_matches_unknown
+                        and recovery_cookie_contracts
+                        and recovery_raw_bearers_absent
+                    ),
+                    "row_counts_unchanged": before_counts == _table_counts(factory),
+                    "business_state_unchanged": before_state
+                    == _business_state_digest(factory),
+                    "private_capabilities_expected": (
+                        recovery_unknown_private_expected
+                    ),
+                    "delivery_count_unchanged": before_delivery == len(sender.sent),
+                }
+            )
+        finally:
+            endpoint._now = original_request_clock
 
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
+        before_private_capabilities = _private_capability_snapshot(factory)
         with factory() as session:
             rotation_registration = session.get(
                 StudentRegistration, soft_deleted_rotate["registration_id"]
@@ -1519,16 +2360,24 @@ def _run_api_probes(
                 "row_counts_unchanged": before_counts == _table_counts(factory),
                 "business_state_unchanged": before_state
                 == _business_state_digest(factory),
+                "private_capabilities_expected": (
+                    _private_capability_state_unchanged(
+                        before_private_capabilities,
+                        _private_capability_snapshot(factory),
+                    )
+                ),
                 "delivery_count_unchanged": True,
             }
         )
 
+        preauth_evidence_cases = preauth_cases + unknown_control_cases
         preauth_capabilities_denied = all(
             case["blocked"]
             and case["row_counts_unchanged"]
             and case["business_state_unchanged"]
+            and case["private_capabilities_expected"]
             and case["delivery_count_unchanged"]
-            for case in preauth_cases
+            for case in preauth_evidence_cases
         )
         assertions.append(
             _assertion(
@@ -1536,20 +2385,39 @@ def _run_api_probes(
                 preauth_capabilities_denied,
                 cases=len(preauth_cases),
                 blocked=sum(case["blocked"] for case in preauth_cases),
+                unknown_controls=len(unknown_control_cases),
+                unknown_controls_passed=sum(
+                    case["blocked"] for case in unknown_control_cases
+                ),
                 all_row_counts_unchanged=all(
-                    case["row_counts_unchanged"] for case in preauth_cases
+                    case["row_counts_unchanged"]
+                    for case in preauth_evidence_cases
                 ),
                 all_business_state_unchanged=all(
-                    case["business_state_unchanged"] for case in preauth_cases
+                    case["business_state_unchanged"]
+                    for case in preauth_evidence_cases
                 ),
                 all_delivery_counts_unchanged=all(
-                    case["delivery_count_unchanged"] for case in preauth_cases
+                    case["delivery_count_unchanged"]
+                    for case in preauth_evidence_cases
+                ),
+                all_private_capabilities_expected=all(
+                    case["private_capabilities_expected"]
+                    for case in preauth_evidence_cases
                 ),
                 login_decoy=login_is_decoy,
                 recovery_decoy=recovery_is_decoy,
+                login_projection_matches_unknown=login_projection_matches_unknown,
+                recovery_projection_matches_unknown=(
+                    recovery_projection_matches_unknown
+                ),
+                login_cookie_contracts=login_cookie_contracts,
+                recovery_cookie_contracts=recovery_cookie_contracts,
+                login_raw_bearers_absent=login_raw_bearers_absent,
+                recovery_raw_bearers_absent=recovery_raw_bearers_absent,
                 response_statuses=[
                     case["response"]["status_code"]
-                    for case in preauth_cases
+                    for case in preauth_evidence_cases
                     if "response" in case
                 ],
             )
@@ -1833,10 +2701,14 @@ def _run_api_probes(
             )
         )
 
-        # Remove only the ``otp_pending`` scope from the shared signup-purpose
-        # predicate. The old reference must then resend and rotate a second
-        # authenticated session, proving the lifecycle-expiry oracle is live.
+        # NYAY-4 added an independent cookie-flow eligibility backstop around
+        # the NYAY-2 signup-purpose predicate.  Remove both reviewed guards as
+        # one explicit composite lifecycle mutant; deleting only either guard
+        # is now safely backstopped and cannot prove that this oracle still
+        # bites. The stale nonterminal cookie must then resend and rotate a
+        # second authenticated session.
         original_signup_scope = otp_service.registration_accepts_otp_purpose
+        original_flow_resolver = otp_flow_service.resolve_flow
 
         def unsafe_signup_scope(
             registration: StudentRegistration | None, purpose: str
@@ -1844,47 +2716,60 @@ def _run_api_probes(
             del purpose
             return otp_service.registration_is_authorizable(registration)
 
-        # Age only the already-consumed original challenge so the mutant reaches
-        # the status-scope predicate rather than being stopped by resend cooldown.
+        status_mutant_flow = _seed_private_signup_flow(
+            factory,
+            signup_registration_id,
+            destination=signup_mobile,
+        )
+        status_mutant_private = _require_private_signup_flow(
+            factory, status_mutant_flow
+        )
+        # Age the database-owned cooldown so only the two intended lifecycle
+        # guards, not rate timing, determine the mutant outcome.
         with factory() as session:
-            prior_signup = session.scalar(
-                select(OtpChallenge)
-                .where(
-                    OtpChallenge.registration_id
-                    == uuid.UUID(str(registration_reference)),
-                    OtpChallenge.purpose == "signup",
-                )
-                .order_by(OtpChallenge.created_at.desc())
+            status_authority = session.get(
+                OtpPurposeAuthority,
+                status_mutant_private["authority_id"],
             )
-            assert prior_signup is not None
-            prior_metadata = dict(prior_signup.metadata_json or {})
-            prior_metadata["issued_at"] = (
-                datetime.now(timezone.utc) - timedelta(minutes=1)
-            ).isoformat()
-            prior_signup.metadata_json = prior_metadata
+            if status_authority is None:
+                raise ProductGateFailure(
+                    "signup lifecycle mutant authority is unavailable"
+                )
+            status_authority.cooldown_until = datetime.now(timezone.utc) - timedelta(
+                seconds=1
+            )
+            status_authority.last_issued_at = datetime.now(timezone.utc) - timedelta(
+                minutes=1
+            )
+            status_authority.resend_window_started_at = None
+            status_authority.resend_count = 0
             session.commit()
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
         before_delivery = len(sender.sent)
         status_mutant_client = _client(app, cookie_name)
+        status_mutant_client.cookies.set(
+            flow_cookie_name, status_mutant_flow, path="/api/v1"
+        )
+        otp_flow_service.resolve_flow = _unsafe_flow_graph_for_mutation
         otp_service.registration_accepts_otp_purpose = unsafe_signup_scope
         try:
             status_mutant_resend = status_mutant_client.post(
                 OTP_RESEND_PATH,
-                json={"registration_id": registration_reference},
+                headers=_trusted_mutation_headers(),
+                json=_otp_resend_payload(),
             )
             status_mutant_code = (
                 sender.sent[-1][1] if len(sender.sent) > before_delivery else "0" * 6
             )
             status_mutant_verify = status_mutant_client.post(
                 OTP_VERIFY_PATH,
-                json={
-                    "registration_id": registration_reference,
-                    "code": status_mutant_code,
-                },
+                headers=_trusted_mutation_headers(),
+                json=_otp_verify_payload(status_mutant_code),
             )
         finally:
             otp_service.registration_accepts_otp_purpose = original_signup_scope
+            otp_flow_service.resolve_flow = original_flow_resolver
         after_counts = _table_counts(factory)
         after_state = _business_state_digest(factory)
         signup_scope_mutant_killed = bool(
@@ -1903,6 +2788,7 @@ def _run_api_probes(
                 "MUTANT-SIGNUP-STATUS-SCOPE",
                 signup_scope_mutant_killed,
                 vulnerability_reproduced=signup_scope_mutant_killed,
+                lifecycle_guards_removed=2,
                 resend_response=_safe_response_signature(status_mutant_resend),
                 verify_response=_safe_response_signature(status_mutant_verify),
                 challenge_created=(
@@ -1923,10 +2809,12 @@ def _run_api_probes(
             )
         )
 
-        # Drop only the deleted-at component of the shared pre-auth predicate.
-        # The real resend route must then create and deliver authority, proving
-        # the soft-delete oracle detects this exact future regression.
+        # The NYAY-4 cookie resolver independently rejects soft-deleted account
+        # graphs. Remove it together with the original NYAY-2 deleted-at
+        # predicate as one explicit composite lifecycle mutant. The real resend
+        # route must then create and deliver authority.
         original_authorizable = otp_service.registration_is_authorizable
+        original_flow_resolver = otp_flow_service.resolve_flow
 
         def unsafe_authorizable(registration: StudentRegistration | None) -> bool:
             return bool(
@@ -1938,14 +2826,21 @@ def _run_api_probes(
         before_counts = _table_counts(factory)
         before_state = _business_state_digest(factory)
         before_delivery = len(sender.sent)
+        deleted_mutant_client = _client(app, cookie_name)
+        deleted_mutant_client.cookies.set(
+            flow_cookie_name, soft_deleted_mutant_flow, path="/api/v1"
+        )
+        otp_flow_service.resolve_flow = _unsafe_flow_graph_for_mutation
         otp_service.registration_is_authorizable = unsafe_authorizable
         try:
-            deleted_mutant_response = preauth_client.post(
+            deleted_mutant_response = deleted_mutant_client.post(
                 OTP_RESEND_PATH,
-                json={"registration_id": str(soft_deleted_mutant["registration_id"])},
+                headers=_trusted_mutation_headers(),
+                json=_otp_resend_payload(),
             )
         finally:
             otp_service.registration_is_authorizable = original_authorizable
+            otp_flow_service.resolve_flow = original_flow_resolver
         after_counts = _table_counts(factory)
         after_state = _business_state_digest(factory)
         soft_delete_mutant_killed = bool(
@@ -1960,6 +2855,7 @@ def _run_api_probes(
                 "MUTANT-SOFT-DELETED-PREAUTH",
                 soft_delete_mutant_killed,
                 vulnerability_reproduced=soft_delete_mutant_killed,
+                lifecycle_guards_removed=2,
                 response=_safe_response_signature(deleted_mutant_response),
                 challenge_created=(
                     after_counts["otp_challenges"]
@@ -1980,6 +2876,7 @@ def _run_api_probes(
             "invalid_session_classes_checked": len(invalid_clients),
             "origin_cases_checked": len(origin_cases),
             "soft_deleted_preauth_cases_checked": len(preauth_cases),
+            "unknown_preauth_controls_checked": len(unknown_control_cases),
             "signup_bootstrap_expiry_cases_checked": 2,
         }
     finally:

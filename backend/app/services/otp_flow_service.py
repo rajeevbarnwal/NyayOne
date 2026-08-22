@@ -5,6 +5,7 @@ import math
 import secrets
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 from typing_extensions import TypedDict
 
 from sqlalchemy import select
@@ -78,6 +79,46 @@ def deterministic_signup_token(idempotency_key: str) -> str:
     """Recomputable bearer for zero-delta exact registration replay."""
 
     return keyed_hash(f"nyayone:otp-flow-bearer:v1:{idempotency_key}")
+
+
+def _terminal_erasure_won(
+    *,
+    record: Any,
+    record_id: Any,
+    registration: Any,
+    authority: Any,
+    flow: Any,
+) -> bool:
+    """Recognise only a complete retention winner after stale flow discovery.
+
+    Verification discovers capability links before acquiring the canonical
+    ledger -> registration -> authority -> flow locks. Retention may atomically
+    erase the graph while verification waits. That exact terminal tombstone is
+    an unavailable capability, while every partial or malformed graph remains
+    an internal integrity failure.
+    """
+
+    registration_erased = bool(
+        registration is None
+        or (
+            registration.status == "deleted"
+            and registration.deleted_at is not None
+            and registration.dob_hash_state == "erased"
+        )
+    )
+    return bool(
+        record is not None
+        and record.id == record_id
+        and record.state in {"retired", "erased"}
+        and record.registration_id is None
+        and record.outbox_id is None
+        and record.request_fingerprint is None
+        and record.request_fingerprint_version is None
+        and record.outcome_code == "registration_replay_expired"
+        and registration_erased
+        and authority is None
+        and flow is None
+    )
 
 
 def random_flow_token() -> str:
@@ -175,15 +216,11 @@ def _locked_flow_graph(
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        if record is None:
-            raise RuntimeError("OTP flow idempotency reservation disappeared")
     registration = None
     if registration_id is not None:
         registration, _ = registration_service.lock_registration_with_idempotency(
             session, registration_id
         )
-        if registration is None:
-            raise RuntimeError("OTP flow registration disappeared")
     authority = session.scalar(
         select(OtpPurposeAuthority)
         .where(OtpPurposeAuthority.id == authority_id)
@@ -196,8 +233,18 @@ def _locked_flow_graph(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    if _terminal_erasure_won(
+        record=record,
+        record_id=record_id,
+        registration=registration,
+        authority=authority,
+        flow=flow,
+    ):
+        return None
     if (
-        authority is None
+        (record_id is not None and record is None)
+        or (registration_id is not None and registration is None)
+        or authority is None
         or flow is None
         or flow.authority_id != authority.id
         or flow.subject_hash != authority.subject_hash
