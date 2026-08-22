@@ -277,9 +277,11 @@ def consume_rate_budgets(
             updated_at=now,
         )
         session.execute(
-            statement.on_conflict_do_nothing(
-                index_elements=["scope", "subject_hash", "action"]
-            )
+            # The UUID is deterministic from the same natural key.  Under a
+            # concurrent first insert PostgreSQL may surface either the
+            # primary-key collision or the natural-key collision, so the
+            # idempotent bootstrap must accept either conflict.
+            statement.on_conflict_do_nothing()
         )
     rows = list(
         session.scalars(

@@ -239,7 +239,14 @@ async function issueCorrectionInvitation(browser, fixture) {
 }
 
 async function cookieContext(browser, baseUrl, token, viewport = { width: 1440, height: 900 }, theme = 'light') {
-  const context = await browser.newContext({ viewport, colorScheme: theme });
+  // Playwright's API request context is not a page fetch and therefore does
+  // not synthesize an Origin header. Supply the actual enabled web origin so
+  // cookie-backed unsafe requests exercise the production CSRF boundary.
+  const context = await browser.newContext({
+    viewport,
+    colorScheme: theme,
+    extraHTTPHeaders: { Origin: new URL(ENABLED_WEB).origin },
+  });
   const url = new URL(baseUrl);
   await context.addCookies([{
     name: COOKIE, value: token, domain: url.hostname, path: '/',

@@ -399,11 +399,13 @@ export function clearRegistrationSession(): void {
 function isStudentSessionActor(value: unknown): value is StudentSessionActor {
   if (!value || typeof value !== 'object') return false;
   const actor = value as Partial<StudentSessionActor>;
+  const acceptedServerRoles = new Set(['student', 'moderator', 'admin']);
   return typeof actor.sub === 'string'
     && actor.sub.trim().length > 0
     && Array.isArray(actor.roles)
-    && actor.roles.includes('student')
-    && actor.roles.every((role) => typeof role === 'string')
+    && actor.roles.length === 1
+    && typeof actor.roles[0] === 'string'
+    && acceptedServerRoles.has(actor.roles[0])
     && (actor.student_profile_id === null
       || (typeof actor.student_profile_id === 'string' && actor.student_profile_id.length > 0))
     && (actor.student_verification === 'draft' || actor.student_verification === 'verified')

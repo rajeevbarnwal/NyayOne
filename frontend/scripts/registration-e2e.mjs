@@ -550,7 +550,12 @@ for (const [name, values, expected] of [
   await resetOtp();
   await page.getByRole('button', { name: 'Send the code' }).click();
   await page.getByText('If an account matches, a six digit recovery code has been sent.').waitFor();
-  await page.getByLabel('6-DIGIT RECOVERY CODE').fill(await latestOtp());
+  const recoveryCode = page.getByLabel('6-DIGIT RECOVERY CODE');
+  // Prove that the server-owned pending projection has rendered before waiting
+  // on the independent provider capture. This preserves the exact oracle while
+  // preventing provider scheduling from hiding a transient UI regression.
+  await recoveryCode.waitFor({ state: 'visible' });
+  await recoveryCode.fill(await latestOtp());
   await page.getByRole('button', { name: 'Verify recovery code' }).click();
   await page.getByText('Recovery verified. You may now sign in again.').waitFor();
   record('recovery_server_start', 'POST /recovery/start', calls,
@@ -562,7 +567,9 @@ for (const [name, values, expected] of [
   record('recovery_no_email_redirect', 'remain /s-06', new URL(page.url()).pathname,
     new URL(page.url()).pathname === '/s-06');
   await page.getByLabel('MOBILE NUMBER', { exact: true }).fill('');
-  await page.getByLabel('6-DIGIT RECOVERY CODE').fill('');
+  // Completion retires the verified recovery flow, so the code control must
+  // disappear instead of remaining editable on the acknowledgement state.
+  await recoveryCode.waitFor({ state: 'detached' });
   await page.screenshot({ path: path.join(evidence, 's06_recovery_complete_v34.png'), fullPage: true });
   await context.close();
 }
@@ -614,7 +621,8 @@ for (const width of [390, 430, 768, 1024, 1440]) {
   }
 }
 
-// Alternate /auth/student entry point must also use the server, never stub OTP.
+// Retired /auth/student prototype must fail closed and direct users to the
+// canonical server-owned flow without mounting any client-owned OTP controls.
 {
   const { context, page } = await fresh();
   const calls = [];
@@ -622,22 +630,15 @@ for (const width of [390, 430, 768, 1024, 1440]) {
     if (r.url().includes('/api/v1/auth/student/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
   await page.goto(`${base}/auth/student`);
-  await page.getByLabel('First name').fill('Brij');
-  await page.getByLabel('Last name').fill('Goyal');
-  await page.getByLabel('Mobile number').fill('9000000007');
-  await page.getByLabel('Date of birth').fill('2000-01-01');
-  await page.getByLabel('College / university').selectOption('NLSIU');
-  await page.getByLabel(/accept the Privacy Notice/).check();
-  await resetOtp();
-  await page.getByRole('button', { name: 'Send OTP' }).click();
-  const otp = await latestOtp();
-  await page.getByLabel('6-digit code').fill(otp);
-  await page.getByRole('button', { name: 'Verify' }).click();
-  await page.getByText('OTP verified').waitFor();
-  record('auth_student_server_register', 'POST /register', calls,
-    calls.some((r) => r.includes('POST /api/v1/auth/student/register')));
-  record('auth_student_server_verify', 'POST /otp/verify', calls,
-    calls.some((r) => r.includes('POST /api/v1/auth/student/otp/verify')));
+  await page.getByRole('heading', { name: 'This legacy sign-in route is unavailable' }).waitFor();
+  const secureLink = page.getByRole('link', { name: 'Use secure student sign-in' });
+  const sessionDiscoveryOnly = calls.length > 0
+    && calls.every((call) => call === 'GET /api/v1/auth/student/session');
+  record('auth_student_legacy_route_fail_closed', 'legacy route denies, links only to /s-03 and permits read-only session discovery only',
+    { href: await secureLink.getAttribute('href'), calls },
+    await secureLink.getAttribute('href') === '/s-03' && sessionDiscoveryOnly);
+  record('auth_student_no_client_otp_controls', 'no registration or OTP inputs mount',
+    await page.locator('input').count(), await page.locator('input').count() === 0);
   record('no_stub_otp_visible', '429016 absent', await page.locator('body').innerText(),
     !(await page.locator('body').innerText()).includes('429016'));
   await context.close();

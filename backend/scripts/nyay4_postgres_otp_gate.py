@@ -2486,7 +2486,14 @@ def _run_populated_restart_probe(
     cookie_issued = False
     uuid_exposed = True
     try:
-        with TestClient(app, raise_server_exceptions=False) as client:
+        # APP_ENV=staging correctly marks the flow cookie Secure. Exercise the
+        # in-process ASGI app through HTTPS so httpx returns that cookie on the
+        # resend/verify requests exactly as a staging browser would.
+        with TestClient(
+            app,
+            base_url="https://testserver",
+            raise_server_exceptions=False,
+        ) as client:
             client.headers["Origin"] = origin
             restart = client.post(
                 "/api/v1/auth/student/register",

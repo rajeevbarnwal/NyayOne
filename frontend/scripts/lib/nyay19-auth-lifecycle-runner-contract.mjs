@@ -108,6 +108,7 @@ export const NYAY19_SEEDED_MUTANT_INVENTORY = Object.freeze([
   'retirement-wrong-attributes',
   'retirement-invalid-max-age-or-expiry',
   'retirement-duplicate-attribute',
+  'context-browser-backed-actor-registry',
   'context-unseeded-memory',
   'context-retained-storage',
   'context-retained-query-cache',
@@ -694,6 +695,7 @@ function exactControlState(value) {
 export function inspectStudentContextBoundary(before, after) {
   const beforeExact = before?.managedExpectedCount > 0
     && before?.managedPresentCount === before.managedExpectedCount
+    && before?.retiredActorRegistryAbsent === true
     && before?.registrationAttemptPresent === true
     && before?.profileDraftPresent === true
     && Number.isSafeInteger(before?.queryCacheCount)
@@ -703,6 +705,7 @@ export function inspectStudentContextBoundary(before, after) {
     && exactControlState(before?.controls);
   const afterExact = after?.managedExpectedCount === before?.managedExpectedCount
     && after?.managedPresentCount === 0
+    && after?.retiredActorRegistryAbsent === true
     && after?.registrationAttemptPresent === false
     && after?.profileDraftPresent === false
     && after?.queryCacheCount === 0

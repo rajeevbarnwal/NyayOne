@@ -88,7 +88,7 @@
 .v34-aside { display: none; }
 .v34-panehead { min-height: 66px; display: flex; align-items: center; gap: 14px; padding: 11px 22px; border-bottom: 1px solid var(--v34-line); }
 .v34-hit { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 7px; background: transparent; color: var(--v34-body); }
-.v34-textlink { min-height: 44px; border: 0; padding: 0; background: transparent; font-weight: 600; }
+.v34-textlink { min-width: 44px; min-height: 44px; border: 0; padding: 0; background: transparent; font-weight: 600; }
 .v34-textlink:disabled { color: var(--v34-muted); cursor: not-allowed; }
 .v34-inlineactions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 

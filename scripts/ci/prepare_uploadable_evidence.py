@@ -104,7 +104,7 @@ INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
     ),
     "registration-browser": (
         "results", "name", 54,
-        "f3ca22ada1d29048e1ad5061684d4a84390db290a809b0dfa7f16be7233baf27",
+        "f9d114f9dac2d2f158c03d5053645e5c4344884420cce48d1e6cee54692d7997",
     ),
     "auth-browser": (
         "rows", "area", 137,
