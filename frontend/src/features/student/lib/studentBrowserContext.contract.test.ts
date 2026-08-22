@@ -10,6 +10,7 @@ const REGISTRATION_PATH = 'src/features/student/lib/registrationApi.ts';
 const SETTINGS_API_PATH = 'src/features/student/lib/settingsApi.ts';
 const SETTINGS_SCREEN_PATH = 'src/features/student/settings/SettingsScreens.tsx';
 const V34_PATH = 'src/features/student/auth/V34Screens.tsx';
+const V34_BROWSER_GATE_PATH = 'scripts/v34-s11-s26-e2e.mjs';
 
 function assertBoundaryContract(value: string): void {
   for (const required of [
@@ -109,6 +110,23 @@ describe('NYAY-19 browser-context source contract', () => {
       source(SETTINGS_SCREEN_PATH),
       source(V34_PATH),
     );
+  });
+
+  it('gives the authenticated browser gate a complete server session actor', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const session = gate.match(
+      /if \(url\.pathname === '\/api\/v1\/auth\/student\/session'\)([\s\S]*?)if \(url\.pathname === '\/api\/v1\/student\/settings'\)/,
+    )?.[1] ?? '';
+    for (const field of [
+      "sub: 'student-browser-gate'",
+      "roles: ['student']",
+      "student_profile_id: 'profile-browser-gate'",
+      "student_verification: 'verified'",
+      'is_minor: false',
+      "consent_state: ['registration']",
+    ]) {
+      expect(session, `missing browser-gate session field: ${field}`).toContain(field);
+    }
   });
 
   it.each([

@@ -160,7 +160,17 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
       return json(200, profile);
     }
     if (url.pathname === '/api/v1/auth/student/session') {
-      return json(200, { authenticated: true, actor: { sub: '00000000-0000-4000-8000-0000000000de', roles: ['student'] } });
+      return json(200, {
+        authenticated: true,
+        actor: {
+          sub: 'student-browser-gate',
+          roles: ['student'],
+          student_profile_id: 'profile-browser-gate',
+          student_verification: 'verified',
+          is_minor: false,
+          consent_state: ['registration'],
+        },
+      });
     }
     if (url.pathname === '/api/v1/student/settings') {
       if (request.method() === 'PATCH') {
