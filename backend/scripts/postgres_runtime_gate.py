@@ -12,9 +12,9 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db.models.audit import AuditEvent
 from app.db.session import get_engine, get_sessionmaker
-from app.models.registration import OtpChallenge
+from app.models.registration import OtpChallenge, OtpOutbox
 from app.schemas.registration import StudentRegisterRequest
-from app.services import otp_outbox, otp_service
+from app.services import otp_flow_service, otp_outbox, otp_service
 from app.services.otp_sender import CapturingSender
 from app.services.registration_service import register_student
 
@@ -29,21 +29,45 @@ def main() -> None:
     factory = get_sessionmaker()
     sender = CapturingSender()
     now = datetime.now(timezone.utc)
+    idempotency_key = "qa-postgres-concurrency"
+    request = StudentRegisterRequest(
+        first_name="Concurrency",
+        last_name="Probe",
+        mobile="9666666666",
+        dob="2000-01-01",
+        consent={"accepted": True, "policy_version": "qa"},
+    )
     with factory() as session:
         created = register_student(
             session,
-            StudentRegisterRequest(
-                first_name="Concurrency",
-                last_name="Probe",
-                mobile="9666666666",
-                dob="2000-01-01",
-                consent={"accepted": True, "policy_version": "qa"},
-            ),
-            idempotency_key="qa-postgres-concurrency",
+            request,
+            idempotency_key=idempotency_key,
             now=now,
         )
+        if created.delivery is None or created.idempotency_record is None:
+            raise RuntimeError("runtime registration staging lost its pending ledger")
+        outbox = session.get(OtpOutbox, created.delivery.outbox_id)
+        challenge = (
+            session.get(OtpChallenge, outbox.challenge_id)
+            if outbox is not None
+            else None
+        )
+        if challenge is None:
+            raise RuntimeError("runtime registration staging lost its challenge")
+        authority = otp_service.authority_for_registration(
+            session, created.registration, "signup", now
+        )
+        otp_flow_service.create_flow(
+            session,
+            authority,
+            now=now,
+            destination=request.mobile,
+            challenge=challenge,
+            registration_id=created.registration.id,
+            registration_idempotency_record_id=created.idempotency_record.id,
+            raw_token=otp_flow_service.deterministic_signup_token(idempotency_key),
+        )
         session.commit()
-        assert created.delivery is not None
         otp_outbox.run_delivery(
             session, created.delivery, sender, raise_on_failure=True
         )

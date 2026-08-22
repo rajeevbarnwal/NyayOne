@@ -24,6 +24,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -56,6 +57,40 @@ class _DeliveryClaim:
     provider_key: str
     destination: str
     code: str
+
+
+@dataclass(frozen=True)
+class _LockedDeliveryGraph:
+    authority: OtpPurposeAuthority
+    flows: tuple[OtpFlow, ...]
+    challenge: OtpChallenge
+    row: OtpOutbox
+
+
+@dataclass(frozen=True)
+class _UnavailableDelivery:
+    reason: str
+
+
+class OtpFlowUnavailable(OtpSendError):
+    """A delivery lost its live browser capability before activation."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__("otp delivery flow unavailable")
+        self.reason = reason
+
+
+_CURRENT_FLOW_STATES = ("pending", "code_sent", "verified", "locked")
+_DELIVERY_FLOW_STATES = ("pending", "code_sent", "locked")
+_FLOW_UNAVAILABLE_REASONS = frozenset(
+    {
+        "otp_flow_ambiguous",
+        "otp_flow_expired",
+        "otp_flow_missing",
+        "otp_flow_unavailable",
+    }
+)
+_EarlyResult = TypeVar("_EarlyResult")
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -136,7 +171,9 @@ def _graph_ids(
 
 def _locked_graph(
     session: Session, outbox_id: uuid.UUID
-) -> tuple[OtpPurposeAuthority, OtpChallenge, OtpOutbox] | None:
+) -> _LockedDeliveryGraph | None:
+    """Lock one relay graph in authority -> flow -> challenge -> outbox order."""
+
     ids = _graph_ids(session, outbox_id)
     if ids is None:
         return None
@@ -147,21 +184,54 @@ def _locked_graph(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    challenge = session.scalar(
-        select(OtpChallenge)
-        .where(OtpChallenge.id == challenge_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+    if authority is None:
+        return None
+    flows = tuple(
+        session.scalars(
+            select(OtpFlow)
+            .where(OtpFlow.authority_id == authority_id)
+            .order_by(OtpFlow.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     )
-    row = session.scalar(
-        select(OtpOutbox)
-        .where(OtpOutbox.id == outbox_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+    challenges = tuple(
+        session.scalars(
+            select(OtpChallenge)
+            .where(
+                OtpChallenge.authority_id == authority_id,
+                (
+                    (OtpChallenge.id == challenge_id)
+                    | OtpChallenge.delivery_state.in_(
+                        ("active", "pending_delivery")
+                    )
+                ),
+            )
+            .order_by(OtpChallenge.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    challenge = next(
+        (candidate for candidate in challenges if candidate.id == challenge_id),
+        None,
+    )
+    challenge_ids = tuple(candidate.id for candidate in challenges)
+    outboxes = tuple(
+        session.scalars(
+            select(OtpOutbox)
+            .where(OtpOutbox.challenge_id.in_(challenge_ids))
+            .order_by(OtpOutbox.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ) if challenge_ids else ()
+    row = next(
+        (candidate for candidate in outboxes if candidate.id == outbox_id),
+        None,
     )
     if (
-        authority is None
-        or challenge is None
+        challenge is None
         or row is None
         or challenge.authority_id != authority.id
         or row.challenge_id != challenge.id
@@ -170,7 +240,96 @@ def _locked_graph(
         or row.purpose != authority.purpose
     ):
         return None
-    return authority, challenge, row
+    return _LockedDeliveryGraph(
+        authority=authority,
+        flows=flows,
+        challenge=challenge,
+        row=row,
+    )
+
+
+def _authorized_delivery_flow(
+    graph: _LockedDeliveryGraph,
+    *,
+    now: datetime,
+) -> tuple[OtpFlow | None, str | None]:
+    current = tuple(
+        flow for flow in graph.flows if flow.state in _CURRENT_FLOW_STATES
+    )
+    if not current:
+        if any(flow.state == "expired" for flow in graph.flows):
+            return None, "otp_flow_expired"
+        return None, "otp_flow_missing"
+    if len(current) != 1:
+        return None, "otp_flow_ambiguous"
+    flow = current[0]
+    if (
+        flow.authority_id != graph.authority.id
+        or flow.subject_hash != graph.authority.subject_hash
+        or flow.registration_id != graph.authority.registration_id
+        or flow.registration_id != graph.challenge.registration_id
+        or flow.purpose != graph.authority.purpose
+        or flow.purpose != graph.challenge.purpose
+    ):
+        return None, "otp_flow_ambiguous"
+    if flow.state not in _DELIVERY_FLOW_STATES:
+        return None, "otp_flow_unavailable"
+    if _as_utc(flow.expires_at) <= now:
+        return None, "otp_flow_expired"
+    return flow, None
+
+
+def _flow_unavailability_reason(
+    graph: _LockedDeliveryGraph,
+    *,
+    now: datetime,
+) -> str | None:
+    return _authorized_delivery_flow(graph, now=now)[1]
+
+
+def _expire_current_flows(
+    graph: _LockedDeliveryGraph,
+    *,
+    now: datetime,
+) -> None:
+    for flow in graph.flows:
+        # A delayed resend callback can observe that the original verifier won
+        # while provider I/O was in flight.  ``verified`` is then an independent
+        # recovery proof, not delivery authority for this stale candidate.  Fence
+        # only states that can still authorize delivery; never revoke that proof.
+        if flow.state not in _DELIVERY_FLOW_STATES:
+            continue
+        flow.state = "expired"
+        flow.consumed_at = now
+        flow.destination_masked_ct = None
+        flow.key_version = None
+
+
+def _fence_unavailable_delivery(
+    session: Session,
+    graph: _LockedDeliveryGraph,
+    *,
+    now: datetime,
+    reason: str,
+) -> None:
+    """Erase every relay/verifier under an unavailable browser capability."""
+
+    target_was_relayable = graph.row.status in {"pending", "claimed", "failed"}
+    _expire_current_flows(graph, now=now)
+    fence_expired_flow_deliveries(session, graph.authority, now=now)
+    # The broad fence only discovers active/pending challenges. A relayable
+    # target can have become inactive in a competing lifecycle transaction, so
+    # explicitly clear its payload, claim, and retry deadline as well. Sent
+    # history remains terminal and untouched.
+    if target_was_relayable:
+        _void(
+            graph.authority,
+            graph.challenge,
+            graph.row,
+            now=now,
+            reason=reason,
+        )
+    session.flush()
 
 
 def _clear_claim(row: OtpOutbox) -> None:
@@ -245,72 +404,115 @@ def _reconcile_voided_candidate(
             flow.state = "code_sent"
 
 
+def _finish_early_delivery(
+    session: Session,
+    result: _EarlyResult,
+    *,
+    commit: bool,
+    mutated: bool = False,
+) -> _EarlyResult:
+    """Release an owned transaction, or preserve caller-owned transaction mode."""
+
+    if commit:
+        session.commit()
+    elif mutated:
+        session.flush()
+    return result
+
+
 def _claim(
     session: Session,
     intent: DeliveryIntent,
     *,
-    now: datetime,
+    now: datetime | None,
     commit: bool,
-) -> _DeliveryClaim | bool:
+) -> _DeliveryClaim | _UnavailableDelivery | bool:
     graph = _locked_graph(session, intent.outbox_id)
     if graph is None:
-        return False
-    authority, challenge, row = graph
+        return _finish_early_delivery(session, False, commit=commit)
+    authority, challenge, row = (
+        graph.authority,
+        graph.challenge,
+        graph.row,
+    )
     if row.status == "sent":
-        return True
+        return _finish_early_delivery(session, True, commit=commit)
     if row.status == "void":
-        return False
+        result: _UnavailableDelivery | bool = False
+        if row.last_error in _FLOW_UNAVAILABLE_REASONS:
+            result = _UnavailableDelivery(row.last_error)
+        return _finish_early_delivery(session, result, commit=commit)
+    operation_now = _as_utc(now) if now is not None else datetime.now(timezone.utc)
+    unavailable_reason = _flow_unavailability_reason(
+        graph,
+        now=operation_now,
+    )
+    if unavailable_reason is not None:
+        _fence_unavailable_delivery(
+            session,
+            graph,
+            now=operation_now,
+            reason=unavailable_reason,
+        )
+        return _finish_early_delivery(
+            session,
+            _UnavailableDelivery(unavailable_reason),
+            commit=commit,
+            mutated=True,
+        )
     if (
         row.status == "claimed"
         and row.lease_expires_at is not None
-        and _as_utc(row.lease_expires_at) > now
+        and _as_utc(row.lease_expires_at) > operation_now
     ):
-        return False
+        return _finish_early_delivery(session, False, commit=commit)
     if (
         row.status == "failed"
         and row.next_attempt_at is not None
-        and _as_utc(row.next_attempt_at) > now
+        and _as_utc(row.next_attempt_at) > operation_now
     ):
-        return False
+        return _finish_early_delivery(session, False, commit=commit)
     if row.attempts >= row.max_attempts:
         was_candidate = challenge.delivery_state == "pending_delivery"
         _void(
             authority,
             challenge,
             row,
-            now=now,
+            now=operation_now,
             reason="provider_attempts_exhausted",
         )
         if was_candidate:
             _reconcile_voided_candidate(session, authority, challenge)
-        if commit:
-            session.commit()
-        else:
-            session.flush()
-        return False
+        return _finish_early_delivery(
+            session,
+            False,
+            commit=commit,
+            mutated=True,
+        )
     if (
         challenge.delivery_state not in {"active", "pending_delivery"}
-        or _as_utc(challenge.expires_at) <= now
+        or _as_utc(challenge.expires_at) <= operation_now
     ):
         was_candidate = challenge.delivery_state == "pending_delivery"
         _void(
             authority,
             challenge,
             row,
-            now=now,
+            now=operation_now,
             reason=(
                 "challenge_expired"
-                if _as_utc(challenge.expires_at) <= now
+                if _as_utc(challenge.expires_at) <= operation_now
                 else "challenge_inactive"
             ),
         )
         if was_candidate:
             _reconcile_voided_candidate(session, authority, challenge)
-        if commit:
-            session.commit()
-        else:
-            session.flush()
-        return False
+        return _finish_early_delivery(
+            session,
+            False,
+            commit=commit,
+            mutated=True,
+        )
     if (
         not row.code_ct
         or not row.destination_ct
@@ -321,16 +523,17 @@ def _claim(
             authority,
             challenge,
             row,
-            now=now,
+            now=operation_now,
             reason="delivery_payload_invalid",
         )
         if was_candidate:
             _reconcile_voided_candidate(session, authority, challenge)
-        if commit:
-            session.commit()
-        else:
-            session.flush()
-        return False
+        return _finish_early_delivery(
+            session,
+            False,
+            commit=commit,
+            mutated=True,
+        )
 
     token = secrets.token_urlsafe(32)
     token_hash = _claim_hash(token)
@@ -338,8 +541,10 @@ def _claim(
     code = decrypt(row.code_ct)
     row.status = "claimed"
     row.claim_token_hash = token_hash
-    row.claimed_at = now
-    row.lease_expires_at = now + timedelta(seconds=settings.otp_outbox_lease_seconds)
+    row.claimed_at = operation_now
+    row.lease_expires_at = operation_now + timedelta(
+        seconds=settings.otp_outbox_lease_seconds
+    )
     row.next_attempt_at = None
     row.attempts += 1
     if commit:
@@ -381,6 +586,7 @@ def _activate_candidate(
     session: Session,
     authority: OtpPurposeAuthority,
     candidate: OtpChallenge,
+    authorized_flow: OtpFlow,
     now: datetime,
 ) -> None:
     if candidate.delivery_state != "pending_delivery":
@@ -404,10 +610,11 @@ def _activate_candidate(
         session.flush()
     candidate.delivery_state = "active"
     candidate.consumed_at = None
-    # Verification lifetime starts only after provider acceptance.  The
-    # staging expiry remains a finite relay deadline while the payload waits.
-    candidate.expires_at = now + timedelta(
-        seconds=settings.otp_challenge_ttl_seconds
+    # Provider acceptance can start a fresh challenge lifetime, but it cannot
+    # extend the exact browser capability that authorized this delivery.
+    candidate.expires_at = min(
+        now + timedelta(seconds=settings.otp_challenge_ttl_seconds),
+        _as_utc(authorized_flow.expires_at),
     )
     candidate.attempts = authority.failed_attempts
     candidate.max_attempts = authority.max_attempts
@@ -420,39 +627,63 @@ def _finalize_success(
     claim: _DeliveryClaim,
     *,
     receipt: str | None,
-    now: datetime,
+    now: datetime | None,
     commit: bool,
-) -> bool:
+) -> _UnavailableDelivery | bool:
     graph = _locked_graph(session, claim.outbox_id)
     if graph is None:
-        return False
-    authority, challenge, row = graph
+        return _finish_early_delivery(session, False, commit=commit)
+    authority, challenge, row = (
+        graph.authority,
+        graph.challenge,
+        graph.row,
+    )
     if (
         row.status != "claimed"
         or row.claim_token_hash is None
         or not hmac.compare_digest(row.claim_token_hash, claim.token_hash)
     ):
-        return row.status == "sent"
-    _activate_candidate(session, authority, challenge, now)
+        return _finish_early_delivery(
+            session,
+            False,
+            commit=commit,
+        )
+    operation_now = _as_utc(now) if now is not None else datetime.now(timezone.utc)
+    authorized_flow, unavailable_reason = _authorized_delivery_flow(
+        graph,
+        now=operation_now,
+    )
+    if unavailable_reason is not None:
+        _fence_unavailable_delivery(
+            session,
+            graph,
+            now=operation_now,
+            reason=unavailable_reason,
+        )
+        return _finish_early_delivery(
+            session,
+            _UnavailableDelivery(unavailable_reason),
+            commit=commit,
+            mutated=True,
+        )
+    assert authorized_flow is not None
+    _activate_candidate(
+        session,
+        authority,
+        challenge,
+        authorized_flow,
+        operation_now,
+    )
     row.status = "sent"
     row.last_error = None
-    row.delivered_at = now
+    row.delivered_at = operation_now
     row.next_attempt_at = None
     row.provider_receipt_hash = _receipt_hash(receipt) if receipt else None
     row.provider_receipt_key_version = "v1" if receipt else None
     _clear_claim(row)
     _erase_payload(row)
-    for flow in session.scalars(
-        select(OtpFlow)
-        .where(
-            OtpFlow.authority_id == authority.id,
-            OtpFlow.registration_id == authority.registration_id,
-            OtpFlow.state.in_(("pending", "code_sent", "locked")),
-        )
-        .with_for_update()
-    ):
-        flow.challenge_id = challenge.id
-        flow.state = "code_sent"
+    authorized_flow.challenge_id = challenge.id
+    authorized_flow.state = "code_sent"
     if commit:
         session.commit()
     else:
@@ -464,19 +695,41 @@ def _finalize_failure(
     session: Session,
     claim: _DeliveryClaim,
     *,
-    now: datetime,
+    now: datetime | None,
     commit: bool,
-) -> None:
+) -> _UnavailableDelivery | None:
     graph = _locked_graph(session, claim.outbox_id)
     if graph is None:
-        return
-    authority, challenge, row = graph
+        return _finish_early_delivery(session, None, commit=commit)
+    authority, challenge, row = (
+        graph.authority,
+        graph.challenge,
+        graph.row,
+    )
     if (
         row.status != "claimed"
         or row.claim_token_hash is None
         or not hmac.compare_digest(row.claim_token_hash, claim.token_hash)
     ):
-        return
+        return _finish_early_delivery(session, None, commit=commit)
+    operation_now = _as_utc(now) if now is not None else datetime.now(timezone.utc)
+    unavailable_reason = _flow_unavailability_reason(
+        graph,
+        now=operation_now,
+    )
+    if unavailable_reason is not None:
+        _fence_unavailable_delivery(
+            session,
+            graph,
+            now=operation_now,
+            reason=unavailable_reason,
+        )
+        return _finish_early_delivery(
+            session,
+            _UnavailableDelivery(unavailable_reason),
+            commit=commit,
+            mutated=True,
+        )
     _clear_claim(row)
     if row.attempts >= row.max_attempts:
         was_candidate = challenge.delivery_state == "pending_delivery"
@@ -484,7 +737,7 @@ def _finalize_failure(
             authority,
             challenge,
             row,
-            now=now,
+            now=operation_now,
             reason="provider_attempts_exhausted",
         )
         if was_candidate:
@@ -503,11 +756,12 @@ def _finalize_failure(
         )
         row.status = "failed"
         row.last_error = "provider_send_failed"
-        row.next_attempt_at = now + timedelta(seconds=delay)
+        row.next_attempt_at = operation_now + timedelta(seconds=delay)
     if commit:
         session.commit()
     else:
         session.flush()
+    return None
 
 
 def run_delivery(
@@ -532,8 +786,7 @@ def run_delivery(
             "OTP provider I/O requires a committed durable lease"
         )
     clock_override = _as_utc(now) if now is not None else None
-    claim_now = clock_override or datetime.now(timezone.utc)
-    claimed = _claim(session, intent, now=claim_now, commit=True)
+    claimed = _claim(session, intent, now=clock_override, commit=True)
     if claimed is True:
         # Terminal observation is success for idempotent reconciliation, but it
         # is not a newly delivered message and must not inflate relay counts.
@@ -542,27 +795,38 @@ def run_delivery(
         if raise_on_failure:
             raise OtpSendError("otp delivery intent unavailable")
         return False
+    if isinstance(claimed, _UnavailableDelivery):
+        if raise_on_failure:
+            raise OtpFlowUnavailable(claimed.reason)
+        return False
     try:
         receipt = _provider_send(sender, claimed)
-    except OtpSendError:
-        finalized_at = clock_override or datetime.now(timezone.utc)
-        _finalize_failure(
+    except OtpSendError as exc:
+        failure = _finalize_failure(
             session,
             claimed,
-            now=_as_utc(finalized_at),
+            now=clock_override,
             commit=True,
         )
+        if isinstance(failure, _UnavailableDelivery):
+            if raise_on_failure:
+                raise OtpFlowUnavailable(failure.reason) from exc
+            return False
         if raise_on_failure:
             raise
         return False
-    finalized_at = clock_override or datetime.now(timezone.utc)
-    return _finalize_success(
+    finalized = _finalize_success(
         session,
         claimed,
         receipt=receipt,
-        now=finalized_at,
+        now=clock_override,
         commit=True,
     )
+    if isinstance(finalized, _UnavailableDelivery):
+        if raise_on_failure:
+            raise OtpFlowUnavailable(finalized.reason)
+        return False
+    return finalized
 
 
 def purge_legacy_destinations(
@@ -630,21 +894,17 @@ def fence_expired_flow_deliveries(
                 .execution_options(populate_existing=True)
             )
         )
-        if challenge.delivery_state == "pending_delivery":
-            for row in outboxes:
-                if row.status in {"pending", "claimed", "failed"}:
-                    _void(
-                        authority,
-                        challenge,
-                        row,
-                        now=now,
-                        reason="otp_flow_expired",
-                    )
-            if challenge.delivery_state == "pending_delivery":
-                challenge.delivery_state = "void"
-                challenge.consumed_at = challenge.consumed_at or now
-        else:
+        for row in outboxes:
+            if row.status in {"pending", "claimed", "failed"}:
+                _void(
+                    authority,
+                    challenge,
+                    row,
+                    now=now,
+                    reason="otp_flow_expired",
+                )
+        if challenge.delivery_state in {"active", "pending_delivery"}:
             challenge.delivery_state = "void"
-            challenge.consumed_at = now
-            authority.active_expires_at = None
+            challenge.consumed_at = challenge.consumed_at or now
+        authority.active_expires_at = None
     session.flush()

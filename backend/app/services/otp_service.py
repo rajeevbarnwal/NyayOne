@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crypto import encrypt, otp_verifier
-from app.models.registration import OtpChallenge, OtpOutbox, OtpPurposeAuthority
+from app.models.registration import (
+    OtpChallenge,
+    OtpFlow,
+    OtpOutbox,
+    OtpPurposeAuthority,
+)
 from app.models.registration import StudentRegistration
 from app.services import integrity_errors, otp_authority, otp_outbox
 from app.services import registration_service
@@ -23,6 +28,8 @@ LOCKOUT_SECONDS = 900
 MAX_ATTEMPTS = 3
 ACTIVE_OTP_CONSTRAINT = "uq_otp_challenges_one_active_per_registration_purpose"
 PENDING_OTP_CONSTRAINT = "uq_otp_challenges_one_pending_delivery_per_authority"
+_CURRENT_FLOW_STATES = ("pending", "code_sent", "verified", "locked")
+_DELIVERY_FLOW_STATES = ("pending", "code_sent", "locked")
 
 
 class OtpError(Exception):
@@ -171,6 +178,50 @@ def _raise_if_locked(authority: OtpPurposeAuthority, now: datetime) -> None:
     seconds = otp_authority.locked_for_seconds(authority, now)
     if seconds:
         raise OtpError(423, "locked", 0, retry_after_seconds=seconds)
+
+
+def _locked_resend_flow_deadline(
+    session: Session,
+    authority: OtpPurposeAuthority,
+    registration: StudentRegistration,
+    *,
+    now: datetime,
+) -> datetime:
+    """Return the sole live browser-capability deadline for a resend.
+
+    The authority row is already locked. Lock every flow for that authority
+    before touching a pending challenge or outbox, then fail closed unless one
+    delivery-capable flow has the exact authority/subject/registration/purpose
+    graph. Candidate challenge IDs are deliberately not flow authority.
+    """
+
+    flows = tuple(
+        session.scalars(
+            select(OtpFlow)
+            .where(OtpFlow.authority_id == authority.id)
+            .order_by(OtpFlow.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    current = tuple(
+        flow for flow in flows if flow.state in _CURRENT_FLOW_STATES
+    )
+    if len(current) != 1:
+        raise OtpError(401, "otp_flow_unavailable")
+    flow = current[0]
+    deadline = _as_utc(flow.expires_at)
+    if (
+        flow.authority_id != authority.id
+        or flow.subject_hash != authority.subject_hash
+        or flow.registration_id != authority.registration_id
+        or flow.registration_id != registration.id
+        or flow.purpose != authority.purpose
+        or flow.state not in _DELIVERY_FLOW_STATES
+        or deadline <= now
+    ):
+        raise OtpError(401, "otp_flow_unavailable")
+    return deadline
 
 
 def issue_challenge(session: Session, registration_id: uuid.UUID, now: datetime, *,
@@ -368,6 +419,12 @@ def resend(session: Session, registration_id: uuid.UUID, now: datetime, *,
             idempotency_record,
         )
     _raise_if_locked(authority, now)
+    flow_deadline = _locked_resend_flow_deadline(
+        session,
+        authority,
+        registration,
+        now=now,
+    )
     pending = _pending_intent(session, authority)
     if authority.cooldown_until is not None and _as_utc(authority.cooldown_until) > now:
         retry = max(1, math.ceil((_as_utc(authority.cooldown_until) - now).total_seconds()))
@@ -379,16 +436,28 @@ def resend(session: Session, registration_id: uuid.UUID, now: datetime, *,
         # the same resend authority as a decoy request. Refresh only its finite
         # relay deadline; the verifier TTL still begins on provider acceptance.
         note_decoy_issue(authority, now=now)
-        candidate.expires_at = now + timedelta(
-            seconds=settings.otp_challenge_ttl_seconds
+        candidate.expires_at = min(
+            now + timedelta(seconds=settings.otp_challenge_ttl_seconds),
+            flow_deadline,
         )
         return candidate, intent
     # ``issue_challenge`` re-enters the canonical registration/authority lock
     # seam with populate_existing=True. Persist the serialized resend-window
     # increment first so that refresh cannot restore the pre-increment bytes.
     session.flush()
-    return issue_challenge(session, registration_id, now, purpose=purpose,
-                           destination=destination, destination_ct=destination_ct)
+    candidate, intent = issue_challenge(
+        session,
+        registration_id,
+        now,
+        purpose=purpose,
+        destination=destination,
+        destination_ct=destination_ct,
+    )
+    candidate.expires_at = min(
+        now + timedelta(seconds=settings.otp_challenge_ttl_seconds),
+        flow_deadline,
+    )
+    return candidate, intent
 
 
 def note_decoy_issue(authority: OtpPurposeAuthority, *, now: datetime) -> None:

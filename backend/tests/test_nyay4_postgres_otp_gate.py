@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import scripts.nyay4_postgres_otp_gate as gate
 from scripts.nyay4_postgres_otp_gate import (
     BEHAVIOR_FIXTURE_MOBILES,
+    COOKIE_TIMING_SAMPLE_ORDER,
     LIBPQ_AMBIENT_KEYS,
     EXPECTED_0019_CHECKS,
     EXPECTED_0019_CHECK_SQL,
@@ -45,6 +46,7 @@ from scripts.nyay4_postgres_otp_gate import (
     _compose_retry_observation,
     _compose_rate_observation,
     _cookie_observation_passes,
+    _db_gate_wiring_is_exact,
     _evaluate_assertions,
     _exact_schema_observation,
     _failed_resend_observation_passes,
@@ -89,6 +91,7 @@ from scripts.nyay4_postgres_otp_gate import (
     _schema_observation_passes,
     _seeded_mutants_are_killed,
     _seeded_mutant_results,
+    _timing_ratio_observation,
 )
 
 
@@ -740,6 +743,43 @@ def _runtime() -> dict[str, object]:
     }
 
 
+def test_runtime_probe_checks_pgvector_in_supplied_gate_database(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def scalar(self, statement):
+            sql = str(statement)
+            return "160015" if "server_version_num" in sql else "0.8.6"
+
+    class Engine:
+        def connect(self):
+            return Connection()
+
+        def dispose(self):
+            captured["disposed"] = True
+
+    def create_engine(url, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return Engine()
+
+    monkeypatch.setattr(gate, "create_engine", create_engine)
+    base = make_url(
+        "postgresql+psycopg://gate:secret@127.0.0.1:55489/"
+        "nyay19_corrective_qa"
+    )
+
+    assert gate._runtime_probe(base) == _runtime()
+    assert make_url(str(captured["url"])).database == "nyay19_corrective_qa"
+    assert captured["disposed"] is True
+
+
 def _migration() -> dict[str, object]:
     return {
         "start_revision": gate.PREVIOUS_REVISION,
@@ -927,7 +967,7 @@ def _cookie() -> dict[str, object]:
         "start_statuses": [202, 202],
         "start_signatures_equal": True,
         "timing_ratio_within_bound": True,
-        "timing_samples_per_class": 12,
+        "timing_samples_per_class": 40,
         "timing_p95_ratio_milli": 1100,
         "timing_bound_milli": 2000,
         "cookie_httponly": True,
@@ -1071,6 +1111,38 @@ def _harness() -> dict[str, object]:
     }
 
 
+def test_db_gate_wiring_requires_exact_nyay4_then_nyay19_terminal_sequence():
+    nyay17 = (
+        '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
+        '--report test-results/nyay17-postgres/summary.json'
+    )
+    nyay4 = (
+        'NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py '
+        '--execute --database-url "$DATABASE_URL" '
+        '--output test-results/nyay4-postgres/summary.json'
+    )
+    nyay19 = (
+        'NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" '
+        'scripts/nyay19_postgres_auth_retention_gate.py '
+        '--execute --database-url "$DATABASE_URL" '
+        '--output test-results/nyay19-postgres/summary.json'
+    )
+    exact = "\n".join(("set -euo pipefail", nyay17, nyay4, nyay19))
+
+    assert _db_gate_wiring_is_exact(exact)
+    assert not _db_gate_wiring_is_exact(
+        "\n".join(("set -euo pipefail", nyay17, nyay19, nyay4))
+    )
+    assert not _db_gate_wiring_is_exact("\n".join(("set -euo pipefail", nyay17, nyay4)))
+    assert not _db_gate_wiring_is_exact(f"{exact}\necho stale-trailing-stage")
+    assert not _db_gate_wiring_is_exact(
+        exact.replace(nyay17, 'echo scripts/nyay17_postgres_idempotency_gate.py')
+    )
+    assert not _db_gate_wiring_is_exact(
+        "\n".join((nyay17, "set -euo pipefail", nyay4, nyay19))
+    )
+
+
 _EVALUATOR_CASES = (
     (_runtime_observation_passes, _runtime),
     (_migration_observation_passes, _migration),
@@ -1184,6 +1256,10 @@ def test_each_exact_observation_accepts_only_its_complete_positive_shape(
             _cookie_observation_passes,
             _cookie,
             {
+                "timing_ratio_within_bound": False,
+                "timing_samples_per_class": 41,
+                "timing_p95_ratio_milli": 2001,
+                "timing_bound_milli": 2500,
                 "uuid_in_response": True,
                 "origin_missing_status": 200,
                 "initial_exhaustion_known_decoy_values_equal": False,
@@ -1410,6 +1486,25 @@ def test_signup_lockout_authority_survives_resend(tmp_path):
     assert observation["wrong_codes"] == ["incorrect_otp", "incorrect_otp", "locked"]
 
 
+def test_direct_registration_relay_fixtures_attach_signup_flow_before_commit():
+    """Direct gate relays must stage the browser capability the product requires."""
+
+    from scripts import postgres_runtime_gate
+
+    sources = (
+        getsource(gate._run_registration_finalizer_interleaving_probe),
+        getsource(postgres_runtime_gate.main),
+    )
+    for source in sources:
+        flow_creation = source.index("otp_flow_service.create_flow(")
+        first_commit = source.index("session.commit()")
+        assert flow_creation < first_commit
+        assert "otp_flow_service.deterministic_signup_token(" in source
+        assert "challenge=challenge" in source
+        assert "registration_id=" in source
+        assert "registration_idempotency_record_id=" in source
+
+
 def test_failed_resend_never_displaces_prior_delivered_verifier(tmp_path):
     """SQLite binds the lifecycle seam; PostgreSQL fencing is separate."""
 
@@ -1550,8 +1645,14 @@ def test_repeated_known_decoy_starts_cookie_reload_and_origin_are_uniform(tmp_pa
         engine.dispose()
     assert observation["start_statuses"] == [202, 202]
     assert observation["start_signatures_equal"] is True
-    assert observation["timing_samples_per_class"] == 8
-    assert observation["timing_ratio_within_bound"] is True
+    assert observation["timing_samples_per_class"] == 40
+    # SQLite binds the HTTP projection, not wall-clock scheduling.  The same
+    # live measurement remains mandatory in the authoritative PostgreSQL gate;
+    # deterministic boundary coverage below proves its estimator and limit.
+    assert observation["timing_ratio_within_bound"] is (
+        observation["timing_p95_ratio_milli"]
+        <= observation["timing_bound_milli"]
+    )
     assert observation["cookie_httponly"] is True
     assert observation["cookie_secure_nonlocal"] is True
     assert observation["cookie_samesite"] == "strict"
@@ -1562,6 +1663,64 @@ def test_repeated_known_decoy_starts_cookie_reload_and_origin_are_uniform(tmp_pa
     assert observation["origin_missing_status"] == 403
     assert observation["origin_bad_status"] == 403
     assert observation["origin_good_status"] == 202
+
+
+def test_cookie_timing_ratio_oracle_enforces_the_exact_two_x_boundary():
+    at_bound = _timing_ratio_observation([100] * 40, [200] * 40)
+    above_bound = _timing_ratio_observation([100] * 40, [201] * 40)
+
+    assert at_bound == {
+        "timing_ratio_within_bound": True,
+        "timing_samples_per_class": 40,
+        "timing_p95_ratio_milli": 2000,
+        "timing_bound_milli": 2000,
+    }
+    assert above_bound == {
+        "timing_ratio_within_bound": False,
+        "timing_samples_per_class": 40,
+        "timing_p95_ratio_milli": 2010,
+        "timing_bound_milli": 2000,
+    }
+
+
+def test_cookie_timing_p95_ignores_exactly_five_percent_not_persistent_skew():
+    two_outliers = _timing_ratio_observation(
+        [100] * 40, [100] * 38 + [1000] * 2
+    )
+    three_outliers = _timing_ratio_observation(
+        [100] * 40, [100] * 37 + [1000] * 3
+    )
+
+    assert two_outliers["timing_p95_ratio_milli"] == 1000
+    assert two_outliers["timing_ratio_within_bound"] is True
+    assert three_outliers["timing_p95_ratio_milli"] == 10000
+    assert three_outliers["timing_ratio_within_bound"] is False
+
+
+def test_cookie_timing_samples_alternate_known_and_decoy_first():
+    assert COOKIE_TIMING_SAMPLE_ORDER == tuple(
+        ("known", "decoy") if index % 2 == 0 else ("decoy", "known")
+        for index in range(40)
+    )
+
+
+@pytest.mark.parametrize(
+    "known,decoy",
+    (
+        ([], []),
+        ([100] * 39, [100] * 39),
+        ([100] * 41, [100] * 41),
+        ([100] * 40, [100] * 39),
+        ([100] * 39 + [0], [100] * 40),
+        ([100] * 39 + [-1], [100] * 40),
+        ([100] * 39 + [True], [100] * 40),
+    ),
+)
+def test_cookie_timing_ratio_oracle_rejects_incomplete_or_invalid_samples(
+    known, decoy
+):
+    with pytest.raises(ValueError, match="timing samples"):
+        _timing_ratio_observation(known, decoy)
 
 
 def test_server_metadata_is_exactly_derived_from_persisted_authority(tmp_path):

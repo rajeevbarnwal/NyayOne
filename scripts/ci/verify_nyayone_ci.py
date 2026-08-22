@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -57,7 +59,75 @@ EXPECTED_NYAY19_BROWSER_CONTRACT_TEST_SHA256 = (
     "0adf37901f510e26fe002b1713e126a9203c0dceb4d6680d4fda264b046fe10f"
 )
 EXPECTED_NYAY19_PACKAGE_COMMAND = "node scripts/nyay19-auth-lifecycle-browser.mjs"
-EXPECTED_DB_GATE_SHA256 = "7c7f8ec2b39ac2cc28c7fda8aec158dbb42d1ed57e2bdee60e639d4190671852"
+NYAY19_ISOLATED_MIGRATION_ENV = "NYAY19_ISOLATED_MIGRATION_EXECUTE"
+EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS: dict[
+    tuple[str, str], tuple[str, ...]
+] = {
+    ("registration-db-gate.yml", "postgres-16-pgvector"): (
+        "bash scripts/db_gate.sh",
+    ),
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): (
+        "bash scripts/db_gate.sh",
+        "python -m alembic upgrade head",
+    ),
+    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): (
+        "bash scripts/wave2_db_gate.sh",
+    ),
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): (
+        "bash scripts/db_gate.sh",
+    ),
+    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): (
+        "bash scripts/wave4_db_gate.sh",
+    ),
+    ("wave5-calendar-gate.yml", "calendar-postgres"): (
+        "python scripts/wave5_postgres_gate.py",
+    ),
+    ("wave5-calendar-gate.yml", "calendar-real-browser"): (
+        "alembic upgrade head",
+    ),
+}
+EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
+    "backend/scripts/nyay2_postgres_authorization_gate.py",
+    "backend/scripts/nyay3_postgres_characterization.py",
+    "backend/scripts/nyay4_postgres_otp_gate.py",
+    "backend/scripts/nyay16_postgres_gate.py",
+    "backend/scripts/nyay17_postgres_idempotency_gate.py",
+    "backend/scripts/nyay19_migrate.py",
+    "backend/scripts/nyay19_postgres_auth_retention_gate.py",
+    "backend/scripts/wave2_postgres_gate.py",
+    "backend/scripts/wave4_postgres_gate.py",
+    "backend/scripts/wave5_postgres_gate.py",
+}
+EXPECTED_NYAY19_ALEMBIC_SHELL_CALLERS = {
+    "backend/scripts/db_gate.sh": "isolated-postgresql",
+    "scripts/wave2_tutoring_browser_gate.sh": "local-sqlite",
+}
+NYAY19_ISOLATED_DATABASE_MARKERS = {
+    "ci",
+    "gate",
+    "nyay2",
+    "nyay3",
+    "nyay4",
+    "nyay16",
+    "nyay17",
+    "nyay19",
+    "qa",
+    "scratch",
+    "test",
+    "testing",
+    "w2gate",
+}
+NYAY19_FORBIDDEN_DATABASE_MARKERS = {"prod", "production", "stage", "staging"}
+NYAY19_ISOLATED_APP_ENVS = {
+    "development",
+    "dev",
+    "local",
+    "test",
+    "testing",
+    "stage",
+    "staging",
+}
+EXPECTED_DB_GATE_SHA256 = "41065fdde2ff466444826a2e78b317bd953f2cbae4543102abc305911efbc7c3"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -275,9 +345,10 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "REGISTRATION_SECRET": "ci-registration-encryption-secret",
         "REGISTRATION_LOOKUP_SECRET": "ci-registration-lookup-secret",
         "APP_ENV": "test",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave1-foundation-gate.yml", "backend-postgres16-gate"): {
-        "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@localhost:1032/nyayone_ci",
+        "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_ci",
         "APP_ENV": "staging",
         "CALENDAR_PUBLIC_BASE_URL": "https://calendar.example.test",
         "INTERNSHIP_REPORT_SCANNER_PROVIDER": "clamav",
@@ -288,12 +359,14 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "OTP_PROVIDER_URL": "https://otp-provider.example.test/send",
         "OTP_PROVIDER_TOKEN": "ci-otp-provider-token-not-a-default",
         "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY": "true",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_ci",
         "APP_ENV": "test",
         "REGISTRATION_SECRET": "ci-registration-encryption-secret-not-a-default",
         "REGISTRATION_LOOKUP_SECRET": "ci-registration-lookup-secret-not-a-default",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_ci",
@@ -311,6 +384,7 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "OTP_PROVIDER_URL": "https://otp-provider.example.test/send",
         "OTP_PROVIDER_TOKEN": "ci-otp-provider-token-not-a-default",
         "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY": "true",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave4_qa",
@@ -325,6 +399,7 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "INTERNSHIP_REPORT_CLAMAV_HOST": "127.0.0.1",
         "INTERNSHIP_REPORT_CLAMAV_PORT": "3310",
         "CORS_ORIGINS": '["http://127.0.0.1:1260","http://localhost:1260","http://127.0.0.1:1263","http://localhost:1263"]',
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave5-calendar-gate.yml", "calendar-postgres"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave5_qa",
@@ -332,6 +407,7 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "WAVE5_GATE_ALLOW_MUTATION": "true",
         "REGISTRATION_SECRET": "ci-registration-encryption-secret-not-a-default",
         "REGISTRATION_LOOKUP_SECRET": "ci-registration-lookup-secret-not-a-default",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
     ("wave5-calendar-gate.yml", "calendar-real-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_wave5_browser_qa",
@@ -342,6 +418,7 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "CORS_ORIGINS": '["https://127.0.0.1:1290"]',
         "CALENDAR_PUBLIC_BASE_URL": "https://127.0.0.1:1291",
         "VITE_DISABLE_SERVICE_WORKER": "true",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
     },
 }
 EVIDENCE_UPLOAD_NAMES: dict[tuple[str, str], str] = {
@@ -369,19 +446,19 @@ NO_OP_RUN_COMMANDS = {":", "exit 0", "true"}
 EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): "151bbfbfcab418fa90213523175b7b50ce0597d6504afcc2f5dd30eb79531838",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
-    ("registration-db-gate.yml", "postgres-16-pgvector"): "88a98c87a1f5779f8da7a2896e4aa7577fbd770ad730b24e5cbc80636886c7dc",
+    ("registration-db-gate.yml", "postgres-16-pgvector"): "22292468d13af440dd365abb67aea9419241753c646d0ffe1f0396bf5bf7c0de",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
     ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "7c3c8d3590339daf512ea1a0dcf0dbe3b0c0aa9783f246be6827d5bd78dfc239",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "55032088f5e0784fc6a52305ab31e5c715f7e72919cb4027111c30ee9dfd4622",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
-    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "e255ab706b9678bab366d87f20298f6296474c7424823db7046d73ba492b5da7",
+    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "c9e8d636f2df9b76f18557ab9cb14476795bd00b342d7a75358299a50b9ded74",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
-    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "b44aae5e834e841ce4c3396456fed7a0088837b739daebc2e4c6948b8149c73f",
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "a5c8c25d7f98d6536e8b8968747a4b3f09ca6e01b8d23e2568dca2964a12ce35",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
-    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "cceb5a2e555c76308658da640e5f362804a1df715718c40c153318643f0d9f78",
+    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "741e06de64ef3a6be76fc5646cc74f8268990f4ae912dee0e0ca6696b0bd8418",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
-    ("wave5-calendar-gate.yml", "calendar-postgres"): "f558c7e1ca04357185b6ccccbab85fe3c06fa3019bad6ae0fa4ed3575aa17234",
-    ("wave5-calendar-gate.yml", "calendar-real-browser"): "3495dabb0102a304dd5ed047f5c4eafd9b4df27185146fed4da957e943d54a59",
+    ("wave5-calendar-gate.yml", "calendar-postgres"): "3e53e60acd87ec409045c0e7fc1dd0bcc474c4c8a13275545d72e0dfd4de7a27",
+    ("wave5-calendar-gate.yml", "calendar-real-browser"): "538128276a071cafcc082999f0b912756b4cd71500552432b49659eedd74f6d4",
     ("wave5-calendar-gate.yml", "required"): "c4c8cefe36440feecc52c6968ae30095e94900cf677dbd9d203d2e8c3d07e3f1",
 }
 
@@ -429,6 +506,153 @@ def _mapping(value: object) -> dict[str, object] | None:
     return value
 
 
+def _nyay19_isolated_postgres_url_is_exact(value: object) -> bool:
+    """Match the release guard's static, fail-closed CI target subset."""
+
+    if not isinstance(value, str) or not value.startswith("postgresql+"):
+        return False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.hostname != "127.0.0.1"
+        or port is None
+        or not 1 <= port <= 65535
+        or not parsed.username
+        or parsed.password is None
+        or parsed.query
+        or parsed.fragment
+    ):
+        return False
+    database = parsed.path.removeprefix("/")
+    if not database or any(
+        marker in database.casefold()
+        for marker in NYAY19_FORBIDDEN_DATABASE_MARKERS
+    ):
+        return False
+    tokens = {
+        token
+        for token in re.split(r"[^a-z0-9]+", database.casefold())
+        if token
+    }
+    return bool(tokens & NYAY19_ISOLATED_DATABASE_MARKERS)
+
+
+def _nyay19_workflow_alembic_failures(
+    path: Path,
+    jobs: dict[str, object],
+) -> list[str]:
+    """Require explicit isolated authority only on sealed Alembic CI jobs."""
+
+    failures: list[str] = []
+    all_caller_markers = {
+        marker
+        for markers in EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS.values()
+        for marker in markers
+    }
+    for job_id, raw_job in jobs.items():
+        job = _mapping(raw_job)
+        if job is None:
+            continue
+        job_env = _mapping(job.get("env")) if "env" in job else {}
+        if job_env is None:
+            job_env = {}
+        steps = job.get("steps")
+        step_mappings = [
+            step
+            for step in steps if isinstance(step, dict)
+        ] if isinstance(steps, list) else []
+        run_text = "\n".join(
+            str(step["run"])
+            for step in step_mappings
+            if isinstance(step.get("run"), str)
+        )
+        canonical_run = _canonical_shell(run_text)
+        key = (path.name, job_id)
+        expected_markers = EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS.get(key)
+        has_known_caller = any(
+            marker in canonical_run for marker in all_caller_markers
+        )
+        has_direct_alembic = (
+            "-m alembic" in canonical_run
+            or re.search(
+                r"(?:^| )alembic (?:[^ ]+ )*"
+                r"(?:upgrade|downgrade|check|current|stamp)(?: |$)",
+                canonical_run,
+            ) is not None
+        )
+        step_opt_ins = [
+            _mapping(step.get("env")).get(NYAY19_ISOLATED_MIGRATION_ENV)
+            for step in step_mappings
+            if _mapping(step.get("env")) is not None
+            and NYAY19_ISOLATED_MIGRATION_ENV in _mapping(step.get("env"))
+        ]
+
+        if expected_markers is None:
+            if (
+                has_known_caller
+                or has_direct_alembic
+                or NYAY19_ISOLATED_MIGRATION_ENV in job_env
+                or step_opt_ins
+            ):
+                failures.append(
+                    f"{path}: job {job_id} has unclassified NYAY-19 isolated Alembic authority"
+                )
+            continue
+
+        if job_env.get(NYAY19_ISOLATED_MIGRATION_ENV) != "1":
+            failures.append(
+                f"{path}: job {job_id} NYAY-19 isolated Alembic authority must be exactly 1 at job scope"
+            )
+        if step_opt_ins:
+            failures.append(
+                f"{path}: job {job_id} NYAY-19 isolated Alembic authority may not be shadowed at step scope"
+            )
+        if job_env.get("APP_ENV") not in NYAY19_ISOLATED_APP_ENVS:
+            failures.append(
+                f"{path}: job {job_id} NYAY-19 isolated Alembic APP_ENV is not allowlisted"
+            )
+        if not any(
+            isinstance(_mapping(service), dict)
+            and isinstance(_mapping(service).get("image"), str)
+            and (
+                "postgres" in str(_mapping(service)["image"]).casefold()
+                or "pgvector" in str(_mapping(service)["image"]).casefold()
+            )
+            for service in (_mapping(job.get("services")) or {}).values()
+        ):
+            failures.append(
+                f"{path}: job {job_id} NYAY-19 isolated Alembic requires its own PostgreSQL service"
+            )
+        for marker in expected_markers:
+            if marker not in canonical_run:
+                failures.append(
+                    f"{path}: job {job_id} NYAY-19 isolated Alembic caller is missing: {marker}"
+                )
+
+        url_values = [
+            value
+            for name, value in job_env.items()
+            if name.endswith("DATABASE_URL")
+        ]
+        url_values.extend(
+            re.findall(
+                r"postgresql(?:\+[A-Za-z0-9_]+)?://[^\s'\"\\]+",
+                run_text,
+            )
+        )
+        if not url_values or any(
+            not _nyay19_isolated_postgres_url_is_exact(value)
+            for value in url_values
+        ):
+            failures.append(
+                f"{path}: job {job_id} NYAY-19 isolated Alembic URLs must use a marker-named database on literal 127.0.0.1"
+            )
+    return failures
+
+
 def _structural_workflow_failures(text: str, path: Path) -> list[str]:
     """Validate security-sensitive workflow semantics with a real YAML parser.
 
@@ -459,6 +683,7 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
     jobs = _mapping(root.get("jobs"))
     if not jobs:
         return failures + [f"{path}: jobs must be a non-empty mapping"]
+    failures.extend(_nyay19_workflow_alembic_failures(path, jobs))
     expected_job_ids = {
         job_id
         for workflow_name, job_id in EXPECTED_JOB_SEMANTIC_SHA256
@@ -1373,6 +1598,301 @@ def check_workflow(path: Path) -> list[str]:
     return failures
 
 
+def _python_alembic_calls(tree: ast.AST) -> list[ast.Call]:
+    command_names = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (
+            node.targets if isinstance(node, ast.Assign) else [node.target]
+        )
+        if isinstance(target, ast.Name)
+        and isinstance(node.value, (ast.List, ast.Tuple))
+        and any(
+            isinstance(item, ast.Constant) and item.value == "alembic"
+            for item in ast.walk(node.value)
+        )
+    }
+    calls: list[ast.Call] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        direct_api = any(
+            isinstance(item, ast.Name)
+            and item.id in {"alembic", "alembic_command"}
+            for item in ast.walk(node.func)
+        )
+        command = node.args[0] if node.args else None
+        command_literal = command is not None and any(
+            isinstance(item, ast.Constant) and item.value == "alembic"
+            for item in ast.walk(command)
+        )
+        assigned_command = command is not None and any(
+            isinstance(item, ast.Name) and item.id in command_names
+            for item in ast.walk(command)
+        )
+        if direct_api or command_literal or assigned_command:
+            calls.append(node)
+    return calls
+
+
+def _call_has_exact_isolated_environment(call: ast.Call) -> bool:
+    environment = next(
+        (keyword.value for keyword in call.keywords if keyword.arg == "env"),
+        None,
+    )
+    if not isinstance(environment, ast.Dict):
+        return False
+    matches = [
+        index
+        for index, (key, value) in enumerate(
+            zip(environment.keys, environment.values)
+        )
+        if isinstance(key, ast.Constant)
+        and key.value == NYAY19_ISOLATED_MIGRATION_ENV
+        and isinstance(value, ast.Constant)
+        and value.value == "1"
+    ]
+    # The exact authority must be the final dictionary item. A later **mapping
+    # could otherwise replace it at runtime while leaving a misleading literal
+    # in the source for a weak static checker to find.
+    return matches == [len(environment.keys) - 1]
+
+
+def _production_wrapper_is_fail_closed(tree: ast.AST, call: ast.Call) -> bool:
+    call_line = getattr(call, "lineno", 0)
+    environment_keyword = next(
+        (keyword.value for keyword in call.keywords if keyword.arg == "env"),
+        None,
+    )
+    command = call.args[0]
+    command_nodes = list(ast.walk(command))
+    if (
+        not isinstance(environment_keyword, ast.Name)
+        or environment_keyword.id != "environment"
+        or not any(
+            isinstance(node, ast.Constant) and node.value == "upgrade"
+            for node in command_nodes
+        )
+        or not any(
+            isinstance(node, ast.Name) and node.id == "TARGET_REVISION"
+            for node in command_nodes
+        )
+    ):
+        return False
+
+    copied_environment = False
+    removed_isolated_authority = False
+    forced_production_approval = False
+    for node in ast.walk(tree):
+        if getattr(node, "lineno", call_line + 1) >= call_line:
+            continue
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "environment"
+            for target in node.targets
+        ):
+            copied_environment = (
+                isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == "dict"
+                and bool(node.value.args)
+                and isinstance(node.value.args[0], ast.Attribute)
+                and isinstance(node.value.args[0].value, ast.Name)
+                and node.value.args[0].value.id == "os"
+                and node.value.args[0].attr == "environ"
+            )
+        if isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+            isolated_in_iterable = any(
+                isinstance(item, ast.Name)
+                and item.id == "ISOLATED_EXECUTION_ENV"
+                for item in ast.walk(node.iter)
+            )
+            removes_loop_name = any(
+                isinstance(item, ast.Call)
+                and isinstance(item.func, ast.Attribute)
+                and isinstance(item.func.value, ast.Name)
+                and item.func.value.id == "environment"
+                and item.func.attr == "pop"
+                and bool(item.args)
+                and isinstance(item.args[0], ast.Name)
+                and item.args[0].id == node.target.id
+                for statement in node.body
+                for item in ast.walk(statement)
+            )
+            removed_isolated_authority = (
+                removed_isolated_authority
+                or (isolated_in_iterable and removes_loop_name)
+            )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "environment"
+            and node.func.attr == "update"
+            and node.args
+            and isinstance(node.args[0], ast.Dict)
+        ):
+            values: dict[str, object] = {}
+            for key, value in zip(node.args[0].keys, node.args[0].values):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    name = key.value
+                elif isinstance(key, ast.Name):
+                    name = key.id
+                else:
+                    continue
+                if isinstance(value, ast.Constant):
+                    values[name] = value.value
+            forced_production_approval = (
+                forced_production_approval
+                or values.get("APP_ENV") == "production"
+                and values.get("FORCE_APPROVAL_ENV") == "1"
+            )
+    return copied_environment and removed_isolated_authority and forced_production_approval
+
+
+def _shell_executable_source(source: str) -> str:
+    return "\n".join(
+        line.split("#", 1)[0]
+        for line in source.splitlines()
+        if not line.lstrip().startswith("#")
+    )
+
+
+def check_alembic_execution_contracts(root: Path = ROOT) -> list[str]:
+    """Inventory every shipped Alembic entry point and seal its authority."""
+
+    failures: list[str] = []
+    root = Path(root)
+    python_callers: set[str] = set()
+    python_root = root / "backend" / "scripts"
+    if python_root.is_dir():
+        for path in sorted(python_root.rglob("*.py")):
+            if path.is_symlink():
+                failures.append(f"{path}: Alembic script inventory may not contain symlinks")
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            except (OSError, UnicodeError, SyntaxError) as exc:
+                failures.append(
+                    f"{path}: Python script cannot be audited: {type(exc).__name__}"
+                )
+                continue
+            calls = _python_alembic_calls(tree)
+            if not calls:
+                continue
+            relative = path.relative_to(root).as_posix()
+            python_callers.add(relative)
+            if relative == "backend/scripts/nyay19_migrate.py":
+                if len(calls) != 1 or not _production_wrapper_is_fail_closed(
+                    tree, calls[0]
+                ):
+                    failures.append(
+                        f"{path}: production Alembic wrapper must remove isolated authority and force exact approval"
+                    )
+                continue
+            for call in calls:
+                if not _call_has_exact_isolated_environment(call):
+                    failures.append(
+                        f"{path}:{getattr(call, 'lineno', 0)}: missing exact isolated subprocess authority"
+                    )
+
+    shell_callers: set[str] = set()
+    shell_roots = (root / "backend" / "scripts", root / "scripts")
+    shell_paths = {
+        path
+        for shell_root in shell_roots
+        if shell_root.is_dir()
+        for path in shell_root.rglob("*.sh")
+    }
+    for path in sorted(shell_paths):
+        if path.is_symlink():
+            failures.append(f"{path}: Alembic shell inventory may not contain symlinks")
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            failures.append(f"{path}: shell script cannot be audited: {type(exc).__name__}")
+            continue
+        executable = _shell_executable_source(source)
+        if (
+            "-m alembic" not in executable
+            and re.search(
+                r"(?:^|[;&|(]\s*)alembic\s+(?:upgrade|downgrade|check|current|stamp)\b",
+                executable,
+                re.MULTILINE,
+            ) is None
+        ):
+            continue
+        relative = path.relative_to(root).as_posix()
+        shell_callers.add(relative)
+        classification = EXPECTED_NYAY19_ALEMBIC_SHELL_CALLERS.get(relative)
+        if classification is None:
+            failures.append(f"{path}: unclassified Alembic shell caller")
+        elif classification == "isolated-postgresql":
+            if re.findall(
+                rf"^export {re.escape(NYAY19_ISOLATED_MIGRATION_ENV)}=1$",
+                executable,
+                re.MULTILINE,
+            ) != [f"export {NYAY19_ISOLATED_MIGRATION_ENV}=1"]:
+                failures.append(
+                    f"{path}: missing exact isolated shell authority"
+                )
+        elif classification == "local-sqlite":
+            if (
+                NYAY19_ISOLATED_MIGRATION_ENV in executable
+                or 'export DATABASE_URL="sqlite+pysqlite:///$DB_FILE"' not in executable
+                or "export APP_ENV=development" not in executable
+            ):
+                failures.append(
+                    f"{path}: local SQLite Alembic caller must not receive PostgreSQL isolated authority"
+                )
+
+    workflow_root = root / ".github" / "workflows"
+    seen_workflow_callers: set[tuple[str, str]] = set()
+    if workflow_root.is_dir() and yaml is not None:
+        workflow_paths = sorted(workflow_root.glob("*.yml")) + sorted(
+            workflow_root.glob("*.yaml")
+        )
+        for path in workflow_paths:
+            try:
+                document = yaml.load(
+                    path.read_text(encoding="utf-8"),
+                    Loader=_NoDuplicateBaseLoader,
+                )
+            except (OSError, UnicodeError, yaml.YAMLError):
+                failures.append(f"{path}: workflow cannot be audited for Alembic authority")
+                continue
+            document_mapping = _mapping(document)
+            jobs = _mapping(document_mapping.get("jobs")) if document_mapping else None
+            if jobs is None:
+                failures.append(f"{path}: workflow jobs cannot be audited for Alembic authority")
+                continue
+            failures.extend(_nyay19_workflow_alembic_failures(path, jobs))
+            seen_workflow_callers.update(
+                (path.name, job_id)
+                for job_id in jobs
+                if (path.name, job_id) in EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS
+            )
+
+        for missing in sorted(
+            set(EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS) - seen_workflow_callers
+        ):
+            failures.append(
+                f"{workflow_root}: missing NYAY-19 isolated Alembic workflow caller {missing}"
+            )
+        if python_callers != EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS:
+            failures.append(
+                f"{python_root}: Alembic Python caller inventory differs from the sealed contract; "
+                f"found={sorted(python_callers)}"
+            )
+        if shell_callers != set(EXPECTED_NYAY19_ALEMBIC_SHELL_CALLERS):
+            failures.append(
+                f"{root}: Alembic shell caller inventory differs from the sealed contract; "
+                f"found={sorted(shell_callers)}"
+            )
+    return failures
+
+
 def main() -> int:
     workflow_paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if not workflow_paths:
@@ -1387,6 +1907,7 @@ def main() -> int:
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(check_nyay19_browser_gate_contract())
+    failures.extend(check_alembic_execution_contracts())
     failures.extend(
         failure for path in workflow_paths for failure in check_workflow(path)
     )

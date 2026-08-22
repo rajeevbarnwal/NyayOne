@@ -27,6 +27,110 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
+    def test_nyay19_alembic_callers_require_exact_isolated_authority(self) -> None:
+        policy = load("verify_nyayone_ci")
+
+        self.assertEqual(policy.check_alembic_execution_contracts(), [])
+
+        wave5 = (
+            policy.ROOT / ".github/workflows/wave5-calendar-gate.yml"
+        ).read_text(encoding="utf-8")
+        mutations = {
+            "missing opt-in": wave5.replace(
+                '      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"\n',
+                "",
+                1,
+            ),
+            "hostname indirection": wave5.replace(
+                "@127.0.0.1:5432/nyayone_wave5_qa",
+                "@localhost:5432/nyayone_wave5_qa",
+                1,
+            ),
+            "unclassified opt-in": wave5.replace(
+                "  required:\n",
+                "  required:\n    env:\n"
+                '      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"\n',
+                1,
+            ),
+            "unclassified caller": wave5.replace(
+                "      - name: Require every upstream job to succeed\n"
+                "        env:\n"
+                "          RESULTS: ${{ toJSON(needs) }}\n"
+                "        run: |\n"
+                "          python - <<'PY'\n",
+                "      - name: Require every upstream job to succeed\n"
+                "        env:\n"
+                "          RESULTS: ${{ toJSON(needs) }}\n"
+                "        run: |\n"
+                "          alembic upgrade head\n"
+                "          python - <<'PY'\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / "wave5-calendar-gate.yml"
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, wave5)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any("NYAY-19 isolated Alembic" in item for item in failures),
+                        failures,
+                    )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "backend/scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "planted_gate.py").write_text(
+                "import subprocess, sys\n"
+                "subprocess.run(\n"
+                "    [sys.executable, '-m', 'alembic', 'upgrade', 'head'],\n"
+                "    env={'APP_ENV': 'testing'},\n"
+                ")\n",
+                encoding="utf-8",
+            )
+            failures = policy.check_alembic_execution_contracts(root)
+        self.assertTrue(
+            any("missing exact isolated subprocess authority" in item for item in failures),
+            failures,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "backend/scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "planted_gate.sh").write_text(
+                '#!/usr/bin/env bash\npython -m alembic upgrade head\n',
+                encoding="utf-8",
+            )
+            failures = policy.check_alembic_execution_contracts(root)
+        self.assertTrue(
+            any("unclassified Alembic shell caller" in item for item in failures),
+            failures,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "backend/scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "nyay19_migrate.py").write_text(
+                "import os, subprocess, sys\n"
+                "TARGET_REVISION = '0020_auth_retention_lifecycle'\n"
+                "environment = dict(os.environ)\n"
+                "subprocess.run(\n"
+                "    [sys.executable, '-m', 'alembic', 'upgrade', TARGET_REVISION],\n"
+                "    env=environment,\n"
+                ")\n",
+                encoding="utf-8",
+            )
+            failures = policy.check_alembic_execution_contracts(root)
+        self.assertTrue(
+            any("force exact approval" in item for item in failures),
+            failures,
+        )
+
     def test_migration_ledger_accepts_current_tree_and_rejects_byte_drift(self) -> None:
         verifier = load("verify_migration_ledger")
         self.assertEqual(verifier.verify(verifier.ROOT), [])

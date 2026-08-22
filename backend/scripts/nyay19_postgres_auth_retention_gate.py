@@ -286,6 +286,72 @@ REQUIRED_MUTANT_IDS = (
     "ASSERTION-INVENTORY-REORDERED",
 )
 
+# These are named assurance probes, not 94 distinct product/source mutations.
+# Some names document separate threat labels that currently exercise the same
+# aggregate observation perturbation.  Keep that relationship explicit so the
+# release report cannot overstate the amount of independent mutation coverage.
+MUTANT_ALIAS_OF = {
+    "ACCEPT-MISSING-LEGACY-DELETION-JOB": (
+        "ACCEPT-CORRUPT-LEGACY-DELETION-TARGET"
+    ),
+    "NULLABLE-LOGIN-LOOKUP": "RELAX-SESSION-USER-NULLABILITY",
+    "NULLABLE-SESSION-TOKEN": "RELAX-SESSION-USER-NULLABILITY",
+    "AUTH-COLUMN-WRONG-TYPE": "RELAX-SESSION-USER-NULLABILITY",
+    "AUTH-COLUMN-WRONG-LENGTH": "RELAX-SESSION-USER-NULLABILITY",
+    "AUTH-COLUMN-WRONG-DEFAULT": "RELAX-SESSION-USER-NULLABILITY",
+    "AUTH-COLUMN-WRONG-TIMEZONE": "RELAX-SESSION-USER-NULLABILITY",
+    "AUTH-PK-CATALOG-NO-INHERIT-FALSE": "AUTH-PK-CATALOG-DEFERRABLE",
+    "AUTH-UQ-CATALOG-NO-INHERIT-FALSE": "AUTH-PK-CATALOG-DEFERRABLE",
+    "AUTH-FK-CATALOG-NOT-VALID": "AUTH-PK-CATALOG-DEFERRABLE",
+    "AUTH-FK-CATALOG-NO-INHERIT-FALSE": "AUTH-PK-CATALOG-DEFERRABLE",
+    "AUTH-UQ-CATALOG-DEFERRABLE": "AUTH-PK-CATALOG-DEFERRABLE",
+    "AUTH-INDEX-CATALOG-INVALID": "AUTH-PK-INCLUDE-DRIFT",
+    "AUTH-INDEX-CATALOG-UNREADY": "AUTH-PK-INCLUDE-DRIFT",
+    "AUTH-INDEX-CATALOG-DEAD": "AUTH-PK-INCLUDE-DRIFT",
+    "AUTH-FK-OPTIONS-DRIFT": "AUTH-FK-DRIFT",
+    "DUPLICATE-NAMED-FK-PRECEDES-EXPECTED": "AUTH-FK-DRIFT",
+    "AUTH-CHECK-NOT-VALID": "AUTH-CHECK-SQL-DRIFT",
+    "AUTH-CHECK-NO-INHERIT": "AUTH-CHECK-SQL-DRIFT",
+    "DUPLICATE-NAMED-UQ-PRECEDES-EXPECTED": "AUTH-UQ-DRIFT",
+    "AUTH-UQ-BACKING-INDEX-EXTRA": "AUTH-UQ-BACKING-INDEX-MISSING",
+    "AUTH-UQ-BACKING-INDEX-NAME-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-DUPLICATE-LINK-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-COLUMNS-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-UNIQUENESS-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-PREDICATE-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-INCLUDE-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-UQ-BACKING-INDEX-OPTIONS-DRIFT": (
+        "AUTH-UQ-BACKING-INDEX-MISSING"
+    ),
+    "AUTH-INDEX-UNIQUENESS-DRIFT": "AUTH-UQ-BACKING-INDEX-MISSING",
+    "AUTH-INDEX-OPTIONS-DRIFT": "AUTH-UQ-BACKING-INDEX-MISSING",
+}
+
+DISTINCT_MUTANT_IDS = tuple(
+    identifier
+    for identifier in REQUIRED_MUTANT_IDS
+    if identifier not in MUTANT_ALIAS_OF
+)
+EXPECTED_MUTANT_INVENTORY = {
+    "named_probe_ids": 94,
+    "distinct_probe_variants": 64,
+    "duplicate_aliases": 30,
+    "killed_named_probe_ids": 94,
+    "killed_distinct_probe_variants": 64,
+}
+
 EXPECTED_COOKIE_CONTRACT = {
     "path": "/api/v1",
     "same_site": "strict",
@@ -2124,6 +2190,7 @@ def _scratch_cleanup_observation_passes(
 def _harness_observation_passes(observation: Mapping[str, Any]) -> bool:
     expected = {
         "mutants",
+        "mutant_inventory",
         "privacy_scanned",
         "privacy_findings",
         "scratch",
@@ -2131,12 +2198,16 @@ def _harness_observation_passes(observation: Mapping[str, Any]) -> bool:
         "native_postgres_executed",
     }
     mutants = observation.get("mutants")
+    mutant_inventory = observation.get("mutant_inventory")
     scratch = observation.get("scratch")
     return bool(
         _exact_keys(observation, expected)
         and isinstance(mutants, Mapping)
         and tuple(mutants) == REQUIRED_MUTANT_IDS
         and all(value is True for value in mutants.values())
+        and isinstance(mutant_inventory, Mapping)
+        and _mutant_inventory_observation_passes(mutant_inventory)
+        and dict(mutant_inventory) == _mutant_inventory(mutants)
         and observation.get("privacy_scanned") is True
         and _is_exact_int(observation.get("privacy_findings"))
         and observation.get("privacy_findings") == 0
@@ -2144,6 +2215,39 @@ def _harness_observation_passes(observation: Mapping[str, Any]) -> bool:
         and _scratch_cleanup_observation_passes(scratch)
         and observation.get("behavior_adapter_frozen") is True
         and observation.get("native_postgres_executed") is True
+    )
+
+
+def _mutant_inventory(results: Mapping[str, Any]) -> dict[str, int]:
+    """Return honest named-versus-distinct seeded-probe accounting."""
+
+    named_killed = sum(value is True for value in results.values())
+    distinct_killed = sum(
+        results.get(identifier) is True for identifier in DISTINCT_MUTANT_IDS
+    )
+    return {
+        "named_probe_ids": len(REQUIRED_MUTANT_IDS),
+        "distinct_probe_variants": len(DISTINCT_MUTANT_IDS),
+        "duplicate_aliases": len(MUTANT_ALIAS_OF),
+        "killed_named_probe_ids": named_killed,
+        "killed_distinct_probe_variants": distinct_killed,
+    }
+
+
+def _mutant_inventory_observation_passes(
+    observation: Mapping[str, Any],
+) -> bool:
+    expected_keys = set(EXPECTED_MUTANT_INVENTORY)
+    return bool(
+        _exact_keys(observation, expected_keys)
+        and all(_is_exact_int(observation.get(key)) for key in expected_keys)
+        and dict(observation) == EXPECTED_MUTANT_INVENTORY
+        and observation["named_probe_ids"]
+        == observation["distinct_probe_variants"]
+        + observation["duplicate_aliases"]
+        and set(MUTANT_ALIAS_OF).issubset(REQUIRED_MUTANT_IDS)
+        and set(MUTANT_ALIAS_OF.values()).issubset(DISTINCT_MUTANT_IDS)
+        and not set(MUTANT_ALIAS_OF.values()).intersection(MUTANT_ALIAS_OF)
     )
 
 
@@ -2334,7 +2438,12 @@ def _run_alembic(scratch_url: str, *arguments: str) -> dict[str, Any]:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
         cwd=BACKEND,
-        env={**os.environ, "APP_ENV": "testing", "DATABASE_URL": scratch_url},
+        env={
+            **os.environ,
+            "APP_ENV": "testing",
+            "DATABASE_URL": scratch_url,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
         capture_output=True,
         text=True,
         timeout=240,
@@ -3252,7 +3361,7 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
 
 
 def _runtime_probe(base: URL) -> dict[str, Any]:
-    engine = create_engine(_database_url(base, "postgres"), poolclass=NullPool)
+    engine = create_engine(base, poolclass=NullPool)
     try:
         with engine.connect() as connection:
             version = connection.scalar(text("SHOW server_version_num"))
@@ -6017,7 +6126,9 @@ def _assemble_assertions(
         _assertion(
             REQUIRED_ASSERTION_IDS[15],
             _harness_observation_passes(harness),
-            mutants=len(REQUIRED_MUTANT_IDS),
+            named_probe_ids=len(REQUIRED_MUTANT_IDS),
+            distinct_probe_variants=len(DISTINCT_MUTANT_IDS),
+            duplicate_aliases=len(MUTANT_ALIAS_OF),
             scratch_databases=3,
         ),
     ]
@@ -6794,7 +6905,12 @@ def _seeded_mutant_results() -> dict[str, bool]:
 
 def _seeded_mutants_are_killed() -> bool:
     results = _seeded_mutant_results()
-    return bool(tuple(results) == REQUIRED_MUTANT_IDS and all(results.values()))
+    inventory = _mutant_inventory(results)
+    return bool(
+        tuple(results) == REQUIRED_MUTANT_IDS
+        and all(value is True for value in results.values())
+        and _mutant_inventory_observation_passes(inventory)
+    )
 
 
 def _blocked_report(reason: str) -> dict[str, Any]:
@@ -6873,13 +6989,16 @@ def run_gate(base: URL) -> dict[str, Any]:
         "scratch": scratch,
     }
     mutants = _seeded_mutant_results()
+    mutant_inventory = _mutant_inventory(mutants)
     private_evidence = {
         "observations": observations,
-        "mutants": mutants,
+        "named_probe_results": mutants,
+        "mutant_inventory": mutant_inventory,
     }
     privacy_findings = len(_privacy_findings(private_evidence))
     harness = {
         "mutants": mutants,
+        "mutant_inventory": mutant_inventory,
         "privacy_scanned": True,
         "privacy_findings": privacy_findings,
         "scratch": scratch,
@@ -6894,7 +7013,7 @@ def run_gate(base: URL) -> dict[str, Any]:
         "executed": True,
         "assertions": assertions,
         "assertion_summary": evaluation,
-        "mutants": len(mutants),
+        "mutant_inventory": mutant_inventory,
         "race_cases": len(REQUIRED_RACE_CASES),
         "scratch": {
             "created": scratch["created"],

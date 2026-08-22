@@ -491,6 +491,8 @@ def _recover_registration_integrity_conflict(
     payload: StudentRegisterRequest,
     idempotency_key: str | None,
     exc: IntegrityError,
+    *,
+    now: datetime,
 ) -> registration_service.RegistrationReplayResolution:
     """Translate only exact named registration invariants after rollback.
 
@@ -512,7 +514,7 @@ def _recover_registration_integrity_conflict(
     ):
         try:
             winner = registration_service.resolve_idempotent_replay(
-                session, idempotency_key, payload
+                session, idempotency_key, payload, now=now
             )
         except RegistrationError as conflict:
             raise _registration_http_error(conflict) from exc
@@ -549,7 +551,7 @@ def _commit_decoy_or_resolve_winner(
         return outcome
     except IntegrityError as exc:
         return _recover_registration_integrity_conflict(
-            session, payload, idempotency_key, exc
+            session, payload, idempotency_key, exc, now=now
         )
 
 
@@ -634,7 +636,7 @@ def register(
     except IntegrityError as exc:
         try:
             result = _recover_registration_integrity_conflict(
-                session, payload, idempotency_key, exc
+                session, payload, idempotency_key, exc, now=now
             )
         except HTTPException as conflict:
             if (
@@ -720,7 +722,7 @@ def register(
         # contract. A distinct-key mobile loser becomes a decoy flow.
         try:
             winner = _recover_registration_integrity_conflict(
-                session, payload, idempotency_key, exc
+                session, payload, idempotency_key, exc, now=now
             )
         except HTTPException as conflict:
             if not (

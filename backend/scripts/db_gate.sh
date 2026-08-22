@@ -22,7 +22,12 @@
 set -euo pipefail
 
 PY="${PYTHON:-python}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 : "${DATABASE_URL:?set DATABASE_URL}"
+# This entry point is explicitly destructive and its downstream gates already
+# require a loopback, marker-named disposable database.  The NYAY-19 Alembic
+# release guard independently rechecks both facts before honoring this opt-in.
+export NYAY19_ISOLATED_MIGRATION_EXECUTE=1
 
 echo "== backend pytest =="
 # The unit/HTTP-contract suite intentionally runs without the target database
@@ -32,6 +37,11 @@ echo "== backend pytest =="
 # explicit test fixtures.  PostgreSQL stages below retain the caller's staging
 # environment and DATABASE_URL.
 env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q
+echo "== NYAY-19 durable reconstruction-auditor unit tests =="
+(
+  cd "$REPO_ROOT"
+  "$PY" -m unittest scripts.provenance.test_nyay19_replay_audit
+)
 echo "== alembic upgrade + drift =="
 "$PY" -m alembic upgrade head
 "$PY" -m alembic check

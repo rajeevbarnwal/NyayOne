@@ -474,7 +474,7 @@ def run_alembic(args: list[str], url: str) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=str(BACKEND),
-        env=env,
+        env={**env, "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1"},
         capture_output=True,
         text=True,
     )

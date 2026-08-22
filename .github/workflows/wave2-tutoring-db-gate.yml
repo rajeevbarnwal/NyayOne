@@ -44,6 +44,7 @@ jobs:
       APP_ENV: test
       REGISTRATION_SECRET: ci-registration-encryption-secret-not-a-default
       REGISTRATION_LOOKUP_SECRET: ci-registration-lookup-secret-not-a-default
+      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

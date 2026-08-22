@@ -133,7 +133,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@localhost:1032/nyayone_ci
+      DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_ci
       APP_ENV: staging
       # Wave 5 fail-closed contract: outside local/test environments the
       # subscriber-facing calendar origin must be a real non-loopback HTTPS
@@ -156,6 +156,9 @@ jobs:
       OTP_PROVIDER_URL: https://otp-provider.example.test/send
       OTP_PROVIDER_TOKEN: ci-otp-provider-token-not-a-default
       OTP_PROVIDER_SUPPORTS_IDEMPOTENCY: "true"
+      # Explicitly marks only this loopback, marker-named CI database as
+      # disposable for the NYAY-19 Alembic release guard.
+      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"
     defaults:
       run:
         working-directory: backend
@@ -171,17 +174,17 @@ jobs:
           pip install -r requirements.txt -c requirements.lock pytest httpx
       - name: Enable pgvector
         run: |
-          PGPASSWORD=nyayone_ci_ephemeral psql -h localhost -p 1032 -U nyayone_ci -d nyayone_ci \
+          PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -p 1032 -U nyayone_ci -d nyayone_ci \
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)
         run: PYTHON=python bash scripts/db_gate.sh
       - name: SAATHI-60 owner-scoped save concurrency (isolated PostgreSQL database)
         run: |
-          PGPASSWORD=nyayone_ci_ephemeral psql -h localhost -p 1032 -U nyayone_ci -d postgres \
+          PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -p 1032 -U nyayone_ci -d postgres \
             -c "CREATE DATABASE nyayone_saathi60_ci_qa OWNER nyayone_ci;"
-          DATABASE_URL=postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@localhost:1032/nyayone_saathi60_ci_qa \
+          DATABASE_URL=postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_saathi60_ci_qa \
             python -m alembic upgrade head
-          SAATHI60_POSTGRES_TEST_URL=postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@localhost:1032/nyayone_saathi60_ci_qa \
+          SAATHI60_POSTGRES_TEST_URL=postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_saathi60_ci_qa \
             python -m pytest -q \
               tests/test_saathi60_internships.py::test_parallel_save_is_one_row_and_one_audit_on_postgresql
       - name: Provision deterministic E2E actors (idempotent — run twice, F1)

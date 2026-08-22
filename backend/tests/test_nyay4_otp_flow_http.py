@@ -4,6 +4,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import threading
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -22,7 +23,7 @@ from app.models.registration import (
     RegistrationIdempotencyRecord,
     StudentRegistration,
 )
-from app.services import registration_service
+from app.services import otp_flow_service, registration_service
 from app.services.otp_sender import CapturingSender
 from tests import dbtemplate
 
@@ -704,6 +705,91 @@ def test_missing_flow_verify_is_typed_and_never_raises_internal_type_error():
     finally:
         client.close()
         engine.dispose()
+
+
+def _terminal_erasure_parts(*, state: str, hard_deleted: bool):
+    record = SimpleNamespace(
+        id="ledger-row",
+        state=state,
+        registration_id=None,
+        outbox_id=None,
+        request_fingerprint=None,
+        request_fingerprint_version=None,
+        outcome_code="registration_replay_expired",
+    )
+    registration = None
+    if not hard_deleted:
+        registration = SimpleNamespace(
+            status="deleted",
+            deleted_at=datetime.now(timezone.utc),
+            dob_hash_state="erased",
+        )
+    return record, registration
+
+
+def test_complete_terminal_erasure_is_the_only_missing_flow_graph_denial():
+    for state in ("retired", "erased"):
+        for hard_deleted in (False, True):
+            record, registration = _terminal_erasure_parts(
+                state=state,
+                hard_deleted=hard_deleted,
+            )
+            assert otp_flow_service._terminal_erasure_won(
+                record=record,
+                record_id="ledger-row",
+                registration=registration,
+                authority=None,
+                flow=None,
+            )
+
+    record, registration = _terminal_erasure_parts(
+        state="retired",
+        hard_deleted=False,
+    )
+    malformed = (
+        ("state", "pending"),
+        ("registration_id", "registration-row"),
+        ("outbox_id", "outbox-row"),
+        ("request_fingerprint", "0" * 64),
+        ("request_fingerprint_version", "v1"),
+        ("outcome_code", "otp_delivery_failed"),
+    )
+    for field, unsafe in malformed:
+        mutant = SimpleNamespace(**vars(record))
+        setattr(mutant, field, unsafe)
+        assert not otp_flow_service._terminal_erasure_won(
+            record=mutant,
+            record_id="ledger-row",
+            registration=registration,
+            authority=None,
+            flow=None,
+        )
+    assert not otp_flow_service._terminal_erasure_won(
+        record=record,
+        record_id="different-ledger-row",
+        registration=registration,
+        authority=None,
+        flow=None,
+    )
+    assert not otp_flow_service._terminal_erasure_won(
+        record=record,
+        record_id="ledger-row",
+        registration=SimpleNamespace(
+            status="otp_pending",
+            deleted_at=None,
+            dob_hash_state="verified",
+        ),
+        authority=None,
+        flow=None,
+    )
+    for authority, flow in ((object(), None), (None, object()), (object(), object())):
+        assert not otp_flow_service._terminal_erasure_won(
+            record=record,
+            record_id="ledger-row",
+            registration=registration,
+            authority=authority,
+            flow=flow,
+        )
 
 
 def _activate_signup(client: TestClient, sender: CapturingSender) -> None:
