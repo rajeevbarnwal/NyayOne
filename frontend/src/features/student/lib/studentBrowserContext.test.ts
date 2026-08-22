@@ -8,7 +8,7 @@ import {
 } from './registrationAttemptStore';
 import {
   STUDENT_AUTH_CHANGED_EVENT,
-  STUDENT_CONTEXT_REGISTRY_KEY,
+  MAX_RETIRED_STUDENT_KEYS_PER_PURGE,
   clearStudentBrowserContext,
   observeStudentSessionActor,
 } from './studentBrowserContext';
@@ -107,7 +107,24 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(inaccessibleWindow.dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('clears actor A before recording actor B and removes only A dynamic keys', () => {
+  it('preserves only the exact actor-independent public projection while clearing private queries and every mutation', () => {
+    queryClient.setQueryData(['public-internship-risk-labels', 'organisation-A'], { available: true });
+    queryClient.setQueryData(['student-profile'], { private: true });
+    queryClient.setQueryData(['unknown-public-looking-key'], { private: true });
+    queryClient.getMutationCache().build(queryClient, {
+      mutationKey: ['public-internship-risk-labels', 'still-unsafe-as-a-mutation'],
+      mutationFn: async () => ({ private: true }),
+    });
+
+    clearStudentBrowserContext();
+
+    expect(queryClient.getQueryData(['public-internship-risk-labels', 'organisation-A'])).toEqual({ available: true });
+    expect(queryClient.getQueryData(['student-profile'])).toBeUndefined();
+    expect(queryClient.getQueryData(['unknown-public-looking-key'])).toBeUndefined();
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('clears actor memory and all retired app-owned dynamic keys before rotation', () => {
     const local = new Map<string, string>([
       ['ls-reports-student-A', 'A'],
       ['ls-reminder-prefs-profile-A', 'A'],
@@ -127,17 +144,11 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(queryClient.getQueryData(['private-A'])).toBeUndefined();
     expect(local.has('ls-reports-student-A')).toBe(false);
     expect(local.has('ls-reminder-prefs-profile-A')).toBe(false);
-    expect(local.get('ls-reports-student-B')).toBe('B');
+    expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.get('ls-theme')).toBe('light');
-    expect(JSON.parse(local.get(STUDENT_CONTEXT_REGISTRY_KEY) ?? 'null')).toEqual([
-      'ls-reports-student-B',
-      'ls-reminder-prefs-student-B',
-      'ls-reports-profile-B',
-      'ls-reminder-prefs-profile-B',
-    ]);
   });
 
-  it('retires only the registered current actor after a full module reload', async () => {
+  it('persists no actor registry and retires bounded app-owned prefixes after reload', async () => {
     const local = new Map<string, string>([
       ['ls-reports-student-A', 'private-report-A'],
       ['ls-reminder-prefs-profile-A', 'private-reminder-A'],
@@ -154,7 +165,7 @@ describe('NYAY-19 student browser-context boundary', () => {
     vi.resetModules();
     const activeRealm = await import('./studentBrowserContext');
     activeRealm.observeStudentSessionActor({ subject: 'student-A', studentProfileId: 'profile-A' });
-    expect(local.has(STUDENT_CONTEXT_REGISTRY_KEY)).toBe(true);
+    expect([...local.keys()].some((key) => key.includes('cleanup-registry'))).toBe(false);
 
     // A new JS realm has no in-memory observed actor. An anonymous/expired
     // server session must still retire only the exact actor registered earlier.
@@ -164,13 +175,13 @@ describe('NYAY-19 student browser-context boundary', () => {
 
     expect(local.has('ls-reports-student-A')).toBe(false);
     expect(local.has('ls-reminder-prefs-profile-A')).toBe(false);
-    expect(local.has(STUDENT_CONTEXT_REGISTRY_KEY)).toBe(false);
-    expect(local.get('ls-reports-student-B')).toBe('private-report-B');
+    expect(local.has('legalsaathi.student.cleanup-registry.v1')).toBe(false);
+    expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
     expect(local.get('ls-locale')).toBe('hi');
   });
 
-  it('a stale actor realm never consumes a newer cross-tab actor registry', async () => {
+  it('never writes actor identity to browser storage across multiple realms', async () => {
     const local = new Map<string, string>([
       ['ls-reports-student-A', 'private-report-A'],
       ['ls-reminder-prefs-student-A', 'private-reminder-A'],
@@ -192,49 +203,23 @@ describe('NYAY-19 student browser-context boundary', () => {
     local.set('ls-reports-student-B', 'private-report-B');
     local.set('ls-reminder-prefs-student-B', 'private-reminder-B');
 
-    // StrictMode can resolve the stale realm anonymous more than once. Its
-    // remembered A identity must preserve B's exact keys and cleanup registry.
+    // StrictMode can resolve either realm anonymous more than once. Retired
+    // app-owned prefixes are purged without persisting either actor identity.
     staleActorRealm.clearStudentBrowserContext();
     staleActorRealm.clearStudentBrowserContext();
-    expect(local.get('ls-reports-student-B')).toBe('private-report-B');
-    expect(local.get('ls-reminder-prefs-student-B')).toBe('private-reminder-B');
-    expect(JSON.parse(local.get(STUDENT_CONTEXT_REGISTRY_KEY) ?? 'null')).toEqual([
-      'ls-reports-student-B',
-      'ls-reminder-prefs-student-B',
-    ]);
+    expect(local.has('ls-reports-student-B')).toBe(false);
+    expect(local.has('ls-reminder-prefs-student-B')).toBe(false);
+    expect([...local.keys()].some((key) => key.includes('cleanup-registry'))).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
 
-    // The server-current B realm (or an accepted terminal mutation) owns B.
     activeActorRealm.clearStudentBrowserContext({ consumeRegisteredActor: true });
     expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.has('ls-reminder-prefs-student-B')).toBe(false);
-    expect(local.has(STUDENT_CONTEXT_REGISTRY_KEY)).toBe(false);
   });
 
-  it.each([
-    ['malformed JSON', '{'],
-    ['wrong cardinality', JSON.stringify(['ls-reports-student-A'])],
-    ['duplicate keys', JSON.stringify([
-      'ls-reports-student-A',
-      'ls-reminder-prefs-student-A',
-      'ls-reports-student-A',
-      'ls-reminder-prefs-student-A',
-    ])],
-    ['cross-prefix key', JSON.stringify([
-      'ls-reports-student-A',
-      'ls-theme',
-    ])],
-    ['mismatched pair', JSON.stringify([
-      'ls-reports-student-A',
-      'ls-reminder-prefs-student-B',
-    ])],
-    ['unsafe actor id', JSON.stringify([
-      'ls-reports-../student-A',
-      'ls-reminder-prefs-../student-A',
-    ])],
-  ])('fails closed for a %s cleanup registry', (_label, registry) => {
+  it('retires the former registry without reading it and preserves unrelated keys', () => {
     const local = new Map<string, string>([
-      [STUDENT_CONTEXT_REGISTRY_KEY, registry],
+      ['legalsaathi.student.cleanup-registry.v1', 'malformed-or-private'],
       ['ls-reports-student-A', 'private-report-A'],
       ['ls-reminder-prefs-student-A', 'private-reminder-A'],
       ['ls-theme', 'dark'],
@@ -247,10 +232,26 @@ describe('NYAY-19 student browser-context boundary', () => {
 
     clearStudentBrowserContext();
 
-    expect(local.has(STUDENT_CONTEXT_REGISTRY_KEY)).toBe(false);
-    expect(local.get('ls-reports-student-A')).toBe('private-report-A');
-    expect(local.get('ls-reminder-prefs-student-A')).toBe('private-reminder-A');
+    expect(local.has('legalsaathi.student.cleanup-registry.v1')).toBe(false);
+    expect(local.has('ls-reports-student-A')).toBe(false);
+    expect(local.has('ls-reminder-prefs-student-A')).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
+  });
+
+  it('bounds prefix enumeration and never clears the whole storage area', () => {
+    const local = new Map<string, string>();
+    for (let index = 0; index < MAX_RETIRED_STUDENT_KEYS_PER_PURGE + 10; index += 1) {
+      local.set(`unrelated-${index}`, 'keep');
+    }
+    const clear = vi.fn();
+    vi.stubGlobal('window', {
+      localStorage: mapStorage(local, clear),
+      sessionStorage: mapStorage(new Map()),
+      dispatchEvent: vi.fn(() => true),
+    });
+    clearStudentBrowserContext();
+    expect(local.size).toBe(MAX_RETIRED_STUDENT_KEYS_PER_PURGE + 10);
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it('does not clear a cache merely because the same actor gains a profile id', () => {

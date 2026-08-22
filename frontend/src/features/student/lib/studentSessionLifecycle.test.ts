@@ -3,11 +3,7 @@ import { queryClient } from '../../../app/queryClient';
 import { getProfileDraft, updateProfileDraft } from './profileStore';
 import { getRegistrationAttempt, setRegistrationAttempt } from './registrationAttemptStore';
 import { getStudentSession, logoutStudent } from './registrationApi';
-import {
-  STUDENT_CONTEXT_REGISTRY_KEY,
-  clearStudentBrowserContext,
-  observeStudentSessionActor,
-} from './studentBrowserContext';
+import { clearStudentBrowserContext, observeStudentSessionActor } from './studentBrowserContext';
 
 function storage(map: Map<string, string>): Storage {
   return {
@@ -117,7 +113,7 @@ describe('student session lifecycle teardown', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('a failed stale-actor logout preserves the newer cross-tab actor registry', async () => {
+  it('a failed logout still purges retired app-owned actor prefixes without a registry', async () => {
     const local = new Map<string, string>();
     const dispatchEvent = vi.fn(() => true);
     vi.stubGlobal('window', {
@@ -126,19 +122,16 @@ describe('student session lifecycle teardown', () => {
       dispatchEvent,
     });
     observeStudentSessionActor({ subject: 'student-A', studentProfileId: null });
-    local.set(STUDENT_CONTEXT_REGISTRY_KEY, JSON.stringify([
-      'ls-reports-student-B',
-      'ls-reminder-prefs-student-B',
-    ]));
+    local.set('legalsaathi.student.cleanup-registry.v1', 'retired-private-registry');
     local.set('ls-reports-student-B', 'private-report-B');
     local.set('ls-reminder-prefs-student-B', 'private-reminder-B');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network unavailable')));
 
     await expect(logoutStudent()).rejects.toThrow('network unavailable');
 
-    expect(local.get('ls-reports-student-B')).toBe('private-report-B');
-    expect(local.get('ls-reminder-prefs-student-B')).toBe('private-reminder-B');
-    expect(local.has(STUDENT_CONTEXT_REGISTRY_KEY)).toBe(true);
+    expect(local.has('ls-reports-student-B')).toBe(false);
+    expect(local.has('ls-reminder-prefs-student-B')).toBe(false);
+    expect(local.has('legalsaathi.student.cleanup-registry.v1')).toBe(false);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 });

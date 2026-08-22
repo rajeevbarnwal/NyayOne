@@ -289,7 +289,6 @@ async function studentContextSnapshot(page, actor) {
       'legalsaathi.internship.applications.v1',
       'legalsaathi.clinical.export-audit.v1',
       'ls-auth-student',
-      'legalsaathi.student.cleanup-registry.v1',
     ];
     const sessionBase = [
       'legalsaathi.student.registration.v2',
@@ -312,6 +311,9 @@ async function studentContextSnapshot(page, actor) {
     return {
       managedExpectedCount,
       managedPresentCount,
+      retiredActorRegistryAbsent:
+        localStorage.getItem('legalsaathi.student.cleanup-registry.v1') === null
+        && sessionStorage.getItem('legalsaathi.student.cleanup-registry.v1') === null,
       registrationAttemptPresent: attemptStore.getRegistrationAttempt() !== null,
       profileDraftPresent,
       queryCacheCount: queryClient.getQueryCache().getAll().length,

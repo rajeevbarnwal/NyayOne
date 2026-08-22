@@ -1,8 +1,9 @@
 /**
  * Small synchronous key/value persistence abstraction (SAATHI-2/3/4/16/18
  * remediation). Mirrors the DraftStore driver pattern (lib/draftQueue.ts): an
- * interface with a browser driver (localStorage — the convention already used by
- * useTheme + TraceabilityBanner) and an in-memory driver for tests/SSR.
+ * interface with an explicitly selected browser driver and a memory-only app
+ * default. Browser persistence is never implicit because actor-scoped values
+ * and workflow identifiers must not survive a JS realm restart.
  *
  * Synchronous by design so React screens can restore state during the first
  * render after a refresh without an async round-trip.
@@ -71,13 +72,9 @@ export class LocalKvStore implements KvStore {
 }
 
 let singleton: KvStore | null = null;
-/** Default app store: localStorage in the browser, in-memory otherwise. */
+/** Default app store: memory-only in every runtime. */
 export function defaultKvStore(): KvStore {
   if (singleton) return singleton;
-  const local = new LocalKvStore();
-  // Probe: if localStorage is unusable, fall back to in-memory.
-  singleton = typeof window !== 'undefined' && (() => { try { return !!window.localStorage; } catch { return false; } })()
-    ? local
-    : new InMemoryKvStore();
+  singleton = new InMemoryKvStore();
   return singleton;
 }

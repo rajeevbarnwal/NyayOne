@@ -367,6 +367,38 @@ describe('adjacent authenticated student boundaries', () => {
     }
   });
 
+  it.each(['moderator', 'admin'])('accepts an exact server-issued %s session', async (role) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002740', roles: [role],
+        student_profile_id: null, student_verification: 'draft',
+        is_minor: false, consent_state: [],
+      },
+    })));
+
+    await expect(getStudentSession()).resolves.toEqual(expect.objectContaining({ roles: [role] }));
+  });
+
+  it.each([
+    ['empty', []],
+    ['unknown', ['owner']],
+    ['mixed', ['moderator', 'admin']],
+    ['forged student mix', ['student', 'admin']],
+    ['malformed', [7]],
+  ])('rejects %s server-session roles fail-closed', async (_label, roles) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002740', roles,
+        student_profile_id: null, student_verification: 'draft',
+        is_minor: false, consent_state: [],
+      },
+    })));
+
+    await expect(getStudentSession()).resolves.toBeNull();
+  });
+
   it('preserves the typed field-error contract', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
       detail: { code: 'validation_error', field: 'mobile' },

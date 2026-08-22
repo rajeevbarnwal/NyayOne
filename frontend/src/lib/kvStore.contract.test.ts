@@ -5,8 +5,8 @@
  * a missing key returns null across both drivers and through the shared
  * auth-persistence and draft-workspace services.
  */
-import { describe, expect, it } from 'vitest';
-import { InMemoryKvStore, LocalKvStore, type KvStore } from './kvStore';
+import { describe, expect, it, vi } from 'vitest';
+import { InMemoryKvStore, LocalKvStore, defaultKvStore, type KvStore } from './kvStore';
 import { loadAuthSnapshot } from '../features/auth/lib/authPersistence';
 import { DraftWorkspaceService } from '../features/lawyer/lib/draftWorkspace';
 
@@ -29,5 +29,15 @@ describe('Independent shared KvStore contract QA — 49d0f10', () => {
 
   it('preserves declared null semantics through shared workspace services', () => {
     expect(new DraftWorkspaceService(new InMemoryKvStore()).get('missing-workspace')).toBeNull();
+  });
+
+  it('uses a memory-only default even when localStorage is available', () => {
+    const setItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { setItem } });
+    const store = defaultKvStore();
+    store.set('actor-derived-key', { private: true });
+    expect(store.get('actor-derived-key')).toEqual({ private: true });
+    expect(setItem).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

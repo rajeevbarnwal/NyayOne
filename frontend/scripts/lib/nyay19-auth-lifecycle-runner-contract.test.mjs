@@ -143,8 +143,9 @@ const issuance = (name, maxAge, suffix = '') => ({
 });
 
 const contextBefore = () => ({
-  managedExpectedCount: 13,
-  managedPresentCount: 13,
+  managedExpectedCount: 12,
+  managedPresentCount: 12,
+  retiredActorRegistryAbsent: true,
   registrationAttemptPresent: true,
   profileDraftPresent: true,
   queryCacheCount: 2,
@@ -153,8 +154,9 @@ const contextBefore = () => ({
 });
 
 const contextAfter = () => ({
-  managedExpectedCount: 13,
+  managedExpectedCount: 12,
   managedPresentCount: 0,
+  retiredActorRegistryAbsent: true,
   registrationAttemptPresent: false,
   profileDraftPresent: false,
   queryCacheCount: 0,
@@ -218,7 +220,7 @@ function assertRunnerWiring(source) {
     /const boundaryA = inspectStudentContextBoundary\(beforeA, afterA\);/,
     /const boundaryB = inspectStudentContextBoundary\(beforeB, afterB\);/,
     /const boundaryExpiry = inspectStudentContextBoundary\(beforeExpiry, afterExpiry\);/,
-    /['"]legalsaathi\.student\.cleanup-registry\.v1['"]/,
+    /localStorage\.getItem\(['"]legalsaathi\.student\.cleanup-registry\.v1['"]\) === null\s*&& sessionStorage\.getItem\(['"]legalsaathi\.student\.cleanup-registry\.v1['"]\) === null/,
     /await loginExpiry\.page\.close\(\);\s*const expiryRestartPage = await openProtectedProbePage\(loginExpiry\.context\);\s*const expiredSession = await productStudentSession\(expiryRestartPage\);/,
     /const afterExpiry = await studentContextSnapshot\(expiryRestartPage, loginExpiry\.actor\);/,
     /const boundaryDelete = inspectStudentContextBoundary\(beforeDelete, afterDelete\);/,
@@ -276,7 +278,7 @@ describe('NYAY-19 browser runner exact contract', () => {
   it('pins all frozen gate cardinalities independently', () => {
     expect(NYAY19_ASSERTION_INVENTORY).toHaveLength(18);
     expect(NYAY19_MUTATION_TRACE).toHaveLength(13);
-    expect(NYAY19_SEEDED_MUTANT_INVENTORY).toHaveLength(77);
+    expect(NYAY19_SEEDED_MUTANT_INVENTORY).toHaveLength(78);
   });
 
   it('pins stable abort stages and exception classes', () => {
@@ -792,6 +794,9 @@ describe('NYAY-19 browser runner exact contract', () => {
   });
 
   const contextMutants = [
+    ['context-browser-backed-actor-registry', (before, after) => [
+      { ...before, retiredActorRegistryAbsent: false }, after,
+    ]],
     ['context-unseeded-memory', (before, after) => [{ ...before, registrationAttemptPresent: false }, after]],
     ['context-retained-storage', (before, after) => [before, { ...after, managedPresentCount: 1 }]],
     ['context-retained-query-cache', (before, after) => [before, { ...after, queryCacheCount: 1 }]],
@@ -951,7 +956,10 @@ describe('NYAY-19 browser runner exact contract', () => {
         ["{ method: 'GET', requestId }", "{ method: 'GET' }"],
         ['const correlatedStaleCookieExact = await hasExactProtectedAuthorityChannel(', 'const correlatedStaleCookieExact = await Boolean('],
         ['retirementComponents: retirement.components', 'retirementComponents: []'],
-        ["      'legalsaathi.student.cleanup-registry.v1',\n", ''],
+        [
+          "localStorage.getItem('legalsaathi.student.cleanup-registry.v1') === null",
+          'true',
+        ],
         ['  await loginExpiry.page.close();\n', ''],
         [
           'const expiredSession = await productStudentSession(expiryRestartPage);',
@@ -1199,6 +1207,6 @@ describe('NYAY-19 browser runner exact contract', () => {
     ].map(([name]) => name);
     expect(covered).toEqual(NYAY19_SEEDED_MUTANT_INVENTORY);
     expect(new Set(covered).size).toBe(covered.length);
-    expect(covered).toHaveLength(77);
+    expect(covered).toHaveLength(78);
   });
 });

@@ -16,7 +16,10 @@ function assertBoundaryContract(value: string): void {
   for (const required of [
     'clearRegistrationAttempt();',
     'resetProfileDraft();',
-    'queryClient.clear();',
+    'clearActorSensitiveQueryState();',
+    "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);",
+    'predicate: (query) => !ACTOR_INDEPENDENT_QUERY_ROOTS.has(String(query.queryKey[0] ?? \'\'))',
+    'queryClient.getMutationCache().clear();',
     "'legalsaathi.student.profile.v1'",
     "'legalsaathi.student.onboarding.v34'",
     "'legalsaathi.internship.applications.v1'",
@@ -27,25 +30,21 @@ function assertBoundaryContract(value: string): void {
     "'ls-auth-student'",
     '`ls-reports-${id}`',
     '`ls-reminder-prefs-${id}`',
-    "'legalsaathi.student.cleanup-registry.v1'",
-    'const registeredKeys = validatedRegisteredActorKeys(local);',
-    '...(consumeRegisteredKeys ? registeredKeys : [])',
-    'const registeredKeys = local ? validatedRegisteredActorKeys(local) : [];',
-    'persistCurrentActorRegistry(currentLocal, actor)',
-    'removeKey(local, STUDENT_CONTEXT_REGISTRY_KEY)',
+    "  'legalsaathi.student.cleanup-registry.v1',\n] as const;",
+    'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;',
+    'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;',
+    'length = Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE);',
+    'RETIRED_ACTOR_PREFIXES.some((prefix) => key.startsWith(prefix))',
+    '...retiredActorKeys(local)',
   ]) {
     expect(value, `missing browser-context boundary: ${required}`).toContain(required);
   }
-  expect(value).toMatch(/parsed\.length !== 2 && parsed\.length !== 4/);
-  expect(value).toMatch(/new Set\(parsed\)\.size !== parsed\.length/);
-  expect(value).toMatch(/reportId !== reminderId \|\| !SAFE_ACTOR_KEY_ID\.test\(reportId\)/);
-  expect(value).toMatch(/options\.consumeRegisteredActor === true/);
-  expect(value).toMatch(/!realmHasObservedStudentActor && observedStudentActor === null/);
-  expect(value).toMatch(/realmHasObservedStudentActor = true/);
-  expect(value).toMatch(/registeredSubject === null \|\| consumeRegisteredKeys/);
+  expect(value).toMatch(/let observedStudentActor: ObservedStudentActor \| null = null/);
+  expect(value).toMatch(/observedStudentActor !== null && observedStudentActor\.subject !== actor\.subject/);
   expect(value).toMatch(/if \(options\.notifyAuthChanged\) notifyStudentAuthChanged\(\);/);
   expect(value).not.toMatch(/(?:localStorage|sessionStorage|\bstorage)\.clear\s*\(/);
-  expect(value).not.toMatch(/(?:startsWith|match|test)\s*\(\s*['"]ls-(?:reports|reminder-prefs)-/);
+  expect(value).not.toMatch(/setItem\s*\([^\n]*cleanup-registry/);
+  expect(value).not.toMatch(/getItem\s*\([^\n]*cleanup-registry/);
   expect(value).not.toMatch(/removeItem\s*\(\s*['"]ls-(?:theme|locale)['"]\s*\)/);
 }
 
@@ -132,39 +131,28 @@ describe('NYAY-19 browser-context source contract', () => {
   it.each([
     ['registration memory', 'clearRegistrationAttempt();'],
     ['profile draft', 'resetProfileDraft();'],
-    ['query and mutation cache', 'queryClient.clear();'],
+    ['actor-sensitive query cache', 'clearActorSensitiveQueryState();'],
+    ['public-query root inventory', "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);"],
+    ['mutation cache', 'queryClient.getMutationCache().clear();'],
     ['onboarding marker', "'legalsaathi.student.onboarding.v34'"],
     ['export reference', "'legalsaathi.student.privacy.export.v1'"],
     ['delete reference', "'legalsaathi.student.privacy.delete.v1'"],
     ['report actor key', '`ls-reports-${id}`'],
     ['reminder actor key', '`ls-reminder-prefs-${id}`'],
-    ['persistent actor registry', "'legalsaathi.student.cleanup-registry.v1'"],
-    ['registry cleanup', 'removeKey(local, STUDENT_CONTEXT_REGISTRY_KEY)'],
-    ['registry restore', '...(consumeRegisteredKeys ? registeredKeys : [])'],
-    ['registry persistence', 'persistCurrentActorRegistry(currentLocal, actor)'],
+    ['retired registry cleanup', "  'legalsaathi.student.cleanup-registry.v1',\n] as const;"],
+    ['bounded retired-key purge', 'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;'],
+    ['retired prefix inventory', 'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;'],
+    ['retired prefix purge', '...retiredActorKeys(local)'],
   ])('kills removal of the %s boundary', (_label, needle) => {
     const mutant = source(BOUNDARY_PATH).replace(needle, '/* planted removal */');
     expect(() => assertBoundaryContract(mutant)).toThrow();
   });
 
   it.each([
-    ['unbounded registry', 'parsed.length !== 2 && parsed.length !== 4', 'false'],
-    ['duplicate registry keys', 'new Set(parsed).size !== parsed.length', 'false'],
-    [
-      'cross-actor registry pair',
-      'reportId !== reminderId || !SAFE_ACTOR_KEY_ID.test(reportId)',
-      '!SAFE_ACTOR_KEY_ID.test(reportId)',
-    ],
-    [
-      'realm identity memory',
-      '!realmHasObservedStudentActor && observedStudentActor === null',
-      'observedStudentActor === null',
-    ],
-    [
-      'foreign-registry preservation',
-      'registeredSubject === null || consumeRegisteredKeys',
-      'true',
-    ],
+    ['unbounded purge', 'Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE)', 'storage.length'],
+    ['report prefix removal', 'RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX]', 'RETIRED_ACTOR_PREFIXES = [REMINDER_KEY_PREFIX]'],
+    ['memory actor rotation', 'observedStudentActor !== null && observedStudentActor.subject !== actor.subject', 'false'],
+    ['unknown query preservation', '!ACTOR_INDEPENDENT_QUERY_ROOTS.has', 'ACTOR_INDEPENDENT_QUERY_ROOTS.has'],
   ])('kills the %s mutant', (_label, needle, replacement) => {
     const original = source(BOUNDARY_PATH);
     const mutant = original.replace(needle, replacement);

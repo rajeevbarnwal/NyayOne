@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import axe from 'axe-core';
+import { validWave4StaffSession } from './lib/wave4-session-validator.mjs';
 
 const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1270').replace(/\/$/, '');
 const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1271').replace(/\/$/, '');
@@ -61,6 +62,11 @@ async function authenticatedContext(browser, viewport = { width: 1440, height: 9
   const context = await browser.newContext({ viewport, colorScheme });
   const apiUrl = new URL(API);
   await context.addCookies([{ name: COOKIE, value: TOKEN, domain: apiUrl.hostname, path: '/', httpOnly: true, secure: false, sameSite: 'Lax' }]);
+  const session = await context.request.get(`${API}/api/v1/auth/student/session`);
+  const body = await session.json().catch(() => null);
+  if (session.status() !== 200 || !validWave4StaffSession(body)) {
+    throw new Error('Wave4 server session is not an exact moderator/admin session');
+  }
   return context;
 }
 

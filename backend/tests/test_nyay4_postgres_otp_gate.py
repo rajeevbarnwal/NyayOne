@@ -246,6 +246,13 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert '"upgrade", PINNED_HEAD' not in behavior_source
 
 
+def test_populated_restart_probe_uses_https_for_the_secure_staging_cookie():
+    source = getsource(gate._run_populated_restart_probe)
+
+    assert 'base_url="https://testserver"' in source
+    assert "settings.app_env" not in source
+
+
 def test_0019_sqlite_lifecycle_proves_induced_ddl_failures_are_atomic(tmp_path):
     database = tmp_path / "nyay4-lifecycle.db"
     observation = _run_migration_lifecycle_probe(f"sqlite+pysqlite:///{database}")

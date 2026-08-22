@@ -4,16 +4,17 @@ import { clearRegistrationAttempt } from './registrationAttemptStore';
 
 export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
 
-/**
- * The one actor whose browser-private dynamic keys belong to the current
- * authenticated session. Persisting this narrow registry lets a later reload
- * retire those exact keys after the server reports an expired/revoked session;
- * it never scans a prefix or guesses at another actor's records.
- */
-export const STUDENT_CONTEXT_REGISTRY_KEY = 'legalsaathi.student.cleanup-registry.v1';
 const REPORT_KEY_PREFIX = 'ls-reports-';
 const REMINDER_KEY_PREFIX = 'ls-reminder-prefs-';
-const SAFE_ACTOR_KEY_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;
+
+// Cleanup is deliberately bounded. These are retired app-owned namespaces,
+// not an authority registry and never a reason to clear unrelated storage.
+export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;
+
+// This projection is anonymous and contains only the server-approved public
+// aggregate. Every other query root remains actor-sensitive by default.
+const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);
 
 const LOCAL_STUDENT_KEYS = [
   'legalsaathi.student.profile.v1',
@@ -21,6 +22,8 @@ const LOCAL_STUDENT_KEYS = [
   'legalsaathi.internship.applications.v1',
   'legalsaathi.clinical.export-audit.v1',
   'ls-auth-student',
+  // Retire the former browser-backed actor registry without reading it.
+  'legalsaathi.student.cleanup-registry.v1',
 ] as const;
 
 const SESSION_STUDENT_KEYS = [
@@ -34,10 +37,9 @@ interface ObservedStudentActor {
   studentProfileId: string | null;
 }
 
+// Actor identity is held only in this JS realm. It is never copied to
+// localStorage/sessionStorage, including indirectly inside a cleanup registry.
 let observedStudentActor: ObservedStudentActor | null = null;
-// Survives ordinary clear calls without retaining an identifier, so a stale
-// actor realm can never consume another tab's registry on a second refresh.
-let realmHasObservedStudentActor = false;
 
 function availableStorage(kind: 'localStorage' | 'sessionStorage'): Storage | null {
   if (typeof window === 'undefined') return null;
@@ -68,49 +70,35 @@ function currentActorKeys(): string[] {
   return observedStudentActor ? actorKeys(observedStudentActor) : [];
 }
 
-function validatedRegisteredActorKeys(storage: Storage): string[] {
-  let parsed: unknown;
+function retiredActorKeys(storage: Storage): string[] {
+  const keys: string[] = [];
+  let length: number;
   try {
-    const raw = storage.getItem(STUDENT_CONTEXT_REGISTRY_KEY);
-    if (raw === null) return [];
-    parsed = JSON.parse(raw);
+    length = Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE);
   } catch {
-    return [];
+    return keys;
   }
-  if (!Array.isArray(parsed) || (parsed.length !== 2 && parsed.length !== 4)) return [];
-  if (new Set(parsed).size !== parsed.length) return [];
-  for (let index = 0; index < parsed.length; index += 2) {
-    const reportKey = parsed[index];
-    const reminderKey = parsed[index + 1];
-    if (typeof reportKey !== 'string' || typeof reminderKey !== 'string') return [];
-    if (!reportKey.startsWith(REPORT_KEY_PREFIX) || !reminderKey.startsWith(REMINDER_KEY_PREFIX)) return [];
-    const reportId = reportKey.slice(REPORT_KEY_PREFIX.length);
-    const reminderId = reminderKey.slice(REMINDER_KEY_PREFIX.length);
-    if (reportId !== reminderId || !SAFE_ACTOR_KEY_ID.test(reportId)) return [];
+  for (let index = 0; index < length; index += 1) {
+    let key: string | null = null;
+    try { key = storage.key(index); } catch { break; }
+    if (key !== null && RETIRED_ACTOR_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      keys.push(key);
+    }
   }
-  return parsed as string[];
+  return keys;
 }
 
-function persistCurrentActorRegistry(storage: Storage, actor: ObservedStudentActor): void {
-  const keys = actorKeys(actor);
-  const validKeys = keys.length === 2 || keys.length === 4
-    ? keys.every((value, index) => {
-      const prefix = index % 2 === 0 ? REPORT_KEY_PREFIX : REMINDER_KEY_PREFIX;
-      return value.startsWith(prefix) && SAFE_ACTOR_KEY_ID.test(value.slice(prefix.length));
-    })
-    : false;
-  try {
-    if (validKeys) storage.setItem(STUDENT_CONTEXT_REGISTRY_KEY, JSON.stringify(keys));
-    else storage.removeItem(STUDENT_CONTEXT_REGISTRY_KEY);
-  } catch {
-    // Current-page memory still owns cleanup when persistence is unavailable.
-  }
+function clearActorSensitiveQueryState(): void {
+  queryClient.removeQueries({
+    predicate: (query) => !ACTOR_INDEPENDENT_QUERY_ROOTS.has(String(query.queryKey[0] ?? '')),
+  });
+  queryClient.getMutationCache().clear();
 }
 
 export interface ClearStudentBrowserContextOptions {
   /** Notify the same-tab auth provider after the teardown is complete. */
   notifyAuthChanged?: boolean;
-  /** A successful logout/deletion may consume the server-current registry. */
+  /** Retained API compatibility; cleanup no longer consumes browser actor state. */
   consumeRegisteredActor?: boolean;
 }
 
@@ -122,31 +110,18 @@ export interface ClearStudentBrowserContextOptions {
 export function clearStudentBrowserContext(
   options: ClearStudentBrowserContextOptions = {},
 ): void {
-  // Keep the operations independent: inaccessible Storage cannot retain memory
-  // or cache state, and one defensive failure cannot skip the later boundaries.
   try { clearRegistrationAttempt(); } catch { /* memory-only dependency */ }
   try { resetProfileDraft(); } catch { /* memory reset happens before storage */ }
-  try { queryClient.clear(); } catch { /* continue through storage + event */ }
+  try { clearActorSensitiveQueryState(); } catch { /* continue through storage + event */ }
 
   const local = availableStorage('localStorage');
   if (local) {
-    const registeredKeys = validatedRegisteredActorKeys(local);
-    const registeredSubject = registeredKeys[0]?.slice(REPORT_KEY_PREFIX.length) ?? null;
-    const consumeRegisteredKeys = registeredSubject !== null
-      && (options.consumeRegisteredActor === true
-        || (!realmHasObservedStudentActor && observedStudentActor === null)
-        || registeredSubject === observedStudentActor?.subject);
-    const actorOwnedKeys = new Set([
+    const keys = new Set([
+      ...LOCAL_STUDENT_KEYS,
       ...currentActorKeys(),
-      ...(consumeRegisteredKeys ? registeredKeys : []),
+      ...retiredActorKeys(local),
     ]);
-    for (const key of [...LOCAL_STUDENT_KEYS, ...actorOwnedKeys]) removeKey(local, key);
-    // A valid registry for a different actor can be installed by another tab
-    // after session rotation. Preserve that actor's cleanup authority; invalid,
-    // missing or same-actor registries are safe to retire here.
-    if (registeredSubject === null || consumeRegisteredKeys) {
-      removeKey(local, STUDENT_CONTEXT_REGISTRY_KEY);
-    }
+    for (const key of keys) removeKey(local, key);
   }
   const session = availableStorage('sessionStorage');
   if (session) {
@@ -157,23 +132,12 @@ export function clearStudentBrowserContext(
   if (options.notifyAuthChanged) notifyStudentAuthChanged();
 }
 
-/** Record the actor owning the singleton cache, clearing it before rotation. */
+/** Record the actor owning singleton memory, clearing before actor rotation. */
 export function observeStudentSessionActor(actor: ObservedStudentActor): void {
-  const local = availableStorage('localStorage');
-  const registeredKeys = local ? validatedRegisteredActorKeys(local) : [];
-  const registeredSubject = registeredKeys[0]?.slice(REPORT_KEY_PREFIX.length) ?? null;
-  if (
-    (observedStudentActor !== null && observedStudentActor.subject !== actor.subject)
-    || (observedStudentActor === null
-      && registeredSubject !== null
-      && registeredSubject !== actor.subject)
-  ) {
+  if (observedStudentActor !== null && observedStudentActor.subject !== actor.subject) {
     clearStudentBrowserContext();
   }
   observedStudentActor = actor;
-  realmHasObservedStudentActor = true;
-  const currentLocal = availableStorage('localStorage');
-  if (currentLocal) persistCurrentActorRegistry(currentLocal, actor);
 }
 
 export function notifyStudentAuthChanged(): void {
@@ -191,6 +155,7 @@ export function retireLegacyStudentRegistrationState(): void {
   if (local) {
     removeKey(local, 'legalsaathi.student.profile.v1');
     removeKey(local, 'ls-auth-student');
+    removeKey(local, 'legalsaathi.student.cleanup-registry.v1');
   }
   const session = availableStorage('sessionStorage');
   if (session) removeKey(session, 'legalsaathi.student.registration.v2');
