@@ -1215,6 +1215,116 @@ jobs:
                         failures,
                     )
 
+    def test_nyay4_transitive_jobs_require_frontend_dependencies_before_gate(self) -> None:
+        policy = load("verify_nyayone_ci")
+        node_failure = (
+            "NYAY-4-transitive job must provision exact pinned Node 22 "
+            "before its backend gate"
+        )
+        npm_failure = (
+            "NYAY-4-transitive job must run exact npm ci from frontend "
+            "before its backend gate"
+        )
+
+        wave3_path = (
+            policy.ROOT / ".github/workflows/wave3-credential-trust-gate.yml"
+        )
+        wave3 = wave3_path.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_workflow(wave3_path), [])
+        setup_node = (
+            "      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0\n"
+            "        with:\n"
+            '          node-version: "22"\n'
+            "          cache: npm\n"
+            "          cache-dependency-path: frontend/package-lock.json\n"
+        )
+        install_frontend = (
+            "      - name: Install frontend and Chromium\n"
+            "        working-directory: frontend\n"
+            "        run: |\n"
+            "          npm ci\n"
+            "          npm exec -- playwright install --with-deps chromium\n"
+        )
+        gate = (
+            "      - name: PostgreSQL migration and full backend gate\n"
+            "        working-directory: backend\n"
+            "        run: PYTHON=python bash scripts/db_gate.sh\n"
+        )
+        self.assertEqual(wave3.count(setup_node), 1)
+        self.assertEqual(wave3.count(install_frontend), 1)
+        self.assertEqual(wave3.count(gate), 1)
+        without_node = wave3.replace(setup_node, "", 1)
+        without_npm = wave3.replace("          npm ci\n", "", 1)
+        mutations: dict[str, tuple[str, str]] = {
+            "missing setup-node": (without_node, node_failure),
+            "wrong Node version": (
+                wave3.replace(
+                    '          node-version: "22"',
+                    '          node-version: "20"',
+                    1,
+                ),
+                node_failure,
+            ),
+            "setup-node after gate": (
+                without_node.replace(gate, gate + setup_node, 1),
+                node_failure,
+            ),
+            "missing npm ci": (without_npm, npm_failure),
+            "npm ci masked": (
+                wave3.replace("          npm ci\n", "          npm ci || true\n", 1),
+                npm_failure,
+            ),
+            "npm ci in backend": (
+                wave3.replace(
+                    "      - name: Install frontend and Chromium\n"
+                    "        working-directory: frontend\n",
+                    "      - name: Install frontend and Chromium\n"
+                    "        working-directory: backend\n",
+                    1,
+                ),
+                npm_failure,
+            ),
+            "npm ci after gate": (
+                wave3.replace(install_frontend, "", 1).replace(
+                    gate, gate + install_frontend, 1
+                ),
+                npm_failure,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / wave3_path.name
+            for label, (mutated, expected) in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, wave3)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any(expected in failure for failure in failures),
+                        failures,
+                    )
+
+        wave4_path = (
+            policy.ROOT / ".github/workflows/wave4-private-reporting-gate.yml"
+        )
+        wave4 = wave4_path.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_workflow(wave4_path), [])
+        full_suite_mutant = wave4.replace("          npm ci\n", "", 1)
+        self.assertNotEqual(full_suite_mutant, wave4)
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / wave4_path.name
+            candidate.write_text(full_suite_mutant, encoding="utf-8")
+            failures = policy.check_workflow(candidate)
+        self.assertTrue(
+            any(npm_failure in failure for failure in failures), failures
+        )
+
+        wave5_path = policy.ROOT / ".github/workflows/wave5-calendar-gate.yml"
+        wave5_failures = policy.check_workflow(wave5_path)
+        self.assertFalse(
+            any("NYAY-4-transitive job" in failure for failure in wave5_failures),
+            wave5_failures,
+        )
+
     def test_nyay4_browser_executable_contract_rejects_seeded_mutants(self) -> None:
         policy = load("verify_nyayone_ci")
         self.assertEqual(policy.check_nyay4_browser_gate_contract(), [])
