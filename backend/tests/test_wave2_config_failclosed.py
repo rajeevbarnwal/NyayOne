@@ -84,6 +84,11 @@ _WAVE2_ENV = (
     "RATE_LIMIT_REVIEW_PER_HOUR",
     "REFUND_FREE_CANCEL_HOURS",
     "REMINDER_OFFSETS",
+    "OTP_DELIVERY_ENABLED",
+    "OTP_PROVIDER",
+    "OTP_PROVIDER_URL",
+    "OTP_PROVIDER_TOKEN",
+    "OTP_PROVIDER_SUPPORTS_IDEMPOTENCY",
 )
 
 
@@ -99,6 +104,21 @@ def _build(**overrides) -> Settings:
     # APP_ENV=staging; inheriting that value would make development-only
     # provider assertions depend on the runner instead of their inputs.
     overrides.setdefault("app_env", "development")
+    if overrides["app_env"] in {"staging", "production"}:
+        # Keep Wave 2 mutants isolated from the independent NYAY-4 startup
+        # boundary. These are syntactically valid reserved test credentials;
+        # no network call occurs during Settings construction.
+        overrides.setdefault("otp_delivery_enabled", True)
+        overrides.setdefault("otp_provider", "http")
+        overrides.setdefault(
+            "otp_provider_url",
+            "https://otp-provider.example.invalid/send",
+        )
+        overrides.setdefault(
+            "otp_provider_token",
+            SecretStr("wave2-config-only-token"),
+        )
+        overrides.setdefault("otp_provider_supports_idempotency", True)
     return Settings(_env_file=None, **overrides)
 
 

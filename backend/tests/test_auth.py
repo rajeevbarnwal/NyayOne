@@ -12,12 +12,49 @@ from app.core.auth import (
     ActorContext,
     Role,
     VerificationStatus,
+    _canonical_http_origin,
     build_actor_context,
     get_actor_context,
     require_authenticated,
     require_lawyer_features,
     require_role,
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("HTTPS://App.Example", "https://app.example"),
+        ("https://app.example:443", "https://app.example"),
+        ("http://app.example:80", "http://app.example"),
+        ("https://app.example:8443", "https://app.example:8443"),
+        ("https://[2001:db8::1]:443", "https://[2001:db8::1]"),
+        ("https://[2001:db8::1]:8443", "https://[2001:db8::1]:8443"),
+    ],
+)
+def test_canonical_http_origin_normalizes_only_origin_tuple(value, expected):
+    assert _canonical_http_origin(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "null",
+        "*",
+        "ftp://app.example",
+        "https://user@app.example",
+        "https://app.example/",
+        "https://app.example/path",
+        "https://app.example?query=1",
+        "https://app.example#fragment",
+        "https://app.example:bad",
+        "https://[2001:db8::1",
+    ],
+)
+def test_canonical_http_origin_rejects_non_origins(value):
+    assert _canonical_http_origin(value) is None
 
 
 def test_anonymous_context() -> None:

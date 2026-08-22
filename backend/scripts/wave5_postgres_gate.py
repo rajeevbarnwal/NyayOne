@@ -22,7 +22,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 BLOCKED = 78
-HEAD = "0017_registration_invariants"
+HEAD = "0020_auth_retention_lifecycle"
 PARENT = "0012_wave4_moderation"
 TABLES = {
     "calendar_event_sources",
@@ -176,7 +176,10 @@ def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=BACKEND,
-        env=os.environ.copy(),
+        env={
+            **os.environ,
+            "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        },
         capture_output=True,
         text=True,
     )

@@ -11,7 +11,9 @@ import { chromium } from 'playwright';
 
 const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1170').replace(/\/$/, '');
 const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1171').replace(/\/$/, '');
+const OTP = (process.env.E2E_OTP_CAPTURE_URL ?? 'http://127.0.0.1:1099').replace(/\/$/, '');
 const OUT = path.resolve(process.env.E2E_OUTPUT_DIR ?? 'test-results/credential-e2e');
+const STUDENT_MOBILE = '9000000097';
 const STUDENT_ID = '00000000-0000-4000-8000-0000000000de';
 const ISSUER_ID = '00000000-0000-4000-8000-000000000253';
 const STUDENT_HEADERS = {
@@ -91,6 +93,33 @@ async function clearWallet(request) {
     });
     if (!removed.ok()) throw new Error(`wallet cleanup delete failed: ${removed.status()}`);
   }
+}
+
+async function authenticateStudent(context) {
+  const reset = await fetch(`${OTP}/reset`, { method: 'POST' });
+  if (!reset.ok) throw new Error('credential OTP capture reset failed');
+  const started = await context.request.post(
+    `${API}/api/v1/auth/student/login/otp/start`,
+    { headers: { Origin: WEB }, data: { mobile: STUDENT_MOBILE } },
+  );
+  if (started.status() !== 202) throw new Error('credential login start failed');
+
+  let code = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await fetch(`${OTP}/latest`);
+    const payload = response.ok ? await response.json() : null;
+    if (payload?.to === STUDENT_MOBILE && /^\d{6}$/u.test(payload?.code ?? '')) {
+      code = payload.code;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!code) throw new Error('credential login OTP unavailable');
+  const verified = await context.request.post(
+    `${API}/api/v1/auth/student/login/otp/verify`,
+    { headers: { Origin: WEB }, data: { code } },
+  );
+  if (verified.status() !== 200) throw new Error('credential login verify failed');
 }
 
 async function runApiNegativeMatrix(request) {
@@ -208,6 +237,10 @@ async function positiveJourney(browser) {
   });
   await clearWallet(context.request);
   await runApiNegativeMatrix(context.request);
+  // Browser-backed actor defaults were retired by NYAY-2. Keep the direct
+  // anonymous-denial request above genuinely anonymous, then establish the
+  // authenticated page journey through a real server-issued HttpOnly session.
+  await authenticateStudent(context);
 
   await page.goto(`${WEB}/s-82`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'Build a credible portfolio' }).waitFor();
@@ -250,8 +283,22 @@ async function positiveJourney(browser) {
     (response) => response.url().includes(`/issuer/credentials/${credentialId}/verify`)
       && response.request().method() === 'POST',
   );
+  // The deterministic issuer seam is intentionally a different actor from
+  // the student session. Remove the student cookie only for this issuer UI
+  // action, then restore the same server-issued student session afterwards.
+  const studentSessionCookies = await context.cookies();
+  await context.clearCookies();
   await page.getByRole('button', { name: 'Verify credential' }).click();
-  check('functional', 'issuer verify HTTP', (await verifyResponse).status() === 200, 'HTTP 200', 'HTTP 200');
+  const issuerVerification = await verifyResponse;
+  await context.addCookies(studentSessionCookies);
+  check(
+    'functional',
+    'issuer verify HTTP',
+    issuerVerification.status() === 200,
+    'HTTP 200',
+    `HTTP ${issuerVerification.status()}`,
+  );
+  await page.reload({ waitUntil: 'networkidle' });
   await page.getByText('verified', { exact: true }).waitFor();
 
   await page.getByRole('link', { name: 'Create share link' }).click();
@@ -332,14 +379,18 @@ async function positiveJourney(browser) {
     JSON.stringify(unexpected),
   );
 
+  const storageState = await context.storageState();
   await context.close();
-  return { credentialId, tokenBody, publicPath };
+  return { credentialId, tokenBody, publicPath, storageState };
 }
 
-async function geometryMatrix(browser, credentialId) {
+async function geometryMatrix(browser, credentialId, storageState) {
   for (const [width, height] of VIEWPORTS) {
     for (const theme of THEMES) {
-      const context = await browser.newContext({ viewport: { width, height } });
+      const context = await browser.newContext({
+        viewport: { width, height },
+        storageState,
+      });
       await context.addInitScript((mode) => localStorage.setItem('ls-theme', mode), theme);
       const page = await context.newPage();
       const consoleErrors = [];
@@ -434,8 +485,11 @@ async function assertGeometry(page, screen, width, height, theme, consoleErrors,
   if (!pass) throw new Error(`geometry failed: ${screen}-${width}x${height}-${theme}`);
 }
 
-async function freshContextPersistence(browser, credentialId) {
-  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+async function freshContextPersistence(browser, credentialId, storageState) {
+  const context = await browser.newContext({
+    viewport: { width: 1024, height: 768 },
+    storageState,
+  });
   const page = await context.newPage();
   await page.goto(`${WEB}/s-82`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'Advanced Moot Court Certificate' }).waitFor();
@@ -454,9 +508,9 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   try {
-    const { credentialId } = await positiveJourney(browser);
-    await freshContextPersistence(browser, credentialId);
-    await geometryMatrix(browser, credentialId);
+    const { credentialId, storageState } = await positiveJourney(browser);
+    await freshContextPersistence(browser, credentialId, storageState);
+    await geometryMatrix(browser, credentialId, storageState);
   } catch (error) {
     report.failures.push({ category: 'qa-error', diagnostic: diagnosticSummary(error) });
   } finally {

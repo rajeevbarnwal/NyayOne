@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "source_root": "/private/tmp/nyayone-sprint1-remaining-a1a40fba/",
+  "window": {
+    "after": "2026-08-21T04:54:11.716Z",
+    "through": "2026-08-21T12:01:37.326Z"
+  },
+  "source_aliases": [
+    "canonical-1",
+    "canonical-2",
+    "canonical-3",
+    "postgres-gate",
+    "head-compat",
+    "browser",
+    "ci-policy"
+  ],
+  "canonical_aliases": [
+    "canonical-1",
+    "canonical-2",
+    "canonical-3"
+  ],
+  "supplemental_aliases": [
+    "postgres-gate",
+    "head-compat",
+    "browser",
+    "ci-policy"
+  ],
+  "expected_per_source": {
+    "canonical-1": {"events": 26, "changes": 31},
+    "canonical-2": {"events": 94, "changes": 100},
+    "canonical-3": {"events": 17, "changes": 25},
+    "postgres-gate": {"events": 129, "changes": 129},
+    "head-compat": {"events": 4, "changes": 12},
+    "browser": {"events": 82, "changes": 93},
+    "ci-policy": {"events": 10, "changes": 12}
+  },
+  "expected": {
+    "canonical_events": 137,
+    "canonical_changes": 156,
+    "supplemental_events": 225,
+    "supplemental_changes": 246,
+    "events": 362,
+    "changes": 402,
+    "paths": 63,
+    "adds": 16,
+    "updates": 386,
+    "deletes": 0,
+    "moves": 0,
+    "conflicting_duplicates": 0,
+    "non_root_events": 2,
+    "mixed_root_events": 0,
+    "selected_stream_sha256": "a0f049bca8f250e263f68e532c56ba7c3b6256f74e1390b0741a06c8f567d4f9",
+    "first": {
+      "timestamp": "2026-08-21T05:05:20.561Z",
+      "call_id": "exec-2caff362-2b12-4ae5-bbc7-e66a2e100cdf"
+    },
+    "last": {
+      "timestamp": "2026-08-21T11:57:26.037Z",
+      "call_id": "exec-1a07f006-d35a-4dfe-a67b-ac8354f505f1"
+    }
+  },
+  "expected_source_sha256": {
+    "canonical-1": "a5b7554bba9c242b8da9bb72946a9ea5dc22527011be109b0aa513a5aab98dbd",
+    "canonical-2": "655a456e01ea1ce64e8b92c3080a0db034dea5a2773c6b80ba2b912958e535b1",
+    "canonical-3": "e11f8b60843a2599502962cd4778ef56fd8525cb7ce40afd88d6af0c5faabad4",
+    "postgres-gate": "6be0a9ca854da7ba6599d5e24f476ae1928d71d3455addd321ae41bedf6f0200",
+    "head-compat": "be2d81f46aec37c3d250583281e502056e265551e4a570a611dbf3fb864c805c",
+    "browser": "fc687dc374ab05f036f1141e19994a5a1a3ed3aa9d688d8ff108f7be448b5ca3",
+    "ci-policy": "3c0951310d05d7661febec83856b99c7ab91ce0361b55d83ccdef05a58ea5771"
+  },
+  "expected_non_apply_audit": {
+    "command_capable_envelopes": 1194,
+    "exec_command_invocations": 1184,
+    "write_stdin_invocations": 76,
+    "interactive_envelopes": 76,
+    "source_scoped_envelopes": 1108,
+    "explicit_repo_state_mutator_envelopes": 2,
+    "explicit_file_mutator_envelopes": 7,
+    "command_stream_sha256": "9917c4547b6f757300544db61013a46e8bde77bab576c6ebfce44089955ccbe3",
+    "conflicting_duplicates": 0,
+    "status_categories": {
+      "completed": 1194,
+      "failed": 0,
+      "error": 0,
+      "aborted": 0,
+      "cancelled": 0,
+      "in_progress": 0,
+      "missing": 0,
+      "other": 0
+    },
+    "per_source": {
+      "canonical-1": {
+        "command_envelopes": 510,
+        "exec_command_invocations": 473,
+        "write_stdin_invocations": 42,
+        "source_scoped_envelopes": 463,
+        "explicit_repo_state_mutator_envelopes": 2,
+        "explicit_file_mutator_envelopes": 0
+      },
+      "canonical-2": {
+        "command_envelopes": 160,
+        "exec_command_invocations": 135,
+        "write_stdin_invocations": 29,
+        "source_scoped_envelopes": 131,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 7
+      },
+      "canonical-3": {
+        "command_envelopes": 33,
+        "exec_command_invocations": 54,
+        "write_stdin_invocations": 0,
+        "source_scoped_envelopes": 33,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 0
+      },
+      "postgres-gate": {
+        "command_envelopes": 207,
+        "exec_command_invocations": 220,
+        "write_stdin_invocations": 3,
+        "source_scoped_envelopes": 201,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 0
+      },
+      "head-compat": {
+        "command_envelopes": 44,
+        "exec_command_invocations": 42,
+        "write_stdin_invocations": 2,
+        "source_scoped_envelopes": 42,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 0
+      },
+      "browser": {
+        "command_envelopes": 213,
+        "exec_command_invocations": 233,
+        "write_stdin_invocations": 0,
+        "source_scoped_envelopes": 211,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 0
+      },
+      "ci-policy": {
+        "command_envelopes": 27,
+        "exec_command_invocations": 27,
+        "write_stdin_invocations": 0,
+        "source_scoped_envelopes": 27,
+        "explicit_repo_state_mutator_envelopes": 0,
+        "explicit_file_mutator_envelopes": 0
+      }
+    }
+  },
+  "non_apply_review_attestation": {
+    "command_stream_sha256": "9917c4547b6f757300544db61013a46e8bde77bab576c6ebfce44089955ccbe3",
+    "explicit_repo_state_mutator_envelopes": 2,
+    "explicit_file_mutator_envelopes": 7,
+    "source_tree_content_mutator_envelopes": 0,
+    "repository_index_or_commit_envelopes": 2,
+    "temporary_sqlite_cleanup_envelopes": 7,
+    "classification": "REVIEWED_EXACT_PINNED_COMMAND_STREAM"
+  },
+  "replay": {
+    "parent_commit": "85c22c277ea3e540244864561fbcc6cd56de2b1e",
+    "parent_tree": "f16bc539a7b539f82ff3f6bb3677fa897d8325e5",
+    "reconstructed_commit": "d3746191a5ea7da575cc0139779d6dc506bc2e7d",
+    "reconstructed_tree": "e2b56d285ff6bad437bafaa2a25736fbf43bcf9c",
+    "subject": "[NYAY-19] Enforce authentication retention lifecycle",
+    "files": 63,
+    "insertions": 17655,
+    "deletions": 204,
+    "create_mode_100644": 16,
+    "db_gate_sha256": "7c7f8ec2b39ac2cc28c7fda8aec158dbb42d1ed57e2bdee60e639d4190671852"
+  },
+  "claim_boundary": {
+    "recorded_original_prefix": "d374619",
+    "original_full_sha": "UNKNOWN_NOT_CLAIMED",
+    "original_tree": "UNKNOWN_NOT_CLAIMED",
+    "original_author_committer_metadata": "UNKNOWN_NOT_CLAIMED"
+  }
+}

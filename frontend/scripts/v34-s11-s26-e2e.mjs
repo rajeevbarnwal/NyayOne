@@ -142,6 +142,11 @@ function attachRuntimeEvidence(page, runtime) {
 }
 
 async function installApiContract(page, runtime, savedListingIds = new Set(['cam'])) {
+  let otpFlow = {
+    status: 'unavailable', purpose: null, destination_masked: null,
+    attempts_left: null, expires_in_seconds: null, resend_in_seconds: null,
+    locked_for_seconds: null, resend_allowed: false,
+  };
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -155,7 +160,17 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
       return json(200, profile);
     }
     if (url.pathname === '/api/v1/auth/student/session') {
-      return json(200, { authenticated: true, actor: { sub: '00000000-0000-4000-8000-0000000000de', roles: ['student'] } });
+      return json(200, {
+        authenticated: true,
+        actor: {
+          sub: 'student-browser-gate',
+          roles: ['student'],
+          student_profile_id: 'profile-browser-gate',
+          student_verification: 'verified',
+          is_minor: false,
+          consent_state: ['registration'],
+        },
+      });
     }
     if (url.pathname === '/api/v1/student/settings') {
       if (request.method() === 'PATCH') {
@@ -177,9 +192,27 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
     if (url.pathname.includes('/privacy/requests/')) {
       return json(200, { request_id: url.pathname.split('/').pop(), kind: 'export', status: 'complete', created_at: '2026-08-01T00:00:00Z' });
     }
-    if (url.pathname.endsWith('/privacy/delete')) return json(202, { request_id: 'delete-opaque-001', status: 'pending' });
-    if (url.pathname.endsWith('/recovery/start')) return json(202, { recovery_id: 'recovery-opaque-001' });
-    if (url.pathname.endsWith('/recovery/verify')) return json(200, { status: 'verified' });
+    if (url.pathname.endsWith('/privacy/delete')) {
+      otpFlow = { ...otpFlow, status: 'unavailable', purpose: null };
+      return json(202, { request_id: 'delete-opaque-001', status: 'pending' });
+    }
+    if (url.pathname === '/api/v1/auth/student/otp/state') return json(200, otpFlow);
+    if (url.pathname.endsWith('/recovery/start')) {
+      otpFlow = {
+        status: 'pending', purpose: 'recovery', destination_masked: '••••••0042',
+        attempts_left: 3, expires_in_seconds: 300, resend_in_seconds: 30,
+        locked_for_seconds: 0, resend_allowed: false,
+      };
+      return json(202, otpFlow);
+    }
+    if (url.pathname.endsWith('/recovery/verify')) {
+      otpFlow = {
+        status: 'verified', purpose: 'recovery', destination_masked: null,
+        attempts_left: null, expires_in_seconds: null, resend_in_seconds: null,
+        locked_for_seconds: null, resend_allowed: false,
+      };
+      return json(200, otpFlow);
+    }
     if (request.method() === 'GET' && url.pathname === '/api/v1/calendar/view-preferences') {
       return json(200, calendarViewPreferences);
     }

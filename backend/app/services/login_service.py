@@ -22,15 +22,25 @@ from app.models.registration import (
     AuthSession,
     Consent,
     LoginAttempt,
+    OtpChallenge,
+    OtpFlow,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
     User,
 )
-from app.services import integrity_errors, otp_outbox, otp_service
+from app.services import (
+    integrity_errors,
+    otp_authority,
+    otp_flow_service,
+    otp_outbox,
+    otp_service,
+    registration_service,
+)
 
 LOGIN_COOLDOWN_SECONDS = 30
 ACTIVE_SESSION_CONSTRAINT = "uq_auth_sessions_one_active_per_user"
+ERASED_LIFECYCLE_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 class LoginError(Exception):
@@ -87,9 +97,11 @@ def start(
     registration = session.scalar(
         select(StudentRegistration).where(
             StudentRegistration.mobile_hash == lookup,
-            StudentRegistration.dob_hash_state == "verified",
+            *otp_service.registration_authority_filters(),
         )
     )
+    if not otp_service.registration_is_authorizable(registration):
+        registration = None
     if registration is not None:
         # Serialize the cooldown decision as well as the eventual replacement;
         # locking only in issue_challenge would allow two deliverable codes.
@@ -99,7 +111,7 @@ def start(
     user = session.get(User, registration.user_id) if registration is not None else None
     eligible = bool(
         registration
-        and registration.dob_hash_state == "verified"
+        and otp_service.registration_is_authorizable(registration)
         and registration.status in {"otp_verified", "active"}
         and user
         and user.role == "student"
@@ -139,6 +151,156 @@ def start(
     return attempt.opaque_id, intent
 
 
+def start_flow(
+    session: Session,
+    mobile: str,
+    now: datetime,
+) -> tuple[str, OtpFlow, otp_outbox.DeliveryIntent | None]:
+    """Create one cookie-owned real or decoy login flow with identical shape."""
+
+    now = _as_utc(now)
+    lookup = keyed_hash(mobile)
+    subject = otp_authority.authority_subject_from_mobile_hash(lookup)
+    registration = session.scalar(
+        select(StudentRegistration).where(
+            StudentRegistration.mobile_hash == lookup,
+            *otp_service.registration_authority_filters(),
+        )
+    )
+    if registration is not None:
+        registration = otp_service.lock_registration_for_update(
+            session, registration.id
+        )
+    user = session.get(User, registration.user_id) if registration is not None else None
+    eligible = bool(
+        registration is not None
+        and otp_service.registration_is_authorizable(registration)
+        and registration.status in {"otp_verified", "active"}
+        and user is not None
+        and user.role == "student"
+        and user.status not in {"suspended", "deleted"}
+    )
+    if not eligible:
+        # Unknown and ineligible/deleted lookups use the same stable decoy
+        # domain. They must never rediscover an old registration-bound
+        # authority (and its active challenge) with registration_id=None.
+        subject = otp_authority.authority_subject_from_mobile_hash(
+            keyed_hash(f"nyayone:otp-login-decoy:v1:{mobile}")
+        )
+    authority = otp_authority.lock_or_create_authority(
+        session,
+        subject_hash=subject,
+        purpose="login",
+        registration_id=registration.id if eligible and registration else None,
+        now=now,
+    )
+    cooldown = bool(
+        authority.cooldown_until is not None
+        and _as_utc(authority.cooldown_until) > now
+    )
+    locked = otp_authority.locked_for_seconds(authority, now) > 0
+    intent: otp_outbox.DeliveryIntent | None = None
+    candidate = None
+    active = session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.authority_id == authority.id,
+            OtpChallenge.delivery_state == "active",
+        )
+    )
+    repeated_issue = authority.last_issued_at is not None
+    if eligible and registration is not None and not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+            session.flush()
+        generation = authority.generation
+        candidate, intent = otp_service.issue_challenge(
+            session,
+            registration.id,
+            now,
+            purpose="login",
+            destination=decrypt(registration.mobile_ct),
+        )
+        if authority.generation == generation:
+            # Reusing the exact pending provider intent is still a public
+            # issuance and advances the same stable cooldown/window as decoy.
+            otp_service.note_decoy_issue(authority, now=now)
+    elif not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+        otp_service.note_decoy_issue(authority, now=now)
+    raw_token, flow = otp_flow_service.create_flow(
+        session,
+        authority,
+        now=now,
+        destination=mobile,
+        # A staged replacement never displaces the prior usable challenge in
+        # browser authority before provider success.
+        challenge=active or candidate,
+        registration_id=(registration.id if eligible and registration else None),
+    )
+    return raw_token, flow, intent
+
+
+def verify_flow(
+    session: Session,
+    raw_flow_token: str | None,
+    code: str,
+    now: datetime,
+) -> tuple[str, AuthSession, OtpFlow]:
+    """Verify a cookie flow, consuming the same decoy budget on every miss."""
+
+    now = _as_utc(now)
+    graph = otp_flow_service.resolve_flow(session, raw_flow_token)
+    if graph is None:
+        raise LoginError()
+    authority, flow = graph
+    if (
+        flow.purpose != "login"
+        or flow.state not in {"pending", "code_sent", "locked"}
+        or _as_utc(flow.expires_at) <= now
+    ):
+        raise LoginError()
+    if flow.registration_id is None or flow.challenge_id is None:
+        try:
+            otp_service.record_failed_attempt(session, authority, now=now)
+        except otp_service.OtpError as exc:
+            raise LoginError() from exc
+        raise LoginError()
+    try:
+        otp_service.verify(
+            session,
+            flow.registration_id,
+            code,
+            now,
+            purpose="login",
+            challenge_id=flow.challenge_id,
+            commit_on_success=False,
+        )
+    except otp_service.OtpError as exc:
+        if exc.code not in {"incorrect_otp", "locked"}:
+            # An undelivered, missing or expired real verifier must consume the
+            # same stable authority attempt as a decoy.  Otherwise provider
+            # state becomes visible through attempts_left on the uniform API.
+            try:
+                otp_service.record_failed_attempt(
+                    session, authority, now=now
+                )
+            except otp_service.OtpError as uniform_exc:
+                raise LoginError() from uniform_exc
+        raise LoginError() from exc
+    registration = session.get(StudentRegistration, flow.registration_id)
+    if not otp_service.registration_is_authorizable(registration):
+        session.rollback()
+        raise LoginError()
+    # Flow retirement is part of the same commit as challenge consumption and
+    # authenticated-session rotation; no crash window leaves both capabilities.
+    otp_flow_service.mark_authenticated(flow, now=now)
+    raw_session, auth_session = rotate_authenticated_session(
+        session, registration, now  # type: ignore[arg-type]
+    )
+    return raw_session, auth_session, flow
+
+
 def lock_user_for_session_rotation(
     session: Session,
     user_id: uuid.UUID,
@@ -165,8 +327,87 @@ def active_sessions_for_rotation(
                 AuthSession.user_id == user_id,
                 AuthSession.status == "active",
             )
+            .order_by(AuthSession.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     )
+
+
+def erase_login_attempt(attempt: LoginAttempt) -> None:
+    """Replace one terminal attempt with a non-linkable fixed-time tombstone."""
+
+    attempt.opaque_id = keyed_hash(
+        f"nyayone:login-attempt-erased-opaque:v1:{attempt.id}"
+    )
+    attempt.lookup_hash = keyed_hash(
+        f"nyayone:login-attempt-erased-lookup:v1:{attempt.id}"
+    )
+    attempt.registration_id = None
+    attempt.challenge_id = None
+    attempt.status = "erased"
+    attempt.expires_at = ERASED_LIFECYCLE_AT
+    attempt.consumed_at = ERASED_LIFECYCLE_AT
+    attempt.created_at = ERASED_LIFECYCLE_AT
+    attempt.updated_at = ERASED_LIFECYCLE_AT
+    attempt.deleted_at = ERASED_LIFECYCLE_AT
+    attempt.metadata_json = None
+
+
+def erase_auth_session(auth_session: AuthSession) -> None:
+    """Destroy every bearer/user/time link while retaining a unique row."""
+
+    auth_session.user_id = None
+    auth_session.token_hash = keyed_hash(
+        f"nyayone:auth-session-erased-token:v1:{auth_session.id}"
+    )
+    auth_session.status = "erased"
+    auth_session.expires_at = ERASED_LIFECYCLE_AT
+    auth_session.last_seen_at = ERASED_LIFECYCLE_AT
+    auth_session.revoked_at = ERASED_LIFECYCLE_AT
+    auth_session.created_at = ERASED_LIFECYCLE_AT
+    auth_session.updated_at = ERASED_LIFECYCLE_AT
+    auth_session.deleted_at = ERASED_LIFECYCLE_AT
+    auth_session.metadata_json = None
+
+
+def suspend_user_and_revoke_sessions(
+    session: Session,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> int:
+    """Freeze account login authority without committing the caller's unit.
+
+    The stable User row is locked before its session children.  Privacy-delete
+    uses this inside the same transaction as recovery-proof consumption and
+    DSR creation, so failure rolls every part back together.
+    """
+
+    now = _as_utc(now)
+    user = lock_user_for_session_rotation(session, user_id)
+    if user is None:
+        raise LoginError()
+    rows = list(
+        session.scalars(
+            select(AuthSession)
+            .where(
+                AuthSession.user_id == user.id,
+                AuthSession.status == "active",
+            )
+            .order_by(AuthSession.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        if _as_utc(row.expires_at) <= now:
+            row.status = "expired"
+            row.revoked_at = row.expires_at
+        else:
+            row.status = "revoked"
+            row.revoked_at = now
+    user.status = "suspended"
+    return len(rows)
 
 
 def rotate_authenticated_session(
@@ -187,7 +428,7 @@ def rotate_authenticated_session(
     if (
         user is None
         or user.role != "student"
-        or registration.dob_hash_state != "verified"
+        or not otp_service.registration_is_authorizable(registration)
         or registration.status not in {"otp_verified", "active"}
         or user.status in {"suspended", "deleted"}
     ):
@@ -238,37 +479,83 @@ def verify(
 ) -> tuple[str, AuthSession]:
     """Consume one login attempt and atomically create a rotated auth session."""
     now = _as_utc(now)
-    attempt = session.scalar(
-        select(LoginAttempt)
-        .where(LoginAttempt.opaque_id == opaque_id)
-        .with_for_update()
-    )
+    discovery = session.execute(
+        select(
+            LoginAttempt.id,
+            LoginAttempt.registration_id,
+            LoginAttempt.challenge_id,
+            LoginAttempt.status,
+            LoginAttempt.expires_at,
+            LoginAttempt.consumed_at,
+        ).where(LoginAttempt.opaque_id == opaque_id)
+    ).one_or_none()
     if (
-        attempt is None
-        or attempt.registration_id is None
-        or attempt.challenge_id is None
-        or attempt.status != "pending"
-        or attempt.consumed_at is not None
+        discovery is None
+        or discovery.registration_id is None
+        or discovery.challenge_id is None
+        or discovery.status != "pending"
+        or discovery.consumed_at is not None
     ):
         raise LoginError()
-    if _as_utc(attempt.expires_at) <= now:
+    registration, _ = registration_service.lock_registration_with_idempotency(
+        session, discovery.registration_id
+    )
+    if registration is None:
+        raise LoginError()
+    if _as_utc(discovery.expires_at) <= now:
+        attempt = session.scalar(
+            select(LoginAttempt)
+            .where(LoginAttempt.id == discovery.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            attempt is None
+            or attempt.registration_id != discovery.registration_id
+            or attempt.challenge_id != discovery.challenge_id
+            or attempt.status != "pending"
+            or attempt.consumed_at is not None
+        ):
+            raise LoginError()
         attempt.status = "expired"
+        attempt.consumed_at = attempt.expires_at
         session.commit()
         raise LoginError()
 
     try:
         otp_service.verify(
             session,
-            attempt.registration_id,
+            discovery.registration_id,
             code,
             now,
             purpose="login",
-            challenge_id=attempt.challenge_id,
+            challenge_id=discovery.challenge_id,
             commit_on_success=False,
         )
     except otp_service.OtpError as exc:
         # One typed response for wrong, expired, locked and replayed codes.
         raise LoginError() from exc
+
+    # OTP authority/challenge are locked before the legacy attempt child, the
+    # same order registration erasure uses. A concurrent attempt-retention
+    # winner is revalidated here and causes the whole proof transaction to
+    # roll back instead of minting a session.
+    attempt = session.scalar(
+        select(LoginAttempt)
+        .where(LoginAttempt.id == discovery.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        attempt is None
+        or attempt.registration_id != discovery.registration_id
+        or attempt.challenge_id != discovery.challenge_id
+        or attempt.status != "pending"
+        or attempt.consumed_at is not None
+        or _as_utc(attempt.expires_at) <= now
+    ):
+        session.rollback()
+        raise LoginError()
 
     # Claim-after-proof, exactly once. PostgreSQL's row locks serialise this;
     # the conditional UPDATE additionally makes the invariant executable on
@@ -283,49 +570,105 @@ def verify(
         session.rollback()
         raise LoginError()
 
-    registration = session.get(StudentRegistration, attempt.registration_id)
-    if registration is None:
+    if not otp_service.registration_is_authorizable(registration):
         session.rollback()
         raise LoginError()
     return rotate_authenticated_session(session, registration, now)
 
 
 def _active_session(
-    session: Session, raw_token: str | None, now: datetime
+    session: Session,
+    raw_token: str | None,
+    now: datetime,
+    *,
+    touch: bool = True,
 ) -> AuthSession | None:
     if not raw_token:
         return None
     now = _as_utc(now)
+    token_hash = keyed_hash(raw_token)
     row = session.scalar(
-        select(AuthSession).where(AuthSession.token_hash == keyed_hash(raw_token))
+        select(AuthSession).where(AuthSession.token_hash == token_hash)
     )
-    if row is None or row.status != "active":
+    if row is None or row.status != "active" or row.user_id is None:
         return None
     if _as_utc(row.expires_at) <= now:
-        row.status = "expired"
-        session.commit()
+        if touch:
+            user = lock_user_for_session_rotation(session, row.user_id)
+            row = session.scalar(
+                select(AuthSession)
+                .where(
+                    AuthSession.id == row.id,
+                    AuthSession.user_id == row.user_id,
+                    AuthSession.token_hash == token_hash,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if user is None or row is None or row.status != "active":
+                session.rollback()
+                return None
+            if _as_utc(row.expires_at) > now:
+                return row
+            row.status = "expired"
+            row.revoked_at = row.expires_at
+            session.commit()
         return None
+    if touch:
+        user = lock_user_for_session_rotation(session, row.user_id)
+        row = session.scalar(
+            select(AuthSession)
+            .where(
+                AuthSession.id == row.id,
+                AuthSession.user_id == row.user_id,
+                AuthSession.token_hash == token_hash,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if user is None or row is None or row.status != "active":
+            session.rollback()
+            return None
+        if _as_utc(row.expires_at) <= now:
+            row.status = "expired"
+            row.revoked_at = row.expires_at
+            session.commit()
+            return None
     return row
 
 
 def session_claims(
-    session: Session, raw_token: str | None, now: datetime
+    session: Session,
+    raw_token: str | None,
+    now: datetime,
+    *,
+    touch: bool = True,
 ) -> dict[str, object] | None:
-    """Resolve an HttpOnly-cookie token into the existing actor-claims shape."""
+    """Resolve an HttpOnly-cookie token into the existing actor-claims shape.
+
+    ``touch=False`` is the authorization-dependency path: it must be a pure
+    read so a subsequently denied request cannot change session lifecycle or
+    telemetry. Explicit session discovery retains the default lifecycle touch.
+    """
     now = _as_utc(now)
-    auth_session = _active_session(session, raw_token, now)
+    auth_session = _active_session(session, raw_token, now, touch=touch)
     if auth_session is None:
         return None
     user = session.get(User, auth_session.user_id)
     if user is None or user.status != "active":
+        if touch:
+            auth_session.status = "revoked"
+            auth_session.revoked_at = now
+            session.commit()
         return None
     # Internal identities are provisioned by the trusted staff identity layer,
     # not by the student OTP flow. They still use the same opaque, hashed,
     # HttpOnly session record once authenticated, so every downstream endpoint
     # consumes one server-authoritative ActorContext.
     if user.role in {"admin", "moderator", "safety_officer", "legal_reviewer"}:
-        auth_session.last_seen_at = now
-        session.commit()
+        if touch:
+            auth_session.last_seen_at = now
+            session.commit()
         return {
             "sub": str(user.id),
             "roles": [user.role],
@@ -336,15 +679,21 @@ def session_claims(
         }
     if user.role != "student":
         return None
-    registration = session.scalar(
-        select(StudentRegistration)
-        .where(StudentRegistration.user_id == user.id)
-        .order_by(StudentRegistration.created_at.desc())
+    candidates = list(
+        session.scalars(
+            select(StudentRegistration)
+            .where(
+                StudentRegistration.user_id == user.id,
+                *otp_service.registration_authority_filters(),
+            )
+            .order_by(StudentRegistration.created_at.desc())
+            .limit(2)
+        )
     )
+    registration = candidates[0] if len(candidates) == 1 else None
     if (
         registration is None
         or registration.status != "active"
-        or registration.dob_hash_state != "verified"
     ):
         return None
     profile = session.scalar(
@@ -366,8 +715,9 @@ def session_claims(
             )
         }
     )
-    auth_session.last_seen_at = now
-    session.commit()
+    if touch:
+        auth_session.last_seen_at = now
+        session.commit()
     return {
         "sub": str(user.id),
         "roles": [user.role],

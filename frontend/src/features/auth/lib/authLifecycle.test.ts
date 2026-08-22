@@ -4,7 +4,7 @@ import {
   type AuthSnapshot,
 } from './authLifecycle';
 import { createChallenge } from '../../student/lib/otp';
-import { saveAuthSnapshot, loadAuthSnapshot, clearAuthSnapshot } from './authPersistence';
+import { saveAuthSnapshot, loadAuthSnapshot } from './authPersistence';
 import { InMemoryKvStore } from '../../../lib/kvStore';
 
 describe('auth lifecycle reducer (SAATHI-2/3 remediation)', () => {
@@ -48,15 +48,16 @@ describe('auth lifecycle reducer (SAATHI-2/3 remediation)', () => {
     expect(snapshotHasNoSecret(bad)).toBe(false);
   });
 
-  it('persists and restores a redacted snapshot across a simulated reload', () => {
+  it('rejects and erases the retired student OTP snapshot', () => {
     const store = new InMemoryKvStore();
     const ch = createChallenge('429016', 1000);
     const snap: AuthSnapshot = { role: 'student', phase: 'otp_entry', destinationMasked: 'aa•••@nls.ac.in', challenge: redactChallenge(ch), consentAt: null, updatedAt: 1000 };
     saveAuthSnapshot(snap, store);
-    const restored = loadAuthSnapshot('student', store);
-    expect(restored?.phase).toBe('otp_entry');
-    expect(JSON.stringify(restored)).not.toContain('429016');
-    clearAuthSnapshot('student', store);
     expect(loadAuthSnapshot('student', store)).toBeNull();
+
+    // A stale pre-NYAY-4 value planted directly in storage is deleted on read.
+    store.set('ls-auth-student', snap);
+    expect(loadAuthSnapshot('student', store)).toBeNull();
+    expect(store.get('ls-auth-student')).toBeNull();
   });
 });

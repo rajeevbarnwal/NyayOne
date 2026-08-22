@@ -6,8 +6,6 @@ persisted truth — service-only single-session assertions are insufficient.
 """
 from __future__ import annotations
 
-import uuid
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,10 +15,14 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (register tables)
 from app.api.v1 import auth_student as ep
+from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.db.base import Base
 from app.db.session import get_session
-from app.models.registration import OtpChallenge, StudentRegistration
+from app.models.registration import (
+    OtpOutbox,
+    OtpPurposeAuthority,
+    StudentRegistration,
+)
 from app.services.otp_sender import OtpSendError
 
 # Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
@@ -30,13 +32,25 @@ from tests import dbtemplate
 class Capturing:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self._receipts: dict[str, tuple[str, str, str]] = {}
 
-    def send(self, destination: str, code: str) -> None:
+    def send_idempotent(
+        self, destination: str, code: str, *, idempotency_token: str
+    ) -> str:
+        existing = self._receipts.get(idempotency_token)
+        if existing is not None:
+            assert existing[:2] == (destination, code)
+            return existing[2]
+        receipt = f"test-{len(self._receipts) + 1}"
+        self._receipts[idempotency_token] = (destination, code, receipt)
         self.sent.append((destination, code))
+        return receipt
 
 
 class Failing:
-    def send(self, destination: str, code: str) -> None:
+    def send_idempotent(
+        self, destination: str, code: str, *, idempotency_token: str
+    ) -> None:
         raise OtpSendError("provider down")
 
 
@@ -66,7 +80,7 @@ def ctx():
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
     app.dependency_overrides[ep.get_outbox_session_factory] = lambda: SessionLocal
-    client = TestClient(app)
+    client = TestClient(app, headers={"Origin": settings.cors_origins[0]})
     yield client, engine, SessionLocal, sender, app
     # Per-test engine: dispose() is the cleanup that matters. The old
     # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
@@ -89,44 +103,64 @@ def test_lockout_persists_across_http_errors(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
     assert r.status_code == 201
-    reg_id = r.json()["registration_id"]
     assert len(sender.sent) == 1  # OTP delivered exactly once on register
+    with _fresh(SessionLocal) as s:
+        registration = s.scalar(select(StudentRegistration))
+        assert registration is not None
+        registration_id = registration.id
 
     for expected_attempts in (1, 2):
-        resp = client.post("/api/v1/auth/student/otp/verify", json={"registration_id": reg_id, "code": "000000x"[:6]})
+        resp = client.post(
+            "/api/v1/auth/student/otp/verify", json={"code": "000000"}
+        )
         assert resp.status_code in (401, 423)
         with _fresh(SessionLocal) as s:  # FRESH session proves persistence
-            ch = s.scalar(select(OtpChallenge).where(OtpChallenge.registration_id == uuid.UUID(reg_id), OtpChallenge.consumed_at.is_(None)))
-            assert ch.attempts == expected_attempts
+            authority = s.scalar(
+                select(OtpPurposeAuthority).where(
+                    OtpPurposeAuthority.registration_id == registration_id,
+                    OtpPurposeAuthority.purpose == "signup",
+                )
+            )
+            assert authority is not None
+            assert authority.failed_attempts == expected_attempts
     # 3rd wrong → lockout persisted
-    resp = client.post("/api/v1/auth/student/otp/verify", json={"registration_id": reg_id, "code": "111111"})
+    resp = client.post(
+        "/api/v1/auth/student/otp/verify", json={"code": "111111"}
+    )
     assert resp.status_code == 423
     with _fresh(SessionLocal) as s:
-        ch = s.scalar(select(OtpChallenge).where(OtpChallenge.registration_id == uuid.UUID(reg_id), OtpChallenge.consumed_at.is_(None)))
-        assert ch.attempts == 3 and ch.locked_until is not None
+        authority = s.scalar(
+            select(OtpPurposeAuthority).where(
+                OtpPurposeAuthority.registration_id == registration_id,
+                OtpPurposeAuthority.purpose == "signup",
+            )
+        )
+        assert authority is not None
+        assert authority.failed_attempts == 3
+        assert authority.locked_until is not None
     # Correct OTP now blocked by lockout
     code = sender.sent[-1][1]
-    resp = client.post("/api/v1/auth/student/otp/verify", json={"registration_id": reg_id, "code": code})
+    resp = client.post("/api/v1/auth/student/otp/verify", json={"code": code})
     assert resp.status_code == 423 and resp.json()["detail"]["code"] == "locked"
 
 
 def test_recovery_indistinguishable_known_vs_unknown(ctx):
     client, engine, SessionLocal, sender, app = ctx
     _register(client, mobile="9876543210")
-    ids = set()
+    known_states = []
     for _ in range(2):
         rk = client.post("/api/v1/auth/student/recovery/start", json={"mobile": "9876543210"})
         assert rk.status_code == 202
-        ids.add(rk.json()["recovery_id"])
+        known_states.append(rk.json())
+    unknown_states = []
     for _ in range(2):
-        ru = client.post("/api/v1/auth/student/recovery/start", json={"mobile": "9999999999"})
+        ru = client.post("/api/v1/auth/student/recovery/start", json={"mobile": "9999993210"})
         assert ru.status_code == 202
-        ids.add(ru.json()["recovery_id"])
-    assert len(ids) == 4  # every id distinct → repetition cannot infer known/unknown
-    reg = None
-    with _fresh(SessionLocal) as s:
-        reg = s.scalar(select(StudentRegistration))
-    assert str(reg.id) not in ids and reg.id.hex not in ids  # never the registration UUID
+        unknown_states.append(ru.json())
+    assert known_states == unknown_states
+    serialized = str(known_states + unknown_states)
+    assert "registration_id" not in serialized
+    assert "recovery_id" not in serialized
 
 
 @pytest.mark.parametrize("bad", ["987654321", "98765432101", "987654321012", "98765abc10", ""])
@@ -144,13 +178,16 @@ def test_fail_closed_when_no_provider(ctx):
         assert s.scalar(select(StudentRegistration)) is None  # nothing persisted
 
 
-def test_sender_failure_rolls_back(ctx):
+def test_sender_failure_preserves_safe_retryable_flow(ctx):
     client, engine, SessionLocal, sender, app = ctx
     app.dependency_overrides[ep.get_otp_sender] = lambda: Failing()
     r = _register(client)
-    assert r.status_code == 502 and r.json()["detail"]["code"] == "otp_delivery_failed"
+    assert r.status_code == 201
+    assert r.json()["status"] == "pending"
     with _fresh(SessionLocal) as s:
-        assert s.scalar(select(StudentRegistration)) is None  # transactional rollback
+        assert s.scalar(select(StudentRegistration)) is not None
+        outbox = s.scalar(select(OtpOutbox))
+        assert outbox is not None and outbox.status == "failed"
 
 
 def test_register_conflict_and_idempotent_replay(ctx):
@@ -160,10 +197,15 @@ def test_register_conflict_and_idempotent_replay(ctx):
     assert a.status_code == 201
     b = client.post("/api/v1/auth/student/register", headers={"Idempotency-Key": "k1"}, json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "9876543210", "dob": "2004-03-14", "consent": {"accepted": True}})
-    assert b.status_code == 201 and b.json()["registration_id"] == a.json()["registration_id"]  # idempotent replay
+    assert b.status_code == 201 and b.json() == a.json()
+    mismatch = client.post("/api/v1/auth/student/register", headers={"Idempotency-Key": "k1"}, json={
+        "first_name": "Other", "last_name": "Person", "mobile": "9876543210", "dob": "2001-01-01", "consent": {"accepted": True}})
+    assert mismatch.status_code == 409
+    assert mismatch.json()["detail"]["code"] == "idempotency_conflict"
     c = client.post("/api/v1/auth/student/register", json={
         "first_name": "Other", "last_name": "Person", "mobile": "9876543210", "dob": "2001-01-01", "consent": {"accepted": True}})
-    assert c.status_code == 409  # mobile conflict
+    assert c.status_code == 201
+    assert c.json().keys() == a.json().keys()
     with _fresh(SessionLocal) as s:
         assert len(s.scalars(select(StudentRegistration)).all()) == 1
 

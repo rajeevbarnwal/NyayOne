@@ -9,6 +9,10 @@
 #     runnable on its own,
 #   * the NYAY-16 PostgreSQL 16 populated-migration lifecycle/preflight gate,
 #   * the NYAY-3 PostgreSQL 16 cardinality/concurrency/service-race gate.
+#   * the NYAY-2 PostgreSQL 16 authorization/ownership release gate.
+#   * the NYAY-17 PostgreSQL 16 registration-idempotency release gate.
+#   * the NYAY-4 PostgreSQL 16 OTP-security authority release gate.
+#   * the NYAY-19 PostgreSQL 16 authentication-retention lifecycle release gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -18,7 +22,12 @@
 set -euo pipefail
 
 PY="${PYTHON:-python}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 : "${DATABASE_URL:?set DATABASE_URL}"
+# This entry point is explicitly destructive and its downstream gates already
+# require a loopback, marker-named disposable database.  The NYAY-19 Alembic
+# release guard independently rechecks both facts before honoring this opt-in.
+export NYAY19_ISOLATED_MIGRATION_EXECUTE=1
 
 echo "== backend pytest =="
 # The unit/HTTP-contract suite intentionally runs without the target database
@@ -28,6 +37,11 @@ echo "== backend pytest =="
 # explicit test fixtures.  PostgreSQL stages below retain the caller's staging
 # environment and DATABASE_URL.
 env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q
+echo "== NYAY-19 durable reconstruction-auditor unit tests =="
+(
+  cd "$REPO_ROOT"
+  "$PY" -m unittest scripts.provenance.test_nyay19_replay_audit
+)
 echo "== alembic upgrade + drift =="
 "$PY" -m alembic upgrade head
 "$PY" -m alembic check
@@ -59,3 +73,23 @@ echo "== NYAY-3 registration cardinality/concurrency gate (PostgreSQL 16 + pgvec
 "$PY" scripts/nyay3_postgres_characterization.py \
   --expect hardened \
   --output test-results/nyay3-postgres/summary.json
+echo "== NYAY-2 authorization/ownership gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay2-postgres
+"$PY" scripts/nyay2_postgres_authorization_gate.py \
+  --report test-results/nyay2-postgres/summary.json
+echo "== NYAY-17 registration idempotency gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay17-postgres
+"$PY" scripts/nyay17_postgres_idempotency_gate.py \
+  --report test-results/nyay17-postgres/summary.json
+echo "== NYAY-4 OTP-security authority gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay4-postgres
+NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py \
+  --execute \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay4-postgres/summary.json
+echo "== NYAY-19 authentication-retention lifecycle gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay19-postgres
+NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" scripts/nyay19_postgres_auth_retention_gate.py \
+  --execute \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay19-postgres/summary.json

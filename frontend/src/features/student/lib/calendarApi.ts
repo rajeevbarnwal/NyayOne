@@ -1,4 +1,5 @@
-import { apiFetch, newRequestId } from '../../../lib/apiClient';
+import { newRequestId } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 import type {
   CalendarEventStatus,
   CalendarSourceType,
@@ -272,7 +273,7 @@ function mapExport(item: ExportWire): CalendarExportSummary {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await apiFetch(`${BASE}${path}`, { ...init, headers });
+  const response = await studentApiFetch(`${BASE}${path}`, { ...init, headers });
   if (!response.ok) {
     let body: { detail?: string | { code?: string; message?: string; field?: string; retryable?: boolean } } = {};
     try { body = await response.json() as typeof body; } catch { /* fail closed below */ }

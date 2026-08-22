@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { queryClient } from '../../../app/queryClient';
+import { getProfileDraft, updateProfileDraft } from './profileStore';
+import { getRegistrationAttempt, setRegistrationAttempt } from './registrationAttemptStore';
+import { clearStudentBrowserContext } from './studentBrowserContext';
 import {
   getStudentProfile,
   updateStudentProfile,
@@ -16,6 +20,8 @@ import {
 } from './settingsApi';
 
 afterEach(() => {
+  clearStudentBrowserContext();
+  queryClient.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -39,6 +45,17 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function storage(map: Map<string, string>): Storage {
+  return {
+    get length() { return map.size; },
+    clear: () => map.clear(),
+    getItem: (key) => map.get(key) ?? null,
+    key: (index) => [...map.keys()][index] ?? null,
+    removeItem: (key) => { map.delete(key); },
+    setItem: (key, value) => { map.set(key, value); },
+  };
 }
 
 describe('server-authoritative student profile API (SAATHI-58)', () => {
@@ -149,28 +166,83 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('idem-1');
   });
 
-  it('posts confirmation + reauth_recovery_id for deletion', async () => {
+  it('posts confirmation only and relies on the HttpOnly recovery proof', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(
       { request_id: 'opaque-delete-1', status: 'pending' },
       202,
     ));
     vi.stubGlobal('fetch', fetchMock);
 
-    await requestAccountDeletion({ confirmation: 'DELETE', reauthRecoveryId: 'recovery-1' });
+    await requestAccountDeletion({ confirmation: 'DELETE' });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
     expect(JSON.parse(String(init.body))).toEqual({
       confirmation: 'DELETE',
-      reauth_recovery_id: 'recovery-1',
     });
+    expect(String(init.body)).not.toMatch(
+      /(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/,
+    );
+  });
+
+  it('retires all browser context when account deletion is accepted', async () => {
+    const local = new Map<string, string>([
+      ['legalsaathi.student.profile.v1', '{"firstName":"Aditi"}'],
+      ['legalsaathi.student.onboarding.v34', 'seen'],
+      ['legalsaathi.internship.applications.v1', 'private'],
+      ['legalsaathi.clinical.export-audit.v1', 'private'],
+      ['ls-theme', 'dark'],
+      ['ls-locale', 'en'],
+    ]);
+    const session = new Map<string, string>([
+      ['legalsaathi.student.privacy.export.v1', 'opaque-export'],
+      ['legalsaathi.student.privacy.delete.v1', 'opaque-delete'],
+    ]);
+    const dispatchEvent = vi.fn(() => true);
+    vi.stubGlobal('window', {
+      localStorage: storage(local),
+      sessionStorage: storage(session),
+      dispatchEvent,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(
+      { request_id: 'opaque-delete-accepted', status: 'pending' },
+      202,
+    )));
+    setRegistrationAttempt({ body: 'private', key: 'private-idempotency' });
+    updateProfileDraft({ firstName: 'Aditi', dateOfBirth: '2004-03-14' });
+    queryClient.setQueryData(['student-settings'], SETTINGS_WIRE);
+    queryClient.getMutationCache().build(queryClient, {
+      mutationKey: ['delete-account'],
+      mutationFn: async () => 'private',
+    });
+
+    await expect(requestAccountDeletion({ confirmation: 'DELETE' })).resolves.toEqual({
+      requestId: 'opaque-delete-accepted',
+      status: 'pending',
+    });
+
+    expect(getRegistrationAttempt()).toBeNull();
+    expect(getProfileDraft().firstName).toBe('');
+    expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+    expect([...session.entries()]).toEqual([]);
+    expect([...local.entries()]).toEqual([
+      ['ls-theme', 'dark'],
+      ['ls-locale', 'en'],
+    ]);
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces the typed 401 reauth_required error', async () => {
+    queryClient.setQueryData(['valid-session'], 'retain');
+    setRegistrationAttempt({ body: 'retain', key: 'retain' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(
       { detail: { code: REAUTH_REQUIRED_CODE } },
       401,
     )));
-    await expect(requestAccountDeletion({ confirmation: 'DELETE', reauthRecoveryId: 'stale' }))
+    await expect(requestAccountDeletion({ confirmation: 'DELETE' }))
       .rejects.toEqual(expect.objectContaining({ status: 401, code: REAUTH_REQUIRED_CODE }));
+    expect(queryClient.getQueryData(['valid-session'])).toBe('retain');
+    expect(getRegistrationAttempt()).toEqual({ body: 'retain', key: 'retain' });
   });
 
   it('surfaces a typed 422 for a wrong confirmation phrase', async () => {
@@ -178,7 +250,7 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
       { detail: { code: 'invalid_confirmation', field: 'confirmation' } },
       422,
     )));
-    await expect(requestAccountDeletion({ confirmation: 'delete', reauthRecoveryId: 'recovery-1' }))
+    await expect(requestAccountDeletion({ confirmation: 'delete' }))
       .rejects.toEqual(expect.objectContaining({
         status: 422,
         code: 'invalid_confirmation',
@@ -208,14 +280,6 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
 
   it('persists only the opaque request id to sessionStorage (no PII)', () => {
     const session = new Map<string, string>();
-    const storage = (map: Map<string, string>): Storage => ({
-      get length() { return map.size; },
-      clear: () => map.clear(),
-      getItem: (key) => map.get(key) ?? null,
-      key: (index) => [...map.keys()][index] ?? null,
-      removeItem: (key) => { map.delete(key); },
-      setItem: (key, value) => { map.set(key, value); },
-    });
     vi.stubGlobal('window', { sessionStorage: storage(session) });
 
     savePrivacyRequestRef('export', 'opaque-export-1');
@@ -223,5 +287,14 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
     expect([...session.values()].join(' ')).toBe('opaque-export-1');
     clearPrivacyRequestRef('export');
     expect(loadPrivacyRequestRef('export')).toBeNull();
+  });
+
+  it('treats inaccessible privacy-ref Storage as unavailable without throwing', () => {
+    vi.stubGlobal('window', {
+      get sessionStorage(): Storage { throw new DOMException('denied'); },
+    });
+    expect(() => savePrivacyRequestRef('export', 'opaque-export')).not.toThrow();
+    expect(loadPrivacyRequestRef('export')).toBeNull();
+    expect(() => clearPrivacyRequestRef('export')).not.toThrow();
   });
 });

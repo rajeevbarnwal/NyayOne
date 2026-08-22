@@ -5,7 +5,7 @@
  * responses; typed 422 codes) — the pure selection helpers below mirror the
  * rules so the UI can prevent invalid selections before the request.
  */
-import { apiFetch } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 
 /** Dev-stub actor claims (see settingsApi.ts) for student-scoped endpoints. */
 const DEV_ACTOR_CLAIMS_HEADER = 'X-Actor-Claims';
@@ -117,7 +117,7 @@ async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
   if (!headers.has(DEV_ACTOR_CLAIMS_HEADER)) {
     headers.set(DEV_ACTOR_CLAIMS_HEADER, DEV_ACTOR_CLAIMS);
   }
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers });
   const body = (await response.json().catch(() => ({}))) as {
     detail?: {
       code?: string;

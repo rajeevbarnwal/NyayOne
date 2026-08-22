@@ -1,4 +1,5 @@
 import { apiFetch } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 
 const CLAIMS = 'X-Actor-Claims';
 export const DEV_STUDENT_ID = '00000000-0000-4000-8000-0000000000de';
@@ -143,7 +144,11 @@ async function request<T>(
   if (!(init.body instanceof FormData) && init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  const response = await apiFetch(path, { ...init, headers });
+  // Issuer/public failures do not prove anything about the current student
+  // cookie. Only student-owned credential calls may retire student context.
+  const response = actor === 'student'
+    ? await studentApiFetch(path, { ...init, headers })
+    : await apiFetch(path, { ...init, headers });
   const body = await response.json().catch(() => ({})) as {
     detail?: { code?: string; field?: string; current_version?: number };
   } & T;

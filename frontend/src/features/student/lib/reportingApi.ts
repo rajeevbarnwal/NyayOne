@@ -1,4 +1,4 @@
-import { apiFetch } from '../../../lib/apiClient';
+import { studentApiFetch } from './studentApiClient';
 
 const CLAIMS = 'X-Actor-Claims';
 export const DEV_REPORTER_ID = '00000000-0000-4000-8000-0000000000de';
@@ -178,7 +178,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!(init.body instanceof FormData) && init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  const response = await apiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers });
   const body = await response.json().catch(() => ({})) as {
     detail?: {
       code?: string;
