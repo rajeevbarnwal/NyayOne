@@ -159,6 +159,14 @@ ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
 PINNED_ACTION = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 PINNED_IMAGE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+PINNED_SETUP_NODE_ACTION = (
+    "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020"
+)
+EXPECTED_NYAY4_SETUP_NODE_WITH = {
+    "node-version": "22",
+    "cache": "npm",
+    "cache-dependency-path": "frontend/package-lock.json",
+}
 ALLOWED_SERVICE_IMAGE_REFS = {
     "clamav/clamav@sha256:78810772a92b4a9168115bc6b2e0ffd702640893b9577f8c3d0432762d2655c4",
     "pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
@@ -166,7 +174,7 @@ ALLOWED_SERVICE_IMAGE_REFS = {
 ALLOWED_RUNNERS = {"ubuntu-24.04"}
 ALLOWED_ACTIONS = {
     "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
-    "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+    PINNED_SETUP_NODE_ACTION,
     "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
 }
@@ -446,12 +454,12 @@ NO_OP_RUN_COMMANDS = {":", "exit 0", "true"}
 EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): "151bbfbfcab418fa90213523175b7b50ce0597d6504afcc2f5dd30eb79531838",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
-    ("registration-db-gate.yml", "postgres-16-pgvector"): "22292468d13af440dd365abb67aea9419241753c646d0ffe1f0396bf5bf7c0de",
+    ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
     ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "55032088f5e0784fc6a52305ab31e5c715f7e72919cb4027111c30ee9dfd4622",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "91fca0d807f2c7e209ff5cff4b624a466d6a7d2fd09cf1c964940e33cb76f14a",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
-    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "c9e8d636f2df9b76f18557ab9cb14476795bd00b342d7a75358299a50b9ded74",
+    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "449af3381247ff7d91c5b6c7a60ab220ecc63308af4553af6dd22a32bdaab758",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "a5c8c25d7f98d6536e8b8968747a4b3f09ca6e01b8d23e2568dca2964a12ce35",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
@@ -504,6 +512,105 @@ def _mapping(value: object) -> dict[str, object] | None:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         return None
     return value
+
+
+def _run_reaches_nyay4_transitively(run: str) -> bool:
+    """Classify jobs whose backend command loads the sealed NYAY-4 source probe."""
+
+    canonical = _canonical_shell(run)
+    calls_database_gate = re.search(
+        r"(?:^|[ (;&|])bash (?:backend/)?scripts/db_gate\.sh(?:$|[ );&|])",
+        canonical,
+    ) is not None
+    runs_complete_backend_suite = re.search(
+        r"(?:^|[ (;&|])(?:python(?:3)? -m )?pytest -q(?=$|[);&|])",
+        canonical,
+    ) is not None
+    return calls_database_gate or runs_complete_backend_suite
+
+
+def _effective_working_directory(
+    job: dict[str, object], step: dict[str, object]
+) -> object:
+    if "working-directory" in step:
+        return step["working-directory"]
+    defaults = _mapping(job.get("defaults")) or {}
+    run_defaults = _mapping(defaults.get("run")) or {}
+    return run_defaults.get("working-directory")
+
+
+def _exact_npm_ci_count(run: str) -> int:
+    return sum(
+        _canonical_shell(line) == "npm ci"
+        for line in run.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+
+def _nyay4_frontend_dependency_failures(
+    path: Path, jobs: dict[str, object]
+) -> list[str]:
+    """Require Node/Vitest dependencies in every NYAY-4-transitive job.
+
+    GitHub jobs do not share filesystems. A sibling frontend job cannot provide
+    ``node_modules`` to a backend job whose complete suite or ``db_gate.sh``
+    reaches NYAY-4's frontend source contracts, so provisioning must be exact,
+    local to the job, and ordered before the first transitive invocation.
+    """
+
+    failures: list[str] = []
+    for job_id, raw_job in jobs.items():
+        job = _mapping(raw_job)
+        if job is None:
+            continue
+        raw_steps = job.get("steps")
+        if not isinstance(raw_steps, list):
+            continue
+        steps = [_mapping(step) for step in raw_steps]
+        transitive_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step is not None
+            and isinstance(step.get("run"), str)
+            and _run_reaches_nyay4_transitively(str(step["run"]))
+        ]
+        if not transitive_indexes:
+            continue
+        first_gate = min(transitive_indexes)
+
+        setup_node = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if step is not None and step.get("uses") == PINNED_SETUP_NODE_ACTION
+        ]
+        if not (
+            len(setup_node) == 1
+            and setup_node[0][0] < first_gate
+            and setup_node[0][1].get("with") == EXPECTED_NYAY4_SETUP_NODE_WITH
+        ):
+            failures.append(
+                f"{path}: job {job_id} NYAY-4-transitive job must provision "
+                "exact pinned Node 22 before its backend gate"
+            )
+
+        npm_ci = [
+            (index, _exact_npm_ci_count(str(step["run"])))
+            for index, step in enumerate(steps)
+            if step is not None
+            and isinstance(step.get("run"), str)
+            and _effective_working_directory(job, step) == "frontend"
+            and _exact_npm_ci_count(str(step["run"]))
+        ]
+        if not (
+            sum(count for _, count in npm_ci) == 1
+            and len(npm_ci) == 1
+            and npm_ci[0][0] < first_gate
+        ):
+            failures.append(
+                f"{path}: job {job_id} NYAY-4-transitive job must run exact "
+                "npm ci from frontend before its backend gate"
+            )
+    return failures
 
 
 def _nyay19_isolated_postgres_url_is_exact(value: object) -> bool:
@@ -684,6 +791,7 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
     if not jobs:
         return failures + [f"{path}: jobs must be a non-empty mapping"]
     failures.extend(_nyay19_workflow_alembic_failures(path, jobs))
+    failures.extend(_nyay4_frontend_dependency_failures(path, jobs))
     expected_job_ids = {
         job_id
         for workflow_name, job_id in EXPECTED_JOB_SEMANTIC_SHA256

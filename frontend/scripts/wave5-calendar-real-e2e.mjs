@@ -328,7 +328,11 @@ await mkdir(OUT, { recursive: false });
 const api = await playwrightRequest.newContext({
   baseURL: API.origin,
   ignoreHTTPSErrors: IGNORE_LOOPBACK_TLS,
-  extraHTTPHeaders: { Cookie: cookieHeader(), Accept: 'application/json' },
+  extraHTTPHeaders: {
+    Cookie: cookieHeader(),
+    Accept: 'application/json',
+    Origin: WEB.origin,
+  },
 });
 const publicApi = await playwrightRequest.newContext({ ignoreHTTPSErrors: IGNORE_LOOPBACK_TLS });
 const browser = await chromium.launch({ headless: true });
