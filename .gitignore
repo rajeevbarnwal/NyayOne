@@ -82,8 +82,10 @@ storage/vectorstore/*
 # ML / vector artifacts
 *.faiss
 *.index
-*.sqlite3
 *.db
+*.db-wal
+*.db-shm
+*.sqlite*
 *.parquet
 *.pkl
 *.joblib
