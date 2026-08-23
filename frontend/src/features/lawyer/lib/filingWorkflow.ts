@@ -568,7 +568,8 @@ export interface FilingWorkflow {
   readonly updatedAt: number;
 }
 
-const fwKey = (workspaceId: string) => `ls-filing-${workspaceId}`;
+const FILING_WORKFLOW_KEY_PREFIX = 'nyayone.lawyer.filing-workflow.v1.';
+const fwKey = (workspaceId: string) => `${FILING_WORKFLOW_KEY_PREFIX}${workspaceId}`;
 
 export function latestBundle(fw: FilingWorkflow): FilingBundle | null {
   return fw.bundles.length ? fw.bundles[fw.bundles.length - 1] : null;

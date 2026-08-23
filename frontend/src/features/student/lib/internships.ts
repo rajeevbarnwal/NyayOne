@@ -129,7 +129,7 @@ let refSeq = 4820;
 /** Generate an application reference id (stub; server-authoritative in prod). */
 export function newApplicationRef(): string {
   refSeq += 1;
-  return `LS-INT-${refSeq}`;
+  return `NYAY-INT-${refSeq}`;
 }
 
 export const MAX_APPLICATION_PDF_BYTES = 5 * 1024 * 1024;
@@ -246,5 +246,5 @@ export const SAMPLE_APPLICATIONS: readonly Application[] = [
   { id: 'a5', listingId: 'vidhi', org: 'Vidhi Centre for Legal Policy', role: 'Research fellowship, policy', meta: 'not selected · recorded 28 Jun', status: 'closed' },
 ];
 
-export const APPLY_DPDP = 'Documents leave LegalSaathi only when you submit';
+export const APPLY_DPDP = 'Documents leave NyayOne only when you submit';
 export const TRACKER_SOURCE = 'Source: firm career pages · external listings, unverified · not affiliated. Applications leave only when you submit';

@@ -7,7 +7,7 @@ import type { ThemeMode } from '../../hooks/useTheme';
  * Option J "Chambers" app shell (SAATHI-343): desktop chambers rail + top
  * command bar + Ask command spine, and a mobile bottom nav with a central Ask.
  * Wraps the existing S-01..S-99 routes (children) without changing routing.
- * Theme is owned by App (single ls-theme source) and passed in.
+ * Theme is owned by App (single NyayOne device-preference source) and passed in.
  */
 export function AppShell({
   children,
@@ -37,8 +37,8 @@ export function AppShell({
       {/* Desktop chambers rail */}
       <nav className="ls-rail" aria-label="Primary">
         <div className="ls-rail__brand">
-          <span className="ls-rail__mark" aria-hidden>LS</span>
-          <span className="ls-rail__word">Legal<span className="brand-accent">Saathi</span></span>
+          <span className="ls-rail__mark" aria-hidden>N1</span>
+          <span className="ls-rail__word">Nyay<span className="brand-accent">One</span></span>
         </div>
         <ul className="ls-rail__list">
           {railItems.map((it) => (
@@ -55,7 +55,7 @@ export function AppShell({
       <div className="ls-main">
         {/* Top command bar */}
         <header className="ls-topbar">
-          <button type="button" className="ls-ask" aria-label="Ask LegalSaathi">
+          <button type="button" className="ls-ask" aria-label="Ask NyayOne">
             <span className="ls-ask__glyph" aria-hidden>⌕</span>
             <span className="ls-ask__text">Ask a question or search…</span>
           </button>
@@ -82,7 +82,7 @@ export function AppShell({
               <span className="ls-bnav__label">{it.label}</span>
             </NavLink>
           ))}
-          <button type="button" className="ls-bnav__ask" aria-label="Ask LegalSaathi">
+          <button type="button" className="ls-bnav__ask" aria-label="Ask NyayOne">
             <span aria-hidden>⌕</span>
           </button>
           {splitBottomNav().right.map((it) => (

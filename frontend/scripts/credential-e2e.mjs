@@ -391,7 +391,7 @@ async function geometryMatrix(browser, credentialId, storageState) {
         viewport: { width, height },
         storageState,
       });
-      await context.addInitScript((mode) => localStorage.setItem('ls-theme', mode), theme);
+      await context.addInitScript((mode) => localStorage.setItem('nyayone.theme.v1', mode), theme);
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];

@@ -5,8 +5,8 @@
  * so a case's draft versions + approval records survive refresh/reload and can be
  * handed to the client-review flow (E07) WITHOUT any hard-coded seed version.
  *
- * Persistence uses the shared KvStore (localStorage in the browser, in-memory in
- * tests) — consistent with the DraftStore driver pattern.
+ * Persistence uses the shared KvStore. The app default is memory-only; callers
+ * may inject another driver at an explicit boundary.
  */
 import {
   addVersion, approveVersion, latestVersion as latestOf, isVersionApproved, canExportForFiling,
@@ -23,8 +23,9 @@ export interface DraftWorkspace {
   readonly updatedAt: number;
 }
 
-const wsKey = (id: string) => `ls-draftws-${id}`;
-const CURRENT_KEY = 'ls-draftws-current';
+const DRAFT_WORKSPACE_KEY_PREFIX = 'nyayone.lawyer.draft-workspace.v1.';
+const wsKey = (id: string) => `${DRAFT_WORKSPACE_KEY_PREFIX}${id}`;
+const CURRENT_KEY = `${DRAFT_WORKSPACE_KEY_PREFIX}current`;
 
 /** Stable, deterministic workspace id derived from the case id. */
 export function workspaceIdFor(caseId: string): string {

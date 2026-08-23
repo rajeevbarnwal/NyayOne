@@ -253,7 +253,9 @@ API_READY=true
 ) >"$BUILD_LOG" 2>&1
 (
   cd "$ROOT/frontend"
-  exec npx vite preview --host 127.0.0.1 --port "$WEB_PORT" --strictPort
+  NYAY18_PREVIEW_ROOT="$ROOT/frontend/dist" \
+    NYAY18_PREVIEW_PORT="$WEB_PORT" \
+    exec node scripts/nyay18-preview-server.mjs
 ) >"$PREVIEW_LOG" 2>&1 &
 PREVIEW_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/" "$PREVIEW_PID"

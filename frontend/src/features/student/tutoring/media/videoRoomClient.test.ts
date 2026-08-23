@@ -365,14 +365,14 @@ describe('runtime adapter selection', () => {
   });
 
   it('builds the deterministic adapter when a pre-boot global asks for it', async () => {
-    vi.stubGlobal('window', { __legalsaathiVideoTransport: 'deterministic' });
+    vi.stubGlobal('window', { __nyayoneVideoTransport: 'deterministic' });
     expect(requestedVideoTransport()).toBe('deterministic');
     const client = await createVideoRoomClient();
     expect(client.transport).toBe('deterministic');
   });
 
   it('ignores any other value on that global', () => {
-    vi.stubGlobal('window', { __legalsaathiVideoTransport: 'livekit-please' });
+    vi.stubGlobal('window', { __nyayoneVideoTransport: 'livekit-please' });
     expect(requestedVideoTransport()).toBe('livekit');
   });
 });

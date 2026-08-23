@@ -48,7 +48,7 @@ const API_LOCAL_HTTP = new URL(API).protocol === 'http:'
   && ['127.0.0.1', 'localhost', '::1'].includes(API_HOST);
 const SESSION_COOKIE = 'nyayone_session';
 const FLOW_COOKIE = 'nyayone_otp_flow';
-const SESSION_BOOTSTRAP_EXPECTED = 2;
+const SESSION_BOOTSTRAP_EXPECTED = 1;
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 10_000;
 let lastLoginIssueConfirmedAt = 0;
 let sessionProbeSequence = 0;
@@ -161,10 +161,14 @@ async function setupDisposableStudent(browser, mobile, idempotencyKey) {
           last_name: 'Lifecycle',
           mobile,
           dob: '2004-03-14',
-          consent: { accepted: true, policy_version: 'nyay19-browser-lifecycle' },
+          terms_accepted: true,
+          terms_version: 'dpdp-2023.v1',
+          privacy_notice_acknowledged: true,
+          privacy_notice_version: 'dpdp-2023.v1',
         },
       },
     );
+    lastLoginIssueConfirmedAt = Date.now();
     await rememberCookieValues(context);
     const code = await latestOtp(mobile);
     const verification = await context.request.post(
@@ -225,7 +229,6 @@ async function loginWithBrowser(browser, mobile) {
   captureBrowserMutations(page);
   await page.goto(`${WEB}/s-04`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-screen="S-04"]').waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Use a one time code' }).click();
   await page.locator('#v34-login-mobile').fill(mobile);
   await waitForNextLoginIssuance();
   const startPromise = page.waitForResponse((response) => (
@@ -289,6 +292,9 @@ async function studentContextSnapshot(page, actor) {
       'legalsaathi.internship.applications.v1',
       'legalsaathi.clinical.export-audit.v1',
       'ls-auth-student',
+      'ls-locale',
+      'ls-reviewer',
+      'ls-onboarding-seen',
     ];
     const sessionBase = [
       'legalsaathi.student.registration.v2',
@@ -319,8 +325,10 @@ async function studentContextSnapshot(page, actor) {
       queryCacheCount: queryClient.getQueryCache().getAll().length,
       mutationCacheCount: queryClient.getMutationCache().getAll().length,
       controls: {
-        theme: localStorage.getItem('ls-theme'),
-        locale: localStorage.getItem('ls-locale'),
+        theme: localStorage.getItem('nyayone.theme.v1'),
+        retiredLocale: localStorage.getItem('ls-locale'),
+        retiredReviewer: localStorage.getItem('ls-reviewer'),
+        retiredOnboardingSeen: localStorage.getItem('ls-onboarding-seen'),
         unrelated: localStorage.getItem('nyay19-unrelated-control'),
       },
     };
@@ -358,8 +366,10 @@ async function seedStudentContext(page, actor) {
       localStorage.setItem(`ls-reports-${id}`, 'planted-private-state');
       localStorage.setItem(`ls-reminder-prefs-${id}`, 'planted-private-state');
     }
-    localStorage.setItem('ls-theme', 'dark');
+    localStorage.setItem('nyayone.theme.v1', 'dark');
     localStorage.setItem('ls-locale', 'hi');
+    localStorage.setItem('ls-reviewer', '1');
+    localStorage.setItem('ls-onboarding-seen', 'seen');
     localStorage.setItem('nyay19-unrelated-control', 'retain');
   }, { subject: actor.sub, studentProfileId: actor.student_profile_id });
   return studentContextSnapshot(page, actor);
@@ -708,7 +718,7 @@ try {
     'setup-disposable-student',
     'real PostgreSQL registration, OTP verification and logout complete without residual cookies',
     setup,
-    setup.registrationHttp === 201
+    setup.registrationHttp === 202
       && setup.verificationHttp === 200
       && setup.logoutHttp === 200
       && setup.cookiesRetired,
@@ -754,8 +764,10 @@ try {
       managedExpected: beforeA.managedExpectedCount,
       managedPresent: beforeA.managedPresentCount,
       memoryAndCachesSeeded: seededA.beforeExact,
-      unrelatedControlsPresent: beforeA.controls.theme === 'dark'
-        && beforeA.controls.locale === 'hi'
+      namespaceControlsExact: beforeA.controls.theme === 'dark'
+        && beforeA.controls.retiredLocale === 'hi'
+        && beforeA.controls.retiredReviewer === '1'
+        && beforeA.controls.retiredOnboardingSeen === 'seen'
         && beforeA.controls.unrelated === 'retain',
     },
     seededA.beforeExact,
@@ -798,6 +810,9 @@ try {
     [SESSION_COOKIE],
     API,
   );
+  await loginA.page.reload({ waitUntil: 'domcontentloaded' });
+  await loginA.page.waitForURL((url) => url.pathname === '/s-03');
+  await loginA.page.locator('[data-screen="S-03"]').waitFor({ state: 'visible' });
   const afterA = await studentContextSnapshot(loginA.page, loginA.actor);
   const boundaryA = inspectStudentContextBoundary(beforeA, afterA);
   const emptyCookiesA = inspectAuthorityCookieInventory(
@@ -880,7 +895,7 @@ try {
   const logoutCookieStillLive = hasFutureCookieExpiry(sessionCookieB, Date.now());
   record(
     'logout-cookie-retirement',
-    'logout retires both cookies and revokes the pre-logout session over independent ambient and bearer channels',
+    'logout retires both cookies and revokes the pre-logout session over independent ambient-cookie and authorization-header channels',
     {
       httpStatus: logoutResponse.status(),
       retirementExact: logoutRetirement.pass,
@@ -1000,7 +1015,7 @@ try {
   const boundaryExpiry = inspectStudentContextBoundary(beforeExpiry, afterExpiry);
   record(
     'expiry-context-clear',
-    'anonymous session resolution clears all private browser context while preserving theme, locale and control',
+    'anonymous session resolution clears all retired browser context while preserving current theme and unrelated control',
     { contextBoundaryExact: boundaryExpiry.pass },
     boundaryExpiry.pass,
   );

@@ -164,6 +164,8 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(STUDENT_AUTH_SESSION_LOCK).toBe('nyayone.student.auth-session.v1');
     expect(STUDENT_AUTH_TRANSITION_CHANNEL).toBe('nyayone.student.auth-transition.v2');
     expect(STUDENT_AUTH_TRANSITION_STARTED_EVENT).toBe('nyayone:student-auth-transition-started');
+    expect(STUDENT_AUTH_CHANGED_EVENT).toBe('nyayone:student-auth-changed');
+    expect(MAX_RETIRED_STUDENT_KEYS_PER_PURGE).toBe(256);
   });
 
   it('keeps cookie rotation behind an in-flight shared request lease', async () => {
@@ -786,7 +788,7 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(operation).not.toHaveBeenCalled();
   });
 
-  it('retires exact active-student memory, cache, refs and storage but preserves device preferences', async () => {
+  it('retires exact active-student memory, cache, refs and storage while preserving migrated theme state', async () => {
     const local = new Map<string, string>([
       ['legalsaathi.student.profile.v1', '{"firstName":"Aditi"}'],
       ['legalsaathi.student.onboarding.v34', 'seen'],
@@ -837,8 +839,6 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(queryClient.getMutationCache().getAll()).toEqual([]);
     expect([...local.entries()]).toEqual([
       ['ls-theme', 'dark'],
-      ['ls-locale', 'hi'],
-      ['ls-reviewer', '{"device":"unrelated"}'],
     ]);
     expect([...session.entries()]).toEqual([['unrelated-session-key', 'keep']]);
     expect(localClear).not.toHaveBeenCalled();
@@ -889,10 +889,11 @@ describe('NYAY-19 student browser-context boundary', () => {
 
   it('clears actor memory and all retired app-owned dynamic keys before rotation', () => {
     const local = new Map<string, string>([
-      ['ls-reports-student-A', 'A'],
-      ['ls-reminder-prefs-profile-A', 'A'],
+      ['nyayone.student.reports.v1.student-A', 'A'],
+      ['nyayone.student.reminder-prefs.v1.profile-A', 'A'],
       ['ls-reports-student-B', 'B'],
       ['ls-theme', 'light'],
+      ['unrelated', 'keep'],
     ]);
     vi.stubGlobal('window', {
       localStorage: mapStorage(local),
@@ -905,10 +906,52 @@ describe('NYAY-19 student browser-context boundary', () => {
     observeStudentSessionActor({ subject: 'student-B', studentProfileId: 'profile-B' });
 
     expect(queryClient.getQueryData(['private-A'])).toBeUndefined();
-    expect(local.has('ls-reports-student-A')).toBe(false);
-    expect(local.has('ls-reminder-prefs-profile-A')).toBe(false);
+    expect(local.has('nyayone.student.reports.v1.student-A')).toBe(false);
+    expect(local.has('nyayone.student.reminder-prefs.v1.profile-A')).toBe(false);
     expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.get('ls-theme')).toBe('light');
+    expect(local.get('unrelated')).toBe('keep');
+  });
+
+  it('retires the incoming actor current keys before first ownership is published', () => {
+    const local = new Map<string, string>([
+      ['nyayone.student.reports.v1.student-A', 'private-report'],
+      ['nyayone.student.reminder-prefs.v1.profile-A', 'private-reminder'],
+      ['unrelated', 'keep'],
+    ]);
+    vi.stubGlobal('window', {
+      localStorage: mapStorage(local),
+      sessionStorage: mapStorage(new Map()),
+      dispatchEvent: vi.fn(() => true),
+    });
+
+    expect(observeStudentSessionActor({
+      subject: 'student-A', studentProfileId: 'profile-A',
+    })).toBe(true);
+
+    expect(local.has('nyayone.student.reports.v1.student-A')).toBe(false);
+    expect(local.has('nyayone.student.reminder-prefs.v1.profile-A')).toBe(false);
+    expect(local.get('unrelated')).toBe('keep');
+  });
+
+  it('refuses first ownership when an incoming actor key cannot be removed', () => {
+    const ownedKey = 'nyayone.student.reports.v1.student-A';
+    const local = new Map<string, string>([[ownedKey, 'private-report']]);
+    const failingStorage = mapStorage(local);
+    failingStorage.removeItem = (key) => {
+      if (key === ownedKey) throw new DOMException('denied');
+      local.delete(key);
+    };
+    vi.stubGlobal('window', {
+      localStorage: failingStorage,
+      sessionStorage: mapStorage(new Map()),
+      dispatchEvent: vi.fn(() => true),
+    });
+
+    expect(observeStudentSessionActor({
+      subject: 'student-A', studentProfileId: 'profile-A',
+    })).toBe(false);
+    expect(local.get(ownedKey)).toBe('private-report');
   });
 
   it('persists no actor registry and retires bounded app-owned prefixes after reload', async () => {
@@ -941,10 +984,10 @@ describe('NYAY-19 student browser-context boundary', () => {
     expect(local.has('legalsaathi.student.cleanup-registry.v1')).toBe(false);
     expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
-    expect(local.get('ls-locale')).toBe('hi');
+    expect(local.has('ls-locale')).toBe(false);
   });
 
-  it('purges every retired private namespace on cold bundle load without touching preferences', () => {
+  it('purges every retired private namespace and obsolete onboarding state on cold bundle load', () => {
     const local = new Map<string, string>([
       ['legalsaathi.student.profile.v1', 'private-profile'],
       ['legalsaathi.student.onboarding.v34', 'retired-onboarding'],
@@ -966,7 +1009,6 @@ describe('NYAY-19 student browser-context boundary', () => {
     retireLegacyStudentRegistrationState();
 
     expect([...local.entries()]).toEqual([
-      ['ls-onboarding-seen', 'seen'],
       ['ls-theme', 'dark'],
       ['unrelated', 'keep'],
     ]);

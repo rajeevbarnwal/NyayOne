@@ -55,6 +55,7 @@ const screenshotNames = new Set();
 let authWireExact = false;
 let registrationA11yExact = false;
 let crossRealmTransitionExact = false;
+let namespaceRetirementExact = false;
 let failureClass = null;
 let failureStage = null;
 let failureCode = null;
@@ -840,6 +841,8 @@ async function transitionCleanupFailureProbe(browser, mobile, mode) {
     await peer.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
     await sessionReady;
     await peer.evaluate(() => {
+      sessionStorage.setItem('legalsaathi.student.registration.v2',
+        'synthetic-peer-cleanup-denial-canary');
       Storage.prototype.removeItem = () => { throw new Error('synthetic_cleanup_denied'); };
     });
   }
@@ -848,6 +851,8 @@ async function transitionCleanupFailureProbe(browser, mobile, mode) {
   await prepareStudentLoginOtp(initiator, mobile);
   if (mode === 'local-cleanup') {
     await initiator.evaluate(() => {
+      localStorage.setItem('legalsaathi.student.profile.v1',
+        'synthetic-cleanup-denial-canary');
       Storage.prototype.removeItem = () => { throw new Error('synthetic_storage_unavailable'); };
     });
   }
@@ -3032,14 +3037,52 @@ async function extendedStorageBoundaryProbe(browser) {
   );
   const page = await context.newPage();
   trackActorBoundary(page);
-  failureStage = 'storage_s18';
-  await page.goto(`${WEB}/s-18`, { waitUntil: 'domcontentloaded' });
-  await page.locator('[data-screen="S-18"]').waitFor();
-  await page.evaluate(() => {
+  const seedUrl = `${WEB}/__nyay5-namespace-retirement-seed`;
+  await page.route(seedUrl, (route) => route.fulfill({
+    body: '<!doctype html><html><body>namespace seed</body></html>',
+    contentType: 'text/html',
+    status: 200,
+  }), { times: 1 });
+  await page.goto(seedUrl, { waitUntil: 'domcontentloaded' });
+  const legacyNamespacePlanted = await page.evaluate(async () => {
+    localStorage.removeItem('nyayone.theme.v1');
     localStorage.setItem('ls-theme', 'dark');
     localStorage.setItem('ls-onboarding-seen', 'seen');
     localStorage.setItem('ls-reviewer', '1');
+    localStorage.setItem('ls-locale', 'en-IN');
+    const retiredCache = await caches.open('ls-shell-v1');
+    await retiredCache.put(
+      new Request(`${location.origin}/index.html`, { credentials: 'same-origin' }),
+      new Response('<!doctype html><title>retired shell</title>', {
+        headers: { 'Content-Type': 'text/html' },
+        status: 200,
+      }),
+    );
+    const cacheNames = await caches.keys();
+    return localStorage.getItem('nyayone.theme.v1') === null
+      && localStorage.getItem('ls-theme') === 'dark'
+      && localStorage.getItem('ls-onboarding-seen') === 'seen'
+      && localStorage.getItem('ls-reviewer') === '1'
+      && localStorage.getItem('ls-locale') === 'en-IN'
+      && cacheNames.includes('ls-shell-v1');
   });
+  if (!legacyNamespacePlanted) throw new Error('NYAY5_LEGACY_NAMESPACE_SEED_FAILED');
+  failureStage = 'storage_s18';
+  await page.goto(`${WEB}/s-18`, { waitUntil: 'domcontentloaded' });
+  await page.locator('[data-screen="S-18"]').waitFor();
+  const migratedNamespace = await page.waitForFunction(async () => {
+    if (!('serviceWorker' in navigator) || !('caches' in window)) return false;
+    await navigator.serviceWorker.ready;
+    const cacheNames = await caches.keys();
+    return localStorage.getItem('nyayone.theme.v1') === 'dark'
+      && ['ls-theme', 'ls-onboarding-seen', 'ls-reviewer', 'ls-locale']
+        .every((key) => localStorage.getItem(key) === null)
+      && cacheNames.includes('nyayone-shell-v1')
+      && !cacheNames.includes('ls-shell-v1');
+  });
+  namespaceRetirementExact = legacyNamespacePlanted
+    && await migratedNamespace.jsonValue() === true;
+  await migratedNamespace.dispose();
   await recordStorage(page, 's18-settings');
 
   failureStage = 'storage_s19_export';
@@ -3047,7 +3090,11 @@ async function extendedStorageBoundaryProbe(browser) {
   await page.locator('[data-screen="S-19"]').waitFor();
   const dataRightsDisclosure = page
     .locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' });
-  await dataRightsDisclosure.locator('summary').click();
+  const dataRightsSummary = dataRightsDisclosure.locator('summary');
+  if ((await dataRightsDisclosure.getAttribute('open')) === null) {
+    await dataRightsSummary.waitFor({ state: 'visible' });
+    await dataRightsSummary.click();
+  }
   const exportResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/student/privacy/export'
@@ -3127,10 +3174,16 @@ async function extendedStorageBoundaryProbe(browser) {
   const reminderResponse = await reminderResponsePromise;
   if (reminderResponse.status() !== 200) throw new Error('NYAY5_REMINDER_UPDATE_FAILED');
   await reminderRow.getByText('Saved.').waitFor();
-  const preservedPreferenceKeys = await page.evaluate(() => (
-    ['ls-theme', 'ls-onboarding-seen', 'ls-reviewer'].every((key) => localStorage.getItem(key) !== null)
-  ));
-  if (!preservedPreferenceKeys) throw new Error('NYAY5_ALLOWED_PREFERENCES_PURGED');
+  const namespaceRetirementStillExact = await page.evaluate(async () => {
+    const cacheNames = await caches.keys();
+    return localStorage.getItem('nyayone.theme.v1') === 'dark'
+      && ['ls-theme', 'ls-onboarding-seen', 'ls-reviewer', 'ls-locale']
+        .every((key) => localStorage.getItem(key) === null)
+      && cacheNames.includes('nyayone-shell-v1')
+      && !cacheNames.includes('ls-shell-v1');
+  });
+  namespaceRetirementExact = namespaceRetirementExact && namespaceRetirementStillExact;
+  if (!namespaceRetirementExact) throw new Error('NYAY5_NAMESPACE_RETIREMENT_FAILED');
   await recordStorage(page, 's93-server-reminders');
   await context.close();
 }
@@ -3167,11 +3220,14 @@ async function run() {
       exact: requests.filter(Boolean).length,
     });
     const storageSurfaceResults = inspectStorageSurfaceResults(storageChecks);
-    observe('browser_persistence_inventory_clean', storageSurfaceResults.pass, {
+    observe('browser_persistence_inventory_clean',
+      namespaceRetirementExact && storageSurfaceResults.pass, {
       surfaces: storageChecks.length,
       clean: storageChecks.filter((entry) => entry.pass).length,
       exact: storageSurfaceResults.exact,
+      namespaceRetirementExact,
     });
+    failureStage = null;
   } catch (error) {
     failureClass = error instanceof Error ? error.constructor.name : 'NonError';
     failureCode = error instanceof Error && /^NYAY5_[A-Z0-9_]+$/u.test(error.message)
@@ -3400,11 +3456,15 @@ async function run() {
 
   const finalRows = NYAY5_ASSERTION_INVENTORY.map((name) => ({ name, ...observations.get(name) }));
   const summary = summarizeNyay5Rows(finalRows);
+  const successfulReport = summary.overallPass
+    && failureClass === null
+    && failureStage === null
+    && failureCode === null;
   const report = {
     gate: 'nyay5_profile_browser',
     target: 'isolated-loopback-real-api-postgresql-chromium',
     executed: observations.get('runtime_chromium').metrics.executed,
-    status: summary.overallPass ? 'PASS' : 'FAIL',
+    status: successfulReport ? 'PASS' : 'FAIL',
     total: summary.total,
     passed: summary.passed,
     failed: summary.failed,

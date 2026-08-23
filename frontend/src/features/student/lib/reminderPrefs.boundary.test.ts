@@ -82,7 +82,7 @@ describe('Independent boundary QA — SAATHI-292 @ 5460998 (reproduced verbatim)
 
   it('rejects duplicate source/channel rows in persisted state', () => {
     const store = new InMemoryKvStore();
-    store.set(`ls-reminder-prefs-${studentId}`, {
+    store.set(`nyayone.student.reminder-prefs.v1.${studentId}`, {
       studentId,
       updatedAt: timestamp,
       prefs: [pref, { ...pref, leadMinutes: 60 }],

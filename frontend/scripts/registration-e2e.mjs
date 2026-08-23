@@ -367,7 +367,7 @@ for (const [name, values, expected] of [
 
   const storage = await page.evaluate(async ({ canaries }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
-    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedLocalKeys = new Set(['nyayone.theme.v1']);
     const allowedSessionKeys = new Set();
     const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
     const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
@@ -578,7 +578,7 @@ for (const [name, values, expected] of [
 for (const width of [390, 430, 768, 1024, 1440]) {
   for (const theme of ['light', 'dark']) {
     const { context, page, consoleErrors } = await fresh({ width, height: 1000 });
-    await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
+    await page.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
     const action = page.getByRole('button', { name: 'Send one time code' });
     const helpButton = page.getByRole('button', { name: 'More information about MOBILE NUMBER' });

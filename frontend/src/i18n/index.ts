@@ -13,7 +13,7 @@ import hi from './locales/hi.json';
 export type Locale = 'en-IN' | 'hi-IN';
 export const DEFAULT_LOCALE: Locale = 'en-IN';
 export const SUPPORTED_LOCALES: Locale[] = ['en-IN', 'hi-IN'];
-export const LOCALE_STORAGE_KEY = 'ls-locale';
+export const LOCALE_STORAGE_KEY = 'nyayone.locale.v1';
 
 type Dict = Record<string, string>;
 const catalogs: Record<Locale, Dict> = { 'en-IN': en as Dict, 'hi-IN': hi as Dict };

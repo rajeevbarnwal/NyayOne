@@ -7,13 +7,8 @@ import { getTrace } from '../../app/traceability';
  * never leaks internal mapping to end users.
  */
 export function isReviewerMode(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    if (window.localStorage.getItem('ls-reviewer') === '1') return true;
-  } catch {
-    /* storage unavailable */
-  }
-  // Vite dev builds are reviewer-mode by default.
+  // Reviewer tracing is a build-time development surface, never a browser
+  // storage capability that a production user can mint.
   return Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
 }
 

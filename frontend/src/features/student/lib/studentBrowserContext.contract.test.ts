@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 const BOUNDARY_PATH = 'src/features/student/lib/studentBrowserContext.ts';
+const LEGACY_STORAGE_PATH = 'src/features/student/lib/studentLegacyStorage.ts';
 const CLIENT_PATH = 'src/features/student/lib/studentApiClient.ts';
 const REGISTRATION_PATH = 'src/features/student/lib/registrationApi.ts';
 const SETTINGS_API_PATH = 'src/features/student/lib/settingsApi.ts';
@@ -13,6 +14,54 @@ const V34_PATH = 'src/features/student/auth/V34Screens.tsx';
 const AUTH_CONTEXT_PATH = 'src/app/authContext.tsx';
 const NOTICE_PATH = 'src/features/student/lib/studentAuthTransitionNotice.ts';
 const V34_BROWSER_GATE_PATH = 'scripts/v34-s11-s26-e2e.mjs';
+
+function assertLegacyStorageContract(value: string): void {
+  for (const required of [
+    "'legalsaathi.student.profile.v1'",
+    "'legalsaathi.student.onboarding.v34'",
+    "'legalsaathi.internship.applications.v1'",
+    "'legalsaathi.clinical.export-audit.v1'",
+    "'legalsaathi.student.registration.v2'",
+    "'legalsaathi.student.privacy.export.v1'",
+    "'legalsaathi.student.privacy.delete.v1'",
+    "'legalsaathi.student.cleanup-registry.v1'",
+    "'ls-auth-student'",
+    "'ls-auth-lawyer'",
+    "'ls-onboarding-seen'",
+    "'ls-locale'",
+    "'ls-reviewer'",
+    "'ls-theme'",
+    "'ls-reports-'",
+    "'ls-reminder-prefs-'",
+    "'ls-draftws-'",
+    "'ls-review-'",
+    "'ls-filing-'",
+    "'nyayone.student.reports.v1.'",
+    "'nyayone.student.reminder-prefs.v1.'",
+    'export const MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH = 256;',
+    'length = storage.length;',
+    'if (!Number.isSafeInteger(length) || length < 0) return null;',
+    'prefixes.some((prefix) => key.startsWith(prefix))',
+    'const snapshot = collectOwnedKeysSnapshot(storage, exactKeys, prefixInventory);',
+    'const batch = snapshot.slice(index, index + MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH);',
+    'storage.removeItem(key);',
+    'const remaining = keysStillPresent(storage, new Set(batch));',
+    'if (removalFailed || remaining.size > 0)',
+    'const nextGeneration = collectOwnedKeysSnapshot(storage, exactKeys, prefixInventory);',
+    'if (nextGeneration === null || nextGeneration.length > 0)',
+    'export function purgeLegacyStudentLocalStorage',
+    'export function purgeLegacyStudentSessionStorage',
+    'export function purgeLegacyStudentSessionStorageAtBootstrap',
+    'export function purgeCompleteLegacyBrowserLocalStorage',
+  ]) {
+    expect(value, `missing NYAY-18 legacy-storage boundary: ${required}`).toContain(required);
+  }
+  expect(value.match(/length = storage\.length;/gu)).toHaveLength(2);
+  expect(value.match(/!Number\.isSafeInteger\(length\) \|\| length < 0/gu)).toHaveLength(2);
+  expect(value).not.toMatch(/\.clear\s*\(/);
+  expect(value).not.toMatch(/\.getItem\s*\(/);
+  expect(value).not.toMatch(/\.setItem\s*\(/);
+}
 
 function assertBoundaryContract(value: string): void {
   for (const required of [
@@ -28,28 +77,18 @@ function assertBoundaryContract(value: string): void {
     "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);",
     'predicate: (query) => !ACTOR_INDEPENDENT_QUERY_ROOTS.has(String(query.queryKey[0] ?? \'\'))',
     'queryClient.getMutationCache().clear();',
-    "'legalsaathi.student.profile.v1'",
-    "'legalsaathi.student.onboarding.v34'",
-    "'legalsaathi.internship.applications.v1'",
-    "'legalsaathi.clinical.export-audit.v1'",
-    "'legalsaathi.student.registration.v2'",
-    "'legalsaathi.student.privacy.export.v1'",
-    "'legalsaathi.student.privacy.delete.v1'",
-    "'ls-auth-student'",
-    '`ls-reports-${id}`',
-    '`ls-reminder-prefs-${id}`',
-    "  'legalsaathi.student.cleanup-registry.v1',\n] as const;",
-    'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;',
-    'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;',
-    'length = storage.length;',
-    'RETIRED_ACTOR_PREFIXES.some((prefix) => key.startsWith(prefix))',
-    'if (batch.length === MAX_RETIRED_STUDENT_KEYS_PER_PURGE)',
-    'for (const batch of retired.batches)',
-    'cleanupComplete = retired.complete;',
-    'if (!clearStudentBrowserContext(options)) return false;',
+    'studentReportStorageKey(id)',
+    'studentReminderPrefStorageKey(id)',
+    'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH;',
+    'function clearStudentBrowserContextWithIncomingActorKeys(',
+    '[...currentActorKeys(), ...incomingActorKeys],',
+    'clearStudentBrowserContextWithIncomingActorKeys(options, actorKeys(actor))',
+    'cleanupComplete = purgeLegacyStudentSessionStorage(session).complete && cleanupComplete;',
+    'if (!clearStudentBrowserContextWithIncomingActorKeys(options, actorKeys(actor))) return false;',
     "export const STUDENT_AUTH_SESSION_LOCK = 'nyayone.student.auth-session.v1';",
     "export const STUDENT_AUTH_TRANSITION_CHANNEL = 'nyayone.student.auth-transition.v2';",
     "export const STUDENT_AUTH_TRANSITION_STARTED_EVENT = 'nyayone:student-auth-transition-started';",
+    "export const STUDENT_AUTH_CHANGED_EVENT = 'nyayone:student-auth-changed';",
     "kind: 'start' | 'ack' | 'nack' | 'end';",
     'run<T>(operation: () => Promise<T>): Promise<T>;',
     'coordinator.locks.request(',
@@ -66,16 +105,19 @@ function assertBoundaryContract(value: string): void {
     expect(value, `missing browser-context boundary: ${required}`).toContain(required);
   }
   expect(value).toMatch(/let observedStudentActor: ObservedStudentActor \| null = null/);
-  expect(value.match(/const retired = retiredActorKeyBatches\(local\);/gu)?.length).toBe(2);
+  expect(value.match(/purgeLegacyStudentLocalStorage\(/gu)).toHaveLength(2);
   expect(value).toMatch(/observedStudentActor === null \|\| observedStudentActor\.subject !== actor\.subject/);
+  expect(value).toMatch(
+    /if \(observedStudentActor === null \|\| observedStudentActor\.subject !== actor\.subject\) \{[\s\S]*clearStudentBrowserContextWithIncomingActorKeys\(options, actorKeys\(actor\)\)[\s\S]*\}\s*observedStudentActor = actor;/,
+  );
   expect(value).toMatch(/if \(options\.notifyAuthChanged\) \{[\s\S]*notifyStudentAuthChanged\(\{[\s\S]*preserveProfileReauthHandoff:/);
   expect(value).not.toMatch(/(?:localStorage|sessionStorage|\bstorage)\.clear\s*\(/);
   expect(value).not.toMatch(/setItem\s*\([^\n]*cleanup-registry/);
   expect(value).not.toMatch(/getItem\s*\([^\n]*cleanup-registry/);
-  expect(value).not.toMatch(/removeItem\s*\(\s*['"]ls-(?:theme|locale)['"]\s*\)/);
   expect(value).not.toMatch(
     /AUTH_TRANSITION_DISCOVERY_MS|kind:\s*['"](?:hello|probe|present)['"]|\{\s*steal:\s*true\s*\}/,
   );
+  assertLegacyStorageContract(source(LEGACY_STORAGE_PATH));
 }
 
 function assertStudentClientContract(value: string): void {
@@ -190,15 +232,11 @@ describe('NYAY-19 browser-context source contract', () => {
     ['actor-sensitive query cache', 'clearActorSensitiveQueryState();'],
     ['public-query root inventory', "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);"],
     ['mutation cache', 'queryClient.getMutationCache().clear();'],
-    ['onboarding marker', "'legalsaathi.student.onboarding.v34'"],
-    ['export reference', "'legalsaathi.student.privacy.export.v1'"],
-    ['delete reference', "'legalsaathi.student.privacy.delete.v1'"],
-    ['report actor key', '`ls-reports-${id}`'],
-    ['reminder actor key', '`ls-reminder-prefs-${id}`'],
-    ['retired registry cleanup', "  'legalsaathi.student.cleanup-registry.v1',\n] as const;"],
-    ['bounded retired-key purge', 'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;'],
-    ['retired prefix inventory', 'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;'],
-    ['retired prefix purge', 'const retired = retiredActorKeyBatches(local);'],
+    ['report actor key', 'studentReportStorageKey(id)'],
+    ['reminder actor key', 'studentReminderPrefStorageKey(id)'],
+    ['bounded retired-key purge alias', 'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH;'],
+    ['retired local purge', '[...currentActorKeys(), ...incomingActorKeys],'],
+    ['incoming actor pre-publication purge', 'clearStudentBrowserContextWithIncomingActorKeys(options, actorKeys(actor))'],
     ['abort prior actor work', "studentBrowserContextAbortController.abort('student_context_changed');"],
     ['peer cleanup rejection', "new Error('student_auth_transition_peer_cleanup_incomplete')"],
     ['late subscriber replay', 'for (const transitionId of coordinator.activeTransitions) listener.onStart(transitionId);'],
@@ -208,9 +246,21 @@ describe('NYAY-19 browser-context source contract', () => {
   });
 
   it.each([
-    ['first-index cap', 'length = storage.length;', 'length = Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE);'],
-    ['matching-key batch cap removal', 'if (batch.length === MAX_RETIRED_STUDENT_KEYS_PER_PURGE)', 'if (false)'],
-    ['report prefix removal', 'RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX]', 'RETIRED_ACTOR_PREFIXES = [REMINDER_KEY_PREFIX]'],
+    ['onboarding marker', "'legalsaathi.student.onboarding.v34'"],
+    ['export reference', "'legalsaathi.student.privacy.export.v1'"],
+    ['delete reference', "'legalsaathi.student.privacy.delete.v1'"],
+    ['retired registry cleanup', "'legalsaathi.student.cleanup-registry.v1'"],
+    ['bounded retired-key purge', 'export const MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH = 256;'],
+    ['retired report prefix', "'ls-reports-'"],
+    ['session bootstrap purge', 'export function purgeLegacyStudentSessionStorageAtBootstrap'],
+    ['complete product purge', 'export function purgeCompleteLegacyBrowserLocalStorage'],
+  ])('kills removal of the %s compatibility boundary', (_label, needle) => {
+    const mutant = source(LEGACY_STORAGE_PATH).replace(needle, '/* planted removal */');
+    expect(mutant).not.toBe(source(LEGACY_STORAGE_PATH));
+    expect(() => assertLegacyStorageContract(mutant)).toThrow();
+  });
+
+  it.each([
     ['memory actor rotation', 'observedStudentActor === null || observedStudentActor.subject !== actor.subject', 'false'],
     ['unknown query preservation', '!ACTOR_INDEPENDENT_QUERY_ROOTS.has', 'ACTOR_INDEPENDENT_QUERY_ROOTS.has'],
     ['failed peer acknowledgement', "coordinator.failedTransitions.has(value.transition) ? 'nack' : 'ack'", "false ? 'nack' : 'ack'"],
@@ -219,6 +269,20 @@ describe('NYAY-19 browser-context source contract', () => {
     const mutant = original.replace(needle, replacement);
     expect(mutant).not.toBe(original);
     expect(() => assertBoundaryContract(mutant)).toThrow();
+  });
+
+  it.each([
+    ['first-index cap', 'length = storage.length;', 'length = Math.min(storage.length, MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH);'],
+    ['hostile length acceptance', 'if (!Number.isSafeInteger(length) || length < 0) return null;', ''],
+    ['matching-key batch cap removal', 'snapshot.slice(index, index + MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH)', 'snapshot.slice(index)'],
+    ['report prefix removal', "  'ls-reports-',", ''],
+    ['silent no-progress verdict', 'if (removalFailed || remaining.size > 0)', 'if (removalFailed)'],
+    ['replenished-generation verdict', 'if (nextGeneration === null || nextGeneration.length > 0)', 'if (nextGeneration === null)'],
+  ])('kills the %s compatibility mutant', (_label, needle, replacement) => {
+    const original = source(LEGACY_STORAGE_PATH);
+    const mutant = original.replace(needle, replacement);
+    expect(mutant).not.toBe(original);
+    expect(() => assertLegacyStorageContract(mutant)).toThrow();
   });
 
   it.each([

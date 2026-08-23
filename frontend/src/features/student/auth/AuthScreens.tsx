@@ -46,7 +46,7 @@ export function Splash() {
     nav(auth.isAuthenticated ? '/s-14' : '/s-03', { replace: true });
   }, [auth.isAuthenticated, nav]);
   return (
-    <AuthCard screenId="S-01" kicker="Student module · S1" title="LegalSaathi" brand>
+    <AuthCard screenId="S-01" kicker="Student module · S1" title="NyayOne" brand>
       <LoadingState label="Checking your session…" />
       <DpdpFootnote>Privacy notice shown before registration · no PII in analytics</DpdpFootnote>
     </AuthCard>
@@ -124,7 +124,7 @@ export function AuthGate() {
   }
 
   return (
-    <AuthCard screenId="S-03" kicker="Student module · S1" title="LegalSaathi" brand>
+    <AuthCard screenId="S-03" kicker="Student module · S1" title="NyayOne" brand>
       <div className="st-tabs" role="tablist" aria-label="Login or register">
         <button role="tab" aria-selected={tab === 'login'} className="st-tab" onClick={() => setTab('login')}>
           Login

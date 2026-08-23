@@ -411,7 +411,7 @@ export function clearPreferredDevices(): void {
  * ========================================================================== */
 
 interface TransportWindow {
-  __legalsaathiVideoTransport?: string;
+  __nyayoneVideoTransport?: string;
 }
 
 interface ViteEnv {
@@ -427,7 +427,7 @@ export function videoRoomServerUrl(): string {
  * Which adapter to build.
  *
  * The deterministic adapter is opt-in and only ever by an explicit request:
- * a `__legalsaathiVideoTransport` global installed BEFORE the app boots (what
+ * a `__nyayoneVideoTransport` global installed BEFORE the app boots (what
  * the browser journey does, so it drives the production screen rather than a
  * copy of it), or a build-time `VITE_VIDEO_TRANSPORT`. With neither, the
  * production LiveKit adapter is what a participant gets.
@@ -435,7 +435,7 @@ export function videoRoomServerUrl(): string {
 export function requestedVideoTransport(): VideoRoomTransport {
   const fromWindow = typeof window === 'undefined'
     ? undefined
-    : (window as unknown as TransportWindow).__legalsaathiVideoTransport;
+    : (window as unknown as TransportWindow).__nyayoneVideoTransport;
   const fromEnv = (import.meta as unknown as ViteEnv).env?.VITE_VIDEO_TRANSPORT;
   return (fromWindow ?? fromEnv) === 'deterministic' ? 'deterministic' : 'livekit';
 }

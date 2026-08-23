@@ -49,6 +49,27 @@ const SETTINGS_KEY = ['student-settings'] as const;
 import { LANGUAGE_OPTIONS } from '../lib/catalog';
 
 const LANGUAGES = LANGUAGE_OPTIONS;
+const SETTINGS_WIDE_LAYOUT_QUERY = '(min-width: 821px)';
+
+export function settingsDisclosuresOpen(
+  matchMedia: ((query: string) => { matches: boolean }) | undefined,
+): boolean {
+  return matchMedia?.(SETTINGS_WIDE_LAYOUT_QUERY).matches === true;
+}
+
+function useWideSettingsLayout(): boolean {
+  const [wide, setWide] = useState(() => settingsDisclosuresOpen(
+    typeof window === 'undefined' ? undefined : window.matchMedia.bind(window),
+  ));
+  useEffect(() => {
+    const media = window.matchMedia(SETTINGS_WIDE_LAYOUT_QUERY);
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return wide;
+}
 
 function Toggle({ id, on, onToggle, label, disabled }: { id: string; on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
   return (
@@ -157,7 +178,7 @@ export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMod
     <StudentScreen screenId="S-18" className="st-set">
       <div className="st-set__head">
         <p className="st-eyebrow">Settings · notifications, theme and language</p>
-        <h1 className="st-h1">How LegalSaathi reaches you</h1>
+        <h1 className="st-h1">How NyayOne reaches you</h1>
       </div>
 
       {settings.isPending && <LoadingState label="Loading your settings…" />}
@@ -297,6 +318,7 @@ const RECOVERY_STATE_UNAVAILABLE = 'Re-authentication state is unavailable. No d
 
 export function PrivacySettings() {
   const nav = useNavigate();
+  const wideLayout = useWideSettingsLayout();
   const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: getStudentSettings });
   const { mutation: settingsMutation, conflict, failure } = useSettingsPatch();
   const s = settings.data;
@@ -443,7 +465,7 @@ export function PrivacySettings() {
         <h1 className="st-h1">Your data, your decisions.</h1>
       </div>
 
-      <details className="v34c-mobile-disclosure">
+      <details open={wideLayout} className="v34c-mobile-disclosure">
         <summary>Consent preferences <span>3 controls</span></summary>
         <section className="st-panel">
         <h2 className="st-panel__title">Consent preferences</h2>
@@ -468,7 +490,7 @@ export function PrivacySettings() {
         </section>
       </details>
 
-      <details className="v34c-mobile-disclosure">
+      <details open={wideLayout} className="v34c-mobile-disclosure">
         <summary>Data rights <span>export · delete</span></summary>
         <section className="st-panel">
         <div className="st-setrow">

@@ -199,7 +199,6 @@ describe('DPDP privacy request API (SAATHI-58 / S-19)', () => {
     expect([...session.entries()]).toEqual([]);
     expect([...local.entries()]).toEqual([
       ['ls-theme', 'dark'],
-      ['ls-locale', 'en'],
     ]);
     expect(dispatchEvent.mock.calls.map(([event]) => (event as Event).type)).toEqual([
       STUDENT_AUTH_TRANSITION_STARTED_EVENT,

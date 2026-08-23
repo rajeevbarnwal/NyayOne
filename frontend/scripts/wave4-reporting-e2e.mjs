@@ -168,7 +168,7 @@ async function positiveJourney(browser) {
   await page.getByLabel('Experience end date').fill('2030-01-02');
   await page.getByLabel('Positive experience').check();
   await page.getByLabel('Your private account').fill('x'.repeat(49));
-  await page.getByLabel(/I consent to LegalSaathi/).check();
+  await page.getByLabel(/I consent to NyayOne/).check();
   await page.getByRole('button', { name: 'Submit privately' }).click();
   await page.getByText('The start date cannot be in the future.').waitFor();
   await page.getByText('Use 50–5,000 characters for the factual account.').waitFor();
@@ -203,7 +203,7 @@ async function positiveJourney(browser) {
   const localKeys = Object.keys(storage.local);
   const storageText = JSON.stringify({ local: storage.local, session: storage.session });
   const noPrivateData = Object.keys(storage.session).length === 0
-    && localKeys.every((key) => key === 'ls-theme')
+    && localKeys.every((key) => key === 'nyayone.theme.v1')
     && !/Example Chambers|APP-W4|private-proof|organisationName|narrative|reportId/i.test(storageText);
   assert(
     'no reporting data in browser storage',

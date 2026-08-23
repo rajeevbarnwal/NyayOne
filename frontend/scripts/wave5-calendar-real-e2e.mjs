@@ -737,7 +737,7 @@ try {
         const context = await newBrowserContext(browser, {
           viewport: { width, height: width <= 430 ? 844 : 900 }, colorScheme: theme,
         });
-        await context.addInitScript((mode) => localStorage.setItem('ls-theme', mode), theme);
+        await context.addInitScript((mode) => localStorage.setItem('nyayone.theme.v1', mode), theme);
         const shotPage = await context.newPage();
         const runtime = watchRuntime(shotPage);
         await shotPage.goto(new URL(route, WEB).href, { waitUntil: 'domcontentloaded' });

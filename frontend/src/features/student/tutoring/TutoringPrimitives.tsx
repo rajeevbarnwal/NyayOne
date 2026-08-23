@@ -200,7 +200,7 @@ export function TutoringScreen({
   return (
     <StudentScreen screenId={screenId} className="st-tutoring">
       <header className="tt-bar">
-        <span className="tt-wm"><i aria-hidden>§</i> LegalSaathi</span>
+        <span className="tt-wm"><i aria-hidden>§</i> NyayOne</span>
         <span className="tt-grow" />
         <span className="tt-sid">{screenId}</span>
       </header>
@@ -642,7 +642,7 @@ const ERROR_COPY: Record<string, TypedErrorCopy> = {
     tone: 'err',
     title: 'Please sign in again',
     detail:
-      'Your session with LegalSaathi has ended. Sign in and reopen this page; nothing was lost.',
+      'Your session with NyayOne has ended. Sign in and reopen this page; nothing was lost.',
     recovery: 'Sign in',
   },
   [VALIDATION_ERROR]: {
@@ -671,7 +671,7 @@ export function typedErrorCopy(error: unknown): TypedErrorCopy & { code: string 
   }
   return {
     tone: 'err',
-    title: 'We could not reach LegalSaathi',
+    title: 'We could not reach NyayOne',
     detail:
       'Your request did not leave the device, so nothing was submitted and nothing was charged. Check your connection and try again.',
     recovery: 'Retry',

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source_inventory_sha256": "61c214817374a8bb2bd966192b70e56111dfed3664728c7fcc4e0451d882b794",
+  "metadata": {
+    "package_name": "nyayone-frontend",
+    "capacitor_app_id": "com.nyayone.app",
+    "capacitor_android_scheme": "https",
+    "capacitor_web_dir": "dist",
+    "app_name": "NyayOne",
+    "service_worker_cache": "nyayone-shell-v1"
+  },
+  "required_runtime_namespaces": {
+    "NYAY-CASE-": 3,
+    "NYAY-INT-": 1,
+    "NYAY-INV-": 1,
+    "__nyayoneVideoRoom": 2,
+    "__nyayoneVideoTransport": 2,
+    "nyayone-clinical-hours-": 1,
+    "nyayone-credential-qr.png": 1,
+    "nyayone-frontend": 3,
+    "nyayone-mark.svg": 3,
+    "nyayone-shell-": 2,
+    "nyayone-shell-v1": 1,
+    "nyayone.app": 1,
+    "nyayone.auth.${role}.v1": 1,
+    "nyayone.clinical-export.v1": 1,
+    "nyayone.lawyer.draft-workspace.v1.": 1,
+    "nyayone.lawyer.filing-workflow.v1.": 1,
+    "nyayone.lawyer.review-workspace.v1.": 1,
+    "nyayone.locale.v1": 1,
+    "nyayone.student.auth-session.v1": 1,
+    "nyayone.student.auth-transition.v2": 1,
+    "nyayone.student.reminder-prefs.v1.": 1,
+    "nyayone.student.reports.v1.": 1,
+    "nyayone.theme.v1": 1,
+    "nyayone:auth-change": 1,
+    "nyayone:student-auth-changed": 1,
+    "nyayone:student-auth-transition-started": 1
+  },
+  "compatibility_sources": {
+    "frontend/public/sw.js": {
+      "sha256": "ee3af1dcae9cfe763a9e9b8bea1d699e46700ae2e9de2b91576d25c71593e33e",
+      "allowed_literals": {
+        "legalsaathi-shell-": 1,
+        "ls-shell-": 1
+      }
+    },
+    "frontend/src/features/student/lib/studentLegacyStorage.ts": {
+      "sha256": "b5950966c53a2c0bcf9a4e3ab93f347d9de9dc4c24cbd30978db30dab83e42b2",
+      "allowed_literals": {
+        "legalsaathi.clinical.export-audit.v1": 1,
+        "legalsaathi.internship.applications.v1": 1,
+        "legalsaathi.student.cleanup-registry.v1": 1,
+        "legalsaathi.student.onboarding.v34": 1,
+        "legalsaathi.student.privacy.delete.v1": 1,
+        "legalsaathi.student.privacy.export.v1": 1,
+        "legalsaathi.student.profile.v1": 1,
+        "legalsaathi.student.registration.v2": 1,
+        "ls-auth-lawyer": 1,
+        "ls-auth-student": 1,
+        "ls-draftws-": 1,
+        "ls-filing-": 1,
+        "ls-locale": 1,
+        "ls-onboarding-seen": 1,
+        "ls-reminder-prefs-": 1,
+        "ls-reports-": 1,
+        "ls-review-": 1,
+        "ls-reviewer": 1,
+        "ls-theme": 1
+      }
+    },
+    "frontend/src/lib/browserNamespace.ts": {
+      "sha256": "b97a1cd512d0f879cd4c13746224665d2c14030e31378ff9152c8cffad65ab5e",
+      "allowed_literals": {
+        "ls-theme": 1
+      }
+    }
+  }
+}

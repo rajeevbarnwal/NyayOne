@@ -143,25 +143,37 @@ const issuance = (name, maxAge, suffix = '') => ({
 });
 
 const contextBefore = () => ({
-  managedExpectedCount: 12,
-  managedPresentCount: 12,
+  managedExpectedCount: 15,
+  managedPresentCount: 15,
   retiredActorRegistryAbsent: true,
   registrationAttemptPresent: true,
   profileDraftPresent: true,
   queryCacheCount: 2,
   mutationCacheCount: 1,
-  controls: { theme: 'dark', locale: 'hi', unrelated: 'retain' },
+  controls: {
+    theme: 'dark',
+    retiredLocale: 'hi',
+    retiredReviewer: '1',
+    retiredOnboardingSeen: 'seen',
+    unrelated: 'retain',
+  },
 });
 
 const contextAfter = () => ({
-  managedExpectedCount: 12,
+  managedExpectedCount: 15,
   managedPresentCount: 0,
   retiredActorRegistryAbsent: true,
   registrationAttemptPresent: false,
   profileDraftPresent: false,
   queryCacheCount: 0,
   mutationCacheCount: 0,
-  controls: { theme: 'dark', locale: 'hi', unrelated: 'retain' },
+  controls: {
+    theme: 'dark',
+    retiredLocale: null,
+    retiredReviewer: null,
+    retiredOnboardingSeen: null,
+    unrelated: 'retain',
+  },
 });
 
 function assertRunnerWiring(source) {
@@ -173,6 +185,59 @@ function assertRunnerWiring(source) {
   }
   if (!/if \(summary\.failed > 0\) process\.exitCode = 1;/.test(source)) {
     throw new Error('NYAY19_RUNNER_FAILURE_EXIT_MISSING');
+  }
+  const exactRegistrationWire = `        data: {
+          first_name: 'Nyay',
+          middle_name: null,
+          last_name: 'Lifecycle',
+          mobile,
+          dob: '2004-03-14',
+          terms_accepted: true,
+          terms_version: 'dpdp-2023.v1',
+          privacy_notice_acknowledged: true,
+          privacy_notice_version: 'dpdp-2023.v1',
+        },`;
+  if (!source.includes(exactRegistrationWire)) {
+    throw new Error('NYAY19_RUNNER_REGISTRATION_WIRE_MISMATCH');
+  }
+  if (!/setup\.registrationHttp === 202/.test(source)) {
+    throw new Error('NYAY19_RUNNER_REGISTRATION_STATUS_MISMATCH');
+  }
+  if (/\bconsent:\s*\{\s*accepted:/u.test(source) || /setup\.registrationHttp === 201/u.test(source)) {
+    throw new Error('NYAY19_RUNNER_OBSOLETE_REGISTRATION_CONTRACT');
+  }
+  if (/getByRole\(['"]button['"], \{ name: ['"]Use a one time code['"] \}\)\.click\(\)/u.test(source)) {
+    throw new Error('NYAY19_RUNNER_OBSOLETE_LOGIN_MODE_TOGGLE');
+  }
+  if (/(?:'[^'\n]*|"[^"\n]*)\bbearer[ \t]+[-A-Za-z0-9._~+/=]+/iu.test(source)) {
+    throw new Error('NYAY19_RUNNER_BEARER_LIKE_EVIDENCE_PROSE');
+  }
+  const setupSource = source.slice(
+    source.indexOf('async function setupDisposableStudent'),
+    source.indexOf('async function productStudentSession'),
+  );
+  if (!/const registration = await context\.request\.post\([\s\S]*\);\s*lastLoginIssueConfirmedAt = Date\.now\(\);\s*await rememberCookieValues\(context\);/u.test(setupSource)) {
+    throw new Error('NYAY19_RUNNER_SIGNUP_LOGIN_FLOOR_ANCHOR_MISSING');
+  }
+  const rotatedRealmRediscovery = `  await loginA.page.reload({ waitUntil: 'domcontentloaded' });
+  await loginA.page.waitForURL((url) => url.pathname === '/s-03');
+  await loginA.page.locator('[data-screen="S-03"]').waitFor({ state: 'visible' });
+`;
+  const rotationSource = source.slice(
+    source.indexOf("  currentStage = 'rotation';"),
+    source.indexOf("  currentStage = 'logout';"),
+  );
+  const rotatedProbeIndex = rotationSource.indexOf(
+    '  const rotatedSession = await productStudentSession(loginA.page);',
+  );
+  const rediscoveryIndex = rotationSource.indexOf(rotatedRealmRediscovery);
+  const contextInspectionIndex = rotationSource.indexOf(
+    '  const afterA = await studentContextSnapshot(loginA.page, loginA.actor);',
+  );
+  if (!(rotatedProbeIndex >= 0
+      && rediscoveryIndex > rotatedProbeIndex
+      && contextInspectionIndex > rediscoveryIndex)) {
+    throw new Error('NYAY19_RUNNER_ROTATED_REALM_REDISCOVERY_MISSING');
   }
   const recordedNames = [...source.matchAll(/\brecord\(\s*['"]([^'"]+)['"]/gu)]
     .map((match) => match[1]);
@@ -220,6 +285,15 @@ function assertRunnerWiring(source) {
     /const boundaryA = inspectStudentContextBoundary\(beforeA, afterA\);/,
     /const boundaryB = inspectStudentContextBoundary\(beforeB, afterB\);/,
     /const boundaryExpiry = inspectStudentContextBoundary\(beforeExpiry, afterExpiry\);/,
+    /const localBase = \[[\s\S]*['"]ls-locale['"][\s\S]*['"]ls-reviewer['"][\s\S]*['"]ls-onboarding-seen['"][\s\S]*\];/,
+    /localStorage\.setItem\(['"]nyayone\.theme\.v1['"], ['"]dark['"]\);/,
+    /localStorage\.setItem\(['"]ls-locale['"], ['"]hi['"]\);/,
+    /localStorage\.setItem\(['"]ls-reviewer['"], ['"]1['"]\);/,
+    /localStorage\.setItem\(['"]ls-onboarding-seen['"], ['"]seen['"]\);/,
+    /theme: localStorage\.getItem\(['"]nyayone\.theme\.v1['"]\)/,
+    /retiredLocale: localStorage\.getItem\(['"]ls-locale['"]\)/,
+    /retiredReviewer: localStorage\.getItem\(['"]ls-reviewer['"]\)/,
+    /retiredOnboardingSeen: localStorage\.getItem\(['"]ls-onboarding-seen['"]\)/,
     /localStorage\.getItem\(['"]legalsaathi\.student\.cleanup-registry\.v1['"]\) === null\s*&& sessionStorage\.getItem\(['"]legalsaathi\.student\.cleanup-registry\.v1['"]\) === null/,
     /await loginExpiry\.page\.close\(\);\s*const expiryRestartPage = await openProtectedProbePage\(loginExpiry\.context\);\s*const expiredSession = await productStudentSession\(expiryRestartPage\);/,
     /const afterExpiry = await studentContextSnapshot\(expiryRestartPage, loginExpiry\.actor\);/,
@@ -234,7 +308,7 @@ function assertRunnerWiring(source) {
     /requestIds\.length === 1 && requestIds\[0\]\.value === probeId/,
     /studentApi\.studentApiFetch\([\s\S]*\{ method: ['"]GET['"], requestId \}/,
     /return \{ response, body, actor, request: response\.request\(\) \};/,
-    /const SESSION_BOOTSTRAP_EXPECTED = 2;/,
+    /const SESSION_BOOTSTRAP_EXPECTED = 1;/,
     /const SESSION_BOOTSTRAP_TIMEOUT_MS = 10_000;/,
     /function isExactBootstrapSessionRequest\(request\) \{[\s\S]*return request\.method\(\) === ['"]GET['"]\s*&& url\.origin === API_ORIGIN\s*&& url\.pathname === ['"]\/api\/v1\/auth\/student\/session['"]\s*&& url\.search === ['"]['"]\s*&& url\.hash === ['"]['"];/,
     /page\.on\(['"]request['"], onRequest\);\s*page\.on\(['"]response['"], onResponse\);\s*page\.on\(['"]requestfinished['"], onRequestFinished\);\s*page\.on\(['"]requestfailed['"], onRequestFailed\);/,
@@ -306,15 +380,15 @@ describe('NYAY-19 browser runner exact contract', () => {
     ]);
   });
 
-  it('accepts only an exact successful two-request session bootstrap settlement', () => {
+  it('accepts only an exact successful single-request session bootstrap settlement', () => {
     expect(inspectNyay19SessionBootstrap({
-      requestCount: 2,
-      responseCount: 2,
-      finishedCount: 2,
+      requestCount: 1,
+      responseCount: 1,
+      finishedCount: 1,
       failedCount: 0,
       responsesSuccessful: true,
     })).toMatchObject({
-      expectedCount: 2,
+      expectedCount: 1,
       exactCardinality: true,
       finishedSettlementExact: true,
       responsesSuccessful: true,
@@ -324,23 +398,23 @@ describe('NYAY-19 browser runner exact contract', () => {
 
   it.each([
     ['extra', {
-      requestCount: 3, responseCount: 3, finishedCount: 3, failedCount: 0,
+      requestCount: 2, responseCount: 2, finishedCount: 2, failedCount: 0,
       responsesSuccessful: true,
     }],
     ['missing', {
-      requestCount: 1, responseCount: 1, finishedCount: 1, failedCount: 0,
+      requestCount: 0, responseCount: 0, finishedCount: 0, failedCount: 0,
       responsesSuccessful: true,
     }],
     ['unsettled', {
-      requestCount: 2, responseCount: 2, finishedCount: 1, failedCount: 0,
+      requestCount: 1, responseCount: 1, finishedCount: 0, failedCount: 0,
       responsesSuccessful: true,
     }],
     ['failed', {
-      requestCount: 2, responseCount: 1, finishedCount: 1, failedCount: 1,
+      requestCount: 1, responseCount: 0, finishedCount: 0, failedCount: 1,
       responsesSuccessful: true,
     }],
     ['unsuccessful', {
-      requestCount: 2, responseCount: 2, finishedCount: 2, failedCount: 0,
+      requestCount: 1, responseCount: 1, finishedCount: 1, failedCount: 0,
       responsesSuccessful: false,
     }],
   ])('fails closed for planted %s session bootstrap state', (_name, observation) => {
@@ -793,6 +867,18 @@ describe('NYAY-19 browser runner exact contract', () => {
     });
   });
 
+  it('rejects any retired device value surviving a lifecycle boundary', () => {
+    for (const [key, value] of [
+      ['retiredLocale', 'hi'],
+      ['retiredReviewer', '1'],
+      ['retiredOnboardingSeen', 'seen'],
+    ]) {
+      const after = contextAfter();
+      after.controls[key] = value;
+      expect(inspectStudentContextBoundary(contextBefore(), after).pass).toBe(false);
+    }
+  });
+
   const contextMutants = [
     ['context-browser-backed-actor-registry', (before, after) => [
       { ...before, retiredActorRegistryAbsent: false }, after,
@@ -912,6 +998,55 @@ describe('NYAY-19 browser runner exact contract', () => {
     expect(() => assertRunnerWiring(mutated), label).toThrow();
   };
 
+  it('kills the obsolete nested-consent and HTTP 201 setup contract', () => {
+    const source = readFileSync(resolve('scripts/nyay19-auth-lifecycle-browser.mjs'), 'utf8');
+    const currentConsent = `          terms_accepted: true,
+          terms_version: 'dpdp-2023.v1',
+          privacy_notice_acknowledged: true,
+          privacy_notice_version: 'dpdp-2023.v1',`;
+    const obsoleteConsent = "          consent: { accepted: true, policy_version: 'nyay19-browser-lifecycle' },";
+
+    rejectSourceMutation(
+      source,
+      (value) => value.replace(currentConsent, obsoleteConsent),
+      'obsolete nested consent',
+    );
+    rejectSourceMutation(
+      source,
+      (value) => value.replace('setup.registrationHttp === 202', 'setup.registrationHttp === 201'),
+      'obsolete registration status',
+    );
+    rejectSourceMutation(
+      source,
+      (value) => value.replace(
+        '    lastLoginIssueConfirmedAt = Date.now();\n    await rememberCookieValues(context);',
+        '    await rememberCookieValues(context);',
+      ),
+      'signup-to-login resend floor anchor',
+    );
+    rejectSourceMutation(
+      source,
+      (value) => value.replace(
+        "  await page.locator('[data-screen=\"S-04\"]').waitFor({ state: 'visible' });",
+        "  await page.locator('[data-screen=\"S-04\"]').waitFor({ state: 'visible' });\n  await page.getByRole('button', { name: 'Use a one time code' }).click();",
+      ),
+      'obsolete login mode toggle',
+    );
+  });
+
+  it('kills a rotated realm rediscovery bypass before context inspection', () => {
+    const source = readFileSync(resolve('scripts/nyay19-auth-lifecycle-browser.mjs'), 'utf8');
+    const rediscovery = `  await loginA.page.reload({ waitUntil: 'domcontentloaded' });
+  await loginA.page.waitForURL((url) => url.pathname === '/s-03');
+  await loginA.page.locator('[data-screen="S-03"]').waitFor({ state: 'visible' });
+`;
+    rejectSourceMutation(
+      source,
+      (value) => value.replace(rediscovery, ''),
+      'rotated realm rediscovery bypass',
+    );
+  });
+
   const exactProbePair = () => ({
     ambient: {
       channel: 'ambient', request: {}, requestCount: 1, channelExact: true, denialExact: true,
@@ -934,7 +1069,7 @@ describe('NYAY-19 browser runner exact contract', () => {
       for (const [from, to] of [
         ['&& staleExpiryProbe.retirementExact', '&& true'],
         ['&& staleExpiryProbe.correlatedStaleCookieExact', '&& true'],
-        ['const SESSION_BOOTSTRAP_EXPECTED = 2;', 'const SESSION_BOOTSTRAP_EXPECTED = 1;'],
+        ['const SESSION_BOOTSTRAP_EXPECTED = 1;', 'const SESSION_BOOTSTRAP_EXPECTED = 2;'],
         ['const SESSION_BOOTSTRAP_TIMEOUT_MS = 10_000;', 'const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;'],
         ["return request.method() === 'GET'", 'return true'],
         ['&& url.origin === API_ORIGIN', '&& true'],
@@ -1136,6 +1271,10 @@ describe('NYAY-19 browser runner exact contract', () => {
         ['const evidencePrivacyExact = scanNyay19Evidence(', 'const evidencePrivacyExact = Boolean('],
         ['  await latestOtp(mobile);\n  const cookiesBeforeLogout', '  const cookiesBeforeLogout'],
         ['const logoutStaleProbes = await independentStaleAuthorityProbes(browser, rawCookieB);', 'const logoutStaleProbes = { pass: true };'],
+        ["localStorage.setItem('nyayone.theme.v1', 'dark');", "localStorage.setItem('ls-theme', 'dark');"],
+        ["retiredLocale: localStorage.getItem('ls-locale')", 'retiredLocale: null'],
+        ["retiredReviewer: localStorage.getItem('ls-reviewer')", 'retiredReviewer: null'],
+        ["retiredOnboardingSeen: localStorage.getItem('ls-onboarding-seen')", 'retiredOnboardingSeen: null'],
         ['const ambient = await ambientCookieOnlyProtectedProbe(browser, rawCookie);', 'const ambient = await bearerOnlyProtectedProbe(browser, rawCookie);'],
         ['const bearer = await bearerOnlyProtectedProbe(browser, rawCookie);', 'const bearer = ambient;'],
         ['return inspectIndependentProtectedProbes(ambient, bearer);', 'return { pass: true };'],

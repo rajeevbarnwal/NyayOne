@@ -5,8 +5,15 @@ import { clearSubmittedApplications } from './internships';
 import { clearProfileConflictDraft } from '../profile/profileConflictDraftStore';
 import { clearProfileReauthHandoff } from '../profile/profileReauthHandoff';
 import { clearStudentAuthTransitionNotice } from './studentAuthTransitionNotice';
+import {
+  MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH,
+  purgeLegacyStudentLocalStorage,
+  purgeLegacyStudentSessionStorage,
+  studentReminderPrefStorageKey,
+  studentReportStorageKey,
+} from './studentLegacyStorage';
 
-export const STUDENT_AUTH_CHANGED_EVENT = 'legalsaathi:student-auth-changed';
+export const STUDENT_AUTH_CHANGED_EVENT = 'nyayone:student-auth-changed';
 export const STUDENT_AUTH_SESSION_LOCK = 'nyayone.student.auth-session.v1';
 export const STUDENT_AUTH_TRANSITION_STARTED_EVENT = 'nyayone:student-auth-transition-started';
 export const STUDENT_AUTH_TRANSITION_CHANNEL = 'nyayone.student.auth-transition.v2';
@@ -90,33 +97,12 @@ const pendingTransitionHandles = new WeakMap<StudentAuthTransition, PendingTrans
 const directStudentAuthTransitions = new WeakSet<StudentAuthTransition>();
 let transitionNonce = 0;
 
-const REPORT_KEY_PREFIX = 'ls-reports-';
-const REMINDER_KEY_PREFIX = 'ls-reminder-prefs-';
-const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;
-
-// Each cleanup batch is deliberately bounded. One teardown exhausts every
-// snapshotted batch, but never clears or mutates an unrelated browser key.
-export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;
+/** @deprecated Import the NYAY-18 compatibility-boundary constant directly. */
+export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH;
 
 // This projection is anonymous and contains only the server-approved public
 // aggregate. Every other query root remains actor-sensitive by default.
 const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);
-
-const LOCAL_STUDENT_KEYS = [
-  'legalsaathi.student.profile.v1',
-  'legalsaathi.student.onboarding.v34',
-  'legalsaathi.internship.applications.v1',
-  'legalsaathi.clinical.export-audit.v1',
-  'ls-auth-student',
-  // Retire the former browser-backed actor registry without reading it.
-  'legalsaathi.student.cleanup-registry.v1',
-] as const;
-
-const SESSION_STUDENT_KEYS = [
-  'legalsaathi.student.registration.v2',
-  'legalsaathi.student.privacy.export.v1',
-  'legalsaathi.student.privacy.delete.v1',
-] as const;
 
 interface ObservedStudentActor {
   subject: string;
@@ -164,50 +150,19 @@ function availableStorage(kind: 'localStorage' | 'sessionStorage'): Storage | nu
   }
 }
 
-function removeKey(storage: Storage, key: string): boolean {
-  try {
-    storage.removeItem(key);
-    return true;
-  } catch {
-    // Storage can become unavailable after access under strict privacy policy.
-    return false;
-  }
-}
-
 function actorKeys(actor: ObservedStudentActor): string[] {
   const ids = new Set([
     actor.subject,
     actor.studentProfileId,
   ].filter((value): value is string => Boolean(value)));
-  return [...ids].flatMap((id) => [`ls-reports-${id}`, `ls-reminder-prefs-${id}`]);
+  return [...ids].flatMap((id) => [
+    studentReportStorageKey(id),
+    studentReminderPrefStorageKey(id),
+  ]);
 }
 
 function currentActorKeys(): string[] {
   return observedStudentActor ? actorKeys(observedStudentActor) : [];
-}
-
-function retiredActorKeyBatches(storage: Storage): { batches: string[][]; complete: boolean } {
-  const batches: string[][] = [];
-  let batch: string[] = [];
-  let length: number;
-  try {
-    length = storage.length;
-  } catch {
-    return { batches, complete: false };
-  }
-  for (let index = 0; index < length; index += 1) {
-    let key: string | null = null;
-    try { key = storage.key(index); } catch { return { batches, complete: false }; }
-    if (key !== null && RETIRED_ACTOR_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-      batch.push(key);
-      if (batch.length === MAX_RETIRED_STUDENT_KEYS_PER_PURGE) {
-        batches.push(batch);
-        batch = [];
-      }
-    }
-  }
-  if (batch.length > 0) batches.push(batch);
-  return { batches, complete: true };
 }
 
 function clearActorSensitiveQueryState(): void {
@@ -231,8 +186,9 @@ export interface ClearStudentBrowserContextOptions {
  * account deletion. The whole singleton TanStack cache is actor-sensitive
  * because current private query keys are not actor-scoped.
  */
-export function clearStudentBrowserContext(
+function clearStudentBrowserContextWithIncomingActorKeys(
   options: ClearStudentBrowserContextOptions = {},
+  incomingActorKeys: readonly string[] = [],
 ): boolean {
   studentBrowserContextAbortController.abort('student_context_changed');
   studentBrowserContextAbortController = new AbortController();
@@ -249,22 +205,16 @@ export function clearStudentBrowserContext(
   const local = availableStorage('localStorage');
   let cleanupComplete = true;
   if (local) {
-    const retired = retiredActorKeyBatches(local);
-    const keys = new Set([
-      ...LOCAL_STUDENT_KEYS,
-      ...currentActorKeys(),
-    ]);
-    cleanupComplete = retired.complete;
-    for (const key of keys) cleanupComplete = removeKey(local, key) && cleanupComplete;
-    for (const batch of retired.batches) {
-      for (const key of batch) cleanupComplete = removeKey(local, key) && cleanupComplete;
-    }
+    cleanupComplete = purgeLegacyStudentLocalStorage(
+      local,
+      [...currentActorKeys(), ...incomingActorKeys],
+    ).complete;
   } else if (isBrowserRealm()) {
     cleanupComplete = false;
   }
   const session = availableStorage('sessionStorage');
   if (session) {
-    for (const key of SESSION_STUDENT_KEYS) cleanupComplete = removeKey(session, key) && cleanupComplete;
+    cleanupComplete = purgeLegacyStudentSessionStorage(session).complete && cleanupComplete;
   } else if (isBrowserRealm()) {
     cleanupComplete = false;
   }
@@ -278,13 +228,22 @@ export function clearStudentBrowserContext(
   return cleanupComplete;
 }
 
+export function clearStudentBrowserContext(
+  options: ClearStudentBrowserContextOptions = {},
+): boolean {
+  return clearStudentBrowserContextWithIncomingActorKeys(options);
+}
+
 /** Record the actor owning singleton memory, clearing before actor rotation. */
 export function observeStudentSessionActor(
   actor: ObservedStudentActor,
   options: Pick<ClearStudentBrowserContextOptions, 'preserveProfileReauthHandoff'> = {},
 ): boolean {
   if (observedStudentActor === null || observedStudentActor.subject !== actor.subject) {
-    if (!clearStudentBrowserContext(options)) return false;
+    // The incoming server actor is known at this point but is not published
+    // yet. Retire both prior-owner and incoming-owner exact durable keys before
+    // authenticated state can mount in a cold realm or after rotation.
+    if (!clearStudentBrowserContextWithIncomingActorKeys(options, actorKeys(actor))) return false;
   }
   observedStudentActor = actor;
   return true;
@@ -818,21 +777,13 @@ export function retireLegacyStudentRegistrationState(): boolean {
   const local = availableStorage('localStorage');
   let cleanupComplete = true;
   if (local) {
-    const retired = retiredActorKeyBatches(local);
-    const keys = new Set([
-      ...LOCAL_STUDENT_KEYS,
-    ]);
-    cleanupComplete = retired.complete;
-    for (const key of keys) cleanupComplete = removeKey(local, key) && cleanupComplete;
-    for (const batch of retired.batches) {
-      for (const key of batch) cleanupComplete = removeKey(local, key) && cleanupComplete;
-    }
+    cleanupComplete = purgeLegacyStudentLocalStorage(local).complete;
   } else if (isBrowserRealm()) {
     cleanupComplete = false;
   }
   const session = availableStorage('sessionStorage');
   if (session) {
-    for (const key of SESSION_STUDENT_KEYS) cleanupComplete = removeKey(session, key) && cleanupComplete;
+    cleanupComplete = purgeLegacyStudentSessionStorage(session).complete && cleanupComplete;
   } else if (isBrowserRealm()) {
     cleanupComplete = false;
   }

@@ -17,7 +17,7 @@ export default function ScreenPlaceholder({ id }: ScreenPlaceholderProps) {
   return (
     <section className="screen-placeholder">
       <TraceabilityBanner screenId={screenId} />
-      <p className="eyebrow">LegalSaathi · Student</p>
+      <p className="eyebrow">NyayOne · Student</p>
       <h1>{screenId.toUpperCase()}</h1>
       <p>Foundation placeholder. This screen will be implemented in a later release tranche.</p>
     </section>

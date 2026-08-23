@@ -164,8 +164,8 @@ function VideoUnavailable({ capability }: { capability?: TutoringCapabilities })
       tone="warn"
       title="Video calls are temporarily unavailable"
       detail={disabled
-        ? 'New room entry is paused by LegalSaathi. Your booking, payment, reschedule, cancellation and attendance options remain available.'
-        : 'LegalSaathi could not confirm video availability. Try again before opening your camera or microphone.'}
+        ? 'New room entry is paused by NyayOne. Your booking, payment, reschedule, cancellation and attendance options remain available.'
+        : 'NyayOne could not confirm video availability. Try again before opening your camera or microphone.'}
       code={disabled ? 'VIDEO_CALLS_DISABLED' : 'PROVIDER_UNAVAILABLE'}
     />
   );
@@ -1587,7 +1587,7 @@ const FAILURE_COPY: Record<VideoRoomFailureCode, { title: string; detail: string
   },
   VIDEO_CALLS_DISABLED: {
     title: 'Video calls are temporarily unavailable',
-    detail: 'LegalSaathi has paused new room entry. Your session, payment and other session actions are unchanged.',
+    detail: 'NyayOne has paused new room entry. Your session, payment and other session actions are unchanged.',
   },
   PROVIDER_NOT_CONFIGURED: {
     title: 'No media provider is configured for this build',
@@ -2128,7 +2128,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
                   <div className="tt-banner__d">
                     {issueError instanceof TutoringApiError
                       ? issueError.serverMessage
-                      : 'The request did not reach LegalSaathi.'}
+                      : 'The request did not reach NyayOne.'}
                   </div>
                 </div>
               </div>

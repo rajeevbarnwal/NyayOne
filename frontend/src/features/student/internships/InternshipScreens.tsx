@@ -395,7 +395,7 @@ export function InternshipApply() {
         ) : detail.isError || !listing ? (
           <ErrorState title="Listing unavailable" detail={internshipFailureCopy(detail.error, 'We could not load this internship. Please retry.')} onRetry={() => void detail.refetch()} />
         ) : <>
-        <ModuleHead eyebrow={`${listing.org} · ${listing.role}`} title="Resume, transcript, cover note" sub="Three deliberate steps · nothing leaves LegalSaathi until review and send" />
+        <ModuleHead eyebrow={`${listing.org} · ${listing.role}`} title="Resume, transcript, cover note" sub="Three deliberate steps · nothing leaves NyayOne until review and send" />
         <div className="v34c-stages" role="tablist" aria-label="Application steps">
           {(['answers', 'documents', 'review'] as const).map((name, index) => (
             <button key={name} type="button" role="tab" aria-selected={stage === name} onClick={() => goTo(name)}>
@@ -444,7 +444,7 @@ export function InternshipApply() {
             <div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => setStage('documents')}>Back to documents</button><button type="button" className="btn btn--primary tap" onClick={submit}>Submit application</button></div>
           </section>
         )}
-        <DpdpFootnote>Documents leave LegalSaathi only when you submit</DpdpFootnote>
+        <DpdpFootnote>Documents leave NyayOne only when you submit</DpdpFootnote>
         </>}
       </div>
     </StudentScreen>

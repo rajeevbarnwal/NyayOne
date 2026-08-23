@@ -1210,12 +1210,11 @@ export function inspectNyay5Projection(value) {
 }
 
 export function inspectBrowserPersistence(snapshot) {
-  // This is the literal NYAY-2 registration oracle allowlist. NYAY-18 owns
-  // any future namespace migration; NYAY-5 must neither add nor rename keys.
+  // NYAY-18 deliberately replaces the inherited NYAY-5 compatibility
+  // allowlist. Only the current, non-sensitive theme preference may survive;
+  // every LegalSaathi key is retired and therefore remains denied here.
   const allowedLocalValues = new Map([
-    ['ls-theme', new Set(['light', 'dark'])],
-    ['ls-onboarding-seen', new Set(['seen'])],
-    ['ls-reviewer', new Set(['1'])],
+    ['nyayone.theme.v1', new Set(['light', 'dark'])],
   ]);
   const allowedLocal = new Set(allowedLocalValues.keys());
   const localKeys = Array.isArray(snapshot?.localStorageKeys) ? snapshot.localStorageKeys : [];
@@ -1253,7 +1252,7 @@ export function inspectBrowserPersistence(snapshot) {
   const cache = cacheInventory.length === 1 ? cacheInventory[0] : null;
   const cacheEntries = Array.isArray(cache?.entries) ? cache.entries : [];
   const indexEntries = cacheEntries.filter((entry) => entry?.pathname === '/index.html');
-  const cacheInventoryExact = cache?.name === 'ls-shell-v1'
+  const cacheInventoryExact = cache?.name === 'nyayone-shell-v1'
     && cacheEntries.length >= 1
     && indexEntries.length === 1
     && cacheEntries.every((entry) => {
@@ -1547,15 +1546,13 @@ export function seededNyay5MutantResults() {
   };
   const cleanStorage = {
     origin: 'http://localhost:1190',
-    localStorageKeys: ['ls-theme', 'ls-onboarding-seen', 'ls-reviewer'],
+    localStorageKeys: ['nyayone.theme.v1'],
     localStorageEntries: [
-      ['ls-theme', 'dark'],
-      ['ls-onboarding-seen', 'seen'],
-      ['ls-reviewer', '1'],
+      ['nyayone.theme.v1', 'dark'],
     ],
     sessionStorageKeys: [],
     cacheInventory: [{
-      name: 'ls-shell-v1',
+      name: 'nyayone-shell-v1',
       entries: [{
         pathname: '/index.html', query: '', method: 'GET',
         credentials: 'same-origin', authorization: false, responseStatus: 200,
@@ -2053,8 +2050,8 @@ export function seededNyay5MutantResults() {
       inspectBrowserPersistence({
         ...cleanStorage,
         localStorageEntries: cleanStorage.localStorageEntries.map((entry) => (
-          entry[0] === 'ls-theme'
-            ? ['ls-theme', 'Bearer synthetic-private-credential']
+          entry[0] === 'nyayone.theme.v1'
+            ? ['nyayone.theme.v1', 'Bearer synthetic-private-credential']
             : entry
         )),
       }).pass

@@ -23,7 +23,9 @@ def test_orchestrator_provisions_exact_real_stack_and_always_cleans_scratch() ->
         "uvicorn app.main:app",
         "VITE_API_BASE_URL=",
         "npm run build",
-        "vite preview",
+        'NYAY18_PREVIEW_ROOT="$ROOT/frontend/dist"',
+        'NYAY18_PREVIEW_PORT="$WEB_PORT"',
+        "exec node scripts/nyay18-preview-server.mjs",
         "qa:nyay5:profile-boundary",
         "NYAY5_DENIAL_FIXTURE_PATH",
         "NYAY5_SCREENSHOT_DIR",
@@ -32,6 +34,7 @@ def test_orchestrator_provisions_exact_real_stack_and_always_cleans_scratch() ->
     for item in required:
         assert item in source
     assert source.count('NYAY5_API_BASE_URL="http://localhost:$API_PORT" \\\n') == 1
+    assert "vite preview" not in source
     assert "set -x" not in source
     assert "--no-access-log" in source
 

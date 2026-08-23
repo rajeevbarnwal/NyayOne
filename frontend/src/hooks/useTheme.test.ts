@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nextTheme, resolveInitialTheme } from './useTheme';
 
-describe('theme resolution (ls-theme)', () => {
+describe('theme resolution (nyayone.theme.v1)', () => {
   it('uses a stored value when present', () => {
     expect(resolveInitialTheme('dark', false)).toBe('dark');
     expect(resolveInitialTheme('light', true)).toBe('light');

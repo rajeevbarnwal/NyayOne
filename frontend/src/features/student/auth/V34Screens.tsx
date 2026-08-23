@@ -46,7 +46,31 @@ type IconName =
   | 'moot' | 'prep' | 'profile' | 'research' | 'retry' | 'save' | 'send' | 'sun'
   | 'verify';
 
-const ONBOARDING_SEEN_KEY = 'ls-onboarding-seen';
+const SESSION_BOUNDARY_FAILURE_CODES = new Set([
+  'invalid_student_session_projection',
+  'session_unavailable',
+  'student_reauth_session_unavailable',
+]);
+
+export function otpVerificationFailureMessage(caught: unknown): string {
+  const code = caught instanceof Error ? caught.message : '';
+  if (
+    code.startsWith('student_auth_transition_')
+    || SESSION_BOUNDARY_FAILURE_CODES.has(code)
+  ) {
+    return 'This browser cannot safely change sessions. Check browser privacy support and try again.';
+  }
+  if (caught instanceof RegistrationApiError && ['locked', 'otp_locked'].includes(caught.code)) {
+    const seconds = caught.otpState?.lockedForSeconds;
+    return seconds === null || seconds === undefined
+      ? 'Too many attempts. Verification is temporarily locked.'
+      : `Too many attempts. Try again in ${seconds} seconds.`;
+  }
+  if (caught instanceof RegistrationApiError && ['expired', 'otp_expired'].includes(caught.code)) {
+    return 'That code has expired. Request a new code when the server allows it.';
+  }
+  return 'That code could not be verified. Check all six digits.';
+}
 
 function V34Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -164,10 +188,10 @@ function Field({ id, label, value, onChange, type = 'text', inputMode, autoCompl
 
 export function splashDestination(
   phase: StudentSessionPhase,
-  onboardingSeen: boolean,
+  _retiredOnboardingSeen = false,
 ): string | null {
   if (phase === 'authenticated') return '/s-07';
-  if (phase === 'anonymous') return onboardingSeen ? '/s-03' : '/s-02';
+  if (phase === 'anonymous') return '/s-02';
   return null;
 }
 
@@ -175,9 +199,7 @@ export function V34Splash() {
   const nav = useNavigate();
   const session = useStudentSession();
   useEffect(() => {
-    const seen = session.phase === 'anonymous'
-      && window.localStorage.getItem(ONBOARDING_SEEN_KEY) === 'seen';
-    const destination = splashDestination(session.phase, seen);
+    const destination = splashDestination(session.phase);
     if (destination) nav(destination, { replace: true });
   }, [nav, session.phase]);
   return (
@@ -209,7 +231,7 @@ export function V34Onboarding() {
   const nav = useNavigate();
   const [index, setIndex] = useState(0);
   const item = ONBOARDING[index];
-  const finish = () => { window.localStorage.setItem(ONBOARDING_SEEN_KEY, 'seen'); nav('/s-03'); };
+  const finish = () => { nav('/s-03'); };
   return (
     <Screen id="S-02" aside={<AuthAside title="The years before the bar, organised." copy="Internships, moots, digests and citation-bound research. One student account."/>}>
       <Pane><main className="v34-main">
@@ -433,6 +455,7 @@ export function V34VerifiedHome(props: ScreenProps) {
           <p id="profile-completion-dialog-description">Your profile is {projection.completionPercent}% complete. Finish the next section to tailor your student workspace.</p>
           {dismissError && <div role="alert" data-testid="profile-save-error">{dismissError}</div>}
           <div className="v34-actions">
+            <button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button>
             <button type="button" className="v34-hit" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}>Maybe Later</button>
             <button type="button" className="v34-hit" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))}>Complete Profile</button>
           </div>
@@ -522,16 +545,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     if (caught instanceof RegistrationApiError && caught.otpState) {
       otpFlow.adopt(caught.otpState);
     }
-    if (caught instanceof RegistrationApiError && ['locked', 'otp_locked'].includes(caught.code)) {
-      const seconds = caught.otpState?.lockedForSeconds;
-      setStatus(seconds === null || seconds === undefined
-        ? 'Too many attempts. Verification is temporarily locked.'
-        : `Too many attempts. Try again in ${seconds} seconds.`);
-    } else if (caught instanceof RegistrationApiError && ['expired', 'otp_expired'].includes(caught.code)) {
-      setStatus('That code has expired. Request a new code when the server allows it.');
-    } else {
-      setStatus('That code could not be verified. Check all six digits.');
-    }
+    setStatus(otpVerificationFailureMessage(caught));
   }
 
   async function submit() {

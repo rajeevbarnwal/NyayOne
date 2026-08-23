@@ -1,6 +1,6 @@
 # Mobile Store Readiness
 
-LegalSaathi is structured to package the responsive React app into native iOS and Android shells with Capacitor.
+NyayOne is structured to package the responsive React app into native iOS and Android shells with Capacitor.
 
 ## Later Checklist
 

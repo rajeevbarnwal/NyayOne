@@ -85,7 +85,7 @@ describe('canonical S-82..S-85 credential screens', () => {
   it('renders an anonymous public-verification route without private evidence UI', () => {
     const html = render(`/verify/${'A'.repeat(43)}`, PublicCredentialVerification);
     expect(html).toContain('data-screen="VERIFY"');
-    expect(html).toContain('Legal<span>Saathi</span>');
+    expect(html).toContain('Nyay<span>One</span>');
     expect(html).not.toMatch(/private identifier|evidence download|issuer notes/i);
   });
 });

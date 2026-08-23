@@ -444,7 +444,7 @@ async function fresh({ viewport = { width: 1440, height: 1000 }, theme = null, l
   await context.tracing.start({ screenshots: true, snapshots: true });
   const page = await context.newPage();
   page.setDefaultTimeout(10_000);
-  if (theme) await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
+  if (theme) await page.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
   const consoleErrors = [];
   const consoleWarnings = [];
   const pageErrors = [];
