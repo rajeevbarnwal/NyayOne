@@ -332,8 +332,47 @@ DB_DIR="${WAVE2_DB_DIR:-${TMPDIR:-/tmp}/wave2_browser_gate}/$RUN_ID"
 mkdir -p "$DB_DIR"
 DB_FILE="$DB_DIR/wave2_browser_gate.db"
 FIXTURE="$WORK/fixture.json"
+ADMIN_SESSION_TOKEN_FILE="$DB_DIR/admin-session-token"
+STUDENT_SESSION_TOKEN_FILE="$DB_DIR/student-session-token"
 API_LOG="$OUT/logs/backend_uvicorn.log"
 WEB_LOG="$OUT/logs/frontend_preview.log"
+
+# M-01 is administrator-only in Sprint 1.  Its isolated browser bearer is
+# generated into the database scratch directory (never --out/evidence), kept
+# mode 0600 for chained --keep-db stages, and supplied only by environment.
+# The fixture stores its keyed hash; neither fixture JSON nor logs contain it.
+if [[ "$KEEP_DB" == "0" ]]; then
+  umask 077
+  "$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(48))' \
+    > "$ADMIN_SESSION_TOKEN_FILE"
+  "$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(48))' \
+    > "$STUDENT_SESSION_TOKEN_FILE"
+  chmod 600 "$ADMIN_SESSION_TOKEN_FILE"
+  chmod 600 "$STUDENT_SESSION_TOKEN_FILE"
+else
+  [[ -f "$ADMIN_SESSION_TOKEN_FILE" ]] || {
+    echo "--keep-db but the private administrator session bearer is absent" >&2
+    exit 2
+  }
+  [[ -f "$STUDENT_SESSION_TOKEN_FILE" ]] || {
+    echo "--keep-db but the private student session bearer is absent" >&2
+    exit 2
+  }
+fi
+ADMIN_SESSION_TOKEN="$(< "$ADMIN_SESSION_TOKEN_FILE")"
+STUDENT_SESSION_TOKEN="$(< "$STUDENT_SESSION_TOKEN_FILE")"
+[[ ${#ADMIN_SESSION_TOKEN} -ge 32 ]] || {
+  echo "isolated administrator session bearer is malformed" >&2
+  exit 2
+}
+[[ ${#STUDENT_SESSION_TOKEN} -ge 32 ]] || {
+  echo "isolated student session bearer is malformed" >&2
+  exit 2
+}
+[[ "$STUDENT_SESSION_TOKEN" != "$ADMIN_SESSION_TOKEN" ]] || {
+  echo "student and administrator session bearers must be distinct" >&2
+  exit 2
+}
 
 # --------------------------------------------- F3: the commit under judgement
 # Stamped into every evidence row by the driver so a result produced at another
@@ -444,7 +483,9 @@ if [[ "$KEEP_DB" == "0" ]]; then
   # needs its OWN >24h slot. Running out mid-catalogue is a harness failure that
   # looks exactly like a product failure, so the calendar is sized for the whole
   # catalogue with headroom.
-  (cd backend && "$PYTHON" scripts/wave2_e2e_fixture.py seed --extra-tutors 12 --days 20) > "$FIXTURE" \
+  (cd backend && WAVE2_E2E_ADMIN_SESSION_TOKEN="$ADMIN_SESSION_TOKEN" \
+    WAVE2_E2E_STUDENT_SESSION_TOKEN="$STUDENT_SESSION_TOKEN" \
+    "$PYTHON" scripts/wave2_e2e_fixture.py seed --extra-tutors 12 --days 20) > "$FIXTURE" \
     || { echo "fixture seed failed" >&2; exit 3; }
   "$PYTHON" -c "import json,sys; d=json.load(open(sys.argv[1])); print('tutors=%d slots=%d gt24h=%d lt24h=%d' % (d['tutor_total'], len(d['slots']), len(d['buckets']['gt24h']), len(d['buckets']['lt24h'])))" "$FIXTURE"
 else
@@ -520,6 +561,8 @@ E2E_REVIEW_LIMIT_PER_HOUR="$RATE_LIMIT_REVIEW_PER_HOUR" \
 E2E_HOLD_MINUTES="$BOOKING_HOLD_MINUTES" \
 E2E_JOIN_TTL_SECONDS="$JOIN_CREDENTIAL_TTL_SECONDS" \
 E2E_FREE_CANCEL_HOURS="$REFUND_FREE_CANCEL_HOURS" \
+E2E_ADMIN_SESSION_TOKEN="$ADMIN_SESSION_TOKEN" \
+E2E_STUDENT_SESSION_TOKEN="$STUDENT_SESSION_TOKEN" \
   node frontend/scripts/wave2-tutoring-e2e.mjs
 DRIVER_RC=$?
 

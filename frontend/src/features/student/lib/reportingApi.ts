@@ -1,9 +1,5 @@
 import { studentApiFetch } from './studentApiClient';
 
-const CLAIMS = 'X-Actor-Claims';
-export const DEV_REPORTER_ID = '00000000-0000-4000-8000-0000000000de';
-const STUDENT_CLAIMS = JSON.stringify({ sub: DEV_REPORTER_ID, roles: ['student'] });
-
 export const REPORT_CATEGORIES = [
   ['unpaid_mismatch', 'Unpaid or stipend mismatch'],
   ['excessive_hours', 'Excessive hours'],
@@ -174,7 +170,6 @@ function wireInput(input: ReportDraftInput) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set(CLAIMS, STUDENT_CLAIMS);
   if (!(init.body instanceof FormData) && init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }

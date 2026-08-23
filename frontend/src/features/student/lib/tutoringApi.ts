@@ -26,18 +26,6 @@ import { newRequestId } from '../../../lib/apiClient';
 import { studentApiFetch } from './studentApiClient';
 
 /**
- * Dev-stub actor claims (backend auth contract: `X-Actor-Claims` JSON header).
- * Identical convention to settingsApi.ts / lawSchoolsApi.ts — the student
- * surfaces have no real login token yet. Replaced by real auth middleware in a
- * later ticket; a caller may override the header per request.
- */
-export const DEV_ACTOR_CLAIMS_HEADER = 'X-Actor-Claims';
-const DEV_ACTOR_CLAIMS = JSON.stringify({
-  sub: '00000000-0000-4000-8000-0000000000de',
-  roles: ['student'],
-});
-
-/**
  * The AUTHORISED actor a mentor-side call is made as.
  *
  * `role` is deliberately narrowed to the two roles the server's
@@ -53,16 +41,6 @@ export interface TutoringActor {
   /** Opaque subject id of the signed-in mentor/administrator. */
   readonly userId: string;
   readonly role: 'tutor' | 'admin';
-}
-
-/** The dev-stub claims header for an authorised mentor/admin call. */
-export function actorClaimsHeaders(actor: TutoringActor): Record<string, string> {
-  return {
-    [DEV_ACTOR_CLAIMS_HEADER]: JSON.stringify({
-      sub: actor.userId,
-      roles: [actor.role],
-    }),
-  };
 }
 
 /* ========================================================================== *
@@ -229,16 +207,21 @@ function parseErrorBody(status: number, body: unknown): TutoringApiError {
 interface RequestOptions extends RequestInit {
   /** Sent as `Idempotency-Key` alongside the body key where P3 accepts one. */
   idempotencyKey?: string;
+  /** Selects lifecycle handling only; it never selects or serialises an actor. */
+  sessionScope?: 'student' | 'staff';
 }
 
 async function jsonRequest<T>(path: string, init: RequestOptions = {}): Promise<T> {
-  const { idempotencyKey, ...rest } = init;
+  const { idempotencyKey, sessionScope = 'student', ...rest } = init;
+  // `sessionScope` remains a presentation/query-key discriminator for inherited
+  // callers; every scope uses the one cookie-aware, lease-holding transport.
+  void sessionScope;
   const headers = new Headers(rest.headers);
   headers.set('Content-Type', 'application/json');
-  if (!headers.has(DEV_ACTOR_CLAIMS_HEADER)) {
-    headers.set(DEV_ACTOR_CLAIMS_HEADER, DEV_ACTOR_CLAIMS);
-  }
   if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
+  // M-01 staff authority uses the same server-authoritative HttpOnly cookie as
+  // student routes. The shared transport holds its lease through the response
+  // and applies the exact canonical-401 teardown contract for either scope.
   const response = await studentApiFetch(path, { ...rest, headers });
   const body: unknown = await response.json().catch(() => ({}));
   if (!response.ok) throw parseErrorBody(response.status, body);
@@ -850,8 +833,8 @@ export interface SessionListResult {
 /**
  * D1. Scoped BY THE SERVER to the caller: a student sees their own sessions, a
  * tutor sees the ones on their calendar, an admin sees both. Passing an `actor`
- * makes the call as that authorised mentor/admin; omitting it keeps the student
- * dev-stub claims.
+ * selects staff lifecycle handling; the server-authoritative HttpOnly session,
+ * never this in-memory value, supplies the actor and role.
  */
 export async function listTutoringSessions(params: {
   status?: string[];
@@ -873,7 +856,7 @@ export async function listTutoringSessions(params: {
     offset: number;
   }>(`/api/v1/tutoring/sessions?${qs.toString()}`, {
     method: 'GET',
-    ...(actor ? { headers: actorClaimsHeaders(actor) } : {}),
+    ...(actor ? { sessionScope: 'staff' as const } : {}),
   });
   return {
     items: (wire.items ?? []).map(mapSession),
@@ -889,7 +872,7 @@ export async function getTutoringSession(
 ): Promise<TutoringSession> {
   const wire = await jsonRequest<SessionWire>(
     `/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}`,
-    { method: 'GET', ...(actor ? { headers: actorClaimsHeaders(actor) } : {}) },
+    { method: 'GET', ...(actor ? { sessionScope: 'staff' as const } : {}) },
   );
   return mapSession(wire);
 }
@@ -1019,19 +1002,17 @@ function mapAttendance(wire: AttendanceWire): AttendanceRecord {
  * D4. Recording completion is a TUTOR/ADMIN action, and only after the
  * scheduled end.
  *
- * The authorised `actor` is a REQUIRED argument, not an option: a caller that
- * has no mentor/admin identity cannot form this call at all. That is what stops
- * the student surface from firing a request the server is bound to refuse — the
- * server still answers a forged attempt with the typed `FORBIDDEN` (role) or
- * `NOT_FOUND` (a tutor who does not own the session), with zero mutation.
+ * The server-issued staff session is the sole authority. `actor` remains a
+ * required in-memory UI guard/query-key input, but no subject or role is sent;
+ * a forged call is still refused by the server cookie authority.
  */
 export async function completeSession(
   sessionId: string,
-  actor: TutoringActor,
+  _actor: TutoringActor,
 ): Promise<AttendanceRecord> {
   return mapAttendance(await jsonRequest<AttendanceWire>(
     `/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}/complete`,
-    { method: 'POST', headers: actorClaimsHeaders(actor) },
+    { method: 'POST', sessionScope: 'staff' },
   ));
 }
 
@@ -1128,7 +1109,10 @@ export function redactJoinCredential(credential: JoinCredential): RedactedJoinCr
  * `FORBIDDEN` / `NOT_FOUND` / `SESSION_STATE_INVALID` / `GRANT_*` codes and no
  * credential is returned at all.
  */
-export async function issueJoinCredentials(sessionId: string): Promise<JoinCredential> {
+export async function issueJoinCredentials(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<JoinCredential> {
   const wire = await jsonRequest<{
     session_id: string;
     grant_id: string;
@@ -1144,6 +1128,7 @@ export async function issueJoinCredentials(sessionId: string): Promise<JoinCrede
     video_ice_transport_policy: 'all' | 'relay';
   }>(`/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}/join-credentials`, {
     method: 'POST',
+    signal,
   });
   return {
     sessionId: wire.session_id,

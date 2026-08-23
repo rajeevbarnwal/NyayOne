@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   filterListings,
   stepForStatus,
@@ -11,7 +12,12 @@ import {
   validateApplicationPdf,
   validateCoverNote,
   MAX_APPLICATION_PDF_BYTES,
+  saveSubmittedApplication,
+  loadSubmittedApplications,
+  clearSubmittedApplications,
 } from './internships';
+
+const internshipsSource = readFileSync(new URL('./internships.ts', import.meta.url), 'utf8');
 
 describe('internships browse/filter/save (SAATHI-60)', () => {
   it('filters by query, stipend and verified-only', () => {
@@ -37,6 +43,21 @@ describe('internships browse/filter/save (SAATHI-60)', () => {
 });
 
 describe('internships application tracker (SAATHI-61)', () => {
+  it('never persists application workflow state in browser storage', () => {
+    expect(internshipsSource).not.toMatch(/(?:localStorage|sessionStorage)\.(?:getItem|setItem)/u);
+
+    clearSubmittedApplications();
+    saveSubmittedApplication({
+      id: 'memory-1', listingId: 'cam', org: 'Synthetic Org', role: 'Intern',
+      meta: 'tab only', status: 'applied',
+    });
+    expect(loadSubmittedApplications()).toEqual([
+      expect.objectContaining({ id: 'memory-1', status: 'applied' }),
+    ]);
+    clearSubmittedApplications();
+    expect(loadSubmittedApplications()).toEqual([]);
+  });
+
   it('maps status to stepper + chip', () => {
     expect(stepForStatus('interview')).toBe(3);
     expect(stepForStatus('offer')).toBe(4);

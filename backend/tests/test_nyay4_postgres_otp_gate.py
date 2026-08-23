@@ -56,6 +56,7 @@ from scripts.nyay4_postgres_otp_gate import (
     _metadata_observation_passes,
     _migration_observation_passes,
     _populated_migration_observation_passes,
+    _preauth_enumeration_observation_passes,
     _privacy_findings,
     _privacy_observation_projection,
     _provider_observation_passes,
@@ -81,6 +82,7 @@ from scripts.nyay4_postgres_otp_gate import (
     _run_neutralized_registration_probe,
     _run_populated_migration_probe,
     _run_pending_registration_lifecycle_probe,
+    _run_preauth_enumeration_probe,
     _run_provider_idempotency_probe,
     _run_rate_budget_probe,
     _run_retry_lease_probe,
@@ -197,11 +199,12 @@ def _assertions() -> list[dict[str, object]]:
 
 def test_assertion_inventory_is_exact_ordered_and_fully_green():
     evaluated = _evaluate_assertions(_assertions())
-    assert len(REQUIRED_ASSERTION_IDS) == 16
+    assert len(REQUIRED_ASSERTION_IDS) == 17
+    assert "CONTRACT-PREAUTH-ENUMERATION-NEUTRAL" in REQUIRED_ASSERTION_IDS
     assert evaluated == {
         "exact_inventory": True,
-        "required": 16,
-        "passed": 16,
+        "required": 17,
+        "passed": 17,
         "failed": [],
         "inventory_failures": {
             "missing": 0,
@@ -226,7 +229,7 @@ def test_immutable_migration_oracle_pins_every_0001_through_0018_byte(
 def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0018_registration_idempotency"
     assert gate.PINNED_HEAD == "0019_otp_security_authority"
-    assert gate.APPLICATION_HEAD == "0020_auth_retention_lifecycle"
+    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
 
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option(
@@ -234,16 +237,18 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     )
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
-    assert (
-        scripts.get_revision(gate.APPLICATION_HEAD).down_revision
-        == gate.PINNED_HEAD
-    )
+    retention = scripts.get_revision("0020_auth_retention_lifecycle")
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == retention.revision
+    assert retention.down_revision == gate.PINNED_HEAD
 
     lifecycle_source = getsource(gate._run_migration_lifecycle_probe)
     behavior_source = getsource(gate._run_behavior_probe)
     assert '"upgrade", PINNED_HEAD' in lifecycle_source
+    assert '"upgrade", PINNED_HEAD' in behavior_source
     assert '"upgrade", APPLICATION_HEAD' in behavior_source
-    assert '"upgrade", PINNED_HEAD' not in behavior_source
+    assert behavior_source.index('"upgrade", PINNED_HEAD') < behavior_source.index(
+        '"upgrade", APPLICATION_HEAD'
+    )
 
 
 def test_populated_restart_probe_uses_https_for_the_secure_staging_cookie():
@@ -269,7 +274,7 @@ def test_0019_populated_upgrade_backfills_authority_and_runtime_restarts_signup(
     assert observation["legacy_rows"] == 2
     assert observation["authority_rows"] == 2
     assert observation["flow_rows"] == 0
-    assert observation["post_upgrade_restart_status"] == 201
+    assert observation["post_upgrade_restart_status"] == 202
     assert observation["post_upgrade_resend_status"] == 202
     assert observation["post_upgrade_verify_status"] == 200
 
@@ -817,7 +822,7 @@ def _populated_migration() -> dict[str, object]:
         "raw_ip_columns": 0,
         "old_writer_challenge_rejected": True,
         "legacy_destination_writer_rejected": True,
-        "post_upgrade_restart_status": 201,
+        "post_upgrade_restart_status": 202,
         "post_upgrade_restart_cookie_issued": True,
         "post_upgrade_restart_uuid_exposed": False,
         "post_upgrade_resend_status": 202,
@@ -1009,6 +1014,25 @@ def _cookie() -> dict[str, object]:
     }
 
 
+def _preauth_enumeration() -> dict[str, object]:
+    return {
+        "classes": ["known", "unknown", "suspended", "ineligible"],
+        "operations": ["login_start", "resend"],
+        "start_statuses": [202, 202, 202, 202],
+        "resend_statuses": [202, 202, 202, 202],
+        "start_bodies_equal": True,
+        "resend_bodies_equal": True,
+        "start_headers_equal": True,
+        "resend_headers_equal": True,
+        "flow_cookies_exact": True,
+        "start_delivery_deltas": [1, 0, 0, 0],
+        "resend_delivery_deltas": [1, 0, 0, 0],
+        "registration_bound_flows": 1,
+        "decoy_flows": 3,
+        "raw_identifier_exposed": False,
+    }
+
+
 def _metadata() -> dict[str, object]:
     return {
         "fields_exact": True,
@@ -1161,6 +1185,7 @@ _EVALUATOR_CASES = (
     (_failed_resend_observation_passes, _failed_resend),
     (_rate_observation_passes, _rate),
     (_cookie_observation_passes, _cookie),
+    (_preauth_enumeration_observation_passes, _preauth_enumeration),
     (_metadata_observation_passes, _metadata),
     (_claim_observation_passes, _claim),
     (_provider_observation_passes, _provider),
@@ -1278,6 +1303,20 @@ def test_each_exact_observation_accepts_only_its_complete_positive_shape(
                 "neutralized_expired_mutations_uniform": False,
                 "pending_missing_mutations_uniform": False,
                 "lifecycle_replay_zero_provider": False,
+            },
+        ),
+        (
+            _preauth_enumeration_observation_passes,
+            _preauth_enumeration,
+            {
+                "start_statuses": [202, 202, 403, 202],
+                "resend_bodies_equal": False,
+                "start_headers_equal": False,
+                "flow_cookies_exact": False,
+                "start_delivery_deltas": [1, 0, 1, 0],
+                "resend_delivery_deltas": [1, 0, 0, 1],
+                "registration_bound_flows": 2,
+                "raw_identifier_exposed": True,
             },
         ),
         (
@@ -1512,6 +1551,24 @@ def test_direct_registration_relay_fixtures_attach_signup_flow_before_commit():
         assert "registration_idempotency_record_id=" in source
 
 
+def test_postgres_runtime_gate_uses_separate_current_legal_acknowledgements():
+    """The live PostgreSQL producer must not revive the legacy combined consent."""
+
+    from scripts import postgres_runtime_gate
+
+    source = getsource(postgres_runtime_gate.main)
+    request_source = source[
+        source.index("request = StudentRegisterRequest(") : source.index(
+            "with factory() as session:"
+        )
+    ]
+    assert "consent=" not in request_source
+    assert "terms_accepted=True" in request_source
+    assert 'terms_version="terms-2026-08.v1"' in request_source
+    assert "privacy_notice_acknowledged=True" in request_source
+    assert 'privacy_notice_version="privacy-2026-08.v1"' in request_source
+
+
 def test_failed_resend_never_displaces_prior_delivered_verifier(tmp_path):
     """SQLite binds the lifecycle seam; PostgreSQL fencing is separate."""
 
@@ -1670,6 +1727,33 @@ def test_repeated_known_decoy_starts_cookie_reload_and_origin_are_uniform(tmp_pa
     assert observation["origin_missing_status"] == 403
     assert observation["origin_bad_status"] == 403
     assert observation["origin_good_status"] == 202
+
+
+def test_known_unknown_suspended_ineligible_start_and_resend_are_conjunctive(
+    tmp_path,
+):
+    """SQLite binds the HTTP contract; PostgreSQL remains authoritative."""
+
+    from app.core.crypto import KeyRing, override_keyring
+    from tests import dbtemplate
+
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'enumeration.db'}")
+    dbtemplate.create_all(engine)
+    override_keyring(
+        KeyRing(
+            active_version="v1",
+            secrets={"v1": b"nyay4-pure-enumeration-encryption-v1"},
+            lookup_secret=b"nyay4-pure-enumeration-lookup-v1",
+        )
+    )
+    try:
+        observation = _run_preauth_enumeration_probe(engine)
+    finally:
+        override_keyring(None)
+        engine.dispose()
+
+    assert observation == _preauth_enumeration()
+    assert _preauth_enumeration_observation_passes(observation)
 
 
 def test_cookie_timing_ratio_oracle_enforces_the_exact_two_x_boundary():
@@ -1844,6 +1928,7 @@ def test_full_behavior_phase_runs_in_production_order_on_exact_migrations(
         "failed_resend",
         "rate",
         "cookie",
+        "enumeration",
         "metadata",
         "claim",
         "provider",
@@ -1857,6 +1942,7 @@ def test_full_behavior_phase_runs_in_production_order_on_exact_migrations(
         "failed_resend": _failed_resend_observation_passes,
         "rate": _rate_observation_passes,
         "cookie": _cookie_observation_passes,
+        "enumeration": _preauth_enumeration_observation_passes,
         "metadata": _metadata_observation_passes,
         "claim": _claim_observation_passes,
         "provider": _provider_observation_passes,
@@ -2010,7 +2096,7 @@ def test_neutralized_registration_key_is_bound_across_flow_expiry_and_removal(
         "removed_mutations_uniform": True,
         "zero_provider": True,
         "zero_delta_after_terminal": True,
-        "mutation_count": 12,
+        "mutation_count": 9,
     }
 
 
@@ -2041,7 +2127,7 @@ def test_pending_registration_expiry_or_missing_flow_closes_relay_graph(tmp_path
         "missing_graph_terminal": True,
         "zero_provider": True,
         "zero_delta_after_terminal": True,
-        "mutation_count_each": 12,
+        "mutation_count_each": 9,
     }
 
 
@@ -2183,6 +2269,7 @@ def test_every_seeded_vulnerable_outcome_is_killed_by_a_strict_oracle():
         "failed_resend": _failed_resend(),
         "rate": _rate(),
         "cookie": _cookie(),
+        "enumeration": _preauth_enumeration(),
         "claim": _claim(),
         "provider": _provider(),
         "retry": _retry(),
@@ -2206,6 +2293,7 @@ def _privacy_projection_inputs() -> dict[str, object]:
         "failed_resend": _failed_resend(),
         "rate": _rate(),
         "cookie": _cookie(),
+        "enumeration": _preauth_enumeration(),
         "metadata": _metadata(),
         "claim": _claim(),
         "provider": _provider(),
@@ -2390,7 +2478,7 @@ def test_aggregate_pass_report_is_privacy_clean():
         "gate": "nyay4_postgres_otp",
         "status": "PASS",
         "executed": True,
-        "assertions": 16,
+        "assertions": 17,
         "mutants_killed": len(REQUIRED_MUTANT_IDS),
         "scratch": {"created": 3, "removed": 3, "failed": 0},
         "postgres_major": 16,

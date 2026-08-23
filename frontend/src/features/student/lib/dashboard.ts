@@ -68,27 +68,3 @@ export function upcomingModules(current: Release = CURRENT_RELEASE): DashboardMo
 
 /** Safe copy for a not-yet-released tile (no dead ends). */
 export const COMING_SOON_LABEL = 'Coming soon';
-
-/** Percentage of the actual profile fields completed; no fabricated momentum. */
-export function profileCompletionPct(profile: {
-  fullName: string;
-  dateOfBirth: string;
-  college: string;
-  yearOfStudy: string;
-  enrolmentNumber: string;
-  institutionalEmail: string;
-  interests: readonly string[];
-  careerGoal: string;
-}): number {
-  const fields = [
-    profile.fullName,
-    profile.dateOfBirth,
-    profile.college,
-    profile.yearOfStudy,
-    profile.enrolmentNumber,
-    profile.institutionalEmail,
-    profile.interests.length ? 'selected' : '',
-    profile.careerGoal,
-  ];
-  return Math.round((fields.filter((v) => v.trim().length > 0).length / fields.length) * 100);
-}

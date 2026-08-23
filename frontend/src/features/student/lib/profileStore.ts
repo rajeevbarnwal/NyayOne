@@ -39,20 +39,3 @@ export function resetProfileDraft(): void {
     // Browser privacy policy must not prevent the in-memory PII reset above.
   }
 }
-
-/** Seed a partially-complete draft (used to demonstrate the S-13 resume path). */
-export function seedResumeDraft(): ProfileDraft {
-  // Preserve genuine registration/wizard data. Seed only an entirely empty
-  // demo state so this showcase route cannot overwrite a real user's profile.
-  if (!draft.fullName && !draft.dateOfBirth) {
-    draft = {
-      ...EMPTY_PROFILE,
-      fullName: 'Student',
-      preferredLanguage: 'en',
-      dateOfBirth: '2004-03-14',
-      college: '',
-      interests: [],
-    };
-  }
-  return draft;
-}

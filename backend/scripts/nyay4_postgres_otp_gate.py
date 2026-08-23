@@ -52,7 +52,8 @@ if str(BACKEND) not in sys.path:
 BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0018_registration_idempotency"
 PINNED_HEAD = "0019_otp_security_authority"
-APPLICATION_HEAD = "0020_auth_retention_lifecycle"
+APPLICATION_PARENT = "0020_auth_retention_lifecycle"
+APPLICATION_HEAD = "0021_nyay5_profile_boundary"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_TIMING_SAMPLE_ORDER = tuple(
@@ -96,6 +97,10 @@ BEHAVIOR_FIXTURE_MOBILES = {
     "maintenance_expired": "9910001001",
     "maintenance_recent": "9910001002",
     "maintenance_preserved": "9910001003",
+    "enumeration_known": "9510008991",
+    "enumeration_unknown": "9520008991",
+    "enumeration_suspended": "9530008991",
+    "enumeration_ineligible": "9540008991",
 }
 
 # 0001..0015 are pinned by the repository migration ledger.  These three
@@ -130,7 +135,7 @@ LIBPQ_AMBIENT_KEYS = frozenset(
     }
 )
 
-# The exact ordered 16-point release matrix. Evaluator order is deliberate:
+# The exact ordered 17-point release matrix. Evaluator order is deliberate:
 # no later green assertion may substitute for an earlier missing control.
 REQUIRED_ASSERTION_IDS = (
     "RUNTIME-POSTGRES-16-PGVECTOR",
@@ -143,6 +148,7 @@ REQUIRED_ASSERTION_IDS = (
     "CONTRACT-FAILED-RESEND-PRESERVES-ACTIVE",
     "CONTRACT-RATE-BUDGETS-IDENTITY-IP-GLOBAL",
     "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+    "CONTRACT-PREAUTH-ENUMERATION-NEUTRAL",
     "CONTRACT-SERVER-METADATA-TYPED-OUTCOMES",
     "CONTRACT-OUTBOX-CLAIM-LEASE-FENCING",
     "CONTRACT-PROVIDER-IDEMPOTENCY-EXACTLY-ONCE",
@@ -177,6 +183,8 @@ REQUIRED_MUTANT_IDS = (
     "CLIENT-RESETS-RESEND-TIMER",
     "AGGREGATOR-ZERO-SELECTOR",
     "MISSING-GATE-COMMAND",
+    "DISCLOSE-SUSPENDED-PREAUTH",
+    "DELIVER-INELIGIBLE-PREAUTH",
 )
 
 OTP_POSITIVE_INTEGER_FIELDS = (
@@ -1169,7 +1177,7 @@ def _populated_migration_observation_passes(
         # pre-upgrade bootstrap authority. Prove the original key holder can
         # receive a fresh verifier, finish signup, and leave a terminal key
         # tombstone without exposing the registration UUID.
-        and observation["post_upgrade_restart_status"] == 201
+        and observation["post_upgrade_restart_status"] == 202
         and observation["post_upgrade_restart_cookie_issued"] is True
         and observation["post_upgrade_restart_uuid_exposed"] is False
         and observation["post_upgrade_resend_status"] == 202
@@ -1505,6 +1513,49 @@ def _cookie_observation_passes(observation: Mapping[str, Any]) -> bool:
     )
 
 
+def _preauth_enumeration_observation_passes(
+    observation: Mapping[str, Any],
+) -> bool:
+    """Require one conjunctive start+resend contract across all actor classes."""
+
+    return bool(
+        _exact_keys(
+            observation,
+            {
+                "classes",
+                "operations",
+                "start_statuses",
+                "resend_statuses",
+                "start_bodies_equal",
+                "resend_bodies_equal",
+                "start_headers_equal",
+                "resend_headers_equal",
+                "flow_cookies_exact",
+                "start_delivery_deltas",
+                "resend_delivery_deltas",
+                "registration_bound_flows",
+                "decoy_flows",
+                "raw_identifier_exposed",
+            },
+        )
+        and observation["classes"]
+        == ["known", "unknown", "suspended", "ineligible"]
+        and observation["operations"] == ["login_start", "resend"]
+        and observation["start_statuses"] == [202, 202, 202, 202]
+        and observation["resend_statuses"] == [202, 202, 202, 202]
+        and observation["start_bodies_equal"] is True
+        and observation["resend_bodies_equal"] is True
+        and observation["start_headers_equal"] is True
+        and observation["resend_headers_equal"] is True
+        and observation["flow_cookies_exact"] is True
+        and observation["start_delivery_deltas"] == [1, 0, 0, 0]
+        and observation["resend_delivery_deltas"] == [1, 0, 0, 0]
+        and observation["registration_bound_flows"] == 1
+        and observation["decoy_flows"] == 3
+        and observation["raw_identifier_exposed"] is False
+    )
+
+
 def _metadata_observation_passes(observation: Mapping[str, Any]) -> bool:
     return bool(
         _exact_keys(
@@ -1690,6 +1741,7 @@ def _seeded_mutant_results(
         "failed_resend",
         "rate",
         "cookie",
+        "enumeration",
         "claim",
         "provider",
         "retry",
@@ -1707,6 +1759,7 @@ def _seeded_mutant_results(
         "failed_resend": _failed_resend_observation_passes,
         "rate": _rate_observation_passes,
         "cookie": _cookie_observation_passes,
+        "enumeration": _preauth_enumeration_observation_passes,
         "claim": _claim_observation_passes,
         "provider": _provider_observation_passes,
         "retry": _retry_observation_passes,
@@ -1840,6 +1893,18 @@ def _seeded_mutant_results(
         ),
         "MISSING-GATE-COMMAND": killed(
             "harness", _harness_observation_passes, "gate_command_present", False
+        ),
+        "DISCLOSE-SUSPENDED-PREAUTH": killed(
+            "enumeration",
+            _preauth_enumeration_observation_passes,
+            "start_bodies_equal",
+            False,
+        ),
+        "DELIVER-INELIGIBLE-PREAUTH": killed(
+            "enumeration",
+            _preauth_enumeration_observation_passes,
+            "resend_delivery_deltas",
+            [1, 0, 0, 1],
         ),
     }
 
@@ -2175,6 +2240,7 @@ def _seed_parent_registration(engine: Engine) -> None:
                 "dob_hash": hashlib.sha256(registration_id.bytes + b"dob").hexdigest(),
             },
         )
+        _seed_empty_parent_profile(connection, engine, registration_id)
 
 
 def _seed_behavior_legacy_destinations(
@@ -2242,6 +2308,7 @@ def _seed_behavior_legacy_destinations(
                 ),
                 values,
             )
+            _seed_empty_parent_profile(connection, engine, registration_id)
             connection.execute(
                 text(
                     "INSERT INTO otp_challenges "
@@ -2272,6 +2339,25 @@ def _database_uuid(engine: Engine, value: uuid.UUID) -> object:
     return value.hex if engine.dialect.name == "sqlite" else value
 
 
+def _seed_empty_parent_profile(
+    connection: Any,
+    engine: Engine,
+    registration_id: uuid.UUID,
+) -> None:
+    """Preserve the pre-NYAY-5 one-profile-per-registration invariant."""
+
+    connection.execute(
+        text(
+            "INSERT INTO student_profiles (id, registration_id) "
+            "VALUES (:id, :registration_id)"
+        ),
+        {
+            "id": _database_uuid(engine, uuid.uuid4()),
+            "registration_id": _database_uuid(engine, registration_id),
+        },
+    )
+
+
 def _seed_populated_parent(engine: Engine, *, rows: int = 2) -> dict[str, Any]:
     """Create realistic 0018 rows, including one completed keyed signup.
 
@@ -2293,7 +2379,7 @@ def _seed_populated_parent(engine: Engine, *, rows: int = 2) -> dict[str, Any]:
     )
 
     now = datetime.now(timezone.utc)
-    payload = _nyay4_registration_payload("9510006101")
+    payload = _nyay4_legacy_v1_registration_payload("9510006101")
     request = StudentRegisterRequest.model_validate(payload)
     idempotency_key = "nyay4-populated-restart-key-v1"
     signup_code = "610101"
@@ -2387,6 +2473,7 @@ def _seed_populated_parent(engine: Engine, *, rows: int = 2) -> dict[str, Any]:
                 ),
                 values,
             )
+            _seed_empty_parent_profile(connection, engine, registration_id)
             connection.execute(
                 text(
                     "INSERT INTO otp_challenges "
@@ -2511,7 +2598,7 @@ def _run_populated_restart_probe(
                 or getattr(registration_id, "hex", "").casefold()
                 in restart_body
             )
-            if restart.status_code == 201 and cookie_issued:
+            if restart.status_code == 202 and cookie_issued:
                 resend = client.post(
                     "/api/v1/auth/student/otp/resend",
                     json={},
@@ -2670,7 +2757,28 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
         )
         raw_ip_columns = len(owned_columns & {"ip", "ip_address", "raw_ip"})
 
+        # Runtime is always exercised against the current application head.
+        # The exact 0019 inventory above remains the ticket-specific migration
+        # oracle; 0020/0021 are then installed only for the current endpoint
+        # contract and removed again before testing 0019's fail-closed downgrade.
+        application_upgrade = _run_alembic(
+            scratch_url, "upgrade", APPLICATION_HEAD
+        )
+        if application_upgrade["returncode"] != 0:
+            raise ProductGateFailure(
+                "populated probe could not install current application head"
+            )
         restart = _run_populated_restart_probe(engine, populated_seed)
+        application_downgrade = _run_alembic(
+            scratch_url, "downgrade", PINNED_HEAD
+        )
+        if (
+            application_downgrade["returncode"] != 0
+            or _current_revision(engine) != PINNED_HEAD
+        ):
+            raise ProductGateFailure(
+                "populated probe could not restore the exact NYAY-4 head"
+            )
 
         with engine.connect() as connection:
             registration_value = connection.scalar(
@@ -3054,7 +3162,13 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
-        if application is None or application.down_revision != PINNED_HEAD:
+        retention = scripts.get_revision(APPLICATION_PARENT)
+        if (
+            application is None
+            or retention is None
+            or application.down_revision != retention.revision
+            or retention.down_revision != PINNED_HEAD
+        ):
             raise ProductGateFailure(
                 "NYAY-4 sealed 0019 migration boundary is unavailable"
             )
@@ -4070,7 +4184,7 @@ def _run_lockout_probe(engine: Engine) -> dict[str, Any]:
             )
             raw_token = client.cookies.get(settings.otp_flow_cookie_name)
             codes = sender._private_accepted_codes()
-            if started.status_code != 201 or not raw_token or len(codes) != 1:
+            if started.status_code != 202 or not raw_token or len(codes) != 1:
                 raise ProductGateFailure("lockout setup failed")
             wrong_code = "000000" if codes[0] != "000000" else "000001"
             inventory = _flow_private_inventory(factory, raw_token)
@@ -5258,6 +5372,206 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
         ) = original_limits
 
 
+def _run_preauth_enumeration_probe(engine: Engine) -> dict[str, Any]:
+    """Compare known/unknown/suspended/ineligible login start and resend.
+
+    Raw mobiles and flow cookies remain private to this function.  The returned
+    observation contains only ordered class labels, status codes, counts, and
+    equality booleans.
+    """
+
+    from contextlib import ExitStack
+
+    from app.api.v1 import auth_student as endpoint
+    from app.core.config import settings
+    from app.core.crypto import keyed_hash
+    from app.models.registration import OtpFlow, StudentRegistration, User
+    from app.services.otp_flow_service import flow_token_hash
+
+    classes = ("known", "unknown", "suspended", "ineligible")
+    mobiles = {
+        label: _behavior_fixture_mobile(f"enumeration_{label}")
+        for label in classes
+    }
+    original_now = endpoint._now
+    setting_names = (
+        "app_env",
+        "otp_resend_cooldown_seconds",
+        "otp_issue_identity_limit",
+        "otp_issue_ip_limit",
+        "otp_issue_global_limit",
+        "otp_resend_identity_limit",
+        "otp_resend_ip_limit",
+        "otp_resend_global_limit",
+    )
+    original = {name: getattr(settings, name) for name in setting_names}
+    fixed = datetime.now(timezone.utc).replace(microsecond=0)
+    clock = {"now": fixed}
+    endpoint._now = lambda: clock["now"]
+    settings.app_env = "production"
+    settings.otp_resend_cooldown_seconds = 1
+    settings.otp_issue_identity_limit = 100
+    settings.otp_issue_ip_limit = 1000
+    settings.otp_issue_global_limit = 10000
+    settings.otp_resend_identity_limit = 100
+    settings.otp_resend_ip_limit = 1000
+    settings.otp_resend_global_limit = 10000
+    sender = _CertifiedGateProvider()
+    sender_holder: dict[str, Any] = {"sender": sender}
+    app, factory = _build_behavior_app(engine, sender_holder)
+    origin = settings.cors_origins[0]
+
+    def external_headers(response: Any) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (name, response.headers.get(name, ""))
+            for name in (
+                "cache-control",
+                "content-type",
+                "expires",
+                "pragma",
+                "retry-after",
+            )
+        )
+
+    def cookie_attributes(response: Any) -> tuple[str, ...]:
+        raw = response.headers.get("set-cookie", "")
+        if "=" not in raw:
+            return ()
+        return tuple(
+            sorted(part.strip().casefold() for part in raw.split(";")[1:] if part.strip())
+        )
+
+    try:
+        for label in ("known", "suspended", "ineligible"):
+            _seed_active_registration(factory, mobiles[label])
+        with factory.begin() as session:
+            suspended = session.scalar(
+                select(StudentRegistration).where(
+                    StudentRegistration.mobile_hash == keyed_hash(mobiles["suspended"])
+                )
+            )
+            ineligible = session.scalar(
+                select(StudentRegistration).where(
+                    StudentRegistration.mobile_hash == keyed_hash(mobiles["ineligible"])
+                )
+            )
+            if suspended is None or ineligible is None:
+                raise ProductGateFailure("preauth enumeration fixture setup failed")
+            suspended.status = "suspended"
+            suspended_user = session.get(User, suspended.user_id)
+            ineligible_user = session.get(User, ineligible.user_id)
+            if suspended_user is None or ineligible_user is None:
+                raise ProductGateFailure("preauth enumeration user setup failed")
+            suspended_user.status = "suspended"
+            ineligible_user.role = "moderator"
+
+        start_responses: list[Any] = []
+        resend_responses: list[Any] = []
+        start_delivery_deltas: list[int] = []
+        resend_delivery_deltas: list[int] = []
+        raw_tokens: list[str] = []
+        with ExitStack() as stack:
+            clients = {
+                label: stack.enter_context(
+                    TestClient(
+                        app,
+                        base_url="https://testserver",
+                        raise_server_exceptions=False,
+                    )
+                )
+                for label in classes
+            }
+            for label in classes:
+                before = sender.acceptance_count
+                response = clients[label].post(
+                    "/api/v1/auth/student/login/otp/start",
+                    headers={"Origin": origin},
+                    json={"mobile": mobiles[label]},
+                )
+                start_responses.append(response)
+                start_delivery_deltas.append(sender.acceptance_count - before)
+                raw_token = clients[label].cookies.get(settings.otp_flow_cookie_name)
+                if raw_token:
+                    raw_tokens.append(raw_token)
+
+            clock["now"] = fixed + timedelta(seconds=2)
+            for label in classes:
+                before = sender.acceptance_count
+                response = clients[label].post(
+                    "/api/v1/auth/student/otp/resend",
+                    headers={"Origin": origin},
+                    json={},
+                )
+                resend_responses.append(response)
+                resend_delivery_deltas.append(sender.acceptance_count - before)
+
+        start_bodies = [response.content for response in start_responses]
+        resend_bodies = [response.content for response in resend_responses]
+        start_header_shapes = [external_headers(response) for response in start_responses]
+        resend_header_shapes = [external_headers(response) for response in resend_responses]
+        cookie_shapes = [cookie_attributes(response) for response in start_responses]
+        exact_cookie_shape = bool(
+            len(raw_tokens) == len(classes)
+            and cookie_shapes
+            and all(shape == cookie_shapes[0] for shape in cookie_shapes)
+            and "httponly" in cookie_shapes[0]
+            and "secure" in cookie_shapes[0]
+            and "samesite=strict" in cookie_shapes[0]
+        )
+        token_hashes = [flow_token_hash(token) for token in raw_tokens]
+        with factory() as session:
+            flows = tuple(
+                session.scalars(
+                    select(OtpFlow).where(OtpFlow.token_hash.in_(token_hashes))
+                )
+            )
+        registration_bound = sum(flow.registration_id is not None for flow in flows)
+        decoy = sum(flow.registration_id is None for flow in flows)
+        body_bytes = (*start_bodies, *resend_bodies)
+        raw_identifier_exposed = bool(
+            any(mobile.encode("utf-8") in body for mobile in mobiles.values() for body in body_bytes)
+            or any(
+                re.search(
+                    rb"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+                    body,
+                    flags=re.IGNORECASE,
+                )
+                is not None
+                for body in body_bytes
+            )
+        )
+        return {
+            "classes": list(classes),
+            "operations": ["login_start", "resend"],
+            "start_statuses": [response.status_code for response in start_responses],
+            "resend_statuses": [response.status_code for response in resend_responses],
+            "start_bodies_equal": bool(
+                start_bodies and all(body == start_bodies[0] for body in start_bodies)
+            ),
+            "resend_bodies_equal": bool(
+                resend_bodies and all(body == resend_bodies[0] for body in resend_bodies)
+            ),
+            "start_headers_equal": bool(
+                start_header_shapes
+                and all(shape == start_header_shapes[0] for shape in start_header_shapes)
+            ),
+            "resend_headers_equal": bool(
+                resend_header_shapes
+                and all(shape == resend_header_shapes[0] for shape in resend_header_shapes)
+            ),
+            "flow_cookies_exact": exact_cookie_shape,
+            "start_delivery_deltas": start_delivery_deltas,
+            "resend_delivery_deltas": resend_delivery_deltas,
+            "registration_bound_flows": registration_bound,
+            "decoy_flows": decoy,
+            "raw_identifier_exposed": raw_identifier_exposed,
+        }
+    finally:
+        endpoint._now = original_now
+        for name, value in original.items():
+            setattr(settings, name, value)
+
+
 def _compose_cookie_observation(
     base: Mapping[str, Any],
     initial: Mapping[str, Any],
@@ -5358,7 +5672,7 @@ def _run_metadata_probe(engine: Engine) -> dict[str, Any]:
             )
             raw_token = client.cookies.get(settings.otp_flow_cookie_name)
             codes = sender._private_accepted_codes()
-            if started.status_code != 201 or not raw_token or len(codes) != 1:
+            if started.status_code != 202 or not raw_token or len(codes) != 1:
                 raise ProductGateFailure("metadata setup failed")
             state = client.get("/api/v1/auth/student/otp/state")
             body = state.json()
@@ -5478,7 +5792,7 @@ def _prepare_signup_race_graph(
         )
         raw_token = client.cookies.get(settings.otp_flow_cookie_name)
     codes = sender_holder["sender"]._private_accepted_codes()
-    if response.status_code != 201 or not raw_token or len(codes) != 1:
+    if response.status_code != 202 or not raw_token or len(codes) != 1:
         raise ProductGateFailure("signup race graph setup failed")
     with factory() as session:
         flow = session.scalar(
@@ -5930,7 +6244,7 @@ def _run_neutralized_concurrency_probe(engine: Engine) -> dict[str, Any]:
     bodies = (payload, mutation)
     with ThreadPoolExecutor(max_workers=2) as executor:
         outcomes = list(executor.map(worker, bodies))
-    winner_indexes = [index for index, item in enumerate(outcomes) if item[0] == 201]
+    winner_indexes = [index for index, item in enumerate(outcomes) if item[0] == 202]
     loser_indexes = [
         index
         for index, item in enumerate(outcomes)
@@ -5982,7 +6296,7 @@ def _run_neutralized_concurrency_probe(engine: Engine) -> dict[str, Any]:
         )
     return {
         "linearized": bool(
-            winner.status_code == 201
+            winner.status_code == 202
             and _response_error_identity(loser)[1] == "idempotency_conflict"
             and ledger_rows == 1
             and flow_rows == 1
@@ -6009,7 +6323,9 @@ def _compose_rate_observation(
     }
 
 
-def _nyay4_registration_payload(mobile: str) -> dict[str, Any]:
+def _nyay4_legacy_v1_registration_payload(mobile: str) -> dict[str, Any]:
+    """Exact sealed 0018 request used only for populated-ledger replay proof."""
+
     return {
         "first_name": "Asha",
         "middle_name": None,
@@ -6028,6 +6344,20 @@ def _nyay4_registration_payload(mobile: str) -> dict[str, Any]:
     }
 
 
+def _nyay4_registration_payload(mobile: str) -> dict[str, Any]:
+    return {
+        "first_name": "Asha",
+        "middle_name": None,
+        "last_name": "Sen",
+        "mobile": mobile,
+        "dob": "2000-01-02",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
+    }
+
+
 def _nyay4_canonical_mutations(
     payload: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
@@ -6037,13 +6367,10 @@ def _nyay4_canonical_mutations(
         ("last_name", "Rao"),
         ("mobile", "7999994444"),
         ("dob", "2000-01-03"),
-        ("consent.accepted", False),
-        ("consent.policy_version", "dpdp-2023.v2"),
-        ("college", "Other Law University"),
-        ("year_of_study", "Year 3"),
-        ("enrolment_number", "QA/9999/2026"),
-        ("institutional_email", "changed@law.invalid"),
-        ("bar_enrolment_number", "QA-BAR-CHANGED"),
+        ("terms_accepted", False),
+        ("terms_version", "terms-2026-08.v2"),
+        ("privacy_notice_acknowledged", False),
+        ("privacy_notice_version", "privacy-2026-08.v2"),
     )
     mutations: list[dict[str, Any]] = []
     for path, replacement in replacements:
@@ -6113,12 +6440,12 @@ def _run_neutralized_registration_probe(engine: Engine) -> dict[str, Any]:
             key = "nyay4-neutralized-live-0001"
             created = post(client, key, payload)
             raw_token = client.cookies.get(settings.otp_flow_cookie_name)
-            if created.status_code != 201 or not raw_token:
+            if created.status_code != 202 or not raw_token:
                 raise ProductGateFailure("neutralized setup failed")
             live_digest = _tables_projection_digest(engine, watched_tables)
             replay = post(client, key, payload)
             replay_stable = bool(
-                replay.status_code == 201
+                replay.status_code == 202
                 and replay.content == created.content
                 and client.cookies.get(settings.otp_flow_cookie_name) == raw_token
                 and _tables_projection_digest(engine, watched_tables) == live_digest
@@ -6175,7 +6502,7 @@ def _run_neutralized_registration_probe(engine: Engine) -> dict[str, Any]:
             removed_key = "nyay4-neutralized-removed-0002"
             removed_created = post(client, removed_key, payload)
             removed_token = client.cookies.get(settings.otp_flow_cookie_name)
-            if removed_created.status_code != 201 or not removed_token:
+            if removed_created.status_code != 202 or not removed_token:
                 raise ProductGateFailure("neutralized removal setup failed")
             with factory() as session:
                 flow = session.scalar(
@@ -6324,6 +6651,7 @@ def _run_pending_registration_lifecycle_probe(engine: Engine) -> dict[str, Any]:
     graph_terminal: list[bool] = []
     zero_provider: list[bool] = []
     zero_delta: list[bool] = []
+    mutation_counts: list[int] = []
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             client.headers["Origin"] = settings.cors_origins[0]
@@ -6337,7 +6665,7 @@ def _run_pending_registration_lifecycle_probe(engine: Engine) -> dict[str, Any]:
                 sender_holder["sender"] = failing
                 created = post(client, key, payload)
                 raw_token = client.cookies.get(settings.otp_flow_cookie_name)
-                if created.status_code != 201 or not raw_token:
+                if created.status_code != 202 or not raw_token:
                     raise ProductGateFailure("pending lifecycle setup failed")
                 inventory = _flow_private_inventory(factory, raw_token)
                 if mode == "expired":
@@ -6364,6 +6692,7 @@ def _run_pending_registration_lifecycle_probe(engine: Engine) -> dict[str, Any]:
                     post(client, key, mutation)
                     for mutation in _nyay4_canonical_mutations(payload)
                 ]
+                mutation_counts.append(len(mutations))
                 cases.append(
                     _response_error_identity(exact)
                     == (409, "registration_replay_expired", "Idempotency-Key")
@@ -6388,7 +6717,12 @@ def _run_pending_registration_lifecycle_probe(engine: Engine) -> dict[str, Any]:
             "missing_graph_terminal": graph_terminal[1],
             "zero_provider": all(zero_provider),
             "zero_delta_after_terminal": all(zero_delta),
-            "mutation_count_each": 12,
+            "mutation_count_each": (
+                mutation_counts[0]
+                if len(mutation_counts) == 2
+                and mutation_counts[0] == mutation_counts[1]
+                else -1
+            ),
         }
     finally:
         endpoint._now = original_now
@@ -6444,8 +6778,8 @@ def _run_signup_verify_symmetry_probe(engine: Engine) -> dict[str, Any]:
             real_token = real_client.cookies.get(settings.otp_flow_cookie_name)
             decoy_token = decoy_client.cookies.get(settings.otp_flow_cookie_name)
             if (
-                real.status_code != 201
-                or decoy.status_code != 201
+                real.status_code != 202
+                or decoy.status_code != 202
                 or not real_token
                 or not decoy_token
             ):
@@ -6565,7 +6899,7 @@ def _run_maintenance_entrypoint_probe(
                 json=expired_payload,
             )
             expired_token = client.cookies.get(settings.otp_flow_cookie_name)
-            if expired_start.status_code != 201 or not expired_token:
+            if expired_start.status_code != 202 or not expired_token:
                 raise ProductGateFailure("maintenance expired-flow setup failed")
 
         # Two ordinary delivered login rows supply an aged grandfathered
@@ -6808,13 +7142,22 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
             )
         finally:
             parent_engine.dispose()
-        upgrade = _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD)
-        if upgrade["returncode"] != 0:
+        pinned_upgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
+        if pinned_upgrade["returncode"] != 0:
+            raise ProductGateFailure("behavior probe could not install exact 0019")
+        pinned_engine = create_engine(scratch_url, poolclass=NullPool)
+        try:
+            schema = _exact_schema_observation(pinned_engine)
+        finally:
+            pinned_engine.dispose()
+        application_upgrade = _run_alembic(
+            scratch_url, "upgrade", APPLICATION_HEAD
+        )
+        if application_upgrade["returncode"] != 0:
             raise ProductGateFailure(
                 "behavior probe could not install current application head"
             )
         engine = create_engine(scratch_url, poolclass=NullPool)
-        schema = _exact_schema_observation(engine)
 
         lockout = _run_lockout_probe(engine)
         _clear_behavior_rate_buckets(engine)
@@ -6856,6 +7199,8 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
                 and neutralized_race.get("deadlocks") == 0
             ),
         )
+        _clear_behavior_rate_buckets(engine)
+        enumeration = _run_preauth_enumeration_probe(engine)
 
         metadata = _run_metadata_probe(engine)
         _clear_behavior_rate_buckets(engine)
@@ -6880,6 +7225,7 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
             "failed_resend": failed_resend,
             "rate": rate,
             "cookie": cookie,
+            "enumeration": enumeration,
             "metadata": metadata,
             "claim": claim,
             "provider": provider,
@@ -7088,6 +7434,7 @@ def run_gate(base: URL) -> dict[str, Any]:
         "failed_resend": behavior["failed_resend"],
         "rate": behavior["rate"],
         "cookie": behavior["cookie"],
+        "enumeration": behavior["enumeration"],
         "claim": behavior["claim"],
         "provider": behavior["provider"],
         "retry": behavior["retry"],
@@ -7154,26 +7501,32 @@ def run_gate(base: URL) -> dict[str, Any]:
         },
         {
             "id": REQUIRED_ASSERTION_IDS[10],
-            "passed": _metadata_observation_passes(behavior["metadata"]),
+            "passed": _preauth_enumeration_observation_passes(
+                behavior["enumeration"]
+            ),
         },
         {
             "id": REQUIRED_ASSERTION_IDS[11],
-            "passed": _claim_observation_passes(behavior["claim"]),
+            "passed": _metadata_observation_passes(behavior["metadata"]),
         },
         {
             "id": REQUIRED_ASSERTION_IDS[12],
-            "passed": _provider_observation_passes(behavior["provider"]),
+            "passed": _claim_observation_passes(behavior["claim"]),
         },
         {
             "id": REQUIRED_ASSERTION_IDS[13],
-            "passed": _retry_observation_passes(behavior["retry"]),
+            "passed": _provider_observation_passes(behavior["provider"]),
         },
         {
             "id": REQUIRED_ASSERTION_IDS[14],
-            "passed": _config_observation_passes(config),
+            "passed": _retry_observation_passes(behavior["retry"]),
         },
         {
             "id": REQUIRED_ASSERTION_IDS[15],
+            "passed": _config_observation_passes(config),
+        },
+        {
+            "id": REQUIRED_ASSERTION_IDS[16],
             "passed": _harness_observation_passes(harness),
         },
     ]

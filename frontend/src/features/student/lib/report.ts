@@ -16,7 +16,7 @@
  * 04 idempotent submit → moderation_pending · 05 evidence validation · 06 anonymity ·
  * 07 cross-user access refused.
  */
-import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+import type { KvStore } from '../../../lib/kvStore';
 
 export type ReportCategory =
   | 'unsafe'
@@ -209,7 +209,7 @@ export interface DraftInput {
 export class ReportService {
   private store: KvStore;
   private userId: string;
-  constructor(userId: string, store: KvStore = defaultKvStore()) {
+  constructor(userId: string, store: KvStore) {
     this.userId = userId;
     this.store = store;
   }

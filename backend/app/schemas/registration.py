@@ -1,6 +1,9 @@
-"""Registration API contracts (SAATHI-421/448). Mirrors the frontend shared
-contract: exact-10 mobile, First/Last required + optional Middle (Unicode, ≤60),
-real non-future DOB, affirmative consent."""
+"""Registration API contracts (SAATHI-421/448, NYAY-5).
+
+Names share the tracked Unicode contract; DOB future policy is evaluated by
+the service's request clock. Legacy academic fields remain parseable only to
+replay sealed v1 idempotency ledgers and new-key creation rejects them.
+"""
 from __future__ import annotations
 
 import re
@@ -8,38 +11,26 @@ import unicodedata
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.legal_name import normalize_legal_name
+from app.core.institutional_email import (
+    normalize_institutional_email,
+)
 
 MOBILE_RE = re.compile(r"[0-9]{10}")
 _ALLOWED_NAME_EXTRA = set(" .'-‘’")
-INSTITUTIONAL_EMAIL_MAX_LENGTH = 254
-CONSUMER_EMAIL_DOMAINS = frozenset(
-    {
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "proton.me",
-        "icloud.com",
-        "rediffmail.com",
-    }
-)
-INSTITUTIONAL_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 
 def _validate_name(value: str | None, *, required: bool, field: str) -> str | None:
-    v = unicodedata.normalize("NFC", (value or "").strip())
-    if not v:
+    if value is None or not value.strip(" "):
         if required:
             raise ValueError(f"{field} is required")
         return None
-    if len(v) > 60:
-        raise ValueError(f"{field} must be 60 characters or fewer")
-    if any(ch.isdigit() for ch in v) or not any(ch.isalpha() for ch in v):
+    try:
+        return normalize_legal_name(value)
+    except ValueError:
         raise ValueError(f"{field} contains characters that aren't allowed")
-    if not all(ch.isalpha() or ch.isspace() or ch in _ALLOWED_NAME_EXTRA for ch in v):
-        raise ValueError(f"{field} contains characters that aren't allowed")
-    return re.sub(r"\s+", " ", v)
 
 
 class ConsentIn(BaseModel):
@@ -66,14 +57,35 @@ class StudentRegisterRequest(BaseModel):
     last_name: str
     mobile: str
     dob: date
-    consent: ConsentIn
-    # Academic profile (SAATHI-421). Optional at registration; persisted to
-    # student_profiles when supplied.
+    # NYAY-5 legal authority.  The two legal artefacts are deliberately
+    # independent: accepting Terms is not consent to, or acknowledgement of,
+    # the Privacy Notice.  They remain optional at schema construction only so
+    # an exact pre-NYAY-5 v1 idempotency replay can be parsed and resolved
+    # before the service rejects legacy-shaped new writes.
+    terms_accepted: bool | None = None
+    terms_version: str | None = None
+    privacy_notice_acknowledged: bool | None = None
+    privacy_notice_version: str | None = None
+    consent: ConsentIn | None = None
+    # Replay-only compatibility leaves for pre-NYAY-5 v1 fingerprints. New
+    # registration writes reject any non-null value before creating a graph.
     college: str | None = None
     year_of_study: str | None = None
     enrolment_number: str | None = None
     institutional_email: str | None = None
     bar_enrolment_number: str | None = None
+
+    @field_validator("terms_version", "privacy_notice_version")
+    @classmethod
+    def _legal_version(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = unicodedata.normalize("NFC", value.strip())
+        if not normalized or len(normalized) > 40:
+            raise ValueError(
+                "Legal policy version is required and must be 40 characters or fewer."
+            )
+        return normalized
 
     @field_validator("first_name")
     @classmethod
@@ -100,9 +112,9 @@ class StudentRegisterRequest(BaseModel):
     @field_validator("dob")
     @classmethod
     def _dob(cls, v: date) -> date:
-        # Pydantic already rejects impossible calendar dates (e.g. 2026-02-31).
-        if v > date.today():
-            raise ValueError("Enter a valid date of birth that is not in the future.")
+        # Pydantic rejects impossible calendar dates. Whether this date is in
+        # the future is request-clock policy and is enforced in the service,
+        # never against process wall time during schema construction.
         return v
 
     @field_validator("college")
@@ -151,16 +163,10 @@ class StudentRegisterRequest(BaseModel):
     @field_validator("institutional_email")
     @classmethod
     def _registration_email(cls, value: str | None) -> str | None:
-        normalized = unicodedata.normalize("NFC", (value or "").strip()).lower()
-        if not normalized:
-            return None
-        if (
-            len(normalized) > INSTITUTIONAL_EMAIL_MAX_LENGTH
-            or not INSTITUTIONAL_EMAIL_RE.fullmatch(normalized)
-            or normalized.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
-        ):
+        try:
+            return normalize_institutional_email(value)
+        except ValueError:
             raise ValueError("Enter a valid institutional email.")
-        return normalized
 
 
 class StudentRegisterResponse(BaseModel):
@@ -177,6 +183,7 @@ class StudentAcademicProfileRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    expected_profile_version: int = Field(ge=1)
     college: str
     year_of_study: str
     enrolment_number: str
@@ -210,13 +217,11 @@ class StudentAcademicProfileRequest(BaseModel):
     @field_validator("institutional_email")
     @classmethod
     def _email(cls, v: str) -> str:
-        value = v.strip().lower()
-        if (
-            not value
-            or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
-            or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
-            or value.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
-        ):
+        try:
+            value = normalize_institutional_email(v)
+        except ValueError:
+            raise ValueError("Enter a valid institutional email.")
+        if value is None:
             raise ValueError("Enter a valid institutional email.")
         return value
 
@@ -228,29 +233,4 @@ class StudentAcademicProfileRequest(BaseModel):
             return None
         if len(value) > 120:
             raise ValueError("Bar enrolment number must be 120 characters or fewer.")
-        return value
-
-
-class InstitutionalEmailVerificationRequest(BaseModel):
-    """S-15 owner-scoped request boundary.
-
-    Ownership comes from the authenticated server session, never a UUID in the
-    request body. Raw email is validated before route execution.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    institutional_email: str
-
-    @field_validator("institutional_email")
-    @classmethod
-    def _email(cls, v: str) -> str:
-        value = v.strip().lower()
-        if (
-            not value
-            or len(value) > INSTITUTIONAL_EMAIL_MAX_LENGTH
-            or not INSTITUTIONAL_EMAIL_RE.fullmatch(value)
-            or value.rpartition("@")[2] in CONSUMER_EMAIL_DOMAINS
-        ):
-            raise ValueError("Enter a valid institutional email.")
         return value

@@ -23,7 +23,7 @@ from fastapi import (
     Request,
     Response,
 )
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ from app.core.auth_cookies import (
     cookie_secure,
 )
 from app.core.config import settings
-from app.core.crypto import active_key_version, decrypt, encrypt, keyed_hash
+from app.core.crypto import decrypt, keyed_hash
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.db.session import get_sessionmaker
@@ -49,13 +49,11 @@ from app.models.registration import (
     OtpChallenge,
     OtpOutbox,
     OtpPurposeAuthority,
-    StudentProfile,
     StudentRegistration,
     StudentVerification,
     VERIFICATION_STATUSES,
 )
 from app.schemas.registration import (
-    InstitutionalEmailVerificationRequest,
     StudentAcademicProfileRequest,
     StudentRegisterRequest,
 )
@@ -64,6 +62,7 @@ from app.services import (
     otp_authority,
     otp_flow_service,
     otp_service,
+    profile_service,
     recovery_service,
     registration_service,
 )
@@ -88,8 +87,10 @@ _REGISTRATION_MOBILE_CONSTRAINT = "uq_student_registrations_mobile_hash"
 _VERIFICATION_TRANSITIONS = {
     "pending": {"in_review", "verified", "rejected"},
     "in_review": {"verified", "rejected"},
-    "verified": set(),
+    "verified": {"expired", "revoked"},
     "rejected": {"in_review"},
+    "expired": {"in_review"},
+    "revoked": {"in_review"},
 }
 
 
@@ -215,6 +216,17 @@ def _client_ip(request: Request) -> str | None:
 def _otp_projection_headers(response: Response) -> None:
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Vary"] = "Cookie"
+
+
+def _registration_accepted_projection() -> dict[str, object]:
+    """Return the one anti-enumerating registration-start wire."""
+
+    return {
+        "status": "accepted",
+        "next": "otp",
+        "expires_in_seconds": settings.otp_challenge_ttl_seconds,
+        "resend_after_seconds": settings.otp_resend_cooldown_seconds,
+    }
 
 
 def _otp_error_headers(
@@ -434,13 +446,13 @@ def _finish_registration_replay(
     now: datetime,
     sender: IdempotentOtpSender | None,
     outbox_session_factory: Callable[[], Session],
-) -> otp_flow_service.OtpFlowState:
+) -> dict[str, object]:
     """Return one typed real/neutral winner without creating another graph."""
 
     if isinstance(
         resolution, registration_service.NeutralizedRegistrationReplay
     ):
-        raw_token, state = _neutralized_replay_projection(
+        raw_token, _state = _neutralized_replay_projection(
             session, idempotency_key, now=now
         )
         delivery = None
@@ -458,9 +470,9 @@ def _finish_registration_replay(
                 now=now,
             )
             authority = session.get(OtpPurposeAuthority, flow.authority_id)
-            state = otp_flow_service.project(authority, flow, now=now)
+            _state = otp_flow_service.project(authority, flow, now=now)
         elif graph is not None:
-            state = otp_flow_service.project(*graph, now=now)
+            _state = otp_flow_service.project(*graph, now=now)
         else:
             raise RuntimeError("registration replay lost its OTP flow")
         delivery = resolution.delivery
@@ -483,7 +495,7 @@ def _finish_registration_replay(
         # Releases the locked winner.  This is normally mutation-free; the
         # populated-0019 compatibility path may have recreated its bearer.
         session.commit()
-    return state
+    return _registration_accepted_projection()
 
 
 def _recover_registration_integrity_conflict(
@@ -555,7 +567,7 @@ def _commit_decoy_or_resolve_winner(
         )
 
 
-@router.post("/register", status_code=201)
+@router.post("/register", status_code=202)
 def register(
     payload: StudentRegisterRequest,
     request: Request,
@@ -568,7 +580,7 @@ def register(
         get_outbox_session_factory
     ),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> otp_flow_service.OtpFlowState:
+) -> dict[str, object]:
     if len(request.headers.getlist("idempotency-key")) > 1:
         raise HTTPException(
             status_code=422,
@@ -609,6 +621,17 @@ def register(
                 sender=sender,
                 outbox_session_factory=outbox_session_factory,
             )
+
+    # Fresh-request legal/date/profile authority is pure and precedes both
+    # provider availability and durable abuse-budget consumption. Exact sealed
+    # replays above retain precedence over this forward-contract validation.
+    try:
+        registration_service.validate_fresh_registration_request(
+            payload,
+            now=now,
+        )
+    except RegistrationError as exc:
+        raise _registration_http_error(exc) from exc
 
     # Fresh real and neutralized requests share this provider-availability
     # decision before any account lookup can affect the HTTP outcome.
@@ -698,9 +721,9 @@ def register(
             )
         raw_token, flow = decoy
         authority = session.get(OtpPurposeAuthority, flow.authority_id)
-        state = otp_flow_service.project(authority, flow, now=now)
+        _state = otp_flow_service.project(authority, flow, now=now)
         _set_flow_cookie(response, raw_token)
-        return state
+        return _registration_accepted_projection()
 
     raw_token = (
         otp_flow_service.deterministic_signup_token(idempotency_key)
@@ -784,7 +807,7 @@ def register(
             result = winner
 
     _set_flow_cookie(response, raw_token)
-    state = otp_flow_service.project(authority, flow, now=now)
+    _state = otp_flow_service.project(authority, flow, now=now)
     if not duplicate and result.delivery is not None:
         if idempotency_key is not None:
             background_tasks.add_task(
@@ -802,7 +825,7 @@ def register(
                 provider,
                 outbox_session_factory,
             )
-    return state
+    return _registration_accepted_projection()
 
 
 # --------------------------------------------------------------------------- #
@@ -826,6 +849,28 @@ class EmptyOtpRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _authenticated_onboarding_response(
+    session: Session,
+    *,
+    actor_user_id: uuid.UUID,
+    raw_session_token: str,
+    purpose: str,
+    now: datetime,
+) -> dict[str, object]:
+    """Build the server-owned onboarding projection before the auth commit."""
+
+    state: dict[str, object] = dict(
+        otp_flow_service.authenticated_state(purpose)
+    )
+    state["onboarding"] = profile_service.projection_for_actor(
+        session,
+        actor_user_id,
+        now=now,
+        raw_session_token=raw_session_token,
+    )
+    return state
+
+
 @router.post("/otp/verify")
 def otp_verify(
     payload: OtpVerifyRequest,
@@ -833,7 +878,7 @@ def otp_verify(
     response: Response,
     _: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
-) -> otp_flow_service.OtpFlowState:
+) -> dict[str, object]:
     now = _now()
     _otp_projection_headers(response)
     raw_token = _flow_cookie_value(request)
@@ -929,19 +974,30 @@ def otp_verify(
             code="otp_failed",
             now=now,
         )
-    state = otp_flow_service.mark_authenticated(flow, now=now)
+    otp_flow_service.mark_authenticated(flow, now=now)
     try:
-        raw_token, _ = login_service.rotate_authenticated_session(
-            session, registration, now
+        raw_token, auth_session = login_service.rotate_authenticated_session(
+            session,
+            registration,
+            now,
+            commit_on_success=False,
         )
     except login_service.LoginError as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail={"code": exc.code},
         ) from exc
+    result = _authenticated_onboarding_response(
+        session,
+        actor_user_id=auth_session.user_id,
+        raw_session_token=raw_token,
+        purpose="signup",
+        now=now,
+    )
+    session.commit()
     _set_session_cookie(response, raw_token)
     _clear_flow_cookie(response)
-    return state
+    return result
 
 
 @router.post("/otp/resend", status_code=202)
@@ -956,7 +1012,7 @@ def otp_resend(
     outbox_session_factory: Callable[[], Session] = Depends(
         get_outbox_session_factory
     ),
-) -> otp_flow_service.OtpFlowState:
+) -> dict[str, object]:
     del origin
     now = _now()
     _otp_projection_headers(response)
@@ -1051,57 +1107,58 @@ def otp_state(
 @router.patch("/profile")
 def update_academic_profile(
     payload: StudentAcademicProfileRequest,
+    request: Request,
+    response: Response,
     actor: ActorContext = Depends(_require_student_actor),
+    _: None = Depends(require_trusted_cookie_origin),
     session: Session = Depends(get_session),
-) -> dict[str, str]:
-    """Persist academic fields for the authenticated registration owner."""
+) -> dict:
+    """Compatibility facade over the one canonical profile authority."""
 
+    _otp_projection_headers(response)
+    if request.query_params:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "field": "query"},
+            headers=_otp_error_headers(),
+        )
     reg = _owned_registration(session, actor)
     if reg.status not in {"otp_verified", "active"}:
         raise HTTPException(status_code=403, detail={"code": "otp_verification_required"})
-    profile = session.scalar(
-        select(StudentProfile).where(StudentProfile.registration_id == reg.id)
-    )
-    if profile is None:
-        profile = StudentProfile(registration_id=reg.id)
-        session.add(profile)
-    profile.college = payload.college
-    profile.year_of_study = payload.year_of_study
-    profile.enrolment_ct = encrypt(payload.enrolment_number)
-    profile.enrolment_hash = keyed_hash(payload.enrolment_number)
-    profile.institutional_email_ct = encrypt(payload.institutional_email)
-    profile.institutional_email_hash = keyed_hash(
-        payload.institutional_email, lower=True
-    )
-    profile.bar_enrolment_ct = (
-        encrypt(payload.bar_enrolment_number)
-        if payload.bar_enrolment_number
-        else None
-    )
-    profile.bar_enrolment_hash = (
-        keyed_hash(payload.bar_enrolment_number)
-        if payload.bar_enrolment_number
-        else None
-    )
-    profile.key_version = active_key_version()
-    reg.institution_ref = payload.college
-    session.flush()
-    session.add(
-        AuditEvent(
-            actor_user_id=actor.user_id,
-            actor_role="student",
-            action="student.profile.academic_updated",
-            resource_type="student_profile",
-            resource_id=profile.id,
-            after_state={
-                "registration_id": str(reg.id),
-                "academic_fields": "complete",
-                "key_version": profile.key_version,
-            },
+    try:
+        return profile_service.update_academic(
+            session,
+            actor.user_id,
+            expected_profile_version=payload.expected_profile_version,
+            college=payload.college,
+            year_of_study=payload.year_of_study,
+            enrolment_number=payload.enrolment_number,
+            institutional_email=payload.institutional_email,
+            bar_enrolment_number=payload.bar_enrolment_number,
+            now=_now(),
+            raw_session_token=request.cookies.get(
+                settings.auth_session_cookie_name
+            ),
         )
-    )
-    session.commit()
-    return {"status": "saved"}
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        detail: dict[str, object] = {"code": error.code}
+        if error.field is not None:
+            detail["field"] = error.field
+        if isinstance(error, profile_service.ProfileVersionConflict):
+            detail.update(
+                {
+                    "current_profile_version": error.projection[
+                        "profile_version"
+                    ],
+                    "current_projection": error.projection,
+                }
+            )
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=detail,
+            headers=_otp_error_headers(),
+        ) from error
 
 
 # --------------------------------------------------------------------------- #
@@ -1345,7 +1402,7 @@ def login_otp_verify(
     response: Response,
     _: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
-) -> otp_flow_service.OtpFlowState:
+) -> dict[str, object]:
     now = _now()
     _otp_projection_headers(response)
     raw_flow_token = _flow_cookie_value(request)
@@ -1359,8 +1416,12 @@ def login_otp_verify(
         now=now,
     )
     try:
-        raw_session_token, _, _ = login_service.verify_flow(
-            session, raw_flow_token, payload.code, now
+        raw_session_token, auth_session, _ = login_service.verify_flow(
+            session,
+            raw_flow_token,
+            payload.code,
+            now,
+            commit_on_success=False,
         )
     except login_service.LoginError as exc:
         raise _flow_http_error(
@@ -1370,9 +1431,17 @@ def login_otp_verify(
             code=exc.code,
             now=now,
         ) from exc
+    result = _authenticated_onboarding_response(
+        session,
+        actor_user_id=auth_session.user_id,
+        raw_session_token=raw_session_token,
+        purpose="login",
+        now=now,
+    )
+    session.commit()
     _set_session_cookie(response, raw_session_token)
     _clear_flow_cookie(response)
-    return otp_flow_service.authenticated_state("login")
+    return result
 
 
 @router.get("/session")
@@ -1446,6 +1515,7 @@ class VerificationTransitionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     registration_id: uuid.UUID
     status: str
+    expected_profile_version: int = Field(ge=1)
 
     @field_validator("status")
     @classmethod
@@ -1476,60 +1546,49 @@ def _load_verification(session: Session, registration_id: uuid.UUID) -> StudentV
 
 @router.post("/verification/email/request", status_code=202)
 def request_institutional_email_verification(
-    payload: InstitutionalEmailVerificationRequest,
+    payload: EmptyOtpRequest,
+    request: Request,
+    response: Response,
     actor: ActorContext = Depends(_require_student_actor),
+    _: None = Depends(require_trusted_cookie_origin),
     session: Session = Depends(get_session),
-) -> dict[str, str]:
+) -> dict:
     """Accept an S-15 verification request only for the saved email.
 
-    Invalid email syntax is rejected by the request schema before this function
-    runs, and registration ownership is resolved from the server session.
+    The body is deliberately empty. Registration ownership and the requested
+    address both come from the authenticated canonical server profile.
     """
-    reg = _owned_registration(session, actor)
-    if reg.status not in {"otp_verified", "active"}:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "otp_verification_required", "message": "Verify the mobile number first"},
-        )
-
-    profile = session.scalar(
-        select(StudentProfile).where(StudentProfile.registration_id == reg.id)
-    )
-    if (
-        profile is None
-        or profile.institutional_email_hash is None
-        or profile.institutional_email_hash
-        != keyed_hash(payload.institutional_email, lower=True)
-    ):
+    del payload
+    _otp_projection_headers(response)
+    if request.query_params:
         raise HTTPException(
             status_code=422,
-            detail={
-                "code": "institutional_email_mismatch",
-                "field": "institutional_email",
-                "message": "Use the institutional email saved in your academic profile",
-            },
+            detail={"code": "validation_error", "field": "query"},
         )
-
-    verification = _load_verification(session, reg.id)
-    if verification.status == "verified":
+    # Preserve this legacy auth namespace's indistinguishable ownership
+    # contract before delegating to the canonical profile authority. Missing,
+    # deleted, quarantined, and ambiguous registrations all remain the same
+    # registration_not_found response on every route in this namespace.
+    _owned_registration(session, actor)
+    try:
+        return profile_service.request_institutional_email_verification(
+            session,
+            actor.user_id,
+            now=_now(),
+            raw_session_token=request.cookies.get(
+                settings.auth_session_cookie_name
+            ),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        detail: dict[str, object] = {"code": error.code}
+        if error.field is not None:
+            detail["field"] = error.field
         raise HTTPException(
-            status_code=409,
-            detail={"code": "institutional_email_already_verified", "message": "Email is already verified"},
-        )
-    verification.method = "institutional_email"
-    verification.status = "pending"
-    session.add(
-        AuditEvent(
-            actor_user_id=actor.user_id,
-            actor_role="student",
-            action="student.verification.email_requested",
-            resource_type="student_verification",
-            resource_id=verification.id,
-            after_state={"registration_id": str(reg.id), "status": "pending"},
-        )
-    )
-    session.commit()
-    return {"status": "pending"}
+            status_code=error.status_code,
+            detail=detail,
+            headers=_otp_error_headers(),
+        ) from error
 
 
 @router.get("/verification/status")
@@ -1554,10 +1613,48 @@ def verification_status(
 @router.post("/verification/status")
 def verification_transition(
     payload: VerificationTransitionRequest,
+    request: Request,
+    _: None = Depends(require_trusted_cookie_origin),
     actor: ActorContext = Depends(_require_verification_reviewer),
     session: Session = Depends(get_session),
-) -> dict[str, str]:
-    ver = _load_verification(session, payload.registration_id)
+) -> dict[str, object]:
+    try:
+        authority = profile_service.lock_authority_for_review(
+            session, payload.registration_id
+        )
+    except profile_service.ProfileBoundaryError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=404, detail={"code": "verification_not_found"}
+        ) from exc
+    ver = authority.verification
+    assert ver is not None
+    raw_session_token = request.cookies.get(
+        settings.auth_session_cookie_name
+    )
+    if raw_session_token is not None:
+        locked_session = login_service.lock_presented_session_for_effect(
+            session,
+            raw_session_token,
+            expected_user_id=actor.user_id,
+            now=_now(),
+            allowed_roles=frozenset({"admin", "legal_reviewer"}),
+        )
+        if locked_session is None:
+            session.rollback()
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "authentication_required"},
+            )
+    if authority.profile.profile_version != payload.expected_profile_version:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "profile_version_conflict",
+                "current_profile_version": authority.profile.profile_version,
+            },
+        )
     allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
     if payload.status != ver.status and payload.status not in allowed:
         raise HTTPException(
@@ -1566,6 +1663,15 @@ def verification_transition(
         )
     before = ver.status
     ver.status = payload.status
+    if payload.status == "verified":
+        if authority.profile.institutional_email_hash is None:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "institutional_email_required"},
+            )
+        ver.verified_email_hash = authority.profile.institutional_email_hash
+    else:
+        ver.verified_email_hash = None
     reviewer_role = (
         "legal_reviewer"
         if actor.has_role(Role.LEGAL_REVIEWER)
@@ -1579,8 +1685,19 @@ def verification_transition(
             resource_type="student_verification",
             resource_id=ver.id,
             before_state={"status": before},
-            after_state={"status": ver.status},
+            after_state={
+                "status": ver.status,
+                "profile_version": authority.profile.profile_version,
+            },
         )
     )
     session.commit()
-    return {"status": ver.status}
+    # This staff operation is deliberately outside the owner-session profile
+    # API: a reviewer cannot truthfully construct the student's session-scoped
+    # prompt projection. Return an explicit invalidation contract so the owner
+    # refetches the canonical projection through their own HttpOnly session.
+    return {
+        "status": ver.status,
+        "profile_version": authority.profile.profile_version,
+        "owner_projection_invalidated": True,
+    }

@@ -134,9 +134,13 @@ OTP_PENDING_SERVICE_INDEX_DEFINITION = {
         "authority_id is not null and delivery_state = 'pending_delivery'"
     ),
 }
-GUARDIAN_STATE_SQL = (
+HISTORICAL_GUARDIAN_STATE_SQL = (
     "(status = 'verified' AND verified = true) OR "
     "(status IN ('pending', 'sent', 'rejected') AND verified = false)"
+)
+CURRENT_GUARDIAN_STATE_SQL = (
+    "(status = 'verified' AND verified = true) OR "
+    "(status IN ('pending', 'sent', 'rejected', 'revoked') AND verified = false)"
 )
 TARGET_CONSTRAINT_DEFINITIONS = {
     "uq_guardian_consents_registration_id": {
@@ -150,7 +154,7 @@ TARGET_CONSTRAINT_DEFINITIONS = {
     "ck_guardian_consents_verified_matches_status": {
         "type": "c",
         "columns": ("status", "verified"),
-        "definition": GUARDIAN_STATE_SQL,
+        "definition": CURRENT_GUARDIAN_STATE_SQL,
     },
 }
 RACE_CONSTRAINTS = {
@@ -168,6 +172,8 @@ GUARDIAN_STATE_CASES = (
     ("sent_true", "sent", True, False),
     ("rejected_false", "rejected", False, True),
     ("rejected_true", "rejected", True, False),
+    ("revoked_false", "revoked", False, True),
+    ("revoked_true", "revoked", True, False),
 )
 
 
@@ -428,7 +434,11 @@ def _normalize_constraint_definition(value: object) -> str:
     return normalized
 
 
-def _runtime_inventory(engine: Engine) -> dict[str, Any]:
+def _runtime_inventory(
+    engine: Engine,
+    *,
+    guardian_state_sql: str,
+) -> dict[str, Any]:
     with engine.connect() as connection:
         server_version_num = int(connection.scalar(text("SHOW server_version_num")))
         vector_version = connection.scalar(
@@ -548,8 +558,17 @@ def _runtime_inventory(engine: Engine) -> dict[str, Any]:
         )
         for name, expected in TARGET_INDEX_DEFINITIONS.items()
     }
+    target_constraint_definitions = {
+        **TARGET_CONSTRAINT_DEFINITIONS,
+        "ck_guardian_consents_verified_matches_status": {
+            **TARGET_CONSTRAINT_DEFINITIONS[
+                "ck_guardian_consents_verified_matches_status"
+            ],
+            "definition": guardian_state_sql,
+        },
+    }
     target_constraint_semantics = {}
-    for name, expected in TARGET_CONSTRAINT_DEFINITIONS.items():
+    for name, expected in target_constraint_definitions.items():
         detail = constraint_details.get(name)
         columns = tuple(detail["columns"]) if detail else ()
         columns_match = (
@@ -803,7 +822,10 @@ def _target_inventory_observation(
 ) -> tuple[dict[str, Any], tuple[Any, ...]]:
     """Return bounded evidence plus an internal exact inventory fingerprint."""
 
-    inventory = _runtime_inventory(engine)
+    inventory = _runtime_inventory(
+        engine,
+        guardian_state_sql=HISTORICAL_GUARDIAN_STATE_SQL,
+    )
     present = {
         **inventory["target_indexes_present"],
         **inventory["target_constraints_present"],
@@ -2106,7 +2128,10 @@ def _service_probes(
         "audit_events": int(session_conflict_state.audit_events),
     }
 
-    conflict_inventory = _runtime_inventory(engine)
+    conflict_inventory = _runtime_inventory(
+        engine,
+        guardian_state_sql=CURRENT_GUARDIAN_STATE_SQL,
+    )
     otp_conflict["index_semantics_retained"] = conflict_inventory[
         "pending_service_index_semantics"
     ]
@@ -2615,7 +2640,10 @@ def _execute(
 
     engine = create_engine(scratch_url, poolclass=NullPool)
     try:
-        inventory = _runtime_inventory(engine)
+        inventory = _runtime_inventory(
+            engine,
+            guardian_state_sql=CURRENT_GUARDIAN_STATE_SQL,
+        )
         if not inventory["postgresql_16_or_newer"] or not inventory["pgvector_version"]:
             raise Blocked("PostgreSQL 16 with pgvector is required")
 

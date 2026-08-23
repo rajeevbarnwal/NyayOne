@@ -10,7 +10,7 @@
  * These tests pin the corrected rule from the student side:
  *   1. NO completion control renders on any student screen, in any session or
  *      attendance state, before or after the scheduled end;
- *   2. confirm / dispute are offered ONLY once a mentor or administrator has
+ *   2. confirm / dispute are offered ONLY once a Sprint 1 administrator has
  *      recorded completion (`attendance_state === 'recorded'`);
  *   3. the shipped student source cannot dispatch the call at all — the adapter
  *      is not imported and the control's copy no longer exists.
@@ -103,9 +103,10 @@ describe('D2: the student surface offers no completion control anywhere', () => 
     assertNoCompletionControl(renderStudent('list', null), 'S-35 list');
   });
 
-  it('explains who records completion instead of offering the action', () => {
+  it('explains the Sprint 1 administrator-only recorder instead of offering the action', () => {
     const html = renderStudent('manage', makeSession());
-    expect(html).toMatch(/mentor or an administrator records completion/i);
+    expect(html).toMatch(/an administrator records completion/i);
+    expect(html).not.toMatch(/mentor or an administrator records completion/i);
   });
 });
 
@@ -117,6 +118,8 @@ describe('D5: confirm and dispute appear only after completion is recorded', () 
     }));
     expect(html).toContain('Confirm attendance');
     expect(html).toContain('Dispute this');
+    expect(html).toMatch(/administrator recorded this session/i);
+    expect(html).not.toMatch(/your mentor recorded this session/i);
     assertNoCompletionControl(html, 'S-35 attendance / recorded');
   });
 

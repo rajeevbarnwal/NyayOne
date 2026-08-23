@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { MENTOR_COMPLETION_SCREEN_ID, MentorSessionCompletion } from './MentorSessionScreens';
 
 /**
- * Mentor / administrator routes for the Wave 2 tutoring module (SAATHI-66).
+ * Administrator routes for the Wave 2 tutoring module (SAATHI-66).
  *
  * These sit OUTSIDE the canonical student S-01..S-99 registry on purpose: that
  * registry is the v3.2 Student Module sitemap (`app/screenRegistry.ts`), and a
@@ -11,9 +11,10 @@ import { MENTOR_COMPLETION_SCREEN_ID, MentorSessionCompletion } from './MentorSe
  * table of stable paths, each with its Jira reference and its guard flag, mapped
  * into the router in `app/App.tsx`.
  *
- * The ENTIRE mentor module is guarded. `guarded: true` wraps the route in
- * `MentorGuard`, so an anonymous / student / unverified actor never mounts a
- * session list or a completion control at all.
+ * M-01 is admin-only for Sprint 1. `guarded: true` wraps the route in
+ * `MentorGuard`, so an anonymous, student, lawyer or tutor actor never mounts a
+ * session list or completion control. A server-issued tutor ceremony is a
+ * separately specified and reviewed future boundary.
  */
 export interface MentorRoute {
   readonly path: string;

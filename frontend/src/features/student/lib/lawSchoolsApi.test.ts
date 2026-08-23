@@ -87,9 +87,11 @@ describe('law-school search API (SAATHI-63 / S-27)', () => {
       feesMax: 320000,
       nirfRank: 1,
     }));
-    const [url] = fetchMock.mock.calls[0] as [string];
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/v1/law-schools?');
     expect(url).toContain('q=national');
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+    expect(init.credentials).toBe('include');
   });
 });
 

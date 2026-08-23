@@ -37,7 +37,7 @@ from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, make_url, select, text
 from sqlalchemy.engine import URL, Engine
@@ -111,6 +111,7 @@ LOGIN_START_PATH = "/api/v1/auth/student/login/otp/start"
 RECOVERY_START_PATH = "/api/v1/auth/student/recovery/start"
 SESSION_PATH = "/api/v1/auth/student/session"
 SIGNUP_IDEMPOTENCY_KEY = "nyay2-postgres-gate-signup-0001"
+SIGNUP_ACCEPTED_STATUS = 202
 TRUSTED_ORIGIN = "http://localhost:1130"
 PRIVATE_CAPABILITY_TABLES = (
     "otp_purpose_authorities",
@@ -1040,6 +1041,8 @@ def _seed_actor(
                     f"{identity}" + chr(64) + "college.invalid", lower=True
                 ),
                 key_version="v1",
+                preferred_language="en",
+                city="Gate City",
             )
             verification = StudentVerification(
                 registration_id=reg.id,
@@ -1092,6 +1095,21 @@ def _signup_registration_headers() -> dict[str, str]:
     return {
         **_trusted_mutation_headers(),
         "Idempotency-Key": SIGNUP_IDEMPOTENCY_KEY,
+    }
+
+
+def _signup_registration_payload(mobile: str) -> dict[str, Any]:
+    """Use the current independent Terms and Privacy legal authorities."""
+
+    return {
+        "first_name": "Gate",
+        "last_name": "Signup",
+        "mobile": mobile,
+        "dob": "2000-01-02",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
     }
 
 
@@ -1255,14 +1273,86 @@ def _unsafe_flow_graph_for_mutation(
     return authority, flow
 
 
-def _profile_payload(marker: str) -> dict[str, Any]:
+def _profile_payload(
+    marker: str,
+    *,
+    expected_profile_version: int,
+) -> dict[str, Any]:
+    marker_roll = (
+        int.from_bytes(
+            hashlib.sha256(marker.encode("utf-8")).digest()[:3],
+            "big",
+        )
+        % 900_000
+        + 100_000
+    )
     return {
-        "college": f"Gate Institute {marker}",
-        "year_of_study": "Year 2",
-        "enrolment_number": "QA/42/2026",
+        "expected_profile_version": expected_profile_version,
+        "college": "NALSAR University of Law",
+        "year_of_study": "4th",
+        "enrolment_number": f"QA/{marker_roll}/2026",
         "institutional_email": (f"gate-{marker}" + chr(64) + "college.invalid"),
         "bar_enrolment_number": None,
     }
+
+
+def _institutional_email_request_payload() -> dict[str, object]:
+    """The saved canonical profile email is the only request authority."""
+
+    return {}
+
+
+def _email_status_projection_passes(
+    *,
+    email_status: int,
+    email_payload: object,
+    status_status: int,
+    status_payload: object,
+) -> bool:
+    """Require the public pending projection and internal review lifecycle."""
+
+    return bool(
+        email_status == 202
+        and isinstance(email_payload, dict)
+        and email_payload.get("institutional_email_status") == "pending"
+        and status_status == 200
+        and isinstance(status_payload, dict)
+        and status_payload.get("status") == "in_review"
+    )
+
+
+def _verification_transition_payload(
+    registration_id: object,
+    *,
+    status: str,
+    expected_profile_version: int,
+) -> dict[str, object]:
+    """Build the review transition's explicit target and profile CAS wire."""
+
+    return {
+        "registration_id": str(registration_id),
+        "status": status,
+        "expected_profile_version": expected_profile_version,
+    }
+
+
+def _current_profile_version(
+    session_factory: sessionmaker[Session],
+    registration_id: uuid.UUID,
+) -> int:
+    """Read the synthetic actor's server version for an exact CAS request."""
+
+    from app.models.registration import StudentProfile
+
+    with session_factory() as session:
+        profile = session.scalar(
+            select(StudentProfile).where(
+                StudentProfile.registration_id == registration_id
+            )
+        )
+        if profile is None:
+            raise ProductGateFailure("profile CAS fixture is unavailable")
+        return int(profile.profile_version)
 
 
 def _run_api_probes(
@@ -1274,7 +1364,7 @@ def _run_api_probes(
     from app.core import auth as core_auth
     from app.core.auth import ActorContext, Role
     from app.core.config import settings
-    from app.core.crypto import KeyRing, otp_verifier, override_keyring
+    from app.core.crypto import KeyRing, keyed_hash, otp_verifier, override_keyring
     from app.db.models.audit import AuditEvent
     from app.db.session import get_session
     from app.models.registration import (
@@ -1284,7 +1374,12 @@ def _run_api_probes(
         StudentRegistration,
         StudentVerification,
     )
-    from app.services import login_service, otp_flow_service, otp_service
+    from app.services import (
+        login_service,
+        otp_flow_service,
+        otp_service,
+        profile_service,
+    )
     from app.services.otp_authority import lock_or_create_registration_authority
 
     factory = sessionmaker(
@@ -1458,18 +1553,12 @@ def _run_api_probes(
         registered = signup_client.post(
             REGISTER_PATH,
             headers=_signup_registration_headers(),
-            json={
-                "first_name": "Gate",
-                "last_name": "Signup",
-                "mobile": signup_mobile,
-                "dob": "2000-01-02",
-                "consent": {"accepted": True},
-            },
+            json=_signup_registration_payload(signup_mobile),
         )
         registered_payload = _safe_response_object(registered)
         signup_flow_token = signup_client.cookies.get(flow_cookie_name)
         if (
-            registered.status_code != 201
+            registered.status_code != SIGNUP_ACCEPTED_STATUS
             or not isinstance(registered_payload, dict)
             or not signup_flow_token
             or len(sender.sent) != 1
@@ -1507,7 +1596,7 @@ def _run_api_probes(
             (registered_payload, verify_payload, session_payload),
         )
         signup_passed = bool(
-            registered.status_code == 201
+            registered.status_code == SIGNUP_ACCEPTED_STATUS
             and registration_id_absent
             and signup_flow_token
             and len(sender.sent) == 1
@@ -1625,7 +1714,12 @@ def _run_api_probes(
             )
         )
 
-        valid_profile = _profile_payload("owner-a")
+        valid_profile = _profile_payload(
+            "owner-a",
+            expected_profile_version=_current_profile_version(
+                factory, owner_a["registration_id"]
+            ),
+        )
 
         # Every affected protected route must reject anonymous authority before
         # any business state changes. Include the status read so the matrix
@@ -1640,7 +1734,7 @@ def _run_api_probes(
                 "email_request",
                 lambda: anonymous.post(
                     EMAIL_PATH,
-                    json={"institutional_email": valid_profile["institutional_email"]},
+                    json=_institutional_email_request_payload(),
                 ),
             ),
             (
@@ -1651,10 +1745,13 @@ def _run_api_probes(
                 "verification_transition",
                 lambda: anonymous.post(
                     STATUS_PATH,
-                    json={
-                        "registration_id": str(owner_a["registration_id"]),
-                        "status": "verified",
-                    },
+                    json=_verification_transition_payload(
+                        owner_a["registration_id"],
+                        status="verified",
+                        expected_profile_version=valid_profile[
+                            "expected_profile_version"
+                        ],
+                    ),
                 ),
             ),
             ("verification_status", lambda: anonymous.get(STATUS_PATH)),
@@ -1730,13 +1827,17 @@ def _run_api_probes(
             )
             owner_audit = session.scalar(
                 select(AuditEvent)
-                .where(AuditEvent.action == "student.profile.academic_updated")
+                .where(AuditEvent.action == "student.profile.section_updated")
                 .order_by(AuditEvent.created_at.desc())
             )
             owner_success = bool(
                 owner_response.status_code == 200
                 and owner_profile is not None
                 and owner_profile.college == valid_profile["college"]
+                and owner_profile.enrolment_hash
+                == keyed_hash(valid_profile["enrolment_number"])
+                and owner_profile.institutional_email_hash
+                == keyed_hash(valid_profile["institutional_email"], lower=True)
                 and owner_audit is not None
                 and owner_audit.actor_user_id == owner_a["user_id"]
                 and owner_audit.actor_role == "student"
@@ -1759,15 +1860,16 @@ def _run_api_probes(
         email_response = owner_a_client.post(
             EMAIL_PATH,
             headers={"Origin": TRUSTED_ORIGIN},
-            json={"institutional_email": valid_profile["institutional_email"]},
+            json=_institutional_email_request_payload(),
         )
         status_response = owner_a_client.get(STATUS_PATH)
+        email_payload = _safe_response_object(email_response)
         status_payload = _safe_response_object(status_response)
-        email_status_passed = bool(
-            email_response.status_code == 202
-            and status_response.status_code == 200
-            and isinstance(status_payload, dict)
-            and status_payload.get("status") == "pending"
+        email_status_passed = _email_status_projection_passes(
+            email_status=email_response.status_code,
+            email_payload=email_payload,
+            status_status=status_response.status_code,
+            status_payload=status_payload,
         )
         assertions.append(
             _assertion(
@@ -1785,8 +1887,16 @@ def _run_api_probes(
                     StudentProfile.registration_id == owner_a["registration_id"]
                 )
             )
-            a_before = profile_a.college if profile_a else None
-        b_payload = _profile_payload("owner-b")
+            a_before = (
+                profile_a.enrolment_hash,
+                profile_a.institutional_email_hash,
+            ) if profile_a else None
+        b_payload = _profile_payload(
+            "owner-b",
+            expected_profile_version=_current_profile_version(
+                factory, owner_b["registration_id"]
+            ),
+        )
         b_response = owner_b_client.patch(
             PROFILE_PATH,
             headers={"Origin": TRUSTED_ORIGIN},
@@ -1806,9 +1916,17 @@ def _run_api_probes(
             cross_isolated = bool(
                 b_response.status_code == 200
                 and profile_a is not None
-                and profile_a.college == a_before
+                and (
+                    profile_a.enrolment_hash,
+                    profile_a.institutional_email_hash,
+                )
+                == a_before
                 and profile_b is not None
                 and profile_b.college == b_payload["college"]
+                and profile_b.enrolment_hash
+                == keyed_hash(b_payload["enrolment_number"])
+                and profile_b.institutional_email_hash
+                == keyed_hash(b_payload["institutional_email"], lower=True)
             )
         assertions.append(
             _assertion(
@@ -1890,7 +2008,6 @@ def _run_api_probes(
                 EMAIL_PATH,
                 headers={"Origin": TRUSTED_ORIGIN},
                 json={
-                    "institutional_email": valid_profile["institutional_email"],
                     "registration_id": str(owner_a["registration_id"]),
                 },
             ),
@@ -2451,10 +2568,13 @@ def _run_api_probes(
 
         # Student denial then trusted reviewer success; the append-only audit
         # row must bind the actual authenticated reviewer identity and role.
-        transition_payload = {
-            "registration_id": str(owner_a["registration_id"]),
-            "status": "verified",
-        }
+        transition_payload = _verification_transition_payload(
+            owner_a["registration_id"],
+            status="verified",
+            expected_profile_version=_current_profile_version(
+                factory, owner_a["registration_id"]
+            ),
+        )
         before_state = _business_state_digest(factory)
         student_transition = owner_a_client.post(
             STATUS_PATH,
@@ -2475,7 +2595,11 @@ def _run_api_probes(
             response = reviewer_client.post(
                 STATUS_PATH,
                 headers={"Origin": TRUSTED_ORIGIN},
-                json={"registration_id": str(target), "status": "verified"},
+                json=_verification_transition_payload(
+                    target,
+                    status="verified",
+                    expected_profile_version=1,
+                ),
             )
             invalid_reviewer_targets.append(
                 {
@@ -2564,7 +2688,12 @@ def _run_api_probes(
             response = owner_b_client.patch(
                 PROFILE_PATH,
                 headers=headers,
-                json=_profile_payload(f"origin-{label}"),
+                json=_profile_payload(
+                    f"origin-{label}",
+                    expected_profile_version=_current_profile_version(
+                        factory, owner_b["registration_id"]
+                    ),
+                ),
             )
             after_counts = _table_counts(factory)
             after_state = _business_state_digest(factory)
@@ -2604,10 +2733,13 @@ def _run_api_probes(
             )
         )
 
-        # Deterministic ownership mutant: remove the user predicate and force B
-        # onto A.  The real endpoint must then expose the vulnerability, proving
-        # the hard oracle would catch a future predicate deletion.
+        # Deterministic ownership mutant: remove both current owner predicates
+        # (the compatibility facade and canonical profile resolver) and force B
+        # onto A. The canonical resolver mutant also removes its cookie/user
+        # coupling; otherwise the independent session backstop correctly kills
+        # the unsafe facade before it can reproduce the ownership vulnerability.
         original_owned_registration = endpoint._owned_registration
+        original_profile_authority = profile_service.resolve_authority
 
         def unsafe_owned_registration(
             session: Session, actor: ActorContext
@@ -2617,13 +2749,40 @@ def _run_api_probes(
             assert registration is not None
             return registration
 
-        endpoint._owned_registration = unsafe_owned_registration
-        mutant_ownership_response = owner_b_client.patch(
-            PROFILE_PATH,
-            headers={"Origin": TRUSTED_ORIGIN},
-            json=_profile_payload("mutant-owner"),
+        def unsafe_profile_authority(
+            session: Session,
+            actor_user_id: uuid.UUID | None,
+            *,
+            for_update: bool = False,
+            now: datetime | None = None,
+            raw_session_token: str | None = None,
+        ) -> Any:
+            del actor_user_id, raw_session_token
+            return original_profile_authority(
+                session,
+                owner_a["user_id"],
+                for_update=for_update,
+                now=now,
+                raw_session_token=None,
+            )
+
+        mutant_owner_payload = _profile_payload(
+            "mutant-owner",
+            expected_profile_version=_current_profile_version(
+                factory, owner_a["registration_id"]
+            ),
         )
-        endpoint._owned_registration = original_owned_registration
+        endpoint._owned_registration = unsafe_owned_registration
+        profile_service.resolve_authority = unsafe_profile_authority
+        try:
+            mutant_ownership_response = owner_b_client.patch(
+                PROFILE_PATH,
+                headers={"Origin": TRUSTED_ORIGIN},
+                json=mutant_owner_payload,
+            )
+        finally:
+            endpoint._owned_registration = original_owned_registration
+            profile_service.resolve_authority = original_profile_authority
         with factory() as session:
             mutant_profile = session.scalar(
                 select(StudentProfile).where(
@@ -2633,8 +2792,13 @@ def _run_api_probes(
             ownership_mutant_killed = bool(
                 mutant_ownership_response.status_code == 200
                 and mutant_profile is not None
-                and mutant_profile.college
-                == _profile_payload("mutant-owner")["college"]
+                and mutant_profile.college == mutant_owner_payload["college"]
+                and mutant_profile.enrolment_hash
+                == keyed_hash(mutant_owner_payload["enrolment_number"])
+                and mutant_profile.institutional_email_hash
+                == keyed_hash(
+                    mutant_owner_payload["institutional_email"], lower=True
+                )
             )
         assertions.append(
             _assertion(
@@ -2645,26 +2809,62 @@ def _run_api_probes(
             )
         )
 
-        # Reset the verification to pending, then bypass only the reviewer
-        # dependency. Student authority must now reproduce the unsafe outcome.
+        # Reset the verification to pending, then bypass both current reviewer
+        # checks: route role resolution and commit-time locked-session role
+        # revalidation. The composite must reproduce the unsafe outcome while
+        # retaining the live exact-session/user lock and every other check.
         with factory() as session:
             row = session.get(StudentVerification, owner_b["verification_id"])
             assert row is not None
             row.status = "pending"
             session.commit()
         original_reviewer_dependency = endpoint._require_verification_reviewer
+        original_reviewer_session_lock = (
+            login_service.lock_presented_session_for_effect
+        )
+
+        def unsafe_reviewer_session_lock(
+            session: Session,
+            raw_token: str | None,
+            *,
+            expected_user_id: uuid.UUID,
+            now: datetime,
+            allowed_roles: frozenset[str],
+        ) -> Any:
+            del allowed_roles
+            return original_reviewer_session_lock(
+                session,
+                raw_token,
+                expected_user_id=expected_user_id,
+                now=now,
+                allowed_roles=frozenset(
+                    {"student", "admin", "legal_reviewer"}
+                ),
+            )
+
         app.dependency_overrides[original_reviewer_dependency] = lambda: ActorContext(
             user_id=owner_b["user_id"], roles=frozenset({Role.STUDENT})
         )
-        role_mutant_response = owner_b_client.post(
-            STATUS_PATH,
-            headers={"Origin": TRUSTED_ORIGIN},
-            json={
-                "registration_id": str(owner_b["registration_id"]),
-                "status": "verified",
-            },
+        login_service.lock_presented_session_for_effect = (
+            unsafe_reviewer_session_lock
         )
-        app.dependency_overrides.pop(original_reviewer_dependency, None)
+        try:
+            role_mutant_response = owner_b_client.post(
+                STATUS_PATH,
+                headers={"Origin": TRUSTED_ORIGIN},
+                json=_verification_transition_payload(
+                    owner_b["registration_id"],
+                    status="verified",
+                    expected_profile_version=_current_profile_version(
+                        factory, owner_b["registration_id"]
+                    ),
+                ),
+            )
+        finally:
+            login_service.lock_presented_session_for_effect = (
+                original_reviewer_session_lock
+            )
+            app.dependency_overrides.pop(original_reviewer_dependency, None)
         with factory() as session:
             row = session.get(StudentVerification, owner_b["verification_id"])
             role_mutant_killed = bool(
@@ -2681,16 +2881,32 @@ def _run_api_probes(
             )
         )
 
-        # Remove only the exact-origin function used by cookie actor resolution;
-        # an untrusted request must then succeed, proving the matrix is live.
+        # Remove both current exact-origin backstops: the global consulted by
+        # cookie actor resolution and the route dependency FastAPI captured at
+        # graph construction. An untrusted request must then succeed, proving
+        # the matrix is live without weakening the production guard.
         original_origin_guard = core_auth.require_trusted_cookie_origin
-        core_auth.require_trusted_cookie_origin = lambda request: None
-        origin_mutant_response = owner_b_client.patch(
-            PROFILE_PATH,
-            headers={"Origin": "http://localhost.invalid:1130"},
-            json=_profile_payload("mutant-origin"),
-        )
-        core_auth.require_trusted_cookie_origin = original_origin_guard
+        original_route_origin_guard = endpoint.require_trusted_cookie_origin
+
+        def unsafe_origin_guard(request: Request) -> None:
+            del request
+
+        core_auth.require_trusted_cookie_origin = unsafe_origin_guard
+        app.dependency_overrides[original_route_origin_guard] = unsafe_origin_guard
+        try:
+            origin_mutant_response = owner_b_client.patch(
+                PROFILE_PATH,
+                headers={"Origin": "http://localhost.invalid:1130"},
+                json=_profile_payload(
+                    "mutant-origin",
+                    expected_profile_version=_current_profile_version(
+                        factory, owner_b["registration_id"]
+                    ),
+                ),
+            )
+        finally:
+            core_auth.require_trusted_cookie_origin = original_origin_guard
+            app.dependency_overrides.pop(original_route_origin_guard, None)
         origin_mutant_killed = origin_mutant_response.status_code == 200
         assertions.append(
             _assertion(

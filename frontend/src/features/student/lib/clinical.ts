@@ -285,11 +285,12 @@ export function buildClinicalExport(
   };
 }
 
-const AUDIT_KEY = 'legalsaathi.clinical.export-audit.v1';
-
-/** Record only export metadata; activity/evidence/verifier PII never enters audit. */
+/**
+ * Build the bounded event for a future server audit boundary. The prototype
+ * must not treat Web Storage as an audit ledger or durable workflow authority.
+ */
 export function recordClinicalExportAudit(payload: ClinicalExportPayload): ClinicalExportAuditEvent {
-  const event: ClinicalExportAuditEvent = {
+  return {
     eventId: `clinical-export-${payload.generatedAt}-${payload.format}`,
     action: 'clinical_hours_exported',
     format: payload.format,
@@ -297,15 +298,6 @@ export function recordClinicalExportAudit(payload: ClinicalExportPayload): Clini
     includesEvidence: payload.includesEvidence,
     entryCount: payload.entryCount,
   };
-  if (typeof window !== 'undefined') {
-    try {
-      const existing = JSON.parse(window.localStorage.getItem(AUDIT_KEY) ?? '[]') as ClinicalExportAuditEvent[];
-      window.localStorage.setItem(AUDIT_KEY, JSON.stringify([...existing, event]));
-    } catch {
-      // Storage denial must not corrupt the export already produced.
-    }
-  }
-  return event;
 }
 
 /** Whether an export can proceed. Re-auth is required when evidence is included. */
@@ -316,7 +308,7 @@ export function canExport(g: { includesEvidence: boolean; reauthenticated: boole
 /** Mandatory export copy (PRD S12.3): this is NOT an official transcript. */
 export const NON_OFFICIAL_TRANSCRIPT_WARNING =
   'This export is a self-maintained record, not an official transcript. Verified/unverified split, source and generated timestamp are included; your institution’s ruleset governs compliance.';
-export const EXPORT_AUDIT_NOTE = 'Every export is audited; sensitive evidence requires re-authentication.';
+export const EXPORT_AUDIT_NOTE = 'This prototype creates no browser-persistent audit record; sensitive evidence still requires re-authentication.';
 
 export const SAMPLE_ENTRIES: readonly LogEntry[] = [
   { id: 'l1', date: '28 Jun', hours: 6, activity: 'DLSA legal-aid camp — Anekal taluk', category: 'legal_aid', verifier: 'prof@nls.ac.in', evidenceName: 'camp-letter.pdf', status: 'submitted' },

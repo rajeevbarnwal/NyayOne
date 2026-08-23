@@ -37,7 +37,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  isStudentMutationCancellation,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import {
   ATTENDANCE_DISPUTE_REASON_CODES,
   REVIEW_BLOCKED,
@@ -472,15 +478,15 @@ function ManageView({
       {policy.started && (
         /*
          * D2 (independent QA): there is NO completion control here, in any
-         * session state. Recording completion belongs to the mentor or an
-         * administrator (`attendance.RECORDER_ROLES`), so it lives on the
-         * authorised mentor surface (/mentor/sessions) and nowhere else. A
-         * student screen that rendered it would be offering an action the
+         * session state. M-01 is administrator-only for Sprint 1, so recording
+         * completion lives on that guarded surface (/mentor/sessions) and
+         * nowhere else. The separate tutor ceremony is deferred. A student
+         * screen that rendered this control would be offering an action the
          * server is bound to refuse.
          */
         <p className="tt-p tt-muted">
-          Your mentor or an administrator records completion once the session ends. It appears
-          here as soon as they do, and only then can you confirm or dispute it.
+          An administrator records completion once the session ends. It appears here as soon as
+          they do, and only then can you confirm or dispute it.
         </p>
       )}
 
@@ -866,12 +872,12 @@ function AttendanceView({
         return {
           tone: 'info' as const,
           title: 'Attendance is not decided yet',
-          detail: 'Attendance opens after the scheduled end. Your mentor records it first, then you confirm or dispute it.',
+          detail: 'Attendance opens after the scheduled end. An administrator records it first, then you confirm or dispute it.',
         };
       case 'recorded':
         return {
           tone: 'info' as const,
-          title: 'Your mentor recorded this session as attended',
+          title: 'An administrator recorded this session as attended',
           detail: 'Confirm it if that matches what happened, or dispute it and an administrator will look at the case.',
         };
       case 'confirmed':
@@ -1755,6 +1761,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
   useEffect(() => {
     let cancelled = false;
     const offs: Array<() => void> = [];
+    const actorFence = captureStudentMutationSequence();
 
     const enter = async (): Promise<void> => {
       if (videoCapability.isPending) return;
@@ -1804,9 +1811,12 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
       // 2. the SERVER decides entry. No credential, no room.
       let issued: JoinCredential;
       try {
-        issued = await issueJoinCredentials(sessionId);
+        issued = await runStudentMutationStep(
+          actorFence,
+          (signal) => issueJoinCredentials(sessionId, signal),
+        );
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || isStudentMutationCancellation(error)) return;
         setIssueError(error);
         setRoomState('failed');
         setFailure(videoRoomFailureFromServerCode(
@@ -1822,7 +1832,13 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
       announce('Entry authorised. Connecting media.');
 
       // 3. the media client, behind the provider-neutral contract.
-      const built = await createVideoRoomClient();
+      let built: VideoRoomClient;
+      try {
+        built = await runStudentMutationStep(actorFence, () => createVideoRoomClient());
+      } catch (error) {
+        if (isStudentMutationCancellation(error)) return;
+        throw error;
+      }
       if (cancelled) {
         await built.leave();
         return;

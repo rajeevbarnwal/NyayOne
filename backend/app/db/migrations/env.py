@@ -10,6 +10,7 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.base import Base
 from app.db.migration_release_guard import (
+    APPLICATION_HEAD_REVISION,
     MigrationApprovalError,
     enforce_nyay19_migration_postflight,
     enforce_nyay19_migration_release_guard,
@@ -33,15 +34,12 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    context.configure(
-        url=settings.database_url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+    # Offline SQL cannot prove the live revision, target identity, transaction,
+    # privacy-zero state, or direct 0020->0021 parentage. It is deliberately
+    # outside the authenticated migration path and therefore fails closed.
+    raise MigrationApprovalError(
+        "NYAY migration offline execution is not authorized; refusing to migrate"
     )
-    with context.begin_transaction():
-        context.run_migrations()
 
 
 def run_migrations_online() -> None:
@@ -79,7 +77,23 @@ def run_migrations_online() -> None:
                     # Re-lock and re-prove exact head/catalog/privacy state
                     # inside Alembic's transaction, before its context exits
                     # and can commit the irreversible transition.
-                    enforce_nyay19_migration_postflight(connection)
+                    requested_revision = getattr(
+                        getattr(config, "cmd_opts", None), "revision", None
+                    )
+                    expected_revision = (
+                        APPLICATION_HEAD_REVISION
+                        if requested_revision
+                        in {APPLICATION_HEAD_REVISION, "head"}
+                        else "0020_auth_retention_lifecycle"
+                    )
+                    if expected_revision == "0020_auth_retention_lifecycle":
+                        # Preserve the sealed NYAY-19 postflight call and its
+                        # source-bound operations contract verbatim.
+                        enforce_nyay19_migration_postflight(connection)
+                    else:
+                        enforce_nyay19_migration_postflight(
+                            connection, expected_revision=expected_revision
+                        )
                 if (
                     authenticate_loaded_migrations
                     and not source_authority_is_valid()

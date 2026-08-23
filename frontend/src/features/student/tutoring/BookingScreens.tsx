@@ -17,7 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import {
   HOLD_CONFLICT,
   HOLD_EXPIRED,

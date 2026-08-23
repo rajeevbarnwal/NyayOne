@@ -8,6 +8,10 @@
 
 export const AGE_OF_MAJORITY = 18;
 export const CONSENT_VERSION = 'dpdp-2023.v1';
+// The first canonical split keeps the already-approved legal version value,
+// while transmitting and persisting the two acknowledgements independently.
+export const TERMS_VERSION = CONSENT_VERSION;
+export const PRIVACY_NOTICE_VERSION = CONSENT_VERSION;
 
 /** Age in whole years from an ISO date (yyyy-mm-dd) at a reference instant. */
 export function computeAge(dobISO: string, nowISO: string): number {

@@ -61,13 +61,18 @@ def _without_ambient_libpq_authority(monkeypatch):
 def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0017_registration_invariants"
     assert gate.PINNED_HEAD == "0018_registration_idempotency"
-    assert gate.APPLICATION_HEAD == "0020_auth_retention_lifecycle"
+    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(gate.BACKEND / "app/db/migrations"))
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     otp_security_head = scripts.get_revision("0019_otp_security_authority")
-    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == otp_security_head.revision
+    retention_head = scripts.get_revision("0020_auth_retention_lifecycle")
+    assert (
+        scripts.get_revision(gate.APPLICATION_HEAD).down_revision
+        == retention_head.revision
+    )
+    assert retention_head.down_revision == otp_security_head.revision
     assert otp_security_head.down_revision == gate.PINNED_HEAD
     behavior_source = pyinspect.getsource(gate._execute_behavior)
     assert '"upgrade", APPLICATION_HEAD' in behavior_source
@@ -87,6 +92,9 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert "_attach_private_response_handle" in pyinspect.getsource(
         gate._post_registration
     )
+    inventory_source = pyinspect.getsource(gate._migration_inventory_passes)
+    assert "app.db.migrations.versions.0021_nyay5_profile_boundary" in inventory_source
+    assert "profile_migration._NEW_REGISTRATION_FINGERPRINT" in inventory_source
 
 
 def test_registration_probe_helpers_supply_trusted_origin_without_collapsing_headers(
@@ -115,9 +123,12 @@ def test_registration_probe_helpers_supply_trusted_origin_without_collapsing_hea
     payload = {"field": "value"}
 
     assert gate._post_registration(object(), payload, "one-key") is response
-    assert gate._post_registration_headers(
-        object(), payload, [("Idempotency-Key", "a"), ("Idempotency-Key", "b")]
-    ) is response
+    assert (
+        gate._post_registration_headers(
+            object(), payload, [("Idempotency-Key", "a"), ("Idempotency-Key", "b")]
+        )
+        is response
+    )
     origin = settings.cors_origins[0]
     assert calls == [
         (
@@ -151,25 +162,21 @@ def test_private_probe_handle_cannot_masquerade_as_public_response_uuid():
     assert gate._public_response_handle(leaked) == handle
 
 
-def test_identifier_free_pending_projection_rejects_uuid_in_any_public_field():
+def test_identifier_free_accepted_projection_rejects_uuid_in_any_public_field():
     handle = "c9dc4df2-1641-4d5d-a3c8-8d05691102c2"
     body = {
-        "status": "pending",
-        "purpose": "signup",
-        "destination_masked": "••••••0101",
-        "attempts_left": 5,
+        "status": "accepted",
+        "next": "otp",
         "expires_in_seconds": 300,
-        "resend_in_seconds": 30,
-        "locked_for_seconds": 0,
-        "resend_allowed": False,
+        "resend_after_seconds": 30,
     }
     response = SimpleNamespace(
-        status_code=201,
+        status_code=202,
         json=lambda: body,
         _nyay17_private_registration_id=handle,
     )
     assert gate._response_is_identifier_free(response, private_handle=handle)
-    assert gate._signup_pending_projection_is_exact(
+    assert gate._registration_accepted_projection_is_exact(
         response, private_handle=handle
     )
     assert gate._post_response_crash_projection_is_exact(
@@ -178,21 +185,19 @@ def test_identifier_free_pending_projection_rejects_uuid_in_any_public_field():
 
     for field, value in (
         ("registration_id", handle),
-        ("destination_masked", handle),
-        ("destination_masked", handle.replace("-", "")),
+        ("next", handle),
+        ("next", handle.replace("-", "")),
     ):
         mutated = dict(body)
         mutated[field] = value
-        leaked = SimpleNamespace(status_code=201, json=lambda value=mutated: value)
-        assert not gate._response_is_identifier_free(
-            leaked, private_handle=handle
-        )
-        assert not gate._signup_pending_projection_is_exact(
+        leaked = SimpleNamespace(status_code=202, json=lambda value=mutated: value)
+        assert not gate._response_is_identifier_free(leaked, private_handle=handle)
+        assert not gate._registration_accepted_projection_is_exact(
             leaked, private_handle=handle
         )
 
     wrong_private = SimpleNamespace(
-        status_code=201,
+        status_code=202,
         json=lambda: body,
         _nyay17_private_registration_id="c7b31f6e-9b98-492e-abee-d951498dc279",
     )
@@ -265,9 +270,9 @@ def test_signup_otp_helpers_use_private_cookie_capability_and_current_payloads(
         ),
     ]
 
-    successful_without_cookie = SimpleNamespace(status_code=201)
+    successful_without_cookie = SimpleNamespace(status_code=202)
     captured = SimpleNamespace(
-        status_code=201,
+        status_code=202,
         _nyay17_private_flow_token="captured-token",
     )
     assert gate._private_flow_token(captured, "opaque-key") == "captured-token"
@@ -307,6 +312,39 @@ def test_behavior_rate_limit_scope_is_exact_and_restores_on_every_exit():
 
     behavior_source = pyinspect.getsource(gate._execute_behavior)
     assert "with _behavior_rate_limit_scope():" in behavior_source
+
+
+def test_behavior_process_scope_restores_keyring_and_environment_on_every_exit():
+    from app.core import crypto
+    from app.core.config import settings
+    from app.core.crypto import KeyRing
+
+    original_env = settings.app_env
+    original_ring = crypto._override
+    seeded_ring = KeyRing(
+        active_version="seeded",
+        secrets={"seeded": b"seeded-process-key"},
+        lookup_secret=b"seeded-process-lookup",
+    )
+    try:
+        settings.app_env = "seeded-environment"
+        crypto.override_keyring(seeded_ring)
+        with gate._behavior_process_scope():
+            assert settings.app_env == "testing"
+            assert crypto._override is not seeded_ring
+            assert crypto._override is not None
+            assert crypto._override.active_version == "v1"
+        assert settings.app_env == "seeded-environment"
+        assert crypto._override is seeded_ring
+
+        with pytest.raises(RuntimeError, match="forced process-scope failure"):
+            with gate._behavior_process_scope():
+                raise RuntimeError("forced process-scope failure")
+        assert settings.app_env == "seeded-environment"
+        assert crypto._override is seeded_ring
+    finally:
+        settings.app_env = original_env
+        crypto.override_keyring(original_ring)
 
 
 def test_gate_provider_doubles_implement_exact_idempotent_contract():
@@ -383,7 +421,7 @@ def test_current_head_neutralized_ledger_shape_is_exact():
     record = SimpleNamespace(
         state="neutralized",
         idempotency_key_hash="a" * 64,
-        request_fingerprint_version="v1",
+        request_fingerprint_version="v2",
         request_fingerprint="b" * 64,
         registration_id=None,
         outbox_id=None,
@@ -404,7 +442,7 @@ def test_current_head_neutralized_ledger_shape_is_exact():
 
 def _neutralized_observation() -> dict:
     return {
-        "response_status": 201,
+        "response_status": 202,
         "projection_exact": True,
         "projection_matches_real": True,
         "public_identifier_absent": True,
@@ -418,7 +456,7 @@ def _neutralized_observation() -> dict:
         "ledger_delta": 1,
         "authority_delta": 1,
         "flow_delta": 1,
-        "replay_status": 201,
+        "replay_status": 202,
         "replay_projection_stable": True,
         "replay_cookie_stable": True,
         "replay_state_unchanged": True,
@@ -766,19 +804,20 @@ def test_schema_inventory_accepts_only_the_exact_reflected_definition(monkeypatc
     assert _migration_inventory_passes(object())
 
 
-def test_schema_inventory_accepts_exact_0019_evolution_at_application_head(
+def test_schema_inventory_accepts_exact_0021_evolution_at_application_head(
     monkeypatch,
 ):
     fixture = _SchemaInspectorFixture()
     otp_migration = gate.importlib.import_module(
         "app.db.migrations.versions.0019_otp_security_authority"
     )
+    profile_migration = gate.importlib.import_module(
+        "app.db.migrations.versions.0021_nyay5_profile_boundary"
+    )
     evolved = {
-        "ck_registration_idempotency_records_state": (
-            otp_migration._LEDGER_STATE_0019
-        ),
+        "ck_registration_idempotency_records_state": (otp_migration._LEDGER_STATE_0019),
         "ck_registration_idempotency_records_request_fingerprint_shape": (
-            otp_migration._LEDGER_FINGERPRINT_0019
+            profile_migration._NEW_REGISTRATION_FINGERPRINT
         ),
         "ck_registration_idempotency_records_state_links": (
             otp_migration._LEDGER_LINKS_0019
@@ -902,7 +941,7 @@ def _graph(one: bool = True) -> dict[str, int]:
         "student_profiles": int(one),
         "student_verifications": int(one),
         "guardian_consents": 0,
-        "consents": int(one),
+        "consents": 2 * int(one),
         "otp_challenges": int(one),
         "otp_outbox": int(one),
         "audit_events": int(one),
@@ -911,9 +950,9 @@ def _graph(one: bool = True) -> dict[str, int]:
 
 def _replay() -> dict:
     return {
-        "first_status": 201,
+        "first_status": 202,
         "first_literal_pending": True,
-        "replay_status": 201,
+        "replay_status": 202,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "initial_graph_delta": _graph(),
@@ -1028,7 +1067,7 @@ def test_retired_evaluator_rejects_match_oracle_and_side_effects(field, unsafe):
 
 def _same_race() -> dict:
     return {
-        "statuses": [201] * 8,
+        "statuses": [202] * 8,
         "conflict_codes": [],
         "conflict_fields": [],
         "public_handles_absent": True,
@@ -1043,7 +1082,7 @@ def _same_race() -> dict:
 
 def _mismatch_race() -> dict:
     return {
-        "statuses": [409, 201],
+        "statuses": [409, 202],
         "conflict_codes": ["idempotency_conflict"],
         "conflict_fields": ["Idempotency-Key"],
         "public_handles_absent": True,
@@ -1093,9 +1132,9 @@ def test_race_evaluator_requires_exact_same_and_mismatch_cardinality():
 
 def _failure() -> dict:
     return {
-        "first_status": 201,
+        "first_status": 202,
         "first_projection_exact": True,
-        "replay_status": 201,
+        "replay_status": 202,
         "replay_projection_exact": True,
         "public_handles_absent": True,
         "private_subject_stable": True,
@@ -1109,7 +1148,7 @@ def _failure() -> dict:
         "replay_state_unchanged": True,
         "mismatch_conflict_exact": True,
         "mismatch_state_unchanged": True,
-        "recovery_status": 201,
+        "recovery_status": 202,
         "stable_provider_key": True,
         "succeeded_state_exact": True,
         "sent_delivery_exact": True,
@@ -1178,7 +1217,7 @@ def test_ledger_inventory_evaluator_rejects_every_missing_authority(field):
 
 def _pending_resume() -> dict:
     return {
-        "crash_status": 201,
+        "crash_status": 202,
         "crash_projection_exact": True,
         "pending_state_exact": True,
         "claimed_delivery_exact": True,
@@ -1186,11 +1225,11 @@ def _pending_resume() -> dict:
         "pending_mismatch_code": "idempotency_conflict",
         "pending_mismatch_field": "Idempotency-Key",
         "pending_mismatch_state_unchanged": True,
-        "immediate_replay_status": 201,
+        "immediate_replay_status": 202,
         "immediate_projection_exact": True,
         "immediate_delivery_delta": 0,
         "immediate_state_unchanged": True,
-        "resume_status": 201,
+        "resume_status": 202,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "succeeded_state_exact": True,
@@ -1249,7 +1288,7 @@ def test_pending_resume_evaluator_rejects_every_false_green(field, unsafe):
 
 def _failed_waiters() -> dict:
     return {
-        "statuses": [201, 201],
+        "statuses": [202, 202],
         "projections_exact": True,
         "public_handles_absent": True,
         "private_subject_stable": True,
@@ -1265,7 +1304,7 @@ def _failed_waiters() -> dict:
         "backend_count": 2,
         "stable_failure_replay": True,
         "mismatch_conflict": True,
-        "recovery_status": 201,
+        "recovery_status": 202,
         "stable_provider_key": True,
         "succeeded_state_exact": True,
         "sent_delivery_exact": True,
@@ -1313,7 +1352,7 @@ def test_failed_waiter_evaluator_rejects_every_false_green(field, unsafe):
 def _pending_resend() -> dict:
     return {
         "resend_status": 202,
-        "replay_status": 201,
+        "replay_status": 202,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "ledger_reused_original_during_send": True,
@@ -1426,7 +1465,7 @@ def _finalizer_retention_race(*, finalizer_first: bool) -> dict:
                 "registration_transitions": 0,
                 "succeeded_state_exact": True,
                 "erased_state_exact": False,
-                "exact_replay_status": 201,
+                "exact_replay_status": 202,
                 "private_subject_stable": True,
                 "mutation_conflict_exact": True,
                 "uniform_terminal_signature": False,
@@ -1549,7 +1588,7 @@ def test_finalizer_retention_race_uses_failed_boundary_and_one_clock():
     assert "sender.entered.wait(" in source
     assert "claimed_delivery_during_overlap" in source
     assert "provider_io_ledger_unlocked" in source
-    assert "flow.expires_at = clock[\"now\"] - timedelta(microseconds=1)" in source
+    assert 'flow.expires_at = clock["now"] - timedelta(microseconds=1)' in source
     assert "bound_flow_boundary_exact" in source
     aggregate_source = pyinspect.getsource(gate._run_retention_purge_probes)
     assembly_source = pyinspect.getsource(gate._assemble_assertions)
@@ -1676,8 +1715,11 @@ def test_canonical_inventory_is_exact_and_has_no_derived_fields():
         "last_name",
         "mobile",
         "dob",
-        "consent.accepted",
-        "consent.policy_version",
+        "terms_accepted",
+        "terms_version",
+        "privacy_notice_acknowledged",
+        "privacy_notice_version",
+        "consent",
         "college",
         "year_of_study",
         "enrolment_number",
@@ -1702,7 +1744,7 @@ def test_every_canonical_mutation_is_schema_valid_and_changes_exactly_one_field(
         mode="json"
     )
     mutations = _canonical_field_mutations(base)
-    assert len(mutations) == len(CANONICAL_FIELD_PATHS) == 12
+    assert len(mutations) == len(CANONICAL_FIELD_PATHS) == 15
     for expected_path, mutation in zip(CANONICAL_FIELD_PATHS, mutations, strict=True):
         normalized = StudentRegisterRequest.model_validate(mutation).model_dump(
             mode="json"
@@ -1713,6 +1755,169 @@ def test_every_canonical_mutation_is_schema_valid_and_changes_exactly_one_field(
             if _path_value(normalized, path) != _path_value(normalized_base, path)
         ]
         assert changed == [expected_path]
+
+
+def test_current_registration_fixture_has_separate_legal_authority_and_no_profile_write():
+    payload = _base_registration_payload(904)
+
+    assert payload == {
+        "first_name": "Āsha Rao",
+        "middle_name": None,
+        "last_name": "Sen",
+        "mobile": "8000000904",
+        "dob": "2000-01-02",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
+    }
+
+
+def test_sealed_v1_fixture_is_used_only_by_the_bound_replay_probe():
+    from app.schemas.registration import StudentRegisterRequest
+    from app.services import registration_service
+
+    payload = gate._legacy_v1_registration_payload(905)
+    request = StudentRegisterRequest.model_validate(payload)
+
+    assert (
+        registration_service.registration_request_fingerprint_version(request) == "v1"
+    )
+    assert set(payload) == registration_service.REGISTRATION_REQUEST_V1_FIELDS
+    assert "_run_legacy_v1_replay_probe(" in pyinspect.getsource(
+        gate._run_sequential_probes
+    )
+    source = pyinspect.getsource(gate._run_legacy_v1_replay_probe)
+    assert 'fingerprint_version="v1"' in source
+    assert "_legacy_v1_registration_payload" in source
+
+
+def test_current_registration_projection_and_v2_ledger_shape_are_exact():
+    accepted = _Response(
+        202,
+        {
+            "status": "accepted",
+            "next": "otp",
+            "expires_in_seconds": 300,
+            "resend_after_seconds": 30,
+        },
+    )
+    accepted._nyay17_private_registration_id = "c9dc4df2-1641-4d5d-a3c8-8d05691102c2"
+    assert gate._registration_accepted_projection_is_exact(
+        accepted,
+        private_handle="c9dc4df2-1641-4d5d-a3c8-8d05691102c2",
+    )
+
+    record = SimpleNamespace(
+        idempotency_key_hash="a" * 64,
+        request_fingerprint="b" * 64,
+        request_fingerprint_version="v2",
+        state="succeeded",
+        registration_id="registration",
+        outbox_id=None,
+        outcome_code=None,
+    )
+    assert gate._ledger_state_exact(record, "succeeded")
+    record.request_fingerprint_version = "v1"
+    assert not gate._ledger_state_exact(record, "succeeded")
+    assert gate._ledger_state_exact(record, "succeeded", fingerprint_version="v1")
+
+
+def _expected_signup_onboarding(payload):
+    return {
+        "status": "authenticated",
+        "purpose": "signup",
+        "destination_masked": None,
+        "attempts_left": None,
+        "expires_in_seconds": None,
+        "resend_in_seconds": None,
+        "locked_for_seconds": None,
+        "resend_allowed": False,
+        "onboarding": {
+            "profile_version": 1,
+            "completion_version": "v1",
+            "completion_percent": 0,
+            "completed_sections": [],
+            "next_incomplete_section": "personal",
+            "is_complete": False,
+            "institutional_email_status": "not_provided",
+            "guardian": {"required": False, "status": "not_required"},
+            "access_mode": "full",
+            "disabled_capabilities": [],
+            "profile_prompt": {
+                "should_show": True,
+                "dismissed_for_session": False,
+            },
+            "profile": {
+                "personal": {
+                    "first_name": payload["first_name"],
+                    "middle_name": payload["middle_name"],
+                    "last_name": payload["last_name"],
+                    "date_of_birth": payload["dob"],
+                    "preferred_language": None,
+                    "city": None,
+                    "pronouns": None,
+                },
+                "academic": {
+                    "college": None,
+                    "year_of_study": None,
+                    "enrolment_number": None,
+                    "institutional_email": None,
+                    "bar_enrolment_number": None,
+                },
+                "interests": {"interests": [], "goals": []},
+            },
+        },
+    }
+
+
+def test_signup_activation_requires_exact_server_owned_onboarding_projection():
+    payload = _base_registration_payload(906)
+    expected = _expected_signup_onboarding(payload)
+
+    assert gate._signup_authenticated_projection_is_exact(
+        _Response(200, expected), registration_payload=payload
+    )
+    mutants = []
+    for mutation in (
+        lambda body: body.pop("onboarding"),
+        lambda body: body.update({"extra": False}),
+        lambda body: body["onboarding"].update({"profile_version": 2}),
+        lambda body: body["onboarding"]["profile_prompt"].update(
+            {"should_show": False}
+        ),
+        lambda body: body["onboarding"]["guardian"].update(
+            {"status": "required_pending"}
+        ),
+        lambda body: body["onboarding"]["profile"]["personal"].update(
+            {"first_name": "Changed"}
+        ),
+        lambda body: body["onboarding"]["profile"]["academic"].update(
+            {"college": "Client supplied"}
+        ),
+        lambda body: body["onboarding"]["profile"]["interests"].update(
+            {"goals": ["Changed"]}
+        ),
+    ):
+        body = deepcopy(expected)
+        mutation(body)
+        mutants.append(body)
+    assert all(
+        not gate._signup_authenticated_projection_is_exact(
+            _Response(200, body), registration_payload=payload
+        )
+        for body in mutants
+    )
+    assert not gate._signup_authenticated_projection_is_exact(
+        _Response(201, expected), registration_payload=payload
+    )
+
+    activation_source = pyinspect.getsource(gate._run_activation_probe)
+    race_source = pyinspect.getsource(gate._run_activation_retention_race)
+    assembly_source = pyinspect.getsource(gate._assemble_assertions)
+    assert "_signup_authenticated_projection_is_exact(" in activation_source
+    assert "_signup_authenticated_projection_is_exact(" in race_source
+    assert 'activation["verification_body_exact"]' in assembly_source
 
 
 def test_unicode_whitespace_case_default_and_omission_equivalents_normalize_exactly():
@@ -1785,7 +1990,7 @@ def test_crash_response_has_no_handle_but_unique_ledger_resolves_subject(
 def test_response_signature_never_retains_response_values():
     raw_identifier = "9dc64042-f7af-4a44-a14d-e48f810492fe"
     success = _safe_response_signature(
-        _Response(201, {"registration_id": raw_identifier, "status": "otp_pending"})
+        _Response(202, {"registration_id": raw_identifier, "status": "accepted"})
     )
     conflict = _safe_response_signature(
         _Response(
@@ -1799,7 +2004,7 @@ def test_response_signature_never_retains_response_values():
             },
         )
     )
-    assert success == {"status_code": 201, "shape": "object"}
+    assert success == {"status_code": 202, "shape": "object"}
     assert conflict == {
         "status_code": 409,
         "shape": "typed_detail",

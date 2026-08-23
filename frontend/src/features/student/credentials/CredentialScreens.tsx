@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import QRCode from 'qrcode';
 import { StudentScreen, TextField, SelectField, Checkbox } from '../components';
 import {
@@ -12,16 +17,13 @@ import {
   createVerificationToken,
   deleteCredential,
   getCredential,
-  getCredentialHistory,
   getPublicCredentialVerification,
   isRetryableCredentialsError,
   listCredentialIssuers,
   listCredentials,
   newIdempotencyKey,
-  revokeCredentialAsIssuer,
   revokeVerificationToken,
   uploadCredentialEvidence,
-  verifyCredential,
   type CredentialRecord,
   type CredentialStatus,
   type PublicCredentialField,
@@ -230,11 +232,20 @@ export function CredentialAdd() {
   });
   const mutation = useMutation({
     mutationFn: async () => {
-      const credential = await createCredential(
-        { title, credentialType, issueDate, expiryDate, issuerId, identifier },
-        newIdempotencyKey('credential'),
+      const fence = captureStudentMutationSequence();
+      const credential = await runStudentMutationStep(
+        fence,
+        () => createCredential(
+          { title, credentialType, issueDate, expiryDate, issuerId, identifier },
+          newIdempotencyKey('credential'),
+        ),
       );
-      if (file) await uploadCredentialEvidence(credential.id, file);
+      if (file) {
+        await runStudentMutationStep(
+          fence,
+          () => uploadCredentialEvidence(credential.id, file),
+        );
+      }
       return credential.id;
     },
     onSuccess: (id) => navigate(`/s-84?credential=${encodeURIComponent(id)}`),
@@ -339,37 +350,11 @@ function CredentialOverview({ credential }: { credential: CredentialRecord }) {
 
 export function CredentialPending() {
   const id = useCredentialParam();
-  const client = useQueryClient();
   const query = useQuery({
     queryKey: ['credential', id],
     queryFn: () => getCredential(id),
     enabled: Boolean(id),
     retry: retryCredential,
-  });
-  const history = useQuery({
-    queryKey: ['credential-history', id],
-    queryFn: () => getCredentialHistory(id),
-    enabled: Boolean(id),
-    retry: retryCredential,
-  });
-  const verify = useMutation({
-    mutationFn: () => verifyCredential(id, query.data!.version, newIdempotencyKey('verify')),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: ['credential', id] });
-      client.invalidateQueries({ queryKey: ['credential-history', id] });
-    },
-  });
-  const revoke = useMutation({
-    mutationFn: () => revokeCredentialAsIssuer(
-      id,
-      query.data!.version,
-      'Issuer revoked this credential after an authorised compliance review.',
-      newIdempotencyKey('revoke'),
-    ),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: ['credential', id] });
-      client.invalidateQueries({ queryKey: ['credential-history', id] });
-    },
   });
   const remove = useMutation({
     mutationFn: () => deleteCredential(id),
@@ -387,14 +372,8 @@ export function CredentialPending() {
           <div className="cw-detailgrid">
             <CredentialOverview credential={query.data} />
             <aside className="cw-timeline">
-              <p className="cw-overline">Trust timeline</p>
-              {history.data?.map((item) => (
-                <div className="cw-timeline__item" key={item.id}>
-                  <span aria-hidden>✓</span>
-                  <div><strong>{item.toStatus.replace(/_/g, ' ')}</strong><small>{item.reasonCode.replace(/_/g, ' ')} · {new Date(item.createdAt).toLocaleString()}</small></div>
-                </div>
-              ))}
-              {!history.data?.length && <p>No status events yet.</p>}
+              <p className="cw-overline">Current server status</p>
+              <p>{query.data.status.replace(/_/g, ' ')}</p>
               <p className="cw-overline cw-space">Evidence scope</p>
               {query.data.evidence.length ? query.data.evidence.map((item) => (
                 <div className="cw-evidence" key={item.id}>
@@ -413,15 +392,13 @@ export function CredentialPending() {
               <div>
                 <p className="cw-overline">Issuer authority panel</p>
                 <h2>Server-authoritative decision</h2>
-                <p>Only a signed-in issuer with an active server-side grant can verify or revoke this record.</p>
+                <p>Issuer review is available only in the separate authorised issuer workspace.</p>
               </div>
               <div className="cw-actions">
-                {query.data.status === 'pending_verification' && <button className="btn btn--primary" type="button" onClick={() => verify.mutate()} disabled={verify.isPending}>Verify credential</button>}
-                {['verified', 'expired'].includes(query.data.status) && <button className="btn" type="button" onClick={() => revoke.mutate()} disabled={revoke.isPending}>Revoke as issuer</button>}
                 {query.data.status === 'verified' && <Link className="btn btn--primary" to={`/s-85?credential=${encodeURIComponent(id)}`}>Create share link</Link>}
                 <button className="btn cw-danger" type="button" onClick={() => remove.mutate()} disabled={remove.isPending}>Delete credential</button>
               </div>
-              {(verify.error || revoke.error || remove.error) && <p className="cw-error" role="alert">{errorCopy(verify.error ?? revoke.error ?? remove.error)}</p>}
+              {remove.error && <p className="cw-error" role="alert">{errorCopy(remove.error)}</p>}
             </section>
           </div>
         )}
@@ -453,9 +430,16 @@ export function CredentialShare() {
   const [qrData, setQrData] = useState('');
   const mutation = useMutation({
     mutationFn: async () => {
+      const fence = captureStudentMutationSequence();
       const fields = includeName ? [...selected, 'student_name' as const] : selected;
-      const projection = await createShareProjection(id, fields, newIdempotencyKey('projection'));
-      return createVerificationToken(id, projection.id, Number(lifetime), newIdempotencyKey('token'));
+      const projection = await runStudentMutationStep(
+        fence,
+        () => createShareProjection(id, fields, newIdempotencyKey('projection')),
+      );
+      return runStudentMutationStep(
+        fence,
+        () => createVerificationToken(id, projection.id, Number(lifetime), newIdempotencyKey('token')),
+      );
     },
     onSuccess: setIssued,
   });

@@ -6,6 +6,7 @@ Do not deploy this process.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
@@ -17,6 +18,22 @@ DELIVERIES: dict[str, tuple[str, str, str]] = {}
 STATE_LOCK = threading.Lock()
 TOKEN = re.compile(r"^[0-9a-f]{64}$")
 MESSAGE_PREFIX = "Your NyayOne verification code is "
+
+
+def validated_binding(host: str, port: str | int) -> tuple[str, int]:
+    """Return the exact local-only binding accepted by browser gates."""
+
+    if host != "127.0.0.1":
+        raise ValueError("OTP capture server requires literal loopback IPv4")
+    try:
+        numeric_port = int(port)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("OTP capture server port must be an integer") from exc
+    if isinstance(port, str) and str(numeric_port) != port:
+        raise ValueError("OTP capture server port must be canonical decimal")
+    if not 1 <= numeric_port <= 65535:
+        raise ValueError("OTP capture server port is out of range")
+    return host, numeric_port
 
 
 def _receipt(token: str) -> str:
@@ -125,4 +142,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    ThreadingHTTPServer(("127.0.0.1", 1099), Handler).serve_forever()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default="1099")
+    arguments = parser.parse_args()
+    ThreadingHTTPServer(
+        validated_binding(arguments.host, arguments.port), Handler
+    ).serve_forever()

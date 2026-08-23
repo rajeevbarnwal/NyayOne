@@ -21,6 +21,7 @@ from app.core.retention import (
 from app.db.models.audit import AuditEvent
 from app.models.registration import (
     AuthSession,
+    AuthSessionProfilePrompt,
     LoginAttempt,
     StudentRegistration,
     User,
@@ -209,6 +210,47 @@ def test_delete_mode_removes_terminal_attempts_and_sessions(db_session: Session)
     assert db_session.get(User, user.id) is not None
 
 
+@pytest.mark.parametrize("mode", ["anonymise", "delete"])
+def test_login_attempt_retention_never_clears_colliding_session_prompt(
+    db_session: Session,
+    mode: str,
+) -> None:
+    """LoginAttempt IDs are not AuthSession prompt authorities."""
+
+    user = _user(db_session)
+    active_session = _auth_session(
+        db_session,
+        user,
+        status="active",
+        expires_at=NOW + timedelta(days=30),
+        revoked_at=None,
+    )
+    prompt = AuthSessionProfilePrompt(
+        auth_session_id=active_session.id,
+        dismissed_at=NOW - timedelta(days=1),
+    )
+    attempt = LoginAttempt(
+        id=active_session.id,
+        opaque_id=uuid.uuid4().hex,
+        lookup_hash=keyed_hash(f"attempt-collision-{uuid.uuid4()}"),
+        status="consumed",
+        expires_at=NOW - timedelta(days=6),
+        consumed_at=NOW - timedelta(days=6),
+    )
+    db_session.add_all([prompt, attempt])
+    db_session.flush()
+
+    counts = purge_expired(
+        db_session,
+        now=NOW,
+        policy=_policy(mode=mode),
+    )
+
+    assert counts["login_attempts"] == 1
+    assert db_session.get(AuthSession, active_session.id) is not None
+    assert db_session.get(AuthSessionProfilePrompt, prompt.id) is not None
+
+
 def test_invalid_policy_is_rejected_before_expiry_mutation(db_session: Session) -> None:
     user = _user(db_session)
     attempt = _attempt(
@@ -297,7 +339,10 @@ def _registration(session: Session, mobile: str) -> StudentRegistration:
             last_name="Nair",
             mobile=mobile,
             dob="2004-03-14",
-            consent={"accepted": True},
+            terms_accepted=True,
+            terms_version="terms.v1",
+            privacy_notice_acknowledged=True,
+            privacy_notice_version="privacy.v1",
         ),
         now=NOW,
     )

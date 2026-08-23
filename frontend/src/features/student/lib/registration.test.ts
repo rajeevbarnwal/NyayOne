@@ -2,6 +2,7 @@
  * SAATHI-388 / SAATHI-421 — shared registration validation contract tests.
  */
 import { describe, it, expect } from 'vitest';
+import legalNameCorpus from '../../../../../contracts/unicode-legal-name-v1.json';
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, todayLocalISO,
@@ -9,6 +10,7 @@ import {
   buildStudentRegistrationCommand, maskMobile,
   NAME_MAX,
 } from './registration';
+import { normalizeLegalName, validateLegalName } from './profileApi';
 
 const CLOCK = new Date('2026-07-26T09:00:00.000+05:30'); // local 2026 test clock
 
@@ -80,6 +82,23 @@ describe('split legal name (PO decision: First required, Middle optional, Last r
     expect(nameErrorMessage('lastName', 'too_long')).toBe(`Last name must be ${NAME_MAX} characters or fewer.`);
     expect(nameErrorMessage('firstName', 'invalid')).toContain("aren't allowed");
   });
+
+  for (const testCase of legalNameCorpus.cases) {
+    it(`matches the shared legal-name corpus: ${testCase.id}`, () => {
+      const repeat = 'repeat' in testCase && typeof testCase.repeat === 'number'
+        ? testCase.repeat
+        : 1;
+      const input = testCase.input.repeat(repeat);
+      expect(validateLegalName(input)).toBe(testCase.valid);
+      expect(validateNamePart(input, { required: true }) === null).toBe(testCase.valid);
+      if (testCase.valid) {
+        const expected = testCase.normalized?.repeat(repeat);
+        expect(normalizeLegalName(input)).toBe(expected);
+        expect(namePartsToPayload({ firstName: input, middleName: '', lastName: 'Nair' }).firstName)
+          .toBe(expected);
+      }
+    });
+  }
 });
 
 describe('name → payload + display, and legacy compatibility', () => {
@@ -104,11 +123,14 @@ describe('name → payload + display, and legacy compatibility', () => {
 
 describe('student registration command boundary (P0.2 payload mapping)', () => {
   it('builds a typed command with middle present', () => {
-    const r = buildStudentRegistrationCommand({ firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', mobile: '9876543210', college: 'NLSIU' });
+    const attemptedLegacyInput = {
+      firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', mobile: '9876543210', college: 'NLSIU',
+    } as unknown as Parameters<typeof buildStudentRegistrationCommand>[0];
+    const r = buildStudentRegistrationCommand(attemptedLegacyInput);
     expect(r.ok).toBe(true);
-    expect(r.ok && r.command).toEqual({ firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', fullName: 'Aditi Rani Nair', mobile: '9876543210', college: 'NLSIU' });
+    expect(r.ok && r.command).toEqual({ firstName: 'Aditi', middleName: 'Rani', lastName: 'Nair', fullName: 'Aditi Rani Nair', mobile: '9876543210' });
   });
-  it('middle absent → null, no double space, college omitted when empty', () => {
+  it('middle absent → null and no double space', () => {
     const r = buildStudentRegistrationCommand({ firstName: 'Aditi', middleName: '', lastName: 'Nair', mobile: '9876543210' });
     expect(r.ok && r.command.middleName).toBeNull();
     expect(r.ok && r.command.fullName).toBe('Aditi Nair');

@@ -1,4 +1,4 @@
-/* LegalSaathi v3.4 S-01–S-10 · Saffron Slate production layer.
+/* NyayOne v3.4 S-01–S-10 · Saffron Slate production layer.
    Scoped to .v34-screen so the approved tokens never leak into later modules. */
 .v34-screen {
   --v34-bg: #f6f2ea;
@@ -20,7 +20,7 @@
   --v34-red-well: #fbefec;
   --v34-red-line: #e8c6be;
   --v34-on-icon: #241a06;
-  --v34-display: 'Space Grotesk', var(--font-sans);
+  --v34-display: Aptos, Calibri, Carlito, system-ui, sans-serif;
   min-height: max(680px, calc(100dvh - 24px));
   width: 100%;
   display: flex;
@@ -55,6 +55,8 @@
 
 .v34-screen *, .v34-screen *::before, .v34-screen *::after { box-sizing: border-box; }
 .v34-screen h1, .v34-screen h2, .v34-screen p { margin: 0; color: inherit; }
+.v34-screen h1, .v34-screen h2 { font-family: var(--v34-display); }
+.ls-v34-content [data-screen='S-10'] :is(h1, h2) { font-family: Aptos, Calibri, Carlito, system-ui, sans-serif; }
 .v34-screen button, .v34-screen input, .v34-screen select { font: inherit; color: inherit; }
 .v34-screen button { border: 0; cursor: pointer; }
 .v34-screen a, .v34-textlink, .v34-linkbtn { color: var(--v34-accent-text); }
@@ -79,7 +81,7 @@
 .v34-rule { height: 3px; background: repeating-linear-gradient(90deg, var(--v34-rule) 0 3px, transparent 3px 9px); }
 
 .v34-brand { display: flex; align-items: center; gap: 11px; }
-.v34-brand__mark { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--v34-mark); color: var(--v34-on-mark); font: 700 19px var(--v34-display); }
+.v34-brand__mark { width: 38px; height: 38px; display: block; object-fit: contain; }
 .v34-brand b { display: block; font: 700 17px var(--v34-display); letter-spacing: -.02em; }
 .v34-brand small { display: block; color: var(--v34-muted); font: 600 10px var(--v34-display); letter-spacing: .14em; }
 .v34-mobilebrand { display: flex; align-items: center; justify-content: space-between; }
@@ -130,6 +132,13 @@
 .v34-banner { display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--v34-red-line); border-left: 3px solid var(--v34-red); border-radius: 10px; padding: 14px 16px; background: var(--v34-red-well); color: var(--v34-red); }
 .v34-banner b { font: 700 12px var(--v34-display); letter-spacing: .06em; }
 .v34-card { border: 1px solid var(--v34-line); border-radius: 10px; padding: 15px 16px; background: var(--v34-surface); }
+.v34-dialog-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, #111 58%, transparent); }
+.v34-dialog { position: relative; width: min(520px, 100%); max-height: calc(100dvh - 40px); overflow: auto; padding: 28px; box-shadow: 0 24px 80px rgb(0 0 0 / 32%); }
+.v34-dialog h2 { margin: 0 48px 12px 0; font: 700 clamp(26px, 5vw, 38px) var(--v34-display); }
+.v34-dialog p { line-height: 1.55; }
+.v34-dialog__close { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; font-size: 24px; }
+.v34-dialog .v34-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.v34-dialog .v34-actions button:last-child { background: var(--v34-accent); color: var(--v34-on-icon); }
 
 .v34-splash__hero { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; overflow: hidden; background: radial-gradient(120% 90% at 50% 12%, rgba(200,129,28,.34), transparent 58%), radial-gradient(90% 70% at 82% 100%, rgba(21,127,82,.26), transparent 60%), var(--v34-mark); }
 .v34-jaali { position: absolute; width: 220px; height: 220px; opacity: .28; background: repeating-linear-gradient(45deg, #c8811c 0 1px, transparent 1px 11px), repeating-linear-gradient(-45deg, #c8811c 0 1px, transparent 1px 11px); }
@@ -220,13 +229,9 @@
 .v34c-brand__mark {
   width: 38px;
   height: 38px;
-  display: grid;
-  place-items: center;
+  display: block;
+  object-fit: contain;
   flex: none;
-  border-radius: 11px;
-  background: var(--v34-mark);
-  color: var(--v34-on-mark);
-  font: 700 19px var(--v34-display);
 }
 .v34c-brand b { display: block; font: 700 17px var(--v34-display); letter-spacing: -.02em; }
 .v34c-brand small { display: block; color: var(--v34-muted); font: 600 9px var(--v34-display); letter-spacing: .14em; }

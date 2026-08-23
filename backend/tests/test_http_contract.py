@@ -20,6 +20,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (register tables)
 from app.api.v1 import auth_student as ep
+from app.api.v1 import student_settings
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
@@ -99,6 +100,7 @@ def _make_ctx(session_class=Session, sender=None, raise_server_exceptions=True):
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(ep.router, prefix="/api/v1")
+    app.include_router(student_settings.router, prefix="/api/v1")
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
     app.dependency_overrides[ep.get_outbox_session_factory] = lambda: SessionLocal
@@ -128,7 +130,10 @@ def _register(client, mobile="9876543210", key=None):
     headers = {"Idempotency-Key": key} if key else {}
     return client.post("/api/v1/auth/student/register", headers=headers, json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": mobile,
-        "dob": "2004-03-14", "consent": {"accepted": True},
+        "dob": "2004-03-14",
+        "terms_accepted": True, "terms_version": "terms.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy.v1",
     })
 
 
@@ -174,7 +179,7 @@ def test_configured_provider_resolves_non_none(monkeypatch):
 def test_register_delivers_exactly_once(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
-    assert r.status_code == 201
+    assert r.status_code == 202
     assert len(sender.sent) == 1  # exactly one delivery after commit
     with _fresh(SessionLocal) as s:
         ob = s.scalar(select(OtpOutbox))
@@ -185,7 +190,7 @@ def test_register_delivers_exactly_once(ctx):
 def test_outbox_delivery_is_idempotent(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
-    assert r.status_code == 201 and len(sender.sent) == 1
+    assert r.status_code == 202 and len(sender.sent) == 1
     with _fresh(SessionLocal) as s:
         ob = s.scalar(select(OtpOutbox))
         assert ob is not None
@@ -204,7 +209,7 @@ def test_failed_outbox_is_relayed_once_after_provider_recovers():
         initial_sender = Capturing()
         app.dependency_overrides[ep.get_otp_sender] = lambda: initial_sender
         registered = _register(client)
-        assert registered.status_code == 201
+        assert registered.status_code == 202
         _verify_signup(client, initial_sender)
         _registration_id(SessionLocal)
         failing = Failing()
@@ -280,7 +285,7 @@ def test_provider_failure_preserves_retryable_graph(ctx):
     client, engine, SessionLocal, sender, app = ctx
     app.dependency_overrides[ep.get_otp_sender] = lambda: Failing()
     r = _register(client)
-    assert r.status_code == 201 and r.json()["status"] == "pending"
+    assert r.status_code == 202 and r.json()["status"] == "accepted"
     with _fresh(SessionLocal) as s:
         assert s.scalar(select(StudentRegistration)) is not None
         challenge = s.scalar(select(OtpChallenge))
@@ -293,11 +298,11 @@ def test_provider_failure_preserves_retryable_graph(ctx):
 def test_idempotent_replay_without_provider(ctx):
     client, engine, SessionLocal, sender, app = ctx
     a = _register(client, key="k1")
-    assert a.status_code == 201 and len(sender.sent) == 1
+    assert a.status_code == 202 and len(sender.sent) == 1
     # Provider now unavailable; replay must still succeed and NOT re-deliver.
     app.dependency_overrides[ep.get_otp_sender] = lambda: None
     b = _register(client, key="k1")
-    assert b.status_code == 201
+    assert b.status_code == 202
     assert b.json() == a.json()
     assert len(sender.sent) == 1  # no repeat delivery
 
@@ -307,7 +312,7 @@ def test_idempotent_replay_without_provider(ctx):
 def test_otp_format_rejected_without_consuming_attempt(ctx, bad):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
-    assert r.status_code == 201
+    assert r.status_code == 202
     registration_id = _registration_id(SessionLocal)
     resp = client.post("/api/v1/auth/student/otp/verify", json={"code": bad})
     assert resp.status_code == 422
@@ -325,7 +330,7 @@ def test_otp_format_rejected_without_consuming_attempt(ctx, bad):
 def test_lockout_persists_across_http_errors(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
-    assert r.status_code == 201
+    assert r.status_code == 202
     registration_id = _registration_id(SessionLocal)
     for expected in (1, 2):
         resp = client.post("/api/v1/auth/student/otp/verify", json={"code": "000000"})
@@ -366,7 +371,7 @@ def test_recovery_start_verify_complete(ctx):
 def test_recovery_rejects_registration_uuid_as_id(ctx):
     client, engine, SessionLocal, sender, app = ctx
     r = _register(client)
-    assert r.status_code == 201
+    assert r.status_code == 202
     reg_id = str(_registration_id(SessionLocal))
     # Using the registration UUID as a recovery id must fail uniformly.
     resp = client.post("/api/v1/auth/student/recovery/verify", json={"recovery_id": reg_id, "code": "123456"})
@@ -441,9 +446,19 @@ def test_recovery_mobile_validation(ctx, bad):
 # --- guardian consent + verification status endpoints ----------------------- #
 def test_student_cannot_complete_own_guardian_consent(ctx):
     client, engine, SessionLocal, sender, app = ctx
-    client.post("/api/v1/auth/student/register", json={
-        "first_name": "Minor", "last_name": "Student", "mobile": "9000000000",
-        "dob": "2012-01-01", "consent": {"accepted": True}})
+    client.post(
+        "/api/v1/auth/student/register",
+        json={
+            "first_name": "Minor",
+            "last_name": "Student",
+            "mobile": "9000000000",
+            "dob": "2012-01-01",
+            "terms_accepted": True,
+            "terms_version": "terms.v1",
+            "privacy_notice_acknowledged": True,
+            "privacy_notice_version": "privacy.v1",
+        },
+    )
     _verify_signup(client, sender)
     done = client.post("/api/v1/auth/student/guardian-consent/complete", json={})
     assert done.status_code == 403
@@ -467,7 +482,11 @@ def test_student_can_read_but_cannot_approve_verification_status(ctx):
     assert got.status_code == 200 and got.json()["status"] == "pending"
     blocked = client.post(
         "/api/v1/auth/student/verification/status",
-        json={"registration_id": reg_id, "status": "verified"},
+        json={
+            "registration_id": reg_id,
+            "status": "verified",
+            "expected_profile_version": 1,
+        },
     )
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["code"] == "verification_reviewer_required"
@@ -477,13 +496,16 @@ def test_student_can_read_but_cannot_approve_verification_status(ctx):
 def test_register_conflict_and_idempotent_replay(ctx):
     client, engine, SessionLocal, sender, app = ctx
     a = _register(client, key="k1")
-    assert a.status_code == 201
+    assert a.status_code == 202
     b = _register(client, key="k1")
-    assert b.status_code == 201 and b.json() == a.json()
+    assert b.status_code == 202 and b.json() == a.json()
     c = client.post("/api/v1/auth/student/register", json={
         "first_name": "Other", "last_name": "Person", "mobile": "9876543210",
-        "dob": "2001-01-01", "consent": {"accepted": True}})
-    assert c.status_code == 201
+        "dob": "2001-01-01", "terms_accepted": True,
+        "terms_version": "terms.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy.v1"})
+    assert c.status_code == 202
     assert c.json().keys() == a.json().keys()
     with _fresh(SessionLocal) as s:
         assert len(s.scalars(select(StudentRegistration)).all()) == 1
@@ -492,9 +514,10 @@ def test_register_conflict_and_idempotent_replay(ctx):
 def test_academic_profile_requires_verified_otp_and_persists_encrypted(ctx):
     client, engine, SessionLocal, sender, app = ctx
     registered = _register(client)
-    assert registered.status_code == 201
+    assert registered.status_code == 202
     reg_id = str(_registration_id(SessionLocal))
     payload = {
+        "expected_profile_version": 2,
         "college": "National Law School of India University",
         "year_of_study": "3rd year",
         "enrolment_number": "KA/1234/2023",
@@ -509,8 +532,24 @@ def test_academic_profile_requires_verified_otp_and_persists_encrypted(ctx):
         json={"registration_id": reg_id, **payload},
     )
     assert legacy_uuid.status_code == 422
+    personal = client.patch(
+        "/api/v1/student/profile/personal",
+        json={
+            "expected_profile_version": 1,
+            "first_name": "Aditi",
+            "middle_name": None,
+            "last_name": "Nair",
+            "date_of_birth": "2004-03-14",
+            "preferred_language": "en",
+            "city": "Bengaluru",
+            "pronouns": None,
+        },
+    )
+    assert personal.status_code == 200, personal.text
     saved = client.patch("/api/v1/auth/student/profile", json=payload)
-    assert saved.status_code == 200 and saved.json() == {"status": "saved"}
+    assert saved.status_code == 200
+    assert saved.json()["profile_version"] == 3
+    assert saved.json()["profile"]["academic"]["college"] == payload["college"]
     with _fresh(SessionLocal) as s:
         profile = s.scalar(
             select(StudentProfile).where(

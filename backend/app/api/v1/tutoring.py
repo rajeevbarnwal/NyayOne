@@ -64,6 +64,7 @@ from app.core.rate_limit import (
 )
 from app.db.session import get_session
 from app.models.wave2 import BookingHold, PaymentOrder
+from app.services import login_service
 from app.services.tutoring import (
     attendance as attendance_service,
     availability,
@@ -169,6 +170,36 @@ def _service_role(actor: ActorContext) -> str:
 def _participant(actor: ActorContext = Depends(_authenticated)) -> ActorContext:
     _service_role(actor)  # 403 for a role with no tutoring identity at all
     return actor
+
+
+def _require_presented_admin_effect_session(
+    session: Session,
+    request: Request,
+    actor: ActorContext,
+    *,
+    now: datetime,
+) -> None:
+    """Re-lock the exact M-01 cookie after its tutoring-domain target lock."""
+
+    raw_session_token = request.cookies.get(settings.auth_session_cookie_name)
+    if raw_session_token is None:
+        # Development/test header actors have no cookie. Production actor
+        # authority cannot reach this branch because headers are ignored there.
+        return
+    locked_session = login_service.lock_presented_session_for_effect(
+        session,
+        raw_session_token,
+        expected_user_id=actor.user_id,
+        now=now,
+        allowed_roles=frozenset({"admin"}),
+    )
+    if locked_session is None:
+        session.rollback()
+        raise _error(
+            401,
+            "session_authority_required",
+            "Authentication required",
+        )
 
 
 def _limit(limit: RateLimit, actor: ActorContext) -> None:
@@ -934,16 +965,25 @@ def cancel_session(
 @router.post("/tutoring/sessions/{session_id}/complete")
 def complete_session(
     session_id: uuid.UUID,
+    request: Request,
     actor: ActorContext = Depends(_participant),
     session: Session = Depends(get_session),
 ) -> dict:
     """D4. Tutor or admin, and only AFTER the scheduled end (no early finish)."""
+    now = attendance_service.utcnow()
     try:
         mutation = attendance_service.record(
             session,
             session_id,
             actor_user_id=actor.user_id,
             actor_role=_service_role(actor),
+            now=now,
+            require_effect_authority=lambda: _require_presented_admin_effect_session(
+                session,
+                request,
+                actor,
+                now=now,
+            ),
         )
     except TutoringError as exc:
         raise _typed(session, exc) from exc
