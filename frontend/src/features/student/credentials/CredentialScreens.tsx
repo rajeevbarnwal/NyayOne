@@ -522,7 +522,7 @@ export function CredentialShare() {
                   <p>Expires {new Date(issued.expiresAt).toLocaleString()} · revocable at any time</p>
                   <a className="cw-link" href={issued.verificationUrl}>{issued.verificationUrl}</a>
                   <div className="cw-actions">
-                    {qrData && <a className="btn btn--primary" href={qrData} download="legalsaathi-credential-qr.png">Download QR</a>}
+                    {qrData && <a className="btn btn--primary" href={qrData} download="nyayone-credential-qr.png">Download QR</a>}
                     <button className="btn cw-danger" type="button" onClick={() => revoke.mutate()} disabled={revoke.isPending}>Revoke link</button>
                   </div>
                 </div>
@@ -548,7 +548,7 @@ export function PublicCredentialVerification() {
   return (
     <section className="st-screen st-credentials cw-public-page" data-screen="VERIFY">
       <div className="cw-public-verify">
-        <div className="cw-wordmark">Legal<span>Saathi</span></div>
+        <div className="cw-wordmark">Nyay<span>One</span></div>
         {query.isLoading && <div className="cw-state" role="status" aria-busy="true">Checking verification…</div>}
         {query.isError && <div className="cw-state cw-state--error" role="alert"><strong>Verification unavailable</strong><span>{errorCopy(query.error)}</span></div>}
         {query.data && (

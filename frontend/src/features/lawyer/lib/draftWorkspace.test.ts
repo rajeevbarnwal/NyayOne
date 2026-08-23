@@ -3,7 +3,7 @@ import { DraftWorkspaceService, workspaceIdFor } from './draftWorkspace';
 import { InMemoryKvStore } from '../../../lib/kvStore';
 
 const t = (n: number) => `2026-07-11T00:0${n}:00.000Z`;
-const CASE = 'LS-CASE-2026-014';
+const CASE = 'NYAY-CASE-2026-014';
 
 function seed(svc: DraftWorkspaceService) {
   const ws = svc.create(CASE, 'Acme v. Sunrise');

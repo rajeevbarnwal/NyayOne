@@ -4,8 +4,13 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import { V34Register, splashDestination } from './V34Screens';
+import {
+  V34Register,
+  otpVerificationFailureMessage,
+  splashDestination,
+} from './V34Screens';
 import { normalizeOtpDigits } from '../lib/otpInput';
+import { RegistrationApiError } from '../lib/registrationApi';
 
 describe('S-01 server-session bootstrap', () => {
   it('uses the approved NyayOne name and exact display type stack on every redesigned shell', () => {
@@ -51,13 +56,14 @@ describe('S-01 server-session bootstrap', () => {
     expect(splashDestination('authenticated', false)).toBe('/s-07');
     expect(splashDestination('authenticated', true)).toBe('/s-07');
     expect(splashDestination('anonymous', false)).toBe('/s-02');
-    expect(splashDestination('anonymous', true)).toBe('/s-03');
+    expect(splashDestination('anonymous', true)).toBe('/s-02');
   });
 
-  it('uses only the inherited allowlisted onboarding preference key', () => {
+  it('does not let a retired device marker bypass onboarding', () => {
     const source = readFileSync(join(process.cwd(), 'src/features/student/auth/V34Screens.tsx'), 'utf8');
-    expect(source).toContain("const ONBOARDING_SEEN_KEY = 'ls-onboarding-seen'");
-    expect(source).not.toContain("const ONBOARDING_SEEN_KEY = 'legalsaathi.student.onboarding.v34'");
+    expect(source).not.toContain('ONBOARDING_SEEN_KEY');
+    expect(source).not.toContain('ls-onboarding-seen');
+    expect(source).not.toContain('localStorage');
   });
 
   it('enters S-07 after signup and restores only a proven login reauth route', () => {
@@ -150,5 +156,38 @@ describe('S-01 server-session bootstrap', () => {
       source.indexOf('export function V34Register'),
     );
     expect(prompt.match(/id="S-07-title"/g)).toHaveLength(3);
+  });
+
+  it('keeps logout accessible while the required S-07 profile dialog is active', () => {
+    const source = readFileSync(join(process.cwd(), 'src/features/student/auth/V34Screens.tsx'), 'utf8');
+    const prompt = source.slice(
+      source.indexOf('export function V34VerifiedHome'),
+      source.indexOf('export function V34Register'),
+    );
+    const dialog = prompt.slice(prompt.indexOf('data-testid="profile-completion-dialog"'));
+
+    expect(dialog).toContain('onClick={signOut}>Sign out</button>');
+  });
+
+  it('reports a fail-closed session transition as a browser boundary failure, not a bad OTP', () => {
+    for (const code of [
+      'student_auth_transition_unavailable',
+      'student_auth_transition_local_cleanup_incomplete',
+      'student_auth_transition_peer_cleanup_incomplete',
+      'session_unavailable',
+    ]) {
+      expect(otpVerificationFailureMessage(new Error(code))).toBe(
+        'This browser cannot safely change sessions. Check browser privacy support and try again.',
+      );
+    }
+    expect(otpVerificationFailureMessage(new Error('network_failure'))).toBe(
+      'That code could not be verified. Check all six digits.',
+    );
+    expect(otpVerificationFailureMessage(new RegistrationApiError(423, 'otp_locked'))).toBe(
+      'Too many attempts. Verification is temporarily locked.',
+    );
+    expect(otpVerificationFailureMessage(new RegistrationApiError(410, 'otp_expired'))).toBe(
+      'That code has expired. Request a new code when the server allows it.',
+    );
   });
 });

@@ -96,7 +96,7 @@ export function canSyncTransition(from: DraftState, to: DraftState): boolean {
 }
 
 export const COMPLIANCE_NOTE =
-  'LegalSaathi records and organises your training hours and evidence. Your institution’s approval controls compliance — we do not certify that requirements are met.';
+  'NyayOne records and organises your training hours and evidence. Your institution’s approval controls compliance — we do not certify that requirements are met.';
 export const EVIDENCE_PRIVACY = 'Evidence shared only with the faculty verifier you choose';
 
 /* -------------------------------------------------------------------------- */
@@ -168,7 +168,7 @@ export interface ClinicalExportPayload {
   readonly generatedAt: string;
   readonly includesEvidence: boolean;
   readonly entryCount: number;
-  readonly source: 'LegalSaathi self-maintained clinical log';
+  readonly source: 'NyayOne self-maintained clinical log';
 }
 
 export interface ClinicalExportAuditEvent {
@@ -253,7 +253,7 @@ export function buildClinicalExport(
     extension = 'csv';
   } else if (format === 'pdf') {
     const lines = [
-      'LegalSaathi clinical-hours report',
+      'NyayOne clinical-hours report',
       `Generated: ${options.generatedAt}`,
       NON_OFFICIAL_TRANSCRIPT_WARNING,
       ...rows.map((row) => `${row.date} | ${row.hours} hrs | ${row.activity} | ${row.category} | ${row.status}${'evidence' in row ? ` | evidence: ${row.evidence}` : ''}`),
@@ -263,7 +263,7 @@ export function buildClinicalExport(
     extension = 'pdf';
   } else {
     content = JSON.stringify({
-      schema: 'legalsaathi.clinical-export.v1',
+      schema: 'nyayone.clinical-export.v1',
       generatedAt: options.generatedAt,
       warning: NON_OFFICIAL_TRANSCRIPT_WARNING,
       summary: exportSummary(entries),
@@ -275,13 +275,13 @@ export function buildClinicalExport(
 
   return {
     format,
-    fileName: `legalsaathi-clinical-hours-${stamp}.${extension}`,
+    fileName: `nyayone-clinical-hours-${stamp}.${extension}`,
     mimeType,
     content,
     generatedAt: options.generatedAt,
     includesEvidence: options.includesEvidence,
     entryCount: entries.length,
-    source: 'LegalSaathi self-maintained clinical log',
+    source: 'NyayOne self-maintained clinical log',
   };
 }
 

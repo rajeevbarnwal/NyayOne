@@ -288,7 +288,7 @@ function LsShell({
     <>
       <header className="ls-top">
         <div className="ls-wm">
-          <span className="ls-mk" aria-hidden="true">§</span> LegalSaathi
+          <span className="ls-mk" aria-hidden="true">§</span> NyayOne
           <span className="ls-sub">Find your law school · Option C+ · Guided Confidence</span>
         </div>
         <span className="ls-flex1" />

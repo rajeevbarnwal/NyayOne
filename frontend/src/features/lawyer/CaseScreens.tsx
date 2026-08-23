@@ -396,7 +396,7 @@ export function CaseDocuments() {
 /* -------------------------------------------------------------------------- */
 /* E06 (SAATHI-16) — Draft plaint/petition with review controls                */
 /* -------------------------------------------------------------------------- */
-const DRAFT_CASE_ID = 'LS-CASE-2026-014';
+const DRAFT_CASE_ID = 'NYAY-CASE-2026-014';
 export function CaseDraft() {
   const nav = useNavigate();
   const actor = filingActorFromAuth(useAuth()) ?? UNAUTHENTICATED_ACTOR;

@@ -152,7 +152,7 @@ def test_geometry_contexts_explicitly_select_the_deterministic_transport():
     init = loop.index("await ctx.addInitScript")
     measure = loop.index("await measure(ctx")
     assert init < measure
-    assert "window.__legalsaathiVideoTransport = 'deterministic'" in loop[:measure]
+    assert "window.__nyayoneVideoTransport = 'deterministic'" in loop[:measure]
 
 
 def test_browser_fixture_applies_sqlite_pragma_only_to_sqlite():

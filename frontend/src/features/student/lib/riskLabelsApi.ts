@@ -210,10 +210,10 @@ export function organisationResponseErrorCopy(error: unknown): string {
     return 'The response could not be submitted. Retry without sharing the invitation link.';
   }
   if (['response_token_unavailable', 'response_token_expired', 'response_token_replayed', 'response_token_invalid'].includes(error.code)) {
-    return 'This invitation is invalid, expired or already used. Ask LegalSaathi for a new verified invitation.';
+    return 'This invitation is invalid, expired or already used. Ask NyayOne for a new verified invitation.';
   }
   if (error.code === 'response_correction_target_changed') {
-    return 'This correction invitation is no longer current. Ask LegalSaathi for a new verified invitation.';
+    return 'This correction invitation is no longer current. Ask NyayOne for a new verified invitation.';
   }
   if (error.code === 'idempotency_conflict') {
     return 'This submission attempt conflicted with an earlier request. Start a fresh submission attempt.';
@@ -223,7 +223,7 @@ export function organisationResponseErrorCopy(error: unknown): string {
   }
   if (error.status === 429) return 'Too many attempts. Request a fresh invitation later.';
   if (error.retryable || error.status >= 500) return 'The response service is temporarily unavailable. Retry safely.';
-  return 'The response could not be submitted. Ask LegalSaathi for a new verified invitation.';
+  return 'The response could not be submitted. Ask NyayOne for a new verified invitation.';
 }
 
 export type OrganisationResponseFailureState = 'invitation-unavailable' | 'conflict' | 'retryable' | 'unavailable';

@@ -64,7 +64,7 @@ try {
   for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }]) {
     for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: theme });
-      await context.addInitScript(({ themeValue }) => localStorage.setItem('ls-theme', themeValue), { themeValue: theme });
+      await context.addInitScript(({ themeValue }) => localStorage.setItem('nyayone.theme.v1', themeValue), { themeValue: theme });
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];
@@ -231,7 +231,7 @@ try {
   }, `${apiBase}/api/v1/auth/student/session`);
   const loginBrowserState = await page.evaluate(({ mobile, otp }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
-    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedLocalKeys = new Set(['nyayone.theme.v1']);
     const allowedSessionKeys = new Set();
     const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
     const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;

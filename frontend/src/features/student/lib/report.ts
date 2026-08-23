@@ -17,6 +17,10 @@
  * 07 cross-user access refused.
  */
 import type { KvStore } from '../../../lib/kvStore';
+import {
+  STUDENT_REPORT_STORAGE_KEY_PREFIX,
+  studentReportStorageKey,
+} from './studentLegacyStorage';
 
 export type ReportCategory =
   | 'unsafe'
@@ -198,7 +202,8 @@ interface ReportStoreShape {
   readonly reports: Record<string, ReportRecord>;
   readonly audit: readonly ReportAuditEvent[];
 }
-const key = (userId: string) => `ls-reports-${userId}`;
+export const REPORT_STORAGE_KEY_PREFIX = STUDENT_REPORT_STORAGE_KEY_PREFIX;
+const key = studentReportStorageKey;
 
 export interface DraftInput {
   category?: ReportCategory | null;

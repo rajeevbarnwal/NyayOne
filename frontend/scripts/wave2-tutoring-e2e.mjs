@@ -1920,7 +1920,7 @@ async function stageE(page) {
     // exclusively to infra/video/scripts/livekit_turn_smoke.sh S1-S11; neither
     // result may be relabelled as the other.
     await page.addInitScript(() => {
-      window.__legalsaathiVideoTransport = 'deterministic';
+      window.__nyayoneVideoTransport = 'deterministic';
     });
     await go(page, `${WEB}/s-35?session=${sessionId}&view=prejoin`, 'div.tt-preview');
     arts.push(await shot(page, 'e1_s35_prejoin'));
@@ -1991,7 +1991,7 @@ async function stageE(page) {
     chk.ok('the server issued a join credential', 'POST .../join-credentials -> 201 with a room_ref and a TTL', { status: cred?.status, roomRef: cred?.json?.room_ref, ttl: cred?.json?.ttl_seconds }, (v) => v.status === 201 && !!v.roomRef && v.ttl === JOIN_TTL);
     const transport = await page.$eval('main.tt-live', (e) => ({
       state: e.getAttribute('data-tt-transport'),
-      adapter: window.__legalsaathiVideoTransport || null,
+      adapter: window.__nyayoneVideoTransport || null,
       pill: document.querySelector('[data-tt-transport-pill]')?.textContent?.trim() || '',
       alerts: [...document.querySelectorAll('[role="alert"]')].map((n) => n.textContent || ''),
     }));
@@ -2300,7 +2300,7 @@ async function stageGeo(browser) {
     // LiveKit adapter here makes the geometry oracle wait on an unrelated
     // external media runtime and produces a false timeout.
     await ctx.addInitScript(() => {
-      window.__legalsaathiVideoTransport = 'deterministic';
+      window.__nyayoneVideoTransport = 'deterministic';
     });
     results[cfg.key] = {
       criterion: cfg.criterion,
@@ -3693,10 +3693,10 @@ async function stageNeg2b(page, browser) {
  * no component is replaced, and no test-only page is loaded.
  *
  * WHAT MAKES IT DETERMINISTIC. A single global,
- * `window.__legalsaathiVideoTransport = 'deterministic'`, is installed BEFORE
+ * `window.__nyayoneVideoTransport = 'deterministic'`, is installed BEFORE
  * the app boots. That is the one runtime switch the product ships, and it
  * selects the deterministic adapter behind the same interface. The adapter then
- * exposes a driver (`window.__legalsaathiVideoRoom`) with no timers at all:
+ * exposes a driver (`window.__nyayoneVideoRoom`) with no timers at all:
  * `dropTransport`, `restoreTransport` and `settle` are three separate steps, so
  * `reconnecting` and `reconnected` can each be OBSERVED rendered rather than
  * raced against a timeout.
@@ -3767,7 +3767,7 @@ async function stageN45(browser) {
   // The ONE switch, installed before the app boots. It selects an adapter; it
   // does not replace, patch or stub any part of the screen.
   await ctx.addInitScript(() => {
-    window.__legalsaathiVideoTransport = 'deterministic';
+    window.__nyayoneVideoTransport = 'deterministic';
   });
   const p = await ctx.newPage();
   attachCapture(p);
@@ -3786,21 +3786,21 @@ async function stageN45(browser) {
     arts.push(await shot(p, 'n45_1_media_connected', { fullPage: false }));
 
     // ---- the provider drops --------------------------------------------- //
-    await p.evaluate(() => window.__legalsaathiVideoRoom.dropTransport());
+    await p.evaluate(() => window.__nyayoneVideoRoom.dropTransport());
     await waitState(p, 'reconnecting');
     await settled(p);
     const reconnecting = await readRoom(p);
     arts.push(await shot(p, 'n45_2_media_reconnecting', { fullPage: false }));
 
     // ---- the provider comes back ---------------------------------------- //
-    await p.evaluate(() => window.__legalsaathiVideoRoom.restoreTransport());
+    await p.evaluate(() => window.__nyayoneVideoRoom.restoreTransport());
     await waitState(p, 'reconnected');
     await settled(p);
     const reconnected = await readRoom(p);
     arts.push(await shot(p, 'n45_3_media_reconnected', { fullPage: false }));
 
     // ---- and settles back to connected, with media flowing again --------- //
-    await p.evaluate(() => window.__legalsaathiVideoRoom.settle());
+    await p.evaluate(() => window.__nyayoneVideoRoom.settle());
     await waitState(p, 'connected');
     await p.waitForFunction(() => {
       const v = document.querySelector('video[data-tt-remote="1"]');
@@ -3820,7 +3820,7 @@ async function stageN45(browser) {
     await p.keyboard.press('Escape');
 
     // ---- the terminal failure path --------------------------------------- //
-    await p.evaluate(() => window.__legalsaathiVideoRoom.failTerminally('TRANSPORT_LOST'));
+    await p.evaluate(() => window.__nyayoneVideoRoom.failTerminally('TRANSPORT_LOST'));
     await waitState(p, 'failed');
     await settled(p);
     const failed = await readRoom(p);
@@ -3894,7 +3894,7 @@ async function stageN45(browser) {
 
     neg('N45', {
       expected: 'the media-plane connection of the PRODUCTION S-35 room drops and re-establishes across its real VideoRoomClient boundary, with the room rendering connected -> reconnecting -> reconnected -> connected as NAMED states (never a bare spinner), remote media stopping while reconnecting and flowing again afterwards, and a separate terminal failure rendering a named state with its typed code',
-      actual: `EXECUTED against the production screen with the DETERMINISTIC adapter selected at runtime (window.__legalsaathiVideoTransport, the switch the product ships). Observed sequence: `
+      actual: `EXECUTED against the production screen with the DETERMINISTIC adapter selected at runtime (window.__nyayoneVideoTransport, the switch the product ships). Observed sequence: `
         + `connected[pill="${connected.pill}", remote readyState=${connected.remote?.readyState} ${connected.remote?.w}x${connected.remote?.h}] -> `
         + `reconnecting[pill="${reconnecting.pill}", banner "${reconnecting.banner?.title}" code=${reconnecting.banner?.code}, remote stream bound=${reconnecting.remote?.bound}] -> `
         + `reconnected[pill="${reconnected.pill}", banner "${reconnected.banner?.title}"] -> `
@@ -3925,7 +3925,7 @@ async function stageN45(browser) {
     summary: `media-plane disconnect/reconnect on the production room: N45=${NEG.N45?.result || 'MISSING'} (transport=${findings.declaredTransport || 'unknown'}); the REAL-LiveKit two-browser variant remains BLOCKED — no LiveKit/TURN runtime in this environment`,
     observed: findings,
     mechanism: {
-      transport: 'the product\'s own runtime adapter switch (window.__legalsaathiVideoTransport) selecting the DETERMINISTIC VideoRoomClient; the screen, the contract and every rendered state are the shipped ones',
+      transport: 'the product\'s own runtime adapter switch (window.__nyayoneVideoTransport) selecting the DETERMINISTIC VideoRoomClient; the screen, the contract and every rendered state are the shipped ones',
       blocked: 'REAL LiveKit two-browser publish/subscribe: no livekit-server, no TURN, no docker and no network egress here',
     },
     artifacts: arts,
@@ -4428,13 +4428,13 @@ function scanText(text, surface, source) {
 /**
  * The EXACT allowlist, defined in the test rather than inferred at run time.
  *
- * The independent-QA finding was that the old gate failed on `ls-theme`. That
+ * The independent-QA finding was that the old gate failed on the theme key. That
  * key is the user's light/dark preference: it is written by `useTheme()` on
  * every mount of the app shell, its value is the literal string `light` or
  * `dark`, and it carries no identifier, no token and nothing derived from one.
  * Failing a privacy gate on it is a false positive that trains people to ignore
  * the gate. So it is allowed BY NAME, with its value CONSTRAINED — a key called
- * `ls-theme` holding anything other than `light`/`dark` is still a failure.
+ * `nyayone.theme.v1` holding anything other than `light`/`dark` is still a failure.
  *
  * Everything not on this list is a failure, and the canary scan runs over every
  * capture from both populations regardless of what the allowlist says.
@@ -4442,7 +4442,7 @@ function scanText(text, surface, source) {
 const STORAGE_ALLOWLIST = {
   /** Any surface, authenticated or not. */
   common: [
-    { key: 'ls-theme', why: 'light/dark preference; no identifier, no secret', valuePattern: /^(light|dark)$/ },
+    { key: 'nyayone.theme.v1', why: 'light/dark preference; no identifier, no secret', valuePattern: /^(light|dark)$/ },
   ],
   /** M-01 uses only an HttpOnly server session; it has no readable auth key. */
   admin: [],
@@ -4480,7 +4480,7 @@ async function stagePriv() {
     'no allowlisted value is out of its declared shape',
     'no cookie is set on any surface',
     'no secret-shaped field exists inside an allowlisted stored object',
-    'the benign ls-theme preference does NOT fail the gate',
+    'the benign NyayOne theme preference does NOT fail the gate',
     'SELF-TEST: a planted secret canary FAILS the scan',
   ]);
   const surfaces = [];
@@ -4606,8 +4606,8 @@ async function stagePriv() {
     if (Object.keys(s.sessionStorage || {}).length) storageViolations.push({ capture: name, why: 'sessionStorage is not empty', keys: Object.keys(s.sessionStorage) });
     if (s.cookie) storageViolations.push({ capture: name, why: 'a cookie was set', cookie: s.cookie });
   }
-  const themeCaptures = storageState.filter((s) => s.localStorageKeys.includes('ls-theme'));
-  const themeViolations = storageViolations.filter((v) => v.key === 'ls-theme');
+  const themeCaptures = storageState.filter((s) => s.localStorageKeys.includes('nyayone.theme.v1'));
+  const themeViolations = storageViolations.filter((v) => v.key === 'nyayone.theme.v1');
   const secretShaped = storageViolations.filter((v) => v.why === 'secret-shaped field inside an allowlisted object');
   const cookieViolations = storageViolations.filter((v) => v.why === 'a cookie was set');
   const shapeViolations = storageViolations.filter((v) => v.why === 'allowlisted key holds a value outside its declared shape');
@@ -4633,7 +4633,7 @@ async function stagePriv() {
   }, null, 1);
   fs.writeFileSync(path.join(canaryDir, 'planted.json'), plantedText);
   const selfTestHits = scanText(plantedText, 'planted.json', 'self_test');
-  const plantedStorage = { capture: 'selftest_planted', localStorage: { 'ls-theme': 'dark', 'ls-session-token': 'join_selftestcredential0123456789abcdefgh' }, sessionStorage: {}, cookie: '' };
+  const plantedStorage = { capture: 'selftest_planted', localStorage: { 'nyayone.theme.v1': 'dark', 'ls-session-token': 'join_selftestcredential0123456789abcdefgh' }, sessionStorage: {}, cookie: '' };
   const selfTestStorageViolations = [];
   for (const key of Object.keys(plantedStorage.localStorage)) {
     const rule = STORAGE_ALLOWLIST.common.find((a) => a.key === key);
@@ -4656,8 +4656,8 @@ async function stagePriv() {
   chk.eq('no cookie is set on any surface', [], cookieViolations);
   chk.eq('no secret-shaped field exists inside an allowlisted stored object', [], secretShaped);
   chk.ok(
-    'the benign ls-theme preference does NOT fail the gate',
-    'ls-theme is present on the student surface, holds only "light"/"dark", and contributes ZERO violations',
+    'the benign NyayOne theme preference does NOT fail the gate',
+    'nyayone.theme.v1 is present on the student surface, holds only "light"/"dark", and contributes ZERO violations',
     { capturesHoldingIt: themeCaptures.length, values: [...new Set(themeCaptures.map((c) => c.capture))].slice(0, 3), violationsCaused: themeViolations.length },
     (v) => v.capturesHoldingIt > 0 && v.violationsCaused === 0,
   );
@@ -4695,7 +4695,7 @@ async function stagePriv() {
     storageState,
     storageViolations,
     themePreference: {
-      note: 'ls-theme is the light/dark preference written by useTheme(). It is allowed BY NAME with a constrained value and is NOT a privacy finding. Independent-QA F7.',
+      note: 'nyayone.theme.v1 is the light/dark preference written by useTheme(). It is allowed BY NAME with a constrained value and is NOT a privacy finding. Independent-QA F7.',
       capturesHoldingIt: themeCaptures.length,
       violationsCaused: themeViolations.length,
     },
@@ -4715,7 +4715,7 @@ async function stagePriv() {
   recordChecks(chk, {
     stage: 'priv',
     matrix: 'J1',
-    summary: `${CANARIES.length} canaries over ${surfaces.length} surfaces (${report.totalBytesScanned} bytes) — ${genericHits.length} finding(s); storage judged against the declared allowlist (${STORAGE_ALLOWLIST.common.map((a) => a.key).join(',')} everywhere, + ${STORAGE_ALLOWLIST.admin.map((a) => a.key).join(',')} on the authenticated administrator surface) with ${storageViolations.length} violation(s); ls-theme present in ${themeCaptures.length} capture(s) and caused ${themeViolations.length}; join credential sighted ${tokenSightings.length} time(s), ${unauthorisedTokenSightings.length} outside its authorised response; self-test triggered ${selfTestCanaries.length} canaries`,
+    summary: `${CANARIES.length} canaries over ${surfaces.length} surfaces (${report.totalBytesScanned} bytes) — ${genericHits.length} finding(s); storage judged against the declared allowlist (${STORAGE_ALLOWLIST.common.map((a) => a.key).join(',')} everywhere, + ${STORAGE_ALLOWLIST.admin.map((a) => a.key).join(',')} on the authenticated administrator surface) with ${storageViolations.length} violation(s); nyayone.theme.v1 present in ${themeCaptures.length} capture(s) and caused ${themeViolations.length}; join credential sighted ${tokenSightings.length} time(s), ${unauthorisedTokenSightings.length} outside its authorised response; self-test triggered ${selfTestCanaries.length} canaries`,
     observed: { findings: genericHits, storageViolations, tokenSightings, selfTest: report.selfTest },
     artifacts: ['privacy_scan.json'],
   });

@@ -27,7 +27,7 @@ export interface Invoice {
 let invSeq = 700;
 export function newInvoice(amount: number, ledgerType: LedgerType, gstPct = 18): Invoice {
   invSeq += 1;
-  return { id: `LS-INV-${invSeq}`, status: 'pending', amount, ledgerType, gstPct };
+  return { id: `NYAY-INV-${invSeq}`, status: 'pending', amount, ledgerType, gstPct };
 }
 
 /** Payment link may be issued only after an invoice exists (is pending). */

@@ -282,7 +282,7 @@ function CalendarMonthAuthenticated() {
         data-wave5-ready={readyState(pending, error)}>
         <CalSubnav active="month" />
         <h1 className="lede">Unified Calendar <span className="m">· S-90</span></h1>
-        <p className="stand">Every LegalSaathi module writes to one private, server-authoritative calendar.</p>
+        <p className="stand">Every NyayOne module writes to one private, server-authoritative calendar.</p>
 
         {showFilters && filters && (
           <section className="card filters" id="cal-filters" aria-label="Calendar filters">
@@ -556,7 +556,7 @@ function CalendarEventScreen() {
             </div>
           </section>
         )}
-        <DpdpFootnote>Personal events are written to your authenticated account. LegalSaathi does not store them in localStorage.</DpdpFootnote>
+        <DpdpFootnote>Personal events are written to your authenticated account. NyayOne does not store them in localStorage.</DpdpFootnote>
       </main>
     </StudentScreen>
   );
@@ -755,7 +755,7 @@ function CalendarPreferencesAuthenticated() {
     mutationFn: () => createCalendarExport(exportTimezone),
     onSuccess: async (created) => {
       setOneTimeFeedUrl(created.oneTimeFeedUrl);
-      setMessage(created.oneTimeFeedUrl ? 'Private feed created. Copy it now; LegalSaathi will not show it again.' : 'Feed metadata created, but no reusable secret was returned.');
+      setMessage(created.oneTimeFeedUrl ? 'Private feed created. Copy it now; NyayOne will not show it again.' : 'Feed metadata created, but no reusable secret was returned.');
       await client.invalidateQueries({ queryKey: ['calendar', 'exports'] });
     },
     onError: (error) => setMessage(calendarErrorCopy(error)),
@@ -771,7 +771,7 @@ function CalendarPreferencesAuthenticated() {
     onSuccess: async (created) => {
       setOneTimeFeedUrl(created.oneTimeFeedUrl);
       setMessage(created.oneTimeFeedUrl
-        ? 'Previous feed atomically rotated. Copy the replacement now; LegalSaathi will not show it again.'
+        ? 'Previous feed atomically rotated. Copy the replacement now; NyayOne will not show it again.'
         : 'Feed rotation completed, but no replacement secret was returned. Refresh before retrying.');
       await client.invalidateQueries({ queryKey: ['calendar', 'exports'] });
     },

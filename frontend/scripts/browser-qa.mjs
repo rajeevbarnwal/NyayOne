@@ -7,7 +7,7 @@
  *   - no horizontal overflow
  *   - actionable targets >= 44x44
  *   - no console errors
- *   - theme persistence (ls-theme survives reload)
+ *   - theme persistence (nyayone.theme.v1 survives reload)
  *   - mobile bottom-nav renders its labels (no dropped item)
  *
  * Usage (local / CI):
@@ -61,7 +61,7 @@ for (const width of WIDTHS) {
 // Theme persistence
 await page.setViewportSize({ width: 1440, height: 900 });
 await page.goto(`${BASE}/s-13`, { waitUntil: 'networkidle' });
-await page.evaluate(() => { window.localStorage.setItem('ls-theme', 'dark'); });
+await page.evaluate(() => { window.localStorage.setItem('nyayone.theme.v1', 'dark'); });
 await page.reload({ waitUntil: 'networkidle' });
 const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
 if (theme !== 'dark') fail(`theme persistence: expected dark after reload, got ${theme}`);

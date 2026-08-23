@@ -196,7 +196,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       localStorageEntries: [],
       sessionStorageKeys: [],
       cacheInventory: [{
-        name: 'ls-shell-v1',
+        name: 'nyayone-shell-v1',
         entries: [
           {
             pathname: '/index.html', query: '', method: 'GET',
@@ -235,14 +235,21 @@ describe('NYAY-5 browser release-gate source contract', () => {
       { ...clean, cacheInventory: [] },
       {
         ...clean,
-        cacheInventory: [{ name: 'ls-shell-v1', entries: [{
+        cacheInventory: clean.cacheInventory.map((cache) => ({
+          ...cache,
+          name: 'ls-shell-v1',
+        })),
+      },
+      {
+        ...clean,
+        cacheInventory: [{ name: 'nyayone-shell-v1', entries: [{
           pathname: '/api/v1/student/profile', query: '', method: 'GET',
           credentials: 'omit', authorization: false, responseStatus: 200,
         }] }],
       },
       {
         ...clean,
-        cacheInventory: [{ name: 'ls-shell-v1', entries: [{
+        cacheInventory: [{ name: 'nyayone-shell-v1', entries: [{
           pathname: '/assets/index-a1b2c3.js', query: '?credential=private', method: 'GET',
           credentials: 'omit', authorization: false, responseStatus: 200,
         }] }],
@@ -975,27 +982,115 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(runner).toContain(
       "locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' })",
     );
-    expect(runner).toContain(".locator('summary').click()");
+    expect(runner).toContain("const dataRightsSummary = dataRightsDisclosure.locator('summary');");
     expect(runner).not.toContain("getByText('Data rights', { exact: true }).click()");
     expect(runner).toContain("getByRole('button', { name: 'Export' })");
     expect(runner).toContain("getByRole('button', { name: 'Save private draft' })");
   });
 
-  it('pins every allowed browser key to its exact harmless value', async () => {
+  it('emits null failure diagnostics for every successful final report', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const successfulCompletionReset = [
+      '    failureStage = null;',
+      '  } catch (error) {',
+    ].join('\n');
+    const successfulReportInvariant = [
+      '  const successfulReport = summary.overallPass',
+      '    && failureClass === null',
+      '    && failureStage === null',
+      '    && failureCode === null;',
+    ].join('\n');
+    const reportSource = runner.slice(
+      runner.indexOf('  const report = {'),
+      runner.indexOf('  const finalFindings = scanNyay5Evidence(report);'),
+    );
+
+    expect(runner).toContain(successfulCompletionReset);
+    expect(runner).toContain(successfulReportInvariant);
+    expect(reportSource).toContain("status: successfulReport ? 'PASS' : 'FAIL'");
+    expect(reportSource).toMatch(/failureClass,\s*failureStage,\s*failureCode,/u);
+  });
+
+  it('kills an unconditional S-19 disclosure toggle before the privacy export', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const storageProbeStart = runner.indexOf('async function extendedStorageBoundaryProbe');
+    const storageProbe = runner.slice(
+      storageProbeStart,
+      runner.indexOf('async function run()', storageProbeStart),
+    );
+    const guardedOpen = [
+      "  if ((await dataRightsDisclosure.getAttribute('open')) === null) {",
+      "    await dataRightsSummary.waitFor({ state: 'visible' });",
+      '    await dataRightsSummary.click();',
+      '  }',
+    ].join('\n');
+    const guardedDisclosurePasses = (source) => (
+      source.includes(guardedOpen)
+      && (source.match(/await dataRightsSummary\.click\(\);/gu) ?? []).length === 1
+      && !source.includes("click({ force: true })")
+      && !source.includes('dataRightsDisclosure.evaluate(')
+    );
+
+    expect(guardedDisclosurePasses(storageProbe)).toBe(true);
+    const unconditionalToggleMutant = storageProbe.replace(
+      guardedOpen,
+      '  await dataRightsSummary.click();',
+    );
+    expect(unconditionalToggleMutant).not.toBe(storageProbe);
+    expect(guardedDisclosurePasses(unconditionalToggleMutant)).toBe(false);
+  });
+
+  it('plants an owned legacy key before each synthesized cleanup failure', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const peerFailureProbe = runner.slice(
+      runner.indexOf('if (peer) {'),
+      runner.indexOf('failureStage = `cross_realm_${mode}_otp`;'),
+    );
+    const localFailureProbe = runner.slice(
+      runner.indexOf("if (mode === 'local-cleanup') {"),
+      runner.indexOf('const beforeCookies ='),
+    );
+    const localOwnedSeed = [
+      "localStorage.setItem('legalsaathi.student.profile.v1',",
+      "        'synthetic-cleanup-denial-canary');",
+    ].join('\n');
+    const peerOwnedSeed = [
+      "sessionStorage.setItem('legalsaathi.student.registration.v2',",
+      "        'synthetic-peer-cleanup-denial-canary');",
+    ].join('\n');
+    const denial = 'Storage.prototype.removeItem = () => {';
+    const exactFixture = (source, ownedSeed) => (
+      source.includes(ownedSeed)
+      && source.includes(denial)
+      && source.indexOf(ownedSeed) < source.indexOf(denial)
+      && source.indexOf(ownedSeed) === source.lastIndexOf(ownedSeed)
+    );
+
+    expect(exactFixture(localFailureProbe, localOwnedSeed)).toBe(true);
+    expect(exactFixture(peerFailureProbe, peerOwnedSeed)).toBe(true);
+    for (const [source, ownedSeed] of [
+      [localFailureProbe, localOwnedSeed],
+      [peerFailureProbe, peerOwnedSeed],
+    ]) {
+      const missingOwnedKeyMutant = source.replace(ownedSeed, '');
+      expect(missingOwnedKeyMutant).not.toBe(source);
+      expect(exactFixture(missingOwnedKeyMutant, ownedSeed)).toBe(false);
+    }
+  });
+
+  it('pins the sole current device preference and rejects every retired survivor', async () => {
     const { inspectBrowserPersistence } = await import(
       './nyay5-profile-browser-contract.mjs'
     );
     const base = {
       origin: 'http://localhost:1190',
-      localStorageKeys: ['ls-onboarding-seen', 'ls-reviewer', 'ls-theme'],
+      localStorageKeys: ['nyayone.theme.v1'],
       localStorageEntries: [
-        ['ls-onboarding-seen', 'seen'],
-        ['ls-reviewer', '1'],
-        ['ls-theme', 'dark'],
+        ['nyayone.theme.v1', 'dark'],
       ],
       sessionStorageKeys: [],
       cacheInventory: [{
-        name: 'ls-shell-v1',
+        name: 'nyayone-shell-v1',
         entries: [{
           pathname: '/index.html', query: '', method: 'GET',
           credentials: 'same-origin', authorization: false, responseStatus: 200,
@@ -1019,19 +1114,39 @@ describe('NYAY-5 browser release-gate source contract', () => {
       localValueContractExact: true,
     });
     for (const [key, unsafe] of [
-      ['ls-theme', 'system'],
-      ['ls-onboarding-seen', '1'],
-      ['ls-reviewer', 'true'],
-      ['ls-theme', 'Bearer synthetic-private-credential'],
-      ['ls-onboarding-seen', 'https://actor:secret@app.invalid'],
-      ['ls-reviewer', 'student@example.test'],
+      ['nyayone.theme.v1', 'system'],
+      ['nyayone.theme.v1', 'Bearer synthetic-private-credential'],
     ]) {
       const mutant = structuredClone(base);
       mutant.localStorageEntries.find((entry) => entry[0] === key)[1] = unsafe;
       expect(inspectBrowserPersistence(mutant).pass).toBe(false);
     }
+    for (const [key, value] of [
+      ['ls-theme', 'dark'],
+      ['ls-onboarding-seen', 'seen'],
+      ['ls-reviewer', '1'],
+      ['ls-locale', 'en-IN'],
+    ]) {
+      const mutant = structuredClone(base);
+      mutant.localStorageKeys.push(key);
+      mutant.localStorageEntries.push([key, value]);
+      expect(inspectBrowserPersistence(mutant).pass).toBe(false);
+    }
+    expect(inspectBrowserPersistence({
+      ...base,
+      cacheInventory: [
+        ...base.cacheInventory,
+        { name: 'ls-shell-v1', entries: [] },
+      ],
+    }).pass).toBe(false);
     const runner = readFileSync(RUNNER, 'utf8');
+    expect(runner).toContain("localStorage.setItem('ls-theme', 'dark')");
     expect(runner).toContain("localStorage.setItem('ls-onboarding-seen', 'seen')");
+    expect(runner).toContain("localStorage.setItem('ls-reviewer', '1')");
+    expect(runner).toContain("localStorage.setItem('ls-locale', 'en-IN')");
+    expect(runner).toContain("caches.open('ls-shell-v1')");
+    expect(runner).toContain("localStorage.getItem('nyayone.theme.v1') === 'dark'");
+    expect(runner).toContain("!cacheNames.includes('ls-shell-v1')");
   });
 
   it('executes REG-05 through both the real UI and canonical backend corpus', async () => {

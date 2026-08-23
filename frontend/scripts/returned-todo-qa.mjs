@@ -197,8 +197,14 @@ await page.setInputFiles('#app-transcript', { name: 'transcript.pdf', mimeType: 
 await page.getByRole('button', { name: 'Review application' }).click();
 await page.getByRole('button', { name: 'Submit application' }).click();
 check('SAATHI-61/116 submission reaches confirmation', new URL(page.url()).pathname === '/s-23', page.url());
-const storedApplications = await page.evaluate(() => localStorage.getItem('legalsaathi.internship.applications.v1'));
-check('SAATHI-61/116 submission stored', Boolean(storedApplications), storedApplications ?? 'missing');
+const retiredApplicationStorageAbsent = await page.evaluate(() => (
+  !Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+    .includes('legalsaathi.internship.applications.v1')
+));
+check(
+  'SAATHI-61/116 submission remains memory-only and retired storage stays absent',
+  retiredApplicationStorageAbsent,
+);
 await page.getByRole('button', { name: 'Open tracker' }).click();
 await page.getByRole('heading', { name: 'Your applications' }).waitFor();
 const trackerCount = await page.locator('section[aria-label="Your applications"] li').count();
@@ -247,7 +253,7 @@ if (runMatrix) for (const [ticket, route] of Object.entries(routeMap)) {
       await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' });
       await page.evaluate((t) => {
         localStorage.removeItem('ls-reviewer');
-        localStorage.setItem('ls-theme', t);
+        localStorage.setItem('nyayone.theme.v1', t);
       }, theme);
       await page.reload({ waitUntil: 'networkidle' });
       const metrics = await page.evaluate(() => {

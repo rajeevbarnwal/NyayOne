@@ -116,7 +116,7 @@ describe('SAATHI-279 risk-label and organisation-response API adapter', () => {
     for (const code of ['response_token_invalid', 'response_token_expired', 'response_token_replayed', 'response_token_unavailable']) {
       const error = new RiskLabelApiError(404, code, 'private');
       expect(organisationResponseErrorCopy(error)).toBe(
-        'This invitation is invalid, expired or already used. Ask LegalSaathi for a new verified invitation.',
+        'This invitation is invalid, expired or already used. Ask NyayOne for a new verified invitation.',
       );
       expect(organisationResponseFailureState(error)).toBe('invitation-unavailable');
     }
@@ -132,7 +132,7 @@ describe('SAATHI-279 risk-label and organisation-response API adapter', () => {
     );
     expect(organisationResponseFailureState(staleTarget)).toBe('invitation-unavailable');
     expect(organisationResponseErrorCopy(staleTarget)).toBe(
-      'This correction invitation is no longer current. Ask LegalSaathi for a new verified invitation.',
+      'This correction invitation is no longer current. Ask NyayOne for a new verified invitation.',
     );
     expect(organisationResponseErrorCopy(staleTarget)).not.toContain('private chain reason');
 

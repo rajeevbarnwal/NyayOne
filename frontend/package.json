@@ -1,5 +1,5 @@
 {
-  "name": "legalsaathi-frontend",
+  "name": "nyayone-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,6 +20,7 @@
     "qa:nyay19:auth-lifecycle": "node scripts/nyay19-auth-lifecycle-browser.mjs",
     "qa:nyay5:profile-boundary": "node scripts/nyay5-profile-browser.mjs",
     "qa:nyay5:acceptance": "node scripts/nyay5-acceptance-aggregate.mjs",
+    "qa:nyay18:browser-namespace": "node scripts/nyay18-browser-namespace.mjs",
     "test:nyay19:auth-lifecycle-contract": "vitest --run scripts/lib/nyay19-auth-lifecycle-runner-contract.test.mjs",
     "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",

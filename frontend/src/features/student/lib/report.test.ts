@@ -9,6 +9,22 @@ import {
 const ev = (over: Partial<EvidenceMeta> = {}): EvidenceMeta => ({ id: 'e1', filename: 'proof.pdf', mimeType: 'application/pdf', sizeBytes: 1000, ...over });
 
 describe('SAATHI-269/271 internship report contract', () => {
+  it('writes only the exact NyayOne report namespace', () => {
+    const store = new InMemoryKvStore();
+    new ReportService('stu-1', store).createDraft('r1', 't0');
+
+    expect(store.get('nyayone.student.reports.v1.stu-1')).not.toBeNull();
+    expect(store.get('ls-reports-stu-1')).toBeNull();
+  });
+
+  it('never reads or migrates a legacy private report namespace', () => {
+    const store = new InMemoryKvStore();
+    store.set('ls-reports-stu-1', { reports: { legacy: { private: true } }, audit: [] });
+
+    expect(new ReportService('stu-1', store).get('legacy')).toBeNull();
+    expect(store.get('nyayone.student.reports.v1.stu-1')).toBeNull();
+  });
+
   it('TC-269-01: save and resume a valid draft without submitting', () => {
     const store = new InMemoryKvStore();
     new ReportService('stu-1', store).createDraft('r1', '2026-07-12T00:00:00Z', { category: 'unpaid', narrative: 'partial' });

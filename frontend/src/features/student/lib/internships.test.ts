@@ -68,7 +68,7 @@ describe('internships application tracker (SAATHI-61)', () => {
   it('generates unique application refs', () => {
     const a = newApplicationRef();
     const b = newApplicationRef();
-    expect(a).toMatch(/^LS-INT-\d+$/);
+    expect(a).toMatch(/^NYAY-INT-\d+$/);
     expect(a).not.toBe(b);
   });
   it('requires genuine, non-empty PDFs no larger than 5 MB', () => {

@@ -191,5 +191,5 @@ export const SAMPLE_MATTER_FACTS: MatterFacts = {
   limitationNote: 'Cause of action arose 12 Mar 2024; within limitation',
   sections: 'Order VII Rule 1 CPC; Section 34 CPC',
   issues: 'Whether the agreement dated 12 Mar 2024 was breached',
-  documentLinks: ['case://LS-CASE-2026-014/doc/agreement'],
+  documentLinks: ['case://NYAY-CASE-2026-014/doc/agreement'],
 };

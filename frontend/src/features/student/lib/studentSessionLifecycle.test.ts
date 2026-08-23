@@ -82,7 +82,37 @@ describe('student session lifecycle teardown', () => {
     expect(local.has('legalsaathi.internship.applications.v1')).toBe(false);
     expect(session.has('legalsaathi.student.privacy.export.v1')).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
-    expect(local.get('ls-locale')).toBe('en');
+    expect(local.has('ls-locale')).toBe(false);
+  });
+
+  it('denies authenticated private mounting when legacy session cleanup cannot complete', async () => {
+    const legacySession = storage(new Map([
+      ['legalsaathi.student.registration.v2', 'private-registration'],
+    ]));
+    legacySession.removeItem = () => { throw new DOMException('denied'); };
+    vi.stubGlobal('window', {
+      localStorage: storage(new Map()),
+      sessionStorage: legacySession,
+      dispatchEvent: vi.fn(() => true),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000001801',
+        roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000001802',
+        student_verification: 'verified',
+        is_minor: false,
+        consent_state: ['registration'],
+      },
+    })));
+
+    const actor = await getStudentSession();
+    if (actor === null) throw new Error('expected authenticated actor');
+    expect(() => applyStudentSessionDiscovery(1, 1, actor)).toThrow(
+      'student_browser_cleanup_incomplete',
+    );
+    expect(applyStudentSessionDiscoveryFailure(1, 1)).toBe(true);
   });
 
   it.each([

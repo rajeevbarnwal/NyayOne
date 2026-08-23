@@ -398,7 +398,7 @@ export function BookingHoldScreen() {
               Entered in your payment provider
             </div>
             <p className="tt-p tt-muted" id="tt-hosted-note">
-              LegalSaathi never receives your card number, security code or the authentication code
+              NyayOne never receives your card number, security code or the authentication code
               your bank sends. Those fields exist only inside the provider surface.
             </p>
           </div>
@@ -468,7 +468,7 @@ export function BookingHoldScreen() {
 
       <Disclosure summary="How your payment is protected" icon="lock">
         <p className="tt-p" style={{ fontSize: '12.5px' }}>
-          Card fields are <b>provider hosted and tokenised</b>. LegalSaathi never sees or stores
+          Card fields are <b>provider hosted and tokenised</b>. NyayOne never sees or stores
           your card number, security code or payment one-time code. Your session is created only
           after the provider confirms payment.
         </p>

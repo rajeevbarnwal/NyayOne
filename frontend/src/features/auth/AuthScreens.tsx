@@ -306,7 +306,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         <p className="st-metatag" style={{ marginTop: 4 }}>State: {AUTH_PHASE_LABELS[phase]}</p>
       </div>
       <Workbench
-        brand="LegalSaathi"
+        brand="NyayOne"
         role={isLawyer ? 'Advocate verification' : 'Student verification'}
         steps={steps}
         requirements={requirements}
@@ -562,7 +562,7 @@ export function AccountSecurity() {
         <p className="st-eyebrow">Authentication · P0.3</p>
         <h1 className="st-h1">Session &amp; account security</h1>
       </div>
-      <Workbench brand="LegalSaathi" role="Security console" steps={steps} requirements={requirements} ledger={ledger}
+      <Workbench brand="NyayOne" role="Security console" steps={steps} requirements={requirements} ledger={ledger}
         policy={<PrivacyNotice>Sessions and device records are server-authoritative and audited. No raw passwords, OTPs or tokens are stored or logged. Notifications go through adapters only.</PrivacyNotice>}>
         {view === 'overview' ? (
           <div className="st-stack">

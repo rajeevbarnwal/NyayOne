@@ -5,8 +5,7 @@
  */
 import { EMPTY_PROFILE, type ProfileDraft } from './profile';
 import { fullNameToParts } from './registration';
-
-const STORAGE_KEY = 'legalsaathi.student.profile.v1';
+import { LEGACY_STUDENT_PROFILE_DRAFT_KEY } from './studentLegacyStorage';
 
 /**
  * Migrate a legacy record that has only `fullName` (no split parts) into
@@ -34,7 +33,7 @@ export function resetProfileDraft(): void {
   draft = { ...EMPTY_PROFILE, interests: [] };
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STUDENT_PROFILE_DRAFT_KEY);
   } catch {
     // Browser privacy policy must not prevent the in-memory PII reset above.
   }

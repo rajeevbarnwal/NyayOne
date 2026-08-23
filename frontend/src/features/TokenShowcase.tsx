@@ -15,7 +15,7 @@ interface TokenShowcaseProps {
 export default function TokenShowcase({ theme, toggleTheme }: TokenShowcaseProps) {
   return (
     <section style={{ width: 'min(100%, 900px)', padding: 'var(--space-5)' }}>
-      <p className="eyebrow">LegalSaathi · Design tokens</p>
+      <p className="eyebrow">NyayOne · Design tokens</p>
       <h1 style={{ fontFamily: 'var(--font-serif)' }}>Option J v3.2 token &amp; theme check</h1>
       <p style={{ color: 'var(--text3)' }}>
         Active theme: <strong>{theme === 'dark' ? 'Chambers Dark' : 'Clean Chambers Light'}</strong>

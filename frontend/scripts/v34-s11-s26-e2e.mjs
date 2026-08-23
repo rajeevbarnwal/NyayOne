@@ -342,7 +342,7 @@ try {
         colorScheme: theme,
       });
       await context.addInitScript(({ themeValue }) => {
-        localStorage.setItem('ls-theme', themeValue);
+        localStorage.setItem('nyayone.theme.v1', themeValue);
       }, { themeValue: theme });
       const page = await context.newPage();
       const runtime = createRuntimeEvidence();
@@ -662,7 +662,7 @@ const summary = {
 };
 await writeFile(resolve(evidenceDir, 'results.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 await writeFile(resolve(evidenceDir, 'summary.txt'), [
-  'LegalSaathi v3.4 S-11-S-26 production integration',
+  'NyayOne v3.4 S-11-S-26 production integration',
   `total=${summary.total}`,
   `passed=${summary.passed}`,
   `failed=${summary.failed}`,
