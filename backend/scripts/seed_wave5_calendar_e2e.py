@@ -42,7 +42,13 @@ if str(BACKEND) not in sys.path:
 from app.core.crypto import encrypt, key_version, keyed_hash  # noqa: E402
 from app.db.session import get_sessionmaker  # noqa: E402
 from app.models.credentials import Credential, CredentialReminderJob  # noqa: E402
-from app.models.registration import AuthSession, StudentRegistration, User  # noqa: E402
+from app.models.registration import (  # noqa: E402
+    AuthSession,
+    Consent,
+    StudentProfile,
+    StudentRegistration,
+    User,
+)
 from app.models.wave2 import (  # noqa: E402
     TutorAvailabilitySlot,
     TutorProfile,
@@ -146,6 +152,53 @@ def provision(session, raw_session_token: str) -> dict[str, object]:
         registration.status = "active"
         registration.is_minor = False
         registration.deleted_at = None
+
+    # The CI sessionmaker disables autoflush.  Persist the registration parent
+    # before adding its canonical profile and consent children so PostgreSQL's
+    # immediate foreign-key checks see the complete graph in dependency order.
+    session.flush()
+
+    # This fixture writes after the real migrations have run, so it must create
+    # the same minimum authority graph as production registration.  A student
+    # session without both rows is intentionally rejected by the frontend's
+    # fail-closed session parser before any private route can mount.
+    profile = session.scalar(
+        select(StudentProfile).where(
+            StudentProfile.registration_id == registration.id
+        )
+    )
+    if profile is None:
+        session.add(
+            StudentProfile(
+                registration_id=registration.id,
+                key_version=registration.key_version,
+            )
+        )
+    else:
+        profile.key_version = registration.key_version
+        profile.deleted_at = None
+
+    consent = session.scalar(
+        select(Consent).where(
+            Consent.registration_id == registration.id,
+            Consent.purpose == "registration",
+        )
+    )
+    if consent is None:
+        session.add(
+            Consent(
+                registration_id=registration.id,
+                purpose="registration",
+                accepted=True,
+                policy_version="wave5-browser-v1",
+                accepted_at=now,
+            )
+        )
+    else:
+        consent.accepted = True
+        consent.policy_version = "wave5-browser-v1"
+        consent.accepted_at = now
+        consent.deleted_at = None
 
     # Reconcile one active, cookie-backed authenticated session.  The raw token
     # never enters any model field or output artifact.

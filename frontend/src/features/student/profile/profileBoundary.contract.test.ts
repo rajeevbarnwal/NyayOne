@@ -101,7 +101,9 @@ describe('NYAY-5 server-authoritative frontend boundary', () => {
     expect(hooks).toContain('onMutate: captureStudentContextFence');
     expect(hooks).toContain('return useStudentMutation(createProjectionMutationOptions');
     expect(hooks.match(/isStudentContextFenceCurrent\(fence\)/gu)).toHaveLength(2);
-    expect(boundary).toContain("const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);");
+    expect(boundary).toContain(
+      "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set([\n  'public-credential-verification',\n  'public-internship-risk-labels',\n]);",
+    );
   });
 
   it('projects S-15/S-16 status from the canonical query and sends no email selector', () => {

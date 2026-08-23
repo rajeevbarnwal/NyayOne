@@ -1917,6 +1917,14 @@ def test_full_behavior_phase_runs_in_production_order_on_exact_migrations(
             exc, original_constraint_name
         ),
     )
+    # This shared SQLite probe binds fixture order and HTTP projections.  Its
+    # wall-clock timing verdict belongs to the separately required PostgreSQL
+    # gate, so use a deterministic monotonic clock here instead of inheriting
+    # host scheduler contention from the native aggregate suite.
+    import time
+
+    ticks = iter(range(10_000))
+    monkeypatch.setattr(time, "perf_counter_ns", lambda: next(ticks))
     database_url = f"sqlite+pysqlite:///{tmp_path / 'full-behavior.db'}"
     observation = gate._run_behavior_probe(database_url)
 
@@ -1952,6 +1960,7 @@ def test_full_behavior_phase_runs_in_production_order_on_exact_migrations(
         name: evaluator(observation[name])
         for name, evaluator in evaluators.items()
     } == {name: True for name in evaluators}
+    assert observation["cookie"]["timing_p95_ratio_milli"] == 1000
 
 
 @pytest.mark.parametrize(

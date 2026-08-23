@@ -935,6 +935,16 @@ class UploadableEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(payload["structuredCandidates"][0]["producerState"], "fail")
 
+    def test_wave1_production_inventory_contract_is_exactly_pinned(self) -> None:
+        exporter = load("prepare_uploadable_evidence")
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("wave1-browser"),
+            (
+                "rows", "area", 1467,
+                "250d3429ae3056dc2b117e013196ee896c8d73b3e99dfc61d3ebd27ef66f8f65",
+            ),
+        )
+
     def test_nyay5_production_inventory_contracts_are_exactly_pinned(self) -> None:
         exporter = load("prepare_uploadable_evidence")
         self.assertEqual(exporter.NYAY5_POSTGRES_MUTANT_COUNT, 29)

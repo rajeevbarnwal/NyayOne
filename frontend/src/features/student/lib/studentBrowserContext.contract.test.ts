@@ -74,7 +74,7 @@ function assertBoundaryContract(value: string): void {
     'studentBrowserContextGeneration += 1;',
     'export function captureStudentContextFence',
     'export function isStudentContextFenceCurrent',
-    "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);",
+    "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set([\n  'public-credential-verification',\n  'public-internship-risk-labels',\n]);",
     'predicate: (query) => !ACTOR_INDEPENDENT_QUERY_ROOTS.has(String(query.queryKey[0] ?? \'\'))',
     'queryClient.getMutationCache().clear();',
     'studentReportStorageKey(id)',
@@ -226,11 +226,42 @@ describe('NYAY-19 browser-context source contract', () => {
     }
   });
 
+  it('drives the V34 S-17 edit journey through the canonical profile boundary', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    for (const field of [
+      'const completeProfileProjection = {',
+      'let profileProjection = completeProfileProjection',
+      'profile_version: 7',
+      "completion_version: 'v1'",
+      'completion_percent: 100',
+      "completed_sections: ['personal', 'academic', 'interests']",
+      'next_incomplete_section: null',
+      'is_complete: true',
+      'personal: {',
+      'academic: {',
+      'interests: {',
+      "page.getByRole('button', { name: 'Edit profile', exact: true })",
+      "url.pathname === '/s-10' && url.search === '?section=personal'",
+      "page.getByRole('heading', { name: 'About you', exact: true })",
+      "expectedScreen: 'S-10'",
+      "page.getByRole('button', { name: 'Continue profile', exact: true })",
+      "url.pathname === '/s-10' && url.search === '?section=academic'",
+      "url.pathname === '/api/v1/auth/student/verification/email/request'",
+      "page.getByRole('button', { name: 'Request verification review', exact: true })",
+      "no editable email field on the server-authoritative status screen",
+      "Verification review request recorded. Verification remains pending until an authorized review succeeds.",
+      "'S-17': 211, 'S-17E': 34",
+    ]) {
+      expect(gate, `missing canonical V34 profile/edit contract: ${field}`).toContain(field);
+    }
+    expect(gate).not.toContain('Edit college & year');
+  });
+
   it.each([
     ['registration memory', 'clearRegistrationAttempt();'],
     ['profile draft', 'resetProfileDraft();'],
     ['actor-sensitive query cache', 'clearActorSensitiveQueryState();'],
-    ['public-query root inventory', "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);"],
+    ['public-query root inventory', "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set([\n  'public-credential-verification',\n  'public-internship-risk-labels',\n]);"],
     ['mutation cache', 'queryClient.getMutationCache().clear();'],
     ['report actor key', 'studentReportStorageKey(id)'],
     ['reminder actor key', 'studentReminderPrefStorageKey(id)'],
