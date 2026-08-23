@@ -872,6 +872,7 @@ describe('NYAY-19 student browser-context boundary', () => {
 
   it('preserves only the exact actor-independent public projection while clearing private queries and every mutation', () => {
     queryClient.setQueryData(['public-internship-risk-labels', 'organisation-A'], { available: true });
+    queryClient.setQueryData(['public-credential-verification', 'opaque-token'], { status: 'verified' });
     queryClient.setQueryData(['student-profile'], { private: true });
     queryClient.setQueryData(['unknown-public-looking-key'], { private: true });
     queryClient.getMutationCache().build(queryClient, {
@@ -882,6 +883,7 @@ describe('NYAY-19 student browser-context boundary', () => {
     clearStudentBrowserContext();
 
     expect(queryClient.getQueryData(['public-internship-risk-labels', 'organisation-A'])).toEqual({ available: true });
+    expect(queryClient.getQueryData(['public-credential-verification', 'opaque-token'])).toEqual({ status: 'verified' });
     expect(queryClient.getQueryData(['student-profile'])).toBeUndefined();
     expect(queryClient.getQueryData(['unknown-public-looking-key'])).toBeUndefined();
     expect(queryClient.getMutationCache().getAll()).toEqual([]);

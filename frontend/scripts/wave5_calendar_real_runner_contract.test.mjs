@@ -41,4 +41,31 @@ describe('Wave 5 real runner cookie-authority boundary', () => {
     expect(mutant).not.toBe(RUNNER_SOURCE);
     expect(hasExactTrustedOrigin(mutant)).toBe(false);
   });
+
+  it('trusts the fixture certificate only behind the explicit self-signed opt-in', () => {
+    expect(RUNNER_SOURCE).toContain(
+      "const IGNORE_LOOPBACK_TLS = process.env.WAVE5_E2E_ALLOW_SELF_SIGNED_TLS === 'true';",
+    );
+    expect(RUNNER_SOURCE).toContain(
+      "const CHROMIUM_LAUNCH_ARGS = IGNORE_LOOPBACK_TLS\n  ? ['--ignore-certificate-errors']\n  : [];",
+    );
+    expect(RUNNER_SOURCE).toContain('args: CHROMIUM_LAUNCH_ARGS');
+    expect(RUNNER_SOURCE.match(/--ignore-certificate-errors/gu)).toHaveLength(1);
+  });
+
+  it('proves the shipped service worker owns the production page without filtering runtime errors', () => {
+    expect(RUNNER_SOURCE).toContain('async function waitForServiceWorkerControl(page)');
+    expect(RUNNER_SOURCE).toContain('navigator.serviceWorker.getRegistrations()');
+    expect(RUNNER_SOURCE).toContain('navigator.serviceWorker.controller');
+    expect(RUNNER_SOURCE).toContain("registration.active?.scriptURL).pathname === '/sw.js'");
+    const navigation = RUNNER_SOURCE.indexOf(
+      "await page.goto(new URL('/s-91', WEB).href, { waitUntil: 'domcontentloaded' });",
+    );
+    const worker = RUNNER_SOURCE.indexOf('await waitForServiceWorkerControl(page);', navigation);
+    const readiness = RUNNER_SOURCE.indexOf('await waitReady(page);', navigation);
+    expect(navigation).toBeGreaterThan(-1);
+    expect(worker).toBeGreaterThan(navigation);
+    expect(worker).toBeLessThan(readiness);
+    expect(RUNNER_SOURCE).not.toContain('An SSL certificate error occurred when fetching the script.');
+  });
 });

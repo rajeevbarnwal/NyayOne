@@ -816,6 +816,50 @@ describe('NYAY-5 browser release-gate source contract', () => {
     );
   });
 
+  it('waits for every visual screen to reach its asserted render-ready state', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const visualSource = runner.slice(
+      runner.indexOf('async function recordVisualContract'),
+      runner.indexOf('async function resetOtp'),
+    );
+    expect(visualSource).toContain(
+      "await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });",
+    );
+    expect(visualSource).toContain('await page.evaluate(() => document.fonts.ready);');
+  });
+
+  it('builds failed-run stdout diagnostics from static privacy-safe inventories only', async () => {
+    const contract = await import('./nyay5-profile-browser-contract.mjs');
+    const diagnostics = contract.summarizeNyay5BrowserFailure({
+      rows: EXPECTED_ASSERTIONS.map((name) => ({ name, pass: name !== 'runtime_chromium' })),
+      executions: [],
+      acceptanceExecutionCoverage: {
+        mapped: 61, missing: 2, skipped: 0, unknown: 0, unique: true,
+      },
+      failureClass: 'TimeoutError2',
+      failureStage: 'complete_profile',
+      failureCode: 'RUNTIME_ASSERTION_FAILED',
+      mobile: '9876543210',
+      session_token: 'opaque-private-session-token',
+    });
+
+    expect(diagnostics.failedAssertions).toEqual(['runtime_chromium']);
+    expect(diagnostics.invalidExecutionIds.length).toBeGreaterThan(0);
+    expect(diagnostics).toMatchObject({
+      failureClass: 'TimeoutError2',
+      failureStage: 'complete_profile',
+      failureCode: 'RUNTIME_ASSERTION_FAILED',
+      coverage: { mapped: 61, missing: 2, skipped: 0, unknown: 0, unique: true },
+    });
+    expect(contract.scanNyay5Evidence(diagnostics)).toEqual([]);
+    expect(JSON.stringify(diagnostics)).not.toContain('9876543210');
+    expect(JSON.stringify(diagnostics)).not.toContain('opaque-private-session-token');
+
+    const runner = readFileSync(RUNNER, 'utf8');
+    expect(runner).toContain('summarizeNyay5BrowserFailure');
+    expect(runner).toContain("diagnostics: report.status === 'FAIL'");
+  });
+
   it('captures selector evidence while the exact controls are still mounted', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     const completeSource = runner.slice(

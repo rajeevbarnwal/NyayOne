@@ -30,6 +30,7 @@ import {
   inspectVerificationObservation,
   scanNyay5Evidence,
   seededNyay5MutantResults,
+  summarizeNyay5BrowserFailure,
   summarizeNyay5Rows,
 } from './lib/nyay5-profile-browser-contract.mjs';
 
@@ -278,7 +279,9 @@ async function captureSafeScreenshot(page, name) {
 
 async function recordVisualContract(page, screenId) {
   const screen = page.locator(`[data-screen="${screenId}"]`).first();
-  await screen.waitFor();
+  await screen.waitFor({ state: 'visible' });
+  await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });
+  await page.evaluate(() => document.fonts.ready);
   const observation = await screen.evaluate((node) => {
     const normalizedFamily = (element) => getComputedStyle(element).fontFamily
       .replace(/["']/gu, '')
@@ -3490,6 +3493,8 @@ async function run() {
     total: report.total,
     passed: report.passed,
     failed: report.failed,
+    diagnostics: report.status === 'FAIL'
+      ? summarizeNyay5BrowserFailure(report) : null,
   })}\n`);
   if (report.status !== 'PASS') process.exitCode = 1;
 }

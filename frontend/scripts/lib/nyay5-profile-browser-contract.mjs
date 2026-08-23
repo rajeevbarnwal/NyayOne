@@ -233,6 +233,64 @@ export const NYAY5_SELECTOR_EXECUTION_IDS = Object.freeze([
   BROWSER('verification_distinct_from_completion'),
 ]);
 
+const NYAY5_REQUIRED_BROWSER_EXECUTION_IDS = Object.freeze([
+  ...new Set(
+    Object.values(NYAY5_ACCEPTANCE_EXECUTION_MAP)
+      .flat()
+      .filter((id) => id.startsWith('browser:')),
+  ),
+]);
+
+export function summarizeNyay5BrowserFailure(report) {
+  const rows = Array.isArray(report?.rows) ? report.rows : [];
+  const rowByName = new Map(rows.map((row) => [row?.name, row]));
+  const failedAssertions = NYAY5_ASSERTION_INVENTORY.filter(
+    (name) => rowByName.get(name)?.pass !== true,
+  );
+  const executions = Array.isArray(report?.executions) ? report.executions : [];
+  const executionById = new Map(executions.map((row) => [row?.id, row]));
+  const invalidExecutionIds = NYAY5_REQUIRED_BROWSER_EXECUTION_IDS.filter((id) => {
+    const row = executionById.get(id);
+    const selectorRequired = NYAY5_SELECTOR_EXECUTION_IDS.includes(id);
+    return row?.executed !== true
+      || row?.skipped !== false
+      || row?.pass !== true
+      || !Number.isSafeInteger(row?.evidenceCount)
+      || row.evidenceCount <= 0
+      || (selectorRequired && (
+        !Number.isSafeInteger(row?.selectorCount) || row.selectorCount <= 0
+      ));
+  });
+  const coverage = report?.acceptanceExecutionCoverage;
+  const safeCount = (value) => (
+    Number.isSafeInteger(value) && value >= 0 ? value : null
+  );
+  const safeFailureClass = typeof report?.failureClass === 'string'
+    && /^(?:Error|[A-Z][A-Za-z0-9]{0,30}Error[0-9]?)$/u.test(report.failureClass)
+    ? report.failureClass : null;
+  const safeFailureStage = typeof report?.failureStage === 'string'
+    && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/u.test(report.failureStage)
+    ? report.failureStage : null;
+  const safeFailureCode = typeof report?.failureCode === 'string'
+    && /^NYAY5_[A-Z0-9_]+$|^RUNTIME_ASSERTION_FAILED$/u.test(report.failureCode)
+    ? report.failureCode : null;
+
+  return {
+    failedAssertions,
+    invalidExecutionIds,
+    failureClass: safeFailureClass,
+    failureStage: safeFailureStage,
+    failureCode: safeFailureCode,
+    coverage: {
+      mapped: safeCount(coverage?.mapped),
+      missing: safeCount(coverage?.missing),
+      skipped: safeCount(coverage?.skipped),
+      unknown: safeCount(coverage?.unknown),
+      unique: typeof coverage?.unique === 'boolean' ? coverage.unique : null,
+    },
+  };
+}
+
 function inspectExecutionCoverage(executions, prefix = null) {
   const mappedIds = Object.keys(NYAY5_ACCEPTANCE_EXECUTION_MAP);
   const rows = Array.isArray(executions) ? executions : [];

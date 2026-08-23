@@ -116,7 +116,7 @@ PROFILE_SPECS: dict[str, tuple[tuple[str, str, str], ...]] = {
 INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
     "wave1-browser": (
         "rows", "area", 1467,
-        "eaee96c2f316fd1062ec6ff844b270c7f91786a6edfc7c2ca1b6d9233372cb5c",
+        "250d3429ae3056dc2b117e013196ee896c8d73b3e99dfc61d3ebd27ef66f8f65",
     ),
     "wave2-postgres": (
         "assertions", "id", 30,

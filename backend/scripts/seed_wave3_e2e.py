@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,7 +28,12 @@ AUTHORISATION_ID = uuid.UUID("00000000-0000-4000-8000-000000000255")
 def provision(session: Session) -> dict[str, int]:
     from app.core.crypto import active_key_version, encrypt, keyed_hash
     from app.models.credentials import CredentialIssuer, IssuerAuthorisation
-    from app.models.registration import StudentRegistration
+    from app.models.registration import (
+        Consent,
+        StudentProfile,
+        StudentRegistration,
+        StudentVerification,
+    )
     from scripts.seed_e2e_actors import provision as provision_common
 
     common = provision_common(session)
@@ -59,6 +65,7 @@ def provision(session: Session) -> dict[str, int]:
     # Reserved outside the registration E2E suite's 9000000001..0007 range.
     mobile = "9000000097"
     dob = "2001-01-02"
+    key_version = active_key_version()
     if registration is None:
         registration = StudentRegistration(
             id=REGISTRATION_ID,
@@ -70,7 +77,7 @@ def provision(session: Session) -> dict[str, int]:
             mobile_ct=encrypt(mobile),
             dob_hash=keyed_hash(dob),
             dob_ct=encrypt(dob),
-            key_version=active_key_version(),
+            key_version=key_version,
             institution_ref="National Law School of India University",
             status="active",
             is_minor=False,
@@ -86,7 +93,74 @@ def provision(session: Session) -> dict[str, int]:
         registration.mobile_ct = encrypt(mobile)
         registration.dob_hash = keyed_hash(dob)
         registration.dob_ct = encrypt(dob)
-        registration.key_version = active_key_version()
+        registration.key_version = key_version
+
+    # Migration 0021 backfills rows that predate the profile boundary, but this
+    # fixture is inserted after migrations on a clean CI database. Provision
+    # the same normalized graph as the production registration ceremony.
+    session.flush()
+    profile = session.scalar(
+        select(StudentProfile).where(
+            StudentProfile.registration_id == registration.id
+        )
+    )
+    created_profile = 0
+    if profile is None:
+        session.add(
+            StudentProfile(
+                registration_id=registration.id,
+                key_version=key_version,
+            )
+        )
+        created_profile = 1
+    else:
+        profile.key_version = key_version
+        profile.deleted_at = None
+
+    verification = session.scalar(
+        select(StudentVerification).where(
+            StudentVerification.registration_id == registration.id
+        )
+    )
+    created_verification = 0
+    if verification is None:
+        session.add(
+            StudentVerification(
+                registration_id=registration.id,
+                method="institutional_email",
+                status="pending",
+            )
+        )
+        created_verification = 1
+    else:
+        verification.method = "institutional_email"
+        verification.status = "pending"
+        verification.verified_email_hash = None
+        verification.deleted_at = None
+
+    consent = session.scalar(
+        select(Consent).where(
+            Consent.registration_id == registration.id,
+            Consent.purpose == "registration",
+        )
+    )
+    created_consent = 0
+    if consent is None:
+        session.add(
+            Consent(
+                registration_id=registration.id,
+                purpose="registration",
+                accepted=True,
+                policy_version="wave3-credential-e2e-v1",
+                accepted_at=datetime.now(timezone.utc),
+            )
+        )
+        created_consent = 1
+    else:
+        consent.accepted = True
+        consent.policy_version = "wave3-credential-e2e-v1"
+        consent.accepted_at = datetime.now(timezone.utc)
+        consent.deleted_at = None
 
     grant = session.get(IssuerAuthorisation, AUTHORISATION_ID)
     if grant is None:
@@ -122,6 +196,9 @@ def provision(session: Session) -> dict[str, int]:
         "common_schools": common["created_schools"],
         "created_issuer": created_issuer,
         "created_registration": created_registration,
+        "created_profile": created_profile,
+        "created_verification": created_verification,
+        "created_consent": created_consent,
         "created_authorisation": created_authorisation,
     }
 

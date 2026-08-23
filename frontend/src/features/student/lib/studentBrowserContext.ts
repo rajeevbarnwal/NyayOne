@@ -100,9 +100,12 @@ let transitionNonce = 0;
 /** @deprecated Import the NYAY-18 compatibility-boundary constant directly. */
 export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = MAX_LEGACY_STUDENT_KEYS_PER_PURGE_BATCH;
 
-// This projection is anonymous and contains only the server-approved public
-// aggregate. Every other query root remains actor-sensitive by default.
-const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);
+// These projections are anonymous and contain only server-approved public
+// aggregates. Every other query root remains actor-sensitive by default.
+const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set([
+  'public-credential-verification',
+  'public-internship-risk-labels',
+]);
 
 interface ObservedStudentActor {
   subject: string;
