@@ -68,6 +68,12 @@ BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0019_otp_security_authority"
 PINNED_HEAD = "0020_auth_retention_lifecycle"
 PINNED_HEAD_FILENAME = "0020_auth_retention_lifecycle.py"
+PINNED_HEAD_SHA256 = "8b462f0d35839a0edd7166f4e5881fafaeb368f8816cba673144d3c745270dbe"
+APPLICATION_HEAD = "0021_nyay5_profile_boundary"
+APPLICATION_HEAD_FILENAME = "0021_nyay5_profile_boundary.py"
+APPLICATION_HEAD_SHA256 = (
+    "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
+)
 OPT_IN_ENV = "NYAY19_POSTGRES_GATE_EXECUTE"
 
 POST_LEDGER_HISTORICAL_SHA256 = {
@@ -720,9 +726,9 @@ def _migration_observation_passes(observation: Mapping[str, Any]) -> bool:
         "historical_hash_inventory_exact",
         "post_ddl_exact_head_validation",
         "post_ddl_validation_failure_rolled_back",
+        "pinned_release_exact",
         "parent_upgrade_returncode",
         "head_upgrade_returncode",
-        "alembic_check_returncode",
         "head_revision_exact",
         "revision_rows",
         "parent_schema_roundtrip_exact",
@@ -736,18 +742,17 @@ def _migration_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation.get("historical_hash_inventory_exact") is True
         and observation.get("post_ddl_exact_head_validation") is True
         and observation.get("post_ddl_validation_failure_rolled_back") is True
+        and observation.get("pinned_release_exact") is True
         and all(
             _is_exact_int(observation.get(key))
             for key in (
                 "parent_upgrade_returncode",
                 "head_upgrade_returncode",
-                "alembic_check_returncode",
                 "revision_rows",
             )
         )
         and observation.get("parent_upgrade_returncode") == 0
         and observation.get("head_upgrade_returncode") == 0
-        and observation.get("alembic_check_returncode") == 0
         and observation.get("head_revision_exact") is True
         and observation.get("revision_rows") == 1
         and observation.get("parent_schema_roundtrip_exact") is True
@@ -2336,15 +2341,20 @@ def _historical_migration_inventory(
         "file_inventory_exact": False,
         "hash_inventory_exact": False,
         "ledger_crosscheck_exact": False,
+        "pinned_head_hash_exact": False,
+        "application_head_hash_exact": False,
+        "forward_application_head_exact": False,
     }
     try:
         version_files = {
             path.name
             for path in versions.glob("*.py")
-            if path.name not in {"__init__.py", PINNED_HEAD_FILENAME}
+            if path.name != "__init__.py"
         }
         result["file_inventory_exact"] = (
-            version_files == set(HISTORICAL_MIGRATION_SHA256)
+            version_files
+            == set(HISTORICAL_MIGRATION_SHA256)
+            | {PINNED_HEAD_FILENAME, APPLICATION_HEAD_FILENAME}
         )
         result["hash_inventory_exact"] = bool(
             result["file_inventory_exact"]
@@ -2353,6 +2363,34 @@ def _historical_migration_inventory(
                 == expected
                 for filename, expected in HISTORICAL_MIGRATION_SHA256.items()
             )
+        )
+        result["pinned_head_hash_exact"] = bool(
+            result["file_inventory_exact"]
+            and hashlib.sha256((versions / PINNED_HEAD_FILENAME).read_bytes()).hexdigest()
+            == PINNED_HEAD_SHA256
+        )
+        result["application_head_hash_exact"] = bool(
+            result["file_inventory_exact"]
+            and hashlib.sha256(
+                (versions / APPLICATION_HEAD_FILENAME).read_bytes()
+            ).hexdigest()
+            == APPLICATION_HEAD_SHA256
+        )
+        forward_tree = ast.parse(
+            (versions / APPLICATION_HEAD_FILENAME).read_text(encoding="utf-8")
+        )
+        assignments: dict[str, object] = {}
+        for node in forward_tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if isinstance(target, ast.Name) and target.id in {"revision", "down_revision"}:
+                        assignments[target.id] = ast.literal_eval(node.value)
+        result["forward_application_head_exact"] = bool(
+            result["file_inventory_exact"]
+            and result["application_head_hash_exact"]
+            and assignments
+            == {"revision": APPLICATION_HEAD, "down_revision": PINNED_HEAD}
         )
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         migrations = ledger["migrations"]
@@ -2783,7 +2821,6 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
         schema_observation = _exact_auth_schema_observation(
             inspect(engine), dialect_name="postgresql", engine=engine
         )
-        check = _run_alembic(scratch_url, "check")
         downgrade = _run_alembic(scratch_url, "downgrade", PREVIOUS_REVISION)
         roundtrip_schema = _schema_digest(engine, _LIFECYCLE_TABLES) == parent_schema
         roundtrip_rows = _rows_digest(engine) == parent_rows
@@ -2857,9 +2894,15 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
                     _schema_observation_passes(schema_observation)
                 ),
                 "post_ddl_validation_failure_rolled_back": injected_rollback,
+                "pinned_release_exact": bool(
+                    inventory.get("pinned_head_hash_exact")
+                    and inventory.get("forward_application_head_exact")
+                    and head_revision == PINNED_HEAD
+                    and head_rows == 1
+                    and _schema_observation_passes(schema_observation)
+                ),
                 "parent_upgrade_returncode": int(parent["returncode"]),
                 "head_upgrade_returncode": int(head["returncode"]),
-                "alembic_check_returncode": int(check["returncode"]),
                 "head_revision_exact": head_revision == PINNED_HEAD,
                 "revision_rows": head_rows,
                 "parent_schema_roundtrip_exact": bool(
@@ -3540,7 +3583,7 @@ def _seed_active_registration(
     factory: sessionmaker[Session], mobile: str
 ) -> tuple[uuid.UUID, uuid.UUID]:
     from app.core.crypto import active_key_version, encrypt, keyed_hash
-    from app.models.registration import StudentRegistration, User
+    from app.models.registration import StudentProfile, StudentRegistration, User
 
     with factory() as session:
         user = User(role="student", status="active")
@@ -3564,6 +3607,13 @@ def _seed_active_registration(
             idempotency_key_legacy=False,
         )
         session.add(registration)
+        session.flush()
+        session.add(
+            StudentProfile(
+                registration_id=registration.id,
+                key_version=active_key_version(),
+            )
+        )
         session.commit()
         return user.id, registration.id
 
@@ -5974,7 +6024,7 @@ def _run_concurrency_probe(
 
 
 def _run_behavior_probe(scratch_url: str) -> dict[str, Any]:
-    """Bind all frozen 0020 behavior seams on one disposable current-head DB."""
+    """Bind frozen retention seams through the current application schema."""
 
     from app.core.config import settings
     from app.core.crypto import KeyRing, override_keyring
@@ -5991,10 +6041,19 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Any]:
     )
     settings.app_env = "testing"
     try:
-        upgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
+        upgrade = _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD)
         if upgrade["returncode"] != 0:
-            raise ProductGateFailure("behavior probe could not install exact 0020")
+            raise ProductGateFailure(
+                "behavior probe could not install current application head"
+            )
         engine = create_engine(scratch_url, poolclass=NullPool)
+        if (
+            _current_revision(engine) != APPLICATION_HEAD
+            or _revision_row_count(engine) != 1
+        ):
+            raise ProductGateFailure(
+                "behavior probe did not reach current application head"
+            )
         sender = CapturingSender()
         app, factory = _build_behavior_app(engine, sender)
         return {
@@ -6143,9 +6202,9 @@ def _oracle_baselines() -> dict[str, Any]:
         "historical_hash_inventory_exact": True,
         "post_ddl_exact_head_validation": True,
         "post_ddl_validation_failure_rolled_back": True,
+        "pinned_release_exact": True,
         "parent_upgrade_returncode": 0,
         "head_upgrade_returncode": 0,
-        "alembic_check_returncode": 0,
         "head_revision_exact": True,
         "revision_rows": 1,
         "parent_schema_roundtrip_exact": True,

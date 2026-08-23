@@ -9,6 +9,7 @@ import {
   getPublicCredentialVerification,
   isRetryableCredentialsError,
   listCredentials,
+  verifyCredential,
   uploadCredentialEvidence,
 } from './credentialsApi';
 
@@ -139,6 +140,21 @@ describe('credential adapter wire contract', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
   });
+
+  it('uses only the current HttpOnly session for student and issuer authority', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [], total: 0, page: 1, page_size: 20 }))
+      .mockResolvedValueOnce(response({ status: 'verified', version: 4 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listCredentials();
+    await verifyCredential(WIRE.id, 3, 'issuer-review-1');
+
+    for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+      expect(init.credentials).toBe('include');
+    }
+  });
 });
 
 describe('credential query retry boundary', () => {
@@ -159,7 +175,10 @@ describe('credential query retry boundary', () => {
   });
 
   it('retries network/5xx at most once', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(response({
+    // A real fetch produces a fresh Response for each retry. Reusing a single
+    // body would make the second lease-observation clone fail before the typed
+    // adapter can classify the second 503.
+    const fetchMock = vi.fn().mockImplementation(async () => response({
       detail: { code: 'internal_error' },
     }, 503));
     vi.stubGlobal('fetch', fetchMock);

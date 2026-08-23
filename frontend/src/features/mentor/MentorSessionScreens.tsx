@@ -1,5 +1,5 @@
 /**
- * M-01 `mentor/completion` — the AUTHORISED completion surface (matrix D4).
+ * M-01 `mentor/completion` — Sprint 1 ADMIN-ONLY completion surface (matrix D4).
  *
  * Design read (legalsaathi-ui-design STEP 0):
  *   * Direction — the locked Option C2 tutoring scope. Every colour, radius and
@@ -9,18 +9,20 @@
  *     TOKEN_COMPONENT_MOTION_SPEC §4).
  *   * Dials — density calm, motion still, variance safe. An authority surface
  *     that moves people's attendance records should be sober, not lively.
- *   * Screen intent — one job: a mentor or administrator records completion for
- *     a session they own. One primary action per row, and nothing else.
+ *   * Screen intent — one job: an administrator records completion on a
+ *     mentor's behalf. One primary action per row, and nothing else.
  *
  * Why this screen exists (independent-QA defect D2). Recording completion is a
- * tutor/admin action on the server (`attendance.RECORDER_ROLES`), so the STUDENT
+ * non-student action on the server, so the STUDENT
  * screen S-35 must not render or dispatch it — a control that knowingly fires a
  * request the server refuses with FORBIDDEN is an unauthorised action exposed in
  * the production student experience, not negative testing. The action lives here
- * instead, behind `MentorGuard`, and nowhere else in the app.
+ * instead, behind an administrator-only `MentorGuard`, and nowhere else in the app.
+ * The lawyer/tutor session ceremony is explicitly deferred; this screen does
+ * not infer tutor authority from lawyer verification or any browser claim.
  *
- *   GET  /api/v1/tutoring/sessions            the caller's OWN sessions (server-scoped)
- *   POST /api/v1/tutoring/sessions/{id}/complete   D4, tutor/admin, after the end
+ *   GET  /api/v1/tutoring/sessions            administrator-scoped list
+ *   POST /api/v1/tutoring/sessions/{id}/complete   D4, called here only as admin
  *
  * The client gate below (ended? already recorded?) mirrors the server rule so
  * the reader is not offered a doomed action; it never DECIDES it. The server
@@ -28,20 +30,23 @@
  * `FORBIDDEN` or a non-enumerating `NOT_FOUND`, and that verdict is final.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../app/authContext';
-import { mentorActorFromAuth, mentorRouteDenial } from './lib/mentorAuth';
+import {
+  mentorActorFromAuth,
+  mentorRouteDenial,
+  type MentorAdminActor,
+} from './lib/mentorAuth';
 import {
   completeSession,
   listTutoringSessions,
   tutoringKeys,
   tutoringRetry,
   type AttendanceRecord,
-  type TutoringActor,
   type TutoringSession,
 } from '../student/lib/tutoringApi';
 import { durationMinutes, slotTimeLabels } from '../student/lib/tutoringRules';
+import { useStudentMutation as useMutation } from '../student/lib/useStudentMutation';
 import {
   Banner,
   Chip,
@@ -64,10 +69,10 @@ export const COMPLETABLE_STATUSES = ['confirmed', 'rescheduled'];
 
 /**
  * The ONE mutation this surface may dispatch, exported so a test can prove the
- * control is wired to the authorised call — and that the call carries a
- * tutor/admin actor rather than the student dev-stub claims.
+ * control is wired to the authorised call — and that the call can carry only
+ * an administrator actor from the current server session.
  */
-export function completionMutationOptions(actor: TutoringActor) {
+export function completionMutationOptions(actor: MentorAdminActor) {
   return {
     mutationFn: (sessionId: string): Promise<AttendanceRecord> =>
       completeSession(sessionId, actor),
@@ -112,7 +117,7 @@ export function completionOffered(
  * ========================================================================== */
 
 /**
- * Denies anonymous / student / unverified actors BEFORE any session data or
+ * Denies every non-administrator actor BEFORE any session data or
  * completion control mounts. Children are not rendered when denied, so there is
  * no hidden, disabled or flag-gated copy of the action anywhere in the tree.
  */
@@ -123,36 +128,32 @@ export function MentorGuard({ children }: { children: ReactNode }) {
   return <MentorDenied denial={denial} />;
 }
 
-/** The denial surface: an explanation and a way in, never a session and never an action. */
+/** The denial surface: an explanation, never a session and never an action. */
 export function MentorDenied({ denial }: { denial: string }) {
   return (
     <TutoringScreen screenId={MENTOR_COMPLETION_SCREEN_ID}>
       <div>
-        <div className="tt-eyebrow">Restricted · mentor workspace</div>
+        <div className="tt-eyebrow">Restricted · administrator workspace</div>
         <h1 className="tt-h tt-arrival" style={{ marginTop: '4px', fontSize: '19px' }}>
-          Mentor sign-in required
+          Administrator access required
         </h1>
       </div>
       <Banner
         tone="warn"
         title={denial}
-        detail="Recording completion for a tutoring session belongs to the mentor who taught it or to an administrator. No session, and no completion control, is shown here until you are signed in as one."
+        detail="M-01 is administrator-only in Sprint 1. Student, lawyer and tutor sessions receive no session data and no completion or issuer control. The separate server-issued tutor ceremony is deferred."
         code="FORBIDDEN"
       />
-      <Link className="tt-btn tt-btn--block" to="/auth/lawyer">
-        <Ic name="lock" />
-        Go to mentor sign-in and verification
-      </Link>
       <p className="tt-svr">
-        server-authoritative: role and ownership are re-checked on every request · this screen
-        only decides what to show
+        server-authoritative: administrator role is re-checked on every request · this screen
+        grants no tutor or issuer authority
       </p>
     </TutoringScreen>
   );
 }
 
 /* ========================================================================== *
- * M-01 — the mentor's own sessions, with the completion action
+ * M-01 — administrator-scoped sessions, with the completion action
  * ========================================================================== */
 
 export function MentorSessionCompletion() {
@@ -161,11 +162,11 @@ export function MentorSessionCompletion() {
   useRouteArrival(`${MENTOR_COMPLETION_SCREEN_ID}:${actor?.role ?? 'denied'}`);
   // Defence in depth: the route is already wrapped in MentorGuard, and the
   // screen refuses to compose an actor of its own if it is ever mounted bare.
-  if (!actor) return <MentorDenied denial={mentorRouteDenial(auth) ?? 'Mentor sign-in required'} />;
+  if (!actor) return <MentorDenied denial={mentorRouteDenial(auth) ?? 'Administrator access required'} />;
   return <MentorCompletionList actor={actor} />;
 }
 
-function MentorCompletionList({ actor }: { actor: TutoringActor }) {
+function MentorCompletionList({ actor }: { actor: MentorAdminActor }) {
   const [announceRegion, announce] = useAnnouncer();
   const [recorded, setRecorded] = useState<AttendanceRecord | null>(null);
   const params = useMemo(() => ({ status: COMPLETABLE_STATUSES, limit: 50 }), []);
@@ -194,13 +195,11 @@ function MentorCompletionList({ actor }: { actor: TutoringActor }) {
       {announceRegion}
       <div>
         <div className="tt-eyebrow">
-          {actor.role === 'admin' ? 'Administrator · authorised actions' : 'Mentor · your calendar'}
+          Administrator · authorised actions
         </div>
         <h1 className="tt-h tt-arrival">Record completion</h1>
         <p className="tt-p" style={{ marginTop: '5px' }}>
-          {actor.role === 'admin'
-            ? 'Sessions you may close on a mentor’s behalf. Recording completion opens the student’s confirm or dispute step.'
-            : 'Sessions on your own calendar. Once you record completion, your student can confirm it or open a dispute.'}
+          Sessions you may close on a mentor’s behalf. Recording completion opens the student’s confirm or dispute step.
         </p>
       </div>
 
@@ -240,7 +239,7 @@ function MentorCompletionList({ actor }: { actor: TutoringActor }) {
       ))}
 
       <Disclosure summary="What the server decides here" icon="info">
-        <Kv label="Who may record">Your session, or an administrator</Kv>
+        <Kv label="Who may record">An administrator in Sprint 1</Kv>
         <Kv label="Before the scheduled end">ATTENDANCE_TOO_EARLY</Kv>
         <Kv label="Already recorded">ATTENDANCE_STATE_INVALID</Kv>
         <Kv label="Not your session">NOT_FOUND</Kv>
@@ -251,7 +250,7 @@ function MentorCompletionList({ actor }: { actor: TutoringActor }) {
       </Disclosure>
 
       <p className="tt-svr">
-        server-authoritative: this list is scoped to your account · completion, its timing and its
+        server-authoritative: this list is scoped to the administrator session · completion, its timing and its
         provenance are all server decisions
       </p>
     </TutoringScreen>

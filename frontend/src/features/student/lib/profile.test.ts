@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   EMPTY_PROFILE,
   validateStep,
-  isStepComplete,
-  nextIncompleteStep,
-  isProfileComplete,
-  profileTier,
   INSTITUTIONAL_EMAIL_RE,
   INSTITUTIONAL_EMAIL_MAX_LENGTH,
   institutionalEmailError,
@@ -53,14 +49,13 @@ describe('profile validation + completeness (SAATHI-55)', () => {
     expect(validateStep(1, d).dateOfBirth).toContain('not in the future');
   });
 
-  it('reports the next incomplete step for resume (S-13)', () => {
+  it('validates each draft section without deriving server routing', () => {
     const d = { ...EMPTY_PROFILE, interests: [] };
-    expect(nextIncompleteStep(d)).toBe(1);
+    expect(validateStep(1, d)).toMatchObject({ fullName: expect.any(String), dateOfBirth: expect.any(String) });
     d.fullName = 'Aditi Nair';
     d.dateOfBirth = '2004-03-14';
     d.preferredLanguage = 'English';
-    expect(isStepComplete(1, d)).toBe(true);
-    expect(nextIncompleteStep(d)).toBe(2);
+    expect(validateStep(1, d)).toEqual({});
   });
 
   it('treats the optional Bar number as never required', () => {
@@ -69,10 +64,12 @@ describe('profile validation + completeness (SAATHI-55)', () => {
     expect(Object.keys(validateStep(2, d))).toHaveLength(0);
   });
 
-  it('marks a full draft complete and awards the Verified Student tier', () => {
+  it('validates preferences without awarding a client-side tier', () => {
     const d = completeDraft();
-    expect(isProfileComplete(d)).toBe(true);
-    expect(profileTier(d)).toBe('verified_student');
-    expect(profileTier(EMPTY_PROFILE)).toBe('incomplete');
+    expect(validateStep(3, d)).toEqual({});
+    expect(validateStep(3, { ...d, interests: [], careerGoal: '' })).toMatchObject({
+      interests: expect.any(String),
+      careerGoal: expect.any(String),
+    });
   });
 });

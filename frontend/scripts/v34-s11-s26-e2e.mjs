@@ -163,9 +163,9 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
       return json(200, {
         authenticated: true,
         actor: {
-          sub: 'student-browser-gate',
+          sub: '00000000-0000-4000-8000-000000002701',
           roles: ['student'],
-          student_profile_id: 'profile-browser-gate',
+          student_profile_id: '00000000-0000-4000-8000-000000002702',
           student_verification: 'verified',
           is_minor: false,
           consent_state: ['registration'],

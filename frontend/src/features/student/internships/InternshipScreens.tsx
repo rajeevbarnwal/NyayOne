@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { StudentScreen, DpdpFootnote } from '../components';
 import { useAuth } from '../../../app/authContext';

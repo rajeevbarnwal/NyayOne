@@ -1,0 +1,143 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+
+describe('NYAY-5 server-authoritative frontend boundary', () => {
+  it('does not derive persisted profile state or completion from the memory-only draft', () => {
+    const screens = source('src/features/student/profile/ProfileScreens.tsx');
+    const dashboard = source('src/features/student/dashboard/Dashboard.tsx');
+    expect(screens).not.toContain('seedResumeDraft');
+    expect(screens).not.toContain('profileTier(');
+    expect(dashboard).not.toContain('getProfileDraft');
+    expect(dashboard).not.toContain('profileCompletionPct(');
+  });
+
+  it('retires every legacy draft-derived routing, completion, and tier authority seam', () => {
+    const profile = source('src/features/student/lib/profile.ts');
+    const profileStore = source('src/features/student/lib/profileStore.ts');
+    const dashboard = source('src/features/student/lib/dashboard.ts');
+    const authScreens = source('src/features/student/auth/AuthScreens.tsx');
+    expect(profile).not.toContain('export function isStepComplete');
+    expect(profile).not.toContain('export function nextIncompleteStep');
+    expect(profile).not.toContain('export function isProfileComplete');
+    expect(profile).not.toContain('export function profileTier');
+    expect(profile).not.toContain('verified_student');
+    expect(profileStore).not.toContain('export function seedResumeDraft');
+    expect(profileStore).not.toContain("fullName: 'Student'");
+    expect(dashboard).not.toContain('export function profileCompletionPct');
+    expect(authScreens).not.toContain('updateProfileDraft');
+  });
+
+  it('removes fabricated profile percentages and verification labels', () => {
+    const v34 = source('src/features/student/auth/V34Screens.tsx');
+    const screens = source('src/features/student/profile/ProfileScreens.tsx');
+    expect(v34).not.toContain('<b className="v34-stat">82%</b>');
+    expect(screens).not.toContain("return isProfileComplete(d) ? 'verified_student' : 'incomplete'");
+  });
+
+  it('keeps a form bound to its hydrated version after a conflict refresh', () => {
+    const screens = source('src/features/student/profile/ProfileScreens.tsx');
+    const conflictDraftStore = source('src/features/student/profile/profileConflictDraftStore.ts');
+    const v34 = source('src/features/student/auth/V34Screens.tsx');
+    const studentMutation = source('src/features/student/lib/useStudentMutation.ts');
+    expect(screens).not.toContain('expectedProfileVersion: query.data.profileVersion');
+    expect(screens.match(/expectedProfileVersion: hydratedVersion/gu)).toHaveLength(3);
+    expect(screens.match(/setHydratedVersion\(query\.data\.profileVersion\)/gu)).toHaveLength(3);
+    expect(screens.match(/const conflictReview = useProfileConflictReview/gu)).toHaveLength(3);
+    expect(screens.match(/conflictReview\.capture\(error\)/gu)).toHaveLength(3);
+    expect(screens).toContain('setHydratedVersion(conflict.profileVersion);');
+    expect(screens).toContain('Current server version {conflict.profileVersion}');
+    expect(screens).toContain('Your retained draft:');
+    expect(screens).toContain('Use current version and review my draft');
+    expect(screens).toContain('Nothing will be overwritten until you explicitly adopt');
+    expect(screens.match(/disabled=\{save\.isPending \|\| Boolean\(conflictReview\.conflict\)\}/gu)).toHaveLength(6);
+    expect(screens.match(/preserveProfileConflictDraft\(/gu)).toHaveLength(2);
+    expect(screens).toContain("takeProfileConflictDraft('academic')");
+    expect(screens).toContain("takeProfileConflictDraft('interests')");
+    expect(screens.match(/data-testid="profile-conflict-draft-restored"/gu)).toHaveLength(2);
+    expect(conflictDraftStore).not.toMatch(/localStorage|sessionStorage|indexedDB|caches\./u);
+    expect(screens.match(/isStudentMutationCancellation\(error\)/gu)).toHaveLength(3);
+    expect(v34.match(/isStudentMutationCancellation\(error\)/gu)).toHaveLength(1);
+    expect(studentMutation).toContain('settleStudentMutationForCaller');
+  });
+
+  it('routes every profile surface through the canonical projection adapter', () => {
+    for (const path of [
+      'src/features/student/auth/V34Screens.tsx',
+      'src/features/student/profile/ProfileScreens.tsx',
+      'src/features/student/dashboard/Dashboard.tsx',
+    ]) {
+      expect(source(path), path).toContain('profileApi');
+    }
+
+    const settingsApi = source('src/features/student/lib/settingsApi.ts');
+    expect(settingsApi).not.toContain("'/api/v1/student/profile'");
+    expect(settingsApi).not.toContain('export async function getStudentProfile');
+    expect(settingsApi).not.toContain('export async function updateStudentProfile');
+  });
+
+  it('keeps S-01 pending until server session discovery settles', () => {
+    const v34 = source('src/features/student/auth/V34Screens.tsx');
+    const splash = v34.slice(
+      v34.indexOf('export function V34Splash'),
+      v34.indexOf('const ONBOARDING ='),
+    );
+    expect(splash).toContain('useStudentSession');
+    expect(splash).not.toContain('setTimeout');
+    expect(splash).not.toContain('auth.isAuthenticated');
+  });
+
+  it('keeps the NYAY-2 and NYAY-19 memory teardown literals intact', () => {
+    const boundary = source('src/features/student/lib/studentBrowserContext.ts');
+    const hooks = source('src/features/student/profile/profileHooks.ts');
+    expect(boundary).toContain('resetProfileDraft();');
+    expect(boundary).toContain('clearProfileConflictDraft();');
+    expect(boundary).toContain('clearActorSensitiveQueryState();');
+    expect(boundary).toContain('studentBrowserContextGeneration += 1;');
+    expect(boundary).toContain('export function captureStudentContextFence');
+    expect(boundary).toContain('export function isStudentContextFenceCurrent');
+    expect(hooks).toContain('onMutate: captureStudentContextFence');
+    expect(hooks).toContain('return useStudentMutation(createProjectionMutationOptions');
+    expect(hooks.match(/isStudentContextFenceCurrent\(fence\)/gu)).toHaveLength(2);
+    expect(boundary).toContain("const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);");
+  });
+
+  it('projects S-15/S-16 status from the canonical query and sends no email selector', () => {
+    const authScreens = source('src/features/student/auth/AuthScreens.tsx');
+    const registrationApi = source('src/features/student/lib/registrationApi.ts');
+    const profileApi = source('src/features/student/lib/profileApi.ts');
+    expect(authScreens).toContain('useStudentProfileProjection');
+    expect(authScreens).not.toContain('auth.isMinor');
+    expect(authScreens).toContain('useRequestInstitutionalEmailVerification');
+    expect(authScreens).not.toContain('Verification link sent');
+    expect(registrationApi).not.toContain('requestInstitutionalEmailVerification');
+    expect(profileApi).toContain('export async function requestInstitutionalEmailVerification');
+    expect(registrationApi).toMatch(/saveAcademicProfile[\s\S]*getStudentProfileProjection[\s\S]*updateAcademicProfile/u);
+  });
+
+  it('keeps S-08 registration limited to core identity, mobile, DOB, and consent', () => {
+    const v34 = source('src/features/student/auth/V34Screens.tsx');
+    const registrationApi = source('src/features/student/lib/registrationApi.ts');
+    const registerScreen = v34.slice(
+      v34.indexOf('export function V34Register'),
+      v34.indexOf('export function V34OtpVerify'),
+    );
+    const registerInput = registrationApi.slice(
+      registrationApi.indexOf('export interface RegisterStudentInput'),
+      registrationApi.indexOf('export interface AcademicProfileInput'),
+    );
+    const registerRequest = registrationApi.slice(
+      registrationApi.indexOf('export async function registerStudent'),
+      registrationApi.indexOf('export async function verifyStudentOtp'),
+    );
+    expect(registerScreen).not.toContain('updateProfileDraft');
+    expect(registerScreen).not.toContain('INSTITUTIONAL EMAIL');
+    expect(registerScreen).not.toContain('COLLEGE OR UNIVERSITY');
+    expect(registerScreen).not.toContain('YEAR OF STUDY');
+    expect(registerScreen).not.toContain('BAR ENROLMENT');
+    expect(registerInput).not.toMatch(/college\??:/u);
+    expect(registerRequest).not.toMatch(/college:\s*input\.college/u);
+  });
+});

@@ -7,11 +7,25 @@ import {
 } from './registrationAttemptStore';
 import {
   STUDENT_AUTH_CHANGED_EVENT,
+  type StudentAuthTransition,
   clearStudentBrowserContext,
+  finishStudentAuthTransition,
   notifyStudentAuthChanged,
-  observeStudentSessionActor,
   retireLegacyStudentRegistrationState,
+  startStudentAuthTransition,
 } from './studentBrowserContext';
+import {
+  getStudentProfileProjection,
+  parseStudentProfileProjection,
+  updateAcademicProfile,
+  type StudentProfileProjection,
+} from './profileApi';
+import {
+  clearProfileReauthHandoff,
+  resolveProfileReauthActor,
+} from '../profile/profileReauthHandoff';
+
+export const STUDENT_SESSION_TIMEOUT_MS = 10_000;
 
 // OTP-flow correlation is exclusively server-owned.  The browser receives only
 // an HttpOnly cookie and relative, display-safe state from GET /otp/state.  In
@@ -29,6 +43,10 @@ export interface OtpFlowState {
   resendInSeconds: number | null;
   lockedForSeconds: number | null;
   resendAllowed: boolean;
+}
+
+export interface OtpVerificationResult extends OtpFlowState {
+  onboarding: StudentProfileProjection;
 }
 
 interface OtpFlowStateWire {
@@ -53,15 +71,50 @@ const OTP_FLOW_STATE_WIRE_KEYS = [
   'status',
 ] as const;
 
+const OTP_VERIFICATION_WIRE_KEYS = [
+  'attempts_left',
+  'destination_masked',
+  'expires_in_seconds',
+  'locked_for_seconds',
+  'onboarding',
+  'purpose',
+  'resend_allowed',
+  'resend_in_seconds',
+  'status',
+] as const;
+
 export interface RegisterStudentInput {
   firstName: string;
   middleName: string | null;
   lastName: string;
   mobile: string;
   dob: string;
-  policyVersion: string;
-  college?: string;
+  termsAccepted: boolean;
+  termsVersion: string;
+  privacyNoticeAcknowledged: boolean;
+  privacyNoticeVersion: string;
 }
+
+export interface RegistrationStartProjection {
+  status: 'accepted';
+  next: 'otp';
+  expiresInSeconds: number;
+  resendAfterSeconds: number;
+}
+
+interface RegistrationStartWire {
+  status: 'accepted';
+  next: 'otp';
+  expires_in_seconds: number;
+  resend_after_seconds: number;
+}
+
+const REGISTRATION_START_WIRE_KEYS = [
+  'expires_in_seconds',
+  'next',
+  'resend_after_seconds',
+  'status',
+] as const;
 
 export interface AcademicProfileInput {
   college: string;
@@ -155,7 +208,7 @@ function mapOtpFlowState(value: OtpFlowStateWire): OtpFlowState {
 async function jsonRequest<T>(
   path: string,
   init: RequestInit,
-  lifecycle: { notifyAuthChanged?: boolean } = {},
+  lifecycle: { notifyAuthChanged?: boolean; authTransition?: StudentAuthTransition } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
@@ -217,18 +270,80 @@ function requireOtpFlowState(result: unknown): OtpFlowState {
   return mapOtpFlowState(result);
 }
 
+function requireOtpVerificationResult(
+  result: unknown,
+  expectedPurpose: 'login' | 'signup',
+): OtpVerificationResult {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new RegistrationApiError(502, 'invalid_otp_verification_projection');
+  }
+  const record = result as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== OTP_VERIFICATION_WIRE_KEYS.length
+    || !keys.every((key, index) => key === OTP_VERIFICATION_WIRE_KEYS[index])
+  ) {
+    throw new RegistrationApiError(502, 'invalid_otp_verification_projection');
+  }
+  const { onboarding, ...flow } = record;
+  if (
+    !isOtpFlowStateWire(flow)
+    || flow.status !== 'authenticated'
+    || flow.purpose !== expectedPurpose
+  ) {
+    throw new RegistrationApiError(502, 'invalid_otp_verification_projection');
+  }
+  try {
+    return {
+      ...mapOtpFlowState(flow),
+      onboarding: parseStudentProfileProjection(onboarding),
+    };
+  } catch {
+    throw new RegistrationApiError(502, 'invalid_otp_verification_projection');
+  }
+}
+
+function requireRegistrationStartProjection(result: unknown): RegistrationStartProjection {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new RegistrationApiError(502, 'invalid_registration_start_projection');
+  }
+  const wire = result as Partial<RegistrationStartWire> & Record<string, unknown>;
+  const keys = Object.keys(wire).sort();
+  const exact = keys.length === REGISTRATION_START_WIRE_KEYS.length
+    && keys.every((key, index) => key === REGISTRATION_START_WIRE_KEYS[index]);
+  if (
+    !exact
+    || wire.status !== 'accepted'
+    || wire.next !== 'otp'
+    || !Number.isSafeInteger(wire.expires_in_seconds)
+    || Number(wire.expires_in_seconds) <= 0
+    || !Number.isSafeInteger(wire.resend_after_seconds)
+    || Number(wire.resend_after_seconds) < 0
+  ) {
+    throw new RegistrationApiError(502, 'invalid_registration_start_projection');
+  }
+  return {
+    status: 'accepted',
+    next: 'otp',
+    expiresInSeconds: Number(wire.expires_in_seconds),
+    resendAfterSeconds: Number(wire.resend_after_seconds),
+  };
+}
+
 export async function registerStudent(
   input: RegisterStudentInput,
   idempotencyKey?: string,
-): Promise<OtpFlowState> {
+): Promise<RegistrationStartProjection> {
   const body = JSON.stringify({
     first_name: input.firstName,
     middle_name: input.middleName,
     last_name: input.lastName,
     mobile: input.mobile,
     dob: input.dob,
-    college: input.college || undefined,
-    consent: { accepted: true, policy_version: input.policyVersion },
+    terms_accepted: input.termsAccepted,
+    terms_version: input.termsVersion,
+    privacy_notice_acknowledged: input.privacyNoticeAcknowledged,
+    privacy_notice_version: input.privacyNoticeVersion,
   });
   const explicitKey = idempotencyKey !== undefined;
   if (!explicitKey && getRegistrationAttempt()?.body !== body) {
@@ -248,7 +363,7 @@ export async function registerStudent(
     if (!explicitKey && getRegistrationAttempt()?.key === attemptKey) {
       clearRegistrationAttempt();
     }
-    return requireOtpFlowState(result);
+    return requireRegistrationStartProjection(result);
   } catch (error) {
     // Transport failures retain the same page-memory key so an uncertain
     // request can replay safely. A typed terminal outcome is known and the
@@ -268,12 +383,14 @@ export async function registerStudent(
 
 export async function verifyStudentOtp(
   code: string,
-): Promise<OtpFlowState> {
-  const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/verify', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
+): Promise<OtpVerificationResult> {
+  return withStudentAuthTransition(async (transition) => {
+    const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }, { notifyAuthChanged: false, authTransition: transition });
+    return requireOtpVerificationResult(result, 'signup');
   });
-  return requireOtpFlowState(result);
 }
 
 export async function resendStudentOtp(): Promise<OtpFlowState> {
@@ -287,26 +404,14 @@ export async function resendStudentOtp(): Promise<OtpFlowState> {
 export async function saveAcademicProfile(
   input: AcademicProfileInput,
 ): Promise<void> {
-  await jsonRequest('/api/v1/auth/student/profile', {
-    method: 'PATCH',
-    body: JSON.stringify({
-      college: input.college,
-      year_of_study: input.yearOfStudy,
-      enrolment_number: input.enrolmentNumber,
-      institutional_email: input.institutionalEmail,
-      bar_enrolment_number: input.barEnrolmentNumber || null,
-    }),
-  });
-}
-
-export async function requestInstitutionalEmailVerification(
-  institutionalEmail: string,
-): Promise<{ status: string }> {
-  return jsonRequest('/api/v1/auth/student/verification/email/request', {
-    method: 'POST',
-    body: JSON.stringify({
-      institutional_email: institutionalEmail.trim(),
-    }),
+  const current = await getStudentProfileProjection();
+  await updateAcademicProfile({
+    expectedProfileVersion: current.profileVersion,
+    college: input.college,
+    yearOfStudy: input.yearOfStudy,
+    enrolmentNumber: input.enrolmentNumber,
+    institutionalEmail: input.institutionalEmail || null,
+    barEnrolmentNumber: input.barEnrolmentNumber || null,
   });
 }
 
@@ -344,50 +449,129 @@ export async function startLoginOtp(mobile: string): Promise<OtpFlowState> {
   return requireOtpFlowState(result);
 }
 
-export async function verifyLoginOtp(code: string): Promise<OtpFlowState> {
-  const result = await jsonRequest<unknown>('/api/v1/auth/student/login/otp/verify', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-  const state = requireOtpFlowState(result);
-  if (state.status === 'authenticated' && state.purpose === 'login') {
-    // Clear actor A before the login UI publishes actor B via its auth event.
-    clearStudentBrowserContext();
+export async function verifyLoginOtp(code: string): Promise<OtpVerificationResult> {
+  try {
+    return await withStudentAuthTransition(async (transition) => {
+      const result = await jsonRequest<unknown>('/api/v1/auth/student/login/otp/verify', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }, { notifyAuthChanged: false, authTransition: transition });
+      return requireOtpVerificationResult(result, 'login');
+    }, {
+      preserveProfileReauthHandoff: true,
+    });
+  } catch (error) {
+    clearProfileReauthHandoff();
+    throw error;
   }
-  return state;
 }
 
-export async function getStudentSession(): Promise<StudentSessionActor | null> {
-  const result = await jsonRequest<{
-    authenticated: boolean;
-    actor: StudentSessionActor | null;
-  }>('/api/v1/auth/student/session', { method: 'GET' }, { notifyAuthChanged: false });
-  if (result.authenticated !== true || !isStudentSessionActor(result.actor)) {
-    clearStudentBrowserContext();
+export async function getStudentSession(
+  lifecycle: { authTransition?: StudentAuthTransition } = {},
+): Promise<StudentSessionActor | null> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort('session_unavailable');
+  }, STUDENT_SESSION_TIMEOUT_MS);
+  let result: unknown;
+  try {
+    result = await jsonRequest<{
+      authenticated: boolean;
+      actor: StudentSessionActor | null;
+    }>('/api/v1/auth/student/session', { method: 'GET', signal: controller.signal }, {
+      notifyAuthChanged: false,
+      authTransition: lifecycle.authTransition,
+    });
+  } catch (error) {
+    if (timedOut) throw new RegistrationApiError(0, 'session_unavailable');
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+  if (isAnonymousStudentSessionProjection(result)) {
     return null;
   }
-  retireLegacyStudentRegistrationState();
-  observeStudentSessionActor({
-    subject: result.actor.sub,
-    studentProfileId: result.actor.student_profile_id,
-  });
+  if (!isAuthenticatedStudentSessionProjection(result)) {
+    throw new RegistrationApiError(502, 'invalid_student_session_projection');
+  }
   return result.actor;
 }
 
-export async function logoutStudent(): Promise<void> {
-  let accepted = false;
+export async function withStudentAuthTransition<T>(
+  operation: (transition: StudentAuthTransition) => Promise<T>,
+  options: {
+    requireAnonymousAfterSuccess?: boolean;
+    preserveProfileReauthHandoff?: boolean;
+  } = {},
+): Promise<T> {
+  const transition = startStudentAuthTransition({
+    preserveProfileReauthHandoff: options.preserveProfileReauthHandoff,
+  });
+  let result: T | undefined;
+  let operationError: unknown;
   try {
+    await transition.run(async () => {
+      try {
+        try {
+          result = await operation(transition);
+        } catch (error) {
+          operationError = error;
+        }
+
+        if (typeof window !== 'undefined') {
+          try {
+            const actor = await getStudentSession({ authTransition: transition });
+            if (actor !== null) resolveProfileReauthActor(actor.sub);
+            if (
+              operationError === undefined
+              && options.preserveProfileReauthHandoff
+              && actor === null
+            ) {
+              operationError = new RegistrationApiError(
+                503,
+                'student_reauth_session_unavailable',
+              );
+            }
+            if (
+              operationError === undefined
+              && options.requireAnonymousAfterSuccess
+              && actor !== null
+            ) {
+              operationError = new RegistrationApiError(
+                503,
+                'student_auth_transition_not_anonymous',
+              );
+            }
+          } catch (error) {
+            if (
+              operationError === undefined
+              && (options.requireAnonymousAfterSuccess || options.preserveProfileReauthHandoff)
+            ) {
+              operationError = error;
+            }
+          }
+        }
+      } finally {
+        // The exclusive lease remains held until the authoritative probe and
+        // every result classification above has completed.
+      }
+    });
+  } finally {
+    await finishStudentAuthTransition(transition);
+  }
+  if (operationError !== undefined) throw operationError;
+  return result as T;
+}
+
+export async function logoutStudent(): Promise<void> {
+  await withStudentAuthTransition(async (transition) => {
     await jsonRequest('/api/v1/auth/student/logout', {
       method: 'POST',
       body: JSON.stringify({}),
-    }, { notifyAuthChanged: false });
-    accepted = true;
-  } finally {
-    clearStudentBrowserContext({
-      notifyAuthChanged: true,
-      consumeRegisteredActor: accepted,
-    });
-  }
+    }, { notifyAuthChanged: false, authTransition: transition });
+  });
 }
 
 export { STUDENT_AUTH_CHANGED_EVENT, notifyStudentAuthChanged };
@@ -397,21 +581,88 @@ export function clearRegistrationSession(): void {
 }
 
 function isStudentSessionActor(value: unknown): value is StudentSessionActor {
-  if (!value || typeof value !== 'object') return false;
-  const actor = value as Partial<StudentSessionActor>;
-  const acceptedServerRoles = new Set(['student', 'moderator', 'admin']);
-  return typeof actor.sub === 'string'
-    && actor.sub.trim().length > 0
-    && Array.isArray(actor.roles)
-    && actor.roles.length === 1
-    && typeof actor.roles[0] === 'string'
-    && acceptedServerRoles.has(actor.roles[0])
-    && (actor.student_profile_id === null
-      || (typeof actor.student_profile_id === 'string' && actor.student_profile_id.length > 0))
-    && (actor.student_verification === 'draft' || actor.student_verification === 'verified')
-    && typeof actor.is_minor === 'boolean'
-    && Array.isArray(actor.consent_state)
-    && actor.consent_state.every((state) => typeof state === 'string');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actor = value as Partial<StudentSessionActor> & Record<string, unknown>;
+  const keys = Object.keys(actor).sort();
+  const expectedKeys = [
+    'consent_state',
+    'is_minor',
+    'roles',
+    'student_profile_id',
+    'student_verification',
+    'sub',
+  ];
+  const acceptedServerRoles = new Set([
+    'admin',
+    'legal_reviewer',
+    'moderator',
+    'safety_officer',
+    'student',
+  ]);
+  if (
+    keys.length !== expectedKeys.length
+    || !keys.every((key, index) => key === expectedKeys[index])
+    || !isCanonicalUuid(actor.sub)
+  ) return false;
+  if (
+    !Array.isArray(actor.roles)
+    || actor.roles.length !== 1
+    || typeof actor.roles[0] !== 'string'
+    || !acceptedServerRoles.has(actor.roles[0])
+    || (actor.student_verification !== 'draft' && actor.student_verification !== 'verified')
+    || typeof actor.is_minor !== 'boolean'
+    || !Array.isArray(actor.consent_state)
+  ) return false;
+
+  const role = actor.roles[0];
+  if (role === 'student') {
+    return isCanonicalUuid(actor.student_profile_id)
+      && isCanonicalStudentConsentState(actor.consent_state);
+  }
+  return actor.student_profile_id === null
+    && actor.student_verification === 'draft'
+    && actor.is_minor === false
+    && actor.consent_state.length === 0;
+}
+
+function isCanonicalUuid(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value);
+}
+
+function isCanonicalStudentConsentState(value: unknown[]): value is string[] {
+  if (!value.every((item) => typeof item === 'string')) return false;
+  return (value.length === 1 && value[0] === 'registration')
+    || (value.length === 2 && value[0] === 'privacy_notice' && value[1] === 'terms');
+}
+
+function hasExactSessionKeys(
+  value: Record<string, unknown>,
+): value is { authenticated: unknown; actor: unknown } {
+  const keys = Object.keys(value).sort();
+  return keys.length === 2 && keys[0] === 'actor' && keys[1] === 'authenticated';
+}
+
+function isAnonymousStudentSessionProjection(
+  value: unknown,
+): value is { authenticated: false; actor: null } {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && hasExactSessionKeys(value as Record<string, unknown>)
+    && (value as Record<string, unknown>).authenticated === false
+    && (value as Record<string, unknown>).actor === null;
+}
+
+function isAuthenticatedStudentSessionProjection(
+  value: unknown,
+): value is { authenticated: true; actor: StudentSessionActor } {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && hasExactSessionKeys(value as Record<string, unknown>)
+    && (value as Record<string, unknown>).authenticated === true
+    && isStudentSessionActor((value as Record<string, unknown>).actor);
 }
 
 // Erase retired browser-persisted registration/PII state as soon as the new

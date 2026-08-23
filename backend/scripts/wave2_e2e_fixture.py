@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import uuid
 from contextlib import contextmanager
@@ -91,7 +92,14 @@ from sqlalchemy import text as sa_text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.session import get_sessionmaker  # noqa: E402
-from app.models.registration import User  # noqa: E402
+from app.core.crypto import encrypt, key_version, keyed_hash  # noqa: E402
+from app.models.registration import (  # noqa: E402
+    AuthSession,
+    Consent,
+    StudentProfile,
+    StudentRegistration,
+    User,
+)
 from app.models.wave2 import (  # noqa: E402
     BookingHold,
     TutoringOutbox,
@@ -104,8 +112,9 @@ from app.models.wave2 import (  # noqa: E402
 )
 from app.services.tutoring import seed as tutoring_seed  # noqa: E402
 
-#: The sub the production frontend sends in `X-Actor-Claims`.
+#: The student identity resolved from the fixture-only HttpOnly session cookie.
 BROWSER_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-0000000000de")
+BROWSER_REGISTRATION_ID = uuid.UUID("00000000-0000-4000-8000-00000000de01")
 #: A second student, so "someone else won the slot" is a real second actor.
 RIVAL_STUDENT_ID = uuid.UUID("00000000-0000-4000-8000-0000000000b2")
 #: The DEDICATED review-rate-limit actor (N44) — single purpose, and the purpose
@@ -162,12 +171,169 @@ def open_session():
 def _ensure_user(session: Session, user_id: uuid.UUID, role: str) -> int:
     user = session.get(User, user_id)
     if user is not None:
+        user.role = role
         user.status = "active"
         user.deleted_at = None
         return 0
     session.add(User(id=user_id, role=role, status="active"))
     session.flush()
     return 1
+
+
+def _ensure_admin_session(
+    session: Session,
+    admin_session_token: str,
+    now: datetime,
+) -> None:
+    """Seed only the keyed hash for the isolated M-01 administrator bearer."""
+
+    if len(admin_session_token) < 32:
+        raise RuntimeError(
+            "WAVE2_E2E_ADMIN_SESSION_TOKEN must contain at least 32 characters"
+        )
+    token_hash = keyed_hash(admin_session_token)
+    for prior in session.scalars(
+        select(AuthSession).where(
+            AuthSession.user_id == ADMIN_ACTOR_ID,
+            AuthSession.status == "active",
+        )
+    ).all():
+        if prior.token_hash != token_hash:
+            prior.status = "revoked"
+            prior.revoked_at = now
+    row = session.scalar(
+        select(AuthSession).where(AuthSession.token_hash == token_hash)
+    )
+    if row is None:
+        session.add(
+            AuthSession(
+                user_id=ADMIN_ACTOR_ID,
+                token_hash=token_hash,
+                status="active",
+                expires_at=now + timedelta(hours=4),
+                last_seen_at=now,
+            )
+        )
+    else:
+        row.user_id = ADMIN_ACTOR_ID
+        row.status = "active"
+        row.expires_at = now + timedelta(hours=4)
+        row.last_seen_at = now
+        row.revoked_at = None
+        row.deleted_at = None
+
+
+def _ensure_student_registration_and_session(
+    session: Session,
+    student_session_token: str,
+    now: datetime,
+) -> None:
+    """Seed genuine student authority while keeping the bearer out of models."""
+
+    if len(student_session_token) < 32:
+        raise RuntimeError(
+            "WAVE2_E2E_STUDENT_SESSION_TOKEN must contain at least 32 characters"
+        )
+    mobile = "7000000001"
+    dob = "2000-01-01"
+    mobile_ct = encrypt(mobile)
+    dob_ct = encrypt(dob)
+    registration = session.get(StudentRegistration, BROWSER_REGISTRATION_ID)
+    if registration is None:
+        registration = StudentRegistration(
+            id=BROWSER_REGISTRATION_ID,
+            user_id=BROWSER_STUDENT_ID,
+            first_name="Browser",
+            middle_name=None,
+            last_name="Fixture",
+            mobile_hash=keyed_hash(mobile),
+            mobile_ct=mobile_ct,
+            dob_hash=keyed_hash(dob),
+            dob_ct=dob_ct,
+            dob_hash_state="verified",
+            key_version=key_version(mobile_ct),
+            institution_ref="WAVE2-QA",
+            status="active",
+            is_minor=False,
+        )
+        session.add(registration)
+        session.flush()
+    else:
+        registration.user_id = BROWSER_STUDENT_ID
+        registration.first_name = "Browser"
+        registration.middle_name = None
+        registration.last_name = "Fixture"
+        registration.mobile_hash = keyed_hash(mobile)
+        registration.mobile_ct = mobile_ct
+        registration.dob_hash = keyed_hash(dob)
+        registration.dob_ct = dob_ct
+        registration.dob_hash_state = "verified"
+        registration.key_version = key_version(mobile_ct)
+        registration.institution_ref = "WAVE2-QA"
+        registration.status = "active"
+        registration.is_minor = False
+        registration.deleted_at = None
+
+    profile = session.scalar(
+        select(StudentProfile).where(
+            StudentProfile.registration_id == registration.id
+        )
+    )
+    if profile is None:
+        session.add(StudentProfile(registration_id=registration.id))
+
+    consent = session.scalar(
+        select(Consent).where(
+            Consent.registration_id == registration.id,
+            Consent.purpose == "registration",
+        )
+    )
+    if consent is None:
+        session.add(
+            Consent(
+                registration_id=registration.id,
+                purpose="registration",
+                accepted=True,
+                policy_version="wave2-browser-v1",
+                accepted_at=now,
+            )
+        )
+    else:
+        consent.accepted = True
+        consent.policy_version = "wave2-browser-v1"
+        consent.accepted_at = now
+        consent.deleted_at = None
+
+    token_hash = keyed_hash(student_session_token)
+    for prior in session.scalars(
+        select(AuthSession).where(
+            AuthSession.user_id == BROWSER_STUDENT_ID,
+            AuthSession.status == "active",
+        )
+    ).all():
+        if prior.token_hash != token_hash:
+            prior.status = "revoked"
+            prior.revoked_at = now
+    row = session.scalar(
+        select(AuthSession).where(AuthSession.token_hash == token_hash)
+    )
+    if row is None:
+        session.add(
+            AuthSession(
+                user_id=BROWSER_STUDENT_ID,
+                token_hash=token_hash,
+                status="active",
+                expires_at=now + timedelta(hours=4),
+                last_seen_at=now,
+            )
+        )
+    else:
+        row.user_id = BROWSER_STUDENT_ID
+        row.status = "active"
+        row.expires_at = now + timedelta(hours=4)
+        row.last_seen_at = now
+        row.revoked_at = None
+        row.deleted_at = None
 
 
 def _extra_tutors(session: Session, count: int, now: datetime) -> list[str]:
@@ -256,12 +422,17 @@ def _slot_rows(session: Session, tutor_ids: list[str], now: datetime) -> list[di
 
 def cmd_seed(args: argparse.Namespace) -> int:
     now = datetime.now(timezone.utc)
+    admin_session_token = os.getenv("WAVE2_E2E_ADMIN_SESSION_TOKEN", "")
+    student_session_token = os.getenv("WAVE2_E2E_STUDENT_SESSION_TOKEN", "")
     with open_session() as session:
         report = tutoring_seed.provision(session, now=now, days=args.days, per_day=args.per_day)
         _ensure_user(session, BROWSER_STUDENT_ID, "student")
         _ensure_user(session, RIVAL_STUDENT_ID, "student")
         _ensure_user(session, REVIEW_LIMIT_STUDENT_ID, "student")
-        _ensure_user(session, ADMIN_ACTOR_ID, "student")
+        _ensure_user(session, ADMIN_ACTOR_ID, "admin")
+        session.flush()
+        _ensure_admin_session(session, admin_session_token, now)
+        _ensure_student_registration_and_session(session, student_session_token, now)
         extra = _extra_tutors(session, args.extra_tutors, now)
         session.commit()
         seeded = report.as_dict()
@@ -273,12 +444,14 @@ def cmd_seed(args: argparse.Namespace) -> int:
         "tutor_total": len(seeded["tutor_ids"]) + len(extra),
         "actors": {
             "browser_student": str(BROWSER_STUDENT_ID),
+            "browser_student_session": "seeded_hashed_only",
             "rival_student": str(RIVAL_STUDENT_ID),
             # Named, not derived: the driver REFUSES to run N44 if this key is
             # absent, so an old fixture cannot silently send it back to the
             # rival student and back to measuring 198 instead of 200.
             "review_rate_limit_student": str(REVIEW_LIMIT_STUDENT_ID),
             "admin": str(ADMIN_ACTOR_ID),
+            "admin_session": "seeded_hashed_only",
             "seed_student": str(tutoring_seed.SEED_STUDENT_ID),
             "tutor_user_ids": {
                 spec.key: str(spec.user_id) for spec in tutoring_seed.SEED_TUTORS

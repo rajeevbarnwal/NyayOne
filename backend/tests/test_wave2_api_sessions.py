@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import func, select
@@ -21,7 +21,8 @@ from sqlalchemy import func, select
 import tests.wave2_helpers as W
 from app.core import rate_limit
 from app.core.config import settings
-from app.models.registration import User
+from app.core.crypto import keyed_hash
+from app.models.registration import AuthSession, User
 from app.models.wave2 import (
     PaymentOrder,
     PaymentRefund,
@@ -37,7 +38,8 @@ from app.models.wave2 import (
     VideoSessionGrant,
 )
 from app.services.providers.video_provider import DeterministicVideoAdapter, hash_token
-from app.services.tutoring import join_credentials
+from app.services import login_service
+from app.services.tutoring import join_credentials, sessions as sessions_service
 from app.services.tutoring.errors import GrantRevoked
 
 T0 = W.T0
@@ -111,6 +113,25 @@ def _tutor(ctx):
 
 def _admin(ctx):
     return {"user": ctx.world.admin_id, "roles": ("admin",)}
+
+
+def _seed_auth_session(ctx, user_id: uuid.UUID, raw_token: str) -> None:
+    now = datetime.now(timezone.utc)
+    with ctx.SessionLocal() as session:
+        session.add(
+            AuthSession(
+                user_id=user_id,
+                token_hash=keyed_hash(raw_token),
+                status="active",
+                expires_at=now + timedelta(hours=1),
+                last_seen_at=now,
+            )
+        )
+        session.commit()
+
+
+def _seed_admin_auth_session(ctx, raw_token: str) -> None:
+    _seed_auth_session(ctx, ctx.world.admin_id, raw_token)
 
 
 def _start_of(ctx, session_id):
@@ -648,6 +669,163 @@ def test_admin_may_record_completion_and_the_provenance_says_admin(ctx):
         assert row.recorded_by_role == "admin"
         assert W.audit_rows(s, "tutoring.attendance.recorded")
         assert W.outbox_rows(s, kind="attendance_recorded")
+
+
+def test_cookie_backed_lawyer_tutor_profile_cannot_mount_m01_authority(ctx):
+    """Sprint 1 has no server-issued lawyer/tutor completion ceremony."""
+
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    raw_token = "m01-deferred-tutor-cookie"
+    _seed_auth_session(ctx, ctx.world.tutor_user_id, raw_token)
+    ctx.client.cookies.set(
+        settings.auth_session_cookie_name,
+        raw_token,
+        path="/api/v1",
+    )
+    try:
+        response = ctx.client.post(
+            f"/api/v1/tutoring/sessions/{session_id}/complete",
+            headers={"Origin": settings.cors_origins[0]},
+        )
+    finally:
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+
+    # The student-session resolver does not manufacture an authenticated tutor
+    # actor from a lawyer account, so the request is denied before M-01 mounts
+    # any role or ownership authority.
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "authentication_required"
+    with ctx.fresh() as session:
+        assert session.scalar(select(func.count()).select_from(SessionAttendance)) == 0
+        assert session.get(TutoringSession, session_id).status == "confirmed"
+        assert not W.outbox_rows(session, kind="attendance_recorded")
+        assert not W.audit_rows(session, "tutoring.attendance.recorded")
+
+
+def test_admin_completion_revalidates_the_exact_cookie_after_domain_lock(ctx, monkeypatch):
+    """A revoked-gap loser has zero attendance, status, audit, or outbox effects."""
+
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    raw_token = "m01-revoked-gap-cookie"
+    _seed_admin_auth_session(ctx, raw_token)
+
+    observed: dict[str, object] = {}
+
+    def revoked_after_actor_discovery(
+        _session,
+        presented_token,
+        *,
+        expected_user_id,
+        now,
+        allowed_roles,
+    ):
+        observed.update(
+            token=presented_token,
+            user_id=expected_user_id,
+            now=now,
+            roles=allowed_roles,
+        )
+        return None
+
+    monkeypatch.setattr(
+        login_service,
+        "lock_presented_session_for_effect",
+        revoked_after_actor_discovery,
+    )
+    ctx.client.cookies.set(
+        settings.auth_session_cookie_name,
+        raw_token,
+        path="/api/v1",
+    )
+    try:
+        response = ctx.client.post(
+            f"/api/v1/tutoring/sessions/{session_id}/complete",
+            headers={"Origin": settings.cors_origins[0]},
+        )
+    finally:
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "session_authority_required"
+    assert observed["token"] == raw_token
+    assert observed["user_id"] == ctx.world.admin_id
+    assert observed["roles"] == frozenset({"admin"})
+    with ctx.fresh() as session:
+        assert session.scalar(select(func.count()).select_from(SessionAttendance)) == 0
+        assert session.get(TutoringSession, session_id).status == "confirmed"
+        assert not W.outbox_rows(session, kind="attendance_recorded")
+        assert not W.audit_rows(session, "tutoring.attendance.recorded")
+        assert not session.scalars(
+            select(SessionStatusHistory).where(
+                SessionStatusHistory.session_id == session_id,
+                SessionStatusHistory.to_status == "completed",
+            )
+        ).all()
+
+
+def test_admin_completion_effect_winner_locks_domain_before_exact_cookie(
+    ctx,
+    monkeypatch,
+):
+    """If the effect owns the exact session lock first, it commits before logout."""
+
+    session_id, _o = _booked(ctx)
+    ctx.clock.set(_end_of(ctx, session_id) + timedelta(minutes=1))
+    raw_token = "m01-effect-winner-cookie"
+    _seed_admin_auth_session(ctx, raw_token)
+    order: list[str] = []
+    original_get_session = sessions_service.get_session
+
+    def recording_domain_lock(*args, **kwargs):
+        row = original_get_session(*args, **kwargs)
+        if kwargs.get("for_update"):
+            order.append("tutoring_session")
+        return row
+
+    def allow_exact_cookie(
+        _session,
+        presented_token,
+        *,
+        expected_user_id,
+        now,
+        allowed_roles,
+    ):
+        assert presented_token == raw_token
+        assert expected_user_id == ctx.world.admin_id
+        assert now == ctx.clock.at
+        assert allowed_roles == frozenset({"admin"})
+        order.append("auth_session")
+        return object()
+
+    monkeypatch.setattr(sessions_service, "get_session", recording_domain_lock)
+    monkeypatch.setattr(
+        login_service,
+        "lock_presented_session_for_effect",
+        allow_exact_cookie,
+    )
+    ctx.client.cookies.set(
+        settings.auth_session_cookie_name,
+        raw_token,
+        path="/api/v1",
+    )
+    try:
+        response = ctx.client.post(
+            f"/api/v1/tutoring/sessions/{session_id}/complete",
+            headers={"Origin": settings.cors_origins[0]},
+        )
+    finally:
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["recorded_by_role"] == "admin"
+    assert order == ["tutoring_session", "auth_session"]
+    with ctx.fresh() as session:
+        assert session.get(TutoringSession, session_id).status == "completed"
+        assert session.scalar(select(func.count()).select_from(SessionAttendance)) == 1
+        assert W.outbox_rows(session, kind="attendance_recorded")
+        assert W.audit_rows(session, "tutoring.attendance.recorded")
 
 
 # --------------------------------------------------------------------------- #

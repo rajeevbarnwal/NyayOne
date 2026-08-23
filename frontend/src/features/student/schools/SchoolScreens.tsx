@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import { StudentScreen, SelectField } from '../components';
 import { useTheme } from '../../../hooks/useTheme';
 import {

@@ -1,449 +1,335 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AuthCard, TextField, SelectField, StudentScreen, DpdpFootnote } from '../components';
-import { ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
+import { AuthCard, DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
+import { ErrorState, LoadingState } from '../../../components/ui/primitives';
 import {
-  validateStep,
-  nextIncompleteStep,
-  profileTier,
-  TIER_LABELS,
-  type FieldErrors,
-} from '../lib/profile';
+  ProfileApiError,
+  profileErrorMessage,
+  profileSectionRoute,
+  validateLegalName,
+  type ProfileSection,
+  type StudentProfileProjection,
+} from '../lib/profileApi';
 import {
-  getStudentProfile,
-  updateStudentProfile,
-  SettingsApiError,
-  type StudentProfile,
-} from '../lib/settingsApi';
-import { getProfileDraft, updateProfileDraft, seedResumeDraft } from '../lib/profileStore';
-import { RegistrationApiError, saveAcademicProfile } from '../lib/registrationApi';
+  canOpenProfileSection,
+  profileResumeDestination,
+  profileSaveDestination,
+  useSaveAcademicProfile,
+  useSaveInterestsProfile,
+  useSavePersonalProfile,
+  useStudentProfileProjection,
+  STUDENT_PROFILE_QUERY_KEY,
+} from './profileHooks';
 import {
-  composeDisplayName,
-  fullNameToParts,
-  nameErrorMessage,
-  validateNameParts,
-} from '../lib/registration';
-
+  preserveProfileConflictDraft,
+  takeProfileConflictDraft,
+} from './profileConflictDraftStore';
+import { isStudentMutationCancellation } from '../lib/useStudentMutation';
+import { useAuth } from '../../../app/authContext';
+import {
+  releaseActiveProfileReauthDraft,
+  stageActiveProfileReauthDraft,
+  takeResolvedProfileReauthDraft,
+  type ProfileReauthDraft,
+} from './profileReauthHandoff';
+import { ENROLMENT_RE, institutionalEmailError } from '../lib/profile';
 import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
 
-const labelForCollege = (v: string | null | undefined) => labelFor(COLLEGE_OPTIONS, toCanonicalCollege(v));
-const labelForYear = (v: string | null | undefined) => labelFor(YEAR_OPTIONS, toCanonicalYear(v));
-const toCanonicalLanguage = (v: string | null | undefined): string =>
-  v === 'English' || v === 'English (en-IN)' ? 'en' : v === 'हिन्दी (Hindi)' || v === 'हिन्दी (hi-IN)' ? 'hi' : (v ?? '');
-
-const LANGUAGES = LANGUAGE_OPTIONS;
-const COLLEGES = COLLEGE_OPTIONS;
-const YEARS = YEAR_OPTIONS;
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
+type FieldErrors = Record<string, string>;
 
-function Progress({ pct }: { pct: number }) {
+function useActiveProfileReauthDraft(
+  actorSubject: string | null | undefined,
+  draft: ProfileReauthDraft | null,
+): () => void {
+  const owner = useRef(Symbol('profile-reauth-form'));
+  useEffect(() => {
+    if (!actorSubject || draft === null) {
+      releaseActiveProfileReauthDraft(owner.current);
+      return;
+    }
+    stageActiveProfileReauthDraft(owner.current, actorSubject, draft);
+  }, [actorSubject, draft]);
+  useEffect(() => () => {
+    releaseActiveProfileReauthDraft(owner.current);
+  }, []);
+  return () => {
+    if (actorSubject && draft !== null) {
+      stageActiveProfileReauthDraft(owner.current, actorSubject, draft);
+    }
+  };
+}
+
+function ReauthDraftRestored({ visible }: { visible: boolean }) {
+  if (!visible) return null;
   return (
-    <div
-      className="st-progress"
-      role="progressbar"
-      aria-valuenow={pct}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label="Profile setup progress"
-    >
-      <div className="st-progress__bar" style={{ width: `${pct}%` }} />
-    </div>
+    <p role="status" data-testid="profile-reauth-draft-restored">
+      Your unsaved profile draft was restored after you signed in again. Review it before saving.
+    </p>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* S-09 — Step 1: personal                                                     */
-/* -------------------------------------------------------------------------- */
+function Progress({ projection }: { projection: StudentProfileProjection }) {
+  return <div className="st-progress" role="progressbar" aria-valuenow={projection.completionPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Profile setup progress" data-testid="profile-completion-percent"><div className="st-progress__bar" style={{ width: `${projection.completionPercent}%` }} /></div>;
+}
+
+function ProfileLoadState({ screenId, error, retry }: { screenId: string; error?: unknown; retry?: () => void }) {
+  const nav = useNavigate();
+  if (!error) return <StudentScreen screenId={screenId}><LoadingState label="Loading your profile…" /></StudentScreen>;
+  const signedOut = error instanceof ProfileApiError && error.status === 401;
+  return <StudentScreen screenId={screenId}>{signedOut ? <div className="ui-state" role="alert"><p className="ui-state__eyebrow">Signed out</p><p className="ui-state__title">Sign in to continue with your profile</p><div className="ui-state__action"><button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button></div></div> : <ErrorState title="Could not load your profile" detail={profileErrorMessage(error)} onRetry={retry} />}</StudentScreen>;
+}
+
+function ErrorSummary({ errors, ids }: { errors: FieldErrors; ids: Record<string, string> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rows = Object.entries(errors).filter(([field]) => Boolean(ids[field]));
+  useEffect(() => { if (rows.length > 0) ref.current?.focus(); }, [errors, rows.length]);
+  if (rows.length === 0) return null;
+  return <div ref={ref} tabIndex={-1} role="alert" data-testid="profile-error-summary" className="ui-state"><h2 className="ui-state__title">Review the highlighted fields</h2><ul>{rows.map(([field, message]) => <li key={field}><a href={`#${ids[field]}`}>{message}</a></li>)}</ul></div>;
+}
+
+function SaveError({ value }: { value: string | null }) {
+  return value ? <div role="alert" className="ui-validation" data-testid="profile-save-error">{value}</div> : null;
+}
+
+function profileSectionSummary(projection: StudentProfileProjection, section: ProfileSection): string {
+  if (section === 'personal') {
+    const value = projection.profile.personal;
+    return [value.firstName, value.middleName, value.lastName, value.dateOfBirth,
+      value.preferredLanguage, value.city, value.pronouns].filter(Boolean).join(' · ');
+  }
+  if (section === 'academic') {
+    const value = projection.profile.academic;
+    return [value.college, value.yearOfStudy, value.enrolmentNumber,
+      value.institutionalEmail, value.barEnrolmentNumber].filter(Boolean).join(' · ');
+  }
+  const value = projection.profile.interests;
+  return [...value.interests, ...value.goals].join(' · ');
+}
+
+function useProfileConflictReview(setHydratedVersion: (version: number) => void) {
+  const queryClient = useQueryClient();
+  const [conflict, setConflict] = useState<StudentProfileProjection | null>(null);
+  function capture(error: unknown): boolean {
+    if (!(error instanceof ProfileApiError)
+      || error.status !== 409
+      || error.code !== 'profile_version_conflict'
+      || !error.currentProjection) return false;
+    setConflict(error.currentProjection);
+    return true;
+  }
+  function adoptForDeliberateRetry(): void {
+    if (!conflict) return;
+    setHydratedVersion(conflict.profileVersion);
+    queryClient.setQueryData(STUDENT_PROFILE_QUERY_KEY, conflict);
+    setConflict(null);
+  }
+  return { conflict, capture, adoptForDeliberateRetry };
+}
+
+function ProfileConflictReview({
+  conflict,
+  section,
+  draftSummary,
+  onAdopt,
+}: {
+  conflict: StudentProfileProjection | null;
+  section: ProfileSection;
+  draftSummary: string;
+  onAdopt: () => void;
+}) {
+  if (!conflict) return null;
+  return <section role="alert" className="ui-state" data-testid="profile-conflict-review" data-server-version={conflict.profileVersion}><h2 className="ui-state__title">Review changes from another tab</h2><p><strong>Current server version {conflict.profileVersion}:</strong> {profileSectionSummary(conflict, section) || 'No saved values'}</p><p><strong>Your retained draft:</strong> {draftSummary || 'No values entered'}</p><p>Nothing will be overwritten until you explicitly adopt the current version and save again.</p><button type="button" className="btn tap" onClick={onAdopt}>Use current version and review my draft</button></section>;
+}
+
+function validDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function useRedirectBlockedSection(projection: StudentProfileProjection | undefined, section: ProfileSection): boolean {
+  const nav = useNavigate();
+  const blocked = Boolean(projection && !canOpenProfileSection(projection, section));
+  useEffect(() => { if (projection && blocked) nav(profileSectionRoute(projection.nextIncompleteSection), { replace: true }); }, [blocked, nav, projection]);
+  return blocked;
+}
+
 export function ProfileStep1() {
   const nav = useNavigate();
-  const d = getProfileDraft();
-  const initialName = d.firstName || d.lastName
-    ? { firstName: d.firstName, middleName: d.middleName, lastName: d.lastName }
-    : fullNameToParts(d.fullName);
-  const [firstName, setFirstName] = useState(initialName.firstName);
-  const [middleName, setMiddleName] = useState(initialName.middleName);
-  const [lastName, setLastName] = useState(initialName.lastName);
-  const [preferredLanguage, setLang] = useState(toCanonicalLanguage(d.preferredLanguage) || 'en');
-  const [dateOfBirth, setDob] = useState(d.dateOfBirth);
+  const auth = useAuth();
+  const query = useStudentProfileProjection();
+  const save = useSavePersonalProfile();
+  const [hydratedVersion, setHydratedVersion] = useState<number | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState('');
+  const [city, setCity] = useState('');
+  const [pronouns, setPronouns] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [reauthRestoreNotice, setReauthRestoreNotice] = useState(false);
+  const conflictReview = useProfileConflictReview(setHydratedVersion);
+  const activeReauthDraft: ProfileReauthDraft | null = dirty && hydratedVersion !== null
+    ? {
+        section: 'personal',
+        value: {
+          firstName,
+          middleName: middleName || null,
+          lastName,
+          dateOfBirth,
+          preferredLanguage,
+          city,
+          pronouns: pronouns || null,
+        },
+      }
+    : null;
+  const stageReauthDraft = useActiveProfileReauthDraft(auth.userId, activeReauthDraft);
+  useEffect(() => {
+    if (!query.data || hydratedVersion !== null) return;
+    setHydratedVersion(query.data.profileVersion);
+    const preserved = auth.userId
+      ? takeResolvedProfileReauthDraft(auth.userId, 'personal')
+      : null;
+    const personal = preserved ?? query.data.profile.personal;
+    setFirstName(personal.firstName); setMiddleName(personal.middleName ?? ''); setLastName(personal.lastName);
+    setDateOfBirth(personal.dateOfBirth); setPreferredLanguage(personal.preferredLanguage ?? ''); setCity(personal.city ?? ''); setPronouns(personal.pronouns ?? '');
+    setDirty(Boolean(preserved));
+    setReauthRestoreNotice(Boolean(preserved));
+  }, [auth.userId, hydratedVersion, query.data]);
 
-  function next() {
-    const parts = { firstName, middleName, lastName };
-    const nameErrors = validateNameParts(parts);
-    const draft = updateProfileDraft({
-      ...parts,
-      fullName: composeDisplayName(parts),
-      preferredLanguage,
-      dateOfBirth,
-    });
-    const e = validateStep(1, draft);
-    if (nameErrors.firstName) e.firstName = nameErrorMessage('firstName', nameErrors.firstName);
-    if (nameErrors.middleName) e.middleName = nameErrorMessage('middleName', nameErrors.middleName);
-    if (nameErrors.lastName) e.lastName = nameErrorMessage('lastName', nameErrors.lastName);
-    setErrors(e);
-    if (Object.keys(e).length === 0) nav('/s-10');
-  }
-
-  return (
-    <AuthCard screenId="S-09" kicker="Step 1 of 3 · Personal" title="About you">
-      <Progress pct={33} />
-      <fieldset className="st-namegroup">
-        <legend className="st-namegroup__legend">Legal name</legend>
-        <TextField id="p1-first-name" label="First name" value={firstName} onChange={setFirstName} error={errors.firstName} autoComplete="given-name" />
-        <TextField id="p1-middle-name" label="Middle name" optional="optional" value={middleName} onChange={setMiddleName} error={errors.middleName} autoComplete="additional-name" />
-        <TextField id="p1-last-name" label="Last name" value={lastName} onChange={setLastName} error={errors.lastName} autoComplete="family-name" />
-      </fieldset>
-      <SelectField id="p1-lang" label="Preferred language" value={preferredLanguage} onChange={setLang} options={LANGUAGES} error={errors.preferredLanguage} />
-      <TextField
-        id="p1-dob"
-        label="Date of birth"
-        value={dateOfBirth}
-        onChange={setDob}
-        type="date"
-        error={errors.dateOfBirth}
-        help="Used only to confirm eligibility · not shown publicly"
-      />
-      <div className="st-actions">
-        <button type="button" className="btn btn--primary tap" onClick={next}>
-          Continue
-        </button>
-      </div>
-    </AuthCard>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* S-10 — Step 2: academic (validation/error)                                  */
-/* S-13 — Resume (recovery) renders the same step                              */
-/* -------------------------------------------------------------------------- */
-function AcademicStep({ screenId }: { screenId: string }) {
-  const nav = useNavigate();
-  const d = getProfileDraft();
-  const [college, setCollege] = useState(d.college);
-  const [yearOfStudy, setYear] = useState(d.yearOfStudy);
-  const [enrolmentNumber, setEnrol] = useState(d.enrolmentNumber);
-  const [institutionalEmail, setEmail] = useState(d.institutionalEmail);
-  const [barEnrolmentNumber, setBar] = useState(d.barEnrolmentNumber ?? '');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    const draft = updateProfileDraft({ college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber });
-    const e = validateStep(2, draft);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-    setSaving(true);
+  async function persist(destination: 'next' | 'exit') {
+    if (!query.data || hydratedVersion === null) return;
+    const next: FieldErrors = {};
+    if (!validateLegalName(firstName)) next.firstName = 'Enter a valid first name of 60 characters or fewer.';
+    if (middleName && !validateLegalName(middleName)) next.middleName = 'Enter a valid middle name of 60 characters or fewer.';
+    if (!validateLegalName(lastName)) next.lastName = 'Enter a valid last name of 60 characters or fewer.';
+    if (!validDate(dateOfBirth)) next.dateOfBirth = 'Enter a valid date of birth.';
+    if (!preferredLanguage) next.preferredLanguage = 'Choose a preferred language.';
+    if (!city.trim()) next.city = 'Enter your city.';
+    if ([...pronouns.trim()].length > 60) next.pronouns = 'Pronouns must be 60 characters or fewer.';
+    setErrors(next); if (Object.keys(next).length > 0) return;
+    setSaveError(null);
+    stageReauthDraft();
     try {
-      await saveAcademicProfile({
-        college,
-        yearOfStudy,
-        enrolmentNumber,
-        institutionalEmail,
-        barEnrolmentNumber,
-      });
-      nav('/s-11');
-    } catch (cause) {
-      setErrors({
-        submit: cause instanceof RegistrationApiError && cause.status === 401
-          ? 'Your session expired. Sign in again to save academic details.'
-          : 'Academic details could not be saved. Please retry.',
-      });
-    } finally {
-      setSaving(false);
+      const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, firstName, middleName: middleName || null, lastName, dateOfBirth, preferredLanguage: preferredLanguage as 'en' | 'hi', city, pronouns: pronouns || null });
+      setDirty(false);
+      nav(profileSaveDestination(result.projection, destination));
+    } catch (error) {
+      if (isStudentMutationCancellation(error)) return;
+      conflictReview.capture(error);
+      setSaveError(profileErrorMessage(error));
     }
   }
-
-  return (
-    <AuthCard
-      screenId={screenId}
-      kicker="Step 2 of 3 · Academic"
-      title="Your academic record"
-      sub="Tailors internships, tutors and research to your college and year."
-    >
-      <Progress pct={66} />
-      <SelectField id="p2-college" label="College / University" value={college} onChange={setCollege} options={COLLEGES} error={errors.college} />
-      <SelectField id="p2-year" label="Year of study" value={yearOfStudy} onChange={setYear} options={YEARS} error={errors.yearOfStudy} />
-      <TextField
-        id="p2-enrol"
-        label="College enrolment number"
-        value={enrolmentNumber}
-        onChange={setEnrol}
-        error={errors.enrolmentNumber}
-        help="Format: state code / roll / year — e.g. KA/1234/2023"
-      />
-      <TextField
-        id="p2-email"
-        label="Institutional email"
-        value={institutionalEmail}
-        onChange={setEmail}
-        type="email"
-        inputMode="email"
-        error={errors.institutionalEmail}
-      />
-      <TextField
-        id="p2-bar"
-        label="Bar enrolment number"
-        optional="optional · private"
-        value={barEnrolmentNumber}
-        onChange={setBar}
-        placeholder="Not enrolled yet"
-        help="Never shown on your public profile — add only if already enrolled with a State Bar Council."
-      />
-      <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-10')}>
-          Back
-        </button>
-        <button type="button" className="btn btn--primary tap" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save & continue'}
-        </button>
-      </div>
-      {errors.submit && <span className="ui-validation" role="alert">{errors.submit}</span>}
-      <DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote>
-    </AuthCard>
-  );
+  if (!query.data) return <ProfileLoadState screenId="S-10" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  const ids = { firstName: 'profile-personal-first-name', middleName: 'profile-personal-middle-name', lastName: 'profile-personal-last-name', dateOfBirth: 'profile-personal-date-of-birth', preferredLanguage: 'profile-personal-language', city: 'profile-personal-city', pronouns: 'profile-personal-pronouns' };
+  return <AuthCard screenId="S-10" kicker="Step 1 of 3 · Personal" title="About you"><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} /><ErrorSummary errors={errors} ids={ids} /><fieldset className="st-namegroup"><legend className="st-namegroup__legend">Legal name</legend><TextField id={ids.firstName} label="First name" value={firstName} onChange={(value) => { setFirstName(value); setDirty(true); }} error={errors.firstName} autoComplete="given-name" /><TextField id={ids.middleName} label="Middle name" optional="optional" value={middleName} onChange={(value) => { setMiddleName(value); setDirty(true); }} error={errors.middleName} autoComplete="additional-name" /><TextField id={ids.lastName} label="Last name" value={lastName} onChange={(value) => { setLastName(value); setDirty(true); }} error={errors.lastName} autoComplete="family-name" /></fieldset><TextField id={ids.dateOfBirth} label="Date of birth" value={dateOfBirth} onChange={(value) => { setDateOfBirth(value); setDirty(true); }} type="date" error={errors.dateOfBirth} help="Used for eligibility and guardian policy · not shown publicly" /><SelectField id={ids.preferredLanguage} label="Preferred language" value={preferredLanguage} onChange={(value) => { setPreferredLanguage(value); setDirty(true); }} options={LANGUAGE_OPTIONS} error={errors.preferredLanguage} /><TextField id={ids.city} label="City" value={city} onChange={(value) => { setCity(value); setDirty(true); }} error={errors.city} autoComplete="address-level2" /><TextField id={ids.pronouns} label="Pronouns" optional="optional" value={pronouns} onChange={(value) => { setPronouns(value); setDirty(true); }} error={errors.pronouns} maxLength={60} /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="personal" draftSummary={[firstName, middleName, lastName, dateOfBirth, preferredLanguage, city, pronouns].filter(Boolean).join(' · ')} onAdopt={() => { conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Save & continue'}</button></div></AuthCard>;
 }
 
-export function ProfileStep2() {
-  return <AcademicStep screenId="S-10" />;
+function AcademicStep({ screenId }: { screenId: string }) {
+  const nav = useNavigate(); const auth = useAuth(); const query = useStudentProfileProjection(); const save = useSaveAcademicProfile();
+  const blocked = useRedirectBlockedSection(query.data, 'academic'); const [hydratedVersion, setHydratedVersion] = useState<number | null>(null);
+  const [college, setCollege] = useState(''); const [yearOfStudy, setYear] = useState(''); const [enrolmentNumber, setEnrolment] = useState(''); const [institutionalEmail, setEmail] = useState(''); const [barEnrolmentNumber, setBar] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({}); const [saveError, setSaveError] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState(false);
+  const [reauthRestoreNotice, setReauthRestoreNotice] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const conflictReview = useProfileConflictReview(setHydratedVersion);
+  const activeReauthDraft: ProfileReauthDraft | null = dirty && hydratedVersion !== null
+    ? { section: 'academic', value: { college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null } }
+    : null;
+  const stageReauthDraft = useActiveProfileReauthDraft(auth.userId, activeReauthDraft);
+  useEffect(() => {
+    if (!query.data || hydratedVersion !== null || !canOpenProfileSection(query.data, 'academic')) return;
+    setHydratedVersion(query.data.profileVersion);
+    const reauthDraft = auth.userId
+      ? takeResolvedProfileReauthDraft(auth.userId, 'academic')
+      : null;
+    const preserved = reauthDraft === null ? takeProfileConflictDraft('academic') : null;
+    const academic = reauthDraft ?? preserved?.value ?? query.data.profile.academic;
+    setCollege(toCanonicalCollege(academic.college) ?? '');
+    setYear(toCanonicalYear(academic.yearOfStudy) ?? '');
+    setEnrolment(academic.enrolmentNumber ?? '');
+    setEmail(academic.institutionalEmail ?? '');
+    setBar(academic.barEnrolmentNumber ?? '');
+    setRestoreNotice(Boolean(preserved));
+    setReauthRestoreNotice(Boolean(reauthDraft));
+    setDirty(Boolean(reauthDraft || preserved));
+  }, [auth.userId, hydratedVersion, query.data]);
+  async function persist(destination: 'next' | 'exit') {
+    if (!query.data || hydratedVersion === null) return; const next: FieldErrors = {};
+    if (!college) next.college = 'Select your college or university.'; if (!yearOfStudy) next.yearOfStudy = 'Select your year of study.'; if (!ENROLMENT_RE.test(enrolmentNumber.trim())) next.enrolmentNumber = 'Use state code / roll / year, for example KA/1234/2023.';
+    if (institutionalEmail.trim()) { const error = institutionalEmailError(institutionalEmail); if (error) next.institutionalEmail = error; }
+    setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft();
+    try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null }); setDirty(false); nav(profileSaveDestination(result.projection, destination)); } catch (error) { if (isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); }
+  }
+  if (!query.data || blocked) return <ProfileLoadState screenId={screenId} error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  const ids = { college: 'profile-academic-college', yearOfStudy: 'profile-academic-year', enrolmentNumber: 'profile-academic-enrolment', institutionalEmail: 'profile-academic-email' };
+  return <AuthCard screenId={screenId} kicker="Step 2 of 3 · Academic" title="Your academic record" sub="Tailors internships, tutors and research to your college and year."><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} />{restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}<ErrorSummary errors={errors} ids={ids} /><SelectField id={ids.college} label="College / University" value={college} onChange={(value) => { setCollege(value); setDirty(true); }} options={COLLEGE_OPTIONS} error={errors.college} /><SelectField id={ids.yearOfStudy} label="Year of study" value={yearOfStudy} onChange={(value) => { setYear(value); setDirty(true); }} options={YEAR_OPTIONS} error={errors.yearOfStudy} /><TextField id={ids.enrolmentNumber} label="College enrolment number" value={enrolmentNumber} onChange={(value) => { setEnrolment(value); setDirty(true); }} error={errors.enrolmentNumber} help="Format: state code / roll / year — e.g. KA/1234/2023" /><TextField id={ids.institutionalEmail} label="Institutional email" optional="optional" value={institutionalEmail} onChange={(value) => { setEmail(value); setDirty(true); }} type="email" inputMode="email" error={errors.institutionalEmail} /><TextField id="profile-academic-bar-enrolment" label="Bar enrolment number" optional="optional · private" value={barEnrolmentNumber} onChange={(value) => { setBar(value); setDirty(true); }} help="Never shown on your public profile." /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="academic" draftSummary={[college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'academic')) preserveProfileConflictDraft({ section: 'academic', value: { college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Save & continue'}</button></div><DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote></AuthCard>;
+}
+
+export function ProfileStep2() { return <AcademicStep screenId="S-10" />; }
+
+export function ProfileStep3() {
+  const nav = useNavigate(); const auth = useAuth(); const query = useStudentProfileProjection(); const save = useSaveInterestsProfile(); const blocked = useRedirectBlockedSection(query.data, 'interests'); const [hydratedVersion, setHydratedVersion] = useState<number | null>(null);
+  const [interests, setInterests] = useState<string[]>([]); const [goal, setGoal] = useState(''); const [errors, setErrors] = useState<FieldErrors>({}); const [saveError, setSaveError] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState(false);
+  const [reauthRestoreNotice, setReauthRestoreNotice] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const conflictReview = useProfileConflictReview(setHydratedVersion);
+  const activeReauthDraft: ProfileReauthDraft | null = dirty && hydratedVersion !== null
+    ? { section: 'interests', value: { interests, goals: goal ? [goal] : [] } }
+    : null;
+  const stageReauthDraft = useActiveProfileReauthDraft(auth.userId, activeReauthDraft);
+  useEffect(() => {
+    if (!query.data || hydratedVersion !== null || !canOpenProfileSection(query.data, 'interests')) return;
+    setHydratedVersion(query.data.profileVersion);
+    const reauthDraft = auth.userId
+      ? takeResolvedProfileReauthDraft(auth.userId, 'interests')
+      : null;
+    const preserved = reauthDraft === null ? takeProfileConflictDraft('interests') : null;
+    const values = reauthDraft ?? preserved?.value ?? query.data.profile.interests;
+    setInterests(values.interests);
+    setGoal(values.goals[0] ?? '');
+    setRestoreNotice(Boolean(preserved));
+    setReauthRestoreNotice(Boolean(reauthDraft));
+    setDirty(Boolean(reauthDraft || preserved));
+  }, [auth.userId, hydratedVersion, query.data]);
+  async function persist(destination: 'done' | 'exit') { if (!query.data || hydratedVersion === null) return; const next: FieldErrors = {}; if (interests.length === 0) next.interests = 'Choose at least one area of interest.'; if (!goal) next.goal = 'Choose a career goal.'; setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft(); try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, interests, goals: [goal] }); setDirty(false); nav(profileSaveDestination(result.projection, destination === 'exit' ? 'exit' : 'next')); } catch (error) { if (isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); } }
+  if (!query.data || blocked) return <ProfileLoadState screenId="S-11" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  return <AuthCard screenId="S-11" kicker="Step 3 of 3 · Interests" title="What should find you?" sub="Choose the legal work and direction you want surfaced first. You can change this later."><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} />{restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}<ErrorSummary errors={errors} ids={{ interests: 'profile-interests-first-option', goal: 'profile-interests-goal' }} /><span className="st-field__label" id="profile-interests-label">Areas of interest</span><div className="st-chips" role="group" aria-labelledby="profile-interests-label" aria-describedby={errors.interests ? 'profile-interests-options-error' : undefined}>{INTERESTS.map((interest, index) => <button id={index === 0 ? 'profile-interests-first-option' : undefined} key={interest} type="button" className="st-chip tap" aria-pressed={interests.includes(interest)} onClick={() => { setInterests((previous) => previous.includes(interest) ? previous.filter((item) => item !== interest) : [...previous, interest]); setDirty(true); }}>{interest}</button>)}</div>{errors.interests && <span id="profile-interests-options-error" className="ui-validation" role="alert">{errors.interests}</span>}<SelectField id="profile-interests-goal" label="Career goal" value={goal} onChange={(value) => { setGoal(value); setDirty(true); }} options={GOALS} error={errors.goal} /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="interests" draftSummary={[...interests, goal].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'interests')) preserveProfileConflictDraft({ section: 'interests', value: { interests, goals: [goal] } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('done'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Finish setup'}</button></div></AuthCard>;
+}
+
+export function CompletionCard({ projection }: { projection: StudentProfileProjection }) {
+  if (projection.isComplete) return null;
+  return <section className="st-panel" data-testid="profile-completion-card" aria-label="Profile completion"><div className="st-panel__head"><h2 className="st-panel__title">Complete your profile</h2><strong data-testid="profile-completion-percent">{projection.completionPercent}%</strong></div><p>Finish the remaining details to tailor your student workspace.</p></section>;
 }
 
 export function ProfileResume() {
-  const nav = useNavigate();
-  // S-13 is a truthful handoff, not a second copy of the form. The destination
-  // remains computed from the live draft and saved values remain untouched.
-  const seeded = useMemo(() => seedResumeDraft(), []);
-  const step = nextIncompleteStep(seeded);
-  const destination = step === 1 ? '/s-10' : step === 2 ? '/s-10?step=academic' : step === 3 ? '/s-11' : '/s-14';
-  const current = step ?? 4;
-  const heading = step === 1 ? 'Finish your details' : step === 2 ? 'Finish your studies' : step === 3 ? 'Pick up where you stopped' : 'Your setup is complete';
-  return (
-    <StudentScreen screenId="S-13" className="st-stack st-resume">
-      <div>
-        <p className="st-eyebrow">Welcome back · {step ? `${Math.round(((step - 1) / 3) * 100)}% done` : '100% done'}</p>
-        <h1 className="st-h1">{heading}</h1>
-        <p className="st-card__sub" style={{ marginTop: 10 }}>
-          Saved answers stay exactly as you left them. Continue at the first incomplete step, or browse before finishing.
-        </p>
-      </div>
-      <section className="st-panel" aria-label="Profile setup progress">
-        {[
-          ['Personal', 'Name, date of birth and city'],
-          ['Academic', 'College, year and enrolment'],
-          ['Preferences', 'Practice areas and career direction'],
-        ].map(([label, detail], index) => {
-          const n = index + 1;
-          const state = n < current ? 'Saved' : n === current ? 'Continue here' : 'Not started';
-          return (
-            <div className="st-setrow" key={label}>
-              <div><div className="st-setrow__label">Step {n} · {label}</div><div className="st-setrow__sub">{detail}</div></div>
-              <span className={`status ${n < current ? 'status--ok' : n === current ? 'status--warn' : 'status--info'}`}>{state}</span>
-            </div>
-          );
-        })}
-      </section>
-      <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-20')}>Browse first</button>
-        <button type="button" className="btn btn--primary tap" onClick={() => nav(destination)}>{step ? `Continue step ${step}` : 'Open dashboard'}</button>
-      </div>
-      <DpdpFootnote>Draft fields remain private and are not submitted by opening this screen</DpdpFootnote>
-    </StudentScreen>
-  );
+  const nav = useNavigate(); const query = useStudentProfileProjection();
+  if (!query.data) return <ProfileLoadState screenId="S-13" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  const projection = query.data; const current = projection.nextIncompleteSection;
+  return <StudentScreen screenId="S-13" className="st-stack st-resume"><div><p className="st-eyebrow">Welcome back · {projection.completionPercent}% done</p><h1 className="st-h1">{projection.isComplete ? 'Your setup is complete' : 'Pick up where you stopped'}</h1><p className="st-card__sub">Your saved answers came from your authenticated profile.</p></div><section className="st-panel" aria-label="Profile setup progress">{(['personal', 'academic', 'interests'] as ProfileSection[]).map((section, index) => { const saved = projection.completedSections.includes(section); const active = current === section; return <div className="st-setrow" key={section}><div><div className="st-setrow__label">Step {index + 1} · {section[0].toUpperCase() + section.slice(1)}</div></div><span className={`status ${saved ? 'status--ok' : active ? 'status--warn' : 'status--info'}`}>{saved ? 'Saved' : active ? 'Continue here' : 'Not started'}</span></div>; })}</section><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => nav('/s-14')}>Browse first</button><button type="button" className="btn btn--primary tap" onClick={() => nav(profileResumeDestination(projection))}>{current ? 'Continue profile' : 'Open dashboard'}</button></div></StudentScreen>;
 }
 
-/* -------------------------------------------------------------------------- */
-/* S-11 — Step 3: preferences                                                  */
-/* -------------------------------------------------------------------------- */
-export function ProfileStep3() {
-  const nav = useNavigate();
-  const d = getProfileDraft();
-  const [interests, setInterests] = useState<string[]>(d.interests);
-  const [careerGoal, setGoal] = useState(d.careerGoal);
-  const [errors, setErrors] = useState<FieldErrors>({});
-
-  function toggle(i: string) {
-    setInterests((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]));
-  }
-
-  function finish() {
-    const draft = updateProfileDraft({ interests, careerGoal });
-    const e = validateStep(3, draft);
-    setErrors(e);
-    if (Object.keys(e).length === 0) nav('/s-12');
-  }
-
-  return (
-    <AuthCard screenId="S-11" kicker="Step 3 of 3 · Preferences" title="What should find you?" sub="Choose the legal work and direction you want LegalSaathi to surface first. You can change this later.">
-      <Progress pct={100} />
-      <span className="st-field__label" id="interests-label">
-        Areas of interest
-      </span>
-      <div className="st-chips" role="group" aria-labelledby="interests-label" style={{ marginBottom: 'var(--space-4)' }}>
-        {INTERESTS.map((i) => (
-          <button key={i} type="button" className="st-chip" aria-pressed={interests.includes(i)} onClick={() => toggle(i)}>
-            {i}
-          </button>
-        ))}
-      </div>
-      {errors.interests && (
-        <span className="ui-validation" role="alert">
-          <span className="ui-validation__mark" aria-hidden>
-            !
-          </span>{' '}
-          {errors.interests}
-        </span>
-      )}
-      <SelectField id="p3-goal" label="Career goal" value={careerGoal} onChange={setGoal} options={GOALS} error={errors.careerGoal} />
-      <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-10?step=academic')}>
-          Back
-        </button>
-        <button type="button" className="btn btn--primary tap" onClick={finish}>
-          Finish setup
-        </button>
-      </div>
-    </AuthCard>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* S-12 — Save success / tier badge                                            */
-/* -------------------------------------------------------------------------- */
 export function ProfileDone() {
-  const nav = useNavigate();
-  const draft = getProfileDraft();
-  const tier = profileTier(draft);
-  const firstName = draft.fullName.trim().split(/\s+/)[0] || 'Student';
-  return (
-    <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re ready, ${firstName}.`}>
-      <p className="st-card__sub">Your student workspace is organised. Verification controls which applications and trusted features are available.</p>
-      <span className="st-badge">
-        <span aria-hidden>✓</span> {TIER_LABELS[tier === 'verified_student' ? 'verified_student' : 'incomplete']}
-      </span>
-      <div className="st-actions">
-        <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-14')}>
-          Go to dashboard
-        </button>
-      </div>
-    </AuthCard>
-  );
+  const nav = useNavigate(); const query = useStudentProfileProjection();
+  useEffect(() => { if (query.data && !query.data.isComplete) nav(profileSectionRoute(query.data.nextIncompleteSection), { replace: true }); }, [nav, query.data]);
+  if (!query.data || !query.data.isComplete) return <ProfileLoadState screenId="S-12" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  const firstName = query.data.profile.personal.firstName || 'Student'; const verification = query.data.institutionalEmailStatus === 'verified' ? 'Institutional email verified' : 'Profile complete · institutional verification not complete';
+  return <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re ready, ${firstName}.`}><p className="st-card__sub">Your student workspace is organised. Verification remains a separate server-controlled process.</p><span className="st-badge">{verification}</span><div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/s-14')}>Go to dashboard</button></div></AuthCard>;
 }
-
-/* -------------------------------------------------------------------------- */
-/* S-17 — Profile view/edit (server-authoritative, SAATHI-58)                  */
-/* -------------------------------------------------------------------------- */
-const PROFILE_KEY = ['student-profile'] as const;
 
 export function ProfileView() {
-  const nav = useNavigate();
-  const qc = useQueryClient();
-  const query = useQuery({ queryKey: PROFILE_KEY, queryFn: getStudentProfile });
-  const [editing, setEditing] = useState(false);
-  const [college, setCollege] = useState('');
-  const [yearOfStudy, setYear] = useState('');
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: () => updateStudentProfile({ college, yearOfStudy }),
-    onSuccess: (data) => {
-      qc.setQueryData<StudentProfile>(PROFILE_KEY, data);
-      setEditing(false);
-      setSaveError(null);
-    },
-    onError: (error) => {
-      setSaveError(
-        error instanceof SettingsApiError && error.status === 401
-          ? 'Your session expired — sign in again to edit your profile.'
-          : 'Could not save your changes — check your connection and retry.',
-      );
-    },
-  });
-
-  const p = query.data;
-  const signedOut = query.error instanceof SettingsApiError && query.error.status === 401;
-  const fullName = p ? [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ') : '';
-
-  function beginEdit(): void {
-    if (!p) return;
-    setCollege(toCanonicalCollege(p.college) ?? '');
-    setYear(toCanonicalYear(p.yearOfStudy) ?? '');
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  return (
-    <StudentScreen screenId="S-17" className="st-set">
-      <div className="st-set__head">
-        <p className="st-eyebrow">Profile · S3</p>
-        <h1 className="st-h1">Your LegalSaathi profile</h1>
-      </div>
-
-      {query.isPending && <LoadingState label="Loading your profile…" />}
-      {query.isError && (signedOut ? (
-        <div className="ui-state" role="alert">
-          <p className="ui-state__eyebrow">Signed out</p>
-          <p className="ui-state__title">Sign in to view your profile</p>
-          <div className="ui-state__action">
-            <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button>
-          </div>
-        </div>
-      ) : (
-        <ErrorState
-          title="Could not load your profile"
-          detail="Check your connection and retry."
-          onRetry={() => void query.refetch()}
-        />
-      ))}
-
-      {p && (
-        <>
-          {!editing && <div className="st-panel">
-            {([
-              ['Full name', fullName || 'Not provided'],
-              ['Mobile', p.maskedMobile || 'Not provided'],
-              ['College', labelForCollege(p.college) || 'Not provided'],
-              ['Year of study', labelForYear(p.yearOfStudy) || 'Not provided'],
-            ] as Array<[string, string]>).map(([k, v]) => (
-              <div className="st-setrow" key={k}>
-                <div>
-                  <div className="st-setrow__label">{k}</div>
-                  <div className="st-setrow__sub">{v}</div>
-                </div>
-              </div>
-            ))}
-            <p className="st-setrow__sub" style={{ marginTop: 'var(--space-3)' }}>
-              Bar enrolment number stays private · never on your public profile.
-            </p>
-          </div>}
-
-          {editing && (
-            <div className="st-panel" style={{ marginTop: 'var(--space-3)' }}>
-              <h2 className="st-panel__title">Edit college &amp; year</h2>
-              <SelectField id="pv-college" label="College / University" value={college} onChange={setCollege} options={COLLEGES} />
-              <SelectField id="pv-year" label="Year of study" value={yearOfStudy} onChange={setYear} options={YEARS} />
-              <div className="st-actions st-actions--split">
-                <button type="button" className="btn tap" onClick={() => setEditing(false)} disabled={save.isPending}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn--primary tap" onClick={() => save.mutate()} disabled={save.isPending}>
-                  {save.isPending ? 'Saving…' : 'Save changes'}
-                </button>
-              </div>
-              {saveError && <ValidationState message={saveError} />}
-            </div>
-          )}
-
-          <div className="st-actions st-actions--split">
-            <button type="button" className="btn tap" onClick={beginEdit} disabled={editing}>
-              Edit college &amp; year
-            </button>
-            <button type="button" className="btn tap" onClick={() => nav('/s-19')}>
-              Privacy &amp; settings
-            </button>
-          </div>
-        </>
-      )}
-    </StudentScreen>
-  );
+  const nav = useNavigate(); const query = useStudentProfileProjection();
+  if (!query.data) return <ProfileLoadState screenId="S-17" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
+  const projection = query.data; const personal = projection.profile.personal; const academic = projection.profile.academic;
+  const rows: Array<[string, string]> = [['Full name', [personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' ')], ['Preferred language', personal.preferredLanguage ?? 'Not provided'], ['City', personal.city ?? 'Not provided'], ['College', labelFor(COLLEGE_OPTIONS, toCanonicalCollege(academic.college)) || 'Not provided'], ['Year of study', labelFor(YEAR_OPTIONS, toCanonicalYear(academic.yearOfStudy)) || 'Not provided'], ['Institutional email status', projection.institutionalEmailStatus.replace(/_/gu, ' ')], ['Guardian status', projection.guardian.status.replace(/_/gu, ' ')], ['Access', projection.accessMode]];
+  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div></div>)}</div><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
 }

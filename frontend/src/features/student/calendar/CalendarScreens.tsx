@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  isStudentMutationCancellation,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../app/authContext';
 import {
@@ -443,7 +449,16 @@ function CalendarEventScreen() {
     },
     onSuccess: async (event) => {
       setMessage('');
-      await client.invalidateQueries({ queryKey: ['calendar'] });
+      const fence = captureStudentMutationSequence();
+      try {
+        await runStudentMutationStep(
+          fence,
+          () => client.invalidateQueries({ queryKey: ['calendar'] }),
+        );
+      } catch (error) {
+        if (isStudentMutationCancellation(error)) return;
+        throw error;
+      }
       setEditing(false);
       nav(`/s-91?event=${encodeURIComponent(event.id)}`, { replace: true });
     },
@@ -452,7 +467,16 @@ function CalendarEventScreen() {
   const remove = useMutation({
     mutationFn: () => deleteCalendarEvent(eventId!),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ['calendar'] });
+      const fence = captureStudentMutationSequence();
+      try {
+        await runStudentMutationStep(
+          fence,
+          () => client.invalidateQueries({ queryKey: ['calendar'] }),
+        );
+      } catch (error) {
+        if (isStudentMutationCancellation(error)) return;
+        throw error;
+      }
       nav('/s-90', { replace: true });
     },
     onError: (error) => setMessage(calendarErrorCopy(error)),

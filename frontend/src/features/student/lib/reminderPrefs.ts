@@ -23,7 +23,7 @@
  *    (typed `conflict`), plus idempotency-key replay protection so a retry can
  *    never duplicate audit effects.
  */
-import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+import type { KvStore } from '../../../lib/kvStore';
 import { CALENDAR_SOURCE_TYPES, SOURCE_LABELS, type CalendarSourceType } from './calendar';
 
 export const REMINDER_CHANNELS = ['in_app', 'email_digest', 'push'] as const;
@@ -325,7 +325,7 @@ function renderPreview(
 }
 
 export class ReminderPrefService {
-  constructor(private store: KvStore = defaultKvStore()) {}
+  constructor(private store: KvStore) {}
 
   /**
    * Normalize a requester into an explicit actor. A malformed runtime actor

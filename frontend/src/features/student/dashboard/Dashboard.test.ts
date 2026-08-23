@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildDashboardWeek, calendarStatusPresentation, currentWeek, dashboardWeekday } from './Dashboard';
+import {
+  buildDashboardWeek,
+  calendarStatusPresentation,
+  currentWeek,
+  dashboardModuleIsDisabled,
+  dashboardWeekday,
+} from './Dashboard';
 import type { CalendarEventRecord } from '../lib/calendarApi';
 
 const EVENT: CalendarEventRecord = {
@@ -38,5 +44,11 @@ describe('Dashboard selected-timezone current week', () => {
     expect(calendarStatusPresentation('cancelled')).toEqual({ chip: 'Cancelled', tone: 'warn' });
     expect(calendarStatusPresentation('done')).toEqual({ chip: 'Done', tone: 'ok' });
     expect(calendarStatusPresentation('scheduled')).toEqual({ chip: 'Scheduled', tone: 'info' });
+  });
+
+  it('disables only modules named by the canonical profile capability projection', () => {
+    expect(dashboardModuleIsDisabled('community', ['community', 'sharing'])).toBe(true);
+    expect(dashboardModuleIsDisabled('calendar', ['community', 'sharing'])).toBe(false);
+    expect(dashboardModuleIsDisabled('community', [])).toBe(false);
   });
 });

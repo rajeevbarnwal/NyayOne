@@ -35,7 +35,10 @@ def main() -> None:
         last_name="Probe",
         mobile="9666666666",
         dob="2000-01-01",
-        consent={"accepted": True, "policy_version": "qa"},
+        terms_accepted=True,
+        terms_version="terms-2026-08.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy-2026-08.v1",
     )
     with factory() as session:
         created = register_student(

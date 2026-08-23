@@ -10,13 +10,21 @@ const REGISTRATION_PATH = 'src/features/student/lib/registrationApi.ts';
 const SETTINGS_API_PATH = 'src/features/student/lib/settingsApi.ts';
 const SETTINGS_SCREEN_PATH = 'src/features/student/settings/SettingsScreens.tsx';
 const V34_PATH = 'src/features/student/auth/V34Screens.tsx';
+const AUTH_CONTEXT_PATH = 'src/app/authContext.tsx';
+const NOTICE_PATH = 'src/features/student/lib/studentAuthTransitionNotice.ts';
 const V34_BROWSER_GATE_PATH = 'scripts/v34-s11-s26-e2e.mjs';
 
 function assertBoundaryContract(value: string): void {
   for (const required of [
     'clearRegistrationAttempt();',
     'resetProfileDraft();',
+    'clearProfileConflictDraft();',
     'clearActorSensitiveQueryState();',
+    "studentBrowserContextAbortController.abort('student_context_changed');",
+    'studentBrowserContextAbortController = new AbortController();',
+    'studentBrowserContextGeneration += 1;',
+    'export function captureStudentContextFence',
+    'export function isStudentContextFenceCurrent',
     "const ACTOR_INDEPENDENT_QUERY_ROOTS = new Set(['public-internship-risk-labels']);",
     'predicate: (query) => !ACTOR_INDEPENDENT_QUERY_ROOTS.has(String(query.queryKey[0] ?? \'\'))',
     'queryClient.getMutationCache().clear();',
@@ -33,44 +41,88 @@ function assertBoundaryContract(value: string): void {
     "  'legalsaathi.student.cleanup-registry.v1',\n] as const;",
     'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;',
     'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;',
-    'length = Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE);',
+    'length = storage.length;',
     'RETIRED_ACTOR_PREFIXES.some((prefix) => key.startsWith(prefix))',
-    '...retiredActorKeys(local)',
+    'if (batch.length === MAX_RETIRED_STUDENT_KEYS_PER_PURGE)',
+    'for (const batch of retired.batches)',
+    'cleanupComplete = retired.complete;',
+    'if (!clearStudentBrowserContext(options)) return false;',
+    "export const STUDENT_AUTH_SESSION_LOCK = 'nyayone.student.auth-session.v1';",
+    "export const STUDENT_AUTH_TRANSITION_CHANNEL = 'nyayone.student.auth-transition.v2';",
+    "export const STUDENT_AUTH_TRANSITION_STARTED_EVENT = 'nyayone:student-auth-transition-started';",
+    "kind: 'start' | 'ack' | 'nack' | 'end';",
+    'run<T>(operation: () => Promise<T>): Promise<T>;',
+    'coordinator.locks.request(',
+    "{ mode: 'shared', signal: abort.signal }",
+    "{ mode: 'exclusive', signal: pending.abort.signal }",
+    'export async function withStudentAuthRequestLease',
+    'failedTransitions: Set<string>;',
+    "coordinator.failedTransitions.has(value.transition) ? 'nack' : 'ack'",
+    "new Error('student_auth_transition_local_cleanup_incomplete')",
+    "new Error('student_auth_transition_peer_cleanup_incomplete')",
+    'notifyTransitionUnavailable(coordinator);',
+    'for (const transitionId of coordinator.activeTransitions) listener.onStart(transitionId);',
   ]) {
     expect(value, `missing browser-context boundary: ${required}`).toContain(required);
   }
   expect(value).toMatch(/let observedStudentActor: ObservedStudentActor \| null = null/);
-  expect(value).toMatch(/observedStudentActor !== null && observedStudentActor\.subject !== actor\.subject/);
-  expect(value).toMatch(/if \(options\.notifyAuthChanged\) notifyStudentAuthChanged\(\);/);
+  expect(value.match(/const retired = retiredActorKeyBatches\(local\);/gu)?.length).toBe(2);
+  expect(value).toMatch(/observedStudentActor === null \|\| observedStudentActor\.subject !== actor\.subject/);
+  expect(value).toMatch(/if \(options\.notifyAuthChanged\) \{[\s\S]*notifyStudentAuthChanged\(\{[\s\S]*preserveProfileReauthHandoff:/);
   expect(value).not.toMatch(/(?:localStorage|sessionStorage|\bstorage)\.clear\s*\(/);
   expect(value).not.toMatch(/setItem\s*\([^\n]*cleanup-registry/);
   expect(value).not.toMatch(/getItem\s*\([^\n]*cleanup-registry/);
   expect(value).not.toMatch(/removeItem\s*\(\s*['"]ls-(?:theme|locale)['"]\s*\)/);
+  expect(value).not.toMatch(
+    /AUTH_TRANSITION_DISCOVERY_MS|kind:\s*['"](?:hello|probe|present)['"]|\{\s*steal:\s*true\s*\}/,
+  );
 }
 
 function assertStudentClientContract(value: string): void {
   expect(value).toMatch(/response\.status !== 401/);
   expect(value).toMatch(/response\.clone\(\)\.json\(\)/);
-  expect(value).toMatch(/errorCode\(body\) === ['"]authentication_required['"]/);
-  expect(value).toMatch(/clearStudentBrowserContext\(\{ notifyAuthChanged:/);
+  expect(value).toContain("const STUDENT_AUTH_LOSS_CODES = new Set([\n  'authentication_required',\n  'session_authority_required',\n]);");
+  expect(value).toContain("STUDENT_AUTH_LOSS_CODES.has(errorCode(body) ?? '')");
+  expect(value).toMatch(/clearStudentBrowserContext\(\{[\s\S]*notifyAuthChanged:/);
+  expect(value).toContain('capturedDraft !== null || hasProfileReauthHandoff()');
+  expect(value).toContain('preserveProfileReauthHandoff: preserveRetainedDraft');
 }
 
-function assertRegistrationLifecycle(value: string): void {
-  expect(value).toMatch(/verifyLoginOtp[\s\S]*state\.status === ['"]authenticated['"][\s\S]*clearStudentBrowserContext\(\)/);
-  expect(value).toMatch(/getStudentSession[\s\S]*!isStudentSessionActor\(result\.actor\)[\s\S]*clearStudentBrowserContext\(\)[\s\S]*return null/);
-  expect(value).toMatch(/getStudentSession[\s\S]*observeStudentSessionActor\(\{[\s\S]*subject: result\.actor\.sub/);
-  expect(value).toMatch(/logoutStudent[\s\S]*let accepted = false;[\s\S]*await jsonRequest[\s\S]*accepted = true;[\s\S]*finally \{[\s\S]*clearStudentBrowserContext\(\{[\s\S]*notifyAuthChanged: true,[\s\S]*consumeRegisteredActor: accepted/);
+function assertRegistrationLifecycle(value: string, authContext: string): void {
+  expect(value).toMatch(/verifyStudentOtp[\s\S]*withStudentAuthTransition\(async \(transition\) =>/);
+  expect(value).toMatch(/verifyLoginOtp[\s\S]*withStudentAuthTransition\(async \(transition\) =>/);
+  const discovery = value.match(/export async function getStudentSession\([\s\S]*?\n\}/)?.[0] ?? '';
+  expect(discovery).toContain('return null;');
+  expect(discovery).not.toContain('clearStudentBrowserContext');
+  expect(discovery).not.toContain('observeStudentSessionActor');
+  expect(value).toContain("const acceptedServerRoles = new Set([\n    'admin',\n    'legal_reviewer',\n    'moderator',\n    'safety_officer',\n    'student',\n  ]);");
+  expect(value).toContain('keys.length !== expectedKeys.length');
+  expect(value).toContain('isCanonicalUuid(actor.sub)');
+  expect(value).toContain('isCanonicalStudentConsentState(actor.consent_state)');
+  expect(value).toMatch(/withStudentAuthTransition[\s\S]*await transition\.run\(async \(\) =>[\s\S]*await getStudentSession\(\{ authTransition: transition \}\)[\s\S]*finally \{[\s\S]*await finishStudentAuthTransition\(transition\)/);
+  expect(value).toMatch(/logoutStudent[\s\S]*withStudentAuthTransition\(async \(transition\) =>[\s\S]*\/auth\/student\/logout[\s\S]*authTransition: transition/);
+  expect(authContext).toMatch(/applyStudentSessionDiscovery[\s\S]*generation !== currentGeneration[\s\S]*observeStudentSessionActor/);
+  expect(authContext).toMatch(/const actor = await getStudentSession\(\)[\s\S]*applyStudentSessionDiscovery\(generation, generationRef\.current, actor\)/);
+  expect(authContext).toMatch(/subscribeStudentAuthTransitions\(\{[\s\S]*onStart:[\s\S]*onEnd:/);
 }
 
-function assertDeletionLifecycle(api: string, screen: string, authGate: string): void {
-  expect(api).toMatch(/requestAccountDeletion[\s\S]*clearStudentBrowserContext\(\{[\s\S]*notifyAuthChanged: true,[\s\S]*consumeRegisteredActor: true[\s\S]*return \{ requestId/);
-  const success = screen.match(/const deleteMut = useMutation\(\{[\s\S]*?onSuccess:[\s\S]*?onError:/)?.[0] ?? '';
-  expect(success).toContain('deletePoll.clear();');
-  expect(success).toContain("nav('/s-03'");
-  expect(success).toContain('studentDeletionAccepted: true');
-  expect(success).not.toContain('deletePoll.track(');
+function assertDeletionLifecycle(api: string, screen: string, authGate: string, notice: string): void {
+  expect(api).toMatch(/requestAccountDeletion[\s\S]*withStudentAuthTransition\(async \(transition\) =>[\s\S]*\/privacy\/delete[\s\S]*authTransition: transition[\s\S]*requireAnonymousAfterSuccess: true/);
+  expect(api).toContain('function requirePrivacyRequestAccepted(value: unknown)');
+  expect(api).toContain("!/^[0-9a-f]{32}$/u.test(wire.request_id)");
+  expect(api).toContain("keys[0] !== 'request_id'");
+  expect(api).toContain("keys[1] !== 'status'");
+  expect(api).toContain("wire.status !== 'pending'");
+  expect(api).toMatch(/\/privacy\/delete[\s\S]*?\n {6}202,/);
+  const success = screen.match(/async function submitAccountDeletion\(\)[\s\S]*?\n {2}\}/)?.[0] ?? '';
+  expect(success).toContain("recordStudentAuthTransitionNotice('account_deletion_accepted')");
+  expect(success).toContain("nav('/s-03', { replace: true })");
+  expect(success).not.toContain('studentDeletionAccepted');
+  expect(screen).not.toContain('const deleteMut = useMutation({');
   expect(authGate).toContain('DELETION REQUEST ACCEPTED');
-  expect(authGate).toContain('studentDeletionAccepted');
+  expect(authGate).toContain("consumeStudentAuthTransitionNotice('account_deletion_accepted')");
+  expect(notice).toContain('let pendingNotice: StudentAuthTransitionNotice | null = null;');
+  expect(notice).not.toMatch(/localStorage|sessionStorage|indexedDB/);
   const signOut = authGate.match(/async function signOut\(\)[\s\S]*?\n {2}\}/)?.[0] ?? '';
   expect(signOut).toContain('await logoutStudent()');
   expect(signOut).not.toContain('notifyStudentAuthChanged()');
@@ -98,16 +150,20 @@ describe('NYAY-19 browser-context source contract', () => {
       expect(source(path), path).toContain('studentApiFetch');
     }
     const credentials = source('src/features/student/lib/credentialsApi.ts');
-    expect(credentials).toMatch(/actor === ['"]student['"][\s\S]*studentApiFetch[\s\S]*apiFetch/);
+    expect(credentials).toMatch(
+      /sessionScope === ['"]student['"][\s\S]*studentApiFetch[\s\S]*apiFetch/,
+    );
+    expect(credentials).not.toContain('X-Actor-Claims');
     expect(source('src/features/student/lib/riskLabelsApi.ts')).not.toContain('studentApiFetch');
   });
 
   it('pins anonymous/invalid, rotation, logout and deletion lifecycle wiring', () => {
-    assertRegistrationLifecycle(source(REGISTRATION_PATH));
+    assertRegistrationLifecycle(source(REGISTRATION_PATH), source(AUTH_CONTEXT_PATH));
     assertDeletionLifecycle(
       source(SETTINGS_API_PATH),
       source(SETTINGS_SCREEN_PATH),
       source(V34_PATH),
+      source(NOTICE_PATH),
     );
   });
 
@@ -117,9 +173,9 @@ describe('NYAY-19 browser-context source contract', () => {
       /if \(url\.pathname === '\/api\/v1\/auth\/student\/session'\)([\s\S]*?)if \(url\.pathname === '\/api\/v1\/student\/settings'\)/,
     )?.[1] ?? '';
     for (const field of [
-      "sub: 'student-browser-gate'",
+      "sub: '00000000-0000-4000-8000-000000002701'",
       "roles: ['student']",
-      "student_profile_id: 'profile-browser-gate'",
+      "student_profile_id: '00000000-0000-4000-8000-000000002702'",
       "student_verification: 'verified'",
       'is_minor: false',
       "consent_state: ['registration']",
@@ -142,17 +198,22 @@ describe('NYAY-19 browser-context source contract', () => {
     ['retired registry cleanup', "  'legalsaathi.student.cleanup-registry.v1',\n] as const;"],
     ['bounded retired-key purge', 'export const MAX_RETIRED_STUDENT_KEYS_PER_PURGE = 256;'],
     ['retired prefix inventory', 'const RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX] as const;'],
-    ['retired prefix purge', '...retiredActorKeys(local)'],
+    ['retired prefix purge', 'const retired = retiredActorKeyBatches(local);'],
+    ['abort prior actor work', "studentBrowserContextAbortController.abort('student_context_changed');"],
+    ['peer cleanup rejection', "new Error('student_auth_transition_peer_cleanup_incomplete')"],
+    ['late subscriber replay', 'for (const transitionId of coordinator.activeTransitions) listener.onStart(transitionId);'],
   ])('kills removal of the %s boundary', (_label, needle) => {
     const mutant = source(BOUNDARY_PATH).replace(needle, '/* planted removal */');
     expect(() => assertBoundaryContract(mutant)).toThrow();
   });
 
   it.each([
-    ['unbounded purge', 'Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE)', 'storage.length'],
+    ['first-index cap', 'length = storage.length;', 'length = Math.min(storage.length, MAX_RETIRED_STUDENT_KEYS_PER_PURGE);'],
+    ['matching-key batch cap removal', 'if (batch.length === MAX_RETIRED_STUDENT_KEYS_PER_PURGE)', 'if (false)'],
     ['report prefix removal', 'RETIRED_ACTOR_PREFIXES = [REPORT_KEY_PREFIX, REMINDER_KEY_PREFIX]', 'RETIRED_ACTOR_PREFIXES = [REMINDER_KEY_PREFIX]'],
-    ['memory actor rotation', 'observedStudentActor !== null && observedStudentActor.subject !== actor.subject', 'false'],
+    ['memory actor rotation', 'observedStudentActor === null || observedStudentActor.subject !== actor.subject', 'false'],
     ['unknown query preservation', '!ACTOR_INDEPENDENT_QUERY_ROOTS.has', 'ACTOR_INDEPENDENT_QUERY_ROOTS.has'],
+    ['failed peer acknowledgement', "coordinator.failedTransitions.has(value.transition) ? 'nack' : 'ack'", "false ? 'nack' : 'ack'"],
   ])('kills the %s mutant', (_label, needle, replacement) => {
     const original = source(BOUNDARY_PATH);
     const mutant = original.replace(needle, replacement);
@@ -163,53 +224,69 @@ describe('NYAY-19 browser-context source contract', () => {
   it.each([
     ['status-only clearing', "response.status !== 401", 'false'],
     ['body consumption', 'response.clone().json()', 'response.json()'],
-    ['inexact auth code', "errorCode(body) === 'authentication_required'", 'response.status === 401'],
-    ['clear removal', 'clearStudentBrowserContext({ notifyAuthChanged:', 'void ({ notifyAuthChanged:'],
+    ['auth-loss code allowlist', "STUDENT_AUTH_LOSS_CODES.has(errorCode(body) ?? '')", 'response.status === 401'],
+    ['auth-loss handoff retention', 'capturedDraft !== null || hasProfileReauthHandoff()', 'false'],
+    ['clear removal', 'clearStudentBrowserContext({', 'void ({'],
   ])('kills the %s client mutant', (_label, needle, replacement) => {
-    const mutant = source(CLIENT_PATH).replace(needle, replacement);
+    const original = source(CLIENT_PATH);
+    const mutant = original.replace(needle, replacement);
+    expect(mutant).not.toBe(original);
     expect(() => assertStudentClientContract(mutant)).toThrow();
   });
 
-  it('kills anonymous-session cleanup removal', () => {
-    const mutant = source(REGISTRATION_PATH).replace(
-      'clearStudentBrowserContext();\n    return null;',
-      'return null; /* planted stale context */',
+  it('kills stale discovery side effects and current-generation application removal', () => {
+    const registration = source(REGISTRATION_PATH);
+    const impure = registration.replace(
+      'if (isAnonymousStudentSessionProjection(result)) {\n    return null;',
+      'if (isAnonymousStudentSessionProjection(result)) {\n    clearStudentBrowserContext();\n    return null;',
     );
-    expect(() => assertRegistrationLifecycle(mutant)).toThrow();
-  });
-
-  it('kills logout cleanup removal', () => {
-    const mutant = source(REGISTRATION_PATH).replace(
-      /clearStudentBrowserContext\(\{\s*notifyAuthChanged: true,\s*consumeRegisteredActor: accepted,\s*\}\);/,
-      '/* planted logout cleanup removal */',
+    expect(() => assertRegistrationLifecycle(impure, source(AUTH_CONTEXT_PATH))).toThrow();
+    const authMutant = source(AUTH_CONTEXT_PATH).replace(
+      'if (generation !== currentGeneration) return false;',
+      'if (false) return false;',
     );
-    expect(() => assertRegistrationLifecycle(mutant)).toThrow();
+    expect(() => assertRegistrationLifecycle(registration, authMutant)).toThrow();
   });
 
-  it('kills logout acceptance binding removal', () => {
-    const original = source(REGISTRATION_PATH);
-    const mutant = original.replace('    accepted = true;\n', '');
-    expect(mutant).not.toBe(original);
-    expect(() => assertRegistrationLifecycle(mutant)).toThrow();
+  it('kills logout transition wrapping', () => {
+    const mutant = source(REGISTRATION_PATH).replace(
+      'export async function logoutStudent(): Promise<void> {\n  await withStudentAuthTransition(async (transition) => {',
+      'export async function logoutStudent(): Promise<void> {\n  await (async () => {',
+    );
+    expect(mutant).not.toBe(source(REGISTRATION_PATH));
+    expect(() => assertRegistrationLifecycle(mutant, source(AUTH_CONTEXT_PATH))).toThrow();
   });
 
-  it('kills accepted-deletion ref revival', () => {
+  it('kills transition-owned accepted-deletion completion', () => {
     const mutant = source(SETTINGS_SCREEN_PATH).replace(
-      'deletePoll.clear();',
-      "deletePoll.track('planted-stale-ref');",
+      "recordStudentAuthTransitionNotice('account_deletion_accepted');",
+      '/* planted completion loss */',
     );
     expect(() => assertDeletionLifecycle(
-      source(SETTINGS_API_PATH), mutant, source(V34_PATH),
+      source(SETTINGS_API_PATH), mutant, source(V34_PATH), source(NOTICE_PATH),
     )).toThrow();
   });
 
-  it('kills accepted-deletion browser cleanup removal', () => {
+  it('kills the post-deletion anonymous-session proof', () => {
     const mutant = source(SETTINGS_API_PATH).replace(
-      /clearStudentBrowserContext\(\{\s*notifyAuthChanged: true,\s*consumeRegisteredActor: true,\s*\}\);/,
-      '/* planted deletion cleanup removal */',
+      '{ requireAnonymousAfterSuccess: true }',
+      '{}',
     );
     expect(() => assertDeletionLifecycle(
-      mutant, source(SETTINGS_SCREEN_PATH), source(V34_PATH),
+      mutant, source(SETTINGS_SCREEN_PATH), source(V34_PATH), source(NOTICE_PATH),
+    )).toThrow();
+  });
+
+  it.each([
+    ['strict response parser', 'function requirePrivacyRequestAccepted(value: unknown)', 'function plantedLooseResponse(value: unknown)'],
+    ['opaque request-id shape', "!/^[0-9a-f]{32}$/u.test(wire.request_id)", 'false'],
+    ['exact 202 response status', '\n      202,', '\n      200,'],
+  ])('kills the accepted-deletion %s mutant', (_label, needle, replacement) => {
+    const original = source(SETTINGS_API_PATH);
+    const mutant = original.replace(needle, replacement);
+    expect(mutant).not.toBe(original);
+    expect(() => assertDeletionLifecycle(
+      mutant, source(SETTINGS_SCREEN_PATH), source(V34_PATH), source(NOTICE_PATH),
     )).toThrow();
   });
 });

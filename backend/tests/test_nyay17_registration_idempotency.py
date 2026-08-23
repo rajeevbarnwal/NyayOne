@@ -55,12 +55,10 @@ def _payload(**changes):
         "last_name": "Nair",
         "mobile": "9876543210",
         "dob": "2004-03-14",
-        "consent": {"accepted": True, "policy_version": "dpdp-2023.v1"},
-        "college": "National Law School",
-        "year_of_study": "Third Year",
-        "enrolment_number": "KA/1234/2023",
-        "institutional_email": "aditi@nls.ac.in",
-        "bar_enrolment_number": "D/1/2020",
+        "terms_accepted": True,
+        "terms_version": "terms.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy.v1",
     }
     payload.update(changes)
     return payload
@@ -68,6 +66,23 @@ def _payload(**changes):
 
 def _request(**changes) -> StudentRegisterRequest:
     return StudentRegisterRequest(**_payload(**changes))
+
+
+def _legacy_v1_payload(**changes):
+    payload = {
+        "first_name": "Aditi",
+        "middle_name": "Rani",
+        "last_name": "Nair",
+        "mobile": "9876543210",
+        "dob": "2004-03-14",
+        "consent": {"accepted": True, "policy_version": "dpdp-2023.v1"},
+    }
+    payload.update(changes)
+    return payload
+
+
+def _legacy_v1_request(**changes) -> StudentRegisterRequest:
+    return StudentRegisterRequest(**_legacy_v1_payload(**changes))
 
 
 class CapturingSender:
@@ -187,23 +202,27 @@ MUTATIONS = (
 
 @pytest.mark.parametrize(("field", "value"), MUTATIONS)
 def test_v1_fingerprint_binds_every_canonical_leaf(field, value):
-    original = registration_service.registration_request_fingerprint(_request())
+    original = registration_service.registration_request_fingerprint(
+        _legacy_v1_request()
+    )
     assert (
         registration_service.registration_request_fingerprint(
-            _request(**{field: value})
+            _legacy_v1_request(**{field: value})
         )
         != original
     )
 
 
 def test_v1_normalization_and_schema_defaults_are_pinned():
-    canonical = _request(
+    canonical = _legacy_v1_request(
         first_name="Aditi",
         college="National Law School",
         year_of_study="Third Year",
+        enrolment_number="KA/1234/2023",
         institutional_email="aditi@nls.ac.in",
+        bar_enrolment_number="D/1/2020",
     )
-    equivalent = _request(
+    equivalent = _legacy_v1_request(
         first_name="  Aditi  ",
         college=" National   Law\tSchool ",
         year_of_study=" Third   Year ",
@@ -215,7 +234,10 @@ def test_v1_normalization_and_schema_defaults_are_pinned():
         equivalent
     ) == registration_service.registration_request_fingerprint(canonical)
     assert set(StudentRegisterRequest.model_fields) == set(
-        registration_service.REGISTRATION_REQUEST_V1_FIELDS
+        registration_service.REGISTRATION_REQUEST_V2_FIELDS
+    )
+    assert registration_service.REGISTRATION_REQUEST_V1_FIELDS < set(
+        StudentRegisterRequest.model_fields
     )
     assert StudentRegisterRequest.model_fields["college"].default is None
     assert canonical.consent.__class__.model_fields["policy_version"].default == (
@@ -244,7 +266,7 @@ def test_exact_replay_and_all_mutations_have_zero_delta(http_ctx):
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert first.status_code == 201
+    assert first.status_code == 202
     with factory() as session:
         baseline = _counts(session)
         record = session.scalar(select(RegistrationIdempotencyRecord))
@@ -259,9 +281,9 @@ def test_exact_replay_and_all_mutations_have_zero_delta(http_ctx):
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert replay.status_code == 201
+    assert replay.status_code == 202
     assert replay.json() == first.json()
-    assert replay.json()["status"] == "pending"
+    assert replay.json()["status"] == "accepted"
     assert len(sender.sent) == 1
 
     for field, value in MUTATIONS:
@@ -313,7 +335,7 @@ def test_provider_failure_preserves_key_and_retryable_graph_with_mismatch_409(
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert first.status_code == 201
+    assert first.status_code == 202
     with factory() as session:
         record = session.scalar(select(RegistrationIdempotencyRecord))
         assert record is not None and record.state == "pending"
@@ -334,7 +356,7 @@ def test_provider_failure_preserves_key_and_retryable_graph_with_mismatch_409(
         headers={"Idempotency-Key": KEY},
         json=_payload(last_name="Shah"),
     )
-    assert exact.status_code == 201
+    assert exact.status_code == 202
     assert exact.json() == first.json()
     assert mismatch.status_code == 409
     assert failing.attempts == 1 and sender.sent == []
@@ -350,7 +372,7 @@ def test_provider_failure_preserves_key_and_retryable_graph_with_mismatch_409(
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert retried.status_code == 201
+    assert retried.status_code == 202
     assert retried.json() == first.json()
     assert len(sender.sent) == 1
     with factory() as session:
@@ -366,7 +388,7 @@ def test_activation_retires_and_removes_match_oracle(http_ctx):
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert created.status_code == 201
+    assert created.status_code == 202
     with factory() as session:
         registration_id = session.scalar(select(StudentRegistration.id))
     assert registration_id is not None
@@ -742,7 +764,7 @@ def test_http_resend_closes_crash_pending_claim_without_later_replay(http_ctx):
         headers={"Idempotency-Key": KEY},
         json=_payload(),
     )
-    assert registered.status_code == 201
+    assert registered.status_code == 202
     with factory() as session:
         record = session.scalar(select(RegistrationIdempotencyRecord))
         assert record is not None and record.registration_id is not None
@@ -1020,7 +1042,7 @@ def test_corrupt_resend_and_finalizer_fail_without_mutation(db_session):
     )
     b = registration_service.register_student(
         db_session,
-        _request(mobile="9876543211", institutional_email="b@nls.ac.in"),
+            _request(mobile="9876543211"),
         now=NOW,
     )
     _attach_signup_flow(db_session, a)
@@ -1275,7 +1297,6 @@ def test_second_ledger_read_dispatches_all_locked_winner_shapes(
     real_key = "real-second-ledger-read"
     real_request = _request(
         mobile="9876543212",
-        institutional_email="second-read@nls.ac.in",
     )
     real = registration_service.register_student(
         db_session,
@@ -1392,7 +1413,7 @@ def test_legacy_terminalization_ambiguity_has_zero_partial_mutation(db_session):
     )
     second = registration_service.register_student(
         db_session,
-        _request(mobile="9876543211", institutional_email="second@nls.ac.in"),
+            _request(mobile="9876543211"),
         now=NOW,
     ).registration
     second.idempotency_key = KEY

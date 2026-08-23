@@ -1,12 +1,6 @@
 import { apiFetch } from '../../../lib/apiClient';
 import { studentApiFetch } from './studentApiClient';
 
-const CLAIMS = 'X-Actor-Claims';
-export const DEV_STUDENT_ID = '00000000-0000-4000-8000-0000000000de';
-export const DEV_ISSUER_ID = '00000000-0000-4000-8000-0000000000c3';
-const STUDENT_CLAIMS = JSON.stringify({ sub: DEV_STUDENT_ID, roles: ['student'] });
-const ISSUER_CLAIMS = JSON.stringify({ sub: DEV_ISSUER_ID, roles: ['lawyer'] });
-
 export const CREDENTIAL_TYPES = [
   { value: 'certificate', label: 'Certificate' },
   { value: 'badge', label: 'Badge' },
@@ -135,18 +129,17 @@ export function newIdempotencyKey(prefix: string): string {
 async function request<T>(
   path: string,
   init: RequestInit = {},
-  actor: 'student' | 'issuer' | 'public' = 'student',
+  sessionScope: 'student' | 'staff' | 'public' = 'student',
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  if (actor !== 'public') {
-    headers.set(CLAIMS, actor === 'issuer' ? ISSUER_CLAIMS : STUDENT_CLAIMS);
-  }
   if (!(init.body instanceof FormData) && init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  // Issuer/public failures do not prove anything about the current student
-  // cookie. Only student-owned credential calls may retire student context.
-  const response = actor === 'student'
+  // JavaScript never selects an actor. Student and staff calls carry only the
+  // current HttpOnly cookie; the server resolves its role and ownership.
+  // Staff/public failures do not prove anything about a student session, so
+  // only student-owned calls may trigger student lifecycle teardown.
+  const response = sessionScope === 'student'
     ? await studentApiFetch(path, { ...init, headers })
     : await apiFetch(path, { ...init, headers });
   const body = await response.json().catch(() => ({})) as {
@@ -314,7 +307,7 @@ export async function verifyCredential(
       headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({ expected_version: expectedVersion }),
     },
-    'issuer',
+    'staff',
   );
 }
 
@@ -331,7 +324,7 @@ export async function revokeCredentialAsIssuer(
       headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({ expected_version: expectedVersion, reason }),
     },
-    'issuer',
+    'staff',
   );
 }
 
@@ -346,7 +339,7 @@ export async function getCredentialHistory(
       reason_code: string;
       created_at: string;
     }>;
-  }>(`/api/v1/issuer/credentials/${encodeURIComponent(credentialId)}/history`);
+  }>(`/api/v1/issuer/credentials/${encodeURIComponent(credentialId)}/history`, {}, 'staff');
   return wire.items.map((item) => ({
     id: item.id,
     fromStatus: item.from_status,

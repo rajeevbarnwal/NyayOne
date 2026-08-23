@@ -41,6 +41,36 @@ NYAY19_BROWSER_CONTRACT_TEST = (
     / "lib"
     / "nyay19-auth-lifecycle-runner-contract.test.mjs"
 )
+NYAY5_BROWSER_ORCHESTRATOR = ROOT / "scripts" / "nyay5_profile_browser_gate.sh"
+NYAY5_BROWSER_GATE = ROOT / "frontend" / "scripts" / "nyay5-profile-browser.mjs"
+NYAY5_BROWSER_CONTRACT = (
+    ROOT / "frontend" / "scripts" / "lib" / "nyay5-profile-browser-contract.mjs"
+)
+NYAY5_BROWSER_CONTRACT_TEST = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay5-profile-browser-contract.test.mjs"
+)
+NYAY5_BROWSER_CONTROL = ROOT / "backend" / "scripts" / "nyay5_browser_gate_control.py"
+NYAY5_POSTGRES_GATE = ROOT / "backend" / "scripts" / "nyay5_postgres_profile_gate.py"
+NYAY5_ACCEPTANCE_AGGREGATE = (
+    ROOT / "frontend" / "scripts" / "nyay5-acceptance-aggregate.mjs"
+)
+NYAY5_ACCEPTANCE_AGGREGATE_TEST = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay5-acceptance-aggregate.test.mjs"
+)
+NYAY5_ACCEPTANCE_ATTESTATION_PRODUCER = (
+    ROOT / "scripts" / "ci" / "nyay5_acceptance_attestations.py"
+)
+NYAY5_ACCEPTANCE_ATTESTATION_TEST = (
+    ROOT / "scripts" / "ci" / "test_nyay5_acceptance_attestations.py"
+)
 FRONTEND_PACKAGE = ROOT / "frontend" / "package.json"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "1920889d94816417792dcc9b5a7aa739869b34fcc8616f8c17df3359c58a45b9"
@@ -59,6 +89,40 @@ EXPECTED_NYAY19_BROWSER_CONTRACT_TEST_SHA256 = (
     "7c81e2d4a6b11131539cabc230e62e399b08051f4ced703453a6b862f917ca83"
 )
 EXPECTED_NYAY19_PACKAGE_COMMAND = "node scripts/nyay19-auth-lifecycle-browser.mjs"
+EXPECTED_NYAY5_BROWSER_ORCHESTRATOR_SHA256 = (
+    "2a594ef9dcc0be184034fa00bfda88a986cdb1c793ccc93681a954d54be1ca53"
+)
+EXPECTED_NYAY5_BROWSER_GATE_SHA256 = (
+    "3b9876f985ca14f85a1251f0fa8e858d091eaf70adc0a56a117e227ca7fe3b7d"
+)
+EXPECTED_NYAY5_BROWSER_CONTRACT_SHA256 = (
+    "a98b50b2e78ce3464978132e0342d4e43449f1185d7449d70f8026710c5f99d7"
+)
+EXPECTED_NYAY5_BROWSER_CONTRACT_TEST_SHA256 = (
+    "738d722270a4d4845ddcdb079fe738c4f5c05b8dfe1dd738d4f55eeaf676f2c2"
+)
+EXPECTED_NYAY5_BROWSER_CONTROL_SHA256 = (
+    "d24b07f325adc630756a6821bd11fecedbcddc76ae42c8cbf5f783ef9615fba8"
+)
+EXPECTED_NYAY5_POSTGRES_GATE_SHA256 = (
+    "b696de5cb796262eaf8ba0b7c9b9a38faae01386e10b6d94c7b26cfb17b4db9b"
+)
+EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_SHA256 = (
+    "1b0fcb0dfa8238d648d04c27e5abb99ac17add6cd667a0d336ac7dc7030de4ca"
+)
+EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_TEST_SHA256 = (
+    "efe6745a2e10be9b60cdaae3d62ac1f6865e34a115dcf0c7073793edfd649720"
+)
+EXPECTED_NYAY5_ACCEPTANCE_ATTESTATION_SHA256 = (
+    "98b2b033e87083d4d17246c57fe1765501dcba1cbb8bd2415a66631bcd2d5c32"
+)
+EXPECTED_NYAY5_ACCEPTANCE_ATTESTATION_TEST_SHA256 = (
+    "8768b19f049a803981f37b0378a4e922c8f1c96e20a3fa7c62dbccb900adc13e"
+)
+EXPECTED_NYAY5_BROWSER_PACKAGE_COMMAND = "node scripts/nyay5-profile-browser.mjs"
+EXPECTED_NYAY5_ACCEPTANCE_PACKAGE_COMMAND = (
+    "node scripts/nyay5-acceptance-aggregate.mjs"
+)
 NYAY19_ISOLATED_MIGRATION_ENV = "NYAY19_ISOLATED_MIGRATION_EXECUTE"
 EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS: dict[
     tuple[str, str], tuple[str, ...]
@@ -85,11 +149,15 @@ EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS: dict[
     ("wave5-calendar-gate.yml", "calendar-real-browser"): (
         "alembic upgrade head",
     ),
+    ("nyay5-profile-boundary-gate.yml", "profile-postgres-production-browser"): (
+        "bash scripts/db_gate.sh",
+    ),
 }
 EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
     "backend/scripts/nyay2_postgres_authorization_gate.py",
     "backend/scripts/nyay3_postgres_characterization.py",
     "backend/scripts/nyay4_postgres_otp_gate.py",
+    "backend/scripts/nyay5_postgres_profile_gate.py",
     "backend/scripts/nyay16_postgres_gate.py",
     "backend/scripts/nyay17_postgres_idempotency_gate.py",
     "backend/scripts/nyay19_migrate.py",
@@ -100,6 +168,7 @@ EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
 }
 EXPECTED_NYAY19_ALEMBIC_SHELL_CALLERS = {
     "backend/scripts/db_gate.sh": "isolated-postgresql",
+    "scripts/nyay5_profile_browser_gate.sh": "nyay5-owned-scratch-postgresql",
     "scripts/wave2_tutoring_browser_gate.sh": "local-sqlite",
 }
 NYAY19_ISOLATED_DATABASE_MARKERS = {
@@ -127,7 +196,7 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "41065fdde2ff466444826a2e78b317bd953f2cbae4543102abc305911efbc7c3"
+EXPECTED_DB_GATE_SHA256 = "648fc1a3959edf7bc147a56b166c5b6bcfa00b66065a1ae0def43964fc277cec"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -139,6 +208,11 @@ EXPECTED_NYAY3_DB_GATE_COMMAND = (
 EXPECTED_NYAY2_DB_GATE_COMMAND = (
     '"$PY" scripts/nyay2_postgres_authorization_gate.py '
     "--report test-results/nyay2-postgres/summary.json"
+)
+EXPECTED_NYAY5_DB_GATE_COMMAND = (
+    'NYAY5_POSTGRES_GATE=1 "$PY" scripts/nyay5_postgres_profile_gate.py '
+    '--execute --database-url "$DATABASE_URL" '
+    "--output test-results/nyay5-postgres/summary.json"
 )
 EXPECTED_NYAY17_DB_GATE_COMMAND = (
     '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
@@ -186,6 +260,7 @@ CANONICAL_WORKFLOW_FILES = {
     "wave3-credential-trust-gate.yml",
     "wave4-private-reporting-gate.yml",
     "wave5-calendar-gate.yml",
+    "nyay5-profile-boundary-gate.yml",
 }
 DANGEROUS_ENV_KEYS = {
     "BASH_ENV",
@@ -236,7 +311,54 @@ EXPECTED_NYAY19_START_RUN = (
     "  done\n"
     "done\n"
 )
+EXPECTED_NYAY5_ATTESTATION_RUN = (
+    'python scripts/ci/nyay5_acceptance_attestations.py --browser '
+    '"$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json" '
+    '--orchestrator '
+    '"$GITHUB_WORKSPACE/test-results/nyay5-browser/orchestrator-summary.json" '
+    '--postgres "$GITHUB_WORKSPACE/test-results/nyay5-postgres/summary.json" '
+    '--otp-postgres "$GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json" '
+    '--manifest-root "$GITHUB_WORKSPACE/test-results/nyay5-browser" '
+    '--output "$GITHUB_WORKSPACE/test-results/nyay5-acceptance/attestations.json"'
+)
+EXPECTED_NYAY5_ACCEPTANCE_RUN = (
+    'npm run qa:nyay5:acceptance -- --browser '
+    '"$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json" '
+    '--postgres "$GITHUB_WORKSPACE/test-results/nyay5-postgres/summary.json" '
+    '--otp-postgres "$GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json" '
+    '--attestations '
+    '"$GITHUB_WORKSPACE/test-results/nyay5-acceptance/attestations.json" '
+    '--output "$GITHUB_WORKSPACE/test-results/nyay5-acceptance/summary.json"'
+)
 EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "profile-postgres-production-browser",
+        "Seal and verify raw NYAY-5 browser evidence inventory",
+    ): {
+        "name": "Seal and verify raw NYAY-5 browser evidence inventory",
+        "run": (
+            'python scripts/ci/evidence_manifest.py --seal '
+            '"$GITHUB_WORKSPACE/test-results/nyay5-browser"'
+        ),
+    },
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "profile-postgres-production-browser",
+        "Produce executed NYAY-5 acceptance attestations",
+    ): {
+        "name": "Produce executed NYAY-5 acceptance attestations",
+        "run": EXPECTED_NYAY5_ATTESTATION_RUN,
+    },
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "profile-postgres-production-browser",
+        "Run and require exact NYAY-5 acceptance aggregate PASS",
+    ): {
+        "name": "Run and require exact NYAY-5 acceptance aggregate PASS",
+        "working-directory": "frontend",
+        "run": EXPECTED_NYAY5_ACCEPTANCE_RUN,
+    },
     (
         "wave3-credential-trust-gate.yml",
         "credential-trust-postgres-browser",
@@ -292,6 +414,13 @@ EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
     },
 }
 EVIDENCE_CONTRACTS: dict[str, dict[str, tuple[str, str, str]]] = {
+    "nyay5-profile-boundary-gate.yml": {
+        "profile-postgres-production-browser": (
+            "$GITHUB_WORKSPACE/test-results",
+            "$RUNNER_TEMP/nyay5-uploadable",
+            "nyay5",
+        ),
+    },
     "wave1-foundation-gate.yml": {
         "frontend-native": (
             "$RUNNER_TEMP/v34-s11-s26",
@@ -348,6 +477,14 @@ EXPECTED_JOB_DEFAULTS: dict[tuple[str, str], dict[str, object]] = {
     },
 }
 EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
+    ("nyay5-profile-boundary-gate.yml", "profile-postgres-production-browser"): {
+        "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_nyay5_ci",
+        "NYAY5_POSTGRES_CONTROL_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_nyay5_ci",
+        "APP_ENV": "testing",
+        "REGISTRATION_SECRET": "ci-nyay5-registration-encryption-secret-not-a-default",
+        "REGISTRATION_LOOKUP_SECRET": "ci-nyay5-registration-lookup-secret-not-a-default",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+    },
     ("registration-db-gate.yml", "postgres-16-pgvector"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_ci",
         "REGISTRATION_SECRET": "ci-registration-encryption-secret",
@@ -430,6 +567,10 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
     },
 }
 EVIDENCE_UPLOAD_NAMES: dict[tuple[str, str], str] = {
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "profile-postgres-production-browser",
+    ): "nyay5-profile-boundary-attestation",
     ("wave1-foundation-gate.yml", "frontend-native"): "v34-s11-s26-browser-attestation",
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "wave2-tutoring-db-gate-attestation",
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "wave3-credential-trust-attestation",
@@ -438,6 +579,20 @@ EVIDENCE_UPLOAD_NAMES: dict[tuple[str, str], str] = {
     ("wave5-calendar-gate.yml", "calendar-real-browser"): "wave5-calendar-real-browser-attestation",
 }
 REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
+    ("nyay5-profile-boundary-gate.yml", "profile-postgres-production-browser"): {
+        "(cd backend && PYTHON=python bash scripts/db_gate.sh)",
+        "bash scripts/nyay5_profile_browser_gate.sh $GITHUB_WORKSPACE/test-results/nyay5-browser/results.json",
+        "python scripts/ci/evidence_manifest.py --seal $GITHUB_WORKSPACE/test-results/nyay5-browser",
+        (
+            "python scripts/ci/nyay5_acceptance_attestations.py --browser "
+            "$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json "
+            "--orchestrator $GITHUB_WORKSPACE/test-results/nyay5-browser/orchestrator-summary.json "
+            "--postgres $GITHUB_WORKSPACE/test-results/nyay5-postgres/summary.json "
+            "--otp-postgres $GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json "
+            "--manifest-root $GITHUB_WORKSPACE/test-results/nyay5-browser "
+            "--output $GITHUB_WORKSPACE/test-results/nyay5-acceptance/attestations.json"
+        ),
+    },
     ("registration-db-gate.yml", "postgres-16-pgvector"): {
         "PYTHON=python bash scripts/db_gate.sh",
     },
@@ -452,6 +607,14 @@ ALLOWED_STEP_CONDITIONS = {
 }
 NO_OP_RUN_COMMANDS = {":", "exit 0", "true"}
 EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "profile-postgres-production-browser",
+    ): "d87c17bf770e64a32ac3be6a1d6e480f104e2777e4f738c464cb05071ec05220",
+    (
+        "nyay5-profile-boundary-gate.yml",
+        "required",
+    ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
     ("nyayone-policy-gate.yml", "policy-contracts"): "151bbfbfcab418fa90213523175b7b50ce0597d6504afcc2f5dd30eb79531838",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
@@ -1092,7 +1255,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
     leaving the workflow untouched while deleting/bypassing NYAY-16, NYAY-3,
-    NYAY-2, NYAY-17, NYAY-4, or NYAY-19 cannot produce a false green.
+    NYAY-2, NYAY-5, NYAY-17, NYAY-4, or NYAY-19 cannot produce a false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -1115,6 +1278,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     nyay16 = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
     nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
     nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
+    nyay5 = _canonical_shell(EXPECTED_NYAY5_DB_GATE_COMMAND)
     nyay17 = _canonical_shell(EXPECTED_NYAY17_DB_GATE_COMMAND)
     nyay4 = _canonical_shell(EXPECTED_NYAY4_DB_GATE_COMMAND)
     nyay19 = _canonical_shell(EXPECTED_NYAY19_DB_GATE_COMMAND)
@@ -1129,6 +1293,10 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay2) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-2 PostgreSQL gate once"
+        )
+    if canonical.count(nyay5) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-5 PostgreSQL gate once"
         )
     if canonical.count(nyay17) != 1:
         failures.append(
@@ -1169,11 +1337,19 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         )
     if (
         nyay2 not in canonical
-        or nyay17 not in canonical
-        or canonical.index(nyay17) < canonical.index(nyay2)
+        or nyay5 not in canonical
+        or canonical.index(nyay5) < canonical.index(nyay2)
     ):
         failures.append(
-            f"{path}: NYAY-17 PostgreSQL gate must remain after the NYAY-2 stage"
+            f"{path}: NYAY-5 PostgreSQL gate must remain after the NYAY-2 stage"
+        )
+    if (
+        nyay5 not in canonical
+        or nyay17 not in canonical
+        or canonical.index(nyay17) < canonical.index(nyay5)
+    ):
+        failures.append(
+            f"{path}: NYAY-17 PostgreSQL gate must remain after the NYAY-5 stage"
         )
     if (
         nyay17 not in canonical
@@ -1323,6 +1499,117 @@ def check_nyay19_browser_gate_contract(
             failures.append(
                 f"{package_path}: NYAY-19 browser package command may not have an npm lifecycle wrapper"
             )
+    return failures
+
+
+def check_nyay5_gate_contract(
+    orchestrator_path: Path = NYAY5_BROWSER_ORCHESTRATOR,
+    browser_path: Path = NYAY5_BROWSER_GATE,
+    contract_path: Path = NYAY5_BROWSER_CONTRACT,
+    contract_test_path: Path = NYAY5_BROWSER_CONTRACT_TEST,
+    control_path: Path = NYAY5_BROWSER_CONTROL,
+    postgres_path: Path = NYAY5_POSTGRES_GATE,
+    aggregate_path: Path = NYAY5_ACCEPTANCE_AGGREGATE,
+    aggregate_test_path: Path = NYAY5_ACCEPTANCE_AGGREGATE_TEST,
+    attestation_path: Path = NYAY5_ACCEPTANCE_ATTESTATION_PRODUCER,
+    attestation_test_path: Path = NYAY5_ACCEPTANCE_ATTESTATION_TEST,
+    package_path: Path = FRONTEND_PACKAGE,
+) -> list[str]:
+    """Seal the complete executable NYAY-5 producer and aggregate chain."""
+
+    failures: list[str] = []
+    pinned_files = (
+        (
+            orchestrator_path,
+            EXPECTED_NYAY5_BROWSER_ORCHESTRATOR_SHA256,
+            "NYAY-5 browser orchestrator",
+        ),
+        (
+            browser_path,
+            EXPECTED_NYAY5_BROWSER_GATE_SHA256,
+            "NYAY-5 browser gate",
+        ),
+        (
+            contract_path,
+            EXPECTED_NYAY5_BROWSER_CONTRACT_SHA256,
+            "NYAY-5 browser assertion contract",
+        ),
+        (
+            contract_test_path,
+            EXPECTED_NYAY5_BROWSER_CONTRACT_TEST_SHA256,
+            "NYAY-5 browser assertion contract tests",
+        ),
+        (
+            control_path,
+            EXPECTED_NYAY5_BROWSER_CONTROL_SHA256,
+            "NYAY-5 scratch-database control",
+        ),
+        (
+            postgres_path,
+            EXPECTED_NYAY5_POSTGRES_GATE_SHA256,
+            "NYAY-5 PostgreSQL gate",
+        ),
+        (
+            aggregate_path,
+            EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_SHA256,
+            "NYAY-5 acceptance aggregate",
+        ),
+        (
+            aggregate_test_path,
+            EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_TEST_SHA256,
+            "NYAY-5 acceptance aggregate tests",
+        ),
+        (
+            attestation_path,
+            EXPECTED_NYAY5_ACCEPTANCE_ATTESTATION_SHA256,
+            "NYAY-5 acceptance attestation producer",
+        ),
+        (
+            attestation_test_path,
+            EXPECTED_NYAY5_ACCEPTANCE_ATTESTATION_TEST_SHA256,
+            "NYAY-5 acceptance attestation producer tests",
+        ),
+    )
+    for path, expected_sha256, label in pinned_files:
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: {label} is missing or unsafe")
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            failures.append(f"{path}: {label} is unreadable")
+            continue
+        if hashlib.sha256(raw).hexdigest() != expected_sha256:
+            failures.append(f"{path}: {label} SHA-256 differs from the sealed contract")
+
+    if not package_path.is_file() or package_path.is_symlink():
+        failures.append(f"{package_path}: frontend package contract is missing or unsafe")
+        return failures
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{package_path}: frontend package contract is unreadable")
+        return failures
+    scripts = package.get("scripts") if isinstance(package, dict) else None
+    if not isinstance(scripts, dict):
+        failures.append(f"{package_path}: frontend scripts must be a mapping")
+        return failures
+    commands = {
+        "qa:nyay5:profile-boundary": EXPECTED_NYAY5_BROWSER_PACKAGE_COMMAND,
+        "qa:nyay5:acceptance": EXPECTED_NYAY5_ACCEPTANCE_PACKAGE_COMMAND,
+    }
+    for gate_name, expected_command in commands.items():
+        if scripts.get(gate_name) != expected_command:
+            failures.append(
+                f"{package_path}: NYAY-5 {gate_name} package command differs "
+                "from the exact contract"
+            )
+        for hook in (f"pre{gate_name}", f"post{gate_name}"):
+            if hook in scripts:
+                failures.append(
+                    f"{package_path}: NYAY-5 package command may not have an "
+                    "npm lifecycle wrapper"
+                )
     return failures
 
 
@@ -1945,6 +2232,33 @@ def check_alembic_execution_contracts(root: Path = ROOT) -> list[str]:
                 failures.append(
                     f"{path}: missing exact isolated shell authority"
                 )
+        elif classification == "nyay5-owned-scratch-postgresql":
+            canonical = _canonical_shell(re.sub(r"\\\s*\n", " ", executable))
+            control_guard = _canonical_shell(
+                'CONTROL_URL="${NYAY5_POSTGRES_CONTROL_URL:?NYAY5_POSTGRES_CONTROL_URL is required}"'
+            )
+            create_scratch = _canonical_shell(
+                'PYTHONPATH="$ROOT/backend" "$PYTHON" '
+                '"$ROOT/backend/scripts/nyay5_browser_gate_control.py" create '
+                '--control-url "$CONTROL_URL" --state-file "$STATE_FILE" '
+                '>"$PRIVATE_DIR/create-summary.json" 2>"$PRIVATE_DIR/create-error.log"'
+            )
+            isolated_upgrade = _canonical_shell(
+                "APP_ENV=testing DATABASE_URL=\"$SCRATCH_URL\" "
+                "REGISTRATION_SECRET='nyay5-browser-synthetic-registration-key-v1' "
+                "REGISTRATION_LOOKUP_SECRET='nyay5-browser-synthetic-lookup-key-v1' "
+                f"{NYAY19_ISOLATED_MIGRATION_ENV}=1 "
+                '"$PYTHON" -m alembic upgrade head'
+            )
+            if (
+                canonical.count(control_guard) != 1
+                or canonical.count(create_scratch) != 1
+                or canonical.count(isolated_upgrade) != 1
+                or f"export {NYAY19_ISOLATED_MIGRATION_ENV}" in executable
+            ):
+                failures.append(
+                    f"{path}: NYAY-5 Alembic caller lacks exact owned-scratch isolated authority"
+                )
         elif classification == "local-sqlite":
             if (
                 NYAY19_ISOLATED_MIGRATION_ENV in executable
@@ -2010,11 +2324,12 @@ def main() -> int:
     failures: list[str] = []
     if {path.name for path in workflow_paths} != CANONICAL_WORKFLOW_FILES:
         failures.append(
-            "workflow filename inventory differs from the seven canonical required gates"
+            "workflow filename inventory differs from the eight canonical required gates"
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(check_nyay19_browser_gate_contract())
+    failures.extend(check_nyay5_gate_contract())
     failures.extend(check_alembic_execution_contracts())
     failures.extend(
         failure for path in workflow_paths for failure in check_workflow(path)

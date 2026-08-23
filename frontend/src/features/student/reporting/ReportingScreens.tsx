@@ -1,6 +1,12 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  isStudentMutationCancellation,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import { Checkbox, InfoTooltip, StudentScreen, TextField } from '../components';
 import {
   REPORT_CATEGORIES,
@@ -148,17 +154,35 @@ export function InternshipReportCreate() {
 
   const save = useMutation({
     mutationFn: async ({ submit }: { submit: boolean }) => {
+      const fence = captureStudentMutationSequence();
       let report = editing
-        ? await updateInternshipReport(editing.id, editing.version, draftPayload(draft))
-        : await createInternshipReport(draftPayload(draft));
+        ? await runStudentMutationStep(
+          fence,
+          () => updateInternshipReport(editing.id, editing.version, draftPayload(draft)),
+        )
+        : await runStudentMutationStep(fence, () => createInternshipReport(draftPayload(draft)));
       for (const file of files) {
-        await uploadInternshipReportEvidence(report.id, report.version, file);
-        report = await getInternshipReport(report.id);
+        await runStudentMutationStep(
+          fence,
+          () => uploadInternshipReportEvidence(report.id, report.version, file),
+        );
+        report = await runStudentMutationStep(fence, () => getInternshipReport(report.id));
       }
-      return submit ? submitInternshipReport(report.id, report.version) : report;
+      return submit
+        ? runStudentMutationStep(fence, () => submitInternshipReport(report.id, report.version))
+        : report;
     },
     onSuccess: async (report, variables) => {
-      await client.invalidateQueries({ queryKey: ['internship-reports'] });
+      const fence = captureStudentMutationSequence();
+      try {
+        await runStudentMutationStep(
+          fence,
+          () => client.invalidateQueries({ queryKey: ['internship-reports'] }),
+        );
+      } catch (error) {
+        if (isStudentMutationCancellation(error)) return;
+        throw error;
+      }
       setEditing(report);
       setFiles([]);
       if (fileInput.current) fileInput.current.value = '';

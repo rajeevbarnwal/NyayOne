@@ -22,7 +22,7 @@ def test_wave_database_gates_target_current_application_head():
         gate.HEAD,
         wave4_postgres_gate.HEAD,
         wave5_postgres_gate.HEAD,
-    } == {"0020_auth_retention_lifecycle"}
+    } == {"0021_nyay5_profile_boundary"}
 
 
 @pytest.mark.parametrize("database", ["postgres", "qa_scratch_01"])

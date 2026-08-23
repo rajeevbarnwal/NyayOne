@@ -45,6 +45,8 @@ const WEB = must('E2E_WEB_URL');
 const API = must('E2E_API_URL');
 const OUT = must('E2E_OUT_DIR');
 const FIXTURE_PATH = must('E2E_FIXTURE');
+const ADMIN_SESSION_TOKEN = must('E2E_ADMIN_SESSION_TOKEN');
+const STUDENT_SESSION_TOKEN = must('E2E_STUDENT_SESSION_TOKEN');
 const STAGES = (process.env.E2E_STAGES || 'a').split(',').map((s) => s.trim()).filter(Boolean);
 const PYTHON = process.env.E2E_PYTHON || 'python3';
 const REPO_ROOT = process.env.E2E_REPO_ROOT || process.cwd();
@@ -1460,53 +1462,94 @@ function tutorUserIdFor(tutorProfileId) {
   return null;
 }
 
-/* --------------------------------------------------- mentor (M-01) surface */
+async function studentContext(browser, options = {}) {
+  const ctx = await browser.newContext(options);
+  const apiUrl = new URL(API);
+  await ctx.addCookies([{
+    name: 'nyayone_session',
+    value: STUDENT_SESSION_TOKEN,
+    domain: apiUrl.hostname,
+    path: '/api/v1',
+    httpOnly: true,
+    secure: apiUrl.protocol === 'https:',
+    sameSite: 'Strict',
+  }]);
+  const response = await ctx.request.get(`${API}/api/v1/auth/student/session`);
+  const body = response.ok() ? await response.json() : null;
+  if (response.status() !== 200
+    || body?.authenticated !== true
+    || body?.actor?.sub !== STUDENT
+    || body?.actor?.roles?.join(',') !== 'student'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      body?.actor?.student_profile_id ?? '',
+    )
+    || body?.actor?.student_verification !== 'draft'
+    || body?.actor?.is_minor !== false
+    || body?.actor?.consent_state?.join(',') !== 'registration') {
+    await ctx.close();
+    throw new Error('WAVE2_STUDENT_SESSION_FIXTURE_INVALID');
+  }
+  return ctx;
+}
+
+/* --------------------------------------------------- administrator (M-01) surface */
 
 /**
- * Completion is a TUTOR/ADMIN action (`attendance.RECORDER_ROLES`), so after
- * independent-QA defect D2 it is neither rendered nor dispatchable on the
- * student surface. It is exercised here BY ROLE instead: a second browser
- * context, signed in as the mentor who owns the session, drives the authorised
- * M-01 screen and clicks its real control.
+ * Completion remains a TUTOR/ADMIN server action, but Sprint 1 has no approved
+ * browser ceremony that can establish tutor ownership.  Option B therefore
+ * exercises the shipped M-01 surface through a server-authoritative ADMIN
+ * session.  The isolated fixture stores only the bearer hash; this context
+ * receives the opaque value only as an HttpOnly cookie and invents no browser
+ * authority.
  *
- * Captures made in that context are named with MENTOR_CAPTURE_PREFIX so the J1
- * privacy stage can account for the mentor's authenticated session (the app's
- * secret-free P0.1 verification snapshot) separately from the student journey,
- * whose storage must stay completely empty.
+ * Captures made in that context are named with ADMIN_CAPTURE_PREFIX so the J1
+ * privacy stage can account for the administrator journey separately from the
+ * student journey, whose storage must stay completely empty.
  */
-const MENTOR_CAPTURE_PREFIX = 'mentor_';
+const ADMIN_CAPTURE_PREFIX = 'admin_';
 
-async function mentorContext(browser, tutorUserId) {
+async function adminContext(browser) {
   const ctx = await browser.newContext({ viewport: MOBILE, colorScheme: 'light' });
-  // The app's real sign-in artefact: a redacted, secret-free verification
-  // snapshot. No token, no OTP, no password — the same shape `saveAuthSnapshot`
-  // writes at the end of the P0.1 lawyer verification flow.
-  await ctx.addInitScript((subjectId) => {
-    try {
-      window.localStorage.setItem('ls-auth-lawyer', JSON.stringify({
-        role: 'lawyer',
-        phase: 'verified',
-        destinationMasked: null,
-        challenge: null,
-        consentAt: new Date().toISOString(),
-        subjectId,
-        filingRole: 'lawyer',
-        updatedAt: Date.now(),
-      }));
-    } catch { /* origin without storage (about:blank) — the next navigation retries */ }
-  }, tutorUserId);
+  const apiUrl = new URL(API);
+  await ctx.addCookies([{
+    name: 'nyayone_session',
+    value: ADMIN_SESSION_TOKEN,
+    domain: apiUrl.hostname,
+    path: '/api/v1',
+    httpOnly: true,
+    secure: apiUrl.protocol === 'https:',
+    sameSite: 'Strict',
+  }]);
   const page = await ctx.newPage();
   attachCapture(page);
   return { ctx, page };
 }
 
+/** A server-leg probe through the same real administrator cookie authority. */
+async function adminApi(browser, method, urlPath, { body } = {}) {
+  const { ctx } = await adminContext(browser);
+  try {
+    const response = await ctx.request.fetch(`${API}${urlPath}`, {
+      method,
+      headers: { Origin: new URL(WEB).origin },
+      ...(body === undefined ? {} : { data: body }),
+    });
+    const text = await response.text();
+    let json;
+    try { json = text ? JSON.parse(text) : null; }
+    catch { json = { _unparsed: text.slice(0, 400) }; }
+    return { status: response.status(), json, code: typedCode({ json }) };
+  } finally {
+    await ctx.close();
+  }
+}
+
 /**
- * Record completion in the browser, on the authorised surface, as the mentor.
+ * Record completion in the browser, on the authorised surface, as an admin.
  * Returns what was observed; the caller owns the verdict.
  */
-async function recordCompletionAsMentor(browser, sessionId, tutorUserId, arts, tag) {
-  if (!tutorUserId) return { performedInBrowser: false, reason: 'no tutor user id in the fixture' };
-  const { ctx, page } = await mentorContext(browser, tutorUserId);
+async function recordCompletionAsAdmin(browser, sessionId, arts, tag) {
+  const { ctx, page } = await adminContext(browser);
   const completeCalls = [];
   page.on('response', (res) => {
     if (/\/complete$/.test(new URL(res.url()).pathname)) {
@@ -1515,7 +1558,7 @@ async function recordCompletionAsMentor(browser, sessionId, tutorUserId, arts, t
   });
   try {
     await go(page, `${WEB}/mentor/sessions`, '[data-screen="M-01"]');
-    arts.push(await shot(page, `${MENTOR_CAPTURE_PREFIX}${tag}_list`));
+    arts.push(await shot(page, `${ADMIN_CAPTURE_PREFIX}${tag}_list`));
     const row = page.locator('article.tt-tut', { hasText: sessionId }).first();
     const control = row.locator('button[data-action="record-completion"]').first();
     await control.waitFor({ state: 'visible', timeout: 20000 });
@@ -1530,16 +1573,16 @@ async function recordCompletionAsMentor(browser, sessionId, tutorUserId, arts, t
       { timeout: 20000 },
     );
     await settled(page);
-    arts.push(await shot(page, `${MENTOR_CAPTURE_PREFIX}${tag}_recorded`));
+    arts.push(await shot(page, `${ADMIN_CAPTURE_PREFIX}${tag}_recorded`));
     return {
       performedInBrowser: true,
       surface: '/mentor/sessions (M-01)',
-      actor: { subject: tutorUserId, role: 'tutor' },
+      actor: { subject: ADMIN, role: 'admin' },
       completeCalls,
       banners: await banners(page),
     };
   } catch (err) {
-    try { arts.push(await shot(page, `${MENTOR_CAPTURE_PREFIX}${tag}_error`)); } catch { /* ignore */ }
+    try { arts.push(await shot(page, `${ADMIN_CAPTURE_PREFIX}${tag}_error`)); } catch { /* ignore */ }
     return { performedInBrowser: false, reason: String(err).slice(0, 400), completeCalls };
   } finally {
     await ctx.close();
@@ -2249,7 +2292,7 @@ async function stageGeo(browser) {
 
   const results = {};
   for (const cfg of CONFIGS) {
-    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'], ...cfg.ctx });
+    const ctx = await studentContext(browser, { permissions: ['camera', 'microphone'], ...cfg.ctx });
     // The aggregate intentionally proves the deterministic application seam;
     // real LiveKit/TURN is owned by infra/video/scripts/livekit_turn_smoke.sh.
     // Every fresh geometry context must make the same explicit selection as
@@ -2439,7 +2482,7 @@ async function stageGeo(browser) {
  * real cancel dialog and the real live-room details sheet.
  */
 async function modalFocusProbe(browser, sessionId) {
-  const ctx = await browser.newContext({ viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
+  const ctx = await studentContext(browser, { viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
   const page = await ctx.newPage();
   attachCapture(page);
   const out = { opened: false, escapedDialog: null, focusReturnedToOpener: null, closedByEscape: null, sheetClosedByEscape: null, tabbedInside: [] };
@@ -2699,7 +2742,7 @@ async function stageD3(page, browser) {
     'the student browser never issued a POST to the completion route',
     'a direct unauthorised student call is typed FORBIDDEN',
     'the refused call mutated nothing',
-    'completion is recorded by the MENTOR on the authorised M-01 surface',
+    'completion is recorded by the ADMINISTRATOR on the authorised M-01 surface',
     'the recorded attendance names a recorder role',
     'ADMIN is the other authorised recorder role (not FORBIDDEN)',
     'the student is then offered "Confirm attendance"',
@@ -2707,21 +2750,19 @@ async function stageD3(page, browser) {
   ]);
   const sessionId = STATE.s1;
   if (!sessionId) {
-    chk.blocked('completion is recorded by the MENTOR on the authorised M-01 surface', 'a completed session', 'no session in state.json — stage c did not run or did not pass');
+    chk.blocked('completion is recorded by the ADMINISTRATOR on the authorised M-01 surface', 'a completed session', 'no session in state.json — stage c did not run or did not pass');
     return recordChecks(chk, { stage: 'd3', matrix: 'I1', summary: 'completion authority could not be attempted', observed: {}, artifacts: [] });
   }
   const arts = [];
-  const s = await apiSession(sessionId);
 
   // 1. completion refused before the scheduled end (real server refusal, browser-rendered)
   await go(page, `${WEB}/s-35?session=${sessionId}&view=attendance`, '.tt-banner');
   arts.push(await shot(page, 'd9_s35_attendance_before_end'));
   const beforeEnd = await banners(page);
-  // Asked as the OWNING MENTOR. Asking as anyone else is refused by ownership
-  // first (a non-enumerating 404), which would never reach the "not ended" rule
-  // this row exists to prove.
-  const owningTutorId = tutorUserIdFor(s.tutor_id);
-  const early = await api('POST', `/api/v1/tutoring/sessions/${sessionId}/complete`, { sub: owningTutorId, roles: ['tutor'] });
+  // Asked through the real administrator cookie. Sprint 1 intentionally has no
+  // tutor browser ceremony, so fabricating an owning-tutor client claim would
+  // bypass the very authority boundary this row is meant to prove.
+  const early = await adminApi(browser, 'POST', `/api/v1/tutoring/sessions/${sessionId}/complete`);
   const statusBeforeRefusals = (await sessionRow(sessionId))?.status;
 
   // 2. move the session past its end (declared clock shift). The STUDENT surface
@@ -2750,11 +2791,11 @@ async function stageD3(page, browser) {
   const rowAfterRefusal = await sessionRow(sessionId);
 
   // 4. completion is performed ON THE AUTHORISED SURFACE, in a real browser,
-  //    signed in as the mentor who owns this session.
-  const mentorLeg = await recordCompletionAsMentor(browser, sessionId, owningTutorId, arts, 'd3');
-  const done = mentorLeg.performedInBrowser
+  //    signed in through the isolated server-issued administrator session.
+  const adminLeg = await recordCompletionAsAdmin(browser, sessionId, arts, 'd3');
+  const done = adminLeg.performedInBrowser
     ? { status: 200, json: dbQuery('SELECT state FROM session_attendance WHERE session_id = ?', [sessionId])[0] || null }
-    : await api('POST', `/api/v1/tutoring/sessions/${sessionId}/complete`, { sub: owningTutorId, roles: ['tutor'] });
+    : { status: null, json: null, code: 'ADMIN_BROWSER_LEG_FAILED' };
 
   await go(page, `${WEB}/s-35?session=${sessionId}&view=attendance`, '.tt-banner');
   arts.push(await shot(page, 'd11_s35_attendance_after_completion'));
@@ -2765,10 +2806,9 @@ async function stageD3(page, browser) {
   arts.push(await shot(page, 'd12_s35_review_blocked'));
   const reviewBanners = await banners(page);
   const serverReview = await api('POST', `/api/v1/tutoring/sessions/${sessionId}/review`, { sub: STUDENT, body: { rating: 5 } });
-  // ADMIN is the OTHER recorder role (attendance.RECORDER_ROLES = tutor, admin).
-  // Proving the authority set is exactly those two means exercising both, so the
-  // admin actor is used here rather than merely declared.
-  const adminRecorder = await api('POST', `/api/v1/tutoring/sessions/${sessionId}/complete`, { sub: ADMIN, roles: ['admin'] });
+  // Repeating the same real-cookie administrator operation proves the server
+  // sees ADMIN authority and then refuses on state, never on client identity.
+  const adminRecorder = await adminApi(browser, 'POST', `/api/v1/tutoring/sessions/${sessionId}/complete`);
 
   const att = dbQuery('SELECT id, state, version, recorded_by_role FROM session_attendance WHERE session_id = ?', [sessionId]);
   const confirmOffered = dock.some((d) => /Confirm attendance/.test(d));
@@ -2779,8 +2819,8 @@ async function stageD3(page, browser) {
   chk.eq('the student browser never issued a POST to the completion route', 0, studentCompleteRequests);
   chk.ok('a direct unauthorised student call is typed FORBIDDEN', 'POST .../complete as a student -> 403 FORBIDDEN', `${studentDirect.status} ${studentDirect.code}`, (v) => v === '403 FORBIDDEN');
   chk.eq('the refused call mutated nothing', { attendanceRows: 0, sessionStatus: statusBeforeRefusals }, { attendanceRows: attAfterRefusal.length, sessionStatus: rowAfterRefusal?.status });
-  chk.eq('completion is recorded by the MENTOR on the authorised M-01 surface', true, mentorLeg.performedInBrowser);
-  chk.ok('the recorded attendance names a recorder role', 'recorded_by_role in (tutor, admin)', att[0]?.recorded_by_role, (v) => ['tutor', 'admin'].includes(v));
+  chk.eq('completion is recorded by the ADMINISTRATOR on the authorised M-01 surface', true, adminLeg.performedInBrowser);
+  chk.eq('the recorded attendance names a recorder role', 'admin', att[0]?.recorded_by_role);
   chk.ok(
     'ADMIN is the other authorised recorder role (not FORBIDDEN)',
     'POST .../complete as an admin is NOT refused with 403 FORBIDDEN — the session is already recorded, so the refusal must be a STATE refusal instead',
@@ -2791,16 +2831,16 @@ async function stageD3(page, browser) {
   chk.ok('the review gate is closed while attendance is unconfirmed', 'a browser banner code plus a server 409 REVIEW_BLOCKED', { browser: reviewBanners.map((b) => b.code).filter(Boolean), server: `${serverReview.status} ${serverReview.code}` }, (v) => v.server === '409 REVIEW_BLOCKED' && v.browser.length > 0);
 
   neg('N17', {
-    expected: 'completion is a TUTOR/ADMIN action: the student surface offers no such control anywhere, a direct student call is 403 FORBIDDEN with zero mutation, and the mentor records it on the authorised M-01 surface',
-    actual: `student controls across ${studentControls.map((c) => c.view).join('/')} = ${studentControls.reduce((n, c) => n + c.byLabel + c.byHook, 0)}; student POST /complete count = ${studentCompleteRequests}; direct student call ${studentDirect.status} ${studentDirect.code} with ${attAfterRefusal.length} attendance row(s); admin probe ${adminRecorder.status} ${adminRecorder.code}; mentor recorded in-browser = ${mentorLeg.performedInBrowser} (recorded_by_role=${att[0]?.recorded_by_role})`,
+    expected: 'the student surface offers no completion control anywhere, a direct student call is 403 FORBIDDEN with zero mutation, and an administrator records it on the authorised M-01 surface using a server-authoritative HttpOnly session',
+    actual: `student controls across ${studentControls.map((c) => c.view).join('/')} = ${studentControls.reduce((n, c) => n + c.byLabel + c.byHook, 0)}; student POST /complete count = ${studentCompleteRequests}; direct student call ${studentDirect.status} ${studentDirect.code} with ${attAfterRefusal.length} attendance row(s); admin repeat probe ${adminRecorder.status} ${adminRecorder.code}; administrator recorded in-browser = ${adminLeg.performedInBrowser} (recorded_by_role=${att[0]?.recorded_by_role})`,
     pass: studentControls.reduce((n, c) => n + c.byLabel + c.byHook, 0) === 0
       && studentCompleteRequests === 0
       && studentDirect.status === 403 && studentDirect.code === 'FORBIDDEN'
       && attAfterRefusal.length === 0
-      && mentorLeg.performedInBrowser === true
-      && ['tutor', 'admin'].includes(att[0]?.recorded_by_role)
+      && adminLeg.performedInBrowser === true
+      && att[0]?.recorded_by_role === 'admin'
       && adminRecorder.status !== 403,
-    mechanism: 'two browser contexts (student + owning mentor) plus server_leg authority probes',
+    mechanism: 'two browser contexts (student + server-authenticated administrator) plus server-leg refusal probes',
     evidence: 'd10_s35_student_has_no_completion_control.png',
   });
   neg('N20', {
@@ -2813,9 +2853,9 @@ async function stageD3(page, browser) {
   recordChecks(chk, {
     stage: 'd3',
     matrix: 'I1',
-    summary: `completion refused before end with ${early.status} ${early.code}; the STUDENT surface offered no completion control in ${studentControls.map((c) => c.view).join('/')} and issued ${studentCompleteRequests} POST /complete; a direct student call was ${studentDirect.status} ${studentDirect.code} with ${attAfterRefusal.length} attendance rows written; completion was recorded BY THE MENTOR on ${mentorLeg.surface || 'the authorised surface'}; admin recorder probe ${adminRecorder.status} ${adminRecorder.code}; DB state=${att[0]?.state} by=${att[0]?.recorded_by_role}; review gate ${serverReview.status} ${serverReview.code}`,
-    observed: { earlyComplete: early, clockShift: shift, studentCompletionControls: studentControls, studentCompletePostRequests: studentCompleteRequests, studentDirectApiCall: studentDirect, adminRecorderProbe: adminRecorder, attendanceAfterStudentRefusal: attAfterRefusal, sessionAfterStudentRefusal: rowAfterRefusal, mentorCompletion: mentorLeg, tutorComplete: done, attendanceBannersBeforeEnd: beforeEnd, attendanceBannersAfter: afterBanners, attendanceBannerCode: feState, dockButtons: dock, reviewBanners, serverReviewRefusal: serverReview, dbAttendance: att },
-    mechanism: { completion: 'authorised_surface_in_browser', clockShift: 'clock_shift', note: 'RECORDER_ROLES = tutor, admin. The student surface renders no completion control at all (QA defect D2); the recording click happens on /mentor/sessions in a second browser context signed in as the owning mentor. The direct student and admin HTTP calls are this driver proving the server rule, not the product UI.' },
+    summary: `completion refused before end with ${early.status} ${early.code}; the STUDENT surface offered no completion control in ${studentControls.map((c) => c.view).join('/')} and issued ${studentCompleteRequests} POST /complete; a direct student call was ${studentDirect.status} ${studentDirect.code} with ${attAfterRefusal.length} attendance rows written; completion was recorded BY THE ADMINISTRATOR on ${adminLeg.surface || 'the authorised surface'}; admin repeat probe ${adminRecorder.status} ${adminRecorder.code}; DB state=${att[0]?.state} by=${att[0]?.recorded_by_role}; review gate ${serverReview.status} ${serverReview.code}`,
+    observed: { earlyComplete: early, clockShift: shift, studentCompletionControls: studentControls, studentCompletePostRequests: studentCompleteRequests, studentDirectApiCall: studentDirect, adminRecorderProbe: adminRecorder, attendanceAfterStudentRefusal: attAfterRefusal, sessionAfterStudentRefusal: rowAfterRefusal, adminCompletion: adminLeg, adminCompletionResult: done, attendanceBannersBeforeEnd: beforeEnd, attendanceBannersAfter: afterBanners, attendanceBannerCode: feState, dockButtons: dock, reviewBanners, serverReviewRefusal: serverReview, dbAttendance: att },
+    mechanism: { completion: 'authorised_surface_in_browser', clockShift: 'clock_shift', note: 'Sprint 1 M-01 is admin-only. The student surface renders no completion control at all; the recording click happens on /mentor/sessions in a second browser context authenticated by a server-authoritative HttpOnly administrator session. No tutor/lawyer browser authority is inferred.' },
     artifacts: arts,
   });
   STATE.s1Completed = true;
@@ -2909,14 +2949,12 @@ async function stageD4(page, browser) {
     STATE.s4 = b4.sessionId;
     saveState();
     await shiftSessionTo(b4.sessionId, -1.6);
-    const s4 = await apiSession(b4.sessionId);
     // Completion for the dispute path is recorded on the AUTHORISED surface too:
-    // the student never has this control, so the driver signs in as the mentor.
-    const mentorLeg4 = await recordCompletionAsMentor(
-      browser, b4.sessionId, tutorUserIdFor(s4.tutor_id), arts, 'd4',
-    );
-    if (!mentorLeg4.performedInBrowser) {
-      throw new Error(`mentor surface could not record completion: ${mentorLeg4.reason}`);
+    // the student never has this control, so the driver uses the same isolated
+    // server-authenticated administrator boundary as D3.
+    const adminLeg4 = await recordCompletionAsAdmin(browser, b4.sessionId, arts, 'd4');
+    if (!adminLeg4.performedInBrowser) {
+      throw new Error(`administrator surface could not record completion: ${adminLeg4.reason}`);
     }
     await go(page, `${WEB}/s-35?session=${b4.sessionId}&view=attendance`, '.tt-banner');
     // Before the mentor recorded it there was no confirm/dispute control at all;
@@ -2938,7 +2976,7 @@ async function stageD4(page, browser) {
     arts.push(await shot(page, 'd20_s35_review_blocked_while_disputed'));
     const blocked = await banners(page);
     const serverBlocked = await api('POST', `/api/v1/tutoring/sessions/${b4.sessionId}/review`, { sub: STUDENT, body: { rating: 4 } });
-    disputed = { sessionId: b4.sessionId, mentorCompletion: mentorLeg4, banners: blocked, serverRefusal: serverBlocked, db: dbQuery('SELECT state, version FROM session_attendance WHERE session_id = ?', [b4.sessionId]) };
+    disputed = { sessionId: b4.sessionId, adminCompletion: adminLeg4, banners: blocked, serverRefusal: serverBlocked, db: dbQuery('SELECT state, version FROM session_attendance WHERE session_id = ?', [b4.sessionId]) };
   } catch (err) {
     disputed = { error: String(err).slice(0, 400) };
   }
@@ -3427,7 +3465,7 @@ async function stageNeg2b(page, browser) {
   };
 
   const mediaCase = async (id, label, ctxOpts, prepare, expectProblem, evidenceName) => {
-    const ctx = await browser.newContext({ viewport: MOBILE, colorScheme: 'light', ...ctxOpts });
+    const ctx = await studentContext(browser, { viewport: MOBILE, colorScheme: 'light', ...ctxOpts });
     const p = await ctx.newPage();
     attachCapture(p);
     try {
@@ -3538,7 +3576,7 @@ async function stageNeg2b(page, browser) {
     const live = await bookAsServerLeg(STUDENT);
     STATE.disconnectSession = live.sessionId;
     saveState();
-    const ctx = await browser.newContext({ viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
+    const ctx = await studentContext(browser, { viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
     const p = await ctx.newPage();
     attachCapture(p);
     let connected = null;
@@ -3721,7 +3759,7 @@ async function stageN45(browser) {
   STATE.mediaPlaneSession = live.sessionId;
   saveState();
 
-  const ctx = await browser.newContext({
+  const ctx = await studentContext(browser, {
     viewport: MOBILE,
     colorScheme: 'light',
     permissions: ['camera', 'microphone'],
@@ -4406,17 +4444,15 @@ const STORAGE_ALLOWLIST = {
   common: [
     { key: 'ls-theme', why: 'light/dark preference; no identifier, no secret', valuePattern: /^(light|dark)$/ },
   ],
-  /** The AUTHENTICATED mentor surface only (M-01). */
-  mentor: [
-    { key: 'ls-auth-lawyer', why: 'the redacted, secret-free P0.1 verification snapshot an authenticated surface must carry', valuePattern: /^\{.*\}$/ },
-  ],
+  /** M-01 uses only an HttpOnly server session; it has no readable auth key. */
+  admin: [],
 };
 /** Field names inside a stored object that must never appear. */
 const SECRET_SHAPED_KEY = /token|secret|password|otp|passcode|credential|signature|pan|cvv/i;
 
 function allowlistFor(captureName) {
-  return captureName.startsWith(MENTOR_CAPTURE_PREFIX)
-    ? [...STORAGE_ALLOWLIST.common, ...STORAGE_ALLOWLIST.mentor]
+  return captureName.startsWith(ADMIN_CAPTURE_PREFIX)
+    ? [...STORAGE_ALLOWLIST.common, ...STORAGE_ALLOWLIST.admin]
     : [...STORAGE_ALLOWLIST.common];
 }
 
@@ -4538,7 +4574,7 @@ async function stagePriv() {
     const local = Object.keys(s.localStorage || {});
     storageState.push({
       capture: name,
-      population: name.startsWith(MENTOR_CAPTURE_PREFIX) ? 'authenticated_mentor' : 'student_journey',
+      population: name.startsWith(ADMIN_CAPTURE_PREFIX) ? 'authenticated_admin' : 'student_journey',
       localStorageKeys: local,
       sessionStorageKeys: Object.keys(s.sessionStorage || {}),
       cookie: s.cookie || '',
@@ -4642,7 +4678,7 @@ async function stagePriv() {
     storageAllowlist: {
       rule: 'A key is permitted only if it is named here AND its value matches the declared shape. Everything else fails.',
       common: STORAGE_ALLOWLIST.common.map((a) => ({ key: a.key, why: a.why, valuePattern: String(a.valuePattern) })),
-      authenticatedMentorSurfaceOnly: STORAGE_ALLOWLIST.mentor.map((a) => ({ key: a.key, why: a.why, valuePattern: String(a.valuePattern) })),
+      authenticatedAdminSurfaceOnly: STORAGE_ALLOWLIST.admin.map((a) => ({ key: a.key, why: a.why, valuePattern: String(a.valuePattern) })),
       secretShapedFieldPattern: String(SECRET_SHAPED_KEY),
     },
     joinCredentialScope: {
@@ -4679,7 +4715,7 @@ async function stagePriv() {
   recordChecks(chk, {
     stage: 'priv',
     matrix: 'J1',
-    summary: `${CANARIES.length} canaries over ${surfaces.length} surfaces (${report.totalBytesScanned} bytes) — ${genericHits.length} finding(s); storage judged against the declared allowlist (${STORAGE_ALLOWLIST.common.map((a) => a.key).join(',')} everywhere, + ${STORAGE_ALLOWLIST.mentor.map((a) => a.key).join(',')} on the authenticated mentor surface) with ${storageViolations.length} violation(s); ls-theme present in ${themeCaptures.length} capture(s) and caused ${themeViolations.length}; join credential sighted ${tokenSightings.length} time(s), ${unauthorisedTokenSightings.length} outside its authorised response; self-test triggered ${selfTestCanaries.length} canaries`,
+    summary: `${CANARIES.length} canaries over ${surfaces.length} surfaces (${report.totalBytesScanned} bytes) — ${genericHits.length} finding(s); storage judged against the declared allowlist (${STORAGE_ALLOWLIST.common.map((a) => a.key).join(',')} everywhere, + ${STORAGE_ALLOWLIST.admin.map((a) => a.key).join(',')} on the authenticated administrator surface) with ${storageViolations.length} violation(s); ls-theme present in ${themeCaptures.length} capture(s) and caused ${themeViolations.length}; join credential sighted ${tokenSightings.length} time(s), ${unauthorisedTokenSightings.length} outside its authorised response; self-test triggered ${selfTestCanaries.length} canaries`,
     observed: { findings: genericHits, storageViolations, tokenSightings, selfTest: report.selfTest },
     artifacts: ['privacy_scan.json'],
   });
@@ -4808,7 +4844,7 @@ async function main() {
   let ctx = null;
   let page = null;
   if (needsPage) {
-    ctx = await browser.newContext({ viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
+    ctx = await studentContext(browser, { viewport: MOBILE, colorScheme: 'light', permissions: ['camera', 'microphone'] });
     if (injected('media-never-ready')) {
       // Fail-closed proof (d): a media state that is never ready. getUserMedia
       // resolves never — exactly the hang a fixed sleep used to paper over.

@@ -1,10 +1,7 @@
 /**
- * Three-step student profile model, validation, completeness and tier
- * derivation (SAATHI-55 / S2.1). Pure + testable; the client uses this to
- * drive step validation and to resume from the last incomplete step (S-13).
- * Registration and academic PII are persisted through the server API. The
- * browser model is an in-memory wizard view only and is never written to
- * localStorage/sessionStorage.
+ * Retired profile-draft compatibility model plus field validation. This module
+ * intentionally does not derive completion, routing, access, or verification;
+ * those are issued only by the canonical server profile projection.
  */
 import { isValidDateOfBirth } from './consent';
 
@@ -123,32 +120,3 @@ const VALIDATORS: Record<ProfileStep, (d: ProfileDraft) => FieldErrors> = {
 export function validateStep(step: ProfileStep, d: ProfileDraft): FieldErrors {
   return VALIDATORS[step](d);
 }
-
-export function isStepComplete(step: ProfileStep, d: ProfileDraft): boolean {
-  return Object.keys(validateStep(step, d)).length === 0;
-}
-
-/** Lowest incomplete step (for resume, S-13) or null when all complete. */
-export function nextIncompleteStep(d: ProfileDraft): ProfileStep | null {
-  const steps: ProfileStep[] = [1, 2, 3];
-  for (const s of steps) {
-    if (!isStepComplete(s, d)) return s;
-  }
-  return null;
-}
-
-export function isProfileComplete(d: ProfileDraft): boolean {
-  return nextIncompleteStep(d) === null;
-}
-
-export type ProfileTier = 'incomplete' | 'verified_student';
-
-/** Tier badge: "Verified Student" once the profile is complete. */
-export function profileTier(d: ProfileDraft): ProfileTier {
-  return isProfileComplete(d) ? 'verified_student' : 'incomplete';
-}
-
-export const TIER_LABELS: Record<ProfileTier, string> = {
-  incomplete: 'Setup incomplete',
-  verified_student: 'Verified Student',
-};

@@ -8,7 +8,8 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import {
   Building2,
   Clock3,

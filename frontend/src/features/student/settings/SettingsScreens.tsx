@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import { StudentScreen, TextField, SelectField, DpdpFootnote } from '../components';
 import {
   ErrorState,
@@ -18,12 +23,8 @@ import {
   requestDataExport,
   requestAccountDeletion,
   getPrivacyRequest,
-  savePrivacyRequestRef,
-  loadPrivacyRequestRef,
-  clearPrivacyRequestRef,
   SettingsApiError,
   SETTINGS_CONFLICT_CODE,
-  REAUTH_REQUIRED_CODE,
   type PrivacyConsentKind,
   type PrivacyRequestKind,
   type PrivacyRequestStatus,
@@ -31,13 +32,17 @@ import {
   type StudentSettingsPatch,
   type ThemePreference,
 } from '../lib/settingsApi';
+import {
+  consumeStudentAuthTransitionNotice,
+  recordStudentAuthTransitionNotice,
+} from '../lib/studentAuthTransitionNotice';
 
 /**
  * S-18/S-19 are server-backed (SAATHI-58/SAATHI-391): GET/PATCH
  * /api/v1/student/settings with optimistic-concurrency (expected_version;
  * 409 conflict refetches and shows a non-blocking notice), and the DPDP
- * export/delete request flow with status polling. PII never touches browser
- * storage — only the opaque privacy request id is kept in sessionStorage.
+ * export/delete request flow with status polling. PII and workflow identifiers
+ * never touch browser storage; the active polling reference is component-only.
  */
 
 const SETTINGS_KEY = ['student-settings'] as const;
@@ -84,9 +89,13 @@ function useSettingsPatch() {
     mutationFn: (input: { patch: StudentSettingsPatch; expectedVersion: number }) =>
       updateStudentSettings(input.patch, input.expectedVersion),
     onMutate: async (input) => {
+      const fence = captureStudentMutationSequence();
       setConflict(null);
       setFailure(null);
-      await qc.cancelQueries({ queryKey: SETTINGS_KEY });
+      await runStudentMutationStep(
+        fence,
+        () => qc.cancelQueries({ queryKey: SETTINGS_KEY }),
+      );
       const previous = qc.getQueryData<StudentSettings>(SETTINGS_KEY);
       if (previous) qc.setQueryData<StudentSettings>(SETTINGS_KEY, applyPatch(previous, input.patch));
       return { previous };
@@ -259,7 +268,7 @@ const CONSENT_LABELS: Record<PrivacyConsentKind, { label: string; sub: string }>
 
 /** Poll a DPDP request until it leaves pending/processing. */
 function usePrivacyRequestPolling(kind: PrivacyRequestKind) {
-  const [requestId, setRequestId] = useState<string | null>(() => loadPrivacyRequestRef(kind));
+  const [requestId, setRequestId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['privacy-request', kind, requestId],
     queryFn: () => getPrivacyRequest(requestId as string),
@@ -275,11 +284,9 @@ function usePrivacyRequestPolling(kind: PrivacyRequestKind) {
     statusError: query.isError,
     refetchStatus: () => void query.refetch(),
     track(id: string) {
-      savePrivacyRequestRef(kind, id); // opaque id only — never request contents
       setRequestId(id);
     },
     clear() {
-      clearPrivacyRequestRef(kind);
       setRequestId(null);
     },
   };
@@ -302,7 +309,17 @@ export function PrivacySettings() {
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
   const [typed, setTyped] = useState('');
-  const [flowError, setFlowError] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(() => {
+    if (consumeStudentAuthTransitionNotice('account_deletion_confirmation_invalid')) {
+      return `Confirmation must be exactly ${DELETE_CONFIRM_PHRASE}.`;
+    }
+    if (consumeStudentAuthTransitionNotice('account_deletion_failed')) {
+      return 'Could not submit the deletion request — try again.';
+    }
+    return null;
+  });
+  const deletionInFlight = useRef(false);
+  const [deletePending, setDeletePending] = useState(false);
   const recoveryFlow = useOtpFlowState();
 
   useEffect(() => {
@@ -357,40 +374,35 @@ export function PrivacySettings() {
     onError: () => setFlowError('That code did not match. Try again.'),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: () => requestAccountDeletion({ confirmation: typed.trim() }),
-    onSuccess: () => {
-      // Acceptance revokes the authenticated session. The actor-bound polling
-      // API can no longer be used, and retaining its opaque id would recreate
-      // context that requestAccountDeletion just retired.
-      exportPoll.clear();
-      deletePoll.clear();
-      setFlowError(null);
-      nav('/s-03', {
-        replace: true,
-        state: { studentDeletionAccepted: true },
-      });
-    },
-    onError: (error) => {
-      if (error instanceof SettingsApiError && (error.status === 401 || error.code === REAUTH_REQUIRED_CODE)) {
-        setStage('reauth-mobile');
-        setOtp('');
-        setFlowError('Re-authentication expired — verify your mobile again.');
-        return;
-      }
-      if (error instanceof SettingsApiError && error.status === 422) {
-        setFlowError(`Confirmation must be exactly ${DELETE_CONFIRM_PHRASE}.`);
-        return;
-      }
-      setFlowError('Could not submit the deletion request — try again.');
-    },
-  });
+  async function submitAccountDeletion(): Promise<void> {
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeletePending(true);
+    setFlowError(null);
+    try {
+      await requestAccountDeletion({ confirmation: typed.trim() });
+      // This is a sanitized transition-owned completion, not an actor callback.
+      // The adapter resolves only after the shared cookie is authoritatively
+      // anonymous, so no stale private result crosses into the destination.
+      recordStudentAuthTransitionNotice('account_deletion_accepted');
+      nav('/s-03', { replace: true });
+    } catch (error) {
+      recordStudentAuthTransitionNotice(
+        error instanceof SettingsApiError && error.status === 422
+          ? 'account_deletion_confirmation_invalid'
+          : 'account_deletion_failed',
+      );
+      deletionInFlight.current = false;
+      setDeletePending(false);
+      nav('/s-19', { replace: true });
+    }
+  }
 
   const reauthenticated = stage === 'confirm'
     && recoveryFlow.state?.status === 'verified'
     && recoveryFlow.state.purpose === 'recovery';
   const deleteReady = canSubmitDelete({ typedConfirmation: typed, reauthenticated })
-    && !deleteMut.isPending && deletePoll.status === null;
+    && !deletePending && deletePoll.status === null;
 
   function toggleConsent(kind: PrivacyConsentKind): void {
     if (!s) return;
@@ -549,9 +561,9 @@ export function PrivacySettings() {
                     className="btn btn--primary tap"
                     disabled={!deleteReady}
                     aria-disabled={!deleteReady}
-                    onClick={() => deleteReady && deleteMut.mutate()}
+                    onClick={() => { if (deleteReady) void submitAccountDeletion(); }}
                   >
-                    {deleteMut.isPending ? 'Submitting…' : 'Delete my account'}
+                    {deletePending ? 'Submitting…' : 'Delete my account'}
                   </button>
                 </div>
               </>

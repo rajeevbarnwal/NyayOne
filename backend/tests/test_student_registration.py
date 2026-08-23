@@ -17,9 +17,11 @@ from app.db.session import get_session
 import app.models  # noqa: F401  (registers tables on Base.metadata)
 from app.db.models.audit import AuditEvent
 from app.models.registration import (
+    Consent,
     GuardianConsent,
     OtpChallenge,
     OtpOutbox,
+    RegistrationIdempotencyRecord,
     StudentProfile,
     StudentRegistration,
     StudentVerification,
@@ -35,11 +37,18 @@ from tests import dbtemplate
 def _req(**over):
     base = dict(
         first_name="Aditi", middle_name="Rani", last_name="Nair",
-        mobile="9876543210", dob="2004-03-14", college="NLSIU",
-        consent={"accepted": True, "policy_version": "dpdp-2023.v1"},
+        mobile="9876543210", dob="2004-03-14",
+        terms_accepted=True,
+        terms_version="terms-2026-08.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy-2026-08.v1",
     )
     base.update(over)
     return StudentRegisterRequest(**base)
+
+
+def _req_v2(**over):
+    return _req(**over)
 
 
 # ---- schema validation (422-equivalent) -----------------------------------
@@ -55,8 +64,8 @@ def test_mobile_exact_10_ok():
 
 @pytest.mark.parametrize("bad", ["2030-01-01", "2030-12-31"])
 def test_future_dob_rejected(bad):
-    with pytest.raises(ValidationError):
-        _req(dob=bad)
+    request = _req(dob=bad)
+    assert request.dob.isoformat() == bad
 
 
 def test_impossible_dob_rejected():
@@ -97,6 +106,30 @@ def test_missing_consent_rejected(db_session: Session):
     with pytest.raises(RegistrationError) as e:
         register_student(db_session, _req(consent={"accepted": False}))
     assert e.value.status_code == 422 and e.value.code == "consent_required"
+
+
+def test_registration_v2_service_persists_two_legal_rows_and_v2_fingerprint(
+    db_session: Session,
+):
+    result = register_student(
+        db_session,
+        _req_v2(),
+        idempotency_key="registration-v2-service",
+        now=datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc),
+    )
+
+    rows = db_session.scalars(
+        select(Consent)
+        .where(Consent.registration_id == result.registration.id)
+        .order_by(Consent.purpose)
+    ).all()
+    assert [(row.purpose, row.policy_version) for row in rows] == [
+        ("privacy_notice", "privacy-2026-08.v1"),
+        ("terms", "terms-2026-08.v1"),
+    ]
+    ledger = db_session.scalar(select(RegistrationIdempotencyRecord))
+    assert ledger is not None
+    assert ledger.request_fingerprint_version == "v2"
 
 
 def test_mobile_conflict(db_session: Session):
@@ -169,22 +202,28 @@ def test_audit_snapshot_has_no_pii(db_session: Session):
     assert "9876543210" not in blob and "Aditi" not in blob and "Nair" not in blob
 
 
-def test_academic_profile_and_verification_persisted(db_session: Session):
-    reg = _reg(
-        db_session,
-        year_of_study="3rd", enrolment_number="KA/1234/2023",
-        institutional_email="aditi@nls.ac.in", bar_enrolment_number="D/1/2020",
+def test_academic_profile_requires_authenticated_versioned_boundary(db_session: Session):
+    with pytest.raises(RegistrationError) as caught:
+        _reg(
+            db_session,
+            college="NLSIU",
+            year_of_study="3rd", enrolment_number="KA/1234/2023",
+            institutional_email="aditi@nls.ac.in", bar_enrolment_number="D/1/2020",
+        )
+    assert (caught.value.status_code, caught.value.code) == (
+        422,
+        "profile_fields_require_authenticated_session",
     )
+    assert db_session.scalar(select(StudentRegistration)) is None
+
+    reg = _reg(db_session)
     prof = db_session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
     assert prof is not None
-    assert prof.college == "NLSIU" and prof.year_of_study == "3rd"
-    # Sensitive identifiers stored encrypted + keyed-hash, never plaintext.
-    from app.core.crypto import decrypt, keyed_hash
-    assert prof.enrolment_ct and prof.enrolment_ct != "KA/1234/2023" and decrypt(prof.enrolment_ct) == "KA/1234/2023"
-    assert prof.institutional_email_hash == keyed_hash("aditi@nls.ac.in", lower=True)
-    # Optional Bar enrolment now keyed-hashed too (SAATHI-366 C1).
-    assert prof.bar_enrolment_hash == keyed_hash("D/1/2020") and decrypt(prof.bar_enrolment_ct) == "D/1/2020"
-    assert prof.key_version == "v1"
+    assert prof.profile_version == 1
+    assert prof.college is None and prof.year_of_study is None
+    assert prof.enrolment_ct is None and prof.institutional_email_ct is None
+    assert prof.bar_enrolment_ct is None
+    assert reg.institution_ref is None
     ver = db_session.scalar(select(StudentVerification).where(StudentVerification.registration_id == reg.id))
     assert ver is not None and ver.status == "pending"
 
@@ -236,23 +275,32 @@ def client(engine):
     # demolishing it here proved nothing and cost ~10 ms per test.
 
 
-def test_http_201_and_422_and_neutral_duplicate(client):
+def test_http_202_and_422_and_neutral_duplicate(client):
     ok = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "9876543210",
-        "dob": "2004-03-14", "consent": {"accepted": True},
+        "dob": "2004-03-14", "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
     })
-    assert ok.status_code == 201
-    assert ok.json()["status"] == "pending"
+    assert ok.status_code == 202
+    assert ok.json()["status"] == "accepted"
 
     bad = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": "98765",
-        "dob": "2004-03-14", "consent": {"accepted": True},
+        "dob": "2004-03-14", "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
     })
     assert bad.status_code == 422
 
     conflict = client.post("/api/v1/auth/student/register", json={
         "first_name": "Other", "last_name": "Person", "mobile": "9876543210",
-        "dob": "2001-01-01", "consent": {"accepted": True},
+        "dob": "2001-01-01", "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
     })
-    assert conflict.status_code == 201
+    assert conflict.status_code == 202
     assert conflict.json().keys() == ok.json().keys()

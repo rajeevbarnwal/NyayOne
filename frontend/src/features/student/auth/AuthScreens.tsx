@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip } from '../components';
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, DOB_ERROR, todayLocalISO,
-  validateNameParts, nameErrorMessage, namePartsToPayload, composeDisplayName,
+  validateNameParts, nameErrorMessage, namePartsToPayload,
 } from '../lib/registration';
-import { RestrictedState, PendingVerificationState, LoadingState, StatusBadge, ValidationState } from '../../../components/ui/primitives';
+import { ErrorState, RestrictedState, PendingVerificationState, LoadingState, StatusBadge, ValidationState } from '../../../components/ui/primitives';
 import { isValidOtpInput } from '../lib/otpInput';
-import { registrationConsentComplete, CONSENT_VERSION, type RegistrationConsent } from '../lib/consent';
-import { updateProfileDraft } from '../lib/profileStore';
-import { institutionalEmailError } from '../lib/profile';
+import {
+  registrationConsentComplete,
+  CONSENT_VERSION,
+  PRIVACY_NOTICE_VERSION,
+  TERMS_VERSION,
+  type RegistrationConsent,
+} from '../lib/consent';
 import { useAuth } from '../../../app/authContext';
 import {
   RegistrationApiError,
   getStudentSession,
-  notifyStudentAuthChanged,
   registerStudent,
   resendStudentOtp,
   startLoginOtp,
@@ -24,9 +27,14 @@ import {
   verifyRecovery,
   verifyStudentOtp,
   completeRecovery,
-  requestInstitutionalEmailVerification,
 } from '../lib/registrationApi';
 import { useOtpFlowState } from '../lib/useOtpFlowState';
+import { profileErrorMessage, profileSectionRoute } from '../lib/profileApi';
+import {
+  useRequestInstitutionalEmailVerification,
+  useStudentProfileProjection,
+} from '../profile/profileHooks';
+import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
@@ -249,13 +257,6 @@ export function Register() {
     if (Object.keys(e).length > 0) return;
 
     const payload = namePartsToPayload(parts);
-    updateProfileDraft({
-      firstName: payload.firstName,
-      middleName: payload.middleName ?? '',
-      lastName: payload.lastName,
-      fullName: composeDisplayName(parts), // compat: no double spaces when middle absent
-      dateOfBirth: dob,
-    });
     setSubmitting(true);
     try {
       await registerStudent({
@@ -264,7 +265,10 @@ export function Register() {
         lastName: payload.lastName,
         mobile,
         dob,
-        policyVersion: CONSENT_VERSION,
+        termsAccepted: true,
+        termsVersion: TERMS_VERSION,
+        privacyNoticeAcknowledged: true,
+        privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
       });
       nav('/s-06');
     } catch {
@@ -416,10 +420,9 @@ export function OtpVerify() {
         ? await verifyStudentOtp(code)
         : await verifyLoginOtp(code);
       otpFlow.adopt(result);
-      notifyStudentAuthChanged();
       setStatus('verified');
       if (purpose === 'login') {
-        nav('/s-14', { replace: true });
+        nav(resolvedProfileReauthResumeRoute() ?? '/s-14', { replace: true });
       } else {
         const actor = await getStudentSession();
         nav(actor?.is_minor ? '/s-16' : '/s-09');
@@ -595,71 +598,44 @@ export function Lockout() {
 /* -------------------------------------------------------------------------- */
 export function EmailVerify() {
   const nav = useNavigate();
-  const [email, setEmail] = useState('aditi.nair@nls.ac.in');
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const [submitting, setSubmitting] = useState(false);
-
-  function changeEmail(value: string) {
-    setEmail(value);
-    setError(undefined);
-    setSent(false);
+  const profile = useStudentProfileProjection();
+  const requestVerification = useRequestInstitutionalEmailVerification();
+  if (!profile.data) {
+    return <AuthCard screenId="S-15" kicker="Institutional email" title="Confirm your college email">{profile.isPending ? <LoadingState label="Loading verification status…" /> : <ErrorState title="Could not load verification status" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</AuthCard>;
   }
-
-  async function sendVerificationLink() {
-    const validationError = institutionalEmailError(email);
-    if (validationError) {
-      setError(validationError);
-      setSent(false);
-      return;
-    }
-    setSubmitting(true);
-    setError(undefined);
-    setSent(false);
-    try {
-      await requestInstitutionalEmailVerification(email);
-      setSent(true);
-    } catch (cause) {
-      if (cause instanceof RegistrationApiError && cause.status === 401) {
-        setError('Your session expired. Sign in again to request verification.');
-      } else if (cause instanceof RegistrationApiError && cause.field === 'institutional_email') {
-        setError('Use the institutional email saved in your academic profile.');
-      } else {
-        setError('Verification could not be requested. Please retry.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const email = profile.data.profile.academic.institutionalEmail;
+  const verified = profile.data.institutionalEmailStatus === 'verified';
   return (
     <AuthCard
       screenId="S-15"
-      kicker="One more check · verification link"
+      kicker="Institutional email status"
       title="Confirm your college email"
-      meta={<StatusBadge status="warn" label="Verification pending" />}
-      sub="Open the one-time link in your institutional inbox to unlock verified-student features. Nothing is verified merely by typing an address here."
+      meta={<StatusBadge status={verified ? 'ok' : 'warn'} label={profile.data.institutionalEmailStatus.replace(/_/gu, ' ')} />}
+      sub="This status comes only from the server. Typing or saving an address never marks it verified."
     >
-      <TextField id="inst-email" label="Institutional email" value={email} onChange={changeEmail} type="email" inputMode="email" error={error} />
-      {sent && (
-        <div className="ui-banner ui-banner--warn" role="status">
-          <span className="ui-banner__mark" aria-hidden>
-            !
-          </span>
-          <span>Verification link sent — check your inbox.</span>
-        </div>
-      )}
-      <div className="st-panel" style={{ marginTop: 'var(--space-4)' }}>
-        <div className="st-setrow"><div><div className="st-setrow__label">Delivery</div><div className="st-setrow__sub">Institutional inbox only</div></div></div>
-        <div className="st-setrow"><div><div className="st-setrow__label">Verification</div><div className="st-setrow__sub">One-time link · server-authoritative</div></div></div>
-        <div className="st-setrow"><div><div className="st-setrow__label">If the domain is not recognised</div><div className="st-setrow__sub">Manual review remains available</div></div></div>
+      <div className="st-panel">
+        <div className="st-setrow"><div><div className="st-setrow__label">Saved institutional email</div><div className="st-setrow__sub">{email ?? 'Not provided'}</div></div></div>
       </div>
+      <div className="st-panel" style={{ marginTop: 'var(--space-4)' }}>
+        <div className="st-setrow"><div><div className="st-setrow__label">Request</div><div className="st-setrow__sub">A request never grants verification; only an authorized review can do that.</div></div></div>
+        <div className="st-setrow"><div><div className="st-setrow__label">Verification</div><div className="st-setrow__sub">Server-authoritative status only</div></div></div>
+      </div>
+      {requestVerification.error && <div role="alert">{profileErrorMessage(requestVerification.error)}</div>}
+      {requestVerification.isSuccess && <p role="status">Verification review request recorded. Verification remains pending until an authorized review succeeds.</p>}
       <div className="st-actions st-actions--split">
         <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
           Back to dashboard
         </button>
-        <button type="button" className="btn btn--primary tap" onClick={sendVerificationLink} disabled={submitting}>
-          {submitting ? 'Requesting…' : 'Send verification link'}
-        </button>
+        {!email
+          ? <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-10?section=academic')}>Add institutional email</button>
+          : <button
+              type="button"
+              className="btn btn--primary tap"
+              disabled={verified || requestVerification.isPending}
+              onClick={() => requestVerification.mutate()}
+            >
+              {verified ? 'Already verified' : requestVerification.isPending ? 'Recording request…' : 'Request verification review'}
+            </button>}
       </div>
     </AuthCard>
   );
@@ -670,11 +646,16 @@ export function EmailVerify() {
 /* -------------------------------------------------------------------------- */
 export function RestrictedDashboard() {
   const nav = useNavigate();
-  const auth = useAuth();
-  const reason = auth.isMinor
-    ? 'Your account needs verified guardian consent before full access. Research, community posting, payments and sharing stay locked until then.'
-    : 'Your dashboard is limited until verification completes — research, internships and community stay read-only.';
-  const restriction = useMemo(() => reason, [reason]);
+  const profile = useStudentProfileProjection();
+  useEffect(() => {
+    if (profile.data?.accessMode === 'full') nav('/s-14', { replace: true });
+  }, [nav, profile.data]);
+  if (!profile.data || profile.data.accessMode === 'full') {
+    return <StudentScreen screenId="S-16" className="st-authwrap">{profile.isPending || profile.data ? <LoadingState label="Checking access…" /> : <ErrorState title="Could not check access" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</StudentScreen>;
+  }
+  const restriction = profile.data.guardian.required
+    ? 'Guardian consent is required before community and sharing access can be enabled. No client action can mark consent verified.'
+    : 'Your server-issued profile currently has limited access.';
   return (
     <StudentScreen screenId="S-16" className="st-authwrap">
       <div className="st-card">
@@ -684,12 +665,13 @@ export function RestrictedDashboard() {
           <StatusBadge status="risk" label="Restricted" />
         </div>
         <RestrictedState reason={restriction} />
+        <p>Disabled capabilities: {profile.data.disabledCapabilities.join(', ') || 'none'}.</p>
         <div className="st-actions st-actions--split">
           <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
             View limited home
           </button>
-          <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-15')}>
-            Verify email
+          <button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(profile.data.nextIncompleteSection))}>
+            Continue profile
           </button>
         </div>
         <DpdpFootnote>Minor-account checks run server-side · data minimised</DpdpFootnote>

@@ -7,15 +7,28 @@ import {
   getStudentSession,
   logoutStudent,
   registerStudent,
-  requestInstitutionalEmailVerification,
   resendStudentOtp,
   saveAcademicProfile,
   startLoginOtp,
   startRecovery,
+  STUDENT_SESSION_TIMEOUT_MS,
   verifyLoginOtp,
   verifyRecovery,
   verifyStudentOtp,
 } from './registrationApi';
+import {
+  STUDENT_AUTH_CHANGED_EVENT,
+  STUDENT_AUTH_TRANSITION_STARTED_EVENT,
+} from './studentBrowserContext';
+
+class TestBroadcastChannel {
+  readonly name: string;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(name: string) { this.name = name; }
+  postMessage(_data: unknown): void {}
+  close(): void {}
+}
 
 const FLOW_HANDLE_RE = /(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/;
 
@@ -41,6 +54,37 @@ const AUTHENTICATED_WIRE = {
   resend_allowed: false,
 } as const;
 
+const ONBOARDING_WIRE = {
+  profile_version: 1,
+  completion_version: 'v1',
+  completion_percent: 0,
+  completed_sections: [],
+  next_incomplete_section: 'personal',
+  is_complete: false,
+  institutional_email_status: 'not_provided',
+  guardian: { required: false, status: 'not_required' },
+  access_mode: 'full',
+  disabled_capabilities: [],
+  profile_prompt: { should_show: true, dismissed_for_session: false },
+  profile: {
+    personal: { first_name: 'Aditi', middle_name: null, last_name: 'Nair', date_of_birth: '2004-03-14', preferred_language: null, city: null, pronouns: null },
+    academic: { college: null, year_of_study: null, enrolment_number: null, institutional_email: null, bar_enrolment_number: null },
+    interests: { interests: [], goals: [] },
+  },
+} as const;
+
+const AUTHENTICATED_WITH_ONBOARDING = {
+  ...AUTHENTICATED_WIRE,
+  onboarding: ONBOARDING_WIRE,
+} as const;
+
+const REGISTRATION_ACCEPTED_WIRE = {
+  status: 'accepted',
+  next: 'otp',
+  expires_in_seconds: 300,
+  resend_after_seconds: 30,
+} as const;
+
 function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -55,7 +99,10 @@ function registrationInput() {
     lastName: 'Nair',
     mobile: '9876543210',
     dob: '2004-03-14',
-    policyVersion: 'dpdp-2023.v1',
+    termsAccepted: true,
+    termsVersion: 'dpdp-2023.v1',
+    privacyNoticeAcknowledged: true,
+    privacyNoticeVersion: 'dpdp-2023.v1',
   };
 }
 
@@ -71,27 +118,53 @@ function storage(map: Map<string, string>): Storage {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   clearRegistrationSession();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe('server-owned student OTP flow API (NYAY-4)', () => {
-  it('maps registration and the flat public state without exposing a correlation handle', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(response(PENDING_WIRE, 201));
+  it('holds every realm pending before signup can replace the shared auth cookie', async () => {
+    const order: string[] = [];
+    const browserWindow = new EventTarget();
+    browserWindow.addEventListener(STUDENT_AUTH_TRANSITION_STARTED_EVENT, () => order.push('start'));
+    browserWindow.addEventListener(STUDENT_AUTH_CHANGED_EVENT, () => order.push('end'));
+    vi.stubGlobal('window', browserWindow);
+    vi.stubGlobal('BroadcastChannel', TestBroadcastChannel);
+    const fetchMock = vi.fn(async (url: string) => {
+      order.push(url.includes('/session') ? 'session' : 'verify');
+      return url.includes('/session')
+        ? response({
+          authenticated: true,
+          actor: {
+            sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+            student_profile_id: '00000000-0000-4000-8000-000000002702',
+            student_verification: 'draft', is_minor: false,
+            consent_state: ['privacy_notice', 'terms'],
+          },
+        })
+        : response(AUTHENTICATED_WITH_ONBOARDING);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(verifyStudentOtp('123456')).resolves.toMatchObject({
+      status: 'authenticated', purpose: 'signup',
+    });
+
+    expect(order).toEqual(['start', 'verify', 'session', 'end']);
+  });
+  it('maps the uniform registration acceptance without exposing a correlation handle', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(REGISTRATION_ACCEPTED_WIRE, 202));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await registerStudent(registrationInput(), 'idempotency-1');
 
     expect(result).toEqual({
-      status: 'pending',
-      purpose: 'signup',
-      destinationMasked: '••••••3210',
-      attemptsLeft: 3,
-      expiresInSeconds: 287,
-      resendInSeconds: 17,
-      lockedForSeconds: 0,
-      resendAllowed: false,
+      status: 'accepted',
+      next: 'otp',
+      expiresInSeconds: 300,
+      resendAfterSeconds: 30,
     });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('idempotency-1');
@@ -101,19 +174,64 @@ describe('server-owned student OTP flow API (NYAY-4)', () => {
       last_name: 'Nair',
       mobile: '9876543210',
       dob: '2004-03-14',
-      consent: { accepted: true, policy_version: 'dpdp-2023.v1' },
+      terms_accepted: true,
+      terms_version: 'dpdp-2023.v1',
+      privacy_notice_acknowledged: true,
+      privacy_notice_version: 'dpdp-2023.v1',
     });
     expect(JSON.stringify(result)).not.toMatch(FLOW_HANDLE_RE);
+  });
+
+  it.each([
+    ['old detailed OTP projection', PENDING_WIRE],
+    ['wrong status', { ...REGISTRATION_ACCEPTED_WIRE, status: 'created' }],
+    ['wrong next route', { ...REGISTRATION_ACCEPTED_WIRE, next: '/s-09' }],
+    ['absolute expiry', { ...REGISTRATION_ACCEPTED_WIRE, expires_at: '2026-08-22T00:00:00Z' }],
+    ['extra identity field', { ...REGISTRATION_ACCEPTED_WIRE, registration_id: 'forbidden' }],
+  ])('rejects the %s registration response', async (_label, body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body, 202)));
+    await expect(registerStudent(registrationInput(), 'idempotency-invalid'))
+      .rejects.toEqual(expect.objectContaining({
+        status: 502,
+        code: 'invalid_registration_start_projection',
+      }));
+  });
+
+  it('never accepts or forwards academic profile data during core registration', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(REGISTRATION_ACCEPTED_WIRE, 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const attemptedLegacyInput = {
+      ...registrationInput(),
+      college: 'NLSIU',
+      yearOfStudy: '3',
+      institutionalEmail: 'aditi@example.edu',
+      barEnrolmentNumber: 'KA/1234/2023',
+    } as unknown as Parameters<typeof registerStudent>[0] & Record<string, unknown>;
+    await registerStudent(attemptedLegacyInput, 'idempotency-core-only');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      first_name: 'Aditi',
+      middle_name: null,
+      last_name: 'Nair',
+      mobile: '9876543210',
+      dob: '2004-03-14',
+      terms_accepted: true,
+      terms_version: 'dpdp-2023.v1',
+      privacy_notice_acknowledged: true,
+      privacy_notice_version: 'dpdp-2023.v1',
+    });
   });
 
   it('reuses one memory-only idempotency key after an uncertain transport failure', async () => {
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new TypeError('synthetic network failure'))
-      .mockResolvedValueOnce(response(PENDING_WIRE, 201));
+      .mockResolvedValueOnce(response(REGISTRATION_ACCEPTED_WIRE, 202));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(registerStudent(registrationInput())).rejects.toBeInstanceOf(TypeError);
-    await expect(registerStudent(registrationInput())).resolves.toMatchObject({ status: 'pending' });
+    await expect(registerStudent(registrationInput())).resolves.toMatchObject({ status: 'accepted' });
 
     const keys = fetchMock.mock.calls.map(([, init]) => (
       new Headers((init as RequestInit).headers).get('Idempotency-Key')
@@ -173,11 +291,14 @@ describe('server-owned student OTP flow API (NYAY-4)', () => {
   it('uses identifier-free verify/resend bodies and trusts direct mutation projections', async () => {
     const resent = { ...PENDING_WIRE, expires_in_seconds: 299, resend_in_seconds: 29 };
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response(AUTHENTICATED_WIRE))
+      .mockResolvedValueOnce(response(AUTHENTICATED_WITH_ONBOARDING))
       .mockResolvedValueOnce(response(resent, 202));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(verifyStudentOtp('123456')).resolves.toMatchObject({ status: 'authenticated' });
+    await expect(verifyStudentOtp('123456')).resolves.toMatchObject({
+      status: 'authenticated',
+      onboarding: { profileVersion: 1, completionPercent: 0, nextIncompleteSection: 'personal' },
+    });
     await expect(resendStudentOtp()).resolves.toMatchObject({
       status: 'pending', expiresInSeconds: 299, resendInSeconds: 29,
     });
@@ -190,6 +311,40 @@ describe('server-owned student OTP flow API (NYAY-4)', () => {
     );
     const serialised = JSON.stringify(fetchMock.mock.calls);
     expect(serialised).not.toMatch(FLOW_HANDLE_RE);
+  });
+
+  it('rejects an authenticated verify response without one exact onboarding projection', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(AUTHENTICATED_WIRE))
+      .mockResolvedValueOnce(response({
+        ...AUTHENTICATED_WITH_ONBOARDING,
+        onboarding: { ...ONBOARDING_WIRE, completion_percent: 67 },
+      }))
+      .mockResolvedValueOnce(response({ ...AUTHENTICATED_WITH_ONBOARDING, bearer: 'forbidden' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(verifyStudentOtp('123456')).rejects.toEqual(expect.objectContaining({
+        status: 502,
+        code: 'invalid_otp_verification_projection',
+      }));
+    }
+  });
+
+  it('rejects a successful verification projection for the wrong OTP purpose', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ ...AUTHENTICATED_WITH_ONBOARDING, purpose: 'login' }))
+      .mockResolvedValueOnce(response(AUTHENTICATED_WITH_ONBOARDING));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(verifyStudentOtp('123456')).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_otp_verification_projection',
+    }));
+    await expect(verifyLoginOtp('123456')).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_otp_verification_projection',
+    }));
   });
 
   it('restores the flow after reload only through the HttpOnly-cookie state endpoint', async () => {
@@ -279,12 +434,18 @@ describe('server-owned student OTP flow API (NYAY-4)', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(loginState, 202))
       .mockResolvedValueOnce(response(loginState, 202))
-      .mockResolvedValueOnce(response({ ...AUTHENTICATED_WIRE, purpose: 'login' }));
+      .mockResolvedValueOnce(response({
+        ...AUTHENTICATED_WITH_ONBOARDING,
+        purpose: 'login',
+      }));
     vi.stubGlobal('fetch', fetchMock);
 
     const known = await startLoginOtp('9876543210');
     const decoy = await startLoginOtp('9000000000');
-    await verifyLoginOtp('123456');
+    await expect(verifyLoginOtp('123456')).resolves.toMatchObject({
+      purpose: 'login',
+      onboarding: { profileVersion: 1 },
+    });
 
     expect(known).toEqual(decoy);
     expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body))).toEqual({ code: '123456' });
@@ -320,9 +481,61 @@ describe('server-owned student OTP flow API (NYAY-4)', () => {
   });
 });
 
+describe('bounded server session discovery (NYAY-5)', () => {
+  it('fails a hung session discovery closed at a deterministic timeout', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => (
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('timeout', 'AbortError'));
+        });
+      })
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const attempt = getStudentSession();
+    const assertion = expect(attempt).rejects.toEqual(expect.objectContaining({
+      status: 0,
+      code: 'session_unavailable',
+    }));
+    await vi.advanceTimersByTimeAsync(STUDENT_SESSION_TIMEOUT_MS);
+    await assertion;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('adjacent authenticated student boundaries', () => {
-  it('maps every academic field without sending OTP flow identifiers', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(response({ status: 'saved' }));
+  const projection = {
+    profile_version: 7,
+    completion_version: 'v1',
+    completion_percent: 34,
+    completed_sections: ['personal'],
+    next_incomplete_section: 'academic',
+    is_complete: false,
+    institutional_email_status: 'not_provided',
+    guardian: { required: false, status: 'not_required' },
+    access_mode: 'full',
+    disabled_capabilities: [],
+    profile_prompt: { should_show: true, dismissed_for_session: false },
+    profile: {
+      personal: { first_name: 'Aditi', middle_name: null, last_name: 'Nair', date_of_birth: '2002-03-14', preferred_language: 'en', city: 'Pune', pronouns: null },
+      academic: { college: null, year_of_study: null, enrolment_number: null, institutional_email: null, bar_enrolment_number: null },
+      interests: { interests: [], goals: [] },
+    },
+  };
+
+  it('delegates the legacy academic helper through the versioned canonical boundary', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(projection))
+      .mockResolvedValueOnce(response({
+        ...projection,
+        profile_version: 8,
+        completion_percent: 67,
+        completed_sections: ['personal', 'academic'],
+        next_incomplete_section: 'interests',
+        institutional_email_status: 'pending',
+        profile: { ...projection.profile, academic: { college: 'NLSIU', year_of_study: '3rd year', enrolment_number: 'KA/1234/2023', institutional_email: 'aditi@nls.ac.in', bar_enrolment_number: 'D/1234/2024' } },
+      }));
     vi.stubGlobal('fetch', fetchMock);
     await saveAcademicProfile({
       college: 'NLSIU',
@@ -331,8 +544,13 @@ describe('adjacent authenticated student boundaries', () => {
       institutionalEmail: 'aditi@nls.ac.in',
       barEnrolmentNumber: 'D/1234/2024',
     });
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [readUrl, readInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(readUrl).toContain('/api/v1/student/profile');
+    expect(readInit.method).toBe('GET');
+    const [writeUrl, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(writeUrl).toContain('/api/v1/student/profile/academic');
     expect(JSON.parse(String(init.body))).toEqual({
+      expected_profile_version: 7,
       college: 'NLSIU',
       year_of_study: '3rd year',
       enrolment_number: 'KA/1234/2023',
@@ -341,25 +559,21 @@ describe('adjacent authenticated student boundaries', () => {
     });
   });
 
-  it('posts institutional email verification to the typed boundary', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ status: 'pending' }, 202)));
-    await expect(requestInstitutionalEmailVerification('  aditi@nls.ac.in  '))
-      .resolves.toEqual({ status: 'pending' });
-  });
-
   it('uses the cookie-backed session/logout endpoints without exposing a token', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response({
         authenticated: true,
         actor: {
-          sub: 'opaque-user-id', roles: ['student'], student_profile_id: null,
-          student_verification: 'draft', is_minor: false, consent_state: ['registration'],
+          sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+          student_profile_id: '00000000-0000-4000-8000-000000002702',
+          student_verification: 'draft', is_minor: false,
+          consent_state: ['privacy_notice', 'terms'],
         },
       }))
       .mockResolvedValueOnce(response({ status: 'logged_out' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    expect((await getStudentSession())?.sub).toBe('opaque-user-id');
+    expect((await getStudentSession())?.sub).toBe('00000000-0000-4000-8000-000000002701');
     await logoutStudent();
     for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
       expect(init.credentials).toBe('include');
@@ -367,7 +581,7 @@ describe('adjacent authenticated student boundaries', () => {
     }
   });
 
-  it.each(['moderator', 'admin'])('accepts an exact server-issued %s session', async (role) => {
+  it.each(['moderator', 'admin', 'safety_officer', 'legal_reviewer'])('accepts an exact server-issued %s session', async (role) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
       authenticated: true,
       actor: {
@@ -396,7 +610,82 @@ describe('adjacent authenticated student boundaries', () => {
       },
     })));
 
-    await expect(getStudentSession()).resolves.toBeNull();
+    await expect(getStudentSession()).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_student_session_projection',
+    }));
+  });
+
+  it.each([
+    ['extra outer authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false,
+        consent_state: ['privacy_notice', 'terms'],
+      },
+      bearer: 'forbidden',
+    }],
+    ['extra actor authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false,
+        consent_state: ['privacy_notice', 'terms'], token: 'forbidden',
+      },
+    }],
+    ['non-UUID subject', {
+      authenticated: true,
+      actor: {
+        sub: 'opaque-but-not-canonical', roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false,
+        consent_state: ['privacy_notice', 'terms'],
+      },
+    }],
+    ['student without profile authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+        student_profile_id: null, student_verification: 'draft', is_minor: false,
+        consent_state: ['privacy_notice', 'terms'],
+      },
+    }],
+    ['staff with student profile authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['moderator'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false, consent_state: [],
+      },
+    }],
+    ['duplicate consent authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false,
+        consent_state: ['terms', 'terms'],
+      },
+    }],
+    ['unknown consent authority', {
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000002701', roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000002702',
+        student_verification: 'draft', is_minor: false,
+        consent_state: ['all_future_purposes'],
+      },
+    }],
+  ])('rejects %s in the session projection before observing an actor', async (_label, body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
+
+    await expect(getStudentSession()).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_student_session_projection',
+    }));
   });
 
   it('preserves the typed field-error contract', async () => {
