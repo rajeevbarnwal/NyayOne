@@ -134,6 +134,18 @@ describe('S-01 server-session bootstrap', () => {
     expect(registerScreen).not.toContain('lawDeclaration');
   });
 
+  it('keeps the S-08 icon CTA accessible-name and tooltip contracts identical', () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(V34Register)),
+    );
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-label="Send one time code")(?=[^>]*data-tip="Send one time code")[^>]*>/,
+    );
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-label="Send one time code")[^>]*>.*?<svg[^>]*aria-hidden="true"/,
+    );
+  });
+
   it('marks every S-08 identity and legal-consent control as programmatically required', () => {
     const html = renderToStaticMarkup(
       createElement(MemoryRouter, null, createElement(V34Register)),
