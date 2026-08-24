@@ -21,6 +21,8 @@
     "qa:nyay5:profile-boundary": "node scripts/nyay5-profile-browser.mjs",
     "qa:nyay5:acceptance": "node scripts/nyay5-acceptance-aggregate.mjs",
     "qa:nyay18:browser-namespace": "node scripts/nyay18-browser-namespace.mjs",
+    "qa:nyay7:ui-foundation": "node scripts/nyay7-ui-foundation.mjs",
+    "test:nyay7:ui-contract": "vitest --run scripts/lib/nyay7-ui-contract.test.mjs",
     "test:nyay19:auth-lifecycle-contract": "vitest --run scripts/lib/nyay19-auth-lifecycle-runner-contract.test.mjs",
     "qa:v34:s01-s10": "node scripts/v34-s01-s10-e2e.mjs",
     "qa:v34:s11-s26": "node scripts/v34-s11-s26-e2e.mjs",
