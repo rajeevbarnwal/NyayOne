@@ -56,6 +56,8 @@ APPLICATION_PARENT = "0020_auth_retention_lifecycle"
 APPLICATION_HEAD = "0021_nyay5_profile_boundary"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
+COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
+_COOKIE_START_PATH = "/api/v1/auth/student/login/otp/start"
 COOKIE_TIMING_SAMPLE_ORDER = tuple(
     ("known", "decoy") if index % 2 == 0 else ("decoy", "known")
     for index in range(40)
@@ -822,6 +824,70 @@ class ScratchCleanupFailure(RuntimeError):
     """A disposable database remained or could not be inventoried."""
 
 
+_FAILURE_STAGES = frozenset(
+    {
+        "runtime",
+        "core-contract",
+        "migration-lifecycle",
+        "migration-populated",
+        "behavior",
+        "behavior-claim-coordination",
+        "configuration",
+        "harness-source",
+        "aggregate-evaluation",
+        "unclassified",
+    }
+)
+_FAILURE_CATEGORIES = frozenset(
+    {
+        "coordination-timeout",
+        "product-or-harness-invariant",
+        "database-operation",
+        "subprocess-operation",
+        "runtime-operation",
+    }
+)
+
+
+class GateStageFailure(RuntimeError):
+    """Carry only reviewed aggregate diagnostics across the privacy boundary."""
+
+    def __init__(self, stage: str, category: str) -> None:
+        self.stage = stage if stage in _FAILURE_STAGES else "unclassified"
+        self.category = (
+            category if category in _FAILURE_CATEGORIES else "runtime-operation"
+        )
+        super().__init__("privacy-safe NYAY-4 gate stage failure")
+
+
+def _failure_category(exc: Exception) -> str:
+    if isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)):
+        return "coordination-timeout"
+    if isinstance(exc, (ProductGateFailure, ScratchCleanupFailure)):
+        return "product-or-harness-invariant"
+    if isinstance(exc, SQLAlchemyError):
+        return "database-operation"
+    if isinstance(exc, subprocess.SubprocessError):
+        return "subprocess-operation"
+    return "runtime-operation"
+
+
+def _run_stage(
+    stage: str,
+    operation: Callable[..., Any],
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Run one stage and discard all unreviewed exception details."""
+
+    try:
+        return operation(*args, **kwargs)
+    except (Blocked, GateStageFailure):
+        raise
+    except Exception as exc:
+        raise GateStageFailure(stage, _failure_category(exc)) from None
+
+
 class _CertifiedGateProvider:
     """Named, in-memory provider contract for retry/idempotency evidence.
 
@@ -913,8 +979,95 @@ def _behavior_fixture_mobile(name: str) -> str:
         raise ProductGateFailure("NYAY-4 behavior fixture is unreviewed") from exc
 
 
+_FAILED_RESEND_OBSERVATION_KEYS = frozenset(
+    {
+        "status",
+        "code",
+        "prior_active_unchanged",
+        "prior_verification_succeeds",
+        "replacement_active",
+        "replacement_deliverable",
+        "provider_acceptances",
+        "authority_unchanged",
+    }
+)
+_COOKIE_OBSERVATION_KEYS = frozenset(
+    {
+        "start_statuses",
+        "start_signatures_equal",
+        "timing_ratio_within_bound",
+        "timing_samples_per_class",
+        "timing_p95_ratio_milli",
+        "timing_bound_milli",
+        "cookie_httponly",
+        "cookie_secure_nonlocal",
+        "cookie_samesite",
+        "raw_flow_token_rows",
+        "uuid_in_response",
+        "reload_status",
+        "reload_metadata_equal",
+        "origin_missing_status",
+        "origin_bad_status",
+        "origin_good_status",
+        "invalid_expired_consumed_signatures_equal",
+        "invalid_expired_consumed_values_equal",
+        "terminal_verify_zero_delta",
+        "initial_exhaustion_purposes",
+        "initial_exhaustion_known_decoy_shapes_equal",
+        "initial_exhaustion_known_decoy_values_equal",
+        "initial_exhaustion_symmetry_through_flow_ttl",
+        "fully_expired_status",
+        "fully_expired_known_decoy_values_equal",
+        "neutralized_key_request_bound",
+        "neutralized_exact_replay_stable",
+        "neutralized_live_mutations_conflict",
+        "neutralized_concurrent_mismatch_linearized",
+        "neutralized_expired_mutations_uniform",
+        "neutralized_removed_mutations_uniform",
+        "pending_expired_mutations_uniform",
+        "pending_missing_mutations_uniform",
+        "lifecycle_replay_zero_provider",
+        "lifecycle_replay_zero_delta",
+    }
+)
+_AGGREGATE_SAFE_TEXT_VALUES = frozenset(
+    {
+        "invalid",
+        "lax",
+        "login",
+        "otp_delivery_failed",
+        "recovery",
+        "strict",
+        "unavailable",
+    }
+)
+
+
 def _exact_keys(observation: Mapping[str, Any], expected: set[str]) -> bool:
     return set(observation) == expected
+
+
+def _aggregate_observation_shape_is_safe(
+    observation: object,
+    expected_keys: frozenset[str],
+) -> bool:
+    """Accept only a small aggregate-only shape before privacy projection."""
+
+    if not isinstance(observation, Mapping) or set(observation) != expected_keys:
+        return False
+
+    def bounded(value: object) -> bool:
+        if value is None or type(value) is bool:
+            return True
+        if type(value) is int:
+            return abs(value) <= 10**18
+        if isinstance(value, str):
+            return value in _AGGREGATE_SAFE_TEXT_VALUES
+        if isinstance(value, (list, tuple)):
+            return len(value) <= 8 and all(bounded(item) for item in value)
+        return False
+
+    return all(bounded(value) for value in observation.values())
 
 
 def _reject_ambient_libpq_environment(
@@ -1359,19 +1512,7 @@ def _resend_observation_passes(observation: Mapping[str, Any]) -> bool:
 
 def _failed_resend_observation_passes(observation: Mapping[str, Any]) -> bool:
     return bool(
-        _exact_keys(
-            observation,
-            {
-                "status",
-                "code",
-                "prior_active_unchanged",
-                "prior_verification_succeeds",
-                "replacement_active",
-                "replacement_deliverable",
-                "provider_acceptances",
-                "authority_unchanged",
-            },
-        )
+        _exact_keys(observation, _FAILED_RESEND_OBSERVATION_KEYS)
         and observation["status"] == 502
         and observation["code"] == "otp_delivery_failed"
         and observation["prior_active_unchanged"] is True
@@ -1432,46 +1573,7 @@ def _rate_observation_passes(observation: Mapping[str, Any]) -> bool:
 
 def _cookie_observation_passes(observation: Mapping[str, Any]) -> bool:
     return bool(
-        _exact_keys(
-            observation,
-            {
-                "start_statuses",
-                "start_signatures_equal",
-                "timing_ratio_within_bound",
-                "timing_samples_per_class",
-                "timing_p95_ratio_milli",
-                "timing_bound_milli",
-                "cookie_httponly",
-                "cookie_secure_nonlocal",
-                "cookie_samesite",
-                "raw_flow_token_rows",
-                "uuid_in_response",
-                "reload_status",
-                "reload_metadata_equal",
-                "origin_missing_status",
-                "origin_bad_status",
-                "origin_good_status",
-                "invalid_expired_consumed_signatures_equal",
-                "invalid_expired_consumed_values_equal",
-                "terminal_verify_zero_delta",
-                "initial_exhaustion_purposes",
-                "initial_exhaustion_known_decoy_shapes_equal",
-                "initial_exhaustion_known_decoy_values_equal",
-                "initial_exhaustion_symmetry_through_flow_ttl",
-                "fully_expired_status",
-                "fully_expired_known_decoy_values_equal",
-                "neutralized_key_request_bound",
-                "neutralized_exact_replay_stable",
-                "neutralized_live_mutations_conflict",
-                "neutralized_concurrent_mismatch_linearized",
-                "neutralized_expired_mutations_uniform",
-                "neutralized_removed_mutations_uniform",
-                "pending_expired_mutations_uniform",
-                "pending_missing_mutations_uniform",
-                "lifecycle_replay_zero_provider",
-                "lifecycle_replay_zero_delta",
-            },
-        )
+        _exact_keys(observation, _COOKIE_OBSERVATION_KEYS)
         and observation["start_statuses"] == [202, 202]
         and observation["start_signatures_equal"] is True
         and observation["timing_ratio_within_bound"] is True
@@ -2011,9 +2113,19 @@ def _privacy_observation_projection(
 
     if "cookie" not in behavior or "failed_resend" not in behavior:
         raise ProductGateFailure("NYAY-4 privacy projection inventory is incomplete")
-    if not _cookie_observation_passes(behavior["cookie"]):
+    # Structural/privacy admission is deliberately separate from the product
+    # verdict.  Exact failed values (for example a false timing bound) remain
+    # failed in the assertion evaluator below, but can now be serialized as a
+    # bounded failed-row report instead of being hidden by a generic envelope.
+    # This does not relax either product oracle: both full evaluators remain in
+    # the required assertion inventory.
+    if not _aggregate_observation_shape_is_safe(
+        behavior["cookie"], _COOKIE_OBSERVATION_KEYS
+    ):
         raise ProductGateFailure("NYAY-4 privacy projection cookie shape is unsafe")
-    if not _failed_resend_observation_passes(behavior["failed_resend"]):
+    if not _aggregate_observation_shape_is_safe(
+        behavior["failed_resend"], _FAILED_RESEND_OBSERVATION_KEYS
+    ) or behavior["failed_resend"].get("code") != "otp_delivery_failed":
         raise ProductGateFailure("NYAY-4 privacy projection outcome shape is unsafe")
     failed_resend = dict(behavior["failed_resend"])
     failed_resend["typed_outcome"] = failed_resend.pop("code")
@@ -5215,10 +5327,48 @@ def _timing_ratio_observation(
     }
 
 
-def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
-    """Compare repeated known/decoy starts, cookies, reload, and Origin."""
+def _install_cookie_handler_timing_probe(app: FastAPI) -> None:
+    """Measure the gate-only server path, excluding TestClient transport jitter."""
 
     import time
+
+    @app.middleware("http")
+    async def measure_cookie_start_handler(request: Any, call_next: Any) -> Any:
+        if request.url.path != "/api/v1/auth/student/login/otp/start":
+            return await call_next(request)
+        began = time.perf_counter_ns()
+        response = await call_next(request)
+        elapsed = max(1, time.perf_counter_ns() - began)
+        response.headers[COOKIE_HANDLER_TIMING_HEADER] = str(elapsed)
+        return response
+
+
+def _cookie_start_sample(
+    client: TestClient,
+    mobile: str,
+    origin: str,
+) -> tuple[Any, int]:
+    """Return one response plus its server-path duration from the gate seam."""
+
+    response = client.post(
+        _COOKIE_START_PATH,
+        headers={"Origin": origin},
+        json={"mobile": mobile},
+    )
+    raw_elapsed = response.headers.get(COOKIE_HANDLER_TIMING_HEADER)
+    try:
+        elapsed = int(raw_elapsed)
+    except (TypeError, ValueError):
+        raise ProductGateFailure(
+            "cookie handler timing measurement was unavailable"
+        ) from None
+    if isinstance(raw_elapsed, bool) or elapsed <= 0:
+        raise ProductGateFailure("cookie handler timing measurement was invalid")
+    return response, elapsed
+
+
+def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
+    """Compare repeated known/decoy starts, cookies, reload, and Origin."""
 
     from app.api.v1 import auth_student as endpoint
     from app.core.config import settings
@@ -5240,18 +5390,10 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
     settings.otp_issue_global_limit = 10000
     sender_holder: dict[str, Any] = {"sender": _CertifiedGateProvider()}
     app, factory = _build_behavior_app(engine, sender_holder)
+    _install_cookie_handler_timing_probe(app)
     origin = settings.cors_origins[0]
     known_mobile = _behavior_fixture_mobile("cookie_known")
     decoy_mobile = _behavior_fixture_mobile("cookie_decoy")
-
-    def start(client: TestClient, mobile: str):
-        began = time.perf_counter_ns()
-        response = client.post(
-            "/api/v1/auth/student/login/otp/start",
-            headers={"Origin": origin},
-            json={"mobile": mobile},
-        )
-        return response, max(1, time.perf_counter_ns() - began)
 
     try:
         _seed_active_registration(factory, known_mobile)
@@ -5271,8 +5413,12 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
                 raise_server_exceptions=False,
             ) as decoy_client,
         ):
-            first_known, _ = start(known_client, known_mobile)
-            first_decoy, _ = start(decoy_client, decoy_mobile)
+            first_known, _ = _cookie_start_sample(
+                known_client, known_mobile, origin
+            )
+            first_decoy, _ = _cookie_start_sample(
+                decoy_client, decoy_mobile, origin
+            )
             cookie_header = first_known.headers.get("set-cookie", "")
             for client in (known_client, decoy_client):
                 token = client.cookies.get(settings.otp_flow_cookie_name)
@@ -5296,7 +5442,9 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
                         if class_name == "known"
                         else (decoy_client, decoy_mobile)
                     )
-                    samples[class_name] = start(client, mobile)
+                    samples[class_name] = _cookie_start_sample(
+                        client, mobile, origin
+                    )
                 known, known_ns = samples["known"]
                 decoy, decoy_ns = samples["decoy"]
                 known_durations.append(known_ns)
@@ -7204,7 +7352,11 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
 
         metadata = _run_metadata_probe(engine)
         _clear_behavior_rate_buckets(engine)
-        claim = _run_claim_concurrency_probe(engine)
+        claim = _run_stage(
+            "behavior-claim-coordination",
+            _run_claim_concurrency_probe,
+            engine,
+        )
         provider = _run_provider_idempotency_probe(engine)
         retry_base = _run_retry_lease_probe(engine)
 
@@ -7382,22 +7534,33 @@ def _run_harness_source_probe() -> dict[str, bool]:
 def run_gate(base: URL) -> dict[str, Any]:
     """Execute the exact three-scratch authoritative release gate."""
 
-    runtime = _runtime_probe(base)
+    runtime = _run_stage("runtime", _runtime_probe, base)
     if not _runtime_observation_passes(runtime):
         raise Blocked("PostgreSQL 16 plus pgvector is required")
-    _require_core_contract()
+    _run_stage("core-contract", _require_core_contract)
     manager = _ScratchDatabaseManager(base)
     migration: Mapping[str, Any] | None = None
     populated: Mapping[str, Any] | None = None
     behavior: Mapping[str, Mapping[str, Any]] | None = None
     try:
-        migration = manager.run(
-            "migration_lifecycle", _run_migration_lifecycle_probe
+        migration = _run_stage(
+            "migration-lifecycle",
+            manager.run,
+            "migration_lifecycle",
+            _run_migration_lifecycle_probe,
         )
-        populated = manager.run(
-            "migration_populated", _run_populated_migration_probe
+        populated = _run_stage(
+            "migration-populated",
+            manager.run,
+            "migration_populated",
+            _run_populated_migration_probe,
         )
-        behavior = manager.run("behavior", _run_behavior_probe)
+        behavior = _run_stage(
+            "behavior",
+            manager.run,
+            "behavior",
+            _run_behavior_probe,
+        )
     finally:
         cleanup = manager.summary()
     if (
@@ -7408,8 +7571,8 @@ def run_gate(base: URL) -> dict[str, Any]:
     ):
         raise ProductGateFailure("NYAY-4 scratch execution or cleanup failed")
 
-    config = _run_configuration_probe()
-    source = _run_harness_source_probe()
+    config = _run_stage("configuration", _run_configuration_probe)
+    source = _run_stage("harness-source", _run_harness_source_probe)
     placeholder_mutants = {
         identifier: True for identifier in REQUIRED_MUTANT_IDS
     }
@@ -7443,7 +7606,9 @@ def run_gate(base: URL) -> dict[str, Any]:
     }
     harness["mutants"] = _seeded_mutant_results(mutant_inputs)
 
-    privacy_observations = _privacy_observation_projection(
+    privacy_observations = _run_stage(
+        "aggregate-evaluation",
+        _privacy_observation_projection,
         runtime=runtime,
         migration=migration,
         populated=populated,
@@ -7576,6 +7741,21 @@ def _blocked_report(reason: str) -> dict[str, Any]:
     }
 
 
+def _failure_report(failure: GateStageFailure | None = None) -> dict[str, Any]:
+    """Emit only fixed, reviewed diagnostics; never exception payloads."""
+
+    return {
+        "gate": "nyay4_postgres_otp",
+        "status": "FAIL",
+        "executed": True,
+        "reason": "authoritative gate rejected product or harness state",
+        "failure_stage": failure.stage if failure else "unclassified",
+        "failure_category": (
+            failure.category if failure else "runtime-operation"
+        ),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--execute", action="store_true")
@@ -7596,13 +7776,11 @@ def main(argv: list[str] | None = None) -> int:
     except Blocked as exc:
         report = _blocked_report(str(exc))
         exit_code = BLOCKED_EXIT
+    except GateStageFailure as exc:
+        report = _failure_report(exc)
+        exit_code = 1
     except Exception:  # never copy exception/URL/provider details into evidence
-        report = {
-            "gate": "nyay4_postgres_otp",
-            "status": "FAIL",
-            "executed": True,
-            "reason": "authoritative gate rejected product or harness state",
-        }
+        report = _failure_report()
         exit_code = 1
 
     findings = _privacy_findings(report)

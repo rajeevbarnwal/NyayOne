@@ -922,6 +922,46 @@ EVIDENCE_UPLOAD_NAMES: dict[tuple[str, str], str] = {
     ("wave5-calendar-gate.yml", "calendar-postgres"): "wave5-calendar-postgres-attestation",
     ("wave5-calendar-gate.yml", "calendar-real-browser"): "wave5-calendar-real-browser-attestation",
 }
+WAVE4_FAILURE_DIAGNOSTIC_UPLOAD = {
+    "name": "Upload privacy-safe S-86/S-87 failure diagnostic",
+    "condition": "${{ failure() }}",
+    "producer": "npm run qa:wave4-reporting",
+    "with": {
+        "name": "wave4-reporting-failure-diagnostic",
+        "path": "${{ github.workspace }}/test-results/wave4-browser/results.json",
+        "if-no-files-found": "error",
+        "retention-days": "14",
+        "include-hidden-files": "false",
+    },
+}
+NYAY4_FAILURE_DIAGNOSTIC_UPLOAD = {
+    "name": "Upload privacy-safe NYAY-4 failure diagnostic",
+    "condition": (
+        "${{ failure() && "
+        "hashFiles('backend/test-results/nyay4-postgres/summary.json') != '' }}"
+    ),
+    "producer": "PYTHON=python bash scripts/db_gate.sh",
+    "with": {
+        "name": "nyay4-postgres-failure-diagnostic",
+        "path": (
+            "${{ github.workspace }}/backend/test-results/nyay4-postgres/"
+            "summary.json"
+        ),
+        "if-no-files-found": "error",
+        "retention-days": "14",
+        "include-hidden-files": "false",
+    },
+}
+FAILURE_DIAGNOSTIC_UPLOADS = {
+    (
+        "wave4-private-reporting-gate.yml",
+        "private-reporting-postgres-browser",
+    ): WAVE4_FAILURE_DIAGNOSTIC_UPLOAD,
+    (
+        "wave1-foundation-gate.yml",
+        "backend-postgres16-gate",
+    ): NYAY4_FAILURE_DIAGNOSTIC_UPLOAD,
+}
 DIRECT_EVIDENCE_UPLOAD_PATHS: dict[tuple[str, str], str] = {
     (
         "nyay18-frontend-namespace-gate.yml",
@@ -991,13 +1031,13 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
     ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "91fca0d807f2c7e209ff5cff4b624a466d6a7d2fd09cf1c964940e33cb76f14a",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "087d03fac8cc5b4105c10b187485581d934878b39185855132fd99d186dad652",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "449af3381247ff7d91c5b6c7a60ab220ecc63308af4553af6dd22a32bdaab758",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "a5c8c25d7f98d6536e8b8968747a4b3f09ca6e01b8d23e2568dca2964a12ce35",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
-    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "741e06de64ef3a6be76fc5646cc74f8268990f4ae912dee0e0ca6696b0bd8418",
+    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "97d1faf91f019d316ca23bcf72a95b05bc25e146b491434c8c6219100b43eeaa",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
     ("wave5-calendar-gate.yml", "calendar-postgres"): "3e53e60acd87ec409045c0e7fc1dd0bcc474c4c8a13275545d72e0dfd4de7a27",
     ("wave5-calendar-gate.yml", "calendar-real-browser"): "538128276a071cafcc082999f0b912756b4cd71500552432b49659eedd74f6d4",
@@ -1428,7 +1468,23 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
                     f"{path}: job {job_id} step {index} has a noncanonical shell override"
                 )
             condition = step.get("if")
-            if condition is not None and condition not in ALLOWED_STEP_CONDITIONS:
+            diagnostic_contract = FAILURE_DIAGNOSTIC_UPLOADS.get(
+                (path.name, job_id)
+            )
+            diagnostic_upload = bool(
+                diagnostic_contract is not None
+                and step.get("name") == diagnostic_contract["name"]
+            )
+            diagnostic_condition = (
+                diagnostic_contract["condition"]
+                if diagnostic_contract is not None
+                else None
+            )
+            if (
+                condition is not None
+                and condition not in ALLOWED_STEP_CONDITIONS
+                and not (diagnostic_upload and condition == diagnostic_condition)
+            ):
                 failures.append(
                     f"{path}: job {job_id} step {index} has a noncanonical condition"
                 )
@@ -1455,6 +1511,15 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
                         f"{path}: job {job_id} checkout must use the exact head-safe configuration"
                     )
             if action == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02":
+                if diagnostic_upload:
+                    if (
+                        condition != diagnostic_condition
+                        or step.get("with") != diagnostic_contract["with"]
+                    ):
+                        failures.append(
+                            f"{path}: job {job_id} diagnostic upload configuration is not exact"
+                        )
+                    continue
                 contract = EVIDENCE_CONTRACTS.get(path.name, {}).get(job_id)
                 evidence_key = (path.name, job_id)
                 expected_name = EVIDENCE_UPLOAD_NAMES.get(evidence_key)
@@ -2552,8 +2617,50 @@ def check_workflow(path: Path) -> list[str]:
         if not upload_indexes:
             continue
         upload_jobs.add(job_id)
-        if len(upload_indexes) != 1:
-            failures.append(f"{path}: job {job_id} must have exactly one artifact upload")
+        diagnostic_contract = FAILURE_DIAGNOSTIC_UPLOADS.get(
+            (path.name, job_id)
+        )
+        diagnostic_indexes = []
+        if diagnostic_contract is not None:
+            diagnostic_indexes = [
+                step_index
+                for step_index in upload_indexes
+                if re.search(
+                    r"^      - name:\s*"
+                    + re.escape(str(diagnostic_contract["name"]))
+                    + r"\s*$",
+                    steps[step_index],
+                    re.MULTILINE,
+                )
+            ]
+            if len(diagnostic_indexes) != 1:
+                failures.append(
+                    f"{path}: job {job_id} needs exactly one privacy-safe diagnostic upload"
+                )
+            elif (
+                diagnostic_indexes[0] == 0
+                or _run_payload(steps[diagnostic_indexes[0] - 1])
+                != diagnostic_contract["producer"]
+            ):
+                failures.append(
+                    f"{path}: job {job_id} diagnostic upload must immediately follow its producer"
+                )
+        canonical_upload_indexes = [
+            step_index
+            for step_index in upload_indexes
+            if step_index not in diagnostic_indexes
+        ]
+        if diagnostic_contract is not None and job_id not in contracts:
+            if canonical_upload_indexes:
+                failures.append(
+                    f"{path}: job {job_id} diagnostic-only contract forbids other artifact uploads"
+                )
+            continue
+        if len(canonical_upload_indexes) != 1:
+            failures.append(
+                f"{path}: job {job_id} must have exactly one artifact upload "
+                "for the canonical attestation"
+            )
         if job_id not in contracts:
             if (path.name, job_id) in DIRECT_EVIDENCE_UPLOAD_PATHS:
                 # The full direct chain is bound structurally above, including
@@ -2564,7 +2671,9 @@ def check_workflow(path: Path) -> list[str]:
             continue
 
         source, destination, profile = contracts[job_id]
-        upload_index = upload_indexes[0]
+        if not canonical_upload_indexes:
+            continue
+        upload_index = canonical_upload_indexes[0]
         canonical_job = _canonical_shell(job_block)
         if "prepare_uploadable_evidence.py" not in canonical_job:
             failures.append(

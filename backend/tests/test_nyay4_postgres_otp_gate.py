@@ -2635,3 +2635,137 @@ def test_both_opt_ins_with_remote_database_url_exit_78_before_gate(monkeypatch):
         )
         == gate.BLOCKED_EXIT
     )
+
+
+def test_cookie_timing_samples_use_gate_handler_clock_not_testclient_transport():
+    class DelayedTransportClient:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *_args, **_kwargs):
+            self.calls += 1
+            return SimpleNamespace(
+                headers={gate.COOKIE_HANDLER_TIMING_HEADER: "731"},
+                status_code=202,
+                content=b"{}",
+            )
+
+    client = DelayedTransportClient()
+    response, elapsed_ns = gate._cookie_start_sample(
+        client,
+        "9510008111",
+        "https://testserver",
+    )
+
+    assert response.status_code == 202
+    assert elapsed_ns == 731
+    assert client.calls == 1
+    assert "perf_counter_ns" not in getsource(gate._cookie_start_sample)
+
+
+@pytest.mark.parametrize("header", (None, "", "0", "-1", "not-an-int", True))
+def test_cookie_timing_sample_rejects_missing_or_invalid_handler_measurement(header):
+    response_headers = (
+        {} if header is None else {gate.COOKIE_HANDLER_TIMING_HEADER: header}
+    )
+    client = SimpleNamespace(
+        post=lambda *_args, **_kwargs: SimpleNamespace(headers=response_headers)
+    )
+
+    with pytest.raises(gate.ProductGateFailure, match="timing measurement"):
+        gate._cookie_start_sample(client, "9510008111", "https://testserver")
+
+
+def test_cookie_timing_middleware_is_gate_only_and_exact_path_scoped():
+    source = getsource(gate._install_cookie_handler_timing_probe)
+
+    assert '"/api/v1/auth/student/login/otp/start"' in source
+    assert "COOKIE_HANDLER_TIMING_HEADER" in source
+    assert "perf_counter_ns" in source
+    assert "add_middleware" not in source
+
+
+def test_false_cookie_oracle_remains_structurally_safe_but_still_fails():
+    cookie = {**_cookie(), "timing_ratio_within_bound": False}
+    behavior = {
+        "cookie": cookie,
+        "failed_resend": _failed_resend(),
+    }
+
+    assert _cookie_observation_passes(cookie) is False
+    projection = gate._privacy_observation_projection(
+        runtime={},
+        migration={},
+        populated={},
+        behavior=behavior,
+        config={},
+        harness={},
+    )
+    assert projection["cookie_contract"]["timing_ratio_within_bound"] is False
+    assert _privacy_findings(projection) == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("cookie_samesite", "opaque-browser-capability"),
+        ("fully_expired_status", "opaque-flow-capability"),
+        ("initial_exhaustion_purposes", ["login", "private-purpose"]),
+    ),
+)
+def test_structural_failure_projection_rejects_unreviewed_text(field, value):
+    behavior = {
+        "cookie": {**_cookie(), field: value},
+        "failed_resend": _failed_resend(),
+    }
+
+    with pytest.raises(gate.ProductGateFailure):
+        gate._privacy_observation_projection(
+            runtime={},
+            migration={},
+            populated={},
+            behavior=behavior,
+            config={},
+            harness={},
+        )
+
+
+def test_unexpected_gate_failure_reports_only_allowlisted_stage_and_category(
+    monkeypatch, capsys,
+):
+    private_detail = (
+        "postgresql://qa:secret@127.0.0.1/private "
+        "mobile 9876543210 otp 123456"
+    )
+
+    def fail_at_stage(_base):
+        def delayed_worker():
+            raise TimeoutError(private_detail)
+
+        gate._run_stage("behavior-claim-coordination", delayed_worker)
+
+    monkeypatch.setenv(gate.OPT_IN_ENV, "1")
+    monkeypatch.setattr(gate, "run_gate", fail_at_stage)
+    exit_code = gate.main(
+        [
+            "--execute",
+            "--database-url",
+            "postgresql+psycopg://qa:secret@localhost/postgres",
+        ]
+    )
+    serialized = capsys.readouterr().out
+    report = gate.json.loads(serialized)
+
+    assert exit_code == 1
+    assert report == {
+        "executed": True,
+        "failure_category": "coordination-timeout",
+        "failure_stage": "behavior-claim-coordination",
+        "gate": "nyay4_postgres_otp",
+        "reason": "authoritative gate rejected product or harness state",
+        "status": "FAIL",
+    }
+    assert private_detail not in serialized
+    assert "9876543210" not in serialized
+    assert "123456" not in serialized
+    assert _privacy_findings(report) == []
