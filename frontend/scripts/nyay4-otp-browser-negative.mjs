@@ -346,18 +346,15 @@ try {
   failPendingStateReads = true;
   await pendingFailurePromise;
   await page.getByText('Verification state is unavailable.', { exact: false }).waitFor({ state: 'visible' });
+  const verifyButton = page.getByRole('button', { name: 'Verify and continue', exact: true });
+  const resendButton = page.getByRole('button', { name: 'Resend Code', exact: true });
   const pendingFailureUi = {
     codeReset: await page.getByLabel('Six digit code').inputValue() === '',
-    verifyDisabled: await page.getByRole('button', { name: 'Verify and continue' }).isDisabled(),
-    resendDisabled: await page.locator('button.v34-textlink').isDisabled(),
+    verifyDisabled: await verifyButton.isDisabled(),
+    resendDisabled: await resendButton.isDisabled(),
   };
-  await page.evaluate(() => {
-    const resend = document.querySelector('button.v34-textlink');
-    if (resend instanceof HTMLButtonElement) resend.click();
-    const verify = [...document.querySelectorAll('button')]
-      .find((button) => button.textContent?.includes('Verify and continue'));
-    if (verify instanceof HTMLButtonElement) verify.click();
-  });
+  await resendButton.evaluate((button) => button.click());
+  await verifyButton.evaluate((button) => button.click());
   await page.waitForTimeout(250);
   record(
     'pending-refresh-failure-invalidation',
@@ -383,7 +380,7 @@ try {
   await page.getByText('Verification state is unavailable.', { exact: false }).waitFor({ state: 'hidden' });
   await page.locator('.v34-kv').filter({ hasText: `Tries left ${initialAttempts}` }).waitFor();
   await page.getByLabel('Six digit code').fill(wrongCode);
-  const pendingVerifyRecovered = !(await page.getByRole('button', { name: 'Verify and continue' }).isDisabled());
+  const pendingVerifyRecovered = !(await verifyButton.isDisabled());
   record(
     'pending-refresh-recovery',
     'a later successful GET restores the strict pending projection and permits code-shaped verify',
@@ -399,7 +396,7 @@ try {
       && new URL(response.url()).pathname.endsWith('/otp/verify')
       && response.status() >= 400
   ));
-  await page.getByRole('button', { name: 'Verify and continue' }).click();
+  await verifyButton.click();
   const wrongResponse = await wrongResponsePromise;
   const wrongBody = await wrongResponse.json();
   const wrongState = wrongBody?.detail?.otp_state;
@@ -422,18 +419,13 @@ try {
 
   // Wait for a fresh GET /otp/state to grant resend, then exercise the actual
   // rendered control. No test-side fetch may manufacture this mutation.
-  await page.waitForFunction(() => {
-    const button = document.querySelector('button.v34-textlink');
-    return button instanceof HTMLButtonElement
-      && !button.disabled
-      && button.textContent?.trim() === 'Resend now';
-  }, undefined, { timeout: 45_000 });
+  await resendButton.click({ trial: true, timeout: 45_000 });
   await resetCapture();
   const resendResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
       && new URL(response.url()).pathname.endsWith('/otp/resend')
   ));
-  await page.getByRole('button', { name: 'Resend now' }).click();
+  await resendButton.click();
   const resendResponse = await resendResponsePromise;
   const resendBody = await resendResponse.json();
   const otpRequestsAfterResend = await resolveCapturedMutations(otpRequests);

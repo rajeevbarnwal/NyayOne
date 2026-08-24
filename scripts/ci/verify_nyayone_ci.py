@@ -24,6 +24,9 @@ NYAY4_BROWSER_GATE = ROOT / "frontend" / "scripts" / "nyay4-otp-browser-negative
 NYAY4_BROWSER_CONTRACT = (
     ROOT / "frontend" / "scripts" / "lib" / "nyay4-otp-runner-contract.mjs"
 )
+NYAY4_BROWSER_CONTRACT_TEST = (
+    ROOT / "frontend" / "scripts" / "lib" / "nyay4-otp-runner-contract.test.mjs"
+)
 NYAY19_BROWSER_GATE = (
     ROOT / "frontend" / "scripts" / "nyay19-auth-lifecycle-browser.mjs"
 )
@@ -105,10 +108,13 @@ NYAY18_BROWSER_CONTRACT_TEST = (
 )
 FRONTEND_PACKAGE = ROOT / "frontend" / "package.json"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
-    "ba667ee265ac8ebc039818c4a39301e81568b8fa4a2865f6a6550e2ec6d74d67"
+    "2f8dec5301d1883ff97d0da455a1c13d8ba7bc9ec97332945e3e53221095488c"
 )
 EXPECTED_NYAY4_BROWSER_CONTRACT_SHA256 = (
-    "c45e97b73d2f180683fe890578fcaac877045f58bc005489c0f7a21939b35b38"
+    "3eaafebac1fa1b47fc7a8892add83ec9ee480d797224ad2472eacaca29e2b067"
+)
+EXPECTED_NYAY4_BROWSER_CONTRACT_TEST_SHA256 = (
+    "e52c7e78db0406060cbefb4e6d5ec53f6865cd07090854554d1731259b901b89"
 )
 EXPECTED_NYAY4_PACKAGE_COMMAND = "node scripts/nyay4-otp-browser-negative.mjs"
 EXPECTED_NYAY19_BROWSER_GATE_SHA256 = (
@@ -1912,6 +1918,7 @@ def check_nyay4_browser_gate_contract(
     browser_path: Path = NYAY4_BROWSER_GATE,
     contract_path: Path = NYAY4_BROWSER_CONTRACT,
     package_path: Path = FRONTEND_PACKAGE,
+    contract_test_path: Path = NYAY4_BROWSER_CONTRACT_TEST,
 ) -> list[str]:
     """Pin the executable NYAY-4 browser oracle behind the required CI step."""
 
@@ -1926,6 +1933,11 @@ def check_nyay4_browser_gate_contract(
             contract_path,
             EXPECTED_NYAY4_BROWSER_CONTRACT_SHA256,
             "NYAY-4 browser assertion contract",
+        ),
+        (
+            contract_test_path,
+            EXPECTED_NYAY4_BROWSER_CONTRACT_TEST_SHA256,
+            "NYAY-4 browser assertion contract tests",
         ),
     )
     for path, expected_sha256, label in pinned_files:
