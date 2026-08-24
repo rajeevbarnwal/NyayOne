@@ -74,6 +74,10 @@ JS_STRING_ATOM = r"(?:'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
 SIMPLE_STRING_CONST = re.compile(
     rf"\bconst\s+(?P<name>{JS_IDENTIFIER})\s*=\s*(?P<value>{JS_STRING_ATOM})\s*;"
 )
+SIMPLE_IDENTIFIER_INITIALIZER = re.compile(
+    rf"\b(?:const|let)\s+(?P<name>{JS_IDENTIFIER})\s*=\s*"
+    r"(?P<value>[^;\r\n]+)\s*;"
+)
 CONCAT_EXPRESSION = re.compile(
     rf"(?P<expression>(?:{JS_STRING_ATOM}|{JS_IDENTIFIER})"
     rf"(?:\s*\+\s*(?:{JS_STRING_ATOM}|{JS_IDENTIFIER}))+)",
@@ -92,6 +96,71 @@ FROM_FIXED_CODE_EXPRESSION = re.compile(
     r"String\.from(?P<method>CharCode|CodePoint)\(\s*(?P<codes>"
     r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)"
     r"(?:\s*,\s*(?:0[xX][0-9A-Fa-f]+|[0-9]+))*)\s*\)"
+)
+PRESENTATION_STYLE_SUFFIXES = {".css", ".scss"}
+PRESENTATION_MARKUP_SUFFIXES = {".html", ".jsx", ".svg", ".tsx"}
+JSX_PRESENTATION_ATTRIBUTE = re.compile(
+    r"\b(?P<name>className|class|data-nyayone-[A-Za-z0-9_-]+)\s*="
+)
+DATA_HOOK_OBJECT_KEY = re.compile(r"^data-nyayone-[A-Za-z0-9_-]+$")
+DATA_HOOK_TOKEN = re.compile(r"\bdata-nyayone-[A-Za-z0-9_-]+\b")
+CONST_DECLARATION = re.compile(
+    rf"\bconst\s+(?P<name>{JS_IDENTIFIER})\s*="
+)
+JSX_SPREAD_IDENTIFIER = re.compile(
+    rf"\{{\s*\.\.\.\s*(?P<name>{JS_IDENTIFIER})\s*\}}"
+)
+ASSIGNMENT_OPERATOR = re.compile(
+    r"(?<![=!<>])(?:\*\*|&&|\|\||\?\?|[+\-*/%&|^])?=(?!=|>)"
+)
+DOM_SELECTOR_CALL = re.compile(
+    r"\.(?:querySelector(?:All)?|matches|closest|getElementById|"
+    r"getElementsByClassName)(?:\s*<[^>\r\n]+>)?\s*\(\s*$"
+)
+BROWSER_AUTHORITY_CALL = re.compile(
+    r"(?:\b(?:localStorage|sessionStorage)\s*\.\s*"
+    r"(?:getItem|setItem|removeItem)|"
+    r"\b(?:(?:window|self|globalThis)\s*\.\s*)?caches\s*\.\s*"
+    r"(?:open|delete|has|match)|"
+    r"\bcookieStore\s*\.\s*(?:get|getAll|set|delete)|"
+    r"\bnew\s+(?:CustomEvent|Event|MessageEvent|StorageEvent|BroadcastChannel)|"
+    r"\.\s*(?:addEventListener|removeEventListener))\s*\("
+)
+DOCUMENT_COOKIE_ASSIGNMENT = re.compile(r"\bdocument\s*\.\s*cookie\s*=")
+DOM_DERIVED_AUTHORITY_KEY = re.compile(
+    r"(?:\?\.|\.)\s*(?:className|classList|dataset|attributes)\b|"
+    r"(?:\?\.|\.)\s*getAttribute\s*\(|"
+    r"(?:\?\.|\.)\s*(?:currentTarget|target)\s*"
+    r"(?:\?\.|\.)\s*(?:id|name|value)\b|"
+    r"\[\s*['\"](?:className|classList|dataset|attributes|getAttribute)['\"]\s*\]"
+)
+DOM_PRESENTATION_DESTRUCTURE = re.compile(
+    r"\b(?:const|let)\s*\{[^}\r\n]*\b"
+    r"(?:className|classList|dataset|attributes)\b[^}\r\n]*\}\s*=\s*"
+    r"[^;\r\n]*\b(?:currentTarget|target)\b"
+)
+PERSISTENT_BROWSER_AUTHORITY_USE = re.compile(
+    r"\b(?:localStorage|sessionStorage)\s*(?:(?:\?\.|\.)\s*"
+    r"(?:getItem|setItem|removeItem)|\[\s*['\"]"
+    r"(?:getItem|setItem|removeItem)['\"]\s*\])|"
+    r"\b(?:indexedDB|caches|cookieStore)\s*(?:(?:\?\.|\.)\s*"
+    r"(?:open|delete|deleteDatabase|has|match|get|getAll|set)|\[\s*['\"]"
+    r"(?:open|delete|deleteDatabase|has|match|get|getAll|set)['\"]\s*\])|"
+    r"\b(?:const|let)\s+" + JS_IDENTIFIER + r"\s*=\s*"
+    r"(?:(?:window|self|globalThis)\s*(?:\?\.|\.)\s*)?"
+    r"(?:localStorage|sessionStorage|indexedDB|caches|cookieStore)\s*;|"
+    r"\b(?:const|let)\s*\{[^}\r\n]*\b"
+    r"(?:getItem|setItem|removeItem|open|delete|deleteDatabase|has|match|get|getAll|set)"
+    r"\b[^}\r\n]*\}\s*=\s*"
+    r"(?:(?:window|self|globalThis)\s*(?:\?\.|\.)\s*)?"
+    r"(?:localStorage|sessionStorage|indexedDB|caches|cookieStore)\s*;|"
+    r"[\(\[,?:=]\s*(?:(?:window|self|globalThis)\s*(?:\?\.|\.)\s*)?"
+    r"(?:localStorage|sessionStorage|indexedDB|caches|cookieStore)\s*"
+    r"(?=[,\)\]\}:;])|"
+    r"\bnew\s+(?:(?:window|self|globalThis)\s*(?:\?\.|\.)\s*)?"
+    r"(?:BroadcastChannel|CustomEvent|MessageEvent|StorageEvent)\b|"
+    r"\bdocument\s*(?:(?:\?\.|\.)\s*cookie|"
+    r"\[\s*['\"]cookie['\"]\s*\])\s*="
 )
 PLANTED_MUTANT_NAMES = (
     "legacy-brand-direct",
@@ -485,6 +554,271 @@ def _is_markup_token(text: str, start: int) -> bool:
     ) is not None
 
 
+def _balanced_brace_end(text: str, start: int) -> int:
+    """Return the end of one JSX braced value without interpreting its code."""
+
+    if start >= len(text) or text[start] != "{":
+        return start
+    depth = 0
+    quote: str | None = None
+    index = start
+    while index < len(text):
+        character = text[index]
+        if quote is not None:
+            if character == "\\":
+                index += 2
+                continue
+            if character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        index += 1
+    # An ambiguous or malformed expression must not mask the remainder of the
+    # source. Returning the opening brace keeps the projection fail-closed.
+    return start
+
+
+def _is_open_markup_attribute(text: str, start: int) -> bool:
+    """Return whether ``start`` is inside a plausible, currently open tag."""
+
+    opening = text.rfind("<", 0, start)
+    closing = text.rfind(">", 0, start)
+    if opening <= closing:
+        return False
+    tag_prefix = text[opening + 1:start]
+    tag = re.match(r"[A-Za-z][A-Za-z0-9:._-]*(?:\s|$)", tag_prefix)
+    if tag is None:
+        return False
+
+    depth = 0
+    quote: str | None = None
+    index = tag.end()
+    while index < len(tag_prefix):
+        character = tag_prefix[index]
+        if quote is not None:
+            if character == "\\":
+                index += 2
+                continue
+            if character == quote:
+                quote = None
+        elif character in {"'", '"', "`"}:
+            quote = character
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            if depth == 0:
+                return False
+            depth -= 1
+        index += 1
+    return quote is None and depth == 0
+
+
+def _contains_assignment_outside_literals(text: str) -> bool:
+    literal_spans = [match.span() for match in JS_STRING.finditer(text)]
+    return ASSIGNMENT_OPERATOR.search(_mask_spans(text, literal_spans)) is not None
+
+
+def _literal_has_presentation_only_nesting(text: str, stop: int) -> bool:
+    """Accept only direct JSX-expression or array-member string literals."""
+
+    stack: list[tuple[str, bool]] = []
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    index = 0
+    while index < stop:
+        literal = JS_STRING.match(text, index)
+        if literal is not None:
+            index = literal.end()
+            continue
+        character = text[index]
+        if character in pairs:
+            previous = text[:index].rstrip()
+            array_literal = character == "[" and (
+                not previous or previous[-1] in "([{,:;=!?+-*/%&|^~<>"
+            )
+            stack.append((pairs[character], array_literal))
+        elif character in pairs.values():
+            if not stack or character != stack[-1][0]:
+                return False
+            stack.pop()
+        index += 1
+    # Array members are a common, presentation-only class-list form. Strings
+    # inside calls, grouping parentheses, objects or blocks remain observable.
+    return all(expected == "]" and is_array for expected, is_array in stack)
+
+
+def _presentation_expression_literal_spans(
+    text: str,
+    start: int,
+    end: int,
+) -> list[tuple[int, int]]:
+    """Select literal class/data tokens without masking executable JSX code."""
+
+    if end <= start + 1 or text[start] != "{" or text[end - 1] != "}":
+        return []
+    expression = text[start + 1:end - 1]
+    if _contains_assignment_outside_literals(expression):
+        return []
+    spans: list[tuple[int, int]] = []
+    for literal in JS_STRING.finditer(expression):
+        if not _literal_has_presentation_only_nesting(expression, literal.start()):
+            continue
+        if literal.group("quote") == "`" and "${" in literal.group("body"):
+            for literal_start, literal_end in _presentation_template_literal_spans(
+                expression, literal
+            ):
+                spans.append(
+                    (start + 1 + literal_start, start + 1 + literal_end)
+                )
+            break
+        spans.append((start + 1 + literal.start(), start + 1 + literal.end()))
+    return spans
+
+
+def _presentation_template_literal_spans(
+    text: str,
+    match: re.Match[str],
+) -> list[tuple[int, int]]:
+    """Mask template static text and safe literals, never interpolation code."""
+
+    spans: list[tuple[int, int]] = []
+    body_start = match.start("body")
+    body_end = match.end("body")
+    cursor = body_start
+    while cursor < body_end:
+        marker = text.find("${", cursor, body_end)
+        if marker < 0:
+            if cursor < body_end:
+                spans.append((cursor, body_end))
+            break
+        if cursor < marker:
+            spans.append((cursor, marker))
+        brace_start = marker + 1
+        brace_end = _balanced_brace_end(text, brace_start)
+        if brace_end <= brace_start or brace_end > body_end:
+            break
+        spans.extend(
+            _presentation_expression_literal_spans(text, brace_start, brace_end)
+        )
+        cursor = brace_end
+    return spans
+
+
+def _spread_only_data_hook_declaration_ranges(text: str) -> list[tuple[int, int]]:
+    """Prove data-hook objects are consumed only by exact JSX spreads."""
+
+    declarations: dict[str, list[re.Match[str]]] = {}
+    spreads: dict[str, list[re.Match[str]]] = {}
+    for match in CONST_DECLARATION.finditer(text):
+        declarations.setdefault(match.group("name"), []).append(match)
+    for match in JSX_SPREAD_IDENTIFIER.finditer(text):
+        spreads.setdefault(match.group("name"), []).append(match)
+
+    ranges: list[tuple[int, int]] = []
+    for name, name_spreads in spreads.items():
+        name_declarations = declarations.get(name, [])
+        if len(name_declarations) != 1:
+            continue
+        identifier = re.compile(
+            rf"(?<![A-Za-z0-9_$]){re.escape(name)}(?![A-Za-z0-9_$])"
+        )
+        uses = [match.span() for match in identifier.finditer(text)]
+        allowed_uses = [name_declarations[0].span("name")]
+        allowed_uses.extend(match.span("name") for match in name_spreads)
+        if sorted(uses) != sorted(allowed_uses):
+            continue
+        declaration_end = text.find(";", name_declarations[0].end())
+        if declaration_end >= 0:
+            ranges.append((name_declarations[0].start(), declaration_end + 1))
+    return ranges
+
+
+def _jsx_presentation_spans(text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    for match in JSX_PRESENTATION_ATTRIBUTE.finditer(text):
+        if not _is_open_markup_attribute(text, match.start()):
+            continue
+        if match.group("name").startswith("data-nyayone-"):
+            spans.append(match.span("name"))
+        index = match.end()
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index < len(text) and text[index] in {"'", '"', "`"}:
+            literal = JS_STRING.match(text, index)
+            if literal is not None:
+                spans.append(literal.span())
+        elif index < len(text) and text[index] == "{":
+            end = _balanced_brace_end(text, index)
+            spans.extend(_presentation_expression_literal_spans(text, index, end))
+        else:
+            end = index
+            while end < len(text) and not text[end].isspace() and text[end] not in ">/":
+                end += 1
+            if end > index:
+                spans.append((index, end))
+
+    # A valueless JSX data hook has no assignment for the attribute parser to
+    # anchor on. Mask only its exact attribute-name token.
+    spans.extend(
+        match.span()
+        for match in DATA_HOOK_TOKEN.finditer(text)
+        if _is_open_markup_attribute(text, match.start())
+        and re.match(r"\s*=", text[match.end():]) is None
+    )
+    return spans
+
+
+def _is_css_import_literal(text: str, match: re.Match[str]) -> bool:
+    body = _decoded_runtime_projection(match.group("body"))
+    if not re.search(r"\.(?:css|scss)(?:[?#].*)?$", body, re.IGNORECASE):
+        return False
+    line_prefix = text[text.rfind("\n", 0, match.start()) + 1:match.start()]
+    return re.search(r"\b(?:import|export)\b[^'\"`]*$", line_prefix) is not None
+
+
+def _is_dom_selector_literal(text: str, match: re.Match[str]) -> bool:
+    prefix = text[max(0, match.start() - 240):match.start()]
+    return DOM_SELECTOR_CALL.search(prefix) is not None
+
+
+def _presentation_namespace_projection(text: str, suffix: str) -> str:
+    """Mask syntax-bound presentation identifiers, never namespace prefixes.
+
+    CSS/SCSS cannot create browser authority state. In executable sources only
+    exact JSX presentation attributes, CSS imports, DOM-selector literals and
+    React data-hook object keys are masked. Browser authority calls are audited
+    separately from the unmasked source so a side effect nested in JSX cannot
+    hide behind this presentation projection.
+    """
+
+    if suffix in PRESENTATION_STYLE_SUFFIXES:
+        return "".join(
+            character if character in "\r\n" else " " for character in text
+        )
+
+    spans: list[tuple[int, int]] = []
+    if suffix in PRESENTATION_MARKUP_SUFFIXES:
+        spans.extend(_jsx_presentation_spans(text))
+    data_hook_ranges = _spread_only_data_hook_declaration_ranges(text)
+    for match in JS_STRING.finditer(text):
+        if _is_css_import_literal(text, match) or _is_dom_selector_literal(text, match):
+            spans.append(match.span())
+            continue
+        tail = text[match.end():match.end() + 20]
+        if DATA_HOOK_OBJECT_KEY.fullmatch(match.group("body")) and re.match(
+            r"\s*:", tail
+        ) and any(start <= match.start() and match.end() <= end for start, end in data_hook_ranges):
+            spans.append(match.span())
+    return _mask_spans(text, spans)
+
+
 def _decoded_runtime_projection(text: str) -> str:
     decoded = html.unescape(text)
 
@@ -676,7 +1010,7 @@ def _contains_constructed_legacy_brand(text: str) -> bool:
     return False
 
 
-def _runtime_namespace_candidates(text: str) -> set[str]:
+def _raw_runtime_namespace_candidates(text: str) -> set[str]:
     decoded = _decoded_runtime_projection(text)
     candidates = {
         match.group(0)
@@ -689,6 +1023,160 @@ def _runtime_namespace_candidates(text: str) -> set[str]:
             for pattern in (CURRENT_RUNTIME_NAMESPACE, CURRENT_DISPLAY_REFERENCE)
             for match in pattern.finditer(projection)
         )
+    return candidates
+
+
+def _first_argument_expression(text: str, start: int) -> str:
+    """Extract one JavaScript call argument with bounded lexical balancing."""
+
+    index = start
+    while index < len(text) and text[index].isspace():
+        index += 1
+    expression_start = index
+    stack: list[str] = []
+    quote: str | None = None
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    while index < len(text):
+        character = text[index]
+        if quote is not None:
+            if character == "\\":
+                index += 2
+                continue
+            if character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character in pairs:
+            stack.append(pairs[character])
+        elif stack and character == stack[-1]:
+            stack.pop()
+        elif not stack and character in {",", ")"}:
+            return text[expression_start:index]
+        index += 1
+    return text[expression_start:index]
+
+
+def _cookie_assignment_expression(text: str, start: int) -> str:
+    index = start
+    expression_start = start
+    quote: str | None = None
+    while index < len(text):
+        character = text[index]
+        if quote is not None:
+            if character == "\\":
+                index += 2
+                continue
+            if character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character in {";", "\r", "\n"}:
+            break
+        index += 1
+    return text[expression_start:index]
+
+
+def _expression_with_referenced_constants(text: str, expression: str) -> str:
+    declarations = {
+        match.group("name"): match.group(0)
+        for match in SIMPLE_STRING_CONST.finditer(text)
+    }
+    selected: dict[str, str] = {}
+    pending = set(re.findall(rf"\b{JS_IDENTIFIER}\b", expression))
+    while pending:
+        name = pending.pop()
+        declaration = declarations.get(name)
+        if declaration is None or name in selected:
+            continue
+        selected[name] = declaration
+        pending.update(re.findall(rf"\b{JS_IDENTIFIER}\b", declaration))
+    return "\n".join((*selected.values(), expression))
+
+
+def _expression_with_referenced_initializers(text: str, expression: str) -> str:
+    """Expand unique simple identifier initializers for bounded taint checks."""
+
+    matches: dict[str, list[str]] = {}
+    for match in SIMPLE_IDENTIFIER_INITIALIZER.finditer(text):
+        matches.setdefault(match.group("name"), []).append(match.group(0))
+    declarations = {
+        name: values[0] for name, values in matches.items() if len(values) == 1
+    }
+    selected: dict[str, str] = {}
+    pending = set(re.findall(rf"\b{JS_IDENTIFIER}\b", expression))
+    while pending:
+        name = pending.pop()
+        declaration = declarations.get(name)
+        if declaration is None or name in selected:
+            continue
+        selected[name] = declaration
+        pending.update(re.findall(rf"\b{JS_IDENTIFIER}\b", declaration))
+    return "\n".join((*selected.values(), expression))
+
+
+def _browser_authority_namespace_candidates(text: str) -> set[str]:
+    """Project names used by browser state, cookie, event and channel APIs."""
+
+    candidates: set[str] = set()
+    for match in BROWSER_AUTHORITY_CALL.finditer(text):
+        expression = _first_argument_expression(text, match.end())
+        candidates.update(
+            _raw_runtime_namespace_candidates(
+                _expression_with_referenced_constants(text, expression)
+            )
+        )
+    for match in DOCUMENT_COOKIE_ASSIGNMENT.finditer(text):
+        expression = _cookie_assignment_expression(text, match.end())
+        candidates.update(
+            _raw_runtime_namespace_candidates(
+                _expression_with_referenced_constants(text, expression)
+            )
+        )
+    return candidates
+
+
+def _browser_authority_uses_dom_derived_key(text: str) -> bool:
+    """Reject DOM presentation state as browser-authority identifiers.
+
+    Presentation strings may be excluded from the namespace census only while
+    they remain presentation-only. Reading class/data/attribute state directly
+    into storage, cache, cookie, event or channel identifiers crosses that
+    boundary and must fail closed even when the argument has no string literal.
+    """
+
+    # Fail closed across bracket/optional calls and simple authority aliases.
+    # A shipped module that combines DOM-derived presentation state with a
+    # persistent/channel authority root needs explicit review rather than
+    # relying on regex call-shape inference.
+    if (
+        (DOM_DERIVED_AUTHORITY_KEY.search(text) or DOM_PRESENTATION_DESTRUCTURE.search(text))
+        and PERSISTENT_BROWSER_AUTHORITY_USE.search(text)
+    ):
+        return True
+
+    for match in BROWSER_AUTHORITY_CALL.finditer(text):
+        expression = _first_argument_expression(text, match.end())
+        if DOM_DERIVED_AUTHORITY_KEY.search(
+            _expression_with_referenced_initializers(text, expression)
+        ):
+            return True
+    for match in DOCUMENT_COOKIE_ASSIGNMENT.finditer(text):
+        expression = _cookie_assignment_expression(text, match.end())
+        if DOM_DERIVED_AUTHORITY_KEY.search(
+            _expression_with_referenced_initializers(text, expression)
+        ):
+            return True
+    return False
+
+
+def _runtime_namespace_candidates(text: str, suffix: str = "") -> set[str]:
+    presentation_projection = _presentation_namespace_projection(text, suffix)
+    candidates = _raw_runtime_namespace_candidates(presentation_projection)
+    candidates.update(_browser_authority_namespace_candidates(text))
     return candidates
 
 
@@ -871,14 +1359,15 @@ def _audit_tree(
         decoded = _decoded_runtime_projection(text)
         if LEGACY_BRAND.search(decoded) or _contains_constructed_legacy_brand(decoded):
             failures.append(_failure("legacy-brand", relative))
-        if any(
+        suffix = Path(relative).suffix.casefold()
+        if _browser_authority_uses_dom_derived_key(text) or any(
             not _runtime_namespace_is_contracted(candidate, required_namespaces)
-            for candidate in _runtime_namespace_candidates(decoded)
+            for candidate in _runtime_namespace_candidates(text, suffix)
         ):
             failures.append(_failure("uncontracted-runtime-namespace", relative))
-        suffix = Path(relative).suffix.casefold()
-        for match in JS_STRING.finditer(text):
-            if _is_legacy_browser_namespace(text, match, suffix):
+        presentation_text = _presentation_namespace_projection(text, suffix)
+        for match in JS_STRING.finditer(presentation_text):
+            if _is_legacy_browser_namespace(presentation_text, match, suffix):
                 failures.append(_failure("legacy-browser-namespace", relative))
                 break
         if re.search(

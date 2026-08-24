@@ -59,6 +59,43 @@ describe('legacy registration browser runner contract', () => {
     expect(fullJourney).toContain("record('protected_calls_use_server_actor'");
   });
 
+  it('observes the post-401 resend control by its accessible contract, not a retired class', () => {
+    const fullJourney = sourceBetween(
+      '// Full v3.4 S-08 -> server OTP S-09 -> S-10 backend profile persistence.',
+      '// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.',
+    );
+    expect(fullJourney).toContain(
+      "page.getByRole('button', { name: 'Resend Code', exact: true }).count() === 1",
+    );
+    expect(fullJourney).not.toContain("page.locator('.v34-textlink').count() === 1");
+  });
+
+  it('waits on the approved Revision L S-03 heading before the privacy-safe capture', () => {
+    const fullJourney = sourceBetween(
+      '// Full v3.4 S-08 -> server OTP S-09 -> S-10 backend profile persistence.',
+      '// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.',
+    );
+    expect(fullJourney).toContain(
+      "getByRole('heading', { name: 'Where would you like to begin?', exact: true })",
+    );
+    expect(fullJourney).not.toContain("name: 'Welcome. Let us get you in.'");
+  });
+
+  it('exercises the current S-08 DOB help tooltip in the responsive matrix', () => {
+    const matrix = sourceBetween(
+      '// Responsive/theme and icon-tooltip contract matrix.',
+      '// Retired /auth/student prototype must fail closed',
+    );
+    expect(matrix).toMatch(
+      /getByRole\('button',\s*\{\s*name: 'More information about DATE OF BIRTH',\s*exact: true,?\s*\}\)/u,
+    );
+    expect(matrix).toContain(
+      "/^Required for eligibility; must be on or before \\d{4}-\\d{2}-\\d{2}\\.$/u.test(tooltipText)",
+    );
+    expect(matrix).not.toContain('More information about MOBILE NUMBER');
+    expect(matrix).not.toContain('Exactly 10 digits. The one time code is sent here.');
+  });
+
   it('expects successful recovery to retire the flow and return to S-04', () => {
     const recovery = sourceBetween(
       '// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.',
