@@ -51,6 +51,51 @@ function assertRunnerWiring(source) {
   if (JSON.stringify(recordedNames) !== JSON.stringify(NYAY4_ASSERTION_INVENTORY)) {
     throw new Error('NYAY4_RUNNER_ASSERTION_SOURCE_MISMATCH');
   }
+  const registrationStart = source.indexOf(
+    '  const registration = await context.request.post(`${API}/api/v1/auth/student/register`, {',
+  );
+  const firstOtpRead = source.indexOf('  let code = await latestOtp(mobile);', registrationStart);
+  if (registrationStart === -1 || firstOtpRead === -1) {
+    throw new Error('NYAY4_CURRENT_SIGNUP_WIRE_MISSING');
+  }
+  const registrationBlock = source.slice(registrationStart, firstOtpRead);
+  for (const required of [
+    /terms_accepted: true/,
+    /terms_version: ['"]dpdp-2023\.v1['"]/,
+    /privacy_notice_acknowledged: true/,
+    /privacy_notice_version: ['"]dpdp-2023\.v1['"]/,
+    /const registrationAccepted = registration\.status\(\) === 202\s*&& inspectRegistrationStartWire\(registrationBody\)\.pass;/,
+    /const signupStateResponse = await context\.request\.get\(\s*`\$\{API\}\/api\/v1\/auth\/student\/otp\/state`,\s*\);/,
+    /const signupStateBody = await signupStateResponse\.json\(\);/,
+    /const signupStateAccepted = signupStateResponse\.status\(\) === 200\s*&& safeProjection\(signupStateBody, ['"]pending['"], ['"]signup['"]\);/,
+  ]) {
+    if (!required.test(registrationBlock)) {
+      throw new Error('NYAY4_CURRENT_SIGNUP_WIRE_MISSING');
+    }
+  }
+  if (/\bconsent\s*:/.test(registrationBlock)
+      || /registrationBody\.(?:attempts_left|destination_masked)/.test(source)
+      || !/const initialAttempts = signupStateBody\.attempts_left;/.test(source)
+      || (source.match(/signupStateBody\.destination_masked/g) ?? []).length < 2) {
+    throw new Error('NYAY4_OBSOLETE_SIGNUP_WIRE_PRESENT');
+  }
+  const registrationAccepted = registrationBlock.indexOf('const registrationAccepted =');
+  const registrationGuard = registrationBlock.indexOf('if (!registrationAccepted)');
+  const stateRead = registrationBlock.indexOf('const signupStateResponse =');
+  const stateAccepted = registrationBlock.indexOf('const signupStateAccepted =');
+  const stateGuard = registrationBlock.indexOf('if (!signupStateAccepted)');
+  if (!(registrationAccepted < registrationGuard
+      && registrationGuard < stateRead
+      && stateRead < stateAccepted
+      && stateAccepted < stateGuard)) {
+    throw new Error('NYAY4_SIGNUP_FAIL_FAST_ORDER_MISSING');
+  }
+  if (!/inspectRegistrationStartWire[\s\S]*inspectOtpVerificationWire[\s\S]*from ['"]\.\/lib\/nyay5-profile-browser-contract\.mjs['"]/.test(source)
+      || !/inspectOtpVerificationWire\(successBody\)\.pass/.test(source)
+      || !/inspectOtpVerificationWire\(loginVerifyBody\)\.pass/.test(source)
+      || /safeProjection\((?:successBody|loginVerifyBody),/.test(source)) {
+    throw new Error('NYAY4_CURRENT_VERIFICATION_WIRE_MISSING');
+  }
   for (const required of [
     /cookieInventory\.length === 1/,
     /postAuthCookies\.length === 1/,
@@ -83,7 +128,7 @@ function assertRunnerWiring(source) {
     /const beforeReload = await readOtpViewSnapshot\(/,
     /await page\.reload\(\{ waitUntil: ['"]domcontentloaded['"] \}\);/,
     /const afterReload = await readOtpViewSnapshot\(/,
-    /registrationBody\.destination_masked/,
+    /signupStateBody\.destination_masked/,
     /hasExactOtpReload\(beforeReload, afterReload\)/,
   ]) {
     if (!required.test(source)) throw new Error('NYAY4_RELOAD_ORACLE_MISSING');
@@ -96,7 +141,7 @@ function assertRunnerWiring(source) {
   const reloadRecord = source.slice(reloadRecordStart, reloadRecordEnd);
   if (reloadRecordStart === -1
       || reloadRecordEnd === -1
-      || /registrationBody\.destination_masked/.test(reloadRecord)) {
+      || /signupStateBody\.destination_masked/.test(reloadRecord)) {
     throw new Error('NYAY4_RELOAD_REPORT_PRIVACY_BREACH');
   }
   for (const required of [
@@ -422,11 +467,11 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
       "cards.locator(':scope > span').allInnerTexts()",
     )],
     ['reused pre-reload snapshot', (source) => source.replace(
-      'const afterReload = await readOtpViewSnapshot(\n    page,\n    initialAttempts,\n    registrationBody.destination_masked,\n  );',
+      'const afterReload = await readOtpViewSnapshot(\n    page,\n    initialAttempts,\n    signupStateBody.destination_masked,\n  );',
       'const afterReload = beforeReload;',
     )],
     ['dropped exact masked destination input', (source) => source.replaceAll(
-      'registrationBody.destination_masked',
+      'signupStateBody.destination_masked',
       'null',
     )],
     ['removed countdown relation', (source) => source.replace(
@@ -435,7 +480,7 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     )],
     ['reported masked destination', (source) => source.replace(
       'destinationMatchAfter: afterReload.destinationExact,',
-      'destinationMatchAfter: afterReload.destinationExact,\n      destination: registrationBody.destination_masked,',
+      'destinationMatchAfter: afterReload.destinationExact,\n      destination: signupStateBody.destination_masked,',
     )],
     ['restored broken exact-text locator', (source) => source.replace(
       'await waitForReauthenticatedBadge(privacyPage);',
@@ -452,6 +497,34 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     ['retained aria-hidden badge mark', (source) => source.replace(
       ".forEach((node) => node.remove());",
       '.forEach(() => undefined);',
+    )],
+    ['restored nested-consent signup fixture', (source) => source.replace(
+      /\s*terms_accepted: true,\s*terms_version: ['"]dpdp-2023\.v1['"],\s*privacy_notice_acknowledged: true,\s*privacy_notice_version: ['"]dpdp-2023\.v1['"],/,
+      "\n      consent: { accepted: true, policy_version: 'nyay4-browser-negative' },",
+    )],
+    ['restored HTTP 201 signup contract', (source) => source.replace(
+      'registration.status() === 202',
+      'registration.status() === 201',
+    )],
+    ['removed rejected-registration fail-fast guard', (source) => source.replace(
+      'if (!registrationAccepted)',
+      'if (false && !registrationAccepted)',
+    )],
+    ['removed authoritative-state fail-fast guard', (source) => source.replace(
+      'if (!signupStateAccepted)',
+      'if (false && !signupStateAccepted)',
+    )],
+    ['restored registration-body OTP state authority', (source) => source.replaceAll(
+      'signupStateBody',
+      'registrationBody',
+    )],
+    ['weakened signup verification envelope', (source) => source.replace(
+      'inspectOtpVerificationWire(successBody).pass',
+      "safeProjection(successBody, 'authenticated', 'signup')",
+    )],
+    ['weakened login verification envelope', (source) => source.replace(
+      'inspectOtpVerificationWire(loginVerifyBody).pass',
+      "safeProjection(loginVerifyBody, 'authenticated', 'login')",
     )],
   ])('detects the planted %s source mutant', (_label, mutate) => {
     const source = readFileSync(resolve('scripts/nyay4-otp-browser-negative.mjs'), 'utf8');
