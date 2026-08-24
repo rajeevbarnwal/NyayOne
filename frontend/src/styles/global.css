@@ -1,5 +1,6 @@
 /* Token + font layers first, then base + primitives. All colors come from tokens. */
 @import './tokens.css';
+@import './nyayone-tokens.css';
 @import './fonts.css';
 @import './student.css';
 @import './student-v34.css';
