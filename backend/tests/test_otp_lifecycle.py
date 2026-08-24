@@ -38,7 +38,9 @@ def _reg(
 ):
     req = StudentRegisterRequest(
         first_name="Aditi", last_name="Nair", mobile=mobile, dob="2004-03-14",
-        consent={"accepted": True},
+        terms_accepted=True, terms_version="terms.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy.v1",
     )
     return register_student(session, req, now=now).registration
 

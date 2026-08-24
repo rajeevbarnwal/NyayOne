@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id": "precomposed_accent", "input": "Á", "valid": true, "normalized": "Á"},
+    {"id": "decomposed_accent", "input": "Á", "valid": true, "normalized": "Á"},
+    {"id": "devanagari_marks", "input": "राज", "valid": true, "normalized": "राज"},
+    {"id": "ascii_space_collapse", "input": "  A   B  ", "valid": true, "normalized": "A B"},
+    {"id": "ascii_apostrophe", "input": "O'Neil", "valid": true, "normalized": "O'Neil"},
+    {"id": "right_apostrophe", "input": "D’Arcy", "valid": true, "normalized": "D’Arcy"},
+    {"id": "hyphen", "input": "Anne-Marie", "valid": true, "normalized": "Anne-Marie"},
+    {"id": "period", "input": "A. Kumar", "valid": true, "normalized": "A. Kumar"},
+    {"id": "leading_approved_punctuation", "input": "-A", "valid": true, "normalized": "-A"},
+    {"id": "leading_apostrophe", "input": "’A", "valid": true, "normalized": "’A"},
+    {"id": "leading_period", "input": ".A", "valid": true, "normalized": ".A"},
+    {"id": "trailing_approved_punctuation", "input": "A-", "valid": true, "normalized": "A-"},
+    {"id": "mark_chain_after_letter", "input": "Á̂", "valid": true, "normalized": "Á̂"},
+    {"id": "punctuation_only", "input": "-.'", "valid": false},
+    {"id": "leading_mark", "input": "́A", "valid": false},
+    {"id": "mark_after_space", "input": "A ́", "valid": false},
+    {"id": "mark_after_punctuation", "input": "A-́", "valid": false},
+    {"id": "tab", "input": "A\tB", "valid": false},
+    {"id": "newline", "input": "A\nB", "valid": false},
+    {"id": "non_breaking_space", "input": "A B", "valid": false},
+    {"id": "emoji", "input": "A🙂", "valid": false},
+    {"id": "symbol", "input": "A$", "valid": false},
+    {"id": "supplementary_letter_60", "input": "𐐀", "repeat": 60, "valid": true, "normalized": "𐐀"},
+    {"id": "supplementary_letter_61", "input": "𐐀", "repeat": 61, "valid": false}
+  ]
+}

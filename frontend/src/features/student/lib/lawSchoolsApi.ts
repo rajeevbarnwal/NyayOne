@@ -7,10 +7,6 @@
  */
 import { studentApiFetch } from './studentApiClient';
 
-/** Dev-stub actor claims (see settingsApi.ts) for student-scoped endpoints. */
-const DEV_ACTOR_CLAIMS_HEADER = 'X-Actor-Claims';
-const DEV_ACTOR_CLAIMS = JSON.stringify({ sub: '00000000-0000-4000-8000-0000000000de', roles: ['student'] });
-
 export interface LawSchoolSummary {
   id: string;
   name: string;
@@ -114,9 +110,6 @@ export function isRetryableLawSchoolsError(error: unknown): boolean {
 async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  if (!headers.has(DEV_ACTOR_CLAIMS_HEADER)) {
-    headers.set(DEV_ACTOR_CLAIMS_HEADER, DEV_ACTOR_CLAIMS);
-  }
   const response = await studentApiFetch(path, { ...init, headers });
   const body = (await response.json().catch(() => ({}))) as {
     detail?: {

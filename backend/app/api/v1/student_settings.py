@@ -24,11 +24,18 @@ from app.core.auth import (
 )
 from app.core.auth_cookies import clear_auth_session_cookie, clear_otp_flow_cookie
 from app.core.config import settings
-from app.core.crypto import decrypt, keyed_hash
+from app.core.crypto import keyed_hash
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
-from app.models.registration import StudentProfile, StudentRegistration
+from app.models.registration import StudentRegistration
+from app.schemas.student_profile import (
+    AcademicProfileMutation,
+    InterestsProfileMutation,
+    PersonalProfileMutation,
+    PromptDismissRequest,
+)
 from app.services import login_service, otp_flow_service, registration_service
+from app.services import profile_service
 from app.models.wave1 import (
     PRIVACY_KINDS, THEMES,
     DataSubjectRequest, DeletionJob, ExportJob, PrivacyPreference, UserSettings,
@@ -38,37 +45,6 @@ router = APIRouter(prefix="/student", tags=["student"])
 
 # --- Canonical wire values (SAATHI-58 D1/D2). Labels live in the UI only. ---
 LANGUAGES = ("en", "hi")
-CANONICAL_COLLEGES = (
-    "National Law School of India University",
-    "NALSAR University of Law",
-    "The West Bengal National University of Juridical Sciences",
-    "Other",
-)
-CANONICAL_YEARS = ("1st", "2nd", "3rd", "4th", "5th", "llm")
-_LEGACY_COLLEGE = {
-    "NLSIU": "National Law School of India University",
-    "National Law School of India University (NLSIU)": "National Law School of India University",
-    "NALSAR": "NALSAR University of Law",
-    "The West Bengal NUJS": "The West Bengal National University of Juridical Sciences",
-    "WBNUJS": "The West Bengal National University of Juridical Sciences",
-}
-_LEGACY_YEAR = {
-    "1st year": "1st", "2nd year": "2nd", "3rd year": "3rd",
-    "4th year \u00b7 B.A. LL.B. (Hons.)": "4th", "4th year": "4th", "5th year": "5th",
-    "LL.M.": "llm", "LLM": "llm",
-}
-
-
-def canonical_college(v):
-    if v is None:
-        return None
-    return v if v in CANONICAL_COLLEGES else _LEGACY_COLLEGE.get(v, v)
-
-
-def canonical_year(v):
-    if v is None:
-        return None
-    return v if v in CANONICAL_YEARS else _LEGACY_YEAR.get(v, v)
 
 
 def _require_student(actor: ActorContext = Depends(get_actor_context)) -> ActorContext:
@@ -101,69 +77,161 @@ def _audit(session: Session, actor: ActorContext, action: str, resource: str, ri
 
 
 # ------------------------------- profile ---------------------------------------
-class ProfilePatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    college: str | None = None
-    year_of_study: str | None = None
-
-    @field_validator("college")
-    @classmethod
-    def _college(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        v = canonical_college(v.strip())
-        if not v:
-            raise ValueError("must not be empty or whitespace")
-        if v not in CANONICAL_COLLEGES:
-            raise ValueError(f"college must be one of {CANONICAL_COLLEGES}")
-        return v
-
-    @field_validator("year_of_study")
-    @classmethod
-    def _year(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        v = canonical_year(v.strip())
-        if not v:
-            raise ValueError("must not be empty or whitespace")
-        if v not in CANONICAL_YEARS:
-            raise ValueError(f"year_of_study must be one of {CANONICAL_YEARS}")
-        return v
+_PROFILE_PROJECTION_HEADERS = {
+    "Cache-Control": "private, no-store",
+    "Vary": "Cookie",
+}
 
 
-def _profile_payload(session: Session, reg: StudentRegistration) -> dict:
-    prof = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
-    mobile = decrypt(reg.mobile_ct)
-    return {
-        "first_name": reg.first_name, "middle_name": reg.middle_name, "last_name": reg.last_name,
-        "college": canonical_college(prof.college) if prof else None,
-        "year_of_study": canonical_year(prof.year_of_study) if prof else None,
-        "masked_mobile": f"******{mobile[-4:]}",
-    }
+def _mark_profile_projection_private(response: Response) -> None:
+    for name, value in _PROFILE_PROJECTION_HEADERS.items():
+        response.headers[name] = value
+
+
+def _raise_profile_error(error: profile_service.ProfileBoundaryError) -> None:
+    detail: dict[str, object] = {"code": error.code}
+    if error.field is not None:
+        detail["field"] = error.field
+    if isinstance(error, profile_service.ProfileVersionConflict):
+        detail.update(
+            {
+                "current_profile_version": error.projection["profile_version"],
+                "current_projection": error.projection,
+            }
+        )
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=detail,
+        headers=dict(_PROFILE_PROJECTION_HEADERS),
+    ) from error
+
+
+def _raw_session_token(request: Request) -> str | None:
+    return request.cookies.get(settings.auth_session_cookie_name)
+
+
+def _require_empty_profile_query(request: Request) -> None:
+    if request.query_params:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "field": "query"},
+        )
 
 
 @router.get("/profile")
-def get_profile(actor: ActorContext = Depends(_require_student), session: Session = Depends(get_session)) -> dict:
-    return _profile_payload(session, _registration_for(session, actor))
+def get_profile(
+    request: Request,
+    response: Response,
+    actor: ActorContext = Depends(_require_student),
+    session: Session = Depends(get_session),
+) -> dict:
+    _mark_profile_projection_private(response)
+    _require_empty_profile_query(request)
+    try:
+        return profile_service.projection_for_actor(
+            session,
+            actor.user_id,
+            now=_now(),
+            raw_session_token=_raw_session_token(request),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        _raise_profile_error(error)
 
 
-@router.patch("/profile")
-def patch_profile(payload: ProfilePatch, actor: ActorContext = Depends(_require_student),
-                  session: Session = Depends(get_session)) -> dict:
-    reg = _registration_for(session, actor)
-    prof = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
-    if prof is None:
-        prof = StudentProfile(registration_id=reg.id)
-        session.add(prof)
-    if payload.college is not None:
-        prof.college = payload.college
-        reg.institution_ref = payload.college
-    if payload.year_of_study is not None:
-        prof.year_of_study = payload.year_of_study
-    _audit(session, actor, "student.profile.update", "student_profile", reg.id,
-           {"fields": [k for k, v in payload.model_dump().items() if v is not None]})
-    session.commit()
-    return _profile_payload(session, reg)
+@router.patch("/profile/personal")
+def patch_personal_profile(
+    payload: PersonalProfileMutation,
+    request: Request,
+    response: Response,
+    actor: ActorContext = Depends(_require_student),
+    _: None = Depends(require_trusted_cookie_origin),
+    session: Session = Depends(get_session),
+) -> dict:
+    _mark_profile_projection_private(response)
+    _require_empty_profile_query(request)
+    try:
+        return profile_service.update_personal(
+            session,
+            actor.user_id,
+            **payload.model_dump(),
+            now=_now(),
+            raw_session_token=_raw_session_token(request),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        _raise_profile_error(error)
+
+
+@router.patch("/profile/academic")
+def patch_academic_profile(
+    payload: AcademicProfileMutation,
+    request: Request,
+    response: Response,
+    actor: ActorContext = Depends(_require_student),
+    _: None = Depends(require_trusted_cookie_origin),
+    session: Session = Depends(get_session),
+) -> dict:
+    _mark_profile_projection_private(response)
+    _require_empty_profile_query(request)
+    try:
+        return profile_service.update_academic(
+            session,
+            actor.user_id,
+            **payload.model_dump(),
+            now=_now(),
+            raw_session_token=_raw_session_token(request),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        _raise_profile_error(error)
+
+
+@router.patch("/profile/interests")
+def patch_interests_profile(
+    payload: InterestsProfileMutation,
+    request: Request,
+    response: Response,
+    actor: ActorContext = Depends(_require_student),
+    _: None = Depends(require_trusted_cookie_origin),
+    session: Session = Depends(get_session),
+) -> dict:
+    _mark_profile_projection_private(response)
+    _require_empty_profile_query(request)
+    try:
+        return profile_service.update_interests(
+            session,
+            actor.user_id,
+            **payload.model_dump(),
+            now=_now(),
+            raw_session_token=_raw_session_token(request),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        _raise_profile_error(error)
+
+
+@router.post("/profile/prompt-dismiss")
+def dismiss_profile_prompt(
+    payload: PromptDismissRequest,
+    request: Request,
+    response: Response,
+    actor: ActorContext = Depends(_require_student),
+    _: None = Depends(require_trusted_cookie_origin),
+    session: Session = Depends(get_session),
+) -> dict:
+    del payload
+    _mark_profile_projection_private(response)
+    _require_empty_profile_query(request)
+    try:
+        return profile_service.dismiss_prompt(
+            session,
+            actor.user_id,
+            now=_now(),
+            raw_session_token=_raw_session_token(request),
+        )
+    except profile_service.ProfileBoundaryError as error:
+        session.rollback()
+        _raise_profile_error(error)
 
 
 # ------------------------------- settings --------------------------------------

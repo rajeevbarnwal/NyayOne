@@ -43,28 +43,38 @@ const provisionLoginStudent = async () => {
       last_name: 'Nair',
       mobile: loginMobile,
       dob: '2004-03-14',
-      consent: { accepted: true, policy_version: 'v34-login-e2e' },
+      terms_accepted: true,
+      terms_version: 'dpdp-2023.v1',
+      privacy_notice_acknowledged: true,
+      privacy_notice_version: 'dpdp-2023.v1',
     },
   });
-  if (response.status() === 409) {
-    await fixtureContext.close();
-    return;
-  }
-  if (response.status() !== 201) throw new Error(`login fixture registration failed: ${response.status()}`);
+  if (response.status() !== 202) throw new Error(`login fixture registration failed: ${response.status()}`);
   const code = await latestOtp();
   const verified = await fixtureContext.request.post(`${apiBase}/api/v1/auth/student/otp/verify`, {
     headers: { 'Content-Type': 'application/json', Origin: webOrigin },
     data: { code },
   });
   if (!verified.ok()) throw new Error(`login fixture OTP verification failed: ${verified.status()}`);
+  const session = await fixtureContext.request.get(`${apiBase}/api/v1/auth/student/session`);
+  const sessionBody = session.ok() ? await session.json() : null;
+  const cookies = await fixtureContext.cookies(`${apiBase}/api/v1/auth/student/session`);
+  if (
+    sessionBody?.authenticated !== true
+    || !sessionBody?.actor?.roles?.includes('student')
+    || !cookies.some((cookie) => cookie.httpOnly && cookie.value)
+  ) throw new Error('login fixture did not establish a canonical student session');
   await fixtureContext.close();
+  return cookies;
 };
 
 try {
+  const authenticatedCookies = await provisionLoginStudent();
   for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }]) {
     for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: theme });
-      await context.addInitScript(({ themeValue }) => localStorage.setItem('ls-theme', themeValue), { themeValue: theme });
+      await context.addCookies(authenticatedCookies);
+      await context.addInitScript(({ themeValue }) => localStorage.setItem('nyayone.theme.v1', themeValue), { themeValue: theme });
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];
@@ -112,12 +122,10 @@ try {
   await page.route('**/api/v1/auth/student/register', async (route) => {
     capturedPayload = route.request().postDataJSON();
     await route.fulfill({
-      status: 201,
+      status: 202,
       contentType: 'application/json',
       body: JSON.stringify({
-        status: 'pending', purpose: 'signup', destination_masked: '••••••3210',
-        attempts_left: 3, expires_in_seconds: 300, resend_in_seconds: 30,
-        locked_for_seconds: 0, resend_allowed: false,
+        status: 'accepted', next: 'otp', expires_in_seconds: 300, resend_after_seconds: 30,
       }),
     });
   });
@@ -130,40 +138,73 @@ try {
     await page.getByLabel('FIRST NAME').fill(first);
     await page.getByLabel('LAST NAME').fill(last);
     await page.locator('#v34-mobile').fill(mobile);
-    await page.getByLabel('INSTITUTIONAL EMAIL').fill('student@nls.ac.in');
     await page.locator('#v34-dob').fill(dob);
-    await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
-    await page.getByLabel('YEAR OF STUDY').selectOption('4');
-    await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
-    await page.getByRole('checkbox', { name: /accept the terms/ }).check();
+    await page.getByRole('checkbox', { name: 'I accept the Terms.', exact: true }).check();
+    await page.getByRole('checkbox', { name: 'I acknowledge the Privacy Notice.', exact: true }).check();
   };
   const submit = () => page.getByRole('button', { name: 'Send one time code' }).click();
 
   await loadRegistration();
   await fillRequired({ mobile: '123456789' });
   await submit();
-  record('mobile_9_digits', 'typed exact-length error and remain S-08', await page.getByRole('alert').allTextContents(), await page.getByText('Mobile number must be exactly 10 digits.').isVisible() && new URL(page.url()).pathname === '/s-08');
+  const mobile9Error = await page.locator('#v34-mobile-error').textContent();
+  record('mobile_9_digits', 'typed exact-length error and remain S-08', mobile9Error,
+    await page.locator('#v34-mobile-error').isVisible()
+      && mobile9Error === 'Mobile number must be exactly 10 digits.'
+      && new URL(page.url()).pathname === '/s-08');
 
   await loadRegistration();
   await fillRequired({ mobile: '12345678901' });
   await submit();
-  record('mobile_11_digits', 'typed exact-length error and remain S-08', await page.getByRole('alert').allTextContents(), await page.getByText('Mobile number must be exactly 10 digits.').isVisible() && new URL(page.url()).pathname === '/s-08');
+  const mobile11Error = await page.locator('#v34-mobile-error').textContent();
+  record('mobile_11_digits', 'typed exact-length error and remain S-08', mobile11Error,
+    await page.locator('#v34-mobile-error').isVisible()
+      && mobile11Error === 'Mobile number must be exactly 10 digits.'
+      && new URL(page.url()).pathname === '/s-08');
 
   await loadRegistration();
   await fillRequired({ dob: '2030-01-01' });
   await submit();
-  record('future_dob', 'future date rejected with clear error', await page.getByRole('alert').allTextContents(), await page.getByText(/not in the future/i).isVisible());
+  const futureDobError = await page.locator('#v34-dob-error').textContent();
+  record('future_dob', 'future date rejected with clear error', futureDobError,
+    await page.locator('#v34-dob-error').isVisible()
+      && futureDobError === 'Enter a valid date of birth that is not in the future.');
 
   await loadRegistration();
   await fillRequired({ first: 'Rajeev!', last: 'Barnwal1' });
   await submit();
-  const specialAlerts = await page.getByRole('alert').allTextContents();
-  record('special_name_characters', 'first and last names rejected', specialAlerts, specialAlerts.filter((text) => /characters that aren't allowed/i.test(text)).length === 2);
+  const specialFieldErrors = {
+    first: await page.locator('#v34-first-error').textContent(),
+    last: await page.locator('#v34-last-error').textContent(),
+  };
+  record(
+    'special_name_characters',
+    'first and last names rejected',
+    specialFieldErrors,
+    await page.locator('#v34-first-error').isVisible()
+      && await page.locator('#v34-last-error').isVisible()
+      && Object.values(specialFieldErrors).every((text) => /characters that aren't allowed/i.test(text ?? '')),
+  );
 
   await loadRegistration();
   await submit();
-  const emptyAlerts = await page.getByRole('alert').allTextContents();
-  record('empty_required_fields', 'all required inputs rejected', emptyAlerts, emptyAlerts.length >= 8);
+  const requiredErrorSelectors = [
+    '#v34-first-error',
+    '#v34-last-error',
+    '#v34-mobile-error',
+    '#v34-dob-error',
+    '#v34-terms-error',
+    '#v34-privacy-error',
+  ];
+  const requiredErrorsVisible = await Promise.all(
+    requiredErrorSelectors.map((selector) => page.locator(selector).isVisible()),
+  );
+  record(
+    'empty_required_fields',
+    'all six required identity and legal-consent errors are visible',
+    { requiredErrorSelectors, requiredErrorsVisible },
+    requiredErrorsVisible.every(Boolean),
+  );
 
   await loadRegistration();
   const sixty = 'A'.repeat(60);
@@ -186,29 +227,40 @@ try {
   await fillRequired({ first: 'B'.repeat(61) });
   const maxLengthActual = await page.getByLabel('FIRST NAME').inputValue();
   await submit();
+  const name61Error = await page.locator('#v34-first-error').textContent();
   record('name_61_boundary', '61 characters retained, rejected, and remain S-08', {
     length: maxLengthActual.length,
-    alerts: await page.getByRole('alert').allTextContents(),
+    error: name61Error,
     path: new URL(page.url()).pathname,
   }, maxLengthActual.length === 61
-    && await page.getByText(/60 characters or fewer/i).isVisible()
+    && await page.locator('#v34-first-error').isVisible()
+    && name61Error === 'First name must be 60 characters or fewer.'
     && new URL(page.url()).pathname === '/s-08');
 
-  const criticalSelectors = {
-    'INSTITUTIONAL EMAIL': '#v34-email',
-    'COLLEGE OR UNIVERSITY': '#v34-college',
-    'YEAR OF STUDY': '#v34-year',
-    'BAR ENROLMENT': '#v34-bar',
+  const currentSelectors = {
+    'FIRST NAME': '#v34-first',
+    'MIDDLE NAME': '#v34-middle',
+    'LAST NAME': '#v34-last',
+    'MOBILE NUMBER': '#v34-mobile',
     'DATE OF BIRTH': '#v34-dob',
+    'TERMS': '#v34-terms',
+    'PRIVACY NOTICE': '#v34-privacy',
   };
-  const criticalVisibility = Object.fromEntries(await Promise.all(Object.entries(criticalSelectors).map(async ([label, selector]) => [label, await page.locator(selector).isVisible()])));
-  record('legacy_schema_parity', 'all critical legacy fields visible', criticalVisibility, Object.values(criticalVisibility).every(Boolean));
+  const currentFieldCounts = Object.fromEntries(await Promise.all(
+    Object.entries(currentSelectors).map(async ([label, selector]) => [label, await page.locator(selector).count()]),
+  ));
+  const retiredFieldCount = await page.locator('#v34-email,#v34-college,#v34-year,#v34-bar').count();
+  record(
+    'legacy_schema_parity',
+    'one core identity/control instance each and zero retired academic fields on S-08',
+    { currentFieldCounts, retiredFieldCount },
+    Object.values(currentFieldCounts).every((count) => count === 1) && retiredFieldCount === 0,
+  );
 
   await page.goto(`${base}/s-03`);
   const iconContract = await page.evaluate(() => [...document.querySelectorAll('.v34-iconbtn')].map((button) => ({ aria: button.getAttribute('aria-label'), tip: button.getAttribute('data-tip'), svg: button.querySelectorAll('svg').length })));
   record('icon_tooltip_contract', 'every icon CTA has SVG, aria-label and visible-tooltip text', iconContract, iconContract.length > 0 && iconContract.every((item) => item.aria && item.tip === item.aria && item.svg === 1));
 
-  await provisionLoginStudent();
   await resetOtp();
   const loginCalls = [];
   page.on('request', (request) => {
@@ -217,10 +269,9 @@ try {
     }
   });
   await page.goto(`${base}/s-04`);
-  await page.getByRole('button', { name: 'Use a one time code' }).click();
   await page.locator('#v34-login-mobile').fill(loginMobile);
   await page.getByRole('button', { name: 'Send one time code' }).click();
-  await page.waitForURL('**/s-09');
+  await page.waitForURL('**/s-05');
   const loginCode = await latestOtp();
   await page.getByLabel('Six digit code').fill(loginCode);
   await page.getByRole('button', { name: 'Verify and continue' }).click();
@@ -231,7 +282,7 @@ try {
   }, `${apiBase}/api/v1/auth/student/session`);
   const loginBrowserState = await page.evaluate(({ mobile, otp }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
-    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedLocalKeys = new Set(['nyayone.theme.v1']);
     const allowedSessionKeys = new Set();
     const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
     const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;

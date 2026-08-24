@@ -14,6 +14,27 @@ const base: ReminderPref = {
 function svc() { return new ReminderPrefService(new InMemoryKvStore()); }
 
 describe('S19.2 reminder preferences (SAATHI-290/292)', () => {
+  it('writes only the exact NyayOne reminder-preference namespace', () => {
+    const store = new InMemoryKvStore();
+    new ReminderPrefService(store).savePref(STU, STU, base, now);
+
+    expect(store.get(`nyayone.student.reminder-prefs.v1.${STU}`)).not.toBeNull();
+    expect(store.get(`ls-reminder-prefs-${STU}`)).toBeNull();
+  });
+
+  it('never reads or migrates a legacy private reminder namespace', () => {
+    const store = new InMemoryKvStore();
+    const service = new ReminderPrefService(store);
+    const saved = service.savePref(STU, STU, base, now);
+    expect(saved.ok).toBe(true);
+    const currentKey = `nyayone.student.reminder-prefs.v1.${STU}`;
+    store.set(`ls-reminder-prefs-${STU}`, store.get(currentKey));
+    store.remove(currentKey);
+
+    expect(new ReminderPrefService(store).read(STU, STU)).toBeNull();
+    expect(store.get(currentKey)).toBeNull();
+  });
+
   it('TC-290-01: new user gets safe defaults; returning user gets saved prefs', () => {
     const s = svc();
     const fresh = s.load(STU);

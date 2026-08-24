@@ -24,21 +24,59 @@ const states = [
     const path = id === 'S-21' || id === 'S-22' ? `/${id.toLowerCase()}?listing=cam` : `/${id.toLowerCase()}`;
     return { id, path };
   }),
-  { id: 'S-17E', path: '/s-17', edit: true },
+  { id: 'S-17E', path: '/s-17', edit: true, expectedScreen: 'S-10' },
 ];
 const mobileScrollLimits = {
   'S-11': 111, 'S-12': 0, 'S-13': 22, 'S-14': 0, 'S-15': 463,
-  'S-16': 8, 'S-17': 109, 'S-17E': 120, 'S-18': 0, 'S-19': 0,
+  'S-16': 8, 'S-17': 211, 'S-17E': 34, 'S-18': 0, 'S-19': 0,
   'S-20': 172, 'S-21': 205, 'S-22': 282, 'S-23': 18, 'S-24': 0,
   'S-25': 0, 'S-26': 0,
 };
 
 const rows = [];
 const record = (area, expected, actual, pass, detail = '') => rows.push({ area, expected, actual, pass, detail });
-const profile = {
-  first_name: 'Aditi', middle_name: 'Rao', last_name: 'Nair',
-  college: 'NLSIU', year_of_study: '4', masked_mobile: '******0042',
+const completeProfileProjection = {
+  profile_version: 7,
+  completion_version: 'v1',
+  completion_percent: 100,
+  completed_sections: ['personal', 'academic', 'interests'],
+  next_incomplete_section: null,
+  is_complete: true,
+  institutional_email_status: 'pending',
+  guardian: { required: false, status: 'not_required' },
+  access_mode: 'full',
+  disabled_capabilities: [],
+  profile_prompt: { should_show: false, dismissed_for_session: false },
+  profile: {
+    personal: {
+      first_name: 'Aditi',
+      middle_name: 'Rao',
+      last_name: 'Nair',
+      date_of_birth: '2002-03-14',
+      preferred_language: 'en',
+      city: 'Bengaluru',
+      pronouns: null,
+    },
+    academic: {
+      college: 'NLSIU',
+      year_of_study: '4',
+      enrolment_number: 'KA/1234/2023',
+      institutional_email: 'aditi@example.edu',
+      bar_enrolment_number: null,
+    },
+    interests: {
+      interests: ['Constitutional law'],
+      goals: ['Litigation'],
+    },
+  },
 };
+const restrictedProfileProjection = {
+  ...completeProfileProjection,
+  guardian: { required: true, status: 'required_pending' },
+  access_mode: 'limited',
+  disabled_capabilities: ['community', 'sharing'],
+};
+let profileProjection = completeProfileProjection;
 let settings = {
   theme: 'system', language: 'en', notif_email: true, notif_sms: true,
   notif_updates: false, version: 7,
@@ -152,20 +190,19 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
     const url = new URL(request.url());
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.pathname === '/api/v1/student/profile') {
-      if (request.method() === 'PATCH') {
-        const body = request.postDataJSON();
-        if (body.college) profile.college = body.college;
-        if (body.year_of_study) profile.year_of_study = body.year_of_study;
-      }
-      return json(200, profile);
+      return json(200, profileProjection);
+    }
+    if (request.method() === 'POST'
+      && url.pathname === '/api/v1/auth/student/verification/email/request') {
+      return json(202, profileProjection);
     }
     if (url.pathname === '/api/v1/auth/student/session') {
       return json(200, {
         authenticated: true,
         actor: {
-          sub: 'student-browser-gate',
+          sub: '00000000-0000-4000-8000-000000002701',
           roles: ['student'],
-          student_profile_id: 'profile-browser-gate',
+          student_profile_id: '00000000-0000-4000-8000-000000002702',
           student_verification: 'verified',
           is_minor: false,
           consent_state: ['registration'],
@@ -325,8 +362,12 @@ function geometryProbe() {
     screen: document.querySelector('[data-screen]')?.getAttribute('data-screen'),
     h1Count: document.querySelectorAll('h1').length,
     bodyOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    contentOverflowX: content ? content.scrollWidth - content.clientWidth : -1,
-    contentOverflowY: content ? content.scrollHeight - content.clientHeight : -1,
+    contentOverflowX: content
+      ? content.scrollWidth - content.clientWidth
+      : document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    contentOverflowY: content
+      ? content.scrollHeight - content.clientHeight
+      : document.documentElement.scrollHeight - document.documentElement.clientHeight,
     smallTargets,
     scrollable,
     legacyShells: document.querySelectorAll('.ls-rail,.ls-topbar,.ls-bnav').length,
@@ -342,7 +383,7 @@ try {
         colorScheme: theme,
       });
       await context.addInitScript(({ themeValue }) => {
-        localStorage.setItem('ls-theme', themeValue);
+        localStorage.setItem('nyayone.theme.v1', themeValue);
       }, { themeValue: theme });
       const page = await context.newPage();
       const runtime = createRuntimeEvidence();
@@ -351,6 +392,9 @@ try {
       await installApiContract(page, runtime, contextSavedIds);
 
       for (const state of states) {
+        profileProjection = state.id === 'S-16'
+          ? restrictedProfileProjection
+          : completeProfileProjection;
         if (state.id === 'S-26') contextSavedIds.clear();
         const calendarResponses = state.id === 'S-14' ? [
           page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/view-preferences')),
@@ -392,14 +436,18 @@ try {
         }
         await waitForDocumentReady(page);
         if (state.edit) {
-          const edit = page.getByRole('button', { name: 'Edit college & year' });
+          const edit = page.getByRole('button', { name: 'Edit profile', exact: true });
           await edit.waitFor({ state: 'visible' });
-          await edit.click();
-          await page.getByRole('heading', { name: 'Edit college & year' }).waitFor({ state: 'visible' });
+          await Promise.all([
+            page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?section=personal'),
+            edit.click(),
+          ]);
+          await page.getByRole('heading', { name: 'About you', exact: true }).waitFor({ state: 'visible' });
+          await waitForDocumentReady(page);
         }
         const geometry = await page.evaluate(geometryProbe);
         const prefix = `${state.id}__${viewport.name}__${theme}`;
-        const expectedScreen = state.id === 'S-17E' ? 'S-17' : state.id;
+        const expectedScreen = state.expectedScreen ?? state.id;
         record(`${prefix}__screen`, expectedScreen, geometry.screen, geometry.screen === expectedScreen);
         record(`${prefix}__heading`, 'exactly one h1', geometry.h1Count, geometry.h1Count === 1);
         record(`${prefix}__overflow-x`, '0 horizontal px', { body: geometry.bodyOverflowX, content: geometry.contentOverflowX }, geometry.bodyOverflowX === 0 && geometry.contentOverflowX <= 1);
@@ -441,8 +489,29 @@ try {
     }
   }
 
+  profileProjection = {
+    ...completeProfileProjection,
+    profile_version: 8,
+    completion_percent: 34,
+    completed_sections: ['personal'],
+    next_incomplete_section: 'academic',
+    is_complete: false,
+    institutional_email_status: 'not_provided',
+    profile_prompt: { should_show: true, dismissed_for_session: false },
+    profile: {
+      ...completeProfileProjection.profile,
+      academic: {
+        college: null,
+        year_of_study: null,
+        enrolment_number: null,
+        institutional_email: null,
+        bar_enrolment_number: null,
+      },
+      interests: { interests: [], goals: [] },
+    },
+  };
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  const page = await context.newPage();
+  let page = await context.newPage();
   const functionalRuntime = createRuntimeEvidence();
   attachRuntimeEvidence(page, functionalRuntime);
   const functionalSavedIds = new Set(['cam']);
@@ -450,50 +519,59 @@ try {
 
   await page.goto(`${base}/s-13`);
   await waitForDocumentReady(page);
-  const resume = page.getByRole('button', { name: 'Continue step 2' });
+  const resume = page.getByRole('button', { name: 'Continue profile', exact: true });
   await resume.waitFor({ state: 'visible' });
   await Promise.all([
-    page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?step=academic'),
+    page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?section=academic'),
     resume.click(),
   ]);
   await waitForDocumentReady(page);
   record('S-13_resume_branch', 'first incomplete step routes to S-10 academic', new URL(page.url()).pathname + new URL(page.url()).search,
-    new URL(page.url()).pathname === '/s-10' && new URL(page.url()).search === '?step=academic');
+    new URL(page.url()).pathname === '/s-10' && new URL(page.url()).search === '?section=academic');
+
+  // The resume assertion intentionally uses an incomplete canonical fixture.
+  // Open a fresh document before the remaining complete-profile journeys so
+  // the client query cache cannot retain that one scenario's projection.
+  profileProjection = completeProfileProjection;
+  await page.close();
+  page = await context.newPage();
+  attachRuntimeEvidence(page, functionalRuntime);
+  await installApiContract(page, functionalRuntime, functionalSavedIds);
 
   await page.goto(`${base}/s-15`);
   await waitForDocumentReady(page);
-  const email = page.getByLabel('Institutional email');
-  const send = page.getByRole('button', { name: 'Send verification link' });
-  const institutionalEmailError = 'Enter a valid institutional email of 254 characters or fewer — e.g. aditi.nair@nls.ac.in';
-  for (const invalid of [
-    { name: 'empty', value: '' },
-    { name: 'malformed', value: 'student@nlsiu' },
-    { name: 'overlength_255', value: `${'a'.repeat(245)}@nls.ac.in` },
-  ]) {
-    await email.fill(invalid.value);
-    await send.click();
-    const alertText = await page.getByRole('alert').allTextContents();
-    const sentVisible = await page.getByText('Verification link sent — check your inbox.').isVisible().catch(() => false);
-    const errorMatched = alertText.some((text) => text.includes(institutionalEmailError));
-    record(
-      `S-15_${invalid.name}`,
-      'invalid institutional email rejected without a success state',
-      { errorMatched, sentVisible },
-      errorMatched && !sentVisible,
-    );
-  }
-  await email.fill('student@gmail.com');
-  await send.click();
-  const consumerErrorVisible = await page.getByText(institutionalEmailError).isVisible();
-  record('S-15_consumer_email', 'consumer domain rejected', { errorVisible: consumerErrorVisible }, consumerErrorVisible);
-  await email.fill('student@nls.ac.in');
-  const academicEmailValue = await email.inputValue();
-  record(
-    'S-15_academic_email',
-    'academic domain clears local validation',
-    { accepted: academicEmailValue === 'student@nls.ac.in', valueLength: academicEmailValue.length },
-    academicEmailValue === 'student@nls.ac.in',
+  const requestReview = page.getByRole('button', { name: 'Request verification review', exact: true });
+  await requestReview.waitFor({ state: 'visible' });
+  const savedEmailVisible = await page.getByText('aditi@example.edu', { exact: true }).isVisible();
+  record('S-15_server_email', 'saved institutional email comes from the canonical server projection',
+    { visible: savedEmailVisible }, savedEmailVisible);
+  const pendingStatus = page.locator('.status').filter({ hasText: 'pending' });
+  const pendingStatusVisible = await pendingStatus.isVisible();
+  record('S-15_server_status', 'pending verification remains server-authoritative',
+    { visible: pendingStatusVisible }, pendingStatusVisible);
+  const editableEmailFields = await page.getByLabel('Institutional email', { exact: true }).count();
+  record('S-15_no_local_verification', 'no editable email field on the server-authoritative status screen',
+    { editableEmailFields }, editableEmailFields === 0);
+  const requestReviewReady = await requestReview.isVisible() && await requestReview.isEnabled();
+  record('S-15_review_action', 'pending saved email exposes the server review request',
+    { ready: requestReviewReady }, requestReviewReady);
+  const reviewResponse = page.waitForResponse((response) => isExactApiResponse(
+    response,
+    'POST',
+    '/api/v1/auth/student/verification/email/request',
+  ));
+  await requestReview.click();
+  const completedReviewResponse = await finishResponse(await reviewResponse);
+  const reviewConfirmation = page.getByText(
+    'Verification review request recorded. Verification remains pending until an authorized review succeeds.',
+    { exact: true },
   );
+  await reviewConfirmation.waitFor({ state: 'visible' });
+  record('S-15_review_request', 'HTTP 202 records a request without self-verifying the student',
+    completedReviewResponse,
+    completedReviewResponse.status === 202 && completedReviewResponse.finishedError === null
+      && await reviewConfirmation.isVisible()
+      && await pendingStatus.isVisible());
 
   const browseResponses = [
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
@@ -662,7 +740,7 @@ const summary = {
 };
 await writeFile(resolve(evidenceDir, 'results.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 await writeFile(resolve(evidenceDir, 'summary.txt'), [
-  'LegalSaathi v3.4 S-11-S-26 production integration',
+  'NyayOne v3.4 S-11-S-26 production integration',
   `total=${summary.total}`,
   `passed=${summary.passed}`,
   `failed=${summary.failed}`,

@@ -5,8 +5,6 @@ run against the same DDL the models declare (mirrored by migration 0002).
 """
 from __future__ import annotations
 
-import uuid
-
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +16,6 @@ from app.models.registration import (
     Consent,
     OtpChallenge,
     StudentProfile,
-    StudentRegistration,
     StudentVerification,
     User,
 )
@@ -29,7 +26,9 @@ from app.services.registration_service import register_student
 def _reg(session: Session, mobile="9876543210"):
     req = StudentRegisterRequest(
         first_name="Aditi", last_name="Nair", mobile=mobile, dob="2004-03-14",
-        consent={"accepted": True},
+        terms_accepted=True, terms_version="terms.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy.v1",
     )
     return register_student(session, req).registration
 

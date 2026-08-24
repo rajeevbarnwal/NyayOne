@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  migrateLegacyBrowserNamespace,
+  NYAYONE_THEME_STORAGE_KEY,
+} from '../lib/browserNamespace';
 
 export type ThemeMode = 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'ls-theme';
+export const THEME_STORAGE_KEY = NYAYONE_THEME_STORAGE_KEY;
 
 /** Pure: resolve the initial theme from stored value then system preference. */
 export function resolveInitialTheme(
@@ -20,13 +24,18 @@ export function nextTheme(mode: ThemeMode): ThemeMode {
 
 function readInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  let stored: string | null = null;
+  try {
+    stored = migrateLegacyBrowserNamespace(window.localStorage).theme;
+  } catch {
+    /* storage unavailable — fall through to the system preference */
+  }
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
   return resolveInitialTheme(stored, prefersDark);
 }
 
 /**
- * Runtime dark/light theme. Persists to localStorage["ls-theme"] and applies
+ * Runtime dark/light theme. Persists to the NyayOne device-preference namespace and applies
  * `data-theme` on <html> so the token CSS switches with no reload. Respects the
  * OS preference on first load (when nothing is stored).
  */

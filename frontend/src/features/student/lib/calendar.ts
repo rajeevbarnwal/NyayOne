@@ -535,4 +535,4 @@ export function zonedToUtcIso(date: string, time: string, timezone: string): str
 }
 
 export const CALENDAR_SOURCE_NOTE =
-  'Aggregated from your LegalSaathi activity. Times use your selected timezone; private exports are revocable and opt-in.';
+  'Aggregated from your NyayOne activity. Times use your selected timezone; private exports are revocable and opt-in.';

@@ -37,6 +37,7 @@ SENSITIVE_CAPTURE_DIRECTORIES = {
     "dom",
     "net",
     "report-evidence",
+    "screenshots",
     "shots",
     "storage",
     "traces",
@@ -87,6 +88,25 @@ PROFILE_SPECS: dict[str, tuple[tuple[str, str, str], ...]] = {
     "wave5-real": (
         ("wave5-real-browser", "wave5-real-browser/wave5-calendar-real-e2e.json", "wave5-browser"),
     ),
+    "nyay5": (
+        ("nyay5-postgres", "nyay5-postgres/summary.json", "nyay5-postgres"),
+        ("nyay5-browser", "nyay5-browser/results.json", "nyay5-browser"),
+        (
+            "nyay5-orchestrator",
+            "nyay5-browser/orchestrator-summary.json",
+            "nyay5-orchestrator",
+        ),
+        (
+            "nyay5-acceptance-attestations",
+            "nyay5-acceptance/attestations.json",
+            "nyay5-acceptance-attestations",
+        ),
+        (
+            "nyay5-acceptance-matrix",
+            "nyay5-acceptance/summary.json",
+            "nyay5-acceptance-matrix",
+        ),
+    ),
 }
 
 # Contracts pin each producer's repository-reviewed exact assertion inventory.
@@ -96,7 +116,7 @@ PROFILE_SPECS: dict[str, tuple[tuple[str, str, str], ...]] = {
 INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
     "wave1-browser": (
         "rows", "area", 1467,
-        "eaee96c2f316fd1062ec6ff844b270c7f91786a6edfc7c2ca1b6d9233372cb5c",
+        "250d3429ae3056dc2b117e013196ee896c8d73b3e99dfc61d3ebd27ef66f8f65",
     ),
     "wave2-postgres": (
         "assertions", "id", 30,
@@ -134,6 +154,22 @@ INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
         "rows", "name", 305,
         "c21aba4487d2936e7c761c2a37ebdb1176bd9037c35b5552140ebc4dffa62478",
     ),
+    "nyay5-postgres": (
+        "assertions", "id", 21,
+        "ced6011b74db2f2b1c890f8ac1d7b3a212ff2aac8f7259e4ef6085e5d4dfd372",
+    ),
+    "nyay5-browser": (
+        "rows", "name", 22,
+        "b9e7aa70519d7d16f044b2ac928fb039cce8d2e073bd1b0303f9f58787d28071",
+    ),
+    "nyay5-acceptance-attestations": (
+        "executions", "id", 12,
+        "3f22abbff483c686efaabc3d86ab33bd2b8758aa95d4df77b8f306edddb9b328",
+    ),
+    "nyay5-acceptance-matrix": (
+        "assertions", "id", 61,
+        "3808f4a08805ec0cc8f904996c9fda428904ae48d8f34e261e3e07791e6d597e",
+    ),
 }
 CREDENTIAL_INVENTORY_CONTRACTS = {
     "functional": (
@@ -149,6 +185,17 @@ CREDENTIAL_INVENTORY_CONTRACTS = {
         "16dcb04559e0b75c8764e2237b26e0ada52245802bddc41a893938f1cf105b08",
     ),
 }
+EXACT_AGGREGATE_ASSERTION_COUNTS = {
+    # Five service-readiness observations, three cleanup observations, and the
+    # exact browser exit and private-log-capture verdicts. The source schema is
+    # checked key-for-key.
+    "nyay5-orchestrator": 10,
+}
+NYAY5_ACCEPTANCE_EXECUTION_INVENTORY = (
+    77,
+    "2f38f7d93992911c68f426aad28766d912235ac40bd6937c8ef3fee6105a9662",
+)
+NYAY5_POSTGRES_MUTANT_COUNT = 29
 
 
 def _size_class(size: int) -> str:
@@ -415,13 +462,17 @@ def _safe_result(
             if any(summary.get(key) != expected for key, expected in expected_summary.items()):
                 return None, "credential report summary does not match assertion groups"
             inventory_complete = complete_groups
-    elif kind in {"postgres-assertions", "postgres-results", "postgres-rows"}:
+    elif kind in {
+        "postgres-assertions", "postgres-results", "postgres-rows",
+        "nyay5-postgres",
+    }:
         if not isinstance(value, dict):
             return None, "PostgreSQL report must be an object"
         expected_gate = {
             "postgres-assertions": "wave2_postgres",
             "postgres-results": "wave4_postgres",
             "postgres-rows": "wave5_postgres",
+            "nyay5-postgres": "nyay5_postgres",
         }[kind]
         if value.get("gate") != expected_gate:
             return None, "PostgreSQL report gate identity is invalid"
@@ -436,6 +487,7 @@ def _safe_result(
             "postgres-assertions": "assertions",
             "postgres-results": "results",
             "postgres-rows": "rows",
+            "nyay5-postgres": "assertions",
         }[kind]
         rows = value.get(row_key)
         if status == "BLOCKED":
@@ -452,16 +504,237 @@ def _safe_result(
                 return None, "PostgreSQL PASS contains a failed assertion"
             if status == "FAIL" and counts[1] == 0:
                 return None, "PostgreSQL FAIL has no failed assertion"
-        if kind in {"postgres-assertions", "postgres-results"}:
+        if kind in {"postgres-assertions", "postgres-results", "nyay5-postgres"}:
             failed_assertions = value.get("failed_assertions")
             if not isinstance(failed_assertions, list):
                 return None, "PostgreSQL failed-assertion inventory is invalid"
             if len(failed_assertions) != counts[1]:
                 return None, "PostgreSQL failed-assertion inventory is inconsistent"
-        if kind == "postgres-assertions":
+        if kind in {"postgres-assertions", "nyay5-postgres"}:
             expected_exit = {"PASS": 0, "FAIL": 1, "BLOCKED": 78}[status]
             if value.get("exit_code") != expected_exit:
                 return None, "PostgreSQL report exit code is inconsistent"
+        if kind == "nyay5-postgres" and status == "PASS":
+            if value.get("head") != "0021_nyay5_profile_boundary":
+                return None, "NYAY-5 PostgreSQL migration head is invalid"
+            summary = value.get("assertion_summary")
+            if not isinstance(summary, dict) or summary != {
+                "exact_inventory": True,
+                "failed": [],
+                "overall_pass": True,
+                "passed": counts[0],
+                "required": counts[0],
+            }:
+                return None, "NYAY-5 PostgreSQL assertion summary is inconsistent"
+            cleanup = value.get("scratch_cleanup")
+            if not isinstance(cleanup, dict) or not (
+                cleanup.get("all_created_removed") is True
+                and cleanup.get("inventory_match") is True
+                and _nonnegative_integer(cleanup.get("created")) is not None
+                and cleanup.get("created") > 0
+                and cleanup.get("removed") == cleanup.get("created")
+                and cleanup.get("cleanup_failed") == 0
+            ):
+                return None, "NYAY-5 PostgreSQL scratch cleanup is incomplete"
+            mutants = value.get("mutant_inventory")
+            if not isinstance(mutants, dict) or set(mutants) != {"named", "killed"}:
+                return None, "NYAY-5 PostgreSQL mutant inventory is incomplete"
+            named = _nonnegative_integer(mutants.get("named"))
+            killed = _nonnegative_integer(mutants.get("killed"))
+            if not (
+                named == NYAY5_POSTGRES_MUTANT_COUNT
+                and killed == NYAY5_POSTGRES_MUTANT_COUNT
+            ):
+                return None, "NYAY-5 PostgreSQL mutant inventory is incomplete"
+            if value.get("privacy_scan") != {
+                "scanned": True,
+                "findings": 0,
+                "passed": True,
+            }:
+                return None, "NYAY-5 PostgreSQL privacy scan is incomplete"
+    elif kind == "nyay5-browser":
+        if not isinstance(value, dict):
+            return None, "NYAY-5 browser report must be an object"
+        if value.get("gate") != "nyay5_profile_browser":
+            return None, "NYAY-5 browser gate identity is invalid"
+        if value.get("target") != "isolated-loopback-real-api-postgresql-chromium":
+            return None, "NYAY-5 browser target-runtime class is invalid"
+        if not isinstance(value.get("executed"), bool):
+            return None, "NYAY-5 browser executed flag is invalid"
+        executed = value["executed"]
+        status = value.get("status")
+        if status not in {"PASS", "FAIL"}:
+            return None, "NYAY-5 browser status is invalid"
+        state = status.lower()
+        counts = _boolean_rows(value, "rows")
+        if counts is None:
+            return None, "NYAY-5 browser report has no assertion rows"
+        if (value.get("total"), value.get("passed"), value.get("failed")) != (
+            counts[0], counts[0] - counts[1], counts[1]
+        ):
+            return None, "NYAY-5 browser declared counts do not match assertion rows"
+        if not executed:
+            return None, "NYAY-5 browser report did not execute"
+        if status == "PASS" and counts[1] != 0:
+            return None, "NYAY-5 browser PASS contains a failed assertion"
+        if status == "FAIL" and counts[1] == 0:
+            return None, "NYAY-5 browser FAIL has no failed assertion"
+        if status == "PASS":
+            if value.get("inventoryExact") is not True:
+                return None, "NYAY-5 browser assertion inventory is not exact"
+            if any(value.get(key) is not None for key in (
+                "failureClass", "failureStage", "failureCode"
+            )):
+                return None, "NYAY-5 browser PASS contains a runtime failure"
+            rows = value.get("rows")
+            if not all(
+                isinstance(row, dict)
+                and isinstance(row.get("metrics"), dict)
+                and row["metrics"].get("executed") is True
+                for row in rows
+            ):
+                return None, "NYAY-5 browser PASS contains a non-executed assertion"
+    elif kind == "nyay5-acceptance-attestations":
+        if not isinstance(value, dict) or set(value) != {
+            "gate", "status", "executed", "executions",
+        }:
+            return None, "NYAY-5 acceptance attestation schema is not exact"
+        if value.get("gate") != "nyay5_acceptance_attestations_v1":
+            return None, "NYAY-5 acceptance attestation identity is invalid"
+        status = value.get("status")
+        if status not in {"PASS", "FAIL"} or value.get("executed") is not True:
+            return None, "NYAY-5 acceptance attestation state is invalid"
+        rows = value.get("executions")
+        counts = _boolean_rows(value, "executions")
+        if counts is None or not isinstance(rows, list):
+            return None, "NYAY-5 acceptance attestation executions are invalid"
+        for row in rows:
+            if not isinstance(row, dict) or set(row) != {
+                "id", "executed", "skipped", "pass", "evidenceCount",
+                "selectorCount",
+            }:
+                return None, "NYAY-5 acceptance execution schema is not exact"
+            evidence_count = _nonnegative_integer(row.get("evidenceCount"))
+            if not (
+                isinstance(row.get("executed"), bool)
+                and row.get("skipped") is False
+                and isinstance(row.get("pass"), bool)
+                and evidence_count is not None
+                and row.get("selectorCount") is None
+                and (
+                    row.get("pass") is False
+                    or (row.get("executed") is True and evidence_count > 0)
+                )
+            ):
+                return None, "NYAY-5 acceptance execution verdict is inconsistent"
+        if (status == "PASS") != (counts[1] == 0):
+            return None, "NYAY-5 acceptance attestation status is inconsistent"
+        executed = True
+        state = status.lower()
+    elif kind == "nyay5-acceptance-matrix":
+        if not isinstance(value, dict) or set(value) != {
+            "gate", "status", "executed", "total", "passed", "failed",
+            "inventoryExact", "assertions", "executionCoverage",
+            "executionInventory", "producerStatus", "privacyScan",
+        }:
+            return None, "NYAY-5 acceptance aggregate schema is not exact"
+        if value.get("gate") != "nyay5_acceptance_matrix":
+            return None, "NYAY-5 acceptance aggregate identity is invalid"
+        status = value.get("status")
+        if status not in {"PASS", "FAIL"} or value.get("executed") is not True:
+            return None, "NYAY-5 acceptance aggregate state is invalid"
+        rows = value.get("assertions")
+        if not isinstance(rows, list) or not rows:
+            return None, "NYAY-5 acceptance aggregate assertions are unavailable"
+        verdicts: list[bool] = []
+        for row in rows:
+            if not isinstance(row, dict) or set(row) != {
+                "id", "passed", "evidenceCount",
+            }:
+                return None, "NYAY-5 acceptance assertion schema is not exact"
+            evidence_count = _nonnegative_integer(row.get("evidenceCount"))
+            if not isinstance(row.get("passed"), bool) or evidence_count is None:
+                return None, "NYAY-5 acceptance assertion verdict is invalid"
+            if row.get("passed") is True and evidence_count <= 0:
+                return None, "NYAY-5 passing assertion has no executed evidence"
+            verdicts.append(row["passed"])
+        counts = len(verdicts), sum(not passed for passed in verdicts)
+        if (value.get("total"), value.get("passed"), value.get("failed")) != (
+            counts[0], counts[0] - counts[1], counts[1]
+        ):
+            return None, "NYAY-5 acceptance aggregate counts are inconsistent"
+        coverage = value.get("executionCoverage")
+        execution_inventory = value.get("executionInventory")
+        producers = value.get("producerStatus")
+        privacy = value.get("privacyScan")
+        expected_execution_count, expected_execution_sha256 = (
+            NYAY5_ACCEPTANCE_EXECUTION_INVENTORY
+        )
+        green = bool(
+            counts[1] == 0
+            and value.get("inventoryExact") is True
+            and isinstance(coverage, dict)
+            and set(coverage) == {
+                "pass", "mapped", "missing", "skipped", "unknown", "unique",
+            }
+            and coverage == {
+                "pass": True,
+                "mapped": counts[0],
+                "missing": 0,
+                "skipped": 0,
+                "unknown": 0,
+                "unique": True,
+            }
+            and execution_inventory == {
+                "count": expected_execution_count,
+                "sha256": expected_execution_sha256,
+            }
+            and producers == {
+                "browser": True,
+                "postgres": True,
+                "otpPostgres": True,
+                "attestations": True,
+            }
+            and privacy == {"passed": True, "findings": 0}
+        )
+        if (status == "PASS") != green:
+            return None, "NYAY-5 acceptance aggregate status is inconsistent"
+        executed = True
+        state = status.lower()
+    elif kind == "nyay5-orchestrator":
+        if not isinstance(value, dict) or set(value) != {
+            "gate", "executed", "status", "services", "scratchCleanup",
+            "browserExitCode", "serviceLogsCaptured",
+        }:
+            return None, "NYAY-5 orchestrator summary schema is not exact"
+        services = value.get("services")
+        cleanup = value.get("scratchCleanup")
+        if not isinstance(services, dict) or set(services) != {
+            "postgresReady", "apiReady", "otpCaptureReady",
+            "productionPreviewReady", "serviceWorkerActive",
+        }:
+            return None, "NYAY-5 orchestrator service schema is not exact"
+        if not isinstance(cleanup, dict) or set(cleanup) != {
+            "created", "removed", "inventoryMatch",
+        }:
+            return None, "NYAY-5 orchestrator cleanup schema is not exact"
+        if not (
+            value.get("gate") == "nyay5-profile-browser-orchestrator-v1"
+            and value.get("executed") is True
+            and value.get("status") == "PASS"
+            and all(item is True for item in services.values())
+            and cleanup == {"created": 1, "removed": 1, "inventoryMatch": True}
+            and value.get("browserExitCode") == 0
+            and value.get("serviceLogsCaptured") is True
+        ):
+            return None, "NYAY-5 orchestrator did not complete every producer and cleanup"
+        return {
+            "producerState": "pass",
+            "executed": True,
+            "assertionCount": EXACT_AGGREGATE_ASSERTION_COUNTS["nyay5-orchestrator"],
+            "failedAssertionCount": 0,
+            "inventoryComplete": True,
+        }, None
     elif kind == "wave5-browser":
         counts = _boolean_rows(value, "rows")
         listed_failures = _failure_list_count(value)
@@ -907,7 +1180,11 @@ def _validate_attestation(
                 else None
             )
             expected_assertion_count = (
-                inventory_contract[2] if inventory_contract is not None else None
+                inventory_contract[2]
+                if inventory_contract is not None
+                else EXACT_AGGREGATE_ASSERTION_COUNTS.get(artifact_id)
+                if isinstance(artifact_id, str)
+                else None
             )
         producer_state = candidate.get("producerState")
         executed = candidate.get("executed")

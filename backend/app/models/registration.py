@@ -57,8 +57,15 @@ OTP_FLOW_STATES = (
     "failed",
 )
 VERIFICATION_METHODS = ("institutional_email", "college_id", "manual")
-VERIFICATION_STATUSES = ("pending", "in_review", "verified", "rejected")
-GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected")
+VERIFICATION_STATUSES = (
+    "pending",
+    "in_review",
+    "verified",
+    "rejected",
+    "expired",
+    "revoked",
+)
+GUARDIAN_STATUSES = ("pending", "sent", "verified", "rejected", "revoked")
 RECOVERY_STATUSES = ("pending", "verified", "consumed", "expired")
 LOGIN_ATTEMPT_STATUSES = ("pending", "consumed", "expired", "erased")
 AUTH_SESSION_STATUSES = ("active", "revoked", "expired", "erased")
@@ -287,7 +294,7 @@ class RegistrationIdempotencyRecord(Base):
         ),
         CheckConstraint(
             "((state IN ('pending', 'succeeded', 'failed', 'neutralized') AND "
-            "request_fingerprint_version = 'v1' AND "
+            "request_fingerprint_version IN ('v1', 'v2') AND "
             "request_fingerprint IS NOT NULL AND "
             "length(request_fingerprint) = 64 AND "
             f"length({_REQUEST_FINGERPRINT_HEX_ONLY_SQL}) = 0) OR "
@@ -360,10 +367,63 @@ class StudentProfile(TimestampedBase):
     bar_enrolment_ct: Mapped[str | None] = mapped_column(String(600), nullable=True)
     bar_enrolment_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     key_version: Mapped[str] = mapped_column(String(8), default="v1", nullable=False)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    preferred_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    pronouns: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    profile_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
     registration: Mapped[StudentRegistration] = relationship(back_populates="profile")
     __table_args__ = (
         # Exactly one profile per registration (one-profile-per-registration contract).
         UniqueConstraint("registration_id", name="uq_student_profiles_registration_id"),
+        CheckConstraint(
+            "preferred_language IS NULL OR preferred_language IN ('en', 'hi')",
+            name="preferred_language",
+        ),
+        CheckConstraint("profile_version >= 1", name="profile_version_positive"),
+    )
+
+
+class StudentProfileInterest(TimestampedBase):
+    """Normalized, owner-scoped profile interest (NYAY-5)."""
+
+    __tablename__ = "student_profile_interests"
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("student_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    value: Mapped[str] = mapped_column(String(80), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id", "value", name="uq_student_profile_interests_profile_id_value"
+        ),
+        CheckConstraint(
+            "length(value) >= 1 AND length(value) <= 80", name="value_length"
+        ),
+    )
+
+
+class StudentProfileGoal(TimestampedBase):
+    """Normalized, owner-scoped profile goal (NYAY-5)."""
+
+    __tablename__ = "student_profile_goals"
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("student_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    value: Mapped[str] = mapped_column(String(80), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id", "value", name="uq_student_profile_goals_profile_id_value"
+        ),
+        CheckConstraint(
+            "length(value) >= 1 AND length(value) <= 80", name="value_length"
+        ),
     )
 
 
@@ -819,6 +879,26 @@ class AuthSession(TimestampedBase):
     )
 
 
+class AuthSessionProfilePrompt(TimestampedBase):
+    """A dismissal scoped to one server-owned authenticated session."""
+
+    __tablename__ = "auth_session_profile_prompts"
+    auth_session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("auth_sessions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    dismissed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "auth_session_id", name="uq_auth_session_profile_prompts_auth_session_id"
+        ),
+    )
+
+
 class OtpOutbox(TimestampedBase):
     """Transactional outbox for OTP delivery (SAATHI-448 A2).
 
@@ -951,12 +1031,20 @@ class StudentVerification(TimestampedBase):
     registration_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("student_registrations.id", ondelete="CASCADE"), index=True, nullable=False)
     method: Mapped[str] = mapped_column(String(32), default="institutional_email", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    verified_email_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     __table_args__ = (
         UniqueConstraint(
             "registration_id", name="uq_student_verifications_registration_id"
         ),
         _in("method", VERIFICATION_METHODS, "method"),
         _in("status", VERIFICATION_STATUSES, "status"),
+        CheckConstraint(
+            "(status = 'verified' AND verified_email_hash IS NOT NULL) OR "
+            "(status <> 'verified' AND verified_email_hash IS NULL)",
+            name="verified_email_proof",
+        ),
     )
 
 
@@ -972,7 +1060,7 @@ class GuardianConsent(TimestampedBase):
         _in("status", GUARDIAN_STATUSES, "status"),
         CheckConstraint(
             "(status = 'verified' AND verified = true) OR "
-            "(status IN ('pending', 'sent', 'rejected') AND verified = false)",
+            "(status IN ('pending', 'sent', 'rejected', 'revoked') AND verified = false)",
             name="verified_matches_status",
         ),
     )

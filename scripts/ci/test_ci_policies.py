@@ -111,6 +111,45 @@ class PolicyOracleTests(unittest.TestCase):
             failures,
         )
 
+        nyay5_orchestrator = policy.NYAY5_BROWSER_ORCHESTRATOR.read_text(
+            encoding="utf-8"
+        )
+        nyay5_mutations = {
+            "missing scratch-only authority": nyay5_orchestrator.replace(
+                "    NYAY19_ISOLATED_MIGRATION_EXECUTE=1 \\\n", "", 1
+            ),
+            "substituted control authority": nyay5_orchestrator.replace(
+                '"$ROOT/backend/scripts/nyay5_browser_gate_control.py" create \\\n'
+                '  --control-url "$CONTROL_URL" --state-file "$STATE_FILE"',
+                '"$ROOT/backend/scripts/nyay5_browser_gate_control.py" create \\\n'
+                '  --control-url "postgresql://substitute" --state-file "$STATE_FILE"',
+                1,
+            ),
+            "broad exported authority": nyay5_orchestrator.replace(
+                "set -Eeuo pipefail\n",
+                "set -Eeuo pipefail\nexport NYAY19_ISOLATED_MIGRATION_EXECUTE=1\n",
+                1,
+            ),
+        }
+        for label, mutated in nyay5_mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                self.assertNotEqual(mutated, nyay5_orchestrator)
+                root = Path(directory)
+                scripts = root / "scripts"
+                scripts.mkdir(parents=True)
+                (scripts / "nyay5_profile_browser_gate.sh").write_text(
+                    mutated, encoding="utf-8"
+                )
+                failures = policy.check_alembic_execution_contracts(root)
+                self.assertTrue(
+                    any(
+                        "NYAY-5 Alembic caller lacks exact owned-scratch isolated authority"
+                        in item
+                        for item in failures
+                    ),
+                    failures,
+                )
+
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             scripts = root / "backend/scripts"
@@ -887,6 +926,224 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
+    def test_nyay4_quarantine_workflow_is_exact_visible_and_never_silent(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (
+            policy.ROOT
+            / ".github"
+            / "workflows"
+            / "ci-flaky-nyay4-cookie-reload-symmetry.yml"
+        )
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_nyay4_quarantine_workflow(source), [])
+        reason = (
+            "Timing-sensitive reload-symmetry assertion that passes locally (17/17) "
+            "but exhibits nondeterministic scheduling variance in GitHub Actions "
+            "runners. Quarantined 2026-08-24 after Cycle 4. Product code is correct; "
+            "CI runner timing is the variable."
+        )
+        command_flag = "--require-quarantined-assertion"
+        diagnostic_path = (
+            "${{ github.workspace }}/backend/test-results/nyay4-ci-flaky/summary.json"
+        )
+        mutations = {
+            "assertion removed": original.replace(
+                "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+                "CONTRACT-REMOVED",
+            ),
+            "reason removed": original.replace(reason, "Unreviewed quarantine."),
+            "strict flag removed": original.replace(command_flag, "--execute"),
+            "unavailable diagnostic removed": original.replace(
+                "Initialize explicit not-yet-executed diagnostic",
+                "Initialize unrelated output",
+            ),
+            "pgvector fixture removed": original.replace(
+                '-c "CREATE EXTENSION IF NOT EXISTS vector;"',
+                '-c "SELECT 1;"',
+            ),
+            "schedule removed": original.replace("  schedule:\n", "  x-schedule:\n"),
+            "manual trigger removed": original.replace(
+                "  workflow_dispatch:\n", "  x-workflow_dispatch:\n"
+            ),
+            "PR trigger removed": original.replace(
+                "  pull_request:\n", "  x-pull_request:\n"
+            ),
+            "always upload removed": original.replace(
+                "        if: ${{ always() }}",
+                "        if: ${{ success() }}",
+            ),
+            "diagnostic path changed": original.replace(
+                diagnostic_path,
+                "${{ github.workspace }}/backend/test-results/empty.json",
+            ),
+            "missing artifact is warning": original.replace(
+                "if-no-files-found: error", "if-no-files-found: warn"
+            ),
+            "failure suppressed": original.replace(
+                command_flag,
+                f"{command_flag} || true",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            workflow = (
+                Path(directory) / "ci-flaky-nyay4-cookie-reload-symmetry.yml"
+            )
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    workflow.write_text(mutated, encoding="utf-8")
+                    self.assertTrue(
+                        policy.check_nyay4_quarantine_workflow(workflow), label
+                    )
+
+    def test_nyay5_required_pipeline_cannot_skip_a_producer_or_attestation(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (
+            policy.ROOT
+            / ".github"
+            / "workflows"
+            / "nyay5-profile-boundary-gate.yml"
+        )
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_workflow(source), [])
+        db_gate = "        run: (cd backend && PYTHON=python bash scripts/db_gate.sh)"
+        browser_gate = (
+            "        run: bash scripts/nyay5_profile_browser_gate.sh "
+            '"$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json"'
+        )
+        source_manifest = (
+            "        run: python scripts/ci/evidence_manifest.py --seal "
+            '"$GITHUB_WORKSPACE/test-results/nyay5-browser"'
+        )
+        attestation_producer = (
+            "          python scripts/ci/nyay5_acceptance_attestations.py\n"
+            "          --browser \"$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json\"\n"
+            "          --orchestrator \"$GITHUB_WORKSPACE/test-results/nyay5-browser/orchestrator-summary.json\"\n"
+            "          --postgres \"$GITHUB_WORKSPACE/test-results/nyay5-postgres/summary.json\"\n"
+            "          --otp-postgres \"$GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json\"\n"
+            "          --manifest-root \"$GITHUB_WORKSPACE/test-results/nyay5-browser\"\n"
+            "          --output \"$GITHUB_WORKSPACE/test-results/nyay5-acceptance/attestations.json\""
+        )
+        acceptance_aggregate = (
+            "          npm run qa:nyay5:acceptance --\n"
+            "          --browser \"$GITHUB_WORKSPACE/test-results/nyay5-browser/results.json\"\n"
+            "          --postgres \"$GITHUB_WORKSPACE/test-results/nyay5-postgres/summary.json\"\n"
+            "          --otp-postgres \"$GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json\"\n"
+            "          --attestations \"$GITHUB_WORKSPACE/test-results/nyay5-acceptance/attestations.json\"\n"
+            "          --output \"$GITHUB_WORKSPACE/test-results/nyay5-acceptance/summary.json\""
+        )
+        require_pass = (
+            "        run: python \"$GITHUB_WORKSPACE/scripts/ci/"
+            "prepare_uploadable_evidence.py\" --require-pass "
+            '"$RUNNER_TEMP/nyay5-uploadable"'
+        )
+        for expected in (
+            db_gate,
+            browser_gate,
+            source_manifest,
+            attestation_producer,
+            acceptance_aggregate,
+            require_pass,
+        ):
+            self.assertEqual(original.count(expected), 1)
+        mutations = {
+            "deleted database producer": original.replace(db_gate, "        run: true", 1),
+            "masked database producer": original.replace(
+                db_gate, db_gate + " || true", 1
+            ),
+            "deleted browser producer": original.replace(
+                browser_gate, "        run: true", 1
+            ),
+            "masked browser producer": original.replace(
+                browser_gate, browser_gate + " || true", 1
+            ),
+            "redirected browser result": original.replace(
+                "test-results/nyay5-browser/results.json",
+                "test-results/nyay5-browser/substitute.json",
+                1,
+            ),
+            "deleted source manifest": original.replace(
+                source_manifest, "        run: true", 1
+            ),
+            "deleted attestation producer": original.replace(
+                attestation_producer, "          true", 1
+            ),
+            "masked attestation producer": original.replace(
+                attestation_producer,
+                attestation_producer + " || true",
+                1,
+            ),
+            "deleted acceptance aggregate": original.replace(
+                acceptance_aggregate, "          true", 1
+            ),
+            "masked acceptance aggregate": original.replace(
+                acceptance_aggregate,
+                acceptance_aggregate + " || true",
+                1,
+            ),
+            "missing NYAY-4 producer staging": original.replace(
+                "          install -m 0600 backend/test-results/nyay4-postgres/summary.json \"$GITHUB_WORKSPACE/test-results/nyay4-postgres/summary.json\"\n",
+                "",
+                1,
+            ),
+            "remote database": original.replace(
+                "@127.0.0.1:5432/nyayone_nyay5_ci",
+                "@database.internal:5432/nyayone_nyay5_ci",
+                1,
+            ),
+            "missing migration authority": original.replace(
+                '      NYAY19_ISOLATED_MIGRATION_EXECUTE: "1"\n', "", 1
+            ),
+            "deleted attestation verdict": original.replace(
+                require_pass, "        run: true", 1
+            ),
+            "empty required needs": original.replace(
+                "    needs: [profile-postgres-production-browser]",
+                "    needs: []",
+                1,
+            ),
+            "conditional producer": original.replace(
+                "  profile-postgres-production-browser:\n",
+                "  profile-postgres-production-browser:\n"
+                "    if: ${{ github.actor == '__never_nyayone_actor__' }}\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / source.name
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(failures, label)
+                    if label in {
+                        "deleted database producer",
+                        "masked database producer",
+                        "deleted browser producer",
+                        "masked browser producer",
+                        "deleted source manifest",
+                        "deleted attestation producer",
+                        "masked attestation producer",
+                    }:
+                        self.assertTrue(
+                            any("required gate command" in item for item in failures),
+                            failures,
+                        )
+                    if label in {
+                        "deleted acceptance aggregate",
+                        "masked acceptance aggregate",
+                    }:
+                        self.assertTrue(
+                            any(
+                                "Run and require exact NYAY-5 acceptance aggregate PASS"
+                                in item
+                                and "exact required contract" in item
+                                for item in failures
+                            ),
+                            failures,
+                        )
+
     def test_nested_database_gate_cannot_drop_or_bypass_required_native_gates(self) -> None:
         policy = load("verify_nyayone_ci")
         source = policy.DB_GATE
@@ -904,6 +1161,12 @@ jobs:
         nyay2 = (
             '"$PY" scripts/nyay2_postgres_authorization_gate.py \\\n'
             "  --report test-results/nyay2-postgres/summary.json"
+        )
+        nyay5 = (
+            'NYAY5_POSTGRES_GATE=1 "$PY" scripts/nyay5_postgres_profile_gate.py \\\n'
+            "  --execute \\\n"
+            '  --database-url "$DATABASE_URL" \\\n'
+            "  --output test-results/nyay5-postgres/summary.json"
         )
         nyay17 = (
             '"$PY" scripts/nyay17_postgres_idempotency_gate.py \\\n'
@@ -925,6 +1188,7 @@ jobs:
         self.assertEqual(original.count(nyay16), 1)
         self.assertEqual(original.count(nyay3), 1)
         self.assertEqual(original.count(nyay2), 1)
+        self.assertEqual(original.count(nyay5), 1)
         self.assertEqual(original.count(nyay17), 1)
         self.assertEqual(original.count(nyay4), 1)
         self.assertEqual(original.count(nyay19), 1)
@@ -998,6 +1262,51 @@ jobs:
             "masked NYAY-2 failure": original.replace(
                 nyay2, nyay2 + " || true", 1
             ),
+            "deleted NYAY-5 invocation": original.replace(nyay5, "true", 1),
+            "duplicated NYAY-5 invocation": original.replace(
+                nyay5, nyay5 + "\n" + nyay5, 1
+            ),
+            "wrong NYAY-5 script": original.replace(
+                "scripts/nyay5_postgres_profile_gate.py",
+                "scripts/not-the-nyay5-gate.py",
+                1,
+            ),
+            "missing NYAY-5 opt-in": original.replace(
+                "NYAY5_POSTGRES_GATE=1 ", "", 1
+            ),
+            "missing NYAY-5 execute flag": original.replace(
+                nyay5,
+                nyay5.replace("  --execute \\\n", "", 1),
+                1,
+            ),
+            "altered NYAY-5 database authority": original.replace(
+                nyay5,
+                nyay5.replace(
+                    '  --database-url "$DATABASE_URL"',
+                    '  --database-url "postgresql://substitute"',
+                    1,
+                ),
+                1,
+            ),
+            "altered NYAY-5 report": original.replace(
+                "test-results/nyay5-postgres/summary.json",
+                "test-results/nyay5-postgres/substitute.json",
+                1,
+            ),
+            "NYAY-5 non-executing help mode": original.replace(
+                nyay5,
+                nyay5.replace("  --execute \\\n", "  --execute --help \\\n", 1),
+                1,
+            ),
+            "conditional NYAY-5 bypass": original.replace(
+                nyay5, "if false; then\n" + nyay5 + "\nfi", 1
+            ),
+            "masked NYAY-5 failure": original.replace(
+                nyay5, nyay5 + " || true", 1
+            ),
+            "NYAY-5 ordered before NYAY-2": original.replace(
+                nyay5, "true", 1
+            ).replace(nyay2, nyay5 + "\n" + nyay2, 1),
             "deleted NYAY-17 invocation": original.replace(nyay17, "true", 1),
             "duplicated NYAY-17 invocation": original.replace(
                 nyay17, nyay17 + "\n" + nyay17, 1
@@ -1131,6 +1440,11 @@ jobs:
                     if label == "deleted NYAY-2 invocation":
                         self.assertTrue(
                             any("invoke the exact NYAY-2" in item for item in failures),
+                            failures,
+                        )
+                    if label == "deleted NYAY-5 invocation":
+                        self.assertTrue(
+                            any("invoke the exact NYAY-5" in item for item in failures),
                             failures,
                         )
                     if label == "deleted NYAY-17 invocation":
@@ -1324,6 +1638,115 @@ jobs:
             any("NYAY-4-transitive job" in failure for failure in wave5_failures),
             wave5_failures,
         )
+
+    def test_wave4_failure_diagnostic_upload_is_exact_and_fail_closed(self) -> None:
+        policy = load("verify_nyayone_ci")
+        workflow_path = (
+            policy.ROOT / ".github/workflows/wave4-private-reporting-gate.yml"
+        )
+        source = workflow_path.read_text(encoding="utf-8")
+        diagnostic = (
+            "      - name: Upload privacy-safe S-86/S-87 failure diagnostic\n"
+            "        if: ${{ failure() }}\n"
+            "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+            "        with:\n"
+            "          name: wave4-reporting-failure-diagnostic\n"
+            "          path: ${{ github.workspace }}/test-results/wave4-browser/results.json\n"
+            "          if-no-files-found: error\n"
+            "          retention-days: 14\n"
+            "          include-hidden-files: false\n"
+        )
+        self.assertEqual(source.count(diagnostic), 1)
+        mutations = {
+            "missing": source.replace(diagnostic, "", 1),
+            "success-only": source.replace(
+                "        if: ${{ failure() }}\n",
+                "        if: ${{ always() }}\n",
+                1,
+            ),
+            "directory upload": source.replace(
+                "          path: ${{ github.workspace }}/test-results/wave4-browser/results.json\n",
+                "          path: ${{ github.workspace }}/test-results/wave4-browser\n",
+                1,
+            ),
+            "missing file allowed": source.replace(
+                "          if-no-files-found: error\n",
+                "          if-no-files-found: warn\n",
+                1,
+            ),
+            "hidden files included": source.replace(
+                "          include-hidden-files: false\n",
+                "          include-hidden-files: true\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / workflow_path.name
+            for label, mutant in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutant, source)
+                    candidate.write_text(mutant, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any("diagnostic upload" in failure for failure in failures),
+                        failures,
+                    )
+
+    def test_nyay4_failure_diagnostic_upload_is_exact_and_non_derivative(self) -> None:
+        policy = load("verify_nyayone_ci")
+        workflow_path = policy.ROOT / ".github/workflows/wave1-foundation-gate.yml"
+        source = workflow_path.read_text(encoding="utf-8")
+        producer = (
+            "      - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)\n"
+            "        run: PYTHON=python bash scripts/db_gate.sh\n"
+        )
+        diagnostic = (
+            "      - name: Upload privacy-safe NYAY-4 failure diagnostic\n"
+            "        if: ${{ failure() && hashFiles('backend/test-results/nyay4-postgres/summary.json') != '' }}\n"
+            "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+            "        with:\n"
+            "          name: nyay4-postgres-failure-diagnostic\n"
+            "          path: ${{ github.workspace }}/backend/test-results/nyay4-postgres/summary.json\n"
+            "          if-no-files-found: error\n"
+            "          retention-days: 14\n"
+            "          include-hidden-files: false\n"
+        )
+
+        self.assertEqual(source.count(producer), 1)
+        self.assertEqual(source.count(diagnostic), 1)
+        self.assertEqual(source.count(producer + diagnostic), 1)
+        mutations = {
+            "always upload": diagnostic.replace(
+                "failure() && hashFiles(", "always() && hashFiles(", 1
+            ),
+            "missing exact-file condition": diagnostic.replace(
+                " && hashFiles('backend/test-results/nyay4-postgres/summary.json') != ''",
+                "",
+                1,
+            ),
+            "directory upload": diagnostic.replace(
+                "backend/test-results/nyay4-postgres/summary.json",
+                "backend/test-results/nyay4-postgres",
+                1,
+            ),
+            "missing file allowed": diagnostic.replace(
+                "if-no-files-found: error", "if-no-files-found: warn", 1
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / workflow_path.name
+            for label, mutant in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutant, diagnostic)
+                    candidate.write_text(
+                        source.replace(diagnostic, mutant, 1),
+                        encoding="utf-8",
+                    )
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any("diagnostic upload" in failure for failure in failures),
+                        failures,
+                    )
 
     def test_nyay4_browser_executable_contract_rejects_seeded_mutants(self) -> None:
         policy = load("verify_nyayone_ci")
@@ -1564,6 +1987,79 @@ jobs:
                     document["scripts"][hook] = "true"
                     package.write_text(json.dumps(document), encoding="utf-8")
                     self.assertTrue(failures())
+
+    def test_nyay5_executable_chain_rejects_seeded_mutants(self) -> None:
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay5_gate_contract(), [])
+        pinned = {
+            "orchestrator_path": policy.NYAY5_BROWSER_ORCHESTRATOR,
+            "browser_path": policy.NYAY5_BROWSER_GATE,
+            "contract_path": policy.NYAY5_BROWSER_CONTRACT,
+            "contract_test_path": policy.NYAY5_BROWSER_CONTRACT_TEST,
+            "control_path": policy.NYAY5_BROWSER_CONTROL,
+            "postgres_path": policy.NYAY5_POSTGRES_GATE,
+            "aggregate_path": policy.NYAY5_ACCEPTANCE_AGGREGATE,
+            "aggregate_test_path": policy.NYAY5_ACCEPTANCE_AGGREGATE_TEST,
+            "attestation_path": policy.NYAY5_ACCEPTANCE_ATTESTATION_PRODUCER,
+            "attestation_test_path": policy.NYAY5_ACCEPTANCE_ATTESTATION_TEST,
+        }
+        for argument, source in pinned.items():
+            with self.subTest(argument=argument), tempfile.TemporaryDirectory() as directory:
+                mutant = Path(directory) / source.name
+                mutant.write_bytes(source.read_bytes() + b"\n# planted semantic drift\n")
+                failures = policy.check_nyay5_gate_contract(**{argument: mutant})
+                self.assertTrue(
+                    any("SHA-256 differs" in item for item in failures),
+                    failures,
+                )
+
+        package = json.loads(policy.FRONTEND_PACKAGE.read_text(encoding="utf-8"))
+        package_mutants = {
+            "substituted browser command": (
+                "qa:nyay5:profile-boundary",
+                "node scripts/not-the-nyay5-gate.mjs",
+            ),
+            "non-executing browser help": (
+                "qa:nyay5:profile-boundary",
+                "node scripts/nyay5-profile-browser.mjs --help",
+            ),
+            "substituted aggregate command": (
+                "qa:nyay5:acceptance",
+                "node scripts/not-the-nyay5-aggregate.mjs",
+            ),
+            "non-executing aggregate help": (
+                "qa:nyay5:acceptance",
+                "node scripts/nyay5-acceptance-aggregate.mjs --help",
+            ),
+        }
+        for label, (script_name, command) in package_mutants.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                mutant = Path(directory) / "package.json"
+                candidate = json.loads(json.dumps(package))
+                candidate["scripts"][script_name] = command
+                mutant.write_text(json.dumps(candidate), encoding="utf-8")
+                failures = policy.check_nyay5_gate_contract(package_path=mutant)
+                self.assertTrue(
+                    any("package command differs" in item for item in failures),
+                    failures,
+                )
+
+        for hook in (
+            "preqa:nyay5:profile-boundary",
+            "postqa:nyay5:profile-boundary",
+            "preqa:nyay5:acceptance",
+            "postqa:nyay5:acceptance",
+        ):
+            with self.subTest(hook=hook), tempfile.TemporaryDirectory() as directory:
+                mutant = Path(directory) / "package.json"
+                candidate = json.loads(json.dumps(package))
+                candidate["scripts"][hook] = "true"
+                mutant.write_text(json.dumps(candidate), encoding="utf-8")
+                failures = policy.check_nyay5_gate_contract(package_path=mutant)
+                self.assertTrue(
+                    any("npm lifecycle wrapper" in item for item in failures),
+                    failures,
+                )
 
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (

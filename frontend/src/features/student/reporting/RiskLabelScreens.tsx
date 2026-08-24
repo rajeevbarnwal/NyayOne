@@ -8,7 +8,8 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import {
   Building2,
   Clock3,
@@ -226,7 +227,7 @@ export function InternshipRiskSignals() {
           <div className="rl-hero__seal"><ShieldCheck size={28} aria-hidden /><div><strong>Privacy threshold enforced</strong><span>Small counts and raw reports stay hidden.</span></div></div>
         </header>
         <PublicRiskLabelPanel organisationId={organisationId} />
-        <aside className="rl-policy" role="note"><LockKeyhole size={19} aria-hidden /><p><strong>Publication fails closed.</strong> When the feature flag, threshold or approval quorum is absent, LegalSaathi publishes no label.</p></aside>
+        <aside className="rl-policy" role="note"><LockKeyhole size={19} aria-hidden /><p><strong>Publication fails closed.</strong> When the feature flag, threshold or approval quorum is absent, NyayOne publishes no label.</p></aside>
         <div className="rl-actions"><Link className="btn" to="/s-20">Browse internships</Link></div>
       </main>
     </StudentScreen>
@@ -354,7 +355,7 @@ export function OrganisationResponse({
           </>
         ) : !token.current && !mutation.isError ? (
           <>
-            <SignalState kind="invalid-invitation" title="A verified invitation is required" detail="Open the single-use invitation supplied by LegalSaathi. Tokens are removed from the address and are never stored by this page." />
+            <SignalState kind="invalid-invitation" title="A verified invitation is required" detail="Open the single-use invitation supplied by NyayOne. Tokens are removed from the address and are never stored by this page." />
             <div className="rl-actions">
               <Link className="btn rl-button" to="/s-20">Return to internships</Link>
             </div>

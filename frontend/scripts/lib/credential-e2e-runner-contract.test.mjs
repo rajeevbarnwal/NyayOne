@@ -17,9 +17,25 @@ test('credential page journeys use a server session without authenticating the a
   assert.ok(firstPageJourney > sessionLogin);
   assert.match(source, /login\/otp\/start/);
   assert.match(source, /login\/otp\/verify/);
-  assert.match(
+  assert.doesNotMatch(
     source,
     /const studentSessionCookies = await context\.cookies\(\);[\s\S]*?await context\.clearCookies\(\);[\s\S]*?await context\.addCookies\(studentSessionCookies\);/,
+  );
+  assert.doesNotMatch(
+    source,
+    /getByRole\('button', \{ name: 'Verify credential' \}\)\.click\(\)/,
+  );
+  assert.match(source, /const ISSUER_HEADERS = \{/);
+  assert.match(source, /roles: \['lawyer'\]/);
+  assert.match(source, /const studentIssuerMutationControls = await page\.getByRole/);
+  assert.match(source, /request as playwrightRequest/);
+  assert.match(
+    source,
+    /playwrightRequest\.newContext\([\s\S]*?extraHTTPHeaders: ISSUER_HEADERS/,
+  );
+  assert.match(
+    source,
+    /issuerRequest\.post\([\s\S]*?expected_version: credentialBeforeVerificationBody\?\.version/,
   );
   assert.match(
     source,
@@ -29,6 +45,9 @@ test('credential page journeys use a server session without authenticating the a
     source,
     /async function freshContextPersistence\(browser, credentialId, storageState\)[\s\S]*?storageState/,
   );
+  assert.match(source, /publicVerificationRequestMethods\[method\]/);
+  assert.match(source, /publicVerificationRequestCount === 1/);
+  assert.match(source, /diagnostics\.publicVerificationRequestMethods\?\.GET === 1/);
   assert.match(
     source,
     /name: 'wallet anonymous'[\s\S]*?headers: \{\}/,

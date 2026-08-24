@@ -12,13 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crypto import keyed_hash
 from app.models.registration import (
     AuthSession,
+    GuardianConsent,
     LoginAttempt,
     OtpChallenge,
     OtpFlow,
@@ -28,7 +29,10 @@ from app.models.registration import (
     RecoverySession,
     RegistrationIdempotencyRecord,
     StudentProfile,
+    StudentProfileGoal,
+    StudentProfileInterest,
     StudentRegistration,
+    StudentVerification,
     User,
 )
 from app.db.models.audit import AuditEvent
@@ -129,6 +133,7 @@ def _expire_active_auth_sessions(session: Session, *, now: datetime) -> int:
             or _as_retention_utc(row.expires_at) > now
         ):
             continue
+        login_service.clear_profile_prompts(session, [row.id])
         row.status = "expired"
         row.revoked_at = row.expires_at
         expired += 1
@@ -395,6 +400,9 @@ def _erase_registration_otp_security_graph(
             .with_for_update()
             .execution_options(populate_existing=True)
         )
+    )
+    login_service.clear_profile_prompts(
+        session, [row.id for row in auth_sessions]
     )
     identity_subjects = [
         keyed_hash(
@@ -862,14 +870,50 @@ def _anonymise_locked(
     reg.last_name = ANONYMISED
     reg.status = "deleted"
     reg.deleted_at = datetime.now(timezone.utc)
-    prof = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
+    # Preserve the canonical NYAY-5 graph order after the registration lock:
+    # profile -> institutional verification -> guardian.  A concurrent review
+    # cannot leave authoritative email proof attached to an anonymised profile.
+    prof = session.scalar(
+        select(StudentProfile)
+        .where(StudentProfile.registration_id == reg.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    verification = session.scalar(
+        select(StudentVerification)
+        .where(StudentVerification.registration_id == reg.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    session.scalar(
+        select(GuardianConsent)
+        .where(GuardianConsent.registration_id == reg.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if verification is not None:
+        verification.status = "revoked"
+        verification.verified_email_hash = None
+        verification.metadata_json = None
     if prof is not None:
         prof.college = None
         prof.year_of_study = None
+        prof.city = None
+        prof.preferred_language = None
+        prof.pronouns = None
+        prof.metadata_json = None
         for col in ("enrolment_ct", "institutional_email_ct", "bar_enrolment_ct"):
             setattr(prof, col, ANONYMISED)
         for col in ("enrolment_hash", "institutional_email_hash", "bar_enrolment_hash"):
             setattr(prof, col, None)
+        session.execute(
+            delete(StudentProfileInterest).where(
+                StudentProfileInterest.profile_id == prof.id
+            )
+        )
+        session.execute(
+            delete(StudentProfileGoal).where(StudentProfileGoal.profile_id == prof.id)
+        )
     session.add(
         AuditEvent(
             actor_role="system",
@@ -920,6 +964,25 @@ def _delete_locked(
         RegistrationDobReconciliation,
         StudentVerification,
     )
+
+    profile_ids = list(
+        session.scalars(
+            select(StudentProfile.id).where(
+                StudentProfile.registration_id == reg.id
+            )
+        )
+    )
+    if profile_ids:
+        session.execute(
+            delete(StudentProfileInterest).where(
+                StudentProfileInterest.profile_id.in_(profile_ids)
+            )
+        )
+        session.execute(
+            delete(StudentProfileGoal).where(
+                StudentProfileGoal.profile_id.in_(profile_ids)
+            )
+        )
 
     for model in (
         Consent,

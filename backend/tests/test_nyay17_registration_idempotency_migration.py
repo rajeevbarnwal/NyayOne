@@ -22,7 +22,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0017_registration_invariants"
 HEAD = "0018_registration_idempotency"
 OTP_HEAD = "0019_otp_security_authority"
-CURRENT_HEAD = "0020_auth_retention_lifecycle"
+CURRENT_HEAD = "0021_nyay5_profile_boundary"
 LEDGER = "registration_idempotency_records"
 TEST_ENV = {
     "APP_ENV": "testing",
@@ -66,7 +66,11 @@ def _revision(database: Path) -> str:
 
 
 def _seed_registration(database: Path, *, raw_key: str | None = None) -> dict[str, str]:
-    ids = {"user": uuid.uuid4().hex, "registration": uuid.uuid4().hex}
+    ids = {
+        "user": uuid.uuid4().hex,
+        "registration": uuid.uuid4().hex,
+        "profile": uuid.uuid4().hex,
+    }
     engine = create_engine(f"sqlite+pysqlite:///{database}")
     try:
         with engine.begin() as connection:
@@ -97,6 +101,20 @@ def _seed_registration(database: Path, *, raw_key: str | None = None) -> dict[st
                     "mobile_hash": uuid.uuid4().hex * 2,
                     "dob_hash": uuid.uuid4().hex * 2,
                     "raw_key": raw_key,
+                },
+            )
+            # Every pre-NYAY-5 live registration already owned exactly one
+            # normalized profile.  Seed that valid historical invariant so
+            # the later 0021 safety check is exercised by a representative
+            # populated graph rather than an impossible orphan fixture.
+            connection.execute(
+                text(
+                    "INSERT INTO student_profiles (id, registration_id) "
+                    "VALUES (:id, :registration_id)"
+                ),
+                {
+                    "id": ids["profile"],
+                    "registration_id": ids["registration"],
                 },
             )
     finally:
@@ -204,9 +222,12 @@ def test_revision_chain_is_single_forward_head():
     otp_head = scripts.get_revision(OTP_HEAD)
     assert otp_head is not None
     assert otp_head.down_revision == HEAD
+    retention_head = scripts.get_revision("0020_auth_retention_lifecycle")
+    assert retention_head is not None
+    assert retention_head.down_revision == OTP_HEAD
     current = scripts.get_revision(CURRENT_HEAD)
     assert current is not None
-    assert current.down_revision == OTP_HEAD
+    assert current.down_revision == retention_head.revision
     assert scripts.get_heads() == [CURRENT_HEAD]
 
 

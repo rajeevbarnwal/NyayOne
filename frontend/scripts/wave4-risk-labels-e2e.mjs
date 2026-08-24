@@ -1196,7 +1196,7 @@ async function geometryAndA11y(browser, fixture) {
     for (const theme of ['light', 'dark']) {
       for (const screen of ['s88', 's89']) {
         const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-        await context.addInitScript((selectedTheme) => localStorage.setItem('ls-theme', selectedTheme), theme);
+        await context.addInitScript((selectedTheme) => localStorage.setItem('nyayone.theme.v1', selectedTheme), theme);
         const page = await context.newPage();
         const runtime = attachRuntimeOracle(page);
         const target = screen === 's88'

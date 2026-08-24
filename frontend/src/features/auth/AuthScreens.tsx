@@ -15,13 +15,13 @@ import { STUB_OTP_CODE } from '../student/lib/authFlow';
 import {
   RegistrationApiError,
   clearRegistrationSession,
-  notifyStudentAuthChanged,
+  getOtpFlowState,
   registerStudent,
   resendStudentOtp,
   verifyStudentOtp,
 } from '../student/lib/registrationApi';
 import { useOtpFlowState } from '../student/lib/useOtpFlowState';
-import { CONSENT_VERSION } from '../student/lib/consent';
+import { PRIVACY_NOTICE_VERSION, TERMS_VERSION } from '../student/lib/consent';
 import {
   nextPhase, redactChallenge, AUTH_PHASE_LABELS, type AuthPhase, type AuthRole, type AuthSnapshot,
 } from './lib/authLifecycle';
@@ -130,7 +130,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
     } else {
       // Student: build the canonical typed registration command (split name +
       // exact-10 mobile). A rejected validation yields NO command and blocks OTP.
-      const built = buildStudentRegistrationCommand({ firstName, middleName, lastName, mobile, college: sv.collegeName });
+      const built = buildStudentRegistrationCommand({ firstName, middleName, lastName, mobile });
       if (!built.ok) {
         const e: Record<string, string> = {};
         for (const [k, v] of Object.entries(built.errors)) if (v) e[k] = v;
@@ -148,17 +148,20 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
       setName(built.command.fullName);
       setBusy(true);
       try {
-        const created = await registerStudent({
+        await registerStudent({
           firstName: built.command.firstName,
           middleName: built.command.middleName,
           lastName: built.command.lastName,
           mobile,
           dob,
-          policyVersion: CONSENT_VERSION,
-          college: sv.collegeName || undefined,
+          termsAccepted: true,
+          termsVersion: TERMS_VERSION,
+          privacyNoticeAcknowledged: true,
+          privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
         });
-        otpFlow.adopt(created);
-        setDestMasked(created.destinationMasked);
+        const flow = await getOtpFlowState();
+        otpFlow.adopt(flow);
+        setDestMasked(flow.destinationMasked);
         setOtpMsg(null);
         pushLedger('OTP dispatched');
         setPhase('otp_entry');
@@ -182,7 +185,6 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
       setBusy(true);
       try {
         otpFlow.adopt(await verifyStudentOtp(otpInput));
-        notifyStudentAuthChanged();
         setOtpMsg(null);
         pushLedger('OTP verified');
         setPhase('consent');
@@ -304,7 +306,7 @@ function AuthWorkbench({ role }: { role: AuthRole }) {
         <p className="st-metatag" style={{ marginTop: 4 }}>State: {AUTH_PHASE_LABELS[phase]}</p>
       </div>
       <Workbench
-        brand="LegalSaathi"
+        brand="NyayOne"
         role={isLawyer ? 'Advocate verification' : 'Student verification'}
         steps={steps}
         requirements={requirements}
@@ -560,7 +562,7 @@ export function AccountSecurity() {
         <p className="st-eyebrow">Authentication · P0.3</p>
         <h1 className="st-h1">Session &amp; account security</h1>
       </div>
-      <Workbench brand="LegalSaathi" role="Security console" steps={steps} requirements={requirements} ledger={ledger}
+      <Workbench brand="NyayOne" role="Security console" steps={steps} requirements={requirements} ledger={ledger}
         policy={<PrivacyNotice>Sessions and device records are server-authoritative and audited. No raw passwords, OTPs or tokens are stored or logged. Notifications go through adapters only.</PrivacyNotice>}>
         {view === 'overview' ? (
           <div className="st-stack">

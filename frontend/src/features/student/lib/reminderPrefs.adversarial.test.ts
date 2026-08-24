@@ -115,7 +115,7 @@ describe('Independent adversarial QA — SAATHI-292 (reproduced natively)', () =
 
   it('does not trust malformed persisted preference state on read', () => {
     const store = new InMemoryKvStore();
-    store.set(`ls-reminder-prefs-${student}`, {
+    store.set(`nyayone.student.reminder-prefs.v1.${student}`, {
       studentId: student,
       updatedAt: 'not-an-iso-timestamp',
       prefs: [{ ...valid, channel: 'carrier_pigeon', enabled: 'yes', timezone: 'Mars/Phobos' }],
@@ -180,7 +180,7 @@ describe('SAATHI-292 authorization / concurrency / recovery (added)', () => {
 
   it('safely recovers on save over corrupt persisted state without trusting bad rows', () => {
     const store = new InMemoryKvStore();
-    store.set(`ls-reminder-prefs-${student}`, {
+    store.set(`nyayone.student.reminder-prefs.v1.${student}`, {
       studentId: student,
       updatedAt: 'garbage',
       prefs: [{ ...valid, channel: 'carrier_pigeon' }],

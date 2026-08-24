@@ -3,7 +3,16 @@ import { queryClient } from '../../../app/queryClient';
 import { getProfileDraft, updateProfileDraft } from './profileStore';
 import { getRegistrationAttempt, setRegistrationAttempt } from './registrationAttemptStore';
 import { getStudentSession, logoutStudent } from './registrationApi';
-import { clearStudentBrowserContext, observeStudentSessionActor } from './studentBrowserContext';
+import {
+  STUDENT_AUTH_CHANGED_EVENT,
+  STUDENT_AUTH_TRANSITION_STARTED_EVENT,
+  clearStudentBrowserContext,
+  observeStudentSessionActor,
+} from './studentBrowserContext';
+import {
+  applyStudentSessionDiscovery,
+  applyStudentSessionDiscoveryFailure,
+} from '../../../app/authContext';
 
 function storage(map: Map<string, string>): Storage {
   return {
@@ -61,7 +70,9 @@ describe('student session lifecycle teardown', () => {
     })));
     seedPrivateContext();
 
-    await expect(getStudentSession()).resolves.toBeNull();
+    const actor = await getStudentSession();
+    expect(actor).toBeNull();
+    expect(applyStudentSessionDiscovery(1, 1, actor)).toBe(true);
 
     expect(getRegistrationAttempt()).toBeNull();
     expect(getProfileDraft().firstName).toBe('');
@@ -71,7 +82,37 @@ describe('student session lifecycle teardown', () => {
     expect(local.has('legalsaathi.internship.applications.v1')).toBe(false);
     expect(session.has('legalsaathi.student.privacy.export.v1')).toBe(false);
     expect(local.get('ls-theme')).toBe('dark');
-    expect(local.get('ls-locale')).toBe('en');
+    expect(local.has('ls-locale')).toBe(false);
+  });
+
+  it('denies authenticated private mounting when legacy session cleanup cannot complete', async () => {
+    const legacySession = storage(new Map([
+      ['legalsaathi.student.registration.v2', 'private-registration'],
+    ]));
+    legacySession.removeItem = () => { throw new DOMException('denied'); };
+    vi.stubGlobal('window', {
+      localStorage: storage(new Map()),
+      sessionStorage: legacySession,
+      dispatchEvent: vi.fn(() => true),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
+      authenticated: true,
+      actor: {
+        sub: '00000000-0000-4000-8000-000000001801',
+        roles: ['student'],
+        student_profile_id: '00000000-0000-4000-8000-000000001802',
+        student_verification: 'verified',
+        is_minor: false,
+        consent_state: ['registration'],
+      },
+    })));
+
+    const actor = await getStudentSession();
+    if (actor === null) throw new Error('expected authenticated actor');
+    expect(() => applyStudentSessionDiscovery(1, 1, actor)).toThrow(
+      'student_browser_cleanup_incomplete',
+    );
+    expect(applyStudentSessionDiscoveryFailure(1, 1)).toBe(true);
   });
 
   it.each([
@@ -93,14 +134,18 @@ describe('student session lifecycle teardown', () => {
   ])('fails closed and clears for %s', async (_label, sessionBody) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(sessionBody)));
     seedPrivateContext();
-    await expect(getStudentSession()).resolves.toBeNull();
+    await expect(getStudentSession()).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_student_session_projection',
+    }));
+    expect(applyStudentSessionDiscoveryFailure(1, 1)).toBe(true);
     expect(getRegistrationAttempt()).toBeNull();
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(queryClient.getMutationCache().getAll()).toEqual([]);
   });
 
   it('clears and notifies exactly once even when the logout request fails', async () => {
-    const dispatchEvent = vi.fn(() => true);
+    const dispatchEvent = vi.fn((_event: Event) => true);
     vi.stubGlobal('window', { dispatchEvent });
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network unavailable')));
     seedPrivateContext();
@@ -110,12 +155,15 @@ describe('student session lifecycle teardown', () => {
     expect(getRegistrationAttempt()).toBeNull();
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(queryClient.getMutationCache().getAll()).toEqual([]);
-    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(dispatchEvent.mock.calls.map(([event]) => (event as Event).type)).toEqual([
+      STUDENT_AUTH_TRANSITION_STARTED_EVENT,
+      STUDENT_AUTH_CHANGED_EVENT,
+    ]);
   });
 
   it('a failed logout still purges retired app-owned actor prefixes without a registry', async () => {
     const local = new Map<string, string>();
-    const dispatchEvent = vi.fn(() => true);
+    const dispatchEvent = vi.fn((_event: Event) => true);
     vi.stubGlobal('window', {
       localStorage: storage(local),
       sessionStorage: storage(new Map()),
@@ -132,6 +180,9 @@ describe('student session lifecycle teardown', () => {
     expect(local.has('ls-reports-student-B')).toBe(false);
     expect(local.has('ls-reminder-prefs-student-B')).toBe(false);
     expect(local.has('legalsaathi.student.cleanup-registry.v1')).toBe(false);
-    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(dispatchEvent.mock.calls.map(([event]) => (event as Event).type)).toEqual([
+      STUDENT_AUTH_TRANSITION_STARTED_EVENT,
+      STUDENT_AUTH_CHANGED_EVENT,
+    ]);
   });
 });

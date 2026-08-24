@@ -35,4 +35,4 @@ npm test           # vitest smoke tests
 
 - Server state uses TanStack Query (`src/app/queryClient.ts`).
 - Routing is lazy-loaded against the canonical v3.2 screen registry `S-01…S-99` (`src/app/screenRegistry.ts`).
-- Dark/light theme is driven by `useTheme` (`src/hooks/useTheme.ts`), persisted to `localStorage["ls-theme"]`, applied via `[data-theme]` + CSS-variable tokens in `styles/global.css`.
+- Dark/light theme is driven by `useTheme` (`src/hooks/useTheme.ts`), persisted to `localStorage["nyayone.theme.v1"]`, applied via `[data-theme]` + CSS-variable tokens in `styles/global.css`.

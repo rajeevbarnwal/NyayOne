@@ -13,7 +13,8 @@ import { openReview, type ReviewSession } from './clientReview';
 import { DraftWorkspaceService } from './draftWorkspace';
 import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
 
-const rKey = (workspaceId: string) => `ls-review-${workspaceId}`;
+const REVIEW_WORKSPACE_KEY_PREFIX = 'nyayone.lawyer.review-workspace.v1.';
+const rKey = (workspaceId: string) => `${REVIEW_WORKSPACE_KEY_PREFIX}${workspaceId}`;
 
 export interface ReviewContext {
   readonly workspaceId: string;

@@ -23,7 +23,11 @@
  *    (typed `conflict`), plus idempotency-key replay protection so a retry can
  *    never duplicate audit effects.
  */
-import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+import type { KvStore } from '../../../lib/kvStore';
+import {
+  STUDENT_REMINDER_PREF_STORAGE_KEY_PREFIX,
+  studentReminderPrefStorageKey,
+} from './studentLegacyStorage';
 import { CALENDAR_SOURCE_TYPES, SOURCE_LABELS, type CalendarSourceType } from './calendar';
 
 export const REMINDER_CHANNELS = ['in_app', 'email_digest', 'push'] as const;
@@ -98,7 +102,8 @@ export interface SaveOptions {
   readonly idempotencyKey?: string;
 }
 
-const key = (studentId: string) => `ls-reminder-prefs-${studentId}`;
+export const REMINDER_PREF_STORAGE_KEY_PREFIX = STUDENT_REMINDER_PREF_STORAGE_KEY_PREFIX;
+const key = studentReminderPrefStorageKey;
 
 // ---- Identifier redaction (applied to EVERY preview, including `public`) ----
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -325,7 +330,7 @@ function renderPreview(
 }
 
 export class ReminderPrefService {
-  constructor(private store: KvStore = defaultKvStore()) {}
+  constructor(private store: KvStore) {}
 
   /**
    * Normalize a requester into an explicit actor. A malformed runtime actor

@@ -13,6 +13,11 @@
  * profile draft, and any payload boundary.
  */
 import { isValidDateOfBirth } from './consent';
+import {
+  LEGAL_NAME_MAX_CODE_POINTS,
+  normalizeLegalName,
+  validateLegalName,
+} from './legalName';
 
 // ---- Mobile ---------------------------------------------------------------
 export const MOBILE_RE = /^\d{10}$/;
@@ -52,7 +57,7 @@ export function isRealCalendarDate(dobISO: string): boolean {
 }
 
 // ---- Split legal name -----------------------------------------------------
-export const NAME_MAX = 60; // per sub-field
+export const NAME_MAX = LEGAL_NAME_MAX_CODE_POINTS; // per sub-field
 export type NameField = 'firstName' | 'middleName' | 'lastName';
 export type NamePartError = 'required' | 'too_long' | 'invalid';
 
@@ -67,19 +72,13 @@ export interface NamePayload {
   readonly lastName: string;
 }
 
-// A legitimate name: starts with a Unicode letter/mark, then letters/marks,
-// spaces, apostrophes (straight or curly), hyphens and periods. Must contain at
-// least one letter — pure digits/markup/symbols/emoji are rejected.
-const NAME_ALLOWED_RE = /^[\p{L}\p{M}][\p{L}\p{M} .‘’'-]*$/u;
-const HAS_LETTER_RE = /[\p{L}]/u;
-
 /** Validate one name sub-field; returns null when valid or a typed reason. */
 export function validateNamePart(value: string, opts: { required: boolean; max?: number }): NamePartError | null {
   const max = opts.max ?? NAME_MAX;
-  const trimmed = (value ?? '').trim();
-  if (!trimmed) return opts.required ? 'required' : null;
-  if (trimmed.length > max) return 'too_long';
-  if (!HAS_LETTER_RE.test(trimmed) || !NAME_ALLOWED_RE.test(trimmed)) return 'invalid';
+  const normalized = normalizeLegalName(value ?? '');
+  if (!normalized) return opts.required ? 'required' : null;
+  if ([...normalized].length > max) return 'too_long';
+  if (!validateLegalName(value)) return 'invalid';
   return null;
 }
 
@@ -105,21 +104,20 @@ export function nameErrorMessage(field: NameField, reason: NamePartError): strin
 
 /** Canonical payload: firstName, middleName (normalized string | null), lastName. */
 export function namePartsToPayload(p: NameParts): NamePayload {
-  const mid = p.middleName.trim().replace(/\s+/g, ' ');
+  const mid = normalizeLegalName(p.middleName);
   return {
-    firstName: p.firstName.trim().replace(/\s+/g, ' '),
+    firstName: normalizeLegalName(p.firstName),
     middleName: mid ? mid : null,
-    lastName: p.lastName.trim().replace(/\s+/g, ' '),
+    lastName: normalizeLegalName(p.lastName),
   };
 }
 
 /** Compatibility display name — no double spaces when Middle Name is absent. */
 export function composeDisplayName(p: NameParts): string {
   return [p.firstName, p.middleName, p.lastName]
-    .map((s) => (s ?? '').trim())
+    .map((s) => normalizeLegalName(s ?? ''))
     .filter(Boolean)
     .join(' ')
-    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -130,7 +128,6 @@ export interface StudentRegistrationCommand {
   readonly lastName: string;
   readonly fullName: string;
   readonly mobile: string;
-  readonly college?: string;
 }
 export type BuildCommandResult =
   | { ok: true; command: StudentRegistrationCommand }
@@ -139,12 +136,12 @@ export type BuildCommandResult =
 /**
  * Build the canonical student-registration command from raw UI fields. Validates
  * name parts + mobile; on success returns a typed payload (firstName,
- * middleName|null, lastName, derived fullName, raw 10-digit mobile, optional
- * college). A rejected validation returns typed errors and NO command — callers
+ * middleName|null, lastName, derived fullName and raw 10-digit mobile). A
+ * rejected validation returns typed errors and NO command — callers
  * must not progress OTP or persist on `ok: false`.
  */
 export function buildStudentRegistrationCommand(input: {
-  firstName: string; middleName: string; lastName: string; mobile: string; college?: string;
+  firstName: string; middleName: string; lastName: string; mobile: string;
 }): BuildCommandResult {
   const errors: Partial<Record<NameField | 'mobile', string>> = {};
   const ne = validateNameParts({ firstName: input.firstName, middleName: input.middleName, lastName: input.lastName });
@@ -163,7 +160,6 @@ export function buildStudentRegistrationCommand(input: {
       lastName: payload.lastName,
       fullName: composeDisplayName(parts),
       mobile: input.mobile,
-      ...(input.college ? { college: input.college } : {}),
     },
   };
 }
@@ -175,7 +171,7 @@ export function maskMobile(mobile: string): string {
 
 /** Migrate a legacy record that only has fullName into First/Middle/Last parts. */
 export function fullNameToParts(fullName: string): NameParts {
-  const tokens = (fullName ?? '').trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+  const tokens = normalizeLegalName(fullName ?? '').split(' ').filter(Boolean);
   if (tokens.length === 0) return { firstName: '', middleName: '', lastName: '' };
   if (tokens.length === 1) return { firstName: tokens[0], middleName: '', lastName: '' };
   return { firstName: tokens[0], middleName: tokens.slice(1, -1).join(' '), lastName: tokens[tokens.length - 1] };

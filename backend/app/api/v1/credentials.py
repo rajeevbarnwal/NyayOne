@@ -35,6 +35,7 @@ from app.core.crypto import (
     encrypt,
     keyed_hash,
 )
+from app.core.guardian_authority import has_authoritative_guardian_proof
 from app.db.session import get_session
 from app.models.credentials import (
     CREDENTIAL_TYPES,
@@ -51,8 +52,10 @@ from app.models.credentials import (
     VerificationAccessLog,
     VerificationToken,
 )
-from app.models.registration import StudentRegistration
+from app.models.registration import GuardianConsent, StudentRegistration
 from app.services.audit_service import record_audit_event
+from app.services import login_service
+from app.services.integrity_errors import constraint_name
 from app.services.credential_storage import (
     EvidenceScanner,
     EvidenceScanUnavailable,
@@ -78,6 +81,13 @@ PUBLIC_FIELDS = frozenset(
 )
 _UNSAFE_TEXT = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f<>]")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_CREDENTIAL_IDEMPOTENCY_CONSTRAINT = "uq_credentials_owner_idempotency"
+_CREDENTIAL_IDENTIFIER_CONSTRAINT = "uq_credentials_owner_identifier_hash"
+_SHARE_IDEMPOTENCY_CONSTRAINT = (
+    "uq_credential_share_projections_owner_idempotency"
+)
+_TOKEN_IDEMPOTENCY_CONSTRAINT = "uq_verification_tokens_owner_idempotency"
+_TOKEN_HASH_CONSTRAINT = "uq_verification_tokens_token_hash"
 
 
 def _error(
@@ -233,17 +243,129 @@ class RevokeCommand(BaseModel):
 
 
 def _get_owned(
-    session: Session, credential_id: uuid.UUID, owner_user_id: uuid.UUID
+    session: Session,
+    credential_id: uuid.UUID,
+    owner_user_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> Credential:
-    row = session.scalar(
-        select(Credential).where(
-            Credential.id == credential_id,
-            Credential.owner_user_id == owner_user_id,
-            Credential.deleted_at.is_(None),
-        )
+    statement = select(Credential).where(
+        Credential.id == credential_id,
+        Credential.owner_user_id == owner_user_id,
+        Credential.deleted_at.is_(None),
     )
+    if for_update:
+        statement = statement.with_for_update()
+    row = session.scalar(statement)
     if row is None:
         raise _error(404, "credential_not_found", "Credential not found")
+    return row
+
+
+def _require_presented_effect_session(
+    session: Session,
+    request: Request,
+    actor: ActorContext,
+    *,
+    now: datetime,
+) -> None:
+    """Revalidate cookie authority after domain locks and before any effect.
+
+    Development/test header actors deliberately have no cookie to revalidate.
+    A production actor, however, can only originate from the opaque session
+    cookie and every side effect must lock that exact row before replay, audit,
+    mutation, external I/O, or commit.
+    """
+
+    raw_session_token = request.cookies.get(settings.auth_session_cookie_name)
+    if raw_session_token is None:
+        return
+    locked_session = login_service.lock_presented_session_for_effect(
+        session,
+        raw_session_token,
+        expected_user_id=actor.user_id,
+        now=now,
+        allowed_roles=frozenset(role.value for role in actor.roles),
+    )
+    if locked_session is None:
+        raise _error(401, "authentication_required", "Authentication required")
+
+
+def _require_current_sharing_access(
+    session: Session,
+    actor: ActorContext,
+) -> None:
+    """Enforce GUARD-05 from current database authority, never client claims."""
+
+    registrations = list(
+        session.scalars(
+            select(StudentRegistration)
+            .where(
+                StudentRegistration.user_id == actor.user_id,
+                StudentRegistration.deleted_at.is_(None),
+                StudentRegistration.status.in_(("otp_verified", "active")),
+                StudentRegistration.dob_hash_state == "verified",
+            )
+            .limit(2)
+            .with_for_update()
+        )
+    )
+    access_error: HTTPException | None = None
+    registration = registrations[0] if len(registrations) == 1 else None
+    if registration is None:
+        access_error = _error(
+            403,
+            "guardian_verification_required",
+            "Guardian verification is required for sharing",
+        )
+    elif registration.is_minor:
+        guardians = list(
+            session.scalars(
+                select(GuardianConsent)
+                .where(GuardianConsent.registration_id == registration.id)
+                .limit(2)
+                .with_for_update()
+            )
+        )
+        if len(guardians) != 1 or not has_authoritative_guardian_proof(
+            guardians[0]
+        ):
+            access_error = _error(
+                403,
+                "guardian_verification_required",
+                "Guardian verification is required for sharing",
+            )
+
+    if access_error is not None:
+        raise access_error
+
+
+def _get_owned_after_sharing_access_lock(
+    session: Session,
+    credential_id: uuid.UUID,
+    actor: ActorContext,
+    *,
+    request: Request,
+    now: datetime,
+) -> Credential:
+    """Lock profile authority first without weakening the owned-404 oracle."""
+
+    access_error: HTTPException | None = None
+    try:
+        _require_current_sharing_access(
+            session,
+            actor,
+        )
+    except HTTPException as exc:
+        access_error = exc
+    row = _get_owned(
+        session, credential_id, actor.user_id, for_update=True
+    )
+    _require_presented_effect_session(
+        session, request, actor, now=now
+    )
+    if access_error is not None:
+        raise access_error
     return row
 
 
@@ -435,16 +557,21 @@ def list_credential_issuers(
 @router.post("/credentials", status_code=status.HTTP_201_CREATED)
 def create_credential(
     payload: CredentialCreate,
+    request: Request,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    request_now = datetime.now(timezone.utc)
     idem = _idempotency(idempotency_key)
     existing = session.scalar(
         select(Credential).where(
             Credential.owner_user_id == actor.user_id,
             Credential.idempotency_key == idem,
-        )
+        ).with_for_update()
+    )
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
     )
     if existing:
         return _credential_payload(session, existing)
@@ -475,20 +602,40 @@ def create_credential(
     try:
         session.flush()
     except IntegrityError as exc:
+        failed_constraint = constraint_name(exc)
         session.rollback()
-        replay = session.scalar(
-            select(Credential).where(
+        if failed_constraint == _CREDENTIAL_IDENTIFIER_CONSTRAINT:
+            raise _error(
+                409,
+                "credential_conflict",
+                "A credential with this identifier already exists",
+            ) from exc
+        if failed_constraint != _CREDENTIAL_IDEMPOTENCY_CONSTRAINT:
+            raise
+        replay_id = session.scalar(
+            select(Credential.id).where(
                 Credential.owner_user_id == actor.user_id,
                 Credential.idempotency_key == idem,
             )
         )
-        if replay:
-            return _credential_payload(session, replay)
-        raise _error(
-            409,
-            "credential_conflict",
-            "A credential with this identifier already exists",
-        ) from exc
+        if replay_id is None:
+            raise exc
+        replay = session.scalar(
+            select(Credential)
+            .where(
+                Credential.id == replay_id,
+                Credential.owner_user_id == actor.user_id,
+                Credential.idempotency_key == idem,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if replay is None:
+            raise exc
+        _require_presented_effect_session(
+            session, request, actor, now=request_now
+        )
+        return _credential_payload(session, replay)
     _history(session, row, actor.user_id, None, "self_declared", "created")
     _schedule_reminders(session, row)
     record_audit_event(
@@ -519,10 +666,17 @@ def get_credential(
 def update_credential(
     credential_id: uuid.UUID,
     payload: CredentialPatch,
+    request: Request,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    row = _get_owned(session, credential_id, actor.user_id)
+    request_now = datetime.now(timezone.utc)
+    row = _get_owned(
+        session, credential_id, actor.user_id, for_update=True
+    )
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
+    )
     if row.status in {"verified", "revoked"}:
         raise _error(
             409,
@@ -575,11 +729,15 @@ def update_credential(
 @router.delete("/credentials/{credential_id}")
 def delete_credential(
     credential_id: uuid.UUID,
+    request: Request,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    row = _get_owned(session, credential_id, actor.user_id)
     now = datetime.now(timezone.utc)
+    row = _get_owned(
+        session, credential_id, actor.user_id, for_update=True
+    )
+    _require_presented_effect_session(session, request, actor, now=now)
     previous = row.status
     row.status = "revoked"
     row.deleted_at = now
@@ -643,13 +801,20 @@ def delete_credential(
 @router.post("/credentials/{credential_id}/evidence")
 async def add_evidence(
     credential_id: uuid.UUID,
+    request: Request,
     file: UploadFile = File(...),
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
     storage: StorageAdapter = Depends(get_credential_storage),
     scanner: EvidenceScanner = Depends(get_evidence_scanner),
 ) -> dict[str, object]:
-    row = _get_owned(session, credential_id, actor.user_id)
+    request_now = datetime.now(timezone.utc)
+    row = _get_owned(
+        session, credential_id, actor.user_id, for_update=True
+    )
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
+    )
     if row.status in {"verified", "revoked"}:
         raise _error(
             409, "credential_immutable", "Evidence cannot be changed in this state"
@@ -738,7 +903,7 @@ async def add_evidence(
                 kind="scan_evidence",
                 status="pending",
                 attempts=0,
-                available_at=datetime.now(timezone.utc),
+                available_at=request_now,
                 payload_json=None,
                 idempotency_key=str(evidence.id),
             )
@@ -791,11 +956,19 @@ async def add_evidence(
 def create_share_projection(
     credential_id: uuid.UUID,
     payload: ShareProjectionCreate,
+    request: Request,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    row = _get_owned(session, credential_id, actor.user_id)
+    now = datetime.now(timezone.utc)
+    row = _get_owned_after_sharing_access_lock(
+        session,
+        credential_id,
+        actor,
+        request=request,
+        now=now,
+    )
     idem = _idempotency(idempotency_key)
     existing = session.scalar(
         select(CredentialShareProjection).where(
@@ -822,12 +995,34 @@ def create_share_projection(
     try:
         session.flush()
     except IntegrityError as exc:
+        failed_constraint = constraint_name(exc)
         session.rollback()
-        replay = session.scalar(
+        if failed_constraint != _SHARE_IDEMPOTENCY_CONSTRAINT:
+            raise
+        replay_discovery = session.scalar(
             select(CredentialShareProjection).where(
                 CredentialShareProjection.owner_user_id == actor.user_id,
                 CredentialShareProjection.idempotency_key == idem,
             )
+        )
+        if replay_discovery is None:
+            raise exc
+        _get_owned_after_sharing_access_lock(
+            session,
+            replay_discovery.credential_id,
+            actor,
+            request=request,
+            now=now,
+        )
+        replay = session.scalar(
+            select(CredentialShareProjection)
+            .where(
+                CredentialShareProjection.id == replay_discovery.id,
+                CredentialShareProjection.owner_user_id == actor.user_id,
+                CredentialShareProjection.idempotency_key == idem,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if replay:
             return {
@@ -897,10 +1092,12 @@ def _issuer_grant(
 def verify_credential(
     credential_id: uuid.UUID,
     payload: VerifyCommand,
+    request: Request,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     actor: ActorContext = Depends(_require_authenticated),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    request_now = datetime.now(timezone.utc)
     idem = _idempotency(idempotency_key)
     replay = session.scalar(
         select(CredentialVerificationEvent).where(
@@ -908,19 +1105,23 @@ def verify_credential(
             CredentialVerificationEvent.idempotency_key == idem,
         )
     )
+    locked_credential_id = replay.credential_id if replay else credential_id
+    row = session.scalar(
+        select(Credential)
+        .where(Credential.id == locked_credential_id)
+        .with_for_update()
+    )
+    if row is None or (not replay and row.deleted_at is not None):
+        raise _error(404, "credential_not_found", "Credential not found")
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
+    )
     if replay:
         return {
             "credential_id": str(replay.credential_id),
             "status": replay.resulting_status,
             "idempotent_replay": True,
         }
-    row = session.scalar(
-        select(Credential)
-        .where(Credential.id == credential_id, Credential.deleted_at.is_(None))
-        .with_for_update()
-    )
-    if row is None:
-        raise _error(404, "credential_not_found", "Credential not found")
     # A concurrent request with the same idempotency key may have committed
     # while this request waited for the credential row lock.
     replay = session.scalar(
@@ -1008,12 +1209,20 @@ def _raw_token(projection_id: uuid.UUID, owner_id: uuid.UUID, idem: str) -> str:
 def create_verification_token(
     credential_id: uuid.UUID,
     payload: VerificationTokenCreate,
+    request: Request,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    request_now = datetime.now(timezone.utc)
+    row = _get_owned_after_sharing_access_lock(
+        session,
+        credential_id,
+        actor,
+        request=request,
+        now=request_now,
+    )
     idem = _idempotency(idempotency_key)
-    row = _get_owned(session, credential_id, actor.user_id)
     if _effective_status(row) != "verified":
         raise _error(
             409,
@@ -1045,7 +1254,7 @@ def create_verification_token(
             "expires_at": existing.expires_at.isoformat(),
             "idempotent_replay": True,
         }
-    now = datetime.now(timezone.utc)
+    now = request_now
     for prior in session.scalars(
         select(VerificationToken)
         .where(
@@ -1068,19 +1277,49 @@ def create_verification_token(
     try:
         session.flush()
     except IntegrityError as exc:
+        failed_constraint = constraint_name(exc)
         session.rollback()
-        replay = session.scalar(
+        if failed_constraint not in {
+            _TOKEN_IDEMPOTENCY_CONSTRAINT,
+            _TOKEN_HASH_CONSTRAINT,
+        }:
+            raise
+        replay_discovery = session.scalar(
             select(VerificationToken).where(
                 VerificationToken.owner_user_id == actor.user_id,
                 VerificationToken.idempotency_key == idem,
             )
         )
+        if replay_discovery is None:
+            raise exc
+        _get_owned_after_sharing_access_lock(
+            session,
+            replay_discovery.credential_id,
+            actor,
+            request=request,
+            now=request_now,
+        )
+        replay = session.scalar(
+            select(VerificationToken)
+            .where(
+                VerificationToken.id == replay_discovery.id,
+                VerificationToken.owner_user_id == actor.user_id,
+                VerificationToken.idempotency_key == idem,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if replay:
+            replay_raw = _raw_token(
+                replay.projection_id, actor.user_id, idem
+            )
+            if keyed_hash(replay_raw) != replay.token_hash:
+                raise exc
             return {
                 "id": str(replay.id),
-                "token": raw,
+                "token": replay_raw,
                 "verification_url": (
-                    f"{settings.credential_public_base_url.rstrip('/')}/{raw}"
+                    f"{settings.credential_public_base_url.rstrip('/')}/{replay_raw}"
                 ),
                 "expires_at": replay.expires_at.isoformat(),
                 "idempotent_replay": True,
@@ -1114,21 +1353,28 @@ def create_verification_token(
 def revoke_verification_token(
     credential_id: uuid.UUID,
     token_id: uuid.UUID,
+    request: Request,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    _get_owned(session, credential_id, actor.user_id)
+    request_now = datetime.now(timezone.utc)
+    _get_owned(
+        session, credential_id, actor.user_id, for_update=True
+    )
     token = session.scalar(
         select(VerificationToken).where(
             VerificationToken.id == token_id,
             VerificationToken.credential_id == credential_id,
             VerificationToken.owner_user_id == actor.user_id,
-        )
+        ).with_for_update()
+    )
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
     )
     if token is None:
         raise _error(404, "verification_token_not_found", "Token not found")
     if token.revoked_at is None:
-        token.revoked_at = datetime.now(timezone.utc)
+        token.revoked_at = request_now
         record_audit_event(
             session,
             action="credential.verification_token_revoked",
@@ -1292,10 +1538,12 @@ def public_verification(
 def revoke_credential(
     credential_id: uuid.UUID,
     payload: RevokeCommand,
+    request: Request,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     actor: ActorContext = Depends(_require_authenticated),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    request_now = datetime.now(timezone.utc)
     idem = _idempotency(idempotency_key)
     replay = session.scalar(
         select(CredentialVerificationEvent).where(
@@ -1303,19 +1551,23 @@ def revoke_credential(
             CredentialVerificationEvent.idempotency_key == idem,
         )
     )
+    locked_credential_id = replay.credential_id if replay else credential_id
+    row = session.scalar(
+        select(Credential)
+        .where(Credential.id == locked_credential_id)
+        .with_for_update()
+    )
+    if row is None or (not replay and row.deleted_at is not None):
+        raise _error(404, "credential_not_found", "Credential not found")
+    _require_presented_effect_session(
+        session, request, actor, now=request_now
+    )
     if replay:
         return {
             "credential_id": str(replay.credential_id),
             "status": replay.resulting_status,
             "idempotent_replay": True,
         }
-    row = session.scalar(
-        select(Credential)
-        .where(Credential.id == credential_id, Credential.deleted_at.is_(None))
-        .with_for_update()
-    )
-    if row is None:
-        raise _error(404, "credential_not_found", "Credential not found")
     replay = session.scalar(
         select(CredentialVerificationEvent).where(
             CredentialVerificationEvent.actor_user_id == actor.user_id,
@@ -1346,7 +1598,7 @@ def revoke_credential(
     previous = row.status
     row.status = "revoked"
     row.version += 1
-    now = datetime.now(timezone.utc)
+    now = request_now
     for token_row in session.scalars(
         select(VerificationToken)
         .where(

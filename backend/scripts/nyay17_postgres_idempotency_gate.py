@@ -74,8 +74,9 @@ PINNED_HEAD = "0018_registration_idempotency"
 # Historical NYAY-17 migration lifecycle remains sealed at 0018. Current ORM,
 # routes and services must instead execute on the repository head, including
 # the OTP-authority and auth-retention lifecycle contracts added after 0018.
-APPLICATION_HEAD = "0020_auth_retention_lifecycle"
+APPLICATION_HEAD = "0021_nyay5_profile_boundary"
 REGISTER_PATH = "/api/v1/auth/student/register"
+REGISTRATION_ACCEPTED_STATUS = 202
 RECENT_PROBE_HISTORY_AGE_DAYS = 2
 PENDING_RETENTION_TARGET_AGE_DAYS = 400
 PENDING_RETENTION_CUTOFF_DAYS = 365
@@ -103,8 +104,11 @@ CANONICAL_FIELD_PATHS = (
     "last_name",
     "mobile",
     "dob",
-    "consent.accepted",
-    "consent.policy_version",
+    "terms_accepted",
+    "terms_version",
+    "privacy_notice_acknowledged",
+    "privacy_notice_version",
+    "consent",
     "college",
     "year_of_study",
     "enrolment_number",
@@ -609,8 +613,11 @@ def _migration_inventory_passes(
         otp_migration = importlib.import_module(
             "app.db.migrations.versions.0019_otp_security_authority"
         )
+        profile_migration = importlib.import_module(
+            "app.db.migrations.versions.0021_nyay5_profile_boundary"
+        )
         expected_state_sql = otp_migration._LEDGER_STATE_0019
-        expected_request_hash_sql = otp_migration._LEDGER_FINGERPRINT_0019
+        expected_request_hash_sql = profile_migration._NEW_REGISTRATION_FINGERPRINT
         expected_state_links_sql = otp_migration._LEDGER_LINKS_0019
     else:
         return False
@@ -1141,7 +1148,7 @@ def _single_graph_delta(deltas: Mapping[str, int]) -> bool:
         "student_profiles": 1,
         "student_verifications": 1,
         "guardian_consents": 0,
-        "consents": 1,
+        "consents": 2,
         "otp_challenges": 1,
         "otp_outbox": 1,
         "audit_events": 1,
@@ -1151,9 +1158,9 @@ def _single_graph_delta(deltas: Mapping[str, int]) -> bool:
 
 def _replay_observation_passes(observation: Mapping[str, Any]) -> bool:
     return bool(
-        observation.get("first_status") == 201
+        observation.get("first_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("first_literal_pending") is True
-        and observation.get("replay_status") == 201
+        and observation.get("replay_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("public_handles_absent") is True
         and observation.get("private_subject_stable") is True
         and _single_graph_delta(observation.get("initial_graph_delta", {}))
@@ -1196,7 +1203,11 @@ def _race_observation_passes(
     observation: Mapping[str, Any], *, mismatched: bool
 ) -> bool:
     statuses = list(observation.get("statuses", ()))
-    expected_statuses = [201, 409] if mismatched else [201] * 8
+    expected_statuses = (
+        [REGISTRATION_ACCEPTED_STATUS, 409]
+        if mismatched
+        else [REGISTRATION_ACCEPTED_STATUS] * 8
+    )
     codes = list(observation.get("conflict_codes", ()))
     fields = list(observation.get("conflict_fields", ()))
     return bool(
@@ -1226,9 +1237,9 @@ def _failure_replay_observation_passes(observation: Mapping[str, Any]) -> bool:
     """A failed provider attempt stays retryable, replay-stable, and bounded."""
 
     return bool(
-        observation.get("first_status") == 201
+        observation.get("first_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("first_projection_exact") is True
-        and observation.get("replay_status") == 201
+        and observation.get("replay_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("replay_projection_exact") is True
         and observation.get("public_handles_absent") is True
         and observation.get("private_subject_stable") is True
@@ -1242,7 +1253,7 @@ def _failure_replay_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation.get("replay_state_unchanged") is True
         and observation.get("mismatch_conflict_exact") is True
         and observation.get("mismatch_state_unchanged") is True
-        and observation.get("recovery_status") == 201
+        and observation.get("recovery_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("stable_provider_key") is True
         and observation.get("succeeded_state_exact") is True
         and observation.get("sent_delivery_exact") is True
@@ -1274,7 +1285,7 @@ def _neutralized_observation_passes(observation: Mapping[str, Any]) -> bool:
     """Require one real, identifier-free neutral reservation and stable replay."""
 
     return bool(
-        observation.get("response_status") == 201
+        observation.get("response_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("projection_exact") is True
         and observation.get("projection_matches_real") is True
         and observation.get("public_identifier_absent") is True
@@ -1288,7 +1299,7 @@ def _neutralized_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation.get("ledger_delta") == 1
         and observation.get("authority_delta") == 1
         and observation.get("flow_delta") == 1
-        and observation.get("replay_status") == 201
+        and observation.get("replay_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("replay_projection_stable") is True
         and observation.get("replay_cookie_stable") is True
         and observation.get("replay_state_unchanged") is True
@@ -1303,7 +1314,7 @@ def _pending_resume_observation_passes(observation: Mapping[str, Any]) -> bool:
     """A crash-pending request must resume once without duplicating its graph."""
 
     return bool(
-        observation.get("crash_status") == 201
+        observation.get("crash_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("crash_projection_exact") is True
         and observation.get("pending_state_exact") is True
         and observation.get("claimed_delivery_exact") is True
@@ -1311,11 +1322,11 @@ def _pending_resume_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation.get("pending_mismatch_code") == "idempotency_conflict"
         and observation.get("pending_mismatch_field") == "Idempotency-Key"
         and observation.get("pending_mismatch_state_unchanged") is True
-        and observation.get("immediate_replay_status") == 201
+        and observation.get("immediate_replay_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("immediate_projection_exact") is True
         and observation.get("immediate_delivery_delta") == 0
         and observation.get("immediate_state_unchanged") is True
-        and observation.get("resume_status") == 201
+        and observation.get("resume_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("public_handles_absent") is True
         and observation.get("private_subject_stable") is True
         and observation.get("succeeded_state_exact") is True
@@ -1337,7 +1348,8 @@ def _failed_waiters_observation_passes(observation: Mapping[str, Any]) -> bool:
     """A peer request must finish while provider I/O remains off-lock."""
 
     return bool(
-        sorted(observation.get("statuses", ())) == [201, 201]
+        sorted(observation.get("statuses", ()))
+        == [REGISTRATION_ACCEPTED_STATUS, REGISTRATION_ACCEPTED_STATUS]
         and observation.get("projections_exact") is True
         and observation.get("public_handles_absent") is True
         and observation.get("private_subject_stable") is True
@@ -1353,7 +1365,7 @@ def _failed_waiters_observation_passes(observation: Mapping[str, Any]) -> bool:
         and observation.get("backend_count") == 2
         and observation.get("stable_failure_replay") is True
         and observation.get("mismatch_conflict") is True
-        and observation.get("recovery_status") == 201
+        and observation.get("recovery_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("stable_provider_key") is True
         and observation.get("succeeded_state_exact") is True
         and observation.get("sent_delivery_exact") is True
@@ -1411,7 +1423,7 @@ def _pending_resend_observation_passes(
     )
     return bool(
         observation.get("resend_status") == 202
-        and observation.get("replay_status") == 201
+        and observation.get("replay_status") == REGISTRATION_ACCEPTED_STATUS
         and observation.get("public_handles_absent") is True
         and observation.get("private_subject_stable") is True
         and authority_shape_exact
@@ -1461,7 +1473,7 @@ def _finalizer_retention_race_observation_passes(
             and observation.get("purged_challenges") == 1
             and observation.get("registration_transitions") == 0
             and observation.get("succeeded_state_exact") is True
-            and observation.get("exact_replay_status") == 201
+            and observation.get("exact_replay_status") == REGISTRATION_ACCEPTED_STATUS
             and observation.get("private_subject_stable") is True
             and observation.get("mutation_conflict_exact") is True
             and observation.get("provider_acceptances") == 1
@@ -1511,16 +1523,16 @@ def _seeded_mutant_results() -> list[bool]:
         "student_profiles": 1,
         "student_verifications": 1,
         "guardian_consents": 0,
-        "consents": 1,
+        "consents": 2,
         "otp_challenges": 1,
         "otp_outbox": 1,
         "audit_events": 1,
     }
     zero_graph = {name: 0 for name in graph}
     replay = {
-        "first_status": 201,
+        "first_status": REGISTRATION_ACCEPTED_STATUS,
         "first_literal_pending": True,
-        "replay_status": 201,
+        "replay_status": REGISTRATION_ACCEPTED_STATUS,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "initial_graph_delta": graph,
@@ -1552,7 +1564,7 @@ def _seeded_mutant_results() -> list[bool]:
         "state_unchanged": True,
     }
     same_race = {
-        "statuses": [201] * 8,
+        "statuses": [REGISTRATION_ACCEPTED_STATUS] * 8,
         "conflict_codes": [],
         "conflict_fields": [],
         "public_handles_absent": True,
@@ -1564,7 +1576,7 @@ def _seeded_mutant_results() -> list[bool]:
         "stable_followups": True,
     }
     mismatch_race = {
-        "statuses": [201, 409],
+        "statuses": [REGISTRATION_ACCEPTED_STATUS, 409],
         "conflict_codes": ["idempotency_conflict"],
         "conflict_fields": ["Idempotency-Key"],
         "public_handles_absent": True,
@@ -1581,9 +1593,9 @@ def _seeded_mutant_results() -> list[bool]:
         "stable_followups": True,
     }
     failure = {
-        "first_status": 201,
+        "first_status": REGISTRATION_ACCEPTED_STATUS,
         "first_projection_exact": True,
-        "replay_status": 201,
+        "replay_status": REGISTRATION_ACCEPTED_STATUS,
         "replay_projection_exact": True,
         "public_handles_absent": True,
         "private_subject_stable": True,
@@ -1597,7 +1609,7 @@ def _seeded_mutant_results() -> list[bool]:
         "replay_state_unchanged": True,
         "mismatch_conflict_exact": True,
         "mismatch_state_unchanged": True,
-        "recovery_status": 201,
+        "recovery_status": REGISTRATION_ACCEPTED_STATUS,
         "stable_provider_key": True,
         "succeeded_state_exact": True,
         "sent_delivery_exact": True,
@@ -1617,7 +1629,7 @@ def _seeded_mutant_results() -> list[bool]:
         "state_links_exact": True,
     }
     neutralized = {
-        "response_status": 201,
+        "response_status": REGISTRATION_ACCEPTED_STATUS,
         "projection_exact": True,
         "projection_matches_real": True,
         "public_identifier_absent": True,
@@ -1631,7 +1643,7 @@ def _seeded_mutant_results() -> list[bool]:
         "ledger_delta": 1,
         "authority_delta": 1,
         "flow_delta": 1,
-        "replay_status": 201,
+        "replay_status": REGISTRATION_ACCEPTED_STATUS,
         "replay_projection_stable": True,
         "replay_cookie_stable": True,
         "replay_state_unchanged": True,
@@ -1641,7 +1653,7 @@ def _seeded_mutant_results() -> list[bool]:
         "mutation_provider_delta": 0,
     }
     pending = {
-        "crash_status": 201,
+        "crash_status": REGISTRATION_ACCEPTED_STATUS,
         "crash_projection_exact": True,
         "pending_state_exact": True,
         "claimed_delivery_exact": True,
@@ -1649,11 +1661,11 @@ def _seeded_mutant_results() -> list[bool]:
         "pending_mismatch_code": "idempotency_conflict",
         "pending_mismatch_field": "Idempotency-Key",
         "pending_mismatch_state_unchanged": True,
-        "immediate_replay_status": 201,
+        "immediate_replay_status": REGISTRATION_ACCEPTED_STATUS,
         "immediate_projection_exact": True,
         "immediate_delivery_delta": 0,
         "immediate_state_unchanged": True,
-        "resume_status": 201,
+        "resume_status": REGISTRATION_ACCEPTED_STATUS,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "succeeded_state_exact": True,
@@ -1670,7 +1682,7 @@ def _seeded_mutant_results() -> list[bool]:
         "followup_stable": True,
     }
     failed_waiter = {
-        "statuses": [201, 201],
+        "statuses": [REGISTRATION_ACCEPTED_STATUS] * 2,
         "projections_exact": True,
         "public_handles_absent": True,
         "private_subject_stable": True,
@@ -1686,7 +1698,7 @@ def _seeded_mutant_results() -> list[bool]:
         "backend_count": 2,
         "stable_failure_replay": True,
         "mismatch_conflict": True,
-        "recovery_status": 201,
+        "recovery_status": REGISTRATION_ACCEPTED_STATUS,
         "stable_provider_key": True,
         "succeeded_state_exact": True,
         "sent_delivery_exact": True,
@@ -1720,7 +1732,7 @@ def _seeded_mutant_results() -> list[bool]:
     }
     pending_resend = {
         "resend_status": 202,
-        "replay_status": 201,
+        "replay_status": REGISTRATION_ACCEPTED_STATUS,
         "public_handles_absent": True,
         "private_subject_stable": True,
         "ledger_reused_original_during_send": True,
@@ -1788,9 +1800,14 @@ def _seeded_mutant_results() -> list[bool]:
         )
     ]
     # One deterministic bypass mutant per canonical request field: replaying a
-    # changed field as 201 must turn the typed-conflict oracle red.
+    # A changed field false-replayed as accepted must turn the oracle red.
     results.extend(
-        killed(_conflict_observation_passes, conflict, "status", 201)
+        killed(
+            _conflict_observation_passes,
+            conflict,
+            "status",
+            REGISTRATION_ACCEPTED_STATUS,
+        )
         for _ in CANONICAL_FIELD_PATHS
     )
     results.extend(
@@ -1819,7 +1836,7 @@ def _seeded_mutant_results() -> list[bool]:
             unsafe,
         )
         for field, unsafe in (
-            ("statuses", [201] * 7 + [409]),
+            ("statuses", [REGISTRATION_ACCEPTED_STATUS] * 7 + [409]),
             ("public_handles_absent", False),
             ("private_winner_exact", False),
             ("backend_count", 7),
@@ -1878,7 +1895,7 @@ def _seeded_mutant_results() -> list[bool]:
     results.extend(
         killed(_failed_waiters_observation_passes, failed_waiter, field, unsafe)
         for field, unsafe in (
-            ("statuses", [201, 502]),
+            ("statuses", [REGISTRATION_ACCEPTED_STATUS, 502]),
             ("backend_count", 1),
             ("peer_completed_before_release", False),
             ("provider_attempt_delta", 2),
@@ -1887,7 +1904,7 @@ def _seeded_mutant_results() -> list[bool]:
     results.extend(
         killed(_invalid_key_observation_passes, invalid_key, field, unsafe)
         for field, unsafe in (
-            ("status", 201),
+            ("status", REGISTRATION_ACCEPTED_STATUS),
             ("error_code", "idempotency_conflict"),
             ("error_field", "mobile"),
             ("state_unchanged", False),
@@ -1989,7 +2006,12 @@ def _seeded_mutants_are_killed() -> bool:
 
 
 def _base_registration_payload(sequence: int) -> dict[str, Any]:
-    """Return synthetic valid content that is kept in memory only."""
+    """Return one current NYAY-5 registration kept in memory only.
+
+    Academic data is intentionally absent: the current contract creates an
+    empty profile and accepts those fields only through the authenticated CAS
+    profile boundary.  Terms and Privacy Notice authority are independent.
+    """
 
     mobile = f"8{sequence:09d}"[-10:]
     return {
@@ -1998,20 +2020,42 @@ def _base_registration_payload(sequence: int) -> dict[str, Any]:
         "last_name": "Sen",
         "mobile": mobile,
         "dob": "2000-01-02",
-        "consent": {
-            "accepted": True,
-            "policy_version": "dpdp-2023.v1",
-        },
-        "college": "Synthetic Law University",
-        "year_of_study": "Year 2",
-        "enrolment_number": f"QA/{1000 + sequence}/2026",
-        "institutional_email": (f"synthetic-{sequence}" + chr(64) + "law.invalid"),
-        "bar_enrolment_number": f"QA-BAR-{sequence}",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
     }
 
 
+def _legacy_v1_registration_payload(sequence: int) -> dict[str, Any]:
+    """Return the sealed v1 shape solely for an already-bound replay probe."""
+
+    payload = _base_registration_payload(sequence)
+    for field in (
+        "terms_accepted",
+        "terms_version",
+        "privacy_notice_acknowledged",
+        "privacy_notice_version",
+    ):
+        payload.pop(field)
+    payload.update(
+        {
+            "consent": {
+                "accepted": True,
+                "policy_version": "dpdp-2023.v1",
+            },
+            "college": "Synthetic Law University",
+            "year_of_study": "Year 2",
+            "enrolment_number": f"QA/{1000 + sequence}/2026",
+            "institutional_email": (f"synthetic-{sequence}" + chr(64) + "law.invalid"),
+            "bar_enrolment_number": f"QA-BAR-{sequence}",
+        }
+    )
+    return payload
+
+
 def _canonical_field_mutations(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Change exactly one of the twelve v1 canonical fields per request."""
+    """Change exactly one of the fifteen current v2 canonical fields."""
 
     mutations: list[dict[str, Any]] = []
     replacements: tuple[tuple[str, Any], ...] = (
@@ -2020,8 +2064,14 @@ def _canonical_field_mutations(payload: Mapping[str, Any]) -> list[dict[str, Any
         ("last_name", "Rao"),
         ("mobile", "7999999999"),
         ("dob", "2000-01-03"),
-        ("consent.accepted", False),
-        ("consent.policy_version", "dpdp-2023.v2"),
+        ("terms_accepted", False),
+        ("terms_version", "terms-2026-08.v2"),
+        ("privacy_notice_acknowledged", False),
+        ("privacy_notice_version", "privacy-2026-08.v2"),
+        (
+            "consent",
+            {"accepted": True, "policy_version": "dpdp-2023.v1"},
+        ),
         ("college", "Other Law University"),
         ("year_of_study", "Year 3"),
         ("enrolment_number", "QA/9999/2026"),
@@ -2046,7 +2096,7 @@ def _canonical_field_mutations(payload: Mapping[str, Any]) -> list[dict[str, Any
 def _canonical_equivalent_payloads(
     payload: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Different JSON spellings that validate to the same canonical v1 value."""
+    """Different JSON spellings that validate to the same current v2 value."""
 
     variants: list[dict[str, Any]] = []
     names = deepcopy(dict(payload))
@@ -2058,22 +2108,25 @@ def _canonical_equivalent_payloads(
     names["middle_name"] = "   "
     variants.append(names)
 
-    academic = deepcopy(dict(payload))
-    academic["college"] = "  Synthetic   Law University  "
-    academic["year_of_study"] = " Year   2 "
-    academic["enrolment_number"] = f" {payload['enrolment_number']} "
-    academic["bar_enrolment_number"] = f" {payload['bar_enrolment_number']} "
-    variants.append(academic)
+    terms = deepcopy(dict(payload))
+    terms["terms_version"] = f"  {payload['terms_version']}  "
+    variants.append(terms)
 
-    email = deepcopy(dict(payload))
-    email["institutional_email"] = (
-        "  " + str(payload["institutional_email"]).upper() + "  "
-    )
-    variants.append(email)
+    privacy = deepcopy(dict(payload))
+    privacy["privacy_notice_version"] = f"  {payload['privacy_notice_version']}  "
+    variants.append(privacy)
 
-    defaulted = deepcopy(dict(payload))
-    defaulted["consent"] = {"accepted": True}
-    variants.append(defaulted)
+    explicit_nulls = deepcopy(dict(payload))
+    for field in (
+        "consent",
+        "college",
+        "year_of_study",
+        "enrolment_number",
+        "institutional_email",
+        "bar_enrolment_number",
+    ):
+        explicit_nulls[field] = None
+    variants.append(explicit_nulls)
 
     omitted_middle = deepcopy(dict(payload))
     omitted_middle.pop("middle_name")
@@ -2253,7 +2306,9 @@ class _BlockingSender(_CapturingSender):
 
 
 @contextmanager
-def _registration_finalizer_clock_scope(clock: Mapping[str, datetime]) -> Iterator[None]:
+def _registration_finalizer_clock_scope(
+    clock: Mapping[str, datetime],
+) -> Iterator[None]:
     """Thread only the background delivery clock through the certified probe."""
 
     from app.api.v1 import auth_student as endpoint
@@ -2373,20 +2428,14 @@ def _wait_for_request_lock(
     # PostgreSQL activity snapshots can stay transaction-bound while a request
     # moves to a new backend after an internal commit. AUTOCOMMIT makes each
     # poll observe current lock state while the owner/PID set is refreshed.
-    with engine.connect().execution_options(
-        isolation_level="AUTOCOMMIT"
-    ) as connection:
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
         while time.monotonic() < deadline:
             pids = tracker.private_snapshot()
             if tracker.count != expected_backends or len(pids) != expected_backends:
                 time.sleep(0.02)
                 continue
-            placeholders = ", ".join(
-                f":pid_{index}" for index in range(len(pids))
-            )
-            parameters = {
-                f"pid_{index}": pid for index, pid in enumerate(sorted(pids))
-            }
+            placeholders = ", ".join(f":pid_{index}" for index in range(len(pids)))
+            parameters = {f"pid_{index}": pid for index, pid in enumerate(sorted(pids))}
             statement = text(
                 "SELECT count(*) FROM pg_stat_activity "
                 f"WHERE pid IN ({placeholders}) AND wait_event_type = 'Lock'"
@@ -2589,90 +2638,154 @@ def _response_is_identifier_free(
     return str(private_id) not in lowered and private_id.hex not in lowered
 
 
+def _registration_accepted_projection_is_exact(
+    response: Any,
+    *,
+    private_handle: str | None,
+) -> bool:
+    """Require the exact current identifier-free registration projection."""
+
+    from app.core.config import settings
+
+    try:
+        body = response.json()
+    except Exception:  # noqa: BLE001 - fail closed on malformed output
+        return False
+    return bool(
+        response.status_code == 202
+        and private_handle is not None
+        and body
+        == {
+            "status": "accepted",
+            "next": "otp",
+            "expires_in_seconds": settings.otp_challenge_ttl_seconds,
+            "resend_after_seconds": settings.otp_resend_cooldown_seconds,
+        }
+        and all(
+            isinstance(body.get(field), int) and not isinstance(body.get(field), bool)
+            for field in (
+                "expires_in_seconds",
+                "resend_after_seconds",
+            )
+        )
+        and _response_is_identifier_free(response, private_handle=private_handle)
+    )
+
+
 def _signup_pending_projection_is_exact(
     response: Any,
     *,
     private_handle: str | None,
 ) -> bool:
-    """Require the exact current identifier-free signup projection."""
+    """Compatibility name for the now-accepted registration wire oracle."""
 
-    try:
-        body = response.json()
-    except Exception:  # noqa: BLE001 - fail closed on malformed output
-        return False
-    return bool(
-        response.status_code == 201
-        and private_handle is not None
-        and isinstance(body, dict)
-        and set(body)
-        == {
-            "status",
-            "purpose",
-            "destination_masked",
-            "attempts_left",
-            "expires_in_seconds",
-            "resend_in_seconds",
-            "locked_for_seconds",
-            "resend_allowed",
-        }
-        and body.get("status") == "pending"
-        and body.get("purpose") == "signup"
-        and isinstance(body.get("destination_masked"), str)
-        and re.fullmatch(r"••••••\d{4}", body["destination_masked"]) is not None
-        and all(
-            isinstance(body.get(field), int)
-            and not isinstance(body.get(field), bool)
-            and body[field] >= 0
-            for field in (
-                "attempts_left",
-                "expires_in_seconds",
-                "resend_in_seconds",
-                "locked_for_seconds",
-            )
-        )
-        and isinstance(body.get("resend_allowed"), bool)
-        and _response_is_identifier_free(response, private_handle=private_handle)
+    return _registration_accepted_projection_is_exact(
+        response, private_handle=private_handle
     )
 
 
+def _signup_authenticated_projection_is_exact(
+    response: Any,
+    *,
+    registration_payload: Mapping[str, Any],
+) -> bool:
+    """Validate the complete NYAY-5 signup activation wire in memory only.
+
+    This oracle deliberately compares the identity values because activation
+    is an authenticated response.  It returns only one boolean; neither the
+    payload nor the response body can enter aggregate evidence.
+    """
+
+    from app.services import otp_flow_service
+
+    profile_fields = (
+        "college",
+        "year_of_study",
+        "enrolment_number",
+        "institutional_email",
+        "bar_enrolment_number",
+    )
+    current_v2_shape = bool(
+        registration_payload.get("terms_accepted") is True
+        and isinstance(registration_payload.get("terms_version"), str)
+        and registration_payload.get("privacy_notice_acknowledged") is True
+        and isinstance(registration_payload.get("privacy_notice_version"), str)
+        and registration_payload.get("consent") is None
+        and all(registration_payload.get(field) is None for field in profile_fields)
+    )
+    if not current_v2_shape:
+        return False
+    expected = {
+        **otp_flow_service.authenticated_state("signup"),
+        "onboarding": {
+            "profile_version": 1,
+            "completion_version": "v1",
+            "completion_percent": 0,
+            "completed_sections": [],
+            "next_incomplete_section": "personal",
+            "is_complete": False,
+            "institutional_email_status": "not_provided",
+            "guardian": {"required": False, "status": "not_required"},
+            "access_mode": "full",
+            "disabled_capabilities": [],
+            "profile_prompt": {
+                "should_show": True,
+                "dismissed_for_session": False,
+            },
+            "profile": {
+                "personal": {
+                    "first_name": registration_payload.get("first_name"),
+                    "middle_name": registration_payload.get("middle_name"),
+                    "last_name": registration_payload.get("last_name"),
+                    "date_of_birth": registration_payload.get("dob"),
+                    "preferred_language": None,
+                    "city": None,
+                    "pronouns": None,
+                },
+                "academic": {
+                    "college": None,
+                    "year_of_study": None,
+                    "enrolment_number": None,
+                    "institutional_email": None,
+                    "bar_enrolment_number": None,
+                },
+                "interests": {"interests": [], "goals": []},
+            },
+        },
+    }
+    try:
+        body = response.json()
+    except Exception:  # noqa: BLE001 - fail closed on malformed output
+        return False
+    return bool(response.status_code == 200 and body == expected)
+
+
 def _neutralized_pending_projection_is_exact(response: Any) -> bool:
-    """Require the exact public signup shape without a real registration."""
+    """Require the exact accepted shape without a real registration."""
+
+    from app.core.config import settings
 
     try:
         body = response.json()
     except Exception:  # noqa: BLE001 - fail closed on malformed output
         return False
     return bool(
-        response.status_code == 201
+        response.status_code == 202
         and _response_handle(response) is None
-        and isinstance(body, dict)
-        and set(body)
+        and body
         == {
-            "status",
-            "purpose",
-            "destination_masked",
-            "attempts_left",
-            "expires_in_seconds",
-            "resend_in_seconds",
-            "locked_for_seconds",
-            "resend_allowed",
+            "status": "accepted",
+            "next": "otp",
+            "expires_in_seconds": settings.otp_challenge_ttl_seconds,
+            "resend_after_seconds": settings.otp_resend_cooldown_seconds,
         }
-        and body.get("status") == "pending"
-        and body.get("purpose") == "signup"
-        and isinstance(body.get("destination_masked"), str)
-        and re.fullmatch(r"••••••\d{4}", body["destination_masked"]) is not None
         and all(
-            isinstance(body.get(field), int)
-            and not isinstance(body.get(field), bool)
-            and body[field] >= 0
+            isinstance(body.get(field), int) and not isinstance(body.get(field), bool)
             for field in (
-                "attempts_left",
                 "expires_in_seconds",
-                "resend_in_seconds",
-                "locked_for_seconds",
+                "resend_after_seconds",
             )
         )
-        and isinstance(body.get("resend_allowed"), bool)
         and _response_is_identifier_free(response)
     )
 
@@ -2685,9 +2798,7 @@ def _post_response_crash_projection_is_exact(
     return bool(
         private_handle is not None
         and _response_handle(response) == private_handle
-        and _signup_pending_projection_is_exact(
-            response, private_handle=private_handle
-        )
+        and _signup_pending_projection_is_exact(response, private_handle=private_handle)
     )
 
 
@@ -2835,9 +2946,7 @@ def _attach_private_response_handle(
 
     cookies = getattr(response, "cookies", None)
     raw_token = (
-        cookies.get(settings.otp_flow_cookie_name)
-        if cookies is not None
-        else None
+        cookies.get(settings.otp_flow_cookie_name) if cookies is not None else None
     )
     registration_id = None
     with factory() as session:
@@ -2855,7 +2964,7 @@ def _attach_private_response_handle(
         private_id = str(uuid.UUID(str(registration_id)))
     except (TypeError, ValueError):
         private_id = None
-    if private_id is not None and getattr(response, "status_code", 0) == 201:
+    if private_id is not None and getattr(response, "status_code", 0) == 202:
         setattr(response, "_nyay17_private_registration_id", private_id)
     if isinstance(raw_token, str) and raw_token:
         setattr(response, "_nyay17_private_flow_token", raw_token)
@@ -2882,10 +2991,19 @@ def _response_error_field(response: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _ledger_state_exact(record: Any, state: str) -> bool:
+def _ledger_state_exact(
+    record: Any,
+    state: str,
+    *,
+    fingerprint_version: str = "v2",
+) -> bool:
     """Validate one exact state/link/fingerprint inventory in memory."""
 
-    if record is None or record.state != state:
+    if (
+        record is None
+        or record.state != state
+        or fingerprint_version not in {"v1", "v2"}
+    ):
         return False
     hash_value = record.idempotency_key_hash
     key_shape = bool(
@@ -2893,7 +3011,7 @@ def _ledger_state_exact(record: Any, state: str) -> bool:
     )
     if state == "pending":
         state_shape = bool(
-            record.request_fingerprint_version == "v1"
+            record.request_fingerprint_version == fingerprint_version
             and isinstance(record.request_fingerprint, str)
             and re.fullmatch(r"[0-9a-f]{64}", record.request_fingerprint)
             and record.registration_id is not None
@@ -2902,7 +3020,7 @@ def _ledger_state_exact(record: Any, state: str) -> bool:
         )
     elif state == "succeeded":
         state_shape = bool(
-            record.request_fingerprint_version == "v1"
+            record.request_fingerprint_version == fingerprint_version
             and isinstance(record.request_fingerprint, str)
             and re.fullmatch(r"[0-9a-f]{64}", record.request_fingerprint)
             and record.registration_id is not None
@@ -2911,7 +3029,7 @@ def _ledger_state_exact(record: Any, state: str) -> bool:
         )
     elif state == "failed":
         state_shape = bool(
-            record.request_fingerprint_version == "v1"
+            record.request_fingerprint_version == fingerprint_version
             and isinstance(record.request_fingerprint, str)
             and re.fullmatch(r"[0-9a-f]{64}", record.request_fingerprint)
             and record.registration_id is None
@@ -2920,7 +3038,7 @@ def _ledger_state_exact(record: Any, state: str) -> bool:
         )
     elif state == "neutralized":
         state_shape = bool(
-            record.request_fingerprint_version == "v1"
+            record.request_fingerprint_version == fingerprint_version
             and isinstance(record.request_fingerprint, str)
             and re.fullmatch(r"[0-9a-f]{64}", record.request_fingerprint)
             and record.registration_id is None
@@ -3080,7 +3198,7 @@ def _run_http_key_boundary(
         "registration_idempotency_records"
     ]
     short_passed = bool(
-        short_response.status_code == 201
+        short_response.status_code == REGISTRATION_ACCEPTED_STATUS
         and _single_graph_delta(_count_delta(short_before_graph, short_after_graph))
         and short_after_ledger - short_before_ledger == 1
         and sender.count - short_before_delivery == 1
@@ -3097,7 +3215,7 @@ def _run_http_key_boundary(
         "registration_idempotency_records"
     ]
     absent_passed = bool(
-        absent_response.status_code == 201
+        absent_response.status_code == REGISTRATION_ACCEPTED_STATUS
         and _single_graph_delta(_count_delta(absent_before_graph, absent_after_graph))
         and absent_after_ledger - absent_before_ledger == 0
         and sender.count - absent_before_delivery == 1
@@ -3112,6 +3230,82 @@ def _run_http_key_boundary(
         "short_key_succeeded": short_passed,
         "absent_header_legacy_succeeded": absent_passed,
     }
+
+
+def _run_legacy_v1_replay_probe(
+    engine: Engine,
+    app: FastAPI,
+    factory: sessionmaker[Session],
+    sender: _CapturingSender,
+) -> bool:
+    """Prove a sealed v1 ledger replays before current fresh-write policy.
+
+    The gate first creates a normal current graph, then turns only its private
+    QA ledger fingerprint into an exact historical v1 binding.  The route must
+    replay that already-bound request despite its legacy profile fields, while
+    a changed v1 request remains a typed conflict.  No v1-shaped fresh write is
+    attempted or accepted.
+    """
+
+    from app.schemas.registration import StudentRegisterRequest
+    from app.services import registration_service
+
+    current_payload = _base_registration_payload(107)
+    legacy_payload = _legacy_v1_registration_payload(107)
+    wire_key = "nyay17-sealed-v1-bound-replay"
+    created = _post_registration(app, current_payload, wire_key)
+    private_handle = _response_handle(created)
+    legacy_request = StudentRegisterRequest.model_validate(legacy_payload)
+    legacy_fingerprint = registration_service.registration_request_fingerprint(
+        legacy_request,
+        version=registration_service.REGISTRATION_REQUEST_FINGERPRINT_VERSION,
+    )
+    with factory() as session:
+        record = _ledger_for_key(session, wire_key)
+        if record is None or private_handle is None:
+            return False
+        record.request_fingerprint = legacy_fingerprint
+        record.request_fingerprint_version = "v1"
+        session.commit()
+
+    tables = REGISTRATION_GRAPH_TABLES + ("registration_idempotency_records",)
+    stable_before = _database_state_digest(engine, tables)
+    delivery_before = sender.count
+    exact = _post_registration(app, legacy_payload, wire_key)
+    stable_after_exact = _database_state_digest(engine, tables)
+    changed = deepcopy(legacy_payload)
+    changed["first_name"] = "Maya"
+    conflict = _post_registration(app, changed, wire_key)
+    stable_after_conflict = _database_state_digest(engine, tables)
+    with factory() as session:
+        record = _ledger_for_key(session, wire_key)
+        legacy_state_exact = _ledger_state_exact(
+            record,
+            "succeeded",
+            fingerprint_version="v1",
+        )
+    return bool(
+        created.status_code == REGISTRATION_ACCEPTED_STATUS
+        and _registration_accepted_projection_is_exact(
+            exact, private_handle=private_handle
+        )
+        and _response_handle(exact) == private_handle
+        and _conflict_observation_passes(
+            {
+                "status": conflict.status_code,
+                "error_code": _response_error_code(conflict),
+                "error_field": _response_error_field(conflict),
+                "graph_delta": {table: 0 for table in REGISTRATION_GRAPH_TABLES},
+                "ledger_delta": 0,
+                "delivery_delta": sender.count - delivery_before,
+                "state_unchanged": stable_after_conflict == stable_after_exact,
+            }
+        )
+        and stable_after_exact == stable_before
+        and stable_after_conflict == stable_before
+        and sender.count == delivery_before
+        and legacy_state_exact
+    )
 
 
 def _run_sequential_probes(
@@ -3152,9 +3346,7 @@ def _run_sequential_probes(
         ),
         "replay_status": replay.status_code,
         "public_handles_absent": bool(
-            _response_is_identifier_free(
-                first, private_handle=_response_handle(first)
-            )
+            _response_is_identifier_free(first, private_handle=_response_handle(first))
             and _response_is_identifier_free(
                 replay, private_handle=_response_handle(replay)
             )
@@ -3194,7 +3386,10 @@ def _run_sequential_probes(
         for candidate in _canonical_equivalent_payloads(base)
     ]
     equivalent_passed = bool(
-        all(response.status_code == 201 for response in equivalent_responses)
+        all(
+            response.status_code == REGISTRATION_ACCEPTED_STATUS
+            for response in equivalent_responses
+        )
         and all(
             _response_handle(response) == _response_handle(first)
             for response in equivalent_responses
@@ -3234,10 +3429,11 @@ def _run_sequential_probes(
         )
 
     # Explicit null and omitted spellings of every optional request field must
-    # share one v1 fingerprint after model validation.
+    # share one v2 fingerprint after model validation.
     explicit_null_payload = _base_registration_payload(105)
     optional_fields = (
         "middle_name",
+        "consent",
         "college",
         "year_of_study",
         "enrolment_number",
@@ -3255,8 +3451,8 @@ def _run_sequential_probes(
     null_delivery_before = sender.count
     omitted_replay = _post_registration(app, omitted_payload, null_key)
     null_omitted_passed = bool(
-        null_first.status_code == 201
-        and omitted_replay.status_code == 201
+        null_first.status_code == REGISTRATION_ACCEPTED_STATUS
+        and omitted_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(null_first) == _response_handle(omitted_replay)
         and sender.count == null_delivery_before
         and _database_state_digest(engine, all_state_tables) == null_before
@@ -3292,6 +3488,7 @@ def _run_sequential_probes(
             _database_state_digest(engine, all_state_tables) == legacy_before_state
         ),
     }
+    legacy_v1_replay_passed = _run_legacy_v1_replay_probe(engine, app, factory, sender)
 
     service_boundary_passed, service_boundary_cases = _key_boundary_passes()
     http_boundary = _run_http_key_boundary(engine, app, factory, sender, base)
@@ -3305,7 +3502,10 @@ def _run_sequential_probes(
         "conflicts_passed": mutations_schema_valid
         and all(_conflict_observation_passes(item) for item in conflict_observations),
         "conflict_cases": len(conflict_observations),
-        "legacy_passed": _conflict_observation_passes(legacy_observation),
+        "legacy_passed": bool(
+            _conflict_observation_passes(legacy_observation) and legacy_v1_replay_passed
+        ),
+        "legacy_cases": 2,
         "boundary_passed": service_boundary_passed and http_boundary["passed"],
         "boundary_cases": (
             service_boundary_cases
@@ -3464,8 +3664,7 @@ def _run_neutralized_ledger_probe(engine: Engine) -> dict[str, Any]:
         "neutral_flow_exact": neutral_flow_exact,
         "neutral_authority_exact": neutral_authority_exact,
         "real_graph_unchanged": (
-            _database_state_digest(engine, REGISTRATION_GRAPH_TABLES)
-            == before_graph
+            _database_state_digest(engine, REGISTRATION_GRAPH_TABLES) == before_graph
         ),
         "real_provider_delta": delivery_after - delivery_before,
         "ledger_delta": (
@@ -3483,8 +3682,7 @@ def _run_neutralized_ledger_probe(engine: Engine) -> dict[str, Any]:
             and _neutralized_pending_projection_is_exact(replay)
         ),
         "replay_cookie_stable": bool(
-            isinstance(neutral_token, str)
-            and replay_token == neutral_token
+            isinstance(neutral_token, str) and replay_token == neutral_token
         ),
         "replay_state_unchanged": stable_after_replay == stable_before_replay,
         "replay_provider_delta": replay_delivery_after - replay_delivery_before,
@@ -3579,6 +3777,12 @@ def _run_activation_probe(engine: Engine) -> dict[str, Any]:
     )
     return {
         "verification_status": verified.status_code if verified is not None else 0,
+        "verification_body_exact": bool(
+            verified is not None
+            and _signup_authenticated_projection_is_exact(
+                verified, registration_payload=payload
+            )
+        ),
         "retired_exact": retired_exact,
         "lifecycle_advanced": lifecycle_advanced,
         "terminal": terminal,
@@ -3792,13 +3996,10 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
         finally:
             control_two.rollback()
             control_two.close()
-    try:
-        activation_body_exact = bool(
-            activation_response.json()
-            == otp_flow_service.authenticated_state("signup")
-        )
-    except Exception:  # noqa: BLE001 - aggregate-only fail-closed diagnostic
-        activation_body_exact = False
+    activation_body_exact = _signup_authenticated_projection_is_exact(
+        activation_response,
+        registration_payload=payload,
+    )
     backend_exact = _backend_cardinality_is_exact(race_backend_count, 2)
     activation_private = _response_is_identifier_free(
         activation_response, private_handle=handle
@@ -3806,7 +4007,7 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
     terminal_passed = _retired_observation_passes(terminal)
     sender_exact = sender.count == 1
     passed = bool(
-        registered.status_code == 201
+        registered.status_code == REGISTRATION_ACCEPTED_STATUS
         and activation_waited
         and both_waited
         and backend_exact
@@ -3823,7 +4024,9 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
     return {
         "passed": passed,
         "cases": 2,
-        "registration_created": registered.status_code == 201,
+        "registration_created": (
+            registered.status_code == REGISTRATION_ACCEPTED_STATUS
+        ),
         "activation_waited": activation_waited,
         "both_waited": both_waited,
         "backend_exact": backend_exact,
@@ -3967,9 +4170,7 @@ def _run_pending_crash_probe(engine: Engine) -> dict[str, Any]:
         outbox_id = record.outbox_id if record is not None else None
         claimed = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         claimed_exact = _claimed_delivery_state_exact(claimed)
-        lease_expires_at = _as_gate_utc(
-            getattr(claimed, "lease_expires_at", None)
-        )
+        lease_expires_at = _as_gate_utc(getattr(claimed, "lease_expires_at", None))
         provider_key = getattr(claimed, "provider_idempotency_key", None)
 
     mismatch_before = _database_state_digest(engine, all_tables)
@@ -4004,7 +4205,9 @@ def _run_pending_crash_probe(engine: Engine) -> dict[str, Any]:
         resumed = _post_registration(resume_app, payload, wire_key)
     resume_graph_after = _table_counts(factory, REGISTRATION_GRAPH_TABLES)
     with factory() as session:
-        succeeded_exact = _ledger_state_exact(_ledger_for_key(session, wire_key), "succeeded")
+        succeeded_exact = _ledger_state_exact(
+            _ledger_for_key(session, wire_key), "succeeded"
+        )
         sent = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         sent_exact = _sent_delivery_state_exact(sent)
         stable_provider_key = bool(
@@ -4016,7 +4219,7 @@ def _run_pending_crash_probe(engine: Engine) -> dict[str, Any]:
     with _registration_finalizer_clock_scope(clock):
         followup = _post_registration(resume_app, payload, wire_key)
     followup_stable = bool(
-        followup.status_code == 201
+        followup.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(followup) == _response_handle(resumed)
         and resume_sender.count == delivery_before
         and _database_state_digest(engine, all_tables) == followup_before
@@ -4072,7 +4275,7 @@ def _run_pending_crash_probe(engine: Engine) -> dict[str, Any]:
         "crash_provider_acceptances": crash_sender.count,
         "resume_provider_acceptances": resume_sender.count,
         "crash_setup_exact": bool(
-            observation["crash_status"] == 201
+            observation["crash_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["crash_projection_exact"]
             and observation["pending_state_exact"]
             and observation["claimed_delivery_exact"]
@@ -4084,13 +4287,13 @@ def _run_pending_crash_probe(engine: Engine) -> dict[str, Any]:
             and observation["pending_mismatch_state_unchanged"]
         ),
         "immediate_replay_exact": bool(
-            observation["immediate_replay_status"] == 201
+            observation["immediate_replay_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["immediate_projection_exact"]
             and observation["immediate_delivery_delta"] == 0
             and observation["immediate_state_unchanged"]
         ),
         "recovery_exact": bool(
-            observation["resume_status"] == 201
+            observation["resume_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["public_handles_absent"]
             and observation["private_subject_stable"]
             and observation["succeeded_state_exact"]
@@ -4133,9 +4336,7 @@ def _run_accepted_crash_projection(engine: Engine) -> dict[str, Any]:
         outbox_id = record.outbox_id if record is not None else None
         claimed = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         claimed_exact = _claimed_delivery_state_exact(claimed)
-        lease_expires_at = _as_gate_utc(
-            getattr(claimed, "lease_expires_at", None)
-        )
+        lease_expires_at = _as_gate_utc(getattr(claimed, "lease_expires_at", None))
         provider_key = getattr(claimed, "provider_idempotency_key", None)
 
     before_replay = _database_state_digest(engine, all_tables)
@@ -4154,7 +4355,9 @@ def _run_accepted_crash_projection(engine: Engine) -> dict[str, Any]:
     with _registration_finalizer_clock_scope(clock):
         recovered = _post_registration(app, payload, wire_key)
     with factory() as session:
-        succeeded_exact = _ledger_state_exact(_ledger_for_key(session, wire_key), "succeeded")
+        succeeded_exact = _ledger_state_exact(
+            _ledger_for_key(session, wire_key), "succeeded"
+        )
         sent = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         sent_exact = _sent_delivery_state_exact(sent)
         stable_provider_key = bool(
@@ -4173,13 +4376,13 @@ def _run_accepted_crash_projection(engine: Engine) -> dict[str, Any]:
         _post_response_crash_projection_is_exact(
             response, private_handle=private_handle
         )
-        and immediate.status_code == 201
+        and immediate.status_code == REGISTRATION_ACCEPTED_STATUS
         and _signup_pending_projection_is_exact(
             immediate, private_handle=_response_handle(immediate)
         )
         and immediate_stable
-        and recovered.status_code == 201
-        and final_replay.status_code == 201
+        and recovered.status_code == REGISTRATION_ACCEPTED_STATUS
+        and final_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_is_identifier_free(immediate, private_handle=private_handle)
         and _response_is_identifier_free(recovered, private_handle=private_handle)
         and _response_is_identifier_free(final_replay, private_handle=private_handle)
@@ -4275,10 +4478,7 @@ def _open_pending_resend_window(
             or row.purpose != "signup"
             or row.status not in {"claimed", "failed"}
             or not _lower_hex_64(row.provider_idempotency_key)
-            or (
-                row.status == "claimed"
-                and not _lower_hex_64(row.claim_token_hash)
-            )
+            or (row.status == "claimed" and not _lower_hex_64(row.claim_token_hash))
         ):
             return None
         operation_now = datetime.now(timezone.utc)
@@ -4368,14 +4568,11 @@ def _pending_resend_shape(
                 and _lower_hex_64(claim_hash)
                 and (
                     pre_relay
-                    or not hmac.compare_digest(
-                        str(claim_hash), str(initial_claim_hash)
-                    )
+                    or not hmac.compare_digest(str(claim_hash), str(initial_claim_hash))
                 )
             ),
             "original_sent_erased_before_replacement": bool(
-                pre_relay
-                and _sent_delivery_state_exact(original, attempts=2)
+                pre_relay and _sent_delivery_state_exact(original, attempts=2)
             ),
         }
 
@@ -4426,8 +4623,7 @@ def _pending_resend_final_shape(
                 target, attempts=1 if pre_relay else 2
             ),
             "active_signup_challenges": sum(
-                challenge.delivery_state == "active"
-                and challenge.consumed_at is None
+                challenge.delivery_state == "active" and challenge.consumed_at is None
                 for challenge in challenges
             ),
             "relayable_signup_payloads": len(relayable),
@@ -4446,7 +4642,7 @@ def _resend_graph_is_exact(
         "student_profiles": 1,
         "student_verifications": 1,
         "guardian_consents": 0,
-        "consents": 1,
+        "consents": 2,
         "otp_challenges": 2 if pre_relay else 1,
         "otp_outbox": 2 if pre_relay else 1,
         "audit_events": 1,
@@ -4476,9 +4672,7 @@ def _run_pending_resend_case(
         initial_record = _ledger_for_key(session, wire_key)
         pending_exact = _ledger_state_exact(initial_record, "pending")
     if (
-        not _post_response_crash_projection_is_exact(
-            crashed, private_handle=handle
-        )
+        not _post_response_crash_projection_is_exact(crashed, private_handle=handle)
         or not pending_exact
         or handle is None
     ):
@@ -4501,9 +4695,7 @@ def _run_pending_resend_case(
                 window["original_outbox_id"] is not None
                 and otp_outbox.run_delivery(
                     session,
-                    otp_outbox.DeliveryIntent(
-                        outbox_id=window["original_outbox_id"]
-                    ),
+                    otp_outbox.DeliveryIntent(outbox_id=window["original_outbox_id"]),
                     relay_sender,
                     raise_on_failure=True,
                     now=window["operation_now"],
@@ -4518,9 +4710,10 @@ def _run_pending_resend_case(
     if concurrent:
         tracker = _PgBackendTracker()
         app, _ = _build_app_context(engine, sender, backend_tracker=tracker)
-        with _registration_request_clock_scope(
-            window["operation_now"]
-        ), _registration_resend_clock_scope(clock):
+        with (
+            _registration_request_clock_scope(window["operation_now"]),
+            _registration_resend_clock_scope(clock),
+        ):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 resend_future = executor.submit(
                     _post_signup_resend, app, crashed, wire_key
@@ -4552,9 +4745,10 @@ def _run_pending_resend_case(
                     replay = replay_future.result(timeout=30)
     else:
         app, _ = _build_app_context(engine, sender)
-        with _registration_request_clock_scope(
-            window["operation_now"]
-        ), _registration_resend_clock_scope(clock):
+        with (
+            _registration_request_clock_scope(window["operation_now"]),
+            _registration_resend_clock_scope(clock),
+        ):
             with ThreadPoolExecutor(max_workers=1) as executor:
                 resend_future = executor.submit(
                     _post_signup_resend, app, crashed, wire_key
@@ -4607,8 +4801,7 @@ def _run_pending_resend_case(
             "original_sent_erased_before_replacement"
         ],
         "succeeded_state_exact": bool(
-            final_shape["succeeded_state_exact"]
-            and final_shape["sent_delivery_exact"]
+            final_shape["succeeded_state_exact"] and final_shape["sent_delivery_exact"]
         ),
         "registration_graph_exact": _resend_graph_is_exact(
             before_graph, after_graph, pre_relay=pre_relay
@@ -4633,27 +4826,21 @@ def _run_pending_resend_case(
             {
                 "relay": relay_passed,
                 "resend_status": observation["resend_status"] == 202,
-                "replay_status": observation["replay_status"] == 201,
-                "public_identifiers_absent": observation[
-                    "public_handles_absent"
-                ],
+                "replay_status": (
+                    observation["replay_status"] == REGISTRATION_ACCEPTED_STATUS
+                ),
+                "public_identifiers_absent": observation["public_handles_absent"],
                 "subject_stable": observation["private_subject_stable"],
-                "original_link": observation[
-                    "ledger_reused_original_during_send"
-                ]
+                "original_link": observation["ledger_reused_original_during_send"]
                 is (not pre_relay),
                 "replacement_link": observation[
                     "ledger_repointed_to_replacement_during_send"
                 ]
                 is pre_relay,
                 "claimed_delivery": observation["claimed_delivery_exact"],
-                "provider_authority": observation[
-                    "provider_key_authority_exact"
-                ],
+                "provider_authority": observation["provider_key_authority_exact"],
                 "claim_fence": observation["claim_fence_exact"],
-                "original_sent": observation[
-                    "original_sent_erased_before_replacement"
-                ]
+                "original_sent": observation["original_sent_erased_before_replacement"]
                 is pre_relay,
                 "succeeded": observation["succeeded_state_exact"],
                 "graph": observation["registration_graph_exact"],
@@ -4661,18 +4848,12 @@ def _run_pending_resend_case(
                 "no_relayable": observation["relayable_signup_payloads"] == 0,
                 "acceptances": observation["provider_acceptances"]
                 == (2 if pre_relay else 1),
-                "backend": (
-                    observation["backend_count"] == 2 if concurrent else True
-                ),
+                "backend": (observation["backend_count"] == 2 if concurrent else True),
                 "peer_completed": (
-                    observation["peer_completed_before_release"]
-                    if concurrent
-                    else True
+                    observation["peer_completed_before_release"] if concurrent else True
                 ),
                 "winner_blocked": (
-                    observation["winner_blocked_before_release"]
-                    if concurrent
-                    else True
+                    observation["winner_blocked_before_release"] if concurrent else True
                 ),
             }
         )
@@ -4700,9 +4881,7 @@ def _run_resend_helper_terminal_wait_case(
     with factory() as session:
         handle = _durable_registration_handle_for_key(session, wire_key)
     if (
-        not _post_response_crash_projection_is_exact(
-            crashed, private_handle=handle
-        )
+        not _post_response_crash_projection_is_exact(crashed, private_handle=handle)
         or handle is None
     ):
         return False
@@ -4754,7 +4933,10 @@ def _run_resend_helper_terminal_wait_case(
             unrelated_app, _base_registration_payload(sequence + 100), None
         )
         unrelated_handle = _response_handle(unrelated)
-        if unrelated.status_code != 201 or unrelated_handle is None:
+        if (
+            unrelated.status_code != REGISTRATION_ACCEPTED_STATUS
+            or unrelated_handle is None
+        ):
             return False
 
     helper_sender = _CapturingSender()
@@ -4986,14 +5168,10 @@ def _run_pending_resend_probes(engine: Engine) -> dict[str, Any]:
     crosslink_app, _ = _build_app_context(engine, crosslink_sender)
     crosslink_response = _post_signup_resend(crosslink_app, pending, wire_key)
     crosslink_rejected = bool(
-        _post_response_crash_projection_is_exact(
-            pending, private_handle=handle
-        )
+        _post_response_crash_projection_is_exact(pending, private_handle=handle)
         and crosslink_installed
         and crosslink_response.status_code == 500
-        and _opaque_internal_error_is_exact(
-            crosslink_response, private_handle=handle
-        )
+        and _opaque_internal_error_is_exact(crosslink_response, private_handle=handle)
         and crosslink_sender.count == 0
         and _database_state_digest(
             engine,
@@ -5073,9 +5251,7 @@ def _run_pending_retention_purge_case(
     with factory() as session:
         handle = _durable_registration_handle_for_key(session, wire_key)
     if (
-        not _post_response_crash_projection_is_exact(
-            crashed, private_handle=handle
-        )
+        not _post_response_crash_projection_is_exact(crashed, private_handle=handle)
         or handle is None
     ):
         return {"passed": False, "cases": 0}
@@ -5200,7 +5376,7 @@ def _run_pending_retention_purge_case(
         "student_profiles": 1,
         "student_verifications": 1,
         "guardian_consents": 0,
-        "consents": 1,
+        "consents": 2,
         "otp_challenges": 0,
         "otp_outbox": 0,
     }
@@ -5338,7 +5514,7 @@ def _run_succeeded_retention_purge_probe(
     delivery_before_replay = sender.count
     replay = _post_registration(app, payload, wire_key)
     replay_stable = bool(
-        replay.status_code == 201
+        replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(replay) == handle
         and sender.count == delivery_before_replay
     )
@@ -5355,9 +5531,7 @@ def _run_succeeded_retention_purge_probe(
                 OtpFlow.purpose == "signup",
             )
         )
-        cooldown_until = _as_gate_utc(
-            getattr(authority, "cooldown_until", None)
-        )
+        cooldown_until = _as_gate_utc(getattr(authority, "cooldown_until", None))
         flow_expires_at = _as_gate_utc(getattr(flow, "expires_at", None))
     if cooldown_until is None or flow_expires_at is None:
         return False
@@ -5365,9 +5539,10 @@ def _run_succeeded_retention_purge_probe(
     if resend_now >= flow_expires_at:
         return False
     resend_clock = {"now": resend_now}
-    with _registration_request_clock_scope(
-        resend_now
-    ), _registration_resend_clock_scope(resend_clock):
+    with (
+        _registration_request_clock_scope(resend_now),
+        _registration_resend_clock_scope(resend_clock),
+    ):
         resend = _post_signup_resend(app, registered, wire_key)
     with factory() as session:
         succeeded_after_resend = _ledger_state_exact(
@@ -5397,7 +5572,7 @@ def _run_succeeded_retention_purge_probe(
             else []
         )
     checks = {
-        "registered": registered.status_code == 201,
+        "registered": registered.status_code == REGISTRATION_ACCEPTED_STATUS,
         "purged_one": counts.get("otp_challenges") == 1,
         "succeeded_after_purge": succeeded_after_purge,
         "registration_preserved": registration_preserved,
@@ -5431,9 +5606,7 @@ def _run_pending_sent_retention_purge_probe(engine: Engine) -> bool:
         record = _ledger_for_key(session, wire_key)
         outbox_id = record.outbox_id if record is not None else None
     if (
-        not _post_response_crash_projection_is_exact(
-            crashed, private_handle=handle
-        )
+        not _post_response_crash_projection_is_exact(crashed, private_handle=handle)
         or handle is None
         or outbox_id is None
     ):
@@ -5509,7 +5682,7 @@ def _run_pending_sent_retention_purge_probe(engine: Engine) -> bool:
         and succeeded
         and registration_preserved
         and history_removed
-        and exact.status_code == 201
+        and exact.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(exact) == handle
         and mismatch.status_code == 409
         and _response_error_code(mismatch) == "idempotency_conflict"
@@ -5557,9 +5730,7 @@ def _run_finalizer_retention_race_case(
     setup_projection_exact = bool(
         handle is not None
         and _response_handle(setup_response) == handle
-        and _signup_pending_projection_is_exact(
-            setup_response, private_handle=handle
-        )
+        and _signup_pending_projection_is_exact(setup_response, private_handle=handle)
     )
     if (
         not setup_projection_exact
@@ -5929,12 +6100,8 @@ def _run_retention_purge_probes(engine: Engine) -> dict[str, Any]:
         "succeeded_diagnostics": succeeded_diagnostics,
         "race_finalizer_first": races["finalizer_first"],
         "race_retention_first": races["retention_first"],
-        "race_finalizer_first_diagnostics": races[
-            "finalizer_first_diagnostics"
-        ],
-        "race_retention_first_diagnostics": races[
-            "retention_first_diagnostics"
-        ],
+        "race_finalizer_first_diagnostics": races["finalizer_first_diagnostics"],
+        "race_retention_first_diagnostics": races["retention_first_diagnostics"],
     }
 
 
@@ -5997,9 +6164,7 @@ def _run_failed_delivery_probe(engine: Engine) -> dict[str, Any]:
         succeeded_exact = _ledger_state_exact(
             _ledger_for_key(session, wire_key), "succeeded"
         )
-        sent_row = (
-            session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
-        )
+        sent_row = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         sent_exact = _sent_delivery_state_exact(sent_row)
         stable_provider_key = bool(
             _lower_hex_64(provider_key)
@@ -6010,7 +6175,7 @@ def _run_failed_delivery_probe(engine: Engine) -> dict[str, Any]:
     with _registration_finalizer_clock_scope(clock):
         final_replay = _post_registration(recovery_app, payload, wire_key)
     final_replay_stable = bool(
-        final_replay.status_code == 201
+        final_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(final_replay) == private_handle
         and recovery_sender.count == final_delivery
         and _database_state_digest(engine, all_tables) == final_state
@@ -6070,13 +6235,13 @@ def _run_failed_delivery_probe(engine: Engine) -> dict[str, Any]:
     return {
         "passed": _failure_replay_observation_passes(observation),
         "initial_failure_exact": bool(
-            observation["first_status"] == 201
+            observation["first_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["first_projection_exact"]
             and observation["pending_state_exact"]
             and observation["failed_delivery_exact"]
         ),
         "stable_replay_exact": bool(
-            observation["replay_status"] == 201
+            observation["replay_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["replay_projection_exact"]
             and observation["replay_ledger_delta"] == 0
             and observation["replay_delivery_delta"] == 0
@@ -6088,7 +6253,7 @@ def _run_failed_delivery_probe(engine: Engine) -> dict[str, Any]:
             and observation["mismatch_state_unchanged"]
         ),
         "recovery_exact": bool(
-            observation["recovery_status"] == 201
+            observation["recovery_status"] == REGISTRATION_ACCEPTED_STATUS
             and observation["public_handles_absent"]
             and observation["private_subject_stable"]
             and observation["stable_provider_key"]
@@ -6141,7 +6306,7 @@ def _run_same_content_race(engine: Engine) -> dict[str, Any]:
         app, _canonical_field_mutations(payload)[0], wire_key
     )
     stable_followups = bool(
-        exact_followup.status_code == 201
+        exact_followup.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(exact_followup) in handles
         and conflict_followup.status_code == 409
         and _response_error_code(conflict_followup) == "idempotency_conflict"
@@ -6155,9 +6320,7 @@ def _run_same_content_race(engine: Engine) -> dict[str, Any]:
         "conflict_fields": [],
         "public_handles_absent": bool(
             all(
-                _response_is_identifier_free(
-                    response, private_handle=private_winner
-                )
+                _response_is_identifier_free(response, private_handle=private_winner)
                 for response in [*responses, exact_followup, conflict_followup]
             )
         ),
@@ -6199,7 +6362,9 @@ def _run_mismatch_race_case(
     provider_overlap_completed = False
     winner_blocked = False
     with ThreadPoolExecutor(max_workers=2) as executor:
-        winner_future = executor.submit(_post_registration, app, winner_payload, wire_key)
+        winner_future = executor.submit(
+            _post_registration, app, winner_payload, wire_key
+        )
         if not sender.entered.wait(timeout=15):
             sender.release.set()
             return False
@@ -6230,9 +6395,7 @@ def _run_mismatch_race_case(
     # latter directly after the winner is terminal, without forming a
     # provider/ledger/authority lock cycle.
     ledger_tracker = _PgBackendTracker()
-    ledger_app, _ = _build_app_context(
-        engine, sender, backend_tracker=ledger_tracker
-    )
+    ledger_app, _ = _build_app_context(engine, sender, backend_tracker=ledger_tracker)
     control = factory()
     ledger_waited = False
     ledger_wait_response = None
@@ -6278,7 +6441,7 @@ def _run_mismatch_race_case(
     winner_replay = _post_registration(app, winner_payload, wire_key)
     loser_replay = _post_registration(app, loser_payload, wire_key)
     stable = bool(
-        winner_replay.status_code == 201
+        winner_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(winner_replay) == _response_handle(winner)
         and loser_replay.status_code == 409
         and _response_error_code(loser_replay) == "idempotency_conflict"
@@ -6305,9 +6468,7 @@ def _run_mismatch_race_case(
         ],
         "public_handles_absent": bool(
             all(
-                _response_is_identifier_free(
-                    response, private_handle=private_winner
-                )
+                _response_is_identifier_free(response, private_handle=private_winner)
                 for response in (
                     winner,
                     loser,
@@ -6334,7 +6495,7 @@ def _run_mismatch_race_case(
         "ledger_lock_wait_observed": ledger_waited,
         "ledger_wait_backend_count": ledger_tracker.count,
         "deadlock_free": bool(
-            winner.status_code == 201
+            winner.status_code == REGISTRATION_ACCEPTED_STATUS
             and loser.status_code == 409
             and ledger_phase_stable
         ),
@@ -6386,9 +6547,7 @@ def _run_failed_waiter_race(engine: Engine) -> dict[str, Any]:
                     if overlap_outbox_id is not None
                     else None
                 )
-                pending_during_overlap = _ledger_state_exact(
-                    overlap_record, "pending"
-                )
+                pending_during_overlap = _ledger_state_exact(overlap_record, "pending")
                 claimed_during_overlap = _claimed_delivery_state_exact(overlap_row)
             waiter_future = executor.submit(_post_registration, app, payload, wire_key)
             try:
@@ -6424,7 +6583,7 @@ def _run_failed_waiter_race(engine: Engine) -> dict[str, Any]:
     with _registration_finalizer_clock_scope(clock):
         exact_replay = _post_registration(app, payload, wire_key)
     stable = bool(
-        exact_replay.status_code == 201
+        exact_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _signup_pending_projection_is_exact(
             exact_replay, private_handle=_response_handle(exact_replay)
         )
@@ -6453,9 +6612,7 @@ def _run_failed_waiter_race(engine: Engine) -> dict[str, Any]:
         succeeded_exact = _ledger_state_exact(
             _ledger_for_key(session, wire_key), "succeeded"
         )
-        sent_row = (
-            session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
-        )
+        sent_row = session.get(OtpOutbox, outbox_id) if outbox_id is not None else None
         sent_exact = _sent_delivery_state_exact(sent_row)
         stable_provider_key = bool(
             _lower_hex_64(provider_key)
@@ -6466,7 +6623,7 @@ def _run_failed_waiter_race(engine: Engine) -> dict[str, Any]:
     with _registration_finalizer_clock_scope(clock):
         final_replay = _post_registration(recovery_app, payload, wire_key)
     final_replay_stable = bool(
-        final_replay.status_code == 201
+        final_replay.status_code == REGISTRATION_ACCEPTED_STATUS
         and _response_handle(final_replay) == private_handle
         and recovery_sender.count == final_delivery
         and _database_state_digest(engine, all_tables) == final_state
@@ -6483,9 +6640,7 @@ def _run_failed_waiter_race(engine: Engine) -> dict[str, Any]:
         ),
         "public_handles_absent": bool(
             all(
-                _response_is_identifier_free(
-                    response, private_handle=private_handle
-                )
+                _response_is_identifier_free(response, private_handle=private_handle)
                 for response in (
                     winner,
                     waiter,
@@ -6572,7 +6727,7 @@ def _run_integrity_translation_probe(engine: Engine) -> dict[str, Any]:
             setup_record.registration_id if setup_record is not None else None
         )
     identifier_free_setup_exact = bool(
-        created.status_code == 201
+        created.status_code == REGISTRATION_ACCEPTED_STATUS
         and _public_response_handle(created) is None
         and private_winner_id is not None
     )
@@ -6652,7 +6807,7 @@ def _run_integrity_translation_probe(engine: Engine) -> dict[str, Any]:
                 unknown_rethrown = False
 
     # Deterministically mutate the product fingerprint comparison seam. A
-    # changed request then false-replays as 201, which the real typed-conflict
+    # changed request then false-replays as accepted, which the typed-conflict
     # oracle must reject. Restore the seam before leaving this single thread.
     mutation_tables = REGISTRATION_GRAPH_TABLES + ("registration_idempotency_records",)
     mutation_state = _database_state_digest(engine, mutation_tables)
@@ -6677,7 +6832,7 @@ def _run_integrity_translation_probe(engine: Engine) -> dict[str, Any]:
         ),
     }
     fingerprint_bypass_killed = bool(
-        bypassed.status_code == 201
+        bypassed.status_code == REGISTRATION_ACCEPTED_STATUS
         and not _conflict_observation_passes(bypass_observation)
     )
     return {
@@ -6715,6 +6870,31 @@ def _behavior_rate_limit_scope() -> Iterator[None]:
             setattr(settings, field, value)
 
 
+@contextmanager
+def _behavior_process_scope() -> Iterator[None]:
+    """Install and exactly restore the gate's process-global authorities."""
+
+    from app.core import crypto
+    from app.core.config import settings
+    from app.core.crypto import KeyRing, override_keyring
+
+    previous_env = settings.app_env
+    previous_keyring = crypto._override
+    try:
+        settings.app_env = "testing"
+        override_keyring(
+            KeyRing(
+                active_version="v1",
+                secrets={"v1": b"nyay17-postgres-gate-encryption-v1"},
+                lookup_secret=b"nyay17-postgres-gate-stable-lookup-v1",
+            )
+        )
+        yield
+    finally:
+        override_keyring(previous_keyring)
+        settings.app_env = previous_env
+
+
 def _execute_behavior(scratch_url: str) -> dict[str, Any]:
     migration = {
         "upgrade": _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD),
@@ -6747,19 +6927,7 @@ def _execute_behavior(scratch_url: str) -> dict[str, Any]:
         if not schema_exact:
             raise ProductGateFailure("0018 ledger schema inventory drifted")
 
-        from app.core.config import settings
-        from app.core.crypto import KeyRing, override_keyring
-
-        previous_env = settings.app_env
-        settings.app_env = "testing"
-        override_keyring(
-            KeyRing(
-                active_version="v1",
-                secrets={"v1": b"nyay17-postgres-gate-encryption-v1"},
-                lookup_secret=b"nyay17-postgres-gate-stable-lookup-v1",
-            )
-        )
-        try:
+        with _behavior_process_scope():
             with _behavior_rate_limit_scope():
                 sequential = _run_sequential_probes(engine)
                 neutralized = _run_neutralized_ledger_probe(engine)
@@ -6775,9 +6943,6 @@ def _execute_behavior(scratch_url: str) -> dict[str, Any]:
                 mismatch_races = _run_mismatch_races(engine)
                 failed_waiter = _run_failed_waiter_race(engine)
                 integrity = _run_integrity_translation_probe(engine)
-        finally:
-            override_keyring(None)
-            settings.app_env = previous_env
         return {
             "runtime": {
                 "passed": runtime_passed,
@@ -6934,11 +7099,12 @@ def _assemble_assertions(
         _assertion(
             "CONTRACT-LEGACY-UNVERIFIABLE-CONFLICT",
             sequential["legacy_passed"],
-            cases_checked=1,
+            cases_checked=sequential["legacy_cases"],
         ),
         _assertion(
             "CONTRACT-ACTIVATION-RETIRES-REPLAY-UNIFORM",
             activation["verification_status"] == 200
+            and activation["verification_body_exact"]
             and activation["retired_exact"]
             and activation["lifecycle_advanced"]
             and activation["activation_then_retention_preserves_retired"]
@@ -6946,6 +7112,7 @@ def _assemble_assertions(
             and _retired_observation_passes(activation["terminal"]),
             cases_checked=3 + activation_retention_race["cases"],
             verification_exact=activation["verification_status"] == 200,
+            verification_body_exact=activation["verification_body_exact"],
             retired_exact=activation["retired_exact"],
             lifecycle_exact=activation["lifecycle_advanced"],
             post_retention_exact=activation[
@@ -6954,9 +7121,7 @@ def _assemble_assertions(
             race_exact=activation_retention_race["passed"],
             race_wait_one=activation_retention_race.get("activation_waited", False),
             race_wait_two=activation_retention_race.get("both_waited", False),
-            race_backend_exact=activation_retention_race.get(
-                "backend_exact", False
-            ),
+            race_backend_exact=activation_retention_race.get("backend_exact", False),
             race_activation_status=activation_retention_race.get(
                 "activation_status_exact", False
             ),
@@ -6972,9 +7137,7 @@ def _assemble_assertions(
             race_row_erased=activation_retention_race.get("row_erased", False),
             race_terminal=activation_retention_race.get("terminal_passed", False),
             race_sender_exact=activation_retention_race.get("sender_exact", False),
-            race_retention_wins=activation_retention_race.get(
-                "retention_wins", False
-            ),
+            race_retention_wins=activation_retention_race.get("retention_wins", False),
         ),
         _assertion(
             "CONTRACT-RETENTION-ERASED-TOMBSTONE-UNIFORM",
@@ -7002,15 +7165,9 @@ def _assemble_assertions(
             resend_pre_relay=pending_resend.get("pre_relay_passed", False),
             resend_crosslink=pending_resend.get("crosslink_passed", False),
             resend_helper_waits=pending_resend.get("helper_waits_passed", False),
-            resend_ordinary_checks=pending_resend.get(
-                "ordinary_diagnostics", {}
-            ),
-            resend_concurrent_checks=pending_resend.get(
-                "concurrent_diagnostics", {}
-            ),
-            resend_pre_relay_checks=pending_resend.get(
-                "pre_relay_diagnostics", {}
-            ),
+            resend_ordinary_checks=pending_resend.get("ordinary_diagnostics", {}),
+            resend_concurrent_checks=pending_resend.get("concurrent_diagnostics", {}),
+            resend_pre_relay_checks=pending_resend.get("pre_relay_diagnostics", {}),
         ),
         _assertion(
             "CONTRACT-FAILED-DELIVERY-REPLAY-STABLE",
@@ -7022,14 +7179,10 @@ def _assemble_assertions(
             failure_mismatch=failed.get("mismatch_exact", False),
             failure_recovery=failed.get("recovery_exact", False),
             retention_probe=retention_purge["passed"],
-            retention_anonymise=retention_purge.get(
-                "pending_anonymise_passed", False
-            ),
+            retention_anonymise=retention_purge.get("pending_anonymise_passed", False),
             retention_delete=retention_purge.get("pending_delete_passed", False),
             retention_succeeded=retention_purge.get("succeeded_passed", False),
-            retention_pending_sent=retention_purge.get(
-                "pending_sent_passed", False
-            ),
+            retention_pending_sent=retention_purge.get("pending_sent_passed", False),
             retention_races=retention_purge.get("races_passed", False),
             retention_anonymise_checks=retention_purge.get(
                 "pending_anonymise_diagnostics", {}
@@ -7037,9 +7190,7 @@ def _assemble_assertions(
             retention_delete_checks=retention_purge.get(
                 "pending_delete_diagnostics", {}
             ),
-            retention_succeeded_checks=retention_purge.get(
-                "succeeded_diagnostics", {}
-            ),
+            retention_succeeded_checks=retention_purge.get("succeeded_diagnostics", {}),
             retention_finalizer_first=retention_purge.get(
                 "race_finalizer_first", False
             ),

@@ -70,9 +70,9 @@ async function seed(page, theme) {
     // eslint-disable-next-line no-global-assign
     Date = class extends _Date { constructor(...a) { super(...(a.length ? a : [fixed])); } static now() { return fixed; } };
     try {
-      Object.keys(localStorage).filter((k) => k.startsWith('ls-cal-') || k === 'ls-theme').forEach((k) => localStorage.removeItem(k));
+      Object.keys(localStorage).filter((k) => k.startsWith('ls-cal-') || k === 'nyayone.theme.v1').forEach((k) => localStorage.removeItem(k));
       localStorage.setItem(filtersKey, JSON.stringify(filters));
-      localStorage.setItem('ls-theme', theme);
+      localStorage.setItem('nyayone.theme.v1', theme);
     } catch { /* ignore */ }
   }, { clockIso: FIXTURE.clockIso, filtersKey: `ls-cal-filters-${FIXTURE.studentId}`, filters: FIXTURE.filters, theme });
 }

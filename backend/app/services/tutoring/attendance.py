@@ -31,6 +31,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Callable
 
 import sqlalchemy as sa
 from sqlalchemy import select
@@ -156,6 +157,7 @@ def record(
     actor_user_id: uuid.UUID | None,
     actor_role: str,
     now: datetime | None = None,
+    require_effect_authority: Callable[[], None] | None = None,
 ) -> AttendanceMutation:
     """Record attendance/completion. Tutor or admin only, AFTER the end. No commit."""
     now = now or utcnow()
@@ -166,12 +168,21 @@ def record(
     if actor_user_id is None:
         raise Forbidden("an actor id is required")
     sess = sessions_service.get_session(
-        session, session_id, user_id=actor_user_id, role=actor_role
+        session,
+        session_id,
+        user_id=actor_user_id,
+        role=actor_role,
+        for_update=require_effect_authority is not None,
     )
     if actor_role == "tutor":
         tutor = session.get(TutorProfile, sess.tutor_id)
         if tutor is None or tutor.user_id != actor_user_id:  # pragma: no cover
             raise NotFound("session not found", resource="tutoring_session")
+    # The route supplies this only for cookie-backed effects. Domain authority is
+    # locked first; the exact presented AuthSession is then re-locked and
+    # revalidated before any replay verdict, mutation, audit, outbox, or commit.
+    if require_effect_authority is not None:
+        require_effect_authority()
     if sess.status not in ("confirmed", "rescheduled"):
         raise AttendanceStateInvalid(
             "attendance can only be recorded for a live session", status=sess.status

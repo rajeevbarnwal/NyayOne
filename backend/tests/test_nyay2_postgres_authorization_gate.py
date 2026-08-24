@@ -22,6 +22,7 @@ from scripts.nyay2_postgres_authorization_gate import (
     LIBPQ_AMBIENT_KEYS,
     ORIGIN_MATRIX_CASES,
     REQUIRED_ASSERTION_IDS,
+    SIGNUP_ACCEPTED_STATUS,
     Blocked,
     ProductGateFailure,
     ScratchCleanupFailure,
@@ -49,6 +50,7 @@ from scripts.nyay2_postgres_authorization_gate import (
     _seed_actor,
     _seed_private_signup_flow,
     _signup_registration_headers,
+    _signup_registration_payload,
     _trusted_mutation_headers,
     _unsafe_flow_graph_for_mutation,
 )
@@ -1299,6 +1301,148 @@ def test_signup_bootstrap_uses_the_current_idempotency_header_contract():
         "Idempotency-Key": "nyay2-postgres-gate-signup-0001",
     }
     assert _trusted_mutation_headers() == {"Origin": gate.TRUSTED_ORIGIN}
+
+
+def test_signup_bootstrap_uses_current_separate_legal_acknowledgement_contract():
+    assert len(REQUIRED_ASSERTION_IDS) == 21
+    assert SIGNUP_ACCEPTED_STATUS == 202
+    assert _signup_registration_payload("7" * 10) == {
+        "first_name": "Gate",
+        "last_name": "Signup",
+        "mobile": "7" * 10,
+        "dob": "2000-01-02",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
+    }
+    assert "consent" not in _signup_registration_payload("7" * 10)
+
+
+def test_profile_and_reviewer_probes_use_current_cas_request_contracts():
+    assert gate._profile_payload(
+        "owner-a", expected_profile_version=3
+    ) == {
+        "expected_profile_version": 3,
+        "college": "NALSAR University of Law",
+        "year_of_study": "4th",
+        "enrolment_number": "QA/874440/2026",
+        "institutional_email": "gate-owner-a@college.invalid",
+        "bar_enrolment_number": None,
+    }
+
+
+def test_email_request_and_status_probe_uses_current_public_internal_projection():
+    assert gate._email_status_projection_passes(
+        email_status=202,
+        email_payload={"institutional_email_status": "pending"},
+        status_status=200,
+        status_payload={"status": "in_review"},
+    )
+    for field, value in (
+        ("email_status", 422),
+        ("email_payload", {"institutional_email_status": "not_provided"}),
+        ("status_status", 401),
+        ("status_payload", {"status": "pending"}),
+    ):
+        observation = {
+            "email_status": 202,
+            "email_payload": {"institutional_email_status": "pending"},
+            "status_status": 200,
+            "status_payload": {"status": "in_review"},
+        }
+        observation[field] = value
+        assert not gate._email_status_projection_passes(**observation)
+    assert gate._institutional_email_request_payload() == {}
+    assert gate._verification_transition_payload(
+        "00000000-0000-4000-8000-000000000001",
+        status="verified",
+        expected_profile_version=4,
+    ) == {
+        "registration_id": "00000000-0000-4000-8000-000000000001",
+        "status": "verified",
+        "expected_profile_version": 4,
+    }
+
+
+def test_seed_actor_starts_at_current_academic_mutation_prerequisite(
+    db_session, engine
+):
+    from app.models.registration import StudentProfile
+
+    factory = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,
+        class_=Session,
+    )
+    actor = _seed_actor(factory, label="current-profile-prerequisite")
+
+    with factory() as session:
+        profile = session.scalar(
+            select(StudentProfile).where(
+                StudentProfile.registration_id == actor["registration_id"]
+            )
+        )
+        assert profile is not None
+        assert profile.profile_version == 1
+        assert profile.preferred_language == "en"
+        assert profile.city == "Gate City"
+
+
+def test_origin_mutant_removes_both_current_cookie_origin_backstops():
+    source = Path(gate.__file__).read_text(encoding="utf-8")
+    assert "core_auth.require_trusted_cookie_origin = unsafe_origin_guard" in source
+    assert (
+        "app.dependency_overrides[original_route_origin_guard] = "
+        "unsafe_origin_guard" in source
+    )
+    assert "app.dependency_overrides.pop(original_route_origin_guard, None)" in source
+
+
+def test_current_composite_mutants_remove_every_independent_backstop():
+    source = Path(gate.__file__).read_text(encoding="utf-8")
+    compact_source = " ".join(source.split())
+    assert "original_profile_authority = profile_service.resolve_authority" in source
+    assert "profile_service.resolve_authority = unsafe_profile_authority" in source
+    assert "profile_service.resolve_authority = original_profile_authority" in source
+    assert (
+        "original_reviewer_session_lock = ( "
+        "login_service.lock_presented_session_for_effect )" in compact_source
+    )
+    assert (
+        "login_service.lock_presented_session_for_effect = "
+        "( unsafe_reviewer_session_lock )" in compact_source
+    )
+    assert (
+        "login_service.lock_presented_session_for_effect = "
+        "( original_reviewer_session_lock )" in compact_source
+    )
+
+
+def test_ownership_mutant_prepares_every_fallible_input_before_global_overrides():
+    source = Path(gate.__file__).read_text(encoding="utf-8")
+    payload = source.index('mutant_owner_payload = _profile_payload(')
+    endpoint_override = source.index(
+        "endpoint._owned_registration = unsafe_owned_registration"
+    )
+    authority_override = source.index(
+        "profile_service.resolve_authority = unsafe_profile_authority"
+    )
+    restoration = source.index(
+        "profile_service.resolve_authority = original_profile_authority"
+    )
+
+    # Database lookup and payload validation can raise. They must finish before
+    # either process-global production function is replaced; the request itself
+    # remains covered by the existing try/finally restoration boundary.
+    assert payload < endpoint_override < authority_override < restoration
+
+
+def test_owner_audit_probe_tracks_the_canonical_profile_event():
+    source = Path(gate.__file__).read_text(encoding="utf-8")
+    assert 'AuditEvent.action == "student.profile.section_updated"' in source
+    assert 'AuditEvent.action == "student.profile.academic_updated"' not in source
 
 
 def test_origin_matrix_inventory_is_exact_and_includes_duplicate_header_case():

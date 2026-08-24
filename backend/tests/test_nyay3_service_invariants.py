@@ -60,7 +60,10 @@ def _registered(session: Session, *, login_eligible: bool = False) -> StudentReg
         last_name="Nair",
         mobile=MOBILE,
         dob="2004-03-14",
-        consent={"accepted": True},
+        terms_accepted=True,
+        terms_version="terms.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy.v1",
     )
     result = register_student(session, request, now=NOW)
     registration = result.registration

@@ -37,10 +37,52 @@ import {
   tutoringKeys,
   tutoringRetry,
 } from './tutoringApi';
+import { FakeLockManager, stubNavigatorLocks } from '../../../test/fakeLockManager';
+
+function emptyStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() { return values.size; },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => { values.delete(key); },
+    setItem: (key, value) => { values.set(key, value); },
+  };
+}
+
+class LeaseBroadcastChannel {
+  static readonly channels = new Map<string, Set<LeaseBroadcastChannel>>();
+
+  readonly name: string;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(name: string) {
+    this.name = name;
+    const peers = LeaseBroadcastChannel.channels.get(name) ?? new Set();
+    peers.add(this);
+    LeaseBroadcastChannel.channels.set(name, peers);
+  }
+
+  postMessage(data: unknown): void {
+    for (const peer of LeaseBroadcastChannel.channels.get(this.name) ?? []) {
+      if (peer !== this) queueMicrotask(() => peer.onmessage?.({ data } as MessageEvent));
+    }
+  }
+
+  close(): void {
+    LeaseBroadcastChannel.channels.get(this.name)?.delete(this);
+  }
+
+  static reset(): void {
+    LeaseBroadcastChannel.channels.clear();
+  }
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  LeaseBroadcastChannel.reset();
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -164,7 +206,8 @@ describe('A1 tutor search', () => {
     }));
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/v1/tutors?');
-    expect(new Headers(init.headers).get('X-Actor-Claims')).toBeTruthy();
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+    expect(init.credentials).toBe('include');
   });
 
   it('maps a 422 unknown-sort refusal to the typed code', async () => {
@@ -819,6 +862,69 @@ describe('retry predicate: 4xx never, 5xx and transport failures once', () => {
  * ========================================================================== */
 
 describe('transport', () => {
+  it('holds the M-01 staff request lease through the complete response before cookie rotation', async () => {
+    const locks = new FakeLockManager();
+    stubNavigatorLocks(locks);
+    const browserWindow = new EventTarget() as EventTarget & {
+      localStorage: Storage;
+      sessionStorage: Storage;
+    };
+    browserWindow.localStorage = emptyStorage();
+    browserWindow.sessionStorage = emptyStorage();
+    vi.stubGlobal('window', browserWindow);
+    vi.stubGlobal('document', {});
+    vi.stubGlobal('BroadcastChannel', LeaseBroadcastChannel);
+    vi.resetModules();
+    const boundary = await import('./studentBrowserContext');
+    const api = await import('./tutoringApi');
+    const subscription = boundary.subscribeStudentAuthTransitions({
+      onStart: () => undefined,
+      onEnd: () => undefined,
+      onUnavailable: () => undefined,
+    });
+    await subscription.ready;
+
+    let releaseResponse!: () => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => {
+      releaseResponse = () => resolve(jsonResponse({
+        session_id: SESSION_WIRE.id,
+        state: 'recorded',
+        version: 1,
+        recorded_by_role: 'admin',
+        recorded_at: '2026-08-23T00:00:00+00:00',
+        confirmed_at: null,
+        disputed_at: null,
+        resolved_at: null,
+        resolution: null,
+        session_status: 'completed',
+      }));
+    })));
+
+    const completion = api.completeSession(SESSION_WIRE.id, {
+      userId: '99999999-9999-4999-8999-999999999999',
+      role: 'admin',
+    });
+    await vi.waitFor(() => expect(releaseResponse).toBeTypeOf('function'));
+    const transition = boundary.startStudentAuthTransition();
+    const transitionRun = transition.run(async () => undefined);
+    await vi.waitFor(() => {
+      expect([
+        ...locks.heldModes(boundary.STUDENT_AUTH_SESSION_LOCK),
+        ...locks.queuedModes(boundary.STUDENT_AUTH_SESSION_LOCK),
+      ]).toContain('exclusive');
+    });
+    const heldBeforeResponse = locks.heldModes(boundary.STUDENT_AUTH_SESSION_LOCK);
+    const queuedBeforeResponse = locks.queuedModes(boundary.STUDENT_AUTH_SESSION_LOCK);
+
+    releaseResponse();
+    await completion;
+    await transitionRun;
+    await boundary.finishStudentAuthTransition(transition);
+    expect(heldBeforeResponse).toEqual(['shared']);
+    expect(queuedBeforeResponse).toEqual(['exclusive']);
+    subscription.unsubscribe();
+  });
+
   it('falls back to an http_<status> code when the body is not an envelope', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response('<html>gateway</html>', { status: 502 }),

@@ -1,5 +1,5 @@
 /**
- * LegalSaathi stakeholder walkthrough recorder.
+ * NyayOne stakeholder walkthrough recorder.
  *
  * Records the implemented Wave 1–3 journeys against a running local stack.
  * It uses only deterministic demo actors, the deterministic payment adapter
@@ -135,7 +135,7 @@ async function chapter(number, label, route, ready) {
 }
 
 // Wave 1 — registration, validation, profile and privacy.
-await chapter(1, 'Login and registration', '/s-03', 'text=LegalSaathi');
+await chapter(1, 'Login and registration', '/s-03', 'text=NyayOne');
 await page.getByRole('tab', { name: 'Register as student' }).click();
 await page.getByLabel('First name').fill('Aarav');
 await page.getByLabel('Middle name').fill('Demo');
@@ -248,7 +248,7 @@ await page.getByLabel('Credential identifier').fill(`DEMO-${Date.now().toString(
 await page.getByLabel('Choose evidence').setInputFiles({
   name: 'stakeholder-demo-certificate.pdf',
   mimeType: 'application/pdf',
-  buffer: Buffer.from('%PDF-1.7\nLegalSaathi stakeholder demo evidence'),
+  buffer: Buffer.from('%PDF-1.7\nNyayOne stakeholder demo evidence'),
 });
 await page.getByRole('button', { name: 'Save credential' }).click();
 await page.waitForURL(/\/s-84\?credential=/, { timeout: 30_000 });
@@ -270,7 +270,7 @@ report.chapters.push({ number: 27, label: 'Credential QR and secure share', rout
 
 await page.evaluate(() => {
   const el = document.createElement('div');
-  el.textContent = 'LegalSaathi · verified journeys from registration to trusted collaboration';
+  el.textContent = 'NyayOne · verified journeys from registration to trusted collaboration';
   Object.assign(el.style, {
     position: 'fixed', inset: '0', zIndex: '2147483647', display: 'grid', placeItems: 'center',
     color: '#fff', background: 'linear-gradient(135deg,#142e25,#38346d)',
@@ -286,7 +286,7 @@ report.credentialId = credentialId;
 await writeFile(path.join(OUT, 'walkthrough-report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 await context.close();
 const rawVideo = await video.path();
-const finalVideo = path.join(OUT, 'LegalSaathi_End_to_End_Stakeholder_Demo.webm');
+const finalVideo = path.join(OUT, 'NyayOne_End_to_End_Stakeholder_Demo.webm');
 await rename(rawVideo, finalVideo);
 await browser.close();
 console.log(JSON.stringify({

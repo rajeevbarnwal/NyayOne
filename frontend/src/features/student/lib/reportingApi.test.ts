@@ -60,6 +60,8 @@ describe('private internship-reporting API contract', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/v1/internship-reports');
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('internship-report-idempotency-1');
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+    expect(init.credentials).toBe('include');
     expect(JSON.parse(String(init.body))).toEqual(expect.objectContaining({
       organisation_name: 'Example Chambers',
       listing_application_ref: 'APP-2026-86',

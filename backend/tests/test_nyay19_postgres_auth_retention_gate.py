@@ -10,6 +10,7 @@ against PostgreSQL 16 plus pgvector.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import inspect as pyinspect
 import json
 from types import SimpleNamespace
@@ -87,8 +88,81 @@ def test_historical_lifecycle_and_application_head_are_exact():
         "script_location", str(gate.BACKEND / "app/db/migrations")
     )
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == [gate.PINNED_HEAD]
+    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
+    assert gate.APPLICATION_HEAD_SHA256 == hashlib.sha256(
+        (gate.BACKEND / "app/db/migrations/versions" / gate.APPLICATION_HEAD_FILENAME).read_bytes()
+    ).hexdigest()
+    assert scripts.get_heads() == [gate.APPLICATION_HEAD]
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == gate.PINNED_HEAD
     assert scripts.get_revision(gate.PINNED_HEAD).down_revision == gate.PREVIOUS_REVISION
+
+
+def test_current_behavior_probe_installs_and_verifies_application_head():
+    """Current ORM/HTTP probes must never execute on the frozen 0020 schema."""
+
+    source = pyinspect.getsource(gate._run_behavior_probe)
+    upgrade = source.index('"upgrade", APPLICATION_HEAD')
+    revision = source.index("_current_revision(engine) != APPLICATION_HEAD")
+    row_count = source.index("_revision_row_count(engine) != 1")
+    app = source.index("_build_behavior_app(engine, sender)")
+
+    assert upgrade < revision < row_count < app
+    assert '"upgrade", PINNED_HEAD' not in source
+
+
+def test_current_behavior_registration_seed_has_one_profile_authority(tmp_path):
+    """Bypass fixtures must preserve the current one-profile invariant."""
+
+    from app.core.crypto import KeyRing, override_keyring
+    from app.models.registration import StudentProfile
+    from tests import dbtemplate
+
+    engine = gate.create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'nyay19-current-profile.db'}"
+    )
+    dbtemplate.create_all(engine)
+    override_keyring(
+        KeyRing(
+            active_version="v1",
+            secrets={"v1": b"nyay19-current-profile-encryption"},
+            lookup_secret=b"nyay19-current-profile-lookup",
+        )
+    )
+    factory = gate.sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        _user_id, registration_id = gate._seed_active_registration(
+            factory, "9100091919"
+        )
+        with factory() as session:
+            profiles = list(
+                session.scalars(
+                    gate.select(StudentProfile).where(
+                        StudentProfile.registration_id == registration_id
+                    )
+                )
+            )
+        assert len(profiles) == 1
+        assert profiles[0].profile_version == 1
+    finally:
+        override_keyring(None)
+        engine.dispose()
+
+
+def test_frozen_lifecycle_validates_exact_release_not_current_metadata_drift():
+    """A reviewed 0020 lifecycle remains valid when 0021 is the app head."""
+
+    source = pyinspect.getsource(gate._run_migration_lifecycle_probe)
+
+    assert '_run_alembic(scratch_url, "check")' not in source
+    release = source[source.index('"pinned_release_exact"') :]
+    for authority in (
+        'inventory.get("pinned_head_hash_exact")',
+        'inventory.get("forward_application_head_exact")',
+        "head_revision == PINNED_HEAD",
+        "head_rows == 1",
+        "_schema_observation_passes(schema_observation)",
+    ):
+        assert authority in release
 
 
 def test_immutable_migration_inventory_is_pinned_through_0019():
@@ -108,6 +182,9 @@ def test_immutable_migration_inventory_is_pinned_through_0019():
         "file_inventory_exact": True,
         "hash_inventory_exact": True,
         "ledger_crosscheck_exact": True,
+        "pinned_head_hash_exact": True,
+        "application_head_hash_exact": True,
+        "forward_application_head_exact": True,
     }
 
 
@@ -127,11 +204,36 @@ def test_immutable_migration_oracle_rejects_changed_post_ledger_file(tmp_path):
     for filename in gate.POST_LEDGER_HISTORICAL_SHA256:
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
+    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
+        source = source_root / "backend/app/db/migrations/versions" / filename
+        (versions / filename).write_bytes(source.read_bytes())
     ledger_target = tmp_path / "backend/app/db/migrations/MIGRATION_SHA256_LEDGER.json"
     ledger_target.write_text(json.dumps(ledger), encoding="utf-8")
     assert _historical_migration_bytes_unchanged(tmp_path)
     changed = versions / "0019_otp_security_authority.py"
     changed.write_bytes(changed.read_bytes() + b"\n# unsafe rewrite\n")
+    assert not _historical_migration_bytes_unchanged(tmp_path)
+
+
+def test_immutable_migration_oracle_rejects_changed_application_head_body(tmp_path):
+    source_root = gate.BACKEND.parent
+    versions = tmp_path / "backend/app/db/migrations/versions"
+    versions.mkdir(parents=True)
+    for filename in gate.HISTORICAL_MIGRATION_SHA256:
+        source = source_root / "backend/app/db/migrations/versions" / filename
+        (versions / filename).write_bytes(source.read_bytes())
+    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
+        source = source_root / "backend/app/db/migrations/versions" / filename
+        (versions / filename).write_bytes(source.read_bytes())
+    ledger_source = source_root / "backend/app/db/migrations/MIGRATION_SHA256_LEDGER.json"
+    ledger_target = tmp_path / "backend/app/db/migrations/MIGRATION_SHA256_LEDGER.json"
+    ledger_target.parent.mkdir(parents=True, exist_ok=True)
+    ledger_target.write_bytes(ledger_source.read_bytes())
+    assert _historical_migration_bytes_unchanged(tmp_path)
+    application_head = versions / gate.APPLICATION_HEAD_FILENAME
+    application_head.write_bytes(application_head.read_bytes() + b"\n# body mutant\n")
+    inventory = _historical_migration_inventory(tmp_path)
+    assert inventory["application_head_hash_exact"] is False
     assert not _historical_migration_bytes_unchanged(tmp_path)
 
 
@@ -142,6 +244,9 @@ def test_immutable_migration_oracle_rejects_missing_and_extra_historical_files(
     versions = tmp_path / "backend/app/db/migrations/versions"
     versions.mkdir(parents=True)
     for filename in gate.HISTORICAL_MIGRATION_SHA256:
+        source = source_root / "backend/app/db/migrations/versions" / filename
+        (versions / filename).write_bytes(source.read_bytes())
+    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
     ledger_source = (
@@ -1165,9 +1270,10 @@ def test_privacy_delete_requires_both_legacy_account_and_registration_freezes():
     (
         "post_ddl_exact_head_validation",
         "post_ddl_validation_failure_rolled_back",
+        "pinned_release_exact",
     ),
 )
-def test_migration_oracle_requires_post_ddl_validation_and_rollback(field):
+def test_migration_oracle_requires_exact_release_validation_and_rollback(field):
     baseline = _oracle_baselines()["migration"]
     mutant = deepcopy(baseline)
     mutant[field] = False

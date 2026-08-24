@@ -6,20 +6,19 @@ import uuid
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 -- register every mapped table
 from app.api.v1 import auth_student as ep
+from app.api.v1 import student_settings as profile_ep
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.models.registration import StudentRegistration, StudentVerification
-from app.schemas.registration import InstitutionalEmailVerificationRequest
 
 
 class CapturingSender:
@@ -40,6 +39,14 @@ class CapturingSender:
         return receipt
 
 
+def _assert_private_profile_projection(response) -> None:
+    assert response.headers["cache-control"] == "private, no-store"
+    assert "cookie" in {
+        token.strip().casefold()
+        for token in response.headers["vary"].split(",")
+    }
+
+
 @pytest.fixture()
 def ctx():
     engine = create_engine(
@@ -55,14 +62,18 @@ def ctx():
         with factory() as session:
             try:
                 yield session
-                session.commit()
             except Exception:
                 session.rollback()
                 raise
+            else:
+                # Mirror app.db.session.get_session: endpoint/service owns any
+                # write commit, and successful uncommitted work is discarded.
+                session.rollback()
 
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(ep.router, prefix="/api/v1")
+    app.include_router(profile_ep.router, prefix="/api/v1")
     app.dependency_overrides[get_session] = prod_session
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
     app.dependency_overrides[ep.get_outbox_session_factory] = lambda: factory
@@ -85,10 +96,13 @@ def _registration(
             "last_name": "Nair",
             "mobile": "9876543210",
             "dob": "2004-03-14",
-            "consent": {"accepted": True},
+            "terms_accepted": True,
+            "terms_version": "terms-2026-08.v1",
+            "privacy_notice_acknowledged": True,
+            "privacy_notice_version": "privacy-2026-08.v1",
         },
     )
-    assert registered.status_code == 201
+    assert registered.status_code == 202
     with factory() as session:
         registration = session.scalar(select(StudentRegistration))
         assert registration is not None
@@ -99,9 +113,24 @@ def _registration(
     )
     assert verified.status_code == 200
     client.headers["Origin"] = settings.cors_origins[0]
+    personal = client.patch(
+        "/api/v1/student/profile/personal",
+        json={
+            "expected_profile_version": 1,
+            "first_name": "Aditi",
+            "middle_name": None,
+            "last_name": "Nair",
+            "date_of_birth": "2004-03-14",
+            "preferred_language": "en",
+            "city": "Bengaluru",
+            "pronouns": None,
+        },
+    )
+    assert personal.status_code == 200
     saved = client.patch(
         "/api/v1/auth/student/profile",
         json={
+            "expected_profile_version": 2,
             "college": "National Law School of India University",
             "year_of_study": "3rd year",
             "enrolment_number": "KA/1234/2023",
@@ -110,15 +139,6 @@ def _registration(
     )
     assert saved.status_code == 200
     return registration_id
-
-
-def test_email_length_boundary_is_exactly_254():
-    suffix = "@nls.ac.in"
-    at_limit = f"{'a' * (254 - len(suffix))}{suffix}"
-    request = InstitutionalEmailVerificationRequest(institutional_email=at_limit)
-    assert len(request.institutional_email) == 254
-    with pytest.raises(ValidationError):
-        InstitutionalEmailVerificationRequest(institutional_email=f"a{at_limit}")
 
 
 @pytest.mark.parametrize(
@@ -158,35 +178,66 @@ def test_invalid_email_is_typed_422_with_zero_mutation(ctx, invalid_email: str):
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == audit_before
 
 
-def test_valid_saved_email_is_accepted_and_audited_without_pii(ctx):
+def test_saved_email_verification_request_is_pending_projection_and_bounded_audit(ctx):
     client, factory, sender = ctx
     registration_id = _registration(client, factory, sender)
+    with factory() as session:
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        assert verification.status == "pending"
 
     response = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={"institutional_email": "  ADITI@NLS.AC.IN  "},
+        json={},
     )
 
     assert response.status_code == 202
-    assert response.json() == {"status": "pending"}
+    _assert_private_profile_projection(response)
+    projection = response.json()
+    assert projection["institutional_email_status"] == "pending"
+    assert projection["profile"]["academic"]["institutional_email"] == "aditi@nls.ac.in"
     with factory() as session:
-        audit = session.scalar(
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        assert verification.status == "in_review"
+        events = session.scalars(
             select(AuditEvent).where(
                 AuditEvent.action == "student.verification.email_requested"
             )
-        )
-        assert audit is not None
-        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
-        assert audit.actor_user_id == registration.user_id
-        assert audit.actor_role == "student"
-        assert audit.after_state == {
-            "registration_id": registration_id,
+        ).all()
+        assert len(events) == 1
+        event = events[0]
+        assert event.resource_id is None
+        assert event.after_state == {
+            "outcome": "accepted",
             "status": "pending",
+            "profile_version": 3,
         }
-        assert "aditi@nls.ac.in" not in str(audit.after_state).lower()
+        serialized = str(event.after_state)
+        assert "aditi@nls.ac.in" not in serialized
+        assert registration_id not in serialized
+
+    replay = client.post(
+        "/api/v1/auth/student/verification/email/request", json={}
+    )
+    assert replay.status_code == 202
+    _assert_private_profile_projection(replay)
+    assert replay.json() == projection
+    with factory() as session:
+        assert session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "student.verification.email_requested")
+        ) == 1
 
 
-def test_different_email_is_typed_422_and_not_audited(ctx):
+def test_client_selected_email_is_typed_422_and_not_audited(ctx):
     client, factory, sender = ctx
     _registration(client, factory, sender)
 
@@ -196,14 +247,52 @@ def test_different_email_is_typed_422_and_not_audited(ctx):
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == {
-        "code": "institutional_email_mismatch",
-        "field": "institutional_email",
-        "message": "Use the institutional email saved in your academic profile",
-    }
+    assert response.json()["detail"]["code"] == "validation_error"
+    assert response.json()["detail"]["field"] == "institutional_email"
     with factory() as session:
         assert session.scalar(
             select(func.count())
             .select_from(AuditEvent)
             .where(AuditEvent.action == "student.verification.email_requested")
         ) == 0
+
+
+def test_verification_request_rejects_query_selector_and_untrusted_origins(ctx):
+    client, factory, sender = ctx
+    registration_id = _registration(client, factory, sender)
+    with factory() as session:
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        before = (verification.method, verification.status, verification.updated_at)
+
+    query = client.post(
+        f"/api/v1/auth/student/verification/email/request?registration_id={registration_id}",
+        json={},
+    )
+    assert query.status_code == 422
+    assert query.json()["detail"]["code"] == "validation_error"
+
+    for origin in (
+        None,
+        "https://attacker.example",
+        f"{settings.cors_origins[0]}.attacker.example",
+    ):
+        if origin is None:
+            client.headers.pop("Origin", None)
+        else:
+            client.headers["Origin"] = origin
+        denied = client.post(
+            "/api/v1/auth/student/verification/email/request", json={}
+        )
+        assert denied.status_code == 403
+
+    with factory() as session:
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        assert (verification.method, verification.status, verification.updated_at) == before

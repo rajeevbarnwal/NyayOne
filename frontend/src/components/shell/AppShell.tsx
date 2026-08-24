@@ -7,7 +7,7 @@ import type { ThemeMode } from '../../hooks/useTheme';
  * Option J "Chambers" app shell (SAATHI-343): desktop chambers rail + top
  * command bar + Ask command spine, and a mobile bottom nav with a central Ask.
  * Wraps the existing S-01..S-99 routes (children) without changing routing.
- * Theme is owned by App (single ls-theme source) and passed in.
+ * Theme is owned by App (single NyayOne device-preference source) and passed in.
  */
 export function AppShell({
   children,
@@ -37,8 +37,8 @@ export function AppShell({
       {/* Desktop chambers rail */}
       <nav className="ls-rail" aria-label="Primary">
         <div className="ls-rail__brand">
-          <span className="ls-rail__mark" aria-hidden>LS</span>
-          <span className="ls-rail__word">Legal<span className="brand-accent">Saathi</span></span>
+          <span className="ls-rail__mark" aria-hidden>N1</span>
+          <span className="ls-rail__word">Nyay<span className="brand-accent">One</span></span>
         </div>
         <ul className="ls-rail__list">
           {railItems.map((it) => (
@@ -55,7 +55,7 @@ export function AppShell({
       <div className="ls-main">
         {/* Top command bar */}
         <header className="ls-topbar">
-          <button type="button" className="ls-ask" aria-label="Ask LegalSaathi">
+          <button type="button" className="ls-ask" aria-label="Ask NyayOne">
             <span className="ls-ask__glyph" aria-hidden>⌕</span>
             <span className="ls-ask__text">Ask a question or search…</span>
           </button>
@@ -82,7 +82,7 @@ export function AppShell({
               <span className="ls-bnav__label">{it.label}</span>
             </NavLink>
           ))}
-          <button type="button" className="ls-bnav__ask" aria-label="Ask LegalSaathi">
+          <button type="button" className="ls-bnav__ask" aria-label="Ask NyayOne">
             <span aria-hidden>⌕</span>
           </button>
           {splitBottomNav().right.map((it) => (
@@ -123,7 +123,7 @@ const V34_MOBILE_NAV = [
 function V34ShellIcon({ name, size = 21 }: { name: string; size?: number }) {
   const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
-    <svg className={`v34c-icon v34c-icon--${name}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`v34c-icon v34c-icon--${name}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" tabIndex={-1} focusable="false">
       {name === 'back' && <path d="m15 5-7 7 7 7" {...line}/>}
       {name === 'sun' && <><circle cx="12" cy="12" r="4" {...line}/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" {...line}/></>}
       {name === 'moon' && <path d="M20 15A8.5 8.5 0 0 1 9 4a9 9 0 1 0 11 11Z" {...line}/>}
@@ -133,15 +133,23 @@ function V34ShellIcon({ name, size = 21 }: { name: string; size?: number }) {
       {name === 'career' && <><rect x="3" y="7" width="18" height="13" rx="2" {...line}/><path d="M9 7V4h6v3m-3 4v5m-2-2h4" {...line}/></>}
       {name === 'community' && <><path d="M4 5h16v11H9l-5 4V5Z" {...line}/><path d="M8 9h8m-8 3h5" {...line}/></>}
       {name === 'research' && <><circle cx="10" cy="10" r="6" {...line}/><path d="m14.5 14.5 5 5M10 7v6m-3-3h6" {...line}/></>}
+      {name === 'internships' && <><rect x="3" y="7" width="18" height="13" rx="2" {...line}/><path d="M9 7V4h6v3m-3 4v5m-2-2h4" {...line}/></>}
+      {name === 'tutors' && <><circle cx="9" cy="8" r="4" {...line}/><path d="M2.5 21c.5-4.3 3-6.5 6.5-6.5 2.2 0 4 .8 5.1 2.2M18 13v8m-4-4h8" {...line}/></>}
+      {name === 'schools' && <><path d="M3 21h18M5 21V9l7-5 7 5v12M9 12h2m2 0h2m-6 4h2m2 0h2" {...line}/></>}
+      {name === 'moot' && <><path d="M12 3v17M7 6h10M5 9l-3 6h6L5 9Zm14 0-3 6h6l-3-6ZM8 21h8" {...line}/></>}
+      {name === 'digests' && <><path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Z" {...line}/><path d="M9 8h6m-6 4h6m-6 4h4" {...line}/></>}
+      {name === 'exam' && <><path d="m4 17-.8 3.8L7 20l11-11-3-3L4 17Z" {...line}/><path d="m13.5 7.5 3 3" {...line}/></>}
+      {name === 'clinical' && <><circle cx="12" cy="12" r="9" {...line}/><path d="M12 7v10M7 12h10" {...line}/></>}
+      {name === 'profile' && <><circle cx="12" cy="8" r="4" {...line}/><path d="M4 21c.8-4.2 3.6-6.5 8-6.5s7.2 2.3 8 6.5" {...line}/></>}
     </svg>
   );
 }
 
 function V34Brand() {
   return (
-    <NavLink to="/s-14" className="v34c-brand" aria-label="LegalSaathi home">
-      <span className="v34c-brand__mark" aria-hidden>§</span>
-      <span><b>LegalSaathi</b><small>STUDENT MODULE</small></span>
+    <NavLink to="/s-14" className="v34c-brand" aria-label="NyayOne home">
+      <img className="v34c-brand__mark" src="/brand/nyayone-mark.svg" alt="" aria-hidden="true" draggable="false"/>
+      <span><b>NyayOne</b><small>STUDENT MODULE</small></span>
     </NavLink>
   );
 }
@@ -186,7 +194,7 @@ function V34ContinuationShell({
           <nav className="v34c-railnav" aria-label="Student module">
             {railItems.map((item) => (
               <NavLink key={item.id} to={item.to} className={({ isActive }) => isActive ? 'is-on' : undefined}>
-                <span aria-hidden>{item.glyph}</span><span>{item.label}</span>
+                <V34ShellIcon name={item.id}/><span>{item.label}</span>
               </NavLink>
             ))}
           </nav>
@@ -218,7 +226,7 @@ function V34ContinuationShell({
             ))}
           </nav>
         )}
-        <NavLink className="v34c-ask" to="/s-36" aria-label="Ask a legal research question" data-tip="Ask LegalSaathi">
+        <NavLink className="v34c-ask" to="/s-36" aria-label="Ask a legal research question" data-tip="Ask NyayOne">
           <V34ShellIcon name="research" size={25}/>
         </NavLink>
       </div>
