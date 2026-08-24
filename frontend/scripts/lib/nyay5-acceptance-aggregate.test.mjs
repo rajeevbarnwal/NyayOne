@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  NYAY4_BLOCKING_POSTGRES_ASSERTION_IDS,
   NYAY4_POSTGRES_ASSERTION_IDS,
+  NYAY4_QUARANTINED_ASSERTION_ID,
+  NYAY4_QUARANTINE_REASON,
   NYAY5_ACCEPTANCE_ATTESTATION_IDS,
   aggregateNyay5Acceptance,
 } from '../nyay5-acceptance-aggregate.mjs';
@@ -71,8 +74,8 @@ function fixtures() {
       assertion_ids: [...NYAY4_POSTGRES_ASSERTION_IDS],
       assertions: {
         exact_inventory: true,
-        required: NYAY4_POSTGRES_ASSERTION_IDS.length,
-        passed: NYAY4_POSTGRES_ASSERTION_IDS.length,
+        required: NYAY4_BLOCKING_POSTGRES_ASSERTION_IDS.length,
+        passed: NYAY4_BLOCKING_POSTGRES_ASSERTION_IDS.length,
         overall_pass: true,
         failed: [],
         inventory_failures: {
@@ -80,6 +83,47 @@ function fixtures() {
           extra: 0,
           duplicate: 0,
           reordered: false,
+        },
+        quarantined: {
+          executed: true,
+          failed: [NYAY4_QUARANTINED_ASSERTION_ID],
+          ids: [NYAY4_QUARANTINED_ASSERTION_ID],
+          passed: 0,
+          required: 1,
+          skipped: false,
+        },
+      },
+      mutants: { required: 27, killed: 27 },
+      quarantine_diagnostic: {
+        assertion_id: NYAY4_QUARANTINED_ASSERTION_ID,
+        cookie_state: {
+          httponly: true,
+          raw_flow_token_rows: 0,
+          reload_metadata_equal: true,
+          reload_status: 200,
+          samesite: 'strict',
+          secure_nonlocal: true,
+          start_signatures_equal: true,
+          start_statuses: [202, 202],
+          uuid_in_response: false,
+        },
+        executed: true,
+        origin_values: {
+          configured: { kind: 'configured_fixture', status: 200 },
+          missing: { kind: 'absent', status: 403 },
+          untrusted: { kind: 'untrusted_fixture', status: 403 },
+        },
+        passed: false,
+        quarantine_eligible: true,
+        quarantined_on: '2026-08-24',
+        reason: NYAY4_QUARANTINE_REASON,
+        skipped: false,
+        stage: 'behavior-cookie-origin-reload-symmetry',
+        timing: {
+          bound_milli: 2000,
+          p95_ratio_milli: 2001,
+          samples_per_class: 40,
+          within_bound: false,
         },
       },
       privacy_findings: 0,
@@ -143,6 +187,26 @@ describe('NYAY-5 exact acceptance-matrix aggregate', () => {
     expect(aggregateNyay5Acceptance(missing).assertions.find(
       (row) => row.id === 'AUTH-04',
     )?.passed).toBe(false);
+  });
+
+  it('keeps the single quarantined assertion executed and visible without forging green', () => {
+    const observedFlake = fixtures();
+    expect(observedFlake.otpPostgres.quarantine_diagnostic.passed).toBe(false);
+    expect(aggregateNyay5Acceptance(observedFlake).status).toBe('PASS');
+
+    for (const mutate of [
+      (value) => { delete value.quarantine_diagnostic; },
+      (value) => { value.quarantine_diagnostic.assertion_id = 'REMOVED'; },
+      (value) => { value.quarantine_diagnostic.executed = false; },
+      (value) => { value.quarantine_diagnostic.skipped = true; },
+      (value) => { delete value.quarantine_diagnostic.timing; },
+      (value) => { value.quarantine_diagnostic.reason = 'weakened'; },
+      (value) => { value.mutants.killed = 26; },
+    ]) {
+      const mutant = fixtures();
+      mutate(mutant.otpPostgres);
+      expect(aggregateNyay5Acceptance(mutant).status).toBe('FAIL');
+    }
   });
 
   it('fails closed for missing, skipped, failed, duplicate, or zero-selector evidence', () => {

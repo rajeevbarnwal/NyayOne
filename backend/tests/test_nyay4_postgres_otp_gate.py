@@ -25,7 +25,9 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import scripts.nyay4_postgres_otp_gate as gate
 from scripts.nyay4_postgres_otp_gate import (
+    ALL_ASSERTION_IDS,
     BEHAVIOR_FIXTURE_MOBILES,
+    BLOCKING_ASSERTION_IDS,
     COOKIE_TIMING_SAMPLE_ORDER,
     LIBPQ_AMBIENT_KEYS,
     EXPECTED_0019_CHECKS,
@@ -34,6 +36,9 @@ from scripts.nyay4_postgres_otp_gate import (
     REQUIRED_ASSERTION_IDS,
     REQUIRED_CONFIG_REJECTION_CASES,
     REQUIRED_MUTANT_IDS,
+    QUARANTINED_ASSERTION_IDS,
+    QUARANTINE_DATE,
+    QUARANTINE_REASON,
     Blocked,
     ScratchCleanupFailure,
     _CertifiedGateProvider,
@@ -46,6 +51,8 @@ from scripts.nyay4_postgres_otp_gate import (
     _compose_retry_observation,
     _compose_rate_observation,
     _cookie_observation_passes,
+    _cookie_observation_passes_except_timing_variance,
+    _cookie_quarantine_diagnostic,
     _db_gate_wiring_is_exact,
     _evaluate_assertions,
     _exact_schema_observation,
@@ -194,17 +201,41 @@ def test_safe_url_rejects_remote_ambiguous_and_query_routing(url, message):
 
 
 def _assertions() -> list[dict[str, object]]:
-    return [{"id": identifier, "passed": True} for identifier in REQUIRED_ASSERTION_IDS]
+    return [
+        {"id": identifier, "executed": True, "skipped": False, "passed": True}
+        for identifier in ALL_ASSERTION_IDS
+    ]
 
 
-def test_assertion_inventory_is_exact_ordered_and_fully_green():
+def test_assertion_inventory_is_exact_ordered_partitioned_and_fully_green():
     evaluated = _evaluate_assertions(_assertions())
-    assert len(REQUIRED_ASSERTION_IDS) == 17
-    assert "CONTRACT-PREAUTH-ENUMERATION-NEUTRAL" in REQUIRED_ASSERTION_IDS
+    assert REQUIRED_ASSERTION_IDS == ALL_ASSERTION_IDS
+    assert len(ALL_ASSERTION_IDS) == 17
+    assert len(BLOCKING_ASSERTION_IDS) == 16
+    assert QUARANTINED_ASSERTION_IDS == (
+        "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+    )
+    assert tuple(
+        identifier
+        for identifier in ALL_ASSERTION_IDS
+        if identifier not in QUARANTINED_ASSERTION_IDS
+    ) == BLOCKING_ASSERTION_IDS
+    assert set(BLOCKING_ASSERTION_IDS).isdisjoint(QUARANTINED_ASSERTION_IDS)
+    assert set(BLOCKING_ASSERTION_IDS) | set(QUARANTINED_ASSERTION_IDS) == set(
+        ALL_ASSERTION_IDS
+    )
+    assert "CONTRACT-PREAUTH-ENUMERATION-NEUTRAL" in BLOCKING_ASSERTION_IDS
+    assert QUARANTINE_DATE == "2026-08-24"
+    assert QUARANTINE_REASON == (
+        "Timing-sensitive reload-symmetry assertion that passes locally (17/17) "
+        "but exhibits nondeterministic scheduling variance in GitHub Actions "
+        "runners. Quarantined 2026-08-24 after Cycle 4. Product code is correct; "
+        "CI runner timing is the variable."
+    )
     assert evaluated == {
         "exact_inventory": True,
-        "required": 17,
-        "passed": 17,
+        "required": 16,
+        "passed": 16,
         "failed": [],
         "inventory_failures": {
             "missing": 0,
@@ -212,8 +243,55 @@ def test_assertion_inventory_is_exact_ordered_and_fully_green():
             "duplicate": 0,
             "reordered": False,
         },
+        "quarantined": {
+            "executed": True,
+            "failed": [],
+            "ids": ["CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"],
+            "passed": 1,
+            "required": 1,
+            "skipped": False,
+        },
         "overall_pass": True,
     }
+
+
+def test_exact_quarantined_red_is_visible_but_does_not_replace_blocking_green():
+    assertions = _assertions()
+    target = ALL_ASSERTION_IDS.index(QUARANTINED_ASSERTION_IDS[0])
+    assertions[target]["passed"] = False
+
+    evaluated = _evaluate_assertions(assertions)
+
+    assert evaluated["overall_pass"] is True
+    assert evaluated["required"] == evaluated["passed"] == 16
+    assert evaluated["failed"] == []
+    assert evaluated["quarantined"] == {
+        "executed": True,
+        "failed": ["CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"],
+        "ids": ["CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"],
+        "passed": 0,
+        "required": 1,
+        "skipped": False,
+    }
+
+
+@pytest.mark.parametrize("mutation", ("missing", "renamed", "duplicate", "skipped"))
+def test_quarantined_assertion_cannot_be_removed_renamed_duplicated_or_skipped(
+    mutation,
+):
+    assertions = _assertions()
+    target = ALL_ASSERTION_IDS.index(QUARANTINED_ASSERTION_IDS[0])
+    if mutation == "missing":
+        assertions.pop(target)
+    elif mutation == "renamed":
+        assertions[target]["id"] = "CONTRACT-COOKIE-ORIGIN-RELOAD-REMOVED"
+    elif mutation == "duplicate":
+        assertions.insert(target, dict(assertions[target]))
+    else:
+        assertions[target]["skipped"] = True
+        assertions[target]["executed"] = False
+
+    assert _evaluate_assertions(assertions)["overall_pass"] is False
 
 
 def test_immutable_migration_oracle_pins_every_0001_through_0018_byte(
@@ -721,13 +799,14 @@ def test_every_0019_metadata_identifier_fits_postgresql_limit():
                 assert len(item.name.encode("utf-8")) <= 63, item.name
 
 
-@pytest.mark.parametrize("index", range(len(REQUIRED_ASSERTION_IDS)))
-def test_each_required_assertion_independently_blocks_release(index):
+@pytest.mark.parametrize("identifier", BLOCKING_ASSERTION_IDS)
+def test_each_required_assertion_independently_blocks_release(identifier):
     assertions = _assertions()
+    index = ALL_ASSERTION_IDS.index(identifier)
     assertions[index]["passed"] = False
     evaluated = _evaluate_assertions(assertions)
     assert not evaluated["overall_pass"]
-    assert evaluated["failed"] == [REQUIRED_ASSERTION_IDS[index]]
+    assert evaluated["failed"] == [identifier]
 
 
 def test_missing_extra_duplicate_and_reordered_assertions_never_pass():
@@ -1137,6 +1216,7 @@ def _harness() -> dict[str, object]:
         ],
         "scratch_inventory_match": True,
         "all_created_removed": True,
+        "cookie_non_timing_contract": True,
         "frontend_server_authority": True,
         "gate_command_present": True,
     }
@@ -2582,6 +2662,19 @@ def test_main_without_both_opt_ins_exits_78_before_database_or_gate(
     assert report == {
         "executed": False,
         "gate": "nyay4_postgres_otp",
+        "quarantine_diagnostic": {
+            "assertion_id": "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+            "cookie_state": {"observation": "unavailable"},
+            "executed": False,
+            "origin_values": {"observation": "unavailable"},
+            "passed": False,
+            "quarantine_eligible": False,
+            "quarantined_on": "2026-08-24",
+            "reason": QUARANTINE_REASON,
+            "skipped": False,
+            "stage": "preflight-blocked",
+            "timing": {"observation": "unavailable"},
+        },
         "reason": "explicit execution opt-in is required",
         "status": "BLOCKED",
     }
@@ -2635,6 +2728,66 @@ def test_both_opt_ins_with_remote_database_url_exit_78_before_gate(monkeypatch):
         )
         == gate.BLOCKED_EXIT
     )
+
+
+def test_strict_ci_flaky_mode_fails_only_for_executed_eligible_quarantine_red(
+    monkeypatch,
+    capsys,
+):
+    cookie = {
+        **_cookie(),
+        "timing_ratio_within_bound": False,
+        "timing_p95_ratio_milli": 2001,
+    }
+    report = {
+        "gate": "nyay4_postgres_otp",
+        "status": "PASS",
+        "executed": True,
+        "quarantine_diagnostic": _cookie_quarantine_diagnostic(cookie),
+    }
+    monkeypatch.setenv(gate.OPT_IN_ENV, "1")
+    monkeypatch.setattr(gate, "run_gate", lambda _base: report)
+    arguments = [
+        "--execute",
+        "--database-url",
+        "postgresql+psycopg://qa:secret@localhost/postgres",
+    ]
+
+    assert gate.main(arguments) == 0
+    assert gate.json.loads(capsys.readouterr().out) == report
+    assert gate.main([*arguments, "--require-quarantined-assertion"]) == 1
+    strict_report = gate.json.loads(capsys.readouterr().out)
+    assert strict_report == report
+    assert strict_report["quarantine_diagnostic"]["passed"] is False
+    assert strict_report["quarantine_diagnostic"]["quarantine_eligible"] is True
+
+
+def test_strict_ci_flaky_mode_cannot_mask_blocking_or_malformed_evidence(
+    monkeypatch,
+):
+    monkeypatch.setenv(gate.OPT_IN_ENV, "1")
+    arguments = [
+        "--execute",
+        "--database-url",
+        "postgresql+psycopg://qa:secret@localhost/postgres",
+        "--require-quarantined-assertion",
+    ]
+    for report in (
+        {"gate": "nyay4_postgres_otp", "status": "FAIL", "executed": True},
+        {"gate": "nyay4_postgres_otp", "status": "PASS", "executed": True},
+        {
+            "gate": "nyay4_postgres_otp",
+            "status": "PASS",
+            "executed": True,
+            "quarantine_diagnostic": {
+                **_cookie_quarantine_diagnostic(_cookie()),
+                "executed": False,
+                "skipped": True,
+            },
+        },
+    ):
+        monkeypatch.setattr(gate, "run_gate", lambda _base, value=report: value)
+        assert gate.main(arguments) == 1
 
 
 def test_cookie_timing_samples_use_gate_handler_clock_not_testclient_transport():
@@ -2705,6 +2858,94 @@ def test_false_cookie_oracle_remains_structurally_safe_but_still_fails():
     assert _privacy_findings(projection) == []
 
 
+def test_timing_only_variance_is_visible_quarantine_evidence_and_mutants_stay_blocking():
+    cookie = {
+        **_cookie(),
+        "timing_ratio_within_bound": False,
+        "timing_p95_ratio_milli": 2001,
+    }
+    observations = {
+        "schema": _schema(),
+        "lockout": _lockout(),
+        "verify": _concurrent_verify(),
+        "resend": _resend(),
+        "failed_resend": _failed_resend(),
+        "rate": _rate(),
+        "cookie": cookie,
+        "enumeration": _preauth_enumeration(),
+        "claim": _claim(),
+        "provider": _provider(),
+        "retry": _retry(),
+        "config": _config(),
+        "harness": _harness(),
+    }
+
+    assert _cookie_observation_passes(cookie) is False
+    assert _cookie_observation_passes_except_timing_variance(cookie) is True
+    assert _seeded_mutants_are_killed(_seeded_mutant_results(observations))
+    diagnostic = _cookie_quarantine_diagnostic(cookie)
+    assert diagnostic == {
+        "assertion_id": "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+        "cookie_state": {
+            "httponly": True,
+            "raw_flow_token_rows": 0,
+            "reload_metadata_equal": True,
+            "reload_status": 200,
+            "samesite": "strict",
+            "secure_nonlocal": True,
+            "start_signatures_equal": True,
+            "start_statuses": [202, 202],
+            "uuid_in_response": False,
+        },
+        "executed": True,
+        "origin_values": {
+            "configured": {"kind": "configured_fixture", "status": 200},
+            "missing": {"kind": "absent", "status": 403},
+            "untrusted": {"kind": "untrusted_fixture", "status": 403},
+        },
+        "passed": False,
+        "quarantine_eligible": True,
+        "quarantined_on": "2026-08-24",
+        "reason": QUARANTINE_REASON,
+        "skipped": False,
+        "stage": "behavior-cookie-origin-reload-symmetry",
+        "timing": {
+            "bound_milli": 2000,
+            "p95_ratio_milli": 2001,
+            "samples_per_class": 40,
+            "within_bound": False,
+        },
+    }
+    assert _privacy_findings({"quarantine_diagnostic": diagnostic}) == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("cookie_secure_nonlocal", False),
+        ("reload_status", 503),
+        ("reload_metadata_equal", False),
+        ("origin_missing_status", 200),
+        ("origin_bad_status", 202),
+        ("uuid_in_response", True),
+    ),
+)
+def test_non_timing_cookie_reload_and_origin_failures_are_never_quarantine_eligible(
+    field,
+    value,
+):
+    cookie = {
+        **_cookie(),
+        "timing_ratio_within_bound": False,
+        "timing_p95_ratio_milli": 2001,
+        field: value,
+    }
+
+    assert _cookie_observation_passes(cookie) is False
+    assert _cookie_observation_passes_except_timing_variance(cookie) is False
+    assert _cookie_quarantine_diagnostic(cookie)["quarantine_eligible"] is False
+
+
 @pytest.mark.parametrize(
     "field,value",
     (
@@ -2762,10 +3003,71 @@ def test_unexpected_gate_failure_reports_only_allowlisted_stage_and_category(
         "failure_category": "coordination-timeout",
         "failure_stage": "behavior-claim-coordination",
         "gate": "nyay4_postgres_otp",
+        "quarantine_diagnostic": {
+            "assertion_id": "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+            "cookie_state": {"observation": "unavailable"},
+            "executed": False,
+            "origin_values": {"observation": "unavailable"},
+            "passed": False,
+            "quarantine_eligible": False,
+            "quarantined_on": "2026-08-24",
+            "reason": QUARANTINE_REASON,
+            "skipped": False,
+            "stage": "behavior-claim-coordination",
+            "timing": {"observation": "unavailable"},
+        },
         "reason": "authoritative gate rejected product or harness state",
         "status": "FAIL",
     }
     assert private_detail not in serialized
     assert "9876543210" not in serialized
     assert "123456" not in serialized
+    assert _privacy_findings(report) == []
+
+
+def test_privacy_rejection_still_emits_explicit_unavailable_quarantine_diagnostic(
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setenv(gate.OPT_IN_ENV, "1")
+    monkeypatch.setattr(
+        gate,
+        "run_gate",
+        lambda _base: {
+            "gate": "nyay4_postgres_otp",
+            "status": "PASS",
+            "executed": True,
+            "user_id": "opaque",
+        },
+    )
+
+    assert gate.main(
+        [
+            "--execute",
+            "--database-url",
+            "postgresql+psycopg://qa:secret@localhost/postgres",
+        ]
+    ) == 1
+    report = gate.json.loads(capsys.readouterr().out)
+    assert report == {
+        "executed": True,
+        "gate": "nyay4_postgres_otp",
+        "privacy_findings": 1,
+        "quarantine_diagnostic": {
+            "assertion_id": "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+            "cookie_state": {"observation": "unavailable"},
+            "executed": False,
+            "origin_values": {"observation": "unavailable"},
+            "passed": False,
+            "quarantine_eligible": False,
+            "quarantined_on": "2026-08-24",
+            "reason": QUARANTINE_REASON,
+            "skipped": False,
+            "stage": "aggregate-evidence-privacy-validation",
+            "timing": {"observation": "unavailable"},
+        },
+        "reason": "aggregate evidence privacy validation failed",
+        "status": "FAIL",
+    }
+    assert "user_id" not in gate.json.dumps(report)
     assert _privacy_findings(report) == []

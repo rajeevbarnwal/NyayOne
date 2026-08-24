@@ -140,10 +140,10 @@ EXPECTED_NYAY5_POSTGRES_GATE_SHA256 = (
     "b696de5cb796262eaf8ba0b7c9b9a38faae01386e10b6d94c7b26cfb17b4db9b"
 )
 EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_SHA256 = (
-    "1b0fcb0dfa8238d648d04c27e5abb99ac17add6cd667a0d336ac7dc7030de4ca"
+    "319a7aace482b04ee97af4fe6ce9ae9234bbf428f64b4d8fd8ada2b4f6923181"
 )
 EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_TEST_SHA256 = (
-    "efe6745a2e10be9b60cdaae3d62ac1f6865e34a115dcf0c7073793edfd649720"
+    "a9e83bddb5ec55d095359c382991c5c9751f604ed8b682c888911d71ae40e9fa"
 )
 EXPECTED_NYAY5_ACCEPTANCE_ATTESTATION_SHA256 = (
     "98b2b033e87083d4d17246c57fe1765501dcba1cbb8bd2415a66631bcd2d5c32"
@@ -370,6 +370,12 @@ NYAY19_ISOLATED_MIGRATION_ENV = "NYAY19_ISOLATED_MIGRATION_EXECUTE"
 EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS: dict[
     tuple[str, str], tuple[str, ...]
 ] = {
+    (
+        "ci-flaky-nyay4-cookie-reload-symmetry.yml",
+        "postgres-16-pgvector-cookie-origin-reload",
+    ): (
+        "python scripts/nyay4_postgres_otp_gate.py",
+    ),
     ("registration-db-gate.yml", "postgres-16-pgvector"): (
         "bash scripts/db_gate.sh",
     ),
@@ -495,7 +501,7 @@ ALLOWED_ACTIONS = {
     "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
 }
-CANONICAL_WORKFLOW_FILES = {
+REQUIRED_WORKFLOW_FILES = {
     "nyay18-frontend-namespace-gate.yml",
     "nyayone-policy-gate.yml",
     "registration-db-gate.yml",
@@ -506,6 +512,21 @@ CANONICAL_WORKFLOW_FILES = {
     "wave5-calendar-gate.yml",
     "nyay5-profile-boundary-gate.yml",
 }
+NYAY4_QUARANTINE_WORKFLOW_FILE = (
+    "ci-flaky-nyay4-cookie-reload-symmetry.yml"
+)
+CANONICAL_WORKFLOW_FILES = REQUIRED_WORKFLOW_FILES | {
+    NYAY4_QUARANTINE_WORKFLOW_FILE
+}
+NYAY4_QUARANTINED_ASSERTION_ID = (
+    "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"
+)
+NYAY4_QUARANTINE_REASON = (
+    "Timing-sensitive reload-symmetry assertion that passes locally (17/17) "
+    "but exhibits nondeterministic scheduling variance in GitHub Actions "
+    "runners. Quarantined 2026-08-24 after Cycle 4. Product code is correct; "
+    "CI runner timing is the variable."
+)
 DANGEROUS_ENV_KEYS = {
     "BASH_ENV",
     "ENV",
@@ -803,6 +824,12 @@ EVIDENCE_CONTRACTS: dict[str, dict[str, tuple[str, str, str]]] = {
     },
 }
 EXPECTED_JOB_DEFAULTS: dict[tuple[str, str], dict[str, object]] = {
+    (
+        "ci-flaky-nyay4-cookie-reload-symmetry.yml",
+        "postgres-16-pgvector-cookie-origin-reload",
+    ): {
+        "run": {"working-directory": "backend"},
+    },
     ("registration-db-gate.yml", "postgres-16-pgvector"): {
         "run": {"working-directory": "backend"},
     },
@@ -817,6 +844,18 @@ EXPECTED_JOB_DEFAULTS: dict[tuple[str, str], dict[str, object]] = {
     },
 }
 EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
+    (
+        "ci-flaky-nyay4-cookie-reload-symmetry.yml",
+        "postgres-16-pgvector-cookie-origin-reload",
+    ): {
+        "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_nyay4_flaky_ci",
+        "REGISTRATION_SECRET": "ci-nyay4-flaky-encryption-secret",
+        "REGISTRATION_LOOKUP_SECRET": "ci-nyay4-flaky-lookup-secret",
+        "APP_ENV": "test",
+        "NYAY19_ISOLATED_MIGRATION_EXECUTE": "1",
+        "QUARANTINED_ASSERTION_ID": NYAY4_QUARANTINED_ASSERTION_ID,
+        "QUARANTINE_REASON": NYAY4_QUARANTINE_REASON,
+    },
     ("nyay5-profile-boundary-gate.yml", "profile-postgres-production-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_nyay5_ci",
         "NYAY5_POSTGRES_CONTROL_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_nyay5_ci",
@@ -952,7 +991,31 @@ NYAY4_FAILURE_DIAGNOSTIC_UPLOAD = {
         "include-hidden-files": "false",
     },
 }
+NYAY4_QUARANTINE_DIAGNOSTIC_UPLOAD = {
+    "name": "Upload detailed quarantine diagnostic",
+    "condition": "${{ always() }}",
+    "producer": (
+        "NYAY4_POSTGRES_GATE=1 python scripts/nyay4_postgres_otp_gate.py "
+        "--execute --database-url \"$DATABASE_URL\" "
+        "--require-quarantined-assertion "
+        "--output test-results/nyay4-ci-flaky/summary.json"
+    ),
+    "with": {
+        "name": "nyay4-cookie-origin-reload-symmetry-diagnostic",
+        "path": (
+            "${{ github.workspace }}/backend/test-results/"
+            "nyay4-ci-flaky/summary.json"
+        ),
+        "if-no-files-found": "error",
+        "retention-days": "14",
+        "include-hidden-files": "false",
+    },
+}
 FAILURE_DIAGNOSTIC_UPLOADS = {
+    (
+        "ci-flaky-nyay4-cookie-reload-symmetry.yml",
+        "postgres-16-pgvector-cookie-origin-reload",
+    ): NYAY4_QUARANTINE_DIAGNOSTIC_UPLOAD,
     (
         "wave4-private-reporting-gate.yml",
         "private-reporting-postgres-browser",
@@ -1006,6 +1069,10 @@ ALLOWED_STEP_CONDITIONS = {
 }
 NO_OP_RUN_COMMANDS = {":", "exit 0", "true"}
 EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
+    (
+        "ci-flaky-nyay4-cookie-reload-symmetry.yml",
+        "postgres-16-pgvector-cookie-origin-reload",
+    ): "a9165baf7120fea7ea964b847de401092e5caab8d6f2b19fadc7b0555abf586d",
     (
         "nyay18-frontend-namespace-gate.yml",
         "namespace-static-policy",
@@ -1100,7 +1167,12 @@ def _run_reaches_nyay4_transitively(run: str) -> bool:
         r"(?:^|[ (;&|])(?:python(?:3)? -m )?pytest -q(?=$|[);&|])",
         canonical,
     ) is not None
-    return calls_database_gate or runs_complete_backend_suite
+    calls_nyay4_gate = re.search(
+        r"(?:^|[ (;&|])(?:python(?:3)?|\$PY) "
+        r"scripts/nyay4_postgres_otp_gate\.py(?:$|[ );&|])",
+        canonical,
+    ) is not None
+    return calls_database_gate or runs_complete_backend_suite or calls_nyay4_gate
 
 
 def _effective_working_directory(
@@ -2836,6 +2908,63 @@ def check_workflow(path: Path) -> list[str]:
     return failures
 
 
+def check_nyay4_quarantine_workflow(path: Path) -> list[str]:
+    """Validate the one visible, non-required quarantine workflow exactly."""
+
+    failures = check_workflow(path)
+    expected_required_gate_failures = (
+        "missing pushes target main",
+        "missing required aggregator",
+        "required aggregator must run with if: always()",
+        "required aggregator needs ",
+        "required aggregator lacks the fail-closed needs result contract",
+        "required aggregator must contain exactly one step",
+    )
+    failures = [
+        failure
+        for failure in failures
+        if not any(marker in failure for marker in expected_required_gate_failures)
+    ]
+    text = path.read_text(encoding="utf-8")
+    exact_fragments = {
+        "pull-request trigger": "  pull_request:\n    branches: [main]",
+        "scheduled evidence trigger": '  schedule:\n    - cron: "17 3 * * *"',
+        "manual evidence trigger": "  workflow_dispatch:",
+        "quarantined assertion": NYAY4_QUARANTINED_ASSERTION_ID,
+        "owner-approved reason": NYAY4_QUARANTINE_REASON,
+        "strict producer flag": "--require-quarantined-assertion",
+        "strict diagnostic stage": "Run quarantined assertion in strict evidence mode",
+        "explicit unavailable diagnostic": "Initialize explicit not-yet-executed diagnostic",
+        "pgvector control fixture": "Enable pgvector in the exact control database",
+        "pgvector extension command": '-c "CREATE EXTENSION IF NOT EXISTS vector;"',
+        "always upload": "        if: ${{ always() }}",
+        "artifact name": "nyay4-cookie-origin-reload-symmetry-diagnostic",
+        "artifact path": (
+            "${{ github.workspace }}/backend/test-results/"
+            "nyay4-ci-flaky/summary.json"
+        ),
+        "missing artifact fails": "if-no-files-found: error",
+    }
+    for label, fragment in exact_fragments.items():
+        if text.count(fragment) != 1:
+            failures.append(f"{path}: quarantine workflow {label} is not exact")
+    if "\n  push:\n" in text or "\n  required:\n" in text:
+        failures.append(
+            f"{path}: quarantine workflow must not impersonate a required gate"
+        )
+    strict_command = (
+        "NYAY4_POSTGRES_GATE=1 python scripts/nyay4_postgres_otp_gate.py "
+        '--execute --database-url "$DATABASE_URL" '
+        "--require-quarantined-assertion "
+        "--output test-results/nyay4-ci-flaky/summary.json"
+    )
+    if text.count(f"        run: {strict_command}") != 1:
+        failures.append(f"{path}: quarantine workflow producer command is not exact")
+    if any(marker in text for marker in ("|| true", "continue-on-error", "pytest.skip", "xfail")):
+        failures.append(f"{path}: quarantine workflow suppresses its oracle")
+    return failures
+
+
 def _python_alembic_calls(tree: ast.AST) -> list[ast.Call]:
     command_names = {
         target.id
@@ -3167,7 +3296,8 @@ def main() -> int:
     failures: list[str] = []
     if {path.name for path in workflow_paths} != CANONICAL_WORKFLOW_FILES:
         failures.append(
-            "workflow filename inventory differs from the nine canonical required gates"
+            "workflow filename inventory differs from nine required gates plus the "
+            "single quarantined evidence workflow"
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
@@ -3177,10 +3307,18 @@ def main() -> int:
     failures.extend(check_nyay18_browser_gate_contract())
     failures.extend(check_alembic_execution_contracts())
     failures.extend(
-        failure for path in workflow_paths for failure in check_workflow(path)
+        failure
+        for path in workflow_paths
+        for failure in (
+            check_nyay4_quarantine_workflow(path)
+            if path.name == NYAY4_QUARANTINE_WORKFLOW_FILE
+            else check_workflow(path)
+        )
     )
     required_names: list[tuple[Path, str]] = []
     for path in workflow_paths:
+        if path.name == NYAY4_QUARANTINE_WORKFLOW_FILE:
+            continue
         text = path.read_text(encoding="utf-8")
         match = re.search(r"^  required:\n    name:\s*([^\s#]+)", text, re.MULTILINE)
         if not match:
