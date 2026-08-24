@@ -8,6 +8,10 @@ import {
   inspectOtpViewSnapshot,
   summarizeNyay4Rows,
 } from './lib/nyay4-otp-runner-contract.mjs';
+import {
+  inspectRegistrationStartWire,
+  inspectOtpVerificationWire,
+} from './lib/nyay5-profile-browser-contract.mjs';
 
 const WEB = process.env.NYAY4_WEB_BASE_URL ?? 'http://127.0.0.1:4174';
 const API = process.env.NYAY4_API_BASE_URL ?? 'http://127.0.0.1:1131';
@@ -83,6 +87,13 @@ async function latestOtp(mobile) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error('OTP capture did not receive the expected signup code');
+}
+
+function privacySafeFailureCode(body) {
+  const candidate = body?.detail?.code;
+  return typeof candidate === 'string' && /^[a-z][a-z0-9_]{0,63}$/u.test(candidate)
+    ? candidate
+    : 'untyped';
 }
 
 async function fulfillStateFailure(route) {
@@ -177,29 +188,50 @@ try {
       last_name: 'Browser',
       mobile,
       dob: '2004-03-14',
-      consent: { accepted: true, policy_version: 'nyay4-browser-negative' },
+      terms_accepted: true,
+      terms_version: 'dpdp-2023.v1',
+      privacy_notice_acknowledged: true,
+      privacy_notice_version: 'dpdp-2023.v1',
     },
   });
   const registrationBody = await registration.json();
+  const registrationAccepted = registration.status() === 202
+    && inspectRegistrationStartWire(registrationBody).pass;
+  if (!registrationAccepted) {
+    throw new Error(
+      `NYAY4_SIGNUP_FIXTURE_REJECTED_${registration.status()}_${privacySafeFailureCode(registrationBody)}`,
+    );
+  }
+  const signupStateResponse = await context.request.get(
+    `${API}/api/v1/auth/student/otp/state`,
+  );
+  const signupStateBody = await signupStateResponse.json();
+  const signupStateAccepted = signupStateResponse.status() === 200
+    && safeProjection(signupStateBody, 'pending', 'signup');
   record(
     'signup-safe-projection',
-    'HTTP 201 pending/signup with relative metadata and no handle',
+    'HTTP 202 accepted bootstrap followed by authoritative pending/signup state',
     {
-      status: registration.status(),
-      keys: Object.keys(registrationBody ?? {}).sort(),
-      purpose: registrationBody?.purpose,
+      registrationStatus: registration.status(),
+      registrationKeys: Object.keys(registrationBody ?? {}).sort(),
+      stateStatus: signupStateResponse.status(),
+      stateKeys: Object.keys(signupStateBody ?? {}).sort(),
+      purpose: signupStateBody?.purpose,
       relativeMetadataTypes: [
-        registrationBody?.attempts_left,
-        registrationBody?.expires_in_seconds,
-        registrationBody?.resend_in_seconds,
-        registrationBody?.locked_for_seconds,
+        signupStateBody?.attempts_left,
+        signupStateBody?.expires_in_seconds,
+        signupStateBody?.resend_in_seconds,
+        signupStateBody?.locked_for_seconds,
       ].map((value) => typeof value),
     },
-    registration.status() === 201 && safeProjection(registrationBody, 'pending', 'signup'),
+    registrationAccepted && signupStateAccepted,
   );
+  if (!signupStateAccepted) {
+    throw new Error(`NYAY4_SIGNUP_STATE_REJECTED_${signupStateResponse.status()}`);
+  }
 
   let code = await latestOtp(mobile);
-  const initialAttempts = registrationBody.attempts_left;
+  const initialAttempts = signupStateBody.attempts_left;
   const wrongCode = code === '000000' ? '111111' : '000000';
   const allCookies = await context.cookies();
   const flowCookies = allCookies.filter((cookie) => cookie.name === 'nyayone_otp_flow');
@@ -266,14 +298,14 @@ try {
   const beforeReload = await readOtpViewSnapshot(
     page,
     initialAttempts,
-    registrationBody.destination_masked,
+    signupStateBody.destination_masked,
   );
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByLabel('Six digit code').waitFor({ state: 'visible' });
   const afterReload = await readOtpViewSnapshot(
     page,
     initialAttempts,
-    registrationBody.destination_masked,
+    signupStateBody.destination_masked,
   );
   record(
     'reload-server-state',
@@ -450,7 +482,7 @@ try {
     },
     successBody?.status === 'authenticated'
       && successBody?.purpose === 'signup'
-      && safeProjection(successBody, 'authenticated', 'signup')
+      && inspectOtpVerificationWire(successBody).pass
       && successOriginExact,
   );
   const postAuthCookies = await context.cookies();
@@ -574,10 +606,11 @@ try {
     'known account authenticates through identifier-free cookie-owned login verify',
     {
       status: loginVerifyResponse.status(),
-      projectionValid: safeProjection(loginVerifyBody, 'authenticated', 'login'),
+      projectionValid: inspectOtpVerificationWire(loginVerifyBody).pass,
     },
     loginVerifyResponse.status() === 200
-      && safeProjection(loginVerifyBody, 'authenticated', 'login'),
+      && loginVerifyBody?.purpose === 'login'
+      && inspectOtpVerificationWire(loginVerifyBody).pass,
   );
 
   const privacyPage = await knownContext.newPage();
