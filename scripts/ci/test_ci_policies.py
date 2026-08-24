@@ -926,6 +926,76 @@ jobs:
                     workflow.write_text(mutated, encoding="utf-8")
                     self.assertTrue(policy.check_workflow(workflow), label)
 
+    def test_nyay4_quarantine_workflow_is_exact_visible_and_never_silent(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (
+            policy.ROOT
+            / ".github"
+            / "workflows"
+            / "ci-flaky-nyay4-cookie-reload-symmetry.yml"
+        )
+        original = source.read_text(encoding="utf-8")
+        self.assertEqual(policy.check_nyay4_quarantine_workflow(source), [])
+        reason = (
+            "Timing-sensitive reload-symmetry assertion that passes locally (17/17) "
+            "but exhibits nondeterministic scheduling variance in GitHub Actions "
+            "runners. Quarantined 2026-08-24 after Cycle 4. Product code is correct; "
+            "CI runner timing is the variable."
+        )
+        command_flag = "--require-quarantined-assertion"
+        diagnostic_path = (
+            "${{ github.workspace }}/backend/test-results/nyay4-ci-flaky/summary.json"
+        )
+        mutations = {
+            "assertion removed": original.replace(
+                "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY",
+                "CONTRACT-REMOVED",
+            ),
+            "reason removed": original.replace(reason, "Unreviewed quarantine."),
+            "strict flag removed": original.replace(command_flag, "--execute"),
+            "unavailable diagnostic removed": original.replace(
+                "Initialize explicit not-yet-executed diagnostic",
+                "Initialize unrelated output",
+            ),
+            "pgvector fixture removed": original.replace(
+                '-c "CREATE EXTENSION IF NOT EXISTS vector;"',
+                '-c "SELECT 1;"',
+            ),
+            "schedule removed": original.replace("  schedule:\n", "  x-schedule:\n"),
+            "manual trigger removed": original.replace(
+                "  workflow_dispatch:\n", "  x-workflow_dispatch:\n"
+            ),
+            "PR trigger removed": original.replace(
+                "  pull_request:\n", "  x-pull_request:\n"
+            ),
+            "always upload removed": original.replace(
+                "        if: ${{ always() }}",
+                "        if: ${{ success() }}",
+            ),
+            "diagnostic path changed": original.replace(
+                diagnostic_path,
+                "${{ github.workspace }}/backend/test-results/empty.json",
+            ),
+            "missing artifact is warning": original.replace(
+                "if-no-files-found: error", "if-no-files-found: warn"
+            ),
+            "failure suppressed": original.replace(
+                command_flag,
+                f"{command_flag} || true",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            workflow = (
+                Path(directory) / "ci-flaky-nyay4-cookie-reload-symmetry.yml"
+            )
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    workflow.write_text(mutated, encoding="utf-8")
+                    self.assertTrue(
+                        policy.check_nyay4_quarantine_workflow(workflow), label
+                    )
+
     def test_nyay5_required_pipeline_cannot_skip_a_producer_or_attestation(self) -> None:
         policy = load("verify_nyayone_ci")
         source = (
