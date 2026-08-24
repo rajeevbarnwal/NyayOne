@@ -15,9 +15,27 @@ The tracked Option 3.2 engineering handoff remains authoritative for product beh
 2. `SCREEN_MAP.md`
 3. `ACCEPTANCE_MATRIX.md`
 4. `IMPLEMENTATION_PLAN.md`
-5. Revision L for appearance and the final 3.2.1 selector delta
+5. Revision L for appearance and the final 3.2.1 selector delta, except for
+   the explicitly enumerated S-08/S-09 security supersession below
 
 Prototype JavaScript is never application logic. Authentication, authorization, OTP, consent, session, route ownership, and storage boundaries remain server-authoritative.
+
+### S-08/S-09 security supersession
+
+Effective 2026-08-25, the Product Owner ruled that NYAY-2, NYAY-4, and NYAY-19
+take precedence over the Revision L mockup states for S-08 and S-09:
+
+- S-08 is sealed with empty identity fields and two separate, unchecked Terms
+  and Privacy Notice acknowledgements. No baseline contains planted PII.
+- S-09 is sealed at the pending server-issued OTP frame immediately before a
+  successful verification redirects to S-07. The persistent prototype success
+  screen is not application behavior and is intentionally absent.
+
+The exact six replacement hashes, their superseded Revision L hashes, and
+capture provenance are recorded in
+`frontend/test-baselines/nyay7/option-3.2.1-rev-l/manifest.json` and
+`SECURITY_SUPERSESSION.md`. Revision L remains the byte-for-byte baseline
+authority for S-03, S-04, and S-05.
 
 ## Final screen delta
 
@@ -36,4 +54,7 @@ Prototype JavaScript is never application logic. Authentication, authorization, 
 - Zero serious or critical Axe violations; no Axe rule is disabled.
 - Every visible interactive target is at least 44×44 CSS pixels in mobile viewports.
 - Zero horizontal overflow and cumulative layout shift no greater than 0.1.
-- Approved baseline images are copied byte-for-byte under `frontend/test-baselines/nyay7/option-3.2.1-rev-l` and sealed by `manifest.json`.
+- The mixed-authority baseline inventory is stored under
+  `frontend/test-baselines/nyay7/option-3.2.1-rev-l` and sealed by
+  `manifest.json`; all 15 visual rows remain blocking under one common
+  one-percent comparison threshold.

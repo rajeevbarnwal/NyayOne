@@ -6,6 +6,20 @@ export const NYAY7_VIEWPORTS = Object.freeze([
   Object.freeze({ id: 'mobile-360', directory: '360x800', width: 360, height: 800 }),
 ]);
 
+// Supplemental responsive/theme coverage. This inventory is intentionally
+// separate from the sealed 3 x 5 x 8 Revision L visual contract above:
+// approved visual references exist only for the canonical light captures, so
+// expanded dark states must never be compared with those light PNGs.
+export const NYAY7_EXPANDED_VIEWPORTS = Object.freeze([
+  Object.freeze({ id: 'width-390', directory: '390x844', width: 390, height: 844, mobile: true }),
+  Object.freeze({ id: 'width-430', directory: '430x932', width: 430, height: 932, mobile: true }),
+  Object.freeze({ id: 'width-768', directory: '768x1024', width: 768, height: 1024, mobile: false }),
+  Object.freeze({ id: 'width-1024', directory: '1024x768', width: 1024, height: 768, mobile: false }),
+  Object.freeze({ id: 'width-1440', directory: '1440x1024', width: 1440, height: 1024, mobile: false }),
+]);
+
+export const NYAY7_COLOR_SCHEMES = Object.freeze(['light', 'dark']);
+
 export const NYAY7_SCREENS = Object.freeze([
   Object.freeze({ id: 'S-03', path: '/s-03', baseline: 's03.png' }),
   Object.freeze({ id: 'S-04', path: '/s-04', baseline: 's04.png' }),
@@ -23,6 +37,19 @@ export const NYAY7_CHECKS = Object.freeze([
   'rev-l-token-use',
   'selector-context-contract',
   'visual-baseline',
+]);
+
+// These observations are meaningful without a theme-specific reference PNG.
+// Token-palette and pixel-baseline assertions remain in the canonical light
+// gate; the expanded gate covers behavior, a11y and responsive geometry.
+export const NYAY7_EXPANDED_CHECKS = Object.freeze([
+  'mount',
+  'axe-serious-critical',
+  'horizontal-overflow',
+  'mobile-touch-targets',
+  'layout-shift',
+  'theme-activation',
+  'selector-context-contract',
 ]);
 
 // The approved native captures were produced with the same pinned Playwright
@@ -53,12 +80,28 @@ export const NYAY7_ASSERTION_INVENTORY = Object.freeze(
   )),
 );
 
+export const NYAY7_EXPANDED_ASSERTION_INVENTORY = Object.freeze(
+  NYAY7_COLOR_SCHEMES.flatMap((colorScheme) => (
+    NYAY7_EXPANDED_VIEWPORTS.flatMap((viewport) => (
+      NYAY7_SCREENS.flatMap((screen) => (
+        NYAY7_EXPANDED_CHECKS.map((check) => (
+          `expanded:${colorScheme}:${viewport.id}:${screen.id}:${check}`
+        ))
+      ))
+    ))
+  )),
+);
+
 export function nyay7AssertionName(viewportId, screenId, check) {
   return `${viewportId}:${screenId}:${check}`;
 }
 
-export function summarizeNyay7Rows(rows) {
-  const inventory = new Set(NYAY7_ASSERTION_INVENTORY);
+export function nyay7ExpandedAssertionName(colorScheme, viewportId, screenId, check) {
+  return `expanded:${colorScheme}:${viewportId}:${screenId}:${check}`;
+}
+
+function summarizeRowsAgainstInventory(rows, assertionInventory) {
+  const inventory = new Set(assertionInventory);
   const seen = new Set();
   const duplicates = [];
   const unknown = [];
@@ -78,16 +121,16 @@ export function summarizeNyay7Rows(rows) {
     if (!row.pass) failures.push(row.name);
   }
 
-  const missing = NYAY7_ASSERTION_INVENTORY.filter((name) => !seen.has(name));
+  const missing = assertionInventory.filter((name) => !seen.has(name));
   const valid = malformed.length === 0
     && unknown.length === 0
     && duplicates.length === 0
     && missing.length === 0
-    && rows.length === NYAY7_ASSERTION_INVENTORY.length;
+    && rows.length === assertionInventory.length;
 
   return {
     valid,
-    total: NYAY7_ASSERTION_INVENTORY.length,
+    total: assertionInventory.length,
     observed: rows.length,
     passed: rows.filter((row) => row?.pass === true).length,
     failed: failures.length,
@@ -97,4 +140,12 @@ export function summarizeNyay7Rows(rows) {
     unknown,
     malformed,
   };
+}
+
+export function summarizeNyay7Rows(rows) {
+  return summarizeRowsAgainstInventory(rows, NYAY7_ASSERTION_INVENTORY);
+}
+
+export function summarizeNyay7ExpandedRows(rows) {
+  return summarizeRowsAgainstInventory(rows, NYAY7_EXPANDED_ASSERTION_INVENTORY);
 }

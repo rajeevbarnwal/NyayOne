@@ -40,7 +40,7 @@
 
   /* Typography */
   --nyayone-font-body: 'Public Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --nyayone-font-heading: Aptos, Calibri, Carlito, system-ui, sans-serif;
+  --nyayone-font-heading: Aptos, Calibri, 'NyayOne Revision L Heading', system-ui, sans-serif;
   --nyayone-font-eyebrow: 'Space Grotesk', var(--nyayone-font-body);
   --nyayone-font-mono: 'Spline Sans Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
   --nyayone-font-brand: Spectral, Georgia, serif;

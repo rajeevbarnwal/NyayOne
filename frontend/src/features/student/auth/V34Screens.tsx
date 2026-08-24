@@ -38,6 +38,8 @@ import { isStudentMutationCancellation } from '../lib/useStudentMutation';
 import { InfoTooltip } from '../components';
 import { consumeStudentAuthTransitionNotice } from '../lib/studentAuthTransitionNotice';
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
+import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
+import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 type IconName =
@@ -132,7 +134,77 @@ function AuthAside({ title, copy }: { title: string; copy: string }) {
   );
 }
 
+function RevLTopbar({ theme, toggleTheme }: ScreenProps) {
+  return (
+    <header className="v321-topbar">
+      <NyayOneRevLLockup/>
+      <nav aria-label="Product areas">
+        <button type="button" disabled aria-disabled="true">Home</button>
+        <button type="button" disabled aria-disabled="true">Research</button>
+        <button type="button" disabled aria-disabled="true">Calendar</button>
+        <button type="button" disabled aria-disabled="true">Careers</button>
+        <button type="button" disabled aria-disabled="true">Profile</button>
+      </nav>
+      <span className="v321-secure">Secure Access</span>
+      {toggleTheme && <ThemeButton theme={theme} toggleTheme={toggleTheme}/>}
+    </header>
+  );
+}
+
+function RevLBrandPanel({ verification = false }: { verification?: boolean }) {
+  return (
+    <aside className={`v321-brandpanel${verification ? ' v321-brandpanel--verification' : ''}`} aria-label="NyayOne student account benefits">
+      <span className="v321-brandpanel__ring" aria-hidden="true"/>
+      <NyayOneRevLLockup reversed/>
+      <div className="v321-brandpanel__copy">
+        {!verification && <span className="v321-eyebrow">A legal workspace for students</span>}
+        <h2>{verification
+          ? 'Your account begins with verified access.'
+          : <><span className="v321-brandpanel__desktop-copy">Learn the law.<br/>Build your path.</span><span className="v321-brandpanel__mobile-copy">The record of your law-school career.</span></>}</h2>
+        <p>{verification
+          ? 'Successful verification signs you in. Profile completion is recommended, not forced.'
+          : <><span className="v321-brandpanel__desktop-copy">Research, opportunities, mentoring and your professional profile, connected through one trusted NyayOne identity.</span><span className="v321-brandpanel__mobile-copy">Internships, moots, research and mentors: one verified student identity, private by default.</span></>}</p>
+        <div className="v321-brandpanel__benefits" aria-label="Account benefits">
+          <span>{verification ? 'Passwordless' : 'Passwordless access'}</span><span>Private by design</span><span>Built for law students</span>
+        </div>
+      </div>
+      <span className="v321-brandpanel__legal">Legal, on the record</span>
+    </aside>
+  );
+}
+
+function RevLLegalFooter() {
+  return <footer className="v321-legal"><a href="/s-19">Privacy Notice</a><span aria-hidden="true">·</span><a href="/terms">Terms</a><span aria-hidden="true">·</span><a href="/accessibility">Accessibility</a></footer>;
+}
+
+function PrivacyNote() {
+  return (
+    <div className="v321-privacy-note">
+      <NyayOneRevLIcon name="shield" framed={false}/>
+      <span>If these details match an account, we’ll send a sign-in code. For your privacy, the response looks the same either way. Data handled under the DPDP Act, 2023.</span>
+    </div>
+  );
+}
+
+function CreateAccountContext({ onChangePersona }: { onChangePersona: () => void }) {
+  return (
+    <div className="v321-context" data-nyayone-create-context="">
+      <span className="v321-context__persona"><NyayOneRevLIcon name="users"/>Joining as <b>Student</b><button type="button" data-nyayone-persona-change="" onClick={onChangePersona}>Change</button></span>
+      <NyayOneAuthSelectors showPersona={false} compact/>
+    </div>
+  );
+}
+
 function Screen({ id, variant = 'auth', aside, children }: { id: string; variant?: 'auth' | 'app' | 'splash' | 'wizard'; aside?: ReactNode; children: ReactNode }) {
+  const revisionL = ['S-03', 'S-04', 'S-05', 'S-08', 'S-09'].includes(id);
+  if (revisionL) {
+    return (
+      <div className={`v34-screen v34-screen--${variant} v321-screen`} data-screen={id} data-nyayone-design="3.2.1-rev-l">
+        {aside}
+        {children}
+      </div>
+    );
+  }
   return (
     <section className={`v34-screen v34-screen--${variant}`} data-screen={id} aria-labelledby={`${id}-title`}>
       {aside}
@@ -166,15 +238,15 @@ function Footer({ hint, children }: { hint: ReactNode; children: ReactNode }) {
   return <footer className="v34-footer"><div className="v34-actions"><span className="v34-actions__hint">{hint}</span>{children}</div></footer>;
 }
 
-function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, required, error, help, max, maxLength, prefix }: {
+function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, required, error, help, max, maxLength, prefix, revisionLIcon }: {
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
-  placeholder?: string; optional?: boolean; required?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string;
+  placeholder?: string; optional?: boolean; required?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; revisionLIcon?: NyayOneRevLIconName;
 }) {
   const describedBy = error ? `${id}-error` : undefined;
   return (
     <div className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`}>
       <span className="v34-field__top">
-        <label htmlFor={id}>{label}</label>
+        <label htmlFor={id}>{revisionLIcon && <span className="v321-icon--indigo"><NyayOneRevLIcon name={revisionLIcon}/></span>}<span>{label}</span></label>
         <span className="v34-field__meta">
           {optional && <small>OPTIONAL</small>}
           {help && <InfoTooltip label={`More information about ${label}`} text={help}/>}
@@ -245,29 +317,39 @@ export function V34Onboarding() {
 
 export function V34AuthGate(props: ScreenProps) {
   const nav = useNavigate();
-  const [language, setLanguage] = useState('English');
+  const location = useLocation();
   const [deletionAccepted] = useState(() => (
     consumeStudentAuthTransitionNotice('account_deletion_accepted')
   ));
+  useEffect(() => {
+    if ((location.state as { nyay7Focus?: string } | null)?.nyay7Focus !== 'persona') return;
+    const frame = requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('[data-screen="S-03"] [data-nyayone-persona-trigger]')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.state]);
   return (
-    <Screen id="S-03" aside={<AuthAside title="The years before the bar, organised." copy="Built for students in India, not adapted from a firm tool."/>}>
-      <Pane><main className="v34-main">
-        <div className="v34-mobilebrand"><Brand/><ThemeButton {...props}/></div>
-        <h1 id="S-03-title" className="v34-display">Welcome. Let us get you in.</h1>
+    <Screen id="S-03" aside={<RevLBrandPanel/>}>
+      <RevLTopbar {...props}/>
+      <Pane><main id="main-content" aria-labelledby="S-03-title" className="v34-main v321-form v321-form--gateway">
+        <div><span className="v321-eyebrow">Welcome to NyayOne</span><h1 id="S-03-title" className="v34-title">Where would you like to begin?</h1><p className="v34-lede">Return to your workspace or create a secure student account in a few clear steps.</p></div>
         {deletionAccepted && (
           <div className="v34-banner" role="status">
             <b>DELETION REQUEST ACCEPTED</b>
             <span>You have been signed out and this browser's student context has been cleared.</span>
           </div>
         )}
-        <p className="v34-lede">Sign in if you have an account, or create one as a law student. Verification takes about a minute.</p><div className="v34-rule"/>
-        <div><span className="v34-mono">LANGUAGE</span><div className="v34-chips" role="radiogroup" aria-label="Language">{['English', 'हिंदी', 'More'].map((name) => <button key={name} type="button" role="radio" aria-checked={language === name} className={language === name ? 'is-on' : ''} onClick={() => setLanguage(name)}>{name}</button>)}</div></div><span className="v34-grow"/>
-      </main><Footer hint={<>Sign in, or register as a law student. Read the <a href="/s-19">privacy notice</a> first.</>}><IconAction secondary label="Register as a student" icon="add" onClick={() => nav('/s-08')}/><IconAction label="Sign in" icon="key" onClick={() => nav('/s-04')}/></Footer></Pane>
+        <button type="button" className="v321-primary" aria-label="Sign in" onClick={() => nav('/s-04')}><NyayOneRevLIcon name="otp"/><span>Sign In Securely</span></button>
+        <p className="v321-signin-note">Signing in? Your saved role and language apply automatically. No need to choose again.</p>
+        <div className="v321-join-card"><span className="v321-eyebrow">New here? Choose how you join</span><NyayOneAuthSelectors/><button type="button" className="v321-secondary" aria-label="Register as a student" onClick={() => nav('/s-08')}><span className="v321-icon--indigo"><NyayOneRevLIcon name="userplus"/></span><span>Create Student Account</span></button></div>
+        <p className="v321-consent">By continuing, you acknowledge the <a href="/s-19">Privacy Notice</a>. No sign-in code is requested on this screen. Persona and language set presentation and routing intent only. They are never authorization.</p>
+        <span className="v321-dpdp"><i aria-hidden="true"/>DPDP Act, 2023</span>
+      </main><RevLLegalFooter/></Pane>
     </Screen>
   );
 }
 
-export function V34Login() {
+export function V34Login(props: ScreenProps) {
   const nav = useNavigate();
   const [mobile, setMobile] = useState('');
   const [busy, setBusy] = useState(false);
@@ -288,12 +370,23 @@ export function V34Login() {
     }
   }
   return (
-    <Screen id="S-04" aside={<AuthAside title="Welcome back." copy="Sign in with the mobile number on your account. We will send a short-lived one time code."/>}>
-      <Pane><PaneHead id="S-04 · SIGN IN" back={() => nav('/s-03')}/><main className="v34-main">
-        <h1 id="S-04-title" className="v34-title">Sign in</h1><div className="v34-fieldset">
-          <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15}/>
-        </div>{errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}<div className="v34-inlineactions"><button className="v34-hit" onClick={() => nav('/s-06')}>Recover account</button></div><span className="v34-grow"/>
-      </main><Footer hint={<>New here? <button className="v34-textlink" onClick={() => nav('/s-08')}>Create a student account</button></>}><IconAction label="Send one time code" icon="send" onClick={submit} disabled={busy}/></Footer></Pane>
+    <Screen id="S-04" aside={<RevLBrandPanel/>}>
+      <RevLTopbar {...props}/>
+      <Pane><main id="main-content" aria-labelledby="S-04-title" className="v34-main v321-form v321-form--login">
+        <span className="v321-eyebrow">Sign in</span>
+        <h1 id="S-04-title" className="v34-title">How do you want to sign in?</h1>
+        <div className="v321-segment" role="group" aria-label="Sign-in identity">
+          <button type="button" aria-pressed="true"><span className="v321-icon--indigo"><NyayOneRevLIcon name="sim"/></span><span>Mobile Number</span></button>
+          <button type="button" aria-pressed="false" aria-disabled="true" disabled><span className="v321-icon--gold"><NyayOneRevLIcon name="badge"/></span><span>Verified Email</span></button>
+        </div>
+        <div className="v34-fieldset">
+          <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>
+        </div>
+        <p className="v321-help">We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release.</p>
+        {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
+        <PrivacyNote/>
+        <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send one time code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
+      </main><RevLLegalFooter/></Pane>
     </Screen>
   );
 }
@@ -509,16 +602,20 @@ export function V34Register(props: ScreenProps) {
     finally { setBusy(false); }
   }
   return (
-    <Screen id="S-08" aside={<AuthAside title="The years before the bar, organised." copy="Create your secure account, then complete your profile after verification."/>}>
-      <Pane><PaneHead id="S-08 · STEP 1 OF 2" back={() => nav('/s-03')}><ThemeButton {...props}/></PaneHead><main className="v34-main">
-        <div><h1 id="S-08-title" className="v34-title">Create your student account</h1><p className="v34-copy">Enter only your core legal identity, mobile number and date of birth. Academic details follow after verification.</p></div>
+    <Screen id="S-08" aside={<RevLBrandPanel/>}>
+      <RevLTopbar {...props}/>
+      <Pane><main id="main-content" aria-labelledby="S-08-title" className="v34-main v321-form v321-form--register">
+        <CreateAccountContext onChangePersona={() => nav('/s-03', { state: { nyay7Focus: 'persona' } })}/>
+        <div><span className="v321-eyebrow">Create account</span><h1 id="S-08-title" className="v34-title">Create your student account.</h1></div>
         <div ref={errorSummaryRef} id="s08-error-summary" tabIndex={-1} role={errorRows.length > 0 ? 'alert' : undefined} hidden={errorRows.length === 0} className="v34-well">
           <h2>Review the highlighted fields</h2><ul>{errorRows.map(([field, message]) => <li key={field}><a href={`#${errorTargets[field] ?? 'S-08-title'}`}>{message}</a></li>)}</ul>
         </div>
-        <div className="v34-fieldset"><div className="v34-row v34-row--three"><Field id="v34-first" label="FIRST NAME" value={firstName} onChange={setFirstName} autoComplete="given-name" required error={errors.firstName}/><Field id="v34-middle" label="MIDDLE NAME" value={middleName} onChange={setMiddleName} autoComplete="additional-name" optional error={errors.middleName}/><Field id="v34-last" label="LAST NAME" value={lastName} onChange={setLastName} autoComplete="family-name" required error={errors.lastName}/></div>
-          <div className="v34-row"><Field id="v34-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" maxLength={15} required error={errors.mobile} help="Exactly 10 digits. The one time code is sent here."/><Field id="v34-dob" label="DATE OF BIRTH" value={dob} onChange={setDob} type="date" required error={errors.dob} help={`Required for eligibility; must be on or before ${todayLocalISO()}.`}/></div>
-        </div><div className="v34-well v34-checks"><label htmlFor="v34-terms"><input id="v34-terms" type="checkbox" required aria-required="true" aria-invalid={errors.terms ? true : undefined} aria-describedby={errors.terms ? 'v34-terms-error' : undefined} checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)}/>I accept the Terms.</label>{errors.terms && <span id="v34-terms-error" role="alert" className="v34-field__error">{errors.terms}</span>}<label htmlFor="v34-privacy"><input id="v34-privacy" type="checkbox" required aria-required="true" aria-invalid={errors.privacy ? true : undefined} aria-describedby={errors.privacy ? 'v34-privacy-error' : undefined} checked={privacyNoticeAcknowledged} onChange={(event) => setPrivacyNoticeAcknowledged(event.target.checked)}/>I acknowledge the Privacy Notice.</label>{errors.privacy && <span id="v34-privacy-error" role="alert" className="v34-field__error">{errors.privacy}</span>}</div>{errors.submit && <span role="alert" className="v34-field__error">{errors.submit}</span>}<span className="v34-grow"/>
-      </main><Footer hint="The code expires after it is sent. Registration uses one-time-code verification only."><IconAction label="Send one time code" icon="send" onClick={submit} disabled={busy}/></Footer></Pane>
+        <div className="v34-fieldset"><div className="v34-row"><Field id="v34-first" label="FIRST NAME" value={firstName} onChange={setFirstName} autoComplete="given-name" required error={errors.firstName} revisionLIcon="idcard"/><Field id="v34-middle" label="MIDDLE NAME" value={middleName} onChange={setMiddleName} autoComplete="additional-name" optional error={errors.middleName}/></div><Field id="v34-last" label="LAST NAME" value={lastName} onChange={setLastName} autoComplete="family-name" required error={errors.lastName}/><Field id="v34-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" maxLength={15} required error={errors.mobile} revisionLIcon="sim"/><Field id="v34-dob" label="DATE OF BIRTH" value={dob} onChange={setDob} type="date" required error={errors.dob} help={`Required for eligibility; must be on or before ${todayLocalISO()}.`}/><p className="v321-help v321-help--dob">Used once to check whether guardian consent applies (S-16). Not shown on your profile.</p></div>
+        <div className="v34-well v34-checks"><label htmlFor="v34-terms"><input id="v34-terms" type="checkbox" required aria-required="true" aria-invalid={errors.terms ? true : undefined} aria-describedby={errors.terms ? 'v34-terms-error' : undefined} checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)}/>I accept the Terms.</label>{errors.terms && <span id="v34-terms-error" role="alert" className="v34-field__error">{errors.terms}</span>}<label htmlFor="v34-privacy"><input id="v34-privacy" type="checkbox" required aria-required="true" aria-invalid={errors.privacy ? true : undefined} aria-describedby={errors.privacy ? 'v34-privacy-error' : undefined} checked={privacyNoticeAcknowledged} onChange={(event) => setPrivacyNoticeAcknowledged(event.target.checked)}/>I acknowledge the Privacy Notice.</label>{errors.privacy && <span id="v34-privacy-error" role="alert" className="v34-field__error">{errors.privacy}</span>}</div>
+        {errors.submit && <span role="alert" className="v34-field__error">{errors.submit}</span>}
+        <button type="button" className="v321-primary" aria-label="Send one time code" onClick={submit} disabled={busy}><NyayOneRevLIcon name="userplus"/><span>Create Account</span></button>
+        <PrivacyNote/>
+      </main><RevLLegalFooter/></Pane>
     </Screen>
   );
 }
@@ -589,15 +686,23 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? '');
   const screenId = purpose === 'signup' ? 'S-09' : 'S-05';
   const backRoute = purpose === 'signup' ? '/s-08' : '/s-04';
+  const destination = flow?.destinationMasked?.match(/^••••••\d{4}$/u)
+    ? `+91 ••••• ••${flow.destinationMasked.slice(-3)}`
+    : (flow?.destinationMasked ?? 'your mobile');
   return (
-    <Screen id={screenId} aside={<AuthAside title="One code, then you are in." copy="Codes are short-lived. Repeated wrong entries trigger a temporary lock."/>}>
-      <Pane><PaneHead id={`${screenId} · VERIFY`} back={() => nav(backRoute)}/><main className="v34-main">
-        <div><h1 id={`${screenId}-title`} className="v34-title">Enter the code</h1><p className="v34-lede">Six digits, sent to {flow?.destinationMasked ?? 'your mobile'}.</p></div>
+    <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
+      <RevLTopbar/>
+      <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
+        {purpose === 'signup' && <CreateAccountContext onChangePersona={() => nav('/s-03', { state: { nyay7Focus: 'persona' } })}/>}
+        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" onClick={() => nav(backRoute)}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
         <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
+        <p className="v321-otp-help">Paste or platform autofill works. The field accepts the full code at once.</p>
         {otpFlow.loading && <div className="v34-well" role="status">Restoring the server verification state…</div>}
         {otpFlow.loadError && <div className="v34-banner" role="alert">Verification state is unavailable. Retry the state check before continuing.</div>}
-        {status && <div className="v34-banner" role="alert">{status}</div>}<div className="v34-card v34-kv"><span>Code expires in <b>{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend available in <button className="v34-textlink" disabled={!flow?.resendAllowed || busy} onClick={resendCode}>{flow?.resendAllowed ? 'Resend now' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</button></span><span>Tries left <b>{attempts ?? '—'}</b></span></div><span className="v34-grow"/>
-      </main><Footer hint="Enter all six digits to verify."><IconAction label="Verify and continue" icon="verify" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}/></Footer></Pane>
+        {status && <div className="v34-banner" role="alert">{status}</div>}
+        <div className="v34-card v34-kv"><span>Expires in <b className="v321-mono">{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend in <b className="v321-mono">{flow?.resendAllowed ? '00:00' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</b></span><span>Tries left <b>{attempts ?? '—'}</b></span></div>
+        <div className="v321-button-row"><button type="button" className="v321-primary" aria-label="Verify and continue" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}><NyayOneRevLIcon name="checkc"/><span>Verify and Continue</span></button><button type="button" className="v321-secondary" disabled={!flow?.resendAllowed || busy} onClick={resendCode}><span className="v321-icon--indigo"><NyayOneRevLIcon name="refresh"/></span><span>Resend Code</span></button></div>
+      </main><RevLLegalFooter/></Pane>
     </Screen>
   );
 }
