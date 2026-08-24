@@ -1569,6 +1569,115 @@ jobs:
             wave5_failures,
         )
 
+    def test_wave4_failure_diagnostic_upload_is_exact_and_fail_closed(self) -> None:
+        policy = load("verify_nyayone_ci")
+        workflow_path = (
+            policy.ROOT / ".github/workflows/wave4-private-reporting-gate.yml"
+        )
+        source = workflow_path.read_text(encoding="utf-8")
+        diagnostic = (
+            "      - name: Upload privacy-safe S-86/S-87 failure diagnostic\n"
+            "        if: ${{ failure() }}\n"
+            "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+            "        with:\n"
+            "          name: wave4-reporting-failure-diagnostic\n"
+            "          path: ${{ github.workspace }}/test-results/wave4-browser/results.json\n"
+            "          if-no-files-found: error\n"
+            "          retention-days: 14\n"
+            "          include-hidden-files: false\n"
+        )
+        self.assertEqual(source.count(diagnostic), 1)
+        mutations = {
+            "missing": source.replace(diagnostic, "", 1),
+            "success-only": source.replace(
+                "        if: ${{ failure() }}\n",
+                "        if: ${{ always() }}\n",
+                1,
+            ),
+            "directory upload": source.replace(
+                "          path: ${{ github.workspace }}/test-results/wave4-browser/results.json\n",
+                "          path: ${{ github.workspace }}/test-results/wave4-browser\n",
+                1,
+            ),
+            "missing file allowed": source.replace(
+                "          if-no-files-found: error\n",
+                "          if-no-files-found: warn\n",
+                1,
+            ),
+            "hidden files included": source.replace(
+                "          include-hidden-files: false\n",
+                "          include-hidden-files: true\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / workflow_path.name
+            for label, mutant in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutant, source)
+                    candidate.write_text(mutant, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any("diagnostic upload" in failure for failure in failures),
+                        failures,
+                    )
+
+    def test_nyay4_failure_diagnostic_upload_is_exact_and_non_derivative(self) -> None:
+        policy = load("verify_nyayone_ci")
+        workflow_path = policy.ROOT / ".github/workflows/wave1-foundation-gate.yml"
+        source = workflow_path.read_text(encoding="utf-8")
+        producer = (
+            "      - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)\n"
+            "        run: PYTHON=python bash scripts/db_gate.sh\n"
+        )
+        diagnostic = (
+            "      - name: Upload privacy-safe NYAY-4 failure diagnostic\n"
+            "        if: ${{ failure() && hashFiles('backend/test-results/nyay4-postgres/summary.json') != '' }}\n"
+            "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+            "        with:\n"
+            "          name: nyay4-postgres-failure-diagnostic\n"
+            "          path: ${{ github.workspace }}/backend/test-results/nyay4-postgres/summary.json\n"
+            "          if-no-files-found: error\n"
+            "          retention-days: 14\n"
+            "          include-hidden-files: false\n"
+        )
+
+        self.assertEqual(source.count(producer), 1)
+        self.assertEqual(source.count(diagnostic), 1)
+        self.assertEqual(source.count(producer + diagnostic), 1)
+        mutations = {
+            "always upload": diagnostic.replace(
+                "failure() && hashFiles(", "always() && hashFiles(", 1
+            ),
+            "missing exact-file condition": diagnostic.replace(
+                " && hashFiles('backend/test-results/nyay4-postgres/summary.json') != ''",
+                "",
+                1,
+            ),
+            "directory upload": diagnostic.replace(
+                "backend/test-results/nyay4-postgres/summary.json",
+                "backend/test-results/nyay4-postgres",
+                1,
+            ),
+            "missing file allowed": diagnostic.replace(
+                "if-no-files-found: error", "if-no-files-found: warn", 1
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / workflow_path.name
+            for label, mutant in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutant, diagnostic)
+                    candidate.write_text(
+                        source.replace(diagnostic, mutant, 1),
+                        encoding="utf-8",
+                    )
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any("diagnostic upload" in failure for failure in failures),
+                        failures,
+                    )
+
     def test_nyay4_browser_executable_contract_rejects_seeded_mutants(self) -> None:
         policy = load("verify_nyayone_ci")
         self.assertEqual(policy.check_nyay4_browser_gate_contract(), [])

@@ -22,3 +22,27 @@ export function validWave4StaffSession(value) {
     && Array.isArray(actor.consent_state)
     && actor.consent_state.length === 0;
 }
+
+export function validWave4StudentSession(value, expectedSub) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (value.authenticated !== true || value.actor === null
+      || typeof value.actor !== 'object' || Array.isArray(value.actor)) return false;
+  if (Object.keys(value).sort().join(',') !== 'actor,authenticated') return false;
+
+  const actor = value.actor;
+  if (Object.keys(actor).sort().join(',')
+      !== 'consent_state,is_minor,roles,student_profile_id,student_verification,sub') return false;
+  return typeof expectedSub === 'string'
+    && UUID.test(expectedSub)
+    && actor.sub === expectedSub
+    && Array.isArray(actor.roles)
+    && actor.roles.length === 1
+    && actor.roles[0] === 'student'
+    && typeof actor.student_profile_id === 'string'
+    && UUID.test(actor.student_profile_id)
+    && actor.student_verification === 'draft'
+    && actor.is_minor === false
+    && Array.isArray(actor.consent_state)
+    && actor.consent_state.length === 1
+    && actor.consent_state[0] === 'registration';
+}

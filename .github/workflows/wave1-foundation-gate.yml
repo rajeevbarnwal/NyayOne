@@ -186,6 +186,15 @@ jobs:
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: Wave 1 + registration DB gate (PostgreSQL 16 + pgvector)
         run: PYTHON=python bash scripts/db_gate.sh
+      - name: Upload privacy-safe NYAY-4 failure diagnostic
+        if: ${{ failure() && hashFiles('backend/test-results/nyay4-postgres/summary.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nyay4-postgres-failure-diagnostic
+          path: ${{ github.workspace }}/backend/test-results/nyay4-postgres/summary.json
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
       - name: SAATHI-60 owner-scoped save concurrency (isolated PostgreSQL database)
         run: |
           PGPASSWORD=nyayone_ci_ephemeral psql -h 127.0.0.1 -p 1032 -U nyayone_ci -d postgres \
