@@ -160,7 +160,7 @@ async function addSessionCookies(context, api) {
 async function newAuthenticatedContext(api, viewport, theme) {
   const context = await browser.newContext({ viewport, colorScheme: theme });
   await addSessionCookies(context, api);
-  await context.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
+  await context.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
   return context;
 }
 

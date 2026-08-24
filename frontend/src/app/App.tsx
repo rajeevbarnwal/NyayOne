@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
 import { screenRoutes } from './screenRegistry';
@@ -15,6 +15,7 @@ import { authRoutes } from '../features/auth/screens';
 import { PublicCredentialVerification } from '../features/student/credentials/CredentialScreens';
 import { moderationRoutes } from '../features/moderation/screens';
 import { ModerationGuard } from '../features/moderation/ModerationScreens';
+import { isProtectedStudentPath, StudentRouteGuard } from './StudentRouteGuard';
 
 // Route-level lazy loading. Screens share one placeholder component in the
 // foundation stage; implemented S-01..S-19 screens (student module) render
@@ -25,7 +26,8 @@ const TokenShowcase = lazy(() => import('../features/TokenShowcase'));
 
 function ShellRoutes() {
   const { theme, toggleTheme } = useTheme();
-  return (
+  const location = useLocation();
+  const shell = (
     <AppShell theme={theme} toggleTheme={toggleTheme}>
       <Suspense fallback={<div className="route-loading">Loading…</div>}>
         <Routes>
@@ -83,6 +85,9 @@ function ShellRoutes() {
       </Suspense>
     </AppShell>
   );
+  return isProtectedStudentPath(location.pathname)
+    ? <StudentRouteGuard>{shell}</StudentRouteGuard>
+    : shell;
 }
 
 function AppRoutes() {
@@ -104,10 +109,13 @@ function PublicVerificationRoute() {
 export function App() {
   // Reactive auth: derives the live state from the persisted, secret-free lawyer
   // session snapshot and updates immediately on P0.1 create/update/clear/expiry.
-  const auth = useDerivedAuth();
+  const session = useDerivedAuth();
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider value={auth}>
+      <AuthProvider
+        value={session.auth}
+        studentSession={{ phase: session.phase, refresh: session.refresh }}
+      >
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>

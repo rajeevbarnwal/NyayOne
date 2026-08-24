@@ -696,6 +696,11 @@ class UploadableEvidenceTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (source / "screen.png").write_bytes(b"\x89PNG\r\n\x1a\nsynthetic")
+            screenshots = source / "screenshots"
+            screenshots.mkdir()
+            (screenshots / "private.png").write_bytes(
+                b"\x89PNG\r\n\x1a\nsynthetic-private"
+            )
             (source / "service.log").write_text(
                 "private narrative that must remain local\n", encoding="utf-8"
             )
@@ -718,9 +723,10 @@ class UploadableEvidenceTests(unittest.TestCase):
                 included, quarantined, failures = exporter.prepare(
                     source, destination, "wave1"
                 )
-            self.assertEqual((included, quarantined, failures), (1, 4, []))
+            self.assertEqual((included, quarantined, failures), (1, 5, []))
             self.assertFalse((destination / "results.json").exists())
             self.assertFalse((destination / "screen.png").exists())
+            self.assertFalse((destination / "screenshots" / "private.png").exists())
             self.assertFalse((destination / "trace.zip").exists())
             self.assertFalse((destination / "service.log").exists())
             self.assertFalse((destination / "work" / "state.json").exists())
@@ -748,6 +754,11 @@ class UploadableEvidenceTests(unittest.TestCase):
                 ],
             )
             self.assertTrue(export_payload["quarantined"])
+            self.assertTrue(any(
+                row.get("mediaClass") == "sensitive-capture"
+                and row.get("count") == 2
+                for row in export_payload["quarantined"]
+            ))
             self.assertTrue(
                 all(
                     "contentSha256" not in row and "pathSha256" not in row
@@ -924,6 +935,48 @@ class UploadableEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(payload["structuredCandidates"][0]["producerState"], "fail")
 
+    def test_wave1_production_inventory_contract_is_exactly_pinned(self) -> None:
+        exporter = load("prepare_uploadable_evidence")
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("wave1-browser"),
+            (
+                "rows", "area", 1467,
+                "250d3429ae3056dc2b117e013196ee896c8d73b3e99dfc61d3ebd27ef66f8f65",
+            ),
+        )
+
+    def test_nyay5_production_inventory_contracts_are_exactly_pinned(self) -> None:
+        exporter = load("prepare_uploadable_evidence")
+        self.assertEqual(exporter.NYAY5_POSTGRES_MUTANT_COUNT, 29)
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("nyay5-postgres"),
+            (
+                "assertions", "id", 21,
+                "ced6011b74db2f2b1c890f8ac1d7b3a212ff2aac8f7259e4ef6085e5d4dfd372",
+            ),
+        )
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("nyay5-browser"),
+            (
+                "rows", "name", 22,
+                "b9e7aa70519d7d16f044b2ac928fb039cce8d2e073bd1b0303f9f58787d28071",
+            ),
+        )
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("nyay5-acceptance-attestations"),
+            (
+                "executions", "id", 12,
+                "3f22abbff483c686efaabc3d86ab33bd2b8758aa95d4df77b8f306edddb9b328",
+            ),
+        )
+        self.assertEqual(
+            exporter.INVENTORY_CONTRACTS.get("nyay5-acceptance-matrix"),
+            (
+                "assertions", "id", 61,
+                "3808f4a08805ec0cc8f904996c9fda428904ae48d8f34e261e3e07791e6d597e",
+            ),
+        )
+
     def test_every_profile_accepts_only_its_complete_consistent_inventory(self) -> None:
         exporter = load("prepare_uploadable_evidence")
         inventory_contracts = {
@@ -956,6 +1009,18 @@ class UploadableEvidenceTests(unittest.TestCase):
             ),
             "wave5-real-browser": self._contract(
                 exporter, "rows", "name", ["wave5-real-01"]
+            ),
+            "nyay5-postgres": self._contract(
+                exporter, "assertions", "id", ["N5-PG-01"]
+            ),
+            "nyay5-browser": self._contract(
+                exporter, "rows", "name", ["nyay5-browser-01"]
+            ),
+            "nyay5-acceptance-attestations": self._contract(
+                exporter, "executions", "id", ["native:frontend-unit"]
+            ),
+            "nyay5-acceptance-matrix": self._contract(
+                exporter, "assertions", "id", ["QA-01"]
             ),
         }
         credential_contracts = {
@@ -1065,6 +1130,116 @@ class UploadableEvidenceTests(unittest.TestCase):
                     "fatalError": None,
                 },
             },
+            "nyay5": {
+                "nyay5-postgres/summary.json": {
+                    "gate": "nyay5_postgres",
+                    "status": "PASS",
+                    "executed": True,
+                    "exit_code": 0,
+                    "head": "0021_nyay5_profile_boundary",
+                    "assertions": [{"id": "N5-PG-01", "status": "PASS"}],
+                    "failed_assertions": [],
+                    "assertion_summary": {
+                        "exact_inventory": True,
+                        "failed": [],
+                        "overall_pass": True,
+                        "passed": 1,
+                        "required": 1,
+                    },
+                    "scratch_cleanup": {
+                        "all_created_removed": True,
+                        "cleanup_failed": 0,
+                        "created": 4,
+                        "inventory_match": True,
+                        "removed": 4,
+                    },
+                    "mutant_inventory": {"named": 29, "killed": 29},
+                    "privacy_scan": {"scanned": True, "findings": 0, "passed": True},
+                },
+                "nyay5-browser/results.json": {
+                    "gate": "nyay5_profile_browser",
+                    "target": "isolated-loopback-real-api-postgresql-chromium",
+                    "executed": True,
+                    "status": "PASS",
+                    "total": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "inventoryExact": True,
+                    "rows": [{
+                        "name": "nyay5-browser-01",
+                        "pass": True,
+                        "metrics": {"executed": True},
+                    }],
+                    "failureClass": None,
+                    "failureStage": None,
+                    "failureCode": None,
+                },
+                "nyay5-browser/orchestrator-summary.json": {
+                    "gate": "nyay5-profile-browser-orchestrator-v1",
+                    "executed": True,
+                    "status": "PASS",
+                    "services": {
+                        "postgresReady": True,
+                        "apiReady": True,
+                        "otpCaptureReady": True,
+                        "productionPreviewReady": True,
+                        "serviceWorkerActive": True,
+                    },
+                    "scratchCleanup": {
+                        "created": 1,
+                        "removed": 1,
+                        "inventoryMatch": True,
+                    },
+                    "browserExitCode": 0,
+                    "serviceLogsCaptured": True,
+                },
+                "nyay5-acceptance/attestations.json": {
+                    "gate": "nyay5_acceptance_attestations_v1",
+                    "status": "PASS",
+                    "executed": True,
+                    "executions": [{
+                        "id": "native:frontend-unit",
+                        "executed": True,
+                        "skipped": False,
+                        "pass": True,
+                        "evidenceCount": 1,
+                        "selectorCount": None,
+                    }],
+                },
+                "nyay5-acceptance/summary.json": {
+                    "gate": "nyay5_acceptance_matrix",
+                    "status": "PASS",
+                    "executed": True,
+                    "total": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "inventoryExact": True,
+                    "assertions": [{
+                        "id": "QA-01",
+                        "passed": True,
+                        "evidenceCount": 1,
+                    }],
+                    "executionCoverage": {
+                        "pass": True,
+                        "mapped": 1,
+                        "missing": 0,
+                        "skipped": 0,
+                        "unknown": 0,
+                        "unique": True,
+                    },
+                    "executionInventory": {
+                        "count": 1,
+                        "sha256": "a" * 64,
+                    },
+                    "producerStatus": {
+                        "browser": True,
+                        "postgres": True,
+                        "otpPostgres": True,
+                        "attestations": True,
+                    },
+                    "privacyScan": {"passed": True, "findings": 0},
+                },
+            },
         }
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -1075,6 +1250,11 @@ class UploadableEvidenceTests(unittest.TestCase):
                 exporter,
                 "CREDENTIAL_INVENTORY_CONTRACTS",
                 credential_contracts,
+            ),
+            mock.patch.object(
+                exporter,
+                "NYAY5_ACCEPTANCE_EXECUTION_INVENTORY",
+                (1, "a" * 64),
             ),
         ):
             root = Path(directory)
@@ -1129,6 +1309,272 @@ class UploadableEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 exported["structuredCandidates"][0]["producerState"], "blocked"
             )
+
+    def test_nyay5_evidence_rejects_false_green_producer_summaries(self) -> None:
+        exporter = load("prepare_uploadable_evidence")
+        contracts = {
+            "nyay5-postgres": self._contract(
+                exporter, "assertions", "id", ["N5-PG-01"]
+            ),
+            "nyay5-browser": self._contract(
+                exporter, "rows", "name", ["N5-BROWSER-01"]
+            ),
+        }
+        postgres = {
+            "gate": "nyay5_postgres",
+            "status": "PASS",
+            "executed": True,
+            "exit_code": 0,
+            "head": "0021_nyay5_profile_boundary",
+            "assertions": [{"id": "N5-PG-01", "status": "PASS"}],
+            "failed_assertions": [],
+            "assertion_summary": {
+                "exact_inventory": True,
+                "failed": [],
+                "overall_pass": True,
+                "passed": 1,
+                "required": 1,
+            },
+            "scratch_cleanup": {
+                "all_created_removed": True,
+                "cleanup_failed": 0,
+                "created": 4,
+                "inventory_match": True,
+                "removed": 4,
+            },
+            "mutant_inventory": {"named": 29, "killed": 29},
+            "privacy_scan": {"scanned": True, "findings": 0, "passed": True},
+        }
+        browser = {
+            "gate": "nyay5_profile_browser",
+            "target": "isolated-loopback-real-api-postgresql-chromium",
+            "executed": True,
+            "status": "PASS",
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "inventoryExact": True,
+            "rows": [{
+                "name": "N5-BROWSER-01",
+                "pass": True,
+                "metrics": {"executed": True},
+            }],
+            "failureClass": None,
+            "failureStage": None,
+            "failureCode": None,
+        }
+        orchestrator = {
+            "gate": "nyay5-profile-browser-orchestrator-v1",
+            "executed": True,
+            "status": "PASS",
+            "services": {
+                "postgresReady": True,
+                "apiReady": True,
+                "otpCaptureReady": True,
+                "productionPreviewReady": True,
+                "serviceWorkerActive": True,
+            },
+            "scratchCleanup": {
+                "created": 1,
+                "removed": 1,
+                "inventoryMatch": True,
+            },
+            "browserExitCode": 0,
+            "serviceLogsCaptured": True,
+        }
+        mutants = {
+            "PostgreSQL mutant survived": (
+                "nyay5-postgres",
+                {**postgres, "mutant_inventory": {"named": 29, "killed": 28}},
+            ),
+            "PostgreSQL mutant inventory shrank": (
+                "nyay5-postgres",
+                {**postgres, "mutant_inventory": {"named": 28, "killed": 28}},
+            ),
+            "PostgreSQL mutant inventory has an extra field": (
+                "nyay5-postgres",
+                {**postgres, "mutant_inventory": {
+                    "named": 29,
+                    "killed": 29,
+                    "survived": 0,
+                }},
+            ),
+            "PostgreSQL cleanup incomplete": (
+                "nyay5-postgres",
+                {**postgres, "scratch_cleanup": {
+                    **postgres["scratch_cleanup"], "removed": 3,
+                }},
+            ),
+            "browser assertion not executed": (
+                "nyay5-browser",
+                {**browser, "rows": [{
+                    "name": "N5-BROWSER-01",
+                    "pass": True,
+                    "metrics": {"executed": False},
+                }]},
+            ),
+            "browser failure hidden by PASS": (
+                "nyay5-browser",
+                {**browser, "failureCode": "RUNTIME_ASSERTION_FAILED"},
+            ),
+            "orchestrator service absent": (
+                "nyay5-orchestrator",
+                {**orchestrator, "services": {
+                    **orchestrator["services"], "serviceWorkerActive": False,
+                }},
+            ),
+            "orchestrator cleanup mismatch": (
+                "nyay5-orchestrator",
+                {**orchestrator, "scratchCleanup": {
+                    "created": 1, "removed": 0, "inventoryMatch": False,
+                }},
+            ),
+            "orchestrator browser failed": (
+                "nyay5-orchestrator",
+                {**orchestrator, "browserExitCode": 1},
+            ),
+            "orchestrator service logs absent": (
+                "nyay5-orchestrator",
+                {**orchestrator, "serviceLogsCaptured": False},
+            ),
+            "orchestrator extra field": (
+                "nyay5-orchestrator",
+                {**orchestrator, "diagnostic": "not uploadable"},
+            ),
+        }
+        with mock.patch.object(exporter, "INVENTORY_CONTRACTS", contracts):
+            for label, (kind, payload) in mutants.items():
+                with self.subTest(label=label):
+                    result, error = exporter._safe_result(kind, payload, {
+                        "nyay5-postgres": "nyay5-postgres",
+                        "nyay5-browser": "nyay5-browser",
+                        "nyay5-orchestrator": "nyay5-orchestrator",
+                    }[kind])
+                    self.assertIsNone(result)
+                    self.assertIsNotNone(error)
+
+    def test_nyay5_acceptance_reports_reject_forged_passes(self) -> None:
+        exporter = load("prepare_uploadable_evidence")
+        contracts = {
+            "nyay5-acceptance-attestations": self._contract(
+                exporter, "executions", "id", ["native:frontend-unit"]
+            ),
+            "nyay5-acceptance-matrix": self._contract(
+                exporter, "assertions", "id", ["QA-01"]
+            ),
+        }
+        attestation = {
+            "gate": "nyay5_acceptance_attestations_v1",
+            "status": "PASS",
+            "executed": True,
+            "executions": [{
+                "id": "native:frontend-unit",
+                "executed": True,
+                "skipped": False,
+                "pass": True,
+                "evidenceCount": 1,
+                "selectorCount": None,
+            }],
+        }
+        aggregate = {
+            "gate": "nyay5_acceptance_matrix",
+            "status": "PASS",
+            "executed": True,
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "inventoryExact": True,
+            "assertions": [{"id": "QA-01", "passed": True, "evidenceCount": 1}],
+            "executionCoverage": {
+                "pass": True,
+                "mapped": 1,
+                "missing": 0,
+                "skipped": 0,
+                "unknown": 0,
+                "unique": True,
+            },
+            "executionInventory": {"count": 1, "sha256": "a" * 64},
+            "producerStatus": {
+                "browser": True,
+                "postgres": True,
+                "otpPostgres": True,
+                "attestations": True,
+            },
+            "privacyScan": {"passed": True, "findings": 0},
+        }
+        with (
+            mock.patch.object(exporter, "INVENTORY_CONTRACTS", contracts),
+            mock.patch.object(
+                exporter,
+                "NYAY5_ACCEPTANCE_EXECUTION_INVENTORY",
+                (1, "a" * 64),
+            ),
+        ):
+            for kind, artifact_id, payload in (
+                (
+                    "nyay5-acceptance-attestations",
+                    "nyay5-acceptance-attestations",
+                    attestation,
+                ),
+                (
+                    "nyay5-acceptance-matrix",
+                    "nyay5-acceptance-matrix",
+                    aggregate,
+                ),
+            ):
+                result, error = exporter._safe_result(kind, payload, artifact_id)
+                self.assertIsNone(error)
+                self.assertEqual(result["producerState"], "pass")
+
+            mutants = {
+                "skipped attestation": (
+                    "nyay5-acceptance-attestations",
+                    "nyay5-acceptance-attestations",
+                    {**attestation, "executions": [{
+                        **attestation["executions"][0], "skipped": True,
+                    }]},
+                ),
+                "zero-evidence attestation": (
+                    "nyay5-acceptance-attestations",
+                    "nyay5-acceptance-attestations",
+                    {**attestation, "executions": [{
+                        **attestation["executions"][0], "evidenceCount": 0,
+                    }]},
+                ),
+                "hidden aggregate assertion failure": (
+                    "nyay5-acceptance-matrix",
+                    "nyay5-acceptance-matrix",
+                    {**aggregate, "assertions": [{
+                        "id": "QA-01", "passed": False, "evidenceCount": 1,
+                    }]},
+                ),
+                "failed producer hidden by aggregate": (
+                    "nyay5-acceptance-matrix",
+                    "nyay5-acceptance-matrix",
+                    {**aggregate, "producerStatus": {
+                        **aggregate["producerStatus"], "attestations": False,
+                    }},
+                ),
+                "missing execution coverage hidden by aggregate": (
+                    "nyay5-acceptance-matrix",
+                    "nyay5-acceptance-matrix",
+                    {**aggregate, "executionCoverage": {
+                        **aggregate["executionCoverage"],
+                        "pass": False,
+                        "missing": 1,
+                    }},
+                ),
+                "privacy finding hidden by aggregate": (
+                    "nyay5-acceptance-matrix",
+                    "nyay5-acceptance-matrix",
+                    {**aggregate, "privacyScan": {"passed": False, "findings": 1}},
+                ),
+            }
+            for label, (kind, artifact_id, payload) in mutants.items():
+                with self.subTest(label=label):
+                    result, error = exporter._safe_result(kind, payload, artifact_id)
+                    self.assertIsNone(result)
+                    self.assertIsNotNone(error)
 
     def test_require_pass_needs_sealed_full_schema_and_rejects_non_pass_states(self) -> None:
         exporter = load("prepare_uploadable_evidence")

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   validateEntry,
   isValidCategory,
@@ -14,9 +15,15 @@ import {
   type LogDraftInput,
 } from './clinical';
 
+const clinicalSource = readFileSync(new URL('./clinical.ts', import.meta.url), 'utf8');
+
 const good: LogDraftInput = { date: '2026-07-04', hours: '6', activity: 'DLSA camp', category: 'legal_aid', verifier: 'prof@nls.ac.in' };
 
 describe('clinical log validation + progress (SAATHI-173)', () => {
+  it('never persists export audit workflow state in browser storage', () => {
+    expect(clinicalSource).not.toMatch(/(?:localStorage|sessionStorage)\.(?:getItem|setItem)/u);
+  });
+
   it('validates categories', () => {
     expect(isValidCategory('legal_aid')).toBe(true);
     expect(isValidCategory('random')).toBe(false);

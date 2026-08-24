@@ -32,6 +32,14 @@ TARGET_SOURCE_PATH = (
     Path(__file__).resolve().parent
     / "migrations/versions/0020_auth_retention_lifecycle.py"
 )
+APPLICATION_HEAD_REVISION = "0021_nyay5_profile_boundary"
+APPLICATION_HEAD_SOURCE_SHA256 = (
+    "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
+)
+APPLICATION_HEAD_SOURCE_PATH = (
+    Path(__file__).resolve().parent
+    / "migrations/versions/0021_nyay5_profile_boundary.py"
+)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 VERSIONS_PATH = TARGET_SOURCE_PATH.parent
 MIGRATION_LEDGER_VERIFIER = REPOSITORY_ROOT / "scripts/ci/verify_migration_ledger.py"
@@ -97,6 +105,7 @@ HISTORICAL_SOURCE_SHA256 = {
 ALL_MIGRATION_SOURCE_SHA256 = {
     **HISTORICAL_SOURCE_SHA256,
     TARGET_SOURCE_PATH.name: TARGET_SOURCE_SHA256,
+    APPLICATION_HEAD_SOURCE_PATH.name: APPLICATION_HEAD_SOURCE_SHA256,
 }
 IRREVERSIBLE_FREEZE_ACK = (
     "I_ACKNOWLEDGE_NYAY19_PRIVACY_FREEZE_IS_IRREVERSIBLE"
@@ -154,6 +163,7 @@ _ISOLATED_DATABASE_MARKERS = {
     "nyay2",
     "nyay3",
     "nyay4",
+    "nyay5",
     "nyay16",
     "nyay17",
     "nyay19",
@@ -399,7 +409,7 @@ def target_source_is_exact() -> bool:
 
 
 def source_authority_is_valid() -> bool:
-    """Verify exact 0001-0020 bytes, inventory, graph and baseline ledger."""
+    """Verify exact 0001-0021 bytes, inventory, graph and baseline ledger."""
 
     expected_names = set(ALL_MIGRATION_SOURCE_SHA256)
     try:
@@ -1352,6 +1362,23 @@ def _target_module() -> Any:
     return module
 
 
+def _nyay5_module() -> Any:
+    module = _load_authenticated_migration_module(
+        "nyay5_authenticated_0021",
+        APPLICATION_HEAD_SOURCE_PATH,
+        APPLICATION_HEAD_SOURCE_SHA256,
+    )
+    module_path = getattr(module, "__file__", None)
+    if (
+        not isinstance(module_path, str)
+        or Path(module_path).resolve() != APPLICATION_HEAD_SOURCE_PATH
+        or getattr(module, "revision", None) != APPLICATION_HEAD_REVISION
+        or getattr(module, "down_revision", None) != TARGET_REVISION
+    ):
+        raise RuntimeError("migration authority rejected")
+    return module
+
+
 def _validate_at_head(connection: Connection) -> None:
     module = _target_module()
     module._begin_and_lock(connection, downgrade=True)
@@ -1386,6 +1413,40 @@ def _validate_at_head(connection: Connection) -> None:
         raise RuntimeError("privacy freeze incomplete")
     if not source_authority_is_valid():
         raise RuntimeError("migration source changed")
+
+
+def _validate_nyay5_at_head(connection: Connection) -> None:
+    """Re-prove exact 0021 schema plus inherited security/privacy authority."""
+
+    module = _nyay5_module()
+    if _current_revision(connection) != APPLICATION_HEAD_REVISION:
+        raise RuntimeError("head revision changed")
+    _validate_authority_catalog(connection)
+    module._validate_postflight(connection, head=True)
+    _target_fingerprint(connection)
+    _validate_legacy_deletion_authority(connection)
+    remaining = (
+        _count(
+            connection,
+            "SELECT count(*) FROM public.users WHERE id IN ("
+            + _ACCEPTED_SUBJECTS_SQL
+            + ") AND status NOT IN ('suspended','deleted')",
+        ),
+        _count(
+            connection,
+            "SELECT count(*) FROM public.student_registrations WHERE user_id IN ("
+            + _ACCEPTED_SUBJECTS_SQL
+            + ") AND status NOT IN ('suspended','deleted')",
+        ),
+        _count(
+            connection,
+            "SELECT count(*) FROM public.auth_sessions WHERE user_id IN ("
+            + _ACCEPTED_SUBJECTS_SQL
+            + ") AND status = 'active'",
+        ),
+    )
+    if any(remaining) or not source_authority_is_valid():
+        raise RuntimeError("NYAY-5 inherited authority validation rejected")
 
 
 def locked_parent_report(
@@ -1520,13 +1581,51 @@ def _upgrade_intent_agrees(
     )
 
 
-def enforce_nyay19_migration_postflight(connection: Connection) -> None:
+def _nyay5_upgrade_intent_agrees(
+    config: Any,
+    command: Any,
+    intent: RuntimeMigrationIntent | None,
+) -> bool:
+    """Bind a forward request to only the direct, authenticated 0021 child."""
+
+    options = getattr(config, "cmd_opts", None)
+    configured = getattr(options, "revision", None)
+    expected_runtime = (
+        configured
+        if configured in {APPLICATION_HEAD_REVISION, "head"}
+        else None
+    )
+    return bool(
+        command is alembic_command.upgrade
+        and expected_runtime is not None
+        and getattr(options, "sql", None) is False
+        and getattr(options, "tag", None) is None
+        and type(intent) is RuntimeMigrationIntent
+        and intent.operation == "upgrade"
+        and intent.destination_revision == expected_runtime
+        and intent.as_sql is False
+        and intent.tag is None
+        and intent.dont_mutate is False
+        and _nyay5_module().down_revision == TARGET_REVISION
+    )
+
+
+def enforce_nyay19_migration_postflight(
+    connection: Connection,
+    *,
+    expected_revision: str = TARGET_REVISION,
+) -> None:
     """Re-prove exact head, catalog authority, and privacy-zero before commit."""
 
     try:
         if not connection.in_transaction():
             raise RuntimeError
-        _validate_at_head(connection)
+        if expected_revision == TARGET_REVISION:
+            _validate_at_head(connection)
+        elif expected_revision == APPLICATION_HEAD_REVISION:
+            _validate_nyay5_at_head(connection)
+        else:
+            raise RuntimeError
     except Exception:
         raise MigrationApprovalError(
             "NYAY-19 migration postflight rejected; refusing to commit"
@@ -1541,7 +1640,7 @@ def enforce_nyay19_migration_release_guard(
     environ: Mapping[str, str] | None = None,
     runtime_intent: RuntimeMigrationIntent | None = None,
 ) -> bool:
-    """Authorize only one exact, locked 0019 -> 0020 online transition."""
+    """Authorize sealed 0019->0020, then only its exact direct 0021 child."""
 
     authority = os.environ if environ is None else environ
     if authority.get(FORCE_APPROVAL_ENV) != "1" and _is_explicit_isolated_target(
@@ -1558,7 +1657,13 @@ def enforce_nyay19_migration_release_guard(
         raise MigrationApprovalError(
             "NYAY-19 migration command is not authorized; refusing to migrate"
         )
-    if not _upgrade_intent_agrees(config, command, runtime_intent):
+    nyay19_upgrade = _upgrade_intent_agrees(config, command, runtime_intent)
+    nyay5_upgrade = bool(
+        getattr(getattr(connection, "dialect", None), "name", None)
+        == "postgresql"
+        and _nyay5_upgrade_intent_agrees(config, command, runtime_intent)
+    )
+    if not (nyay19_upgrade or nyay5_upgrade):
         raise MigrationApprovalError(
             "NYAY-19 migration command is not authorized; refusing to migrate"
         )
@@ -1581,6 +1686,36 @@ def enforce_nyay19_migration_release_guard(
         raise MigrationApprovalError(
             "NYAY-19 live target rejected; refusing to migrate"
         ) from None
+    if nyay5_upgrade:
+        if revision == APPLICATION_HEAD_REVISION:
+            try:
+                _validate_nyay5_at_head(connection)
+            except Exception:
+                raise MigrationApprovalError(
+                    "NYAY-5 head validation rejected; refusing to migrate"
+                ) from None
+            return True
+        if revision != TARGET_REVISION:
+            raise MigrationApprovalError(
+                "NYAY-5 database revision rejected; refusing to migrate"
+            )
+        try:
+            # Re-prove the sealed 0020 schema/privacy state before its one
+            # ordinary direct-child transition. No 0019 approval is aggregated
+            # or bypassed by a request for 0021/head.
+            _validate_at_head(connection)
+        except Exception:
+            raise MigrationApprovalError(
+                "NYAY-5 parent validation rejected; refusing to migrate"
+            ) from None
+        # The unified development kickoff authorizes only disposable local/CI
+        # execution (handled by the isolated-target bypass above). No new
+        # digest-bound, four-role production approval contract exists for
+        # 0021, and the sealed 0019->0020 report cannot be replayed or widened.
+        raise MigrationApprovalError(
+            "NYAY-5 production approval unavailable; refusing to migrate"
+        )
+
     if revision == TARGET_REVISION:
         try:
             _validate_at_head(connection)

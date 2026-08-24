@@ -11,15 +11,19 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crypto import decrypt, keyed_hash
+from app.core.student_verification_authority import (
+    has_authoritative_institutional_email_proof,
+)
 from app.db.models.audit import AuditEvent
 from app.models.registration import (
     AuthSession,
+    AuthSessionProfilePrompt,
     Consent,
     LoginAttempt,
     OtpChallenge,
@@ -246,6 +250,8 @@ def verify_flow(
     raw_flow_token: str | None,
     code: str,
     now: datetime,
+    *,
+    commit_on_success: bool = True,
 ) -> tuple[str, AuthSession, OtpFlow]:
     """Verify a cookie flow, consuming the same decoy budget on every miss."""
 
@@ -296,7 +302,10 @@ def verify_flow(
     # authenticated-session rotation; no crash window leaves both capabilities.
     otp_flow_service.mark_authenticated(flow, now=now)
     raw_session, auth_session = rotate_authenticated_session(
-        session, registration, now  # type: ignore[arg-type]
+        session,
+        registration,  # type: ignore[arg-type]
+        now,
+        commit_on_success=commit_on_success,
     )
     return raw_session, auth_session, flow
 
@@ -371,6 +380,26 @@ def erase_auth_session(auth_session: AuthSession) -> None:
     auth_session.metadata_json = None
 
 
+def clear_profile_prompts(
+    session: Session,
+    auth_session_ids: list[uuid.UUID] | tuple[uuid.UUID, ...],
+) -> None:
+    """Remove session-scoped profile UI state before session retirement.
+
+    Prompt dismissal is deliberately scoped to one active bearer session.  A
+    revoked, expired, rotated, or erased session must therefore take its
+    dismissal row with it instead of leaking UI state into lifecycle history.
+    """
+
+    session_ids = tuple(dict.fromkeys(auth_session_ids))
+    if session_ids:
+        session.execute(
+            delete(AuthSessionProfilePrompt).where(
+                AuthSessionProfilePrompt.auth_session_id.in_(session_ids)
+            )
+        )
+
+
 def suspend_user_and_revoke_sessions(
     session: Session,
     user_id: uuid.UUID,
@@ -399,6 +428,7 @@ def suspend_user_and_revoke_sessions(
             .execution_options(populate_existing=True)
         )
     )
+    clear_profile_prompts(session, [row.id for row in rows])
     for row in rows:
         if _as_utc(row.expires_at) <= now:
             row.status = "expired"
@@ -414,6 +444,8 @@ def rotate_authenticated_session(
     session: Session,
     registration: StudentRegistration,
     now: datetime,
+    *,
+    commit_on_success: bool = True,
 ) -> tuple[str, AuthSession]:
     """Serialize and atomically replace the active session for one user.
 
@@ -435,7 +467,9 @@ def rotate_authenticated_session(
         session.rollback()
         raise LoginError()
 
-    for prior in active_sessions_for_rotation(session, user.id):
+    prior_sessions = active_sessions_for_rotation(session, user.id)
+    clear_profile_prompts(session, [prior.id for prior in prior_sessions])
+    for prior in prior_sessions:
         prior.status = "revoked"
         prior.revoked_at = now
 
@@ -462,7 +496,8 @@ def rotate_authenticated_session(
                 after_state={"method": "otp", "rotated": True},
             )
         )
-        session.commit()
+        if commit_on_success:
+            session.commit()
     except IntegrityError as exc:
         session.rollback()
         if integrity_errors.constraint_name(exc) == ACTIVE_SESSION_CONSTRAINT:
@@ -610,6 +645,7 @@ def _active_session(
                 return None
             if _as_utc(row.expires_at) > now:
                 return row
+            clear_profile_prompts(session, [row.id])
             row.status = "expired"
             row.revoked_at = row.expires_at
             session.commit()
@@ -630,11 +666,74 @@ def _active_session(
             session.rollback()
             return None
         if _as_utc(row.expires_at) <= now:
+            clear_profile_prompts(session, [row.id])
             row.status = "expired"
             row.revoked_at = row.expires_at
             session.commit()
             return None
     return row
+
+
+def lock_presented_session_for_effect(
+    session: Session,
+    raw_token: str | None,
+    *,
+    expected_user_id: uuid.UUID,
+    now: datetime,
+    allowed_roles: frozenset[str],
+) -> AuthSession | None:
+    """Lock and revalidate the exact cookie authority before a domain effect.
+
+    Callers first lock their canonical domain graph (registration/profile or
+    credential/review target), then call this helper before any replay return,
+    CAS, audit, mutation, or commit.  Inside the helper, lock the stable
+    ``User`` parent before the exact ``AuthSession`` row.  Logout and every
+    session rotation use that same User -> AuthSession order, so an effect that
+    later inserts a user-FK row cannot deadlock with session revocation.  The
+    exact session lock still linearizes the effect against logout, rotation,
+    suspension, expiry, and erasure.
+
+    The initial token lookup is discovery only.  Every security decision is
+    repeated from ``populate_existing`` rows after the session lock is held.
+    No lifecycle state is changed and the caller owns commit/rollback.
+    """
+
+    if not raw_token:
+        return None
+    now = _as_utc(now)
+    token_hash = keyed_hash(raw_token)
+    candidate = session.execute(
+        select(AuthSession.id, AuthSession.user_id).where(
+            AuthSession.token_hash == token_hash
+        )
+    ).one_or_none()
+    if candidate is None or candidate.user_id != expected_user_id:
+        return None
+    user = lock_user_for_session_rotation(session, expected_user_id)
+    if (
+        user is None
+        or user.status != "active"
+        or user.role not in allowed_roles
+    ):
+        return None
+    auth_session = session.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == candidate.id,
+            AuthSession.user_id == expected_user_id,
+            AuthSession.token_hash == token_hash,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        auth_session is None
+        or auth_session.status != "active"
+        or auth_session.deleted_at is not None
+        or _as_utc(auth_session.expires_at) <= now
+    ):
+        return None
+    return auth_session
 
 
 def session_claims(
@@ -657,6 +756,7 @@ def session_claims(
     user = session.get(User, auth_session.user_id)
     if user is None or user.status != "active":
         if touch:
+            clear_profile_prompts(session, [auth_session.id])
             auth_session.status = "revoked"
             auth_session.revoked_at = now
             session.commit()
@@ -723,7 +823,11 @@ def session_claims(
         "roles": [user.role],
         "student_profile_id": str(profile.id) if profile is not None else None,
         "student_verification": (
-            "verified" if verification and verification.status == "verified" else "draft"
+            "verified"
+            if has_authoritative_institutional_email_proof(
+                verification, profile
+            )
+            else "draft"
         ),
         "is_minor": registration.is_minor,
         "consent_state": consent_state,
@@ -736,6 +840,7 @@ def logout(session: Session, raw_token: str | None, now: datetime) -> None:
     row = _active_session(session, raw_token, now)
     if row is None:
         return
+    clear_profile_prompts(session, [row.id])
     row.status = "revoked"
     row.revoked_at = now
     session.add(

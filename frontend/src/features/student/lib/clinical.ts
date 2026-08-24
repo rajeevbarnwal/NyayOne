@@ -96,7 +96,7 @@ export function canSyncTransition(from: DraftState, to: DraftState): boolean {
 }
 
 export const COMPLIANCE_NOTE =
-  'LegalSaathi records and organises your training hours and evidence. Your institution’s approval controls compliance — we do not certify that requirements are met.';
+  'NyayOne records and organises your training hours and evidence. Your institution’s approval controls compliance — we do not certify that requirements are met.';
 export const EVIDENCE_PRIVACY = 'Evidence shared only with the faculty verifier you choose';
 
 /* -------------------------------------------------------------------------- */
@@ -168,7 +168,7 @@ export interface ClinicalExportPayload {
   readonly generatedAt: string;
   readonly includesEvidence: boolean;
   readonly entryCount: number;
-  readonly source: 'LegalSaathi self-maintained clinical log';
+  readonly source: 'NyayOne self-maintained clinical log';
 }
 
 export interface ClinicalExportAuditEvent {
@@ -253,7 +253,7 @@ export function buildClinicalExport(
     extension = 'csv';
   } else if (format === 'pdf') {
     const lines = [
-      'LegalSaathi clinical-hours report',
+      'NyayOne clinical-hours report',
       `Generated: ${options.generatedAt}`,
       NON_OFFICIAL_TRANSCRIPT_WARNING,
       ...rows.map((row) => `${row.date} | ${row.hours} hrs | ${row.activity} | ${row.category} | ${row.status}${'evidence' in row ? ` | evidence: ${row.evidence}` : ''}`),
@@ -263,7 +263,7 @@ export function buildClinicalExport(
     extension = 'pdf';
   } else {
     content = JSON.stringify({
-      schema: 'legalsaathi.clinical-export.v1',
+      schema: 'nyayone.clinical-export.v1',
       generatedAt: options.generatedAt,
       warning: NON_OFFICIAL_TRANSCRIPT_WARNING,
       summary: exportSummary(entries),
@@ -275,21 +275,22 @@ export function buildClinicalExport(
 
   return {
     format,
-    fileName: `legalsaathi-clinical-hours-${stamp}.${extension}`,
+    fileName: `nyayone-clinical-hours-${stamp}.${extension}`,
     mimeType,
     content,
     generatedAt: options.generatedAt,
     includesEvidence: options.includesEvidence,
     entryCount: entries.length,
-    source: 'LegalSaathi self-maintained clinical log',
+    source: 'NyayOne self-maintained clinical log',
   };
 }
 
-const AUDIT_KEY = 'legalsaathi.clinical.export-audit.v1';
-
-/** Record only export metadata; activity/evidence/verifier PII never enters audit. */
+/**
+ * Build the bounded event for a future server audit boundary. The prototype
+ * must not treat Web Storage as an audit ledger or durable workflow authority.
+ */
 export function recordClinicalExportAudit(payload: ClinicalExportPayload): ClinicalExportAuditEvent {
-  const event: ClinicalExportAuditEvent = {
+  return {
     eventId: `clinical-export-${payload.generatedAt}-${payload.format}`,
     action: 'clinical_hours_exported',
     format: payload.format,
@@ -297,15 +298,6 @@ export function recordClinicalExportAudit(payload: ClinicalExportPayload): Clini
     includesEvidence: payload.includesEvidence,
     entryCount: payload.entryCount,
   };
-  if (typeof window !== 'undefined') {
-    try {
-      const existing = JSON.parse(window.localStorage.getItem(AUDIT_KEY) ?? '[]') as ClinicalExportAuditEvent[];
-      window.localStorage.setItem(AUDIT_KEY, JSON.stringify([...existing, event]));
-    } catch {
-      // Storage denial must not corrupt the export already produced.
-    }
-  }
-  return event;
 }
 
 /** Whether an export can proceed. Re-auth is required when evidence is included. */
@@ -316,7 +308,7 @@ export function canExport(g: { includesEvidence: boolean; reauthenticated: boole
 /** Mandatory export copy (PRD S12.3): this is NOT an official transcript. */
 export const NON_OFFICIAL_TRANSCRIPT_WARNING =
   'This export is a self-maintained record, not an official transcript. Verified/unverified split, source and generated timestamp are included; your institution’s ruleset governs compliance.';
-export const EXPORT_AUDIT_NOTE = 'Every export is audited; sensitive evidence requires re-authentication.';
+export const EXPORT_AUDIT_NOTE = 'This prototype creates no browser-persistent audit record; sensitive evidence still requires re-authentication.';
 
 export const SAMPLE_ENTRIES: readonly LogEntry[] = [
   { id: 'l1', date: '28 Jun', hours: 6, activity: 'DLSA legal-aid camp — Anekal taluk', category: 'legal_aid', verifier: 'prof@nls.ac.in', evidenceName: 'camp-letter.pdf', status: 'submitted' },

@@ -1,0 +1,133 @@
+name: NYAY-18 frontend namespace gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  namespace-static-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install hash-locked workflow policy parser
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes --no-deps -r scripts/ci/policy-requirements.lock
+      - name: Prove planted namespace regressions are rejected
+        run: python scripts/ci/test_nyay18_namespace_policy.py
+      - name: Verify documented compatibility and rollback boundary
+        run: python scripts/ci/test_nyay18_namespace_boundary_doc.py
+      - name: Enforce exact shipped identity and compatibility boundary
+        run: >-
+          python scripts/ci/check_nyay18_frontend_namespaces.py
+          --output "$RUNNER_TEMP/nyay18-static/summary.json"
+      - name: Seal static gate evidence
+        run: python scripts/ci/evidence_manifest.py --seal "$RUNNER_TEMP/nyay18-static"
+      - name: Scan static gate evidence for privacy regressions
+        run: python scripts/ci/scan_evidence.py "$RUNNER_TEMP/nyay18-static"
+      - name: Reverify static gate evidence inventory
+        run: python scripts/ci/evidence_manifest.py --verify "$RUNNER_TEMP/nyay18-static"
+
+  namespace-production-chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend and Chromium dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npm exec -- playwright install --with-deps chromium
+      - name: Prove the browser evidence contract and planted mutants
+        working-directory: frontend
+        run: npm test -- --run scripts/lib/nyay18-browser-contract.test.mjs
+      - name: Run exact-head production Chromium namespace producer
+        id: browser_producer
+        run: >-
+          bash scripts/nyay18_browser_namespace_gate.sh
+          "$RUNNER_TEMP/nyay18-browser-raw/results.json"
+      - name: Seal raw Chromium evidence inventory
+        id: browser_raw_manifest
+        if: ${{ always() }}
+        run: python scripts/ci/evidence_manifest.py --seal "$RUNNER_TEMP/nyay18-browser-raw"
+      - name: Reverify raw Chromium evidence inventory
+        id: browser_raw_integrity
+        if: ${{ always() }}
+        run: python scripts/ci/evidence_manifest.py --verify "$RUNNER_TEMP/nyay18-browser-raw"
+      - name: Prepare privacy-safe textual Chromium attestation
+        id: browser_prepare
+        run: |
+          mkdir -p "$RUNNER_TEMP/nyay18-browser-uploadable"
+          install -m 0600 "$RUNNER_TEMP/nyay18-browser-raw/results.json" "$RUNNER_TEMP/nyay18-browser-uploadable/results.json"
+          install -m 0600 "$RUNNER_TEMP/nyay18-browser-raw/SHA256SUMS.txt" "$RUNNER_TEMP/nyay18-browser-uploadable/RAW-SHA256SUMS.txt"
+      - name: Seal uploadable Chromium attestation
+        id: browser_manifest
+        if: ${{ always() }}
+        run: python scripts/ci/evidence_manifest.py --seal "$RUNNER_TEMP/nyay18-browser-uploadable"
+      - name: Scan textual Chromium attestation for privacy regressions
+        id: browser_privacy
+        if: ${{ always() }}
+        run: python scripts/ci/scan_evidence.py "$RUNNER_TEMP/nyay18-browser-uploadable"
+      - name: Reverify immutable uploadable Chromium attestation
+        id: browser_integrity
+        if: ${{ always() }}
+        run: python scripts/ci/evidence_manifest.py --verify "$RUNNER_TEMP/nyay18-browser-uploadable"
+      - name: Upload NYAY-18 Chromium evidence
+        if: ${{ always() && steps.browser_producer.outcome == 'success' && steps.browser_raw_manifest.outcome == 'success' && steps.browser_raw_integrity.outcome == 'success' && steps.browser_prepare.outcome == 'success' && steps.browser_manifest.outcome == 'success' && steps.browser_privacy.outcome == 'success' && steps.browser_integrity.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nyay18-browser-namespace-attestation
+          path: ${{ runner.temp }}/nyay18-browser-uploadable
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
+
+  required:
+    name: nyayone-nyay18-namespace-required
+    if: ${{ always() }}
+    needs: [namespace-static-policy, namespace-production-chromium]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every upstream job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          results = {
+              name: value["result"]
+              for name, value in json.loads(os.environ["RESULTS"]).items()
+          }
+          print(results)
+          if not results or any(value != "success" for value in results.values()):
+              sys.exit("one or more required jobs did not succeed")
+          PY

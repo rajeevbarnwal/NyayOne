@@ -1,10 +1,10 @@
 """Server-authoritative student registration (SAATHI-421/448).
 
-Transactional persistence of a registration + consent + OTP challenge (verifier
-only) + outbox delivery intent + audit event. Sensitive fields are keyed-hashed
-for uniqueness and Fernet-encrypted (version-stamped) for display; raw
-mobile/DOB/OTP/enrolment never touch plaintext columns, logs or the audit
-snapshot.
+Transactional persistence of a registration + independently versioned Terms
+and Privacy Notice acknowledgements + OTP challenge (verifier only) + outbox
+delivery intent + audit event. Sensitive fields are keyed-hashed for uniqueness
+and Fernet-encrypted (version-stamped) for display; raw mobile/DOB/OTP/enrolment
+never touch plaintext columns, logs or the audit snapshot.
 
 This function performs all writes and FLUSHES but does NOT commit — the caller
 (endpoint) commits and then delivers the OTP via the outbox, so an OTP is never
@@ -40,12 +40,17 @@ from app.models.registration import (
     StudentVerification,
     User,
 )
-from app.schemas.registration import StudentRegisterRequest
+from app.schemas.registration import ConsentIn, StudentRegisterRequest
 from app.services import otp_outbox
 from app.services.otp_sender import IdempotentOtpSender, OtpSendError
 
 AGE_OF_MAJORITY = 18
+# ``v1`` is sealed by NYAY-17 and remains replayable byte-for-byte.  NYAY-5's
+# separate Terms/Privacy contract is a new canonical envelope and must never be
+# mislabeled as v1.
 REGISTRATION_REQUEST_FINGERPRINT_VERSION = "v1"
+REGISTRATION_REQUEST_CURRENT_FINGERPRINT_VERSION = "v2"
+REGISTRATION_REQUEST_FINGERPRINT_VERSIONS = frozenset({"v1", "v2"})
 _OTP_AUTHORITY_ID_NAMESPACE = uuid.UUID(
     "d4bd542f-dd07-4512-ac24-c7d789287708"
 )
@@ -67,6 +72,14 @@ REGISTRATION_REQUEST_V1_FIELDS = frozenset(
 )
 REGISTRATION_REQUEST_V1_CONSENT_FIELDS = frozenset(
     {"accepted", "policy_version"}
+)
+REGISTRATION_REQUEST_V2_FIELDS = REGISTRATION_REQUEST_V1_FIELDS | frozenset(
+    {
+        "terms_accepted",
+        "terms_version",
+        "privacy_notice_acknowledged",
+        "privacy_notice_version",
+    }
 )
 _REGISTRATION_REQUEST_V1_REQUIRED_FIELDS = frozenset(
     {"first_name", "last_name", "mobile", "dob", "consent"}
@@ -350,8 +363,32 @@ def close_expired_signup_delivery(
         _expire_flow(flow_graph[1], now)
 
 
-def registration_request_fingerprint(req: StudentRegisterRequest) -> str:
-    """Return the v1 keyed fingerprint of the complete validated request.
+def _is_registration_v1_request(req: StudentRegisterRequest) -> bool:
+    return bool(
+        req.consent is not None
+        and req.terms_accepted is None
+        and req.terms_version is None
+        and req.privacy_notice_acknowledged is None
+        and req.privacy_notice_version is None
+    )
+
+
+def registration_request_fingerprint_version(
+    req: StudentRegisterRequest,
+) -> str:
+    return (
+        REGISTRATION_REQUEST_FINGERPRINT_VERSION
+        if _is_registration_v1_request(req)
+        else REGISTRATION_REQUEST_CURRENT_FINGERPRINT_VERSION
+    )
+
+
+def registration_request_fingerprint(
+    req: StudentRegisterRequest,
+    *,
+    version: str | None = None,
+) -> str:
+    """Return a versioned keyed fingerprint of the complete validated request.
 
     ``mode='json'`` provides stable JSON-native date values, explicit nulls
     preserve optional-field meaning, and the envelope versions the canonical
@@ -359,36 +396,31 @@ def registration_request_fingerprint(req: StudentRegisterRequest) -> str:
     stored; neither these canonical bytes nor any raw request value is retained.
     """
 
-    # This assertion deliberately prevents a future request-schema field from
-    # silently changing v1 bytes. Adding a field requires an explicit mapping,
-    # reviewed version decision, and replay-compatibility tests.
-    if set(StudentRegisterRequest.model_fields) != REGISTRATION_REQUEST_V1_FIELDS:
-        raise RuntimeError("registration request fingerprint v1 schema mismatch")
-    if set(req.consent.__class__.model_fields) != REGISTRATION_REQUEST_V1_CONSENT_FIELDS:
+    if set(StudentRegisterRequest.model_fields) != REGISTRATION_REQUEST_V2_FIELDS:
+        raise RuntimeError("registration request fingerprint schema mismatch")
+    if set(ConsentIn.model_fields) != REGISTRATION_REQUEST_V1_CONSENT_FIELDS:
         raise RuntimeError("registration consent fingerprint v1 schema mismatch")
     request_fields = StudentRegisterRequest.model_fields
     if any(
         not request_fields[name].is_required()
-        for name in _REGISTRATION_REQUEST_V1_REQUIRED_FIELDS
+        for name in {"first_name", "last_name", "mobile", "dob"}
     ) or any(
         request_fields[name].default is not None
-        for name in _REGISTRATION_REQUEST_V1_NULL_DEFAULT_FIELDS
+        for name in REGISTRATION_REQUEST_V2_FIELDS
+        - {"first_name", "last_name", "mobile", "dob"}
     ):
-        raise RuntimeError("registration request fingerprint v1 defaults mismatch")
-    consent_fields = req.consent.__class__.model_fields
+        raise RuntimeError("registration request fingerprint defaults mismatch")
+    consent_fields = ConsentIn.model_fields
     if (
         not consent_fields["accepted"].is_required()
         or consent_fields["policy_version"].default != "dpdp-2023.v1"
     ):
         raise RuntimeError("registration consent fingerprint v1 defaults mismatch")
 
-    payload = {
+    selected_version = version or registration_request_fingerprint_version(req)
+    common = {
         "bar_enrolment_number": req.bar_enrolment_number,
         "college": req.college,
-        "consent": {
-            "accepted": req.consent.accepted,
-            "policy_version": req.consent.policy_version,
-        },
         "dob": req.dob.isoformat(),
         "enrolment_number": req.enrolment_number,
         "first_name": req.first_name,
@@ -398,17 +430,67 @@ def registration_request_fingerprint(req: StudentRegisterRequest) -> str:
         "mobile": req.mobile,
         "year_of_study": req.year_of_study,
     }
+    if selected_version == REGISTRATION_REQUEST_FINGERPRINT_VERSION:
+        if not _is_registration_v1_request(req) or req.consent is None:
+            raise ValueError("request is not an exact v1 registration shape")
+        payload = {
+            **common,
+            "consent": {
+                "accepted": req.consent.accepted,
+                "policy_version": req.consent.policy_version,
+            },
+        }
+    elif selected_version == REGISTRATION_REQUEST_CURRENT_FINGERPRINT_VERSION:
+        payload = {
+            **common,
+            "consent": (
+                {
+                    "accepted": req.consent.accepted,
+                    "policy_version": req.consent.policy_version,
+                }
+                if req.consent is not None
+                else None
+            ),
+            "privacy_notice_acknowledged": req.privacy_notice_acknowledged,
+            "privacy_notice_version": req.privacy_notice_version,
+            "terms_accepted": req.terms_accepted,
+            "terms_version": req.terms_version,
+        }
+    else:
+        raise ValueError("unsupported registration fingerprint version")
     canonical = json.dumps(
         {
             "contract": _REGISTRATION_REQUEST_FINGERPRINT_CONTRACT,
             "payload": payload,
-            "version": REGISTRATION_REQUEST_FINGERPRINT_VERSION,
+            "version": selected_version,
         },
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
     )
     return keyed_hash(canonical)
+
+
+def _registration_fingerprint_for_new_request(
+    req: StudentRegisterRequest,
+) -> tuple[str, str]:
+    version = registration_request_fingerprint_version(req)
+    return version, registration_request_fingerprint(req, version=version)
+
+
+def _registration_fingerprint_matches(
+    record: RegistrationIdempotencyRecord,
+    req: StudentRegisterRequest,
+) -> bool:
+    version = record.request_fingerprint_version
+    stored = record.request_fingerprint or ""
+    if version not in REGISTRATION_REQUEST_FINGERPRINT_VERSIONS or len(stored) != 64:
+        return False
+    try:
+        expected = registration_request_fingerprint(req, version=version)
+    except ValueError:
+        return False
+    return hmac.compare_digest(stored, expected)
 
 
 def _ledger_by_key_hash(
@@ -444,7 +526,7 @@ def _ledger_is_safely_unlinked(record: RegistrationIdempotencyRecord) -> bool:
                 record.state == "failed"
                 and record.request_fingerprint is not None
                 and record.request_fingerprint_version
-                == REGISTRATION_REQUEST_FINGERPRINT_VERSION
+                in REGISTRATION_REQUEST_FINGERPRINT_VERSIONS
                 and record.outcome_code == "otp_delivery_failed"
             )
         )
@@ -527,8 +609,7 @@ def _resolve_locked_idempotency_record(
         )
 
     if record.state == "failed":
-        expected = registration_request_fingerprint(req)
-        if not hmac.compare_digest(record.request_fingerprint or "", expected):
+        if not _registration_fingerprint_matches(record, req):
             raise RegistrationError(
                 409, "idempotency_conflict", "Idempotency-Key"
             )
@@ -564,14 +645,7 @@ def _resolve_locked_idempotency_record(
             session, existing
         )
         if migrated_authority is not None:
-            expected = registration_request_fingerprint(req)
-            stored = record.request_fingerprint or ""
-            if (
-                record.request_fingerprint_version
-                != REGISTRATION_REQUEST_FINGERPRINT_VERSION
-                or len(stored) != 64
-                or not hmac.compare_digest(stored, expected)
-            ):
+            if not _registration_fingerprint_matches(record, req):
                 raise RegistrationError(
                     409, "idempotency_conflict", "Idempotency-Key"
                 )
@@ -628,14 +702,7 @@ def _resolve_locked_idempotency_record(
         raise RegistrationError(
             409, "registration_replay_expired", "Idempotency-Key"
         )
-    expected = registration_request_fingerprint(req)
-    stored = record.request_fingerprint or ""
-    if (
-        record.request_fingerprint_version
-        != REGISTRATION_REQUEST_FINGERPRINT_VERSION
-        or len(stored) != 64
-        or not hmac.compare_digest(stored, expected)
-    ):
+    if not _registration_fingerprint_matches(record, req):
         raise RegistrationError(409, "idempotency_conflict", "Idempotency-Key")
     if record.state == "succeeded":
         return RegistrationResult(
@@ -682,14 +749,7 @@ def _validate_locked_neutralized_replay(
         raise RegistrationError(
             409, "registration_replay_expired", "Idempotency-Key"
         )
-    expected = registration_request_fingerprint(req)
-    stored = record.request_fingerprint or ""
-    if (
-        record.request_fingerprint_version
-        != REGISTRATION_REQUEST_FINGERPRINT_VERSION
-        or len(stored) != 64
-        or not hmac.compare_digest(stored, expected)
-    ):
+    if not _registration_fingerprint_matches(record, req):
         raise RegistrationError(409, "idempotency_conflict", "Idempotency-Key")
     if (
         record.registration_id is not None
@@ -711,10 +771,11 @@ def reserve_neutralized_registration(
     existing = resolve_idempotent_replay(session, key, req, now=now)
     if existing is not None:
         return existing
+    fingerprint_version, fingerprint = _registration_fingerprint_for_new_request(req)
     record = RegistrationIdempotencyRecord(
         idempotency_key_hash=registration_idempotency_key_hash(key),
-        request_fingerprint=registration_request_fingerprint(req),
-        request_fingerprint_version=REGISTRATION_REQUEST_FINGERPRINT_VERSION,
+        request_fingerprint=fingerprint,
+        request_fingerprint_version=fingerprint_version,
         state="neutralized",
         outcome_code="registration_neutralized",
         registration_id=None,
@@ -1273,6 +1334,71 @@ def finalize_pending_resend_if_claimed(
     return True
 
 
+def validate_fresh_registration_request(
+    req: StudentRegisterRequest,
+    *,
+    now: datetime,
+) -> None:
+    """Validate a new registration without reading or mutating authority state.
+
+    Callers must first resolve an exact idempotency replay.  Keeping this seam
+    pure lets the HTTP boundary reject an invalid fresh request before provider
+    availability or abuse-budget work, while the service repeats the same
+    validation for every non-HTTP caller.
+    """
+
+    if req.dob > now.date():
+        raise RegistrationError(422, "invalid_date_of_birth", "dob")
+
+    # These legacy fields remain in the validated request/fingerprint solely
+    # so an exact pre-NYAY-5 idempotency-key replay can resolve above without
+    # changing its sealed v1 bytes.  They are no longer a creation authority:
+    # every new academic write must cross the authenticated, versioned profile
+    # boundary after registration.
+    if any(
+        value is not None
+        for value in (
+            req.college,
+            req.year_of_study,
+            req.enrolment_number,
+            req.institutional_email,
+            req.bar_enrolment_number,
+        )
+    ):
+        raise RegistrationError(
+            422,
+            "profile_fields_require_authenticated_session",
+            "profile",
+        )
+
+    if req.consent is not None:
+        if not req.consent.accepted:
+            raise RegistrationError(422, "consent_required", "consent")
+        raise RegistrationError(
+            422,
+            "separate_legal_acknowledgements_required",
+            "terms_accepted",
+        )
+    if req.terms_accepted is not True:
+        raise RegistrationError(
+            422, "terms_acceptance_required", "terms_accepted"
+        )
+    if req.terms_version is None:
+        raise RegistrationError(422, "terms_version_required", "terms_version")
+    if req.privacy_notice_acknowledged is not True:
+        raise RegistrationError(
+            422,
+            "privacy_notice_acknowledgement_required",
+            "privacy_notice_acknowledged",
+        )
+    if req.privacy_notice_version is None:
+        raise RegistrationError(
+            422,
+            "privacy_notice_version_required",
+            "privacy_notice_version",
+        )
+
+
 def register_student(
     session: Session,
     req: StudentRegisterRequest,
@@ -1292,14 +1418,13 @@ def register_student(
         if existing is not None:
             return existing
 
-    if not req.consent.accepted:
-        raise RegistrationError(422, "consent_required", "consent")
+    validate_fresh_registration_request(req, now=now)
 
     mobile_hash = keyed_hash(req.mobile)
     if session.scalar(select(StudentRegistration).where(StudentRegistration.mobile_hash == mobile_hash)):
         raise RegistrationError(409, "mobile_already_registered", "mobile")
 
-    minor = _is_minor(req.dob)
+    minor = _is_minor(req.dob, now.date())
     key_version = active_key_version()
     user = User(role="student", status="pending")
     session.add(user)
@@ -1316,7 +1441,7 @@ def register_student(
         dob_ct=encrypt(req.dob.isoformat()),
         dob_hash_state="verified",
         key_version=key_version,
-        institution_ref=req.college,
+        institution_ref=None,
         status="otp_pending",
         is_minor=minor,
         idempotency_key=None,
@@ -1325,14 +1450,23 @@ def register_student(
     session.add(reg)
     session.flush()
 
-    session.add(
-        Consent(
-            registration_id=reg.id,
-            purpose="registration",
-            accepted=True,
-            policy_version=req.consent.policy_version,
-            accepted_at=now,
-        )
+    session.add_all(
+        [
+            Consent(
+                registration_id=reg.id,
+                purpose="terms",
+                accepted=True,
+                policy_version=req.terms_version,
+                accepted_at=now,
+            ),
+            Consent(
+                registration_id=reg.id,
+                purpose="privacy_notice",
+                accepted=True,
+                policy_version=req.privacy_notice_version,
+                accepted_at=now,
+            ),
+        ]
     )
 
     # OTP challenge via the shared lifecycle service (persists a keyed verifier
@@ -1348,20 +1482,12 @@ def register_student(
     if minor:
         session.add(GuardianConsent(registration_id=reg.id, status="pending", verified=False))
 
-    # Academic profile (SAATHI-421) — encrypted + keyed hash for sensitive
-    # identifiers; plain college/year for display; version-stamped.
+    # NYAY-5: every registration starts at the empty v1 profile boundary.
+    # Academic data is accepted only through the authenticated CAS endpoint.
     session.add(
         StudentProfile(
             registration_id=reg.id,
-            college=req.college,
-            year_of_study=req.year_of_study,
             key_version=key_version,
-            enrolment_ct=encrypt(req.enrolment_number) if req.enrolment_number else None,
-            enrolment_hash=keyed_hash(req.enrolment_number) if req.enrolment_number else None,
-            institutional_email_ct=encrypt(req.institutional_email) if req.institutional_email else None,
-            institutional_email_hash=keyed_hash(req.institutional_email, lower=True) if req.institutional_email else None,
-            bar_enrolment_ct=encrypt(req.bar_enrolment_number) if req.bar_enrolment_number else None,
-            bar_enrolment_hash=keyed_hash(req.bar_enrolment_number) if req.bar_enrolment_number else None,
         )
     )
     session.add(StudentVerification(registration_id=reg.id, method="institutional_email", status="pending"))
@@ -1378,12 +1504,15 @@ def register_student(
     )
     idempotency_record = None
     if idempotency_key:
+        fingerprint_version, fingerprint = (
+            _registration_fingerprint_for_new_request(req)
+        )
         idempotency_record = RegistrationIdempotencyRecord(
             idempotency_key_hash=registration_idempotency_key_hash(
                 idempotency_key
             ),
-            request_fingerprint=registration_request_fingerprint(req),
-            request_fingerprint_version=REGISTRATION_REQUEST_FINGERPRINT_VERSION,
+            request_fingerprint=fingerprint,
+            request_fingerprint_version=fingerprint_version,
             state="pending",
             outcome_code=None,
             registration_id=reg.id,

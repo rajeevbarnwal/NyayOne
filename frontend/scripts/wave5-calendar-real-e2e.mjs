@@ -57,6 +57,9 @@ const SESSION_TOKEN = process.env.WAVE5_E2E_SESSION_TOKEN;
 if (SESSION_TOKEN.length < 32) throw new Error('WAVE5_E2E_SESSION_TOKEN must be at least 32 characters');
 const COOKIE_NAME = process.env.WAVE5_E2E_COOKIE_NAME?.trim() || 'nyayone_session';
 const IGNORE_LOOPBACK_TLS = process.env.WAVE5_E2E_ALLOW_SELF_SIGNED_TLS === 'true';
+const CHROMIUM_LAUNCH_ARGS = IGNORE_LOOPBACK_TLS
+  ? ['--ignore-certificate-errors']
+  : [];
 const WEB = loopbackOrigin('E2E_WEB_URL', process.env.E2E_WEB_URL);
 const API = loopbackOrigin('E2E_API_URL', process.env.E2E_API_URL);
 const PUBLIC = loopbackOrigin('E2E_PUBLIC_URL', process.env.E2E_PUBLIC_URL);
@@ -212,6 +215,16 @@ async function waitReady(page) {
   });
 }
 
+async function waitForServiceWorkerControl(page) {
+  await page.waitForFunction(async () => {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return false;
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    return registrations.some((registration) => registration.active !== null
+      && new URL(registration.active?.scriptURL).origin === location.origin
+      && new URL(registration.active?.scriptURL).pathname === '/sw.js');
+  }, undefined, { timeout: 20_000 });
+}
+
 function localParts(iso, timeZone) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', {
@@ -335,7 +348,10 @@ const api = await playwrightRequest.newContext({
   },
 });
 const publicApi = await playwrightRequest.newContext({ ignoreHTTPSErrors: IGNORE_LOOPBACK_TLS });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: CHROMIUM_LAUNCH_ARGS,
+});
 
 let personalEventId = null;
 let editedTitle = `Calendar QA ${Date.now().toString(36)}`;
@@ -370,6 +386,7 @@ try {
   const lifecycleRuntime = watchRuntime(page);
   const local = localParts(fixture.tutoring_start_utc, fixture.timezone);
   await page.goto(new URL('/s-91', WEB).href, { waitUntil: 'domcontentloaded' });
+  await waitForServiceWorkerControl(page);
   await waitReady(page);
   await page.getByTestId('ev-title').fill(editedTitle);
   await page.getByTestId('ev-date').fill(local.date);
@@ -737,7 +754,7 @@ try {
         const context = await newBrowserContext(browser, {
           viewport: { width, height: width <= 430 ? 844 : 900 }, colorScheme: theme,
         });
-        await context.addInitScript((mode) => localStorage.setItem('ls-theme', mode), theme);
+        await context.addInitScript((mode) => localStorage.setItem('nyayone.theme.v1', mode), theme);
         const shotPage = await context.newPage();
         const runtime = watchRuntime(shotPage);
         await shotPage.goto(new URL(route, WEB).href, { waitUntil: 'domcontentloaded' });

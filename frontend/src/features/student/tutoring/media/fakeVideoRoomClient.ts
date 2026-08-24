@@ -70,7 +70,7 @@ export interface DeterministicVideoRoomDriver {
 }
 
 interface DriverWindow {
-  __legalsaathiVideoRoom?: DeterministicVideoRoomDriver;
+  __nyayoneVideoRoom?: DeterministicVideoRoomDriver;
 }
 
 /* ========================================================================== *
@@ -334,7 +334,7 @@ class FakeVideoRoomClient implements VideoRoomClient {
 export function createFakeVideoRoomClient(): VideoRoomClient {
   const client = new FakeVideoRoomClient();
   if (typeof window !== 'undefined') {
-    (window as unknown as DriverWindow).__legalsaathiVideoRoom = client.driver();
+    (window as unknown as DriverWindow).__nyayoneVideoRoom = client.driver();
   }
   return client;
 }

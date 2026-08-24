@@ -17,6 +17,7 @@ exactly on a hold TTL edge instead of a few seconds either side of it.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -51,6 +52,27 @@ from app.services.tutoring import payments as payments_service
 T0 = W.T0
 AMOUNT = W.AMOUNT_PAISE
 PAY_SIG = "X-Payment-Signature"
+_BOOKING_PRIVACY_CANARIES = (
+    "pan",
+    "cvv",
+    "otp",
+    "4111",
+    "sdp",
+    "ice_candidate",
+    "device_label",
+    "@",
+)
+_UUID_TEXT = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    re.IGNORECASE,
+)
+
+
+def _booking_privacy_canary_hits(payload: object) -> list[str]:
+    """Find planted privacy markers without treating UUID hex as card data."""
+    blob = json.dumps(payload, sort_keys=True).lower()
+    scannable = _UUID_TEXT.sub("<uuid>", blob)
+    return [canary for canary in _BOOKING_PRIVACY_CANARIES if canary in scannable]
 
 
 # --------------------------------------------------------------------------- #
@@ -944,6 +966,16 @@ def test_create_session_cross_user_and_malformed(ctx):
     ).status_code == 403
 
 
+def test_booking_privacy_canary_ignores_uuid_hex_collision_but_detects_marker():
+    collision = {"refund_id": "aaaaaaaa-4111-4aaa-8aaa-aaaaaaaaaaaa"}
+    planted = {"privacy_probe": "4111"}
+    nested_planted = {"audit": {"after": {"privacy_probe": "4111"}}}
+
+    assert _booking_privacy_canary_hits(collision) == []
+    assert _booking_privacy_canary_hits(planted) == ["4111"]
+    assert _booking_privacy_canary_hits(nested_planted) == ["4111"]
+
+
 def test_booking_trail_and_audit_carry_ids_and_codes_only(ctx):
     """J1. The booking trail is forensic, not narrative."""
     _paid_flow(ctx)
@@ -951,13 +983,12 @@ def test_booking_trail_and_audit_carry_ids_and_codes_only(ctx):
         kinds = [row.kind for row in s.scalars(select(BookingEvent)).all()]
         assert {"hold_created", "payment_initiated", "payment_succeeded",
                 "hold_consumed", "session_confirmed"} <= set(kinds)
-        blob = json.dumps(
+        payloads = (
             [row.payload_json for row in s.scalars(select(BookingEvent)).all()]
             + [
                 {"before": e.before_state, "after": e.after_state}
                 for e in s.scalars(select(AuditEvent)).all()
             ]
             + [row.payload_json for row in s.scalars(select(TutoringOutbox)).all()]
-        ).lower()
-    for canary in ("pan", "cvv", "otp", "4111", "sdp", "ice_candidate", "device_label", "@"):
-        assert canary not in blob, canary
+        )
+    assert _booking_privacy_canary_hits(payloads) == []

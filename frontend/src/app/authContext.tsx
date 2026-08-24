@@ -1,11 +1,29 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { defaultKvStore, type KvStore } from '../lib/kvStore';
 import { loadAuthSnapshot, clearAuthSnapshot, subscribeAuthChange } from '../features/auth/lib/authPersistence';
 import {
   getStudentSession,
-  STUDENT_AUTH_CHANGED_EVENT,
   type StudentSessionActor,
 } from '../features/student/lib/registrationApi';
+import {
+  clearStudentBrowserContext,
+  notifyStudentAuthChanged,
+  observeStudentSessionActor,
+  subscribeStudentAuthTransitions,
+} from '../features/student/lib/studentBrowserContext';
+import {
+  hasProfileReauthHandoff,
+  resolveProfileReauthActor,
+} from '../features/student/profile/profileReauthHandoff';
 
 /**
  * Frontend auth-context + route-guard scaffolding (SAATHI-337 / SAATHI-368).
@@ -61,15 +79,50 @@ export function canUseLawyerFeatures(auth: AuthState): boolean {
   return auth.roles.includes('lawyer') && auth.lawyerVerification === 'verified';
 }
 
-const AuthContext = createContext<AuthState>(ANONYMOUS_AUTH);
+export type StudentSessionPhase = 'pending' | 'authenticated' | 'anonymous' | 'unavailable';
 
-export function AuthProvider({ value, children }: { value?: AuthState; children: ReactNode }) {
-  const auth = useMemo(() => value ?? ANONYMOUS_AUTH, [value]);
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+export interface StudentSessionControls {
+  phase: StudentSessionPhase;
+  refresh: () => Promise<void>;
+}
+
+interface AuthContextValue {
+  auth: AuthState;
+  studentSession: StudentSessionControls;
+}
+
+const noopRefresh = async () => undefined;
+const AuthContext = createContext<AuthContextValue>({
+  auth: ANONYMOUS_AUTH,
+  studentSession: { phase: 'anonymous', refresh: noopRefresh },
+});
+
+export function AuthProvider({
+  value,
+  studentSession,
+  children,
+}: {
+  value?: AuthState;
+  studentSession?: StudentSessionControls;
+  children: ReactNode;
+}) {
+  const auth = value ?? ANONYMOUS_AUTH;
+  const contextValue = useMemo<AuthContextValue>(() => ({
+    auth,
+    studentSession: studentSession ?? {
+      phase: auth.isAuthenticated ? 'authenticated' : 'anonymous',
+      refresh: noopRefresh,
+    },
+  }), [auth, studentSession]);
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {
-  return useContext(AuthContext);
+  return useContext(AuthContext).auth;
+}
+
+export function useStudentSession(): StudentSessionControls {
+  return useContext(AuthContext).studentSession;
 }
 
 /**
@@ -162,35 +215,195 @@ function studentActorToAuth(actor: StudentSessionActor): AuthState {
   };
 }
 
+export interface StudentSessionState {
+  auth: AuthState;
+  phase: StudentSessionPhase;
+  generation: number;
+}
+
+type StudentSessionAction =
+  | { type: 'begin'; generation: number }
+  | { type: 'resolved'; generation: number; actor: StudentSessionActor | null }
+  | { type: 'failed'; generation: number };
+
+/**
+ * Generation-gated reducer for session discovery. Beginning any newer probe
+ * immediately removes the previous private actor from the render tree. Older
+ * responses are ignored, so an out-of-order request can never resurrect an
+ * expired or signed-out session.
+ */
+export function reduceStudentSessionState(
+  state: StudentSessionState,
+  action: StudentSessionAction,
+): StudentSessionState {
+  if (action.generation < state.generation) return state;
+  if (action.type === 'begin') {
+    return { auth: ANONYMOUS_AUTH, phase: 'pending', generation: action.generation };
+  }
+  if (action.type === 'failed') {
+    return { auth: ANONYMOUS_AUTH, phase: 'unavailable', generation: action.generation };
+  }
+  if (!action.actor) {
+    return { auth: ANONYMOUS_AUTH, phase: 'anonymous', generation: action.generation };
+  }
+  return {
+    auth: studentActorToAuth(action.actor),
+    phase: 'authenticated',
+    generation: action.generation,
+  };
+}
+
+export interface DerivedAuthSession extends StudentSessionControls {
+  auth: AuthState;
+}
+
+/** Apply session side effects only for the generation that still owns the probe. */
+export function applyStudentSessionDiscovery(
+  generation: number,
+  currentGeneration: number,
+  actor: StudentSessionActor | null,
+): boolean {
+  if (generation !== currentGeneration) return false;
+  if (actor === null) {
+    // A proven anonymous state is the expected bridge to sign-in after a
+    // canonical 401. Keep only the already captured, TTL-bound handoff; private
+    // queries and the rendered actor are still cleared immediately.
+    clearStudentBrowserContext({
+      preserveProfileReauthHandoff: hasProfileReauthHandoff(),
+    });
+    return true;
+  }
+  const sameActorReauth = resolveProfileReauthActor(actor.sub);
+  const complete = observeStudentSessionActor({
+    subject: actor.sub,
+    studentProfileId: actor.student_profile_id,
+  }, {
+    preserveProfileReauthHandoff: sameActorReauth,
+  });
+  if (!complete) throw new Error('student_browser_cleanup_incomplete');
+  return true;
+}
+
+export function applyStudentSessionDiscoveryFailure(
+  generation: number,
+  currentGeneration: number,
+): boolean {
+  if (generation !== currentGeneration) return false;
+  clearStudentBrowserContext();
+  return true;
+}
+
 /**
  * Reactive auth state: re-derives immediately on P0.1 snapshot create / update /
  * clear (in-tab event) and on cross-tab storage changes — no full reload needed.
  */
-export function useDerivedAuth(): AuthState {
-  const [auth, setAuth] = useState<AuthState>(() => deriveAuthState());
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const actor = await getStudentSession();
-        if (active) setAuth(actor ? studentActorToAuth(actor) : deriveAuthState());
-      } catch {
-        // The server is authoritative. No cookie/session means anonymous unless
-        // the separate verified-lawyer snapshot is present.
-        if (active) setAuth(deriveAuthState());
-      }
-    };
-    void refresh();
-    const unsubscribe = subscribeAuthChange(() => { void refresh(); });
-    const onStudentAuthChanged = () => { void refresh(); };
-    window.addEventListener(STUDENT_AUTH_CHANGED_EVENT, onStudentAuthChanged);
-    return () => {
-      active = false;
-      unsubscribe();
-      window.removeEventListener(STUDENT_AUTH_CHANGED_EVENT, onStudentAuthChanged);
-    };
+export function useDerivedAuth(): DerivedAuthSession {
+  const [state, dispatch] = useReducer(reduceStudentSessionState, {
+    auth: ANONYMOUS_AUTH,
+    phase: 'pending',
+    generation: 0,
+  });
+  const generationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const activeTransitionsRef = useRef(new Set<string>());
+  const transitionTimeoutsRef = useRef(new Map<string, ReturnType<typeof globalThis.setTimeout>>());
+  const lastPublishedStudentAuthenticationRef = useRef(false);
+
+  const beginPending = useCallback(() => {
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    dispatch({ type: 'begin', generation });
+    return generation;
   }, []);
-  return auth;
+
+  const discoverSession = useCallback(async (transitionOwned: boolean) => {
+    if (activeTransitionsRef.current.size > 0) {
+      beginPending();
+      return;
+    }
+    clearStudentBrowserContext({
+      preserveProfileReauthHandoff: hasProfileReauthHandoff(),
+    });
+    const generation = beginPending();
+    try {
+      const actor = await getStudentSession();
+      if (
+        mountedRef.current
+        && applyStudentSessionDiscovery(generation, generationRef.current, actor)
+      ) {
+        const lostPublishedAuthority = lastPublishedStudentAuthenticationRef.current && actor === null;
+        lastPublishedStudentAuthenticationRef.current = actor !== null;
+        dispatch({ type: 'resolved', generation, actor });
+        if (lostPublishedAuthority && !transitionOwned) notifyStudentAuthChanged();
+      }
+    } catch {
+      if (
+        mountedRef.current
+        && applyStudentSessionDiscoveryFailure(generation, generationRef.current)
+      ) {
+        dispatch({ type: 'failed', generation });
+      }
+    }
+  }, [beginPending]);
+
+  const refresh = useCallback(async () => discoverSession(false), [discoverSession]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let transitionChannelAvailable = true;
+    const transitionSubscription = subscribeStudentAuthTransitions({
+      onStart: (transitionId) => {
+        activeTransitionsRef.current.add(transitionId);
+        beginPending();
+        const prior = transitionTimeoutsRef.current.get(transitionId);
+        if (prior) globalThis.clearTimeout(prior);
+        transitionTimeoutsRef.current.set(transitionId, globalThis.setTimeout(() => {
+          if (!activeTransitionsRef.current.has(transitionId)) return;
+          const generation = beginPending();
+          dispatch({ type: 'failed', generation });
+        }, 15_000));
+      },
+      onEnd: (transitionId) => {
+        activeTransitionsRef.current.delete(transitionId);
+        const timeout = transitionTimeoutsRef.current.get(transitionId);
+        if (timeout) globalThis.clearTimeout(timeout);
+        transitionTimeoutsRef.current.delete(transitionId);
+        if (transitionChannelAvailable && activeTransitionsRef.current.size === 0) {
+          void discoverSession(true);
+        }
+      },
+      onUnavailable: () => {
+        transitionChannelAvailable = false;
+        clearStudentBrowserContext();
+        const generation = beginPending();
+        dispatch({ type: 'failed', generation });
+      },
+    });
+    void transitionSubscription.ready.then(() => {
+      if (
+        mountedRef.current
+        && transitionChannelAvailable
+        && activeTransitionsRef.current.size === 0
+      ) void refresh();
+    });
+    const unsubscribe = subscribeAuthChange(() => {
+      if (transitionChannelAvailable && activeTransitionsRef.current.size === 0) void refresh();
+    });
+    return () => {
+      mountedRef.current = false;
+      unsubscribe();
+      transitionSubscription.unsubscribe();
+      for (const timeout of transitionTimeoutsRef.current.values()) globalThis.clearTimeout(timeout);
+      transitionTimeoutsRef.current.clear();
+      activeTransitionsRef.current.clear();
+    };
+  }, [beginPending, discoverSession, refresh]);
+
+  return useMemo(() => ({
+    auth: state.auth,
+    phase: state.phase,
+    refresh,
+  }), [refresh, state.auth, state.phase]);
 }
 
 export type GuardRule = 'authenticated' | 'student-verified' | 'lawyer-features';

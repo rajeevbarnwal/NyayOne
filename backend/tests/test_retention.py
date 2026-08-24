@@ -18,7 +18,9 @@ NOW = datetime(2026, 7, 26, 9, 0, tzinfo=timezone.utc)
 def _reg(session: Session, mobile="9876543210"):
     req = StudentRegisterRequest(
         first_name="Aditi", last_name="Nair", mobile=mobile, dob="2004-03-14",
-        consent={"accepted": True},
+        terms_accepted=True, terms_version="terms.v1",
+        privacy_notice_acknowledged=True,
+        privacy_notice_version="privacy.v1",
     )
     return register_student(session, req, now=NOW).registration
 

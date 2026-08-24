@@ -7,7 +7,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, request as playwrightRequest } from 'playwright';
 
 const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1170').replace(/\/$/, '');
 const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1171').replace(/\/$/, '');
@@ -16,8 +16,12 @@ const OUT = path.resolve(process.env.E2E_OUTPUT_DIR ?? 'test-results/credential-
 const STUDENT_MOBILE = '9000000097';
 const STUDENT_ID = '00000000-0000-4000-8000-0000000000de';
 const ISSUER_ID = '00000000-0000-4000-8000-000000000253';
+const ISSUER_ACTOR_ID = '00000000-0000-4000-8000-0000000000c3';
 const STUDENT_HEADERS = {
   'X-Actor-Claims': JSON.stringify({ sub: STUDENT_ID, roles: ['student'] }),
+};
+const ISSUER_HEADERS = {
+  'X-Actor-Claims': JSON.stringify({ sub: ISSUER_ACTOR_ID, roles: ['lawyer'] }),
 };
 const VIEWPORTS = [
   [390, 844],
@@ -279,24 +283,43 @@ async function positiveJourney(browser) {
   check('functional', 'S-83 persisted ID', Boolean(credentialId), 'opaque credential ID', String(credentialId));
   await page.getByText('pending verification', { exact: true }).waitFor();
 
-  const verifyResponse = page.waitForResponse(
-    (response) => response.url().includes(`/issuer/credentials/${credentialId}/verify`)
-      && response.request().method() === 'POST',
+  // Student sessions must never receive issuer mutation controls. The
+  // separate lawyer/tutor session ceremony is deliberately deferred, so the
+  // existing test-only claims seam exercises the issuer API in an isolated
+  // cookie-free request context without inventing a production ceremony.
+  const studentIssuerMutationControls = await page.getByRole('button', {
+    name: /verify credential|revoke as issuer/iu,
+  }).count();
+  const credentialBeforeVerification = await context.request.get(
+    `${API}/api/v1/credentials/${credentialId}`,
+    { headers: STUDENT_HEADERS },
   );
-  // The deterministic issuer seam is intentionally a different actor from
-  // the student session. Remove the student cookie only for this issuer UI
-  // action, then restore the same server-issued student session afterwards.
-  const studentSessionCookies = await context.cookies();
-  await context.clearCookies();
-  await page.getByRole('button', { name: 'Verify credential' }).click();
-  const issuerVerification = await verifyResponse;
-  await context.addCookies(studentSessionCookies);
+  const credentialBeforeVerificationBody = credentialBeforeVerification.ok()
+    ? await credentialBeforeVerification.json() : null;
+  const issuerRequest = await playwrightRequest.newContext({
+    baseURL: API,
+    extraHTTPHeaders: ISSUER_HEADERS,
+  });
+  let issuerVerification;
+  try {
+    issuerVerification = await issuerRequest.post(
+      `/api/v1/issuer/credentials/${credentialId}/verify`,
+      {
+        headers: { 'Idempotency-Key': 'credential-e2e-issuer-review-1' },
+        data: { expected_version: credentialBeforeVerificationBody?.version },
+      },
+    );
+  } finally {
+    await issuerRequest.dispose();
+  }
   check(
     'functional',
     'issuer verify HTTP',
-    issuerVerification.status() === 200,
-    'HTTP 200',
-    `HTTP ${issuerVerification.status()}`,
+    studentIssuerMutationControls === 0
+      && credentialBeforeVerification.status() === 200
+      && issuerVerification.status() === 200,
+    'student issuer controls absent; isolated issuer HTTP 200',
+    `${studentIssuerMutationControls} student controls; HTTP ${issuerVerification.status()}`,
   );
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText('verified', { exact: true }).waitFor();
@@ -391,10 +414,24 @@ async function geometryMatrix(browser, credentialId, storageState) {
         viewport: { width, height },
         storageState,
       });
-      await context.addInitScript((mode) => localStorage.setItem('ls-theme', mode), theme);
+      await context.addInitScript((mode) => localStorage.setItem('nyayone.theme.v1', mode), theme);
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];
+      let publicVerificationRequestCount = 0;
+      const publicVerificationRequestMethods = {};
+      page.on('request', (request) => {
+        const requestUrl = new URL(request.url());
+        if (
+          requestUrl.origin === new URL(API).origin
+          && requestUrl.pathname.startsWith('/api/v1/public/credential-verifications/')
+        ) {
+          publicVerificationRequestCount += 1;
+          const method = request.method();
+          publicVerificationRequestMethods[method] =
+            (publicVerificationRequestMethods[method] ?? 0) + 1;
+        }
+      });
       page.on('console', (message) => {
         if (message.type() === 'error') consoleErrors.push(diagnosticSummary(message.text()));
       });
@@ -420,13 +457,25 @@ async function geometryMatrix(browser, credentialId, storageState) {
       await page.goto(`${WEB}${new URL(tokenBody.verification_url).pathname}`, {
         waitUntil: 'networkidle',
       });
-      await assertGeometry(page, 'public-verify', width, height, theme, consoleErrors, pageErrors);
+      await assertGeometry(page, 'public-verify', width, height, theme, consoleErrors, pageErrors, {
+        publicVerificationRequestCount,
+        publicVerificationRequestMethods,
+      });
       await context.close();
     }
   }
 }
 
-async function assertGeometry(page, screen, width, height, theme, consoleErrors, pageErrors) {
+async function assertGeometry(
+  page,
+  screen,
+  width,
+  height,
+  theme,
+  consoleErrors,
+  pageErrors,
+  diagnostics = {},
+) {
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
     const badTargets = [];
@@ -465,18 +514,27 @@ async function assertGeometry(page, screen, width, height, theme, consoleErrors,
       theme: root.dataset.theme,
     };
   });
+  const publicVerificationRequestPass = screen !== 'public-verify'
+    || (
+      diagnostics.publicVerificationRequestCount === 1
+      && diagnostics.publicVerificationRequestMethods?.GET === 1
+      && Object.keys(diagnostics.publicVerificationRequestMethods).length === 1
+    );
   const pass = metrics.scrollWidth <= metrics.clientWidth + 1
     && metrics.badTargets.length === 0
     && metrics.theme === theme
     && consoleErrors.length === 0
-    && pageErrors.length === 0;
+    && pageErrors.length === 0
+    && publicVerificationRequestPass;
   record(
     'geometry',
     `${screen}-${width}x${height}-${theme}`,
-    'no overflow; targets >=44; correct theme; zero console/page errors',
+    `no overflow; targets >=44; correct theme; zero console/page errors${
+      screen === 'public-verify' ? '; one public verification GET' : ''
+    }`,
     JSON.stringify(metrics),
     pass,
-    { consoleErrors: [...consoleErrors], pageErrors: [...pageErrors] },
+    { consoleErrors: [...consoleErrors], pageErrors: [...pageErrors], ...diagnostics },
   );
   await page.screenshot({
     path: path.join(OUT, `${screen}-${width}x${height}-${theme}.png`),

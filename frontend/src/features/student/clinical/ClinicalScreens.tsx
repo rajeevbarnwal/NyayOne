@@ -253,9 +253,9 @@ export function ClinicalExport() {
       link.download = payload.fileName;
       link.click();
       URL.revokeObjectURL(url);
-      setExportStatus(`${format.toUpperCase()} export downloaded. Audit event recorded.`);
+      setExportStatus(`${format.toUpperCase()} export downloaded. No browser-persistent audit record was created.`);
     } else {
-      setExportStatus('Institution package prepared. No external transfer occurs in this prototype. Audit event recorded.');
+      setExportStatus('Institution package prepared. No external transfer or browser-persistent audit occurs in this prototype.');
     }
   }
   return (

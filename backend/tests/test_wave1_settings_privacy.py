@@ -62,7 +62,11 @@ def ctx(_mounted):
     with SessionLocal() as s:
         reg = register_student(s, StudentRegisterRequest(
             first_name="Aditi", last_name="Nair", mobile="9876543210", dob="2004-03-14",
-            consent={"accepted": True})).registration
+            terms_accepted=True, terms_version="terms.v1",
+            privacy_notice_acknowledged=True,
+            privacy_notice_version="privacy.v1")).registration
+        reg.status = "active"
+        s.get(User, reg.user_id).status = "active"
         s.commit()
         uid, rid = reg.user_id, reg.id
     yield client, SessionLocal, uid, rid
@@ -70,6 +74,42 @@ def ctx(_mounted):
     # drop_all here re-walked all 53 tables (~10 ms) to demolish a database
     # that was about to be discarded anyway.
     engine.dispose()
+
+
+def _personal(version=1):
+    return {
+        "expected_profile_version": version,
+        "first_name": "Aditi",
+        "middle_name": None,
+        "last_name": "Nair",
+        "date_of_birth": "2004-03-14",
+        "preferred_language": "en",
+        "city": "Bengaluru",
+        "pronouns": None,
+    }
+
+
+def _academic(version=2, **overrides):
+    payload = {
+        "expected_profile_version": version,
+        "college": "National Law School of India University",
+        "year_of_study": "3rd",
+        "enrolment_number": "KA/1234/2023",
+        "institutional_email": None,
+        "bar_enrolment_number": None,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _complete_personal(client, uid):
+    response = client.patch(
+        "/api/v1/student/profile/personal",
+        headers={**_claims(uid), "Origin": settings.cors_origins[0]},
+        json=_personal(),
+    )
+    assert response.status_code == 200
+    return response.json()
 
 
 def test_anonymous_and_wrong_role_rejected(ctx):
@@ -82,22 +122,30 @@ def test_profile_get_patch_and_fresh_session(ctx):
     client, SessionLocal, uid, rid = ctx
     h = {**_claims(uid), "Origin": settings.cors_origins[0]}
     p = client.get("/api/v1/student/profile", headers=h)
-    assert p.status_code == 200 and p.json()["first_name"] == "Aditi"
-    assert p.json()["masked_mobile"].endswith("3210") and "9876543210" not in p.json()["masked_mobile"]
-    up = client.patch("/api/v1/student/profile", headers=h, json={"college": "NLSIU", "year_of_study": "3rd"})
+    assert p.status_code == 200
+    assert p.json()["profile"]["personal"]["first_name"] == "Aditi"
+    assert "masked_mobile" not in p.json()
+    _complete_personal(client, uid)
+    up = client.patch(
+        "/api/v1/student/profile/academic", headers=h, json=_academic()
+    )
     assert up.status_code == 200
-    # D1: legacy submissions map onto CANONICAL wire values
-    assert up.json()["college"] == "National Law School of India University"
-    assert up.json()["year_of_study"] == "3rd"
+    assert up.json()["profile"]["academic"]["college"] == "National Law School of India University"
+    assert up.json()["profile"]["academic"]["year_of_study"] == "3rd"
     with SessionLocal() as s:  # refresh-safe: fresh session sees the persisted value
         reg = s.get(StudentRegistration, rid)
         assert reg.institution_ref == "National Law School of India University"
 
 
-@pytest.mark.parametrize("bad", [{"college": "   "}, {"college": "x" * 161}, {"nickname": "no"}])
+@pytest.mark.parametrize("bad", [{"college": "x" * 161}, {"nickname": "no"}])
 def test_profile_patch_validation(ctx, bad):
     client, SessionLocal, uid, rid = ctx
-    assert client.patch("/api/v1/student/profile", headers=_claims(uid), json=bad).status_code == 422
+    _complete_personal(client, uid)
+    assert client.patch(
+        "/api/v1/student/profile/academic",
+        headers=_claims(uid),
+        json={**_academic(), **bad},
+    ).status_code == 422
 
 
 def test_settings_roundtrip_version_conflict_and_privacy(ctx):
@@ -233,11 +281,16 @@ def test_delete_requires_typed_confirmation_and_real_reauth(ctx):
 
 def test_audit_written_and_pii_free(ctx):
     client, SessionLocal, uid, rid = ctx
-    client.patch("/api/v1/student/profile", headers=_claims(uid), json={"college": "Other"})
+    _complete_personal(client, uid)
+    assert client.patch(
+        "/api/v1/student/profile/academic",
+        headers=_claims(uid),
+        json=_academic(college="Other"),
+    ).status_code == 200
     with SessionLocal() as s:
         evs = s.scalars(select(AuditEvent)).all()
         blob = "".join(str(e.after_state) for e in evs)
-        assert any(e.action == "student.profile.update" for e in evs)
+        assert any(e.action == "student.profile.section_updated" for e in evs)
         assert "9876543210" not in blob and "Aditi" not in blob
 
 
@@ -245,19 +298,35 @@ def test_audit_written_and_pii_free(ctx):
 def test_d1_unsupported_college_and_year_rejected(ctx):
     client, SessionLocal, uid, rid = ctx
     h = _claims(uid)
-    r1 = client.patch("/api/v1/student/profile", headers=h, json={"college": "Hogwarts School of Law"})
-    r2 = client.patch("/api/v1/student/profile", headers=h, json={"year_of_study": "9th year"})
+    _complete_personal(client, uid)
+    r1 = client.patch(
+        "/api/v1/student/profile/academic",
+        headers=h,
+        json=_academic(college="Hogwarts School of Law"),
+    )
+    r2 = client.patch(
+        "/api/v1/student/profile/academic",
+        headers=h,
+        json=_academic(year_of_study="9th year"),
+    )
     assert r1.status_code == 422 and r2.status_code == 422
 
 
 def test_d1_legacy_display_labels_map_to_canonical(ctx):
     client, SessionLocal, uid, rid = ctx
     h = _claims(uid)
-    up = client.patch("/api/v1/student/profile", headers=h, json={
-        "college": "National Law School of India University (NLSIU)", "year_of_study": "3rd year"})
+    _complete_personal(client, uid)
+    up = client.patch(
+        "/api/v1/student/profile/academic",
+        headers=h,
+        json=_academic(
+            college="National Law School of India University (NLSIU)",
+            year_of_study="3rd year",
+        ),
+    )
     assert up.status_code == 200
-    assert up.json()["college"] == "National Law School of India University"
-    assert up.json()["year_of_study"] == "3rd"
+    assert up.json()["profile"]["academic"]["college"] == "National Law School of India University"
+    assert up.json()["profile"]["academic"]["year_of_study"] == "3rd"
 
 
 def test_d1_returning_user_reads_canonical_from_legacy_rows(ctx):
@@ -273,22 +342,31 @@ def test_d1_returning_user_reads_canonical_from_legacy_rows(ctx):
         prof.year_of_study = "3rd year"
         s.commit()
     g = client.get("/api/v1/student/profile", headers=_claims(uid))
-    assert g.json()["college"] == "National Law School of India University"
-    assert g.json()["year_of_study"] == "3rd"
+    assert (
+        g.json()["profile"]["academic"]["college"]
+        == "National Law School of India University"
+    )
+    assert g.json()["profile"]["academic"]["year_of_study"] == "3rd"
 
 
 def test_d1_open_save_without_change_preserves_values(ctx):
     client, SessionLocal, uid, rid = ctx
     h = _claims(uid)
-    client.patch("/api/v1/student/profile", headers=h, json={
-        "college": "National Law School of India University", "year_of_study": "3rd"})
+    _complete_personal(client, uid)
+    client.patch("/api/v1/student/profile/academic", headers=h, json=_academic())
     g1 = client.get("/api/v1/student/profile", headers=h).json()
     # simulate open-edit + save-without-modification (echo canonical values back)
-    up = client.patch("/api/v1/student/profile", headers=h, json={
-        "college": g1["college"], "year_of_study": g1["year_of_study"]})
+    up = client.patch(
+        "/api/v1/student/profile/academic",
+        headers=h,
+        json={
+            **g1["profile"]["academic"],
+            "expected_profile_version": g1["profile_version"],
+        },
+    )
     assert up.status_code == 200
     g2 = client.get("/api/v1/student/profile", headers=h).json()
-    assert g2["college"] == g1["college"] and g2["year_of_study"] == g1["year_of_study"]
+    assert g2["profile"]["academic"] == g1["profile"]["academic"]
 
 
 def test_d2_language_enum_fresh_default_and_persistence(ctx):

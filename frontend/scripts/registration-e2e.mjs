@@ -70,19 +70,15 @@ async function fresh(viewport = { width: 1440, height: 1000 }) {
 
 async function fillBase(page, {
   first = 'Aditi', middle = '', last = 'Nair', mobile = '9876543210', dob = '2004-03-14',
-  email = 'aditi@nls.ac.in',
 } = {}) {
   await page.goto(`${base}/s-08`);
   await page.getByLabel('FIRST NAME').fill(first);
   await page.getByLabel('MIDDLE NAME').fill(middle);
   await page.getByLabel('LAST NAME').fill(last);
   await page.getByLabel('MOBILE NUMBER', { exact: true }).fill(mobile);
-  await page.getByLabel('INSTITUTIONAL EMAIL').fill(email);
   await page.getByLabel('DATE OF BIRTH', { exact: true }).fill(dob);
-  await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('NLSIU');
-  await page.getByLabel('YEAR OF STUDY').selectOption('3');
-  await page.getByRole('checkbox', { name: /enrolled in, or applying to/ }).check();
-  await page.getByRole('checkbox', { name: /accept the terms and DPDP/ }).check();
+  await page.getByRole('checkbox', { name: 'I accept the Terms.', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'I acknowledge the Privacy Notice.', exact: true }).check();
 }
 
 // Explicit negative/boundary cases.
@@ -158,15 +154,19 @@ for (const [name, values, expected] of [
   const protectedRequests = [];
   let registrationPayload = null;
   page.on('request', (r) => {
-    if (r.url().includes('/api/v1/auth/student/')) {
-      const url = new URL(r.url());
+    const url = new URL(r.url());
+    if (
+      url.pathname.startsWith('/api/v1/auth/student/')
+      || url.pathname.startsWith('/api/v1/student/')
+    ) {
       requests.push(`${r.method()} ${url.pathname}`);
-      if (r.url().includes('/api/v1/auth/student/register')) registrationPayload = r.postDataJSON();
-      if (
-        url.pathname.endsWith('/profile')
-        || url.pathname.endsWith('/verification/email/request')
-        || url.pathname.endsWith('/verification/status')
-      ) {
+      if (url.pathname === '/api/v1/auth/student/register') registrationPayload = r.postDataJSON();
+      if ([
+        '/api/v1/student/profile/personal',
+        '/api/v1/student/profile/academic',
+        '/api/v1/auth/student/verification/email/request',
+        '/api/v1/auth/student/verification/status',
+      ].includes(url.pathname)) {
         protectedRequests.push({
           method: r.method(),
           path: url.pathname,
@@ -184,7 +184,6 @@ for (const [name, values, expected] of [
     last: qaPii.last,
     mobile: qaPii.mobile,
     dob: qaPii.dob,
-    email: qaPii.email,
   });
   await resetOtp();
 
@@ -204,14 +203,19 @@ for (const [name, values, expected] of [
   await send.click();
   const registrationResponse = await registrationResponsePromise;
   const registrationResult = await registrationResponse.json();
+  const registrationResultKeys = Object.keys(registrationResult ?? {}).sort();
   record(
     'registration_response_safe_flow_projection',
-    'pre-auth response contains relative state and no correlation identifier',
-    registrationResult,
-    registrationResult?.status === 'pending'
-      && registrationResult?.purpose === 'signup'
-      && Number.isInteger(registrationResult?.attempts_left)
-      && Number.isInteger(registrationResult?.expires_in_seconds)
+    'HTTP 202 accepted/otp projection contains only relative expiry and resend timing',
+    { status: registrationResponse.status(), keys: registrationResultKeys, body: registrationResult },
+    registrationResponse.status() === 202
+      && registrationResultKeys.join(',') === 'expires_in_seconds,next,resend_after_seconds,status'
+      && registrationResult?.status === 'accepted'
+      && registrationResult?.next === 'otp'
+      && Number.isSafeInteger(registrationResult?.expires_in_seconds)
+      && registrationResult.expires_in_seconds >= 0
+      && Number.isSafeInteger(registrationResult?.resend_after_seconds)
+      && registrationResult.resend_after_seconds >= 0
       && !/(?:registration|login|recovery)(?:_(?:id|token)|(?:Id|Token))/.test(JSON.stringify(registrationResult)),
   );
   await page.waitForURL('**/s-09');
@@ -271,7 +275,7 @@ for (const [name, values, expected] of [
   );
   await otpControl.fill(otp);
   await page.getByRole('button', { name: 'Verify and continue' }).click();
-  await page.waitForURL('**/s-10');
+  await page.waitForURL('**/s-07');
   const splitNamePayloadValid = registrationPayload?.first_name === qaPii.first
     && registrationPayload?.middle_name === qaPii.middle
     && registrationPayload?.last_name === qaPii.last
@@ -286,10 +290,15 @@ for (const [name, values, expected] of [
       legacyFullNamePresent: registrationPayload?.full_name !== undefined,
     },
     splitNamePayloadValid);
-  await page.getByLabel('CITY').selectOption('Bengaluru');
-  await page.getByLabel('PRONOUNS').fill(qaPii.pronouns);
-  await page.getByRole('button', { name: 'Continue to academics' }).click();
-  await page.waitForURL('**/s-10?step=academic');
+  await page.getByTestId('profile-completion-dialog').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Complete Profile' }).click();
+  await page.waitForURL('**/s-10?section=personal');
+  await page.getByRole('heading', { name: 'About you' }).waitFor({ state: 'visible' });
+  await page.getByLabel('Preferred language').selectOption('en');
+  await page.getByLabel('City').fill('Bengaluru');
+  await page.getByLabel('Pronouns').fill(qaPii.pronouns);
+  await page.getByRole('button', { name: 'Save & continue' }).click();
+  await page.waitForURL('**/s-10?section=academic');
 
   for (const label of [
     'College / University',
@@ -326,9 +335,11 @@ for (const [name, values, expected] of [
   // registration from the authenticated HttpOnly session. Merely watching
   // for these paths would let a removed request false-green this oracle.
   await page.goto(`${base}/s-15`);
-  await page.getByLabel('Institutional email').fill(qaPii.email);
-  await page.getByRole('button', { name: 'Send verification link' }).click();
-  await page.getByRole('status').filter({ hasText: 'Verification link sent' }).waitFor();
+  await page.getByRole('heading', { name: 'Confirm your college email' }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Request verification review' }).click();
+  await page.getByRole('status')
+    .filter({ hasText: 'Verification review request recorded' })
+    .waitFor();
   const emailRequest = protectedRequests.find((request) => (
     request.method === 'POST'
       && request.path === '/api/v1/auth/student/verification/email/request'
@@ -361,13 +372,13 @@ for (const [name, values, expected] of [
     statusResult,
     statusResult.status === 200
       && /application\/json/i.test(statusResult.contentType)
-      && statusResult.body?.status === 'pending'
+      && statusResult.body?.status === 'in_review'
       && statusResult.body?.method === 'institutional_email',
   );
 
   const storage = await page.evaluate(async ({ canaries }) => {
     const registrationKey = 'legalsaathi.student.registration.v2';
-    const allowedLocalKeys = new Set(['ls-theme', 'ls-onboarding-seen', 'ls-reviewer']);
+    const allowedLocalKeys = new Set(['nyayone.theme.v1']);
     const allowedSessionKeys = new Set();
     const forbiddenKey = /(?:access[_-]?token|auth[_-]?token|session[_-]?token|onboarding[_-]?(?:token|capability)|authorization|bearer|password|otp|secret)/i;
     const credentialValue = /(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\b[A-Za-z0-9_-]{48,}\b)/;
@@ -489,7 +500,8 @@ for (const [name, values, expected] of [
       || uuid.test(`${request.url} ${request.body}`)
   ));
   const expectedProtectedCalls = [
-    'PATCH /api/v1/auth/student/profile',
+    'PATCH /api/v1/student/profile/personal',
+    'PATCH /api/v1/student/profile/academic',
     'POST /api/v1/auth/student/verification/email/request',
     'GET /api/v1/auth/student/verification/status',
   ];
@@ -499,14 +511,20 @@ for (const [name, values, expected] of [
     .filter((request) => expectedProtectedCalls.includes(`${request.method} ${request.path}`))
     .filter((request) => request.origin !== emailRequest.origin)
     .map((request) => `${request.method} ${request.path}`);
-  record('protected_calls_use_server_actor', 'profile/email/status each execute at the configured API origin without registration_id field, query, header or UUID',
+  record('protected_calls_use_server_actor', 'personal/academic/email/status each execute at the configured API origin without registration_id field, query, header or UUID',
     { protectedActorReferenceLeak, missingProtectedCalls, wrongOriginCalls },
     protectedActorReferenceLeak === false
       && missingProtectedCalls.length === 0
       && wrongOriginCalls.length === 0);
   record('registration_api_called', 'POST /register', requests, requests.some((r) => r.includes('POST /api/v1/auth/student/register')));
   record('otp_api_called', 'POST /otp/verify', requests, requests.some((r) => r.includes('POST /api/v1/auth/student/otp/verify')));
-  record('profile_api_called', 'PATCH /profile', requests, requests.some((r) => r.includes('PATCH /api/v1/auth/student/profile')));
+  record(
+    'profile_api_called',
+    'PATCH both canonical personal and academic profile sections',
+    requests,
+    requests.includes('PATCH /api/v1/student/profile/personal')
+      && requests.includes('PATCH /api/v1/student/profile/academic'),
+  );
   const expectedIncorrectOtpConsoleMessage = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
   const expectedIncorrectOtpConsoleCount = consoleErrors.filter(
     (entry) => entry === expectedIncorrectOtpConsoleMessage,
@@ -533,7 +551,8 @@ for (const [name, values, expected] of [
     expectedIncorrectOtpErrorCount === 1 && unexpectedNetworkErrors.length === 0,
   );
   const file = 's08_s10_full_flow_v34.png';
-  await page.getByLabel('Institutional email').fill('');
+  await page.goto(`${base}/s-03`);
+  await page.getByRole('heading', { name: 'Welcome. Let us get you in.' }).waitFor({ state: 'visible' });
   await page.screenshot({ path: path.join(evidence, file), fullPage: true });
   await context.close();
 }
@@ -557,15 +576,16 @@ for (const [name, values, expected] of [
   await recoveryCode.waitFor({ state: 'visible' });
   await recoveryCode.fill(await latestOtp());
   await page.getByRole('button', { name: 'Verify recovery code' }).click();
-  await page.getByText('Recovery verified. You may now sign in again.').waitFor();
+  await page.waitForURL('**/s-04');
+  await page.getByRole('heading', { name: 'Sign in' }).waitFor({ state: 'visible' });
   record('recovery_server_start', 'POST /recovery/start', calls,
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/start')));
   record('recovery_server_verify', 'POST /recovery/verify', calls,
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/verify')));
   record('recovery_server_complete', 'POST /recovery/complete', calls,
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/complete')));
-  record('recovery_no_email_redirect', 'remain /s-06', new URL(page.url()).pathname,
-    new URL(page.url()).pathname === '/s-06');
+  record('recovery_no_email_redirect', 'return to canonical sign-in at /s-04', new URL(page.url()).pathname,
+    new URL(page.url()).pathname === '/s-04');
   await page.getByLabel('MOBILE NUMBER', { exact: true }).fill('');
   // Completion retires the verified recovery flow, so the code control must
   // disappear instead of remaining editable on the acknowledgement state.
@@ -578,7 +598,7 @@ for (const [name, values, expected] of [
 for (const width of [390, 430, 768, 1024, 1440]) {
   for (const theme of ['light', 'dark']) {
     const { context, page, consoleErrors } = await fresh({ width, height: 1000 });
-    await page.addInitScript((value) => localStorage.setItem('ls-theme', value), theme);
+    await page.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
     const action = page.getByRole('button', { name: 'Send one time code' });
     const helpButton = page.getByRole('button', { name: 'More information about MOBILE NUMBER' });
@@ -609,13 +629,10 @@ for (const width of [390, 430, 768, 1024, 1440]) {
       'MIDDLE NAME',
       'LAST NAME',
       'MOBILE NUMBER',
-      'INSTITUTIONAL EMAIL',
       'DATE OF BIRTH',
     ]) {
       await page.getByLabel(label, { exact: true }).fill('');
     }
-    await page.getByLabel('COLLEGE OR UNIVERSITY').selectOption('');
-    await page.getByLabel('YEAR OF STUDY').selectOption('');
     await page.screenshot({ path: path.join(evidence, file), fullPage: true });
     await context.close();
   }
@@ -629,11 +646,17 @@ for (const width of [390, 430, 768, 1024, 1440]) {
   page.on('request', (r) => {
     if (r.url().includes('/api/v1/auth/student/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
+  const sessionDiscoveryRequest = page.waitForRequest((request) => (
+    request.method() === 'GET'
+      && new URL(request.url()).pathname === '/api/v1/auth/student/session'
+  ));
   await page.goto(`${base}/auth/student`);
   await page.getByRole('heading', { name: 'This legacy sign-in route is unavailable' }).waitFor();
+  await sessionDiscoveryRequest;
   const secureLink = page.getByRole('link', { name: 'Use secure student sign-in' });
-  const sessionDiscoveryOnly = calls.length > 0
-    && calls.every((call) => call === 'GET /api/v1/auth/student/session');
+  const sessionDiscoveryOnly = calls.length > 0 && calls.every(
+    (call) => call === 'GET /api/v1/auth/student/session',
+  );
   record('auth_student_legacy_route_fail_closed', 'legacy route denies, links only to /s-03 and permits read-only session discovery only',
     { href: await secureLink.getAttribute('href'), calls },
     await secureLink.getAttribute('href') === '/s-03' && sessionDiscoveryOnly);

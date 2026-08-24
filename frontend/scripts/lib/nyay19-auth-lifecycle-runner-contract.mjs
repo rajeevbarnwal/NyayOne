@@ -181,14 +181,14 @@ export function inspectNyay19SessionBootstrap(observation) {
   const finishedCount = countsValid ? observation.finishedCount : 0;
   const failedCount = countsValid ? observation.failedCount : 0;
   const exactCardinality = Boolean(countsValid)
-    && requestCount === 2
-    && responseCount === 2;
+    && requestCount === 1
+    && responseCount === 1;
   const finishedSettlementExact = exactCardinality
-    && finishedCount === 2
+    && finishedCount === 1
     && failedCount === 0;
   const responsesSuccessful = observation?.responsesSuccessful === true;
   return {
-    expectedCount: 2,
+    expectedCount: 1,
     requestCount,
     responseCount,
     finishedCount,
@@ -686,9 +686,11 @@ export function inspectCookieRetirementHeaders(headers, expectedNames, apiBaseUr
   };
 }
 
-function exactControlState(value) {
+function exactControlState(value, retiredPresent) {
   return value?.theme === 'dark'
-    && value?.locale === 'hi'
+    && value?.retiredLocale === (retiredPresent ? 'hi' : null)
+    && value?.retiredReviewer === (retiredPresent ? '1' : null)
+    && value?.retiredOnboardingSeen === (retiredPresent ? 'seen' : null)
     && value?.unrelated === 'retain';
 }
 
@@ -702,7 +704,7 @@ export function inspectStudentContextBoundary(before, after) {
     && before.queryCacheCount > 0
     && Number.isSafeInteger(before?.mutationCacheCount)
     && before.mutationCacheCount > 0
-    && exactControlState(before?.controls);
+    && exactControlState(before?.controls, true);
   const afterExact = after?.managedExpectedCount === before?.managedExpectedCount
     && after?.managedPresentCount === 0
     && after?.retiredActorRegistryAbsent === true
@@ -710,7 +712,7 @@ export function inspectStudentContextBoundary(before, after) {
     && after?.profileDraftPresent === false
     && after?.queryCacheCount === 0
     && after?.mutationCacheCount === 0
-    && exactControlState(after?.controls);
+    && exactControlState(after?.controls, false);
   return { beforeExact, afterExact, pass: beforeExact && afterExact };
 }
 

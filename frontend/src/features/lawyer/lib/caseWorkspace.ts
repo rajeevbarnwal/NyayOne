@@ -16,10 +16,10 @@ export const CASE_TABS: ReadonlyArray<{ id: CaseTab; label: string; empty: strin
 ];
 
 let caseSeq = 2040;
-/** Stable internal LegalSaathi reference id (server-authoritative in prod). */
+/** Stable internal NyayOne reference id (server-authoritative in prod). */
 export function newCaseRef(): string {
   caseSeq += 1;
-  return `LS-CASE-${caseSeq}`;
+  return `NYAY-CASE-${caseSeq}`;
 }
 
 export interface CaseRecord {

@@ -87,7 +87,19 @@ def _registration(mobile: str = "9876543210") -> dict:
         "last_name": "Nair",
         "mobile": mobile,
         "dob": "2004-03-14",
-        "consent": {"accepted": True},
+        "terms_accepted": True,
+        "terms_version": "terms.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy.v1",
+    }
+
+
+def _assert_registration_accepted(state: dict) -> None:
+    assert state == {
+        "status": "accepted",
+        "next": "otp",
+        "expires_in_seconds": 300,
+        "resend_after_seconds": 30,
     }
 
 
@@ -115,8 +127,13 @@ def test_signup_replay_reissues_cookie_with_zero_database_and_provider_delta():
             headers=headers,
             json=_registration(),
         )
-        assert first.status_code == 201
-        _assert_pending(first.json(), "signup", "3210")
+        assert first.status_code == 202
+        _assert_registration_accepted(first.json())
+        _assert_pending(
+            client.get("/api/v1/auth/student/otp/state").json(),
+            "signup",
+            "3210",
+        )
         assert len(sender.sent) == 1
         cookie = client.cookies.get(settings.otp_flow_cookie_name)
         assert cookie
@@ -137,8 +154,13 @@ def test_signup_replay_reissues_cookie_with_zero_database_and_provider_delta():
             headers=headers,
             json=_registration(),
         )
-        assert replay.status_code == 201
-        _assert_pending(replay.json(), "signup", "3210")
+        assert replay.status_code == 202
+        _assert_registration_accepted(replay.json())
+        _assert_pending(
+            client.get("/api/v1/auth/student/otp/state").json(),
+            "signup",
+            "3210",
+        )
         assert client.cookies.get(settings.otp_flow_cookie_name) == cookie
         assert len(sender.sent) == 1
         with factory() as session:
@@ -160,13 +182,15 @@ def test_signup_verify_uses_code_only_and_returns_terminal_projection():
             headers={"Idempotency-Key": "nyay4-signup-verify-0001"},
             json=_registration(),
         )
-        assert created.status_code == 201
+        assert created.status_code == 202
         code = sender.sent[-1][1]
         verified = client.post(
             "/api/v1/auth/student/otp/verify", json={"code": code}
         )
         assert verified.status_code == 200
-        assert verified.json() == {
+        terminal = verified.json()
+        onboarding = terminal.pop("onboarding")
+        assert terminal == {
             "status": "authenticated",
             "purpose": "signup",
             "destination_masked": None,
@@ -176,6 +200,10 @@ def test_signup_verify_uses_code_only_and_returns_terminal_projection():
             "locked_for_seconds": None,
             "resend_allowed": False,
         }
+        assert onboarding["profile_version"] == 1
+        assert onboarding["completion_percent"] == 0
+        assert onboarding["next_incomplete_section"] == "personal"
+        assert onboarding["profile"]["personal"]["first_name"] == "Aditi"
         state = client.get("/api/v1/auth/student/otp/state")
         assert state.status_code == 200
         assert state.json()["status"] == "unavailable"
@@ -204,7 +232,7 @@ def test_duplicate_mobile_gets_same_safe_shape_without_rotating_real_flow():
             headers={"Idempotency-Key": "nyay4-real-0001"},
             json=_registration(),
         )
-        assert first.status_code == 201
+        assert first.status_code == 202
         real_cookie = client.cookies.get(settings.otp_flow_cookie_name)
         delivered = len(sender.sent)
 
@@ -213,8 +241,13 @@ def test_duplicate_mobile_gets_same_safe_shape_without_rotating_real_flow():
             headers={"Idempotency-Key": "nyay4-decoy-0001"},
             json={**_registration(), "first_name": "Different"},
         )
-        assert duplicate.status_code == 201
-        _assert_pending(duplicate.json(), "signup", "3210")
+        assert duplicate.status_code == 202
+        _assert_registration_accepted(duplicate.json())
+        _assert_pending(
+            client.get("/api/v1/auth/student/otp/state").json(),
+            "signup",
+            "3210",
+        )
         assert len(sender.sent) == delivered
         assert client.cookies.get(settings.otp_flow_cookie_name) != real_cookie
         with factory() as session:
@@ -232,7 +265,7 @@ def test_duplicate_mobile_gets_same_safe_shape_without_rotating_real_flow():
             headers={"Idempotency-Key": "nyay4-decoy-0001"},
             json={**_registration(), "first_name": "Different"},
         )
-        assert replay.status_code == 201
+        assert replay.status_code == 202
         assert replay.json() == duplicate.json()
         assert client.cookies.get(settings.otp_flow_cookie_name) == decoy_cookie
         assert len(sender.sent) == delivered
@@ -318,7 +351,7 @@ def test_preflight_to_register_race_replays_neutral_winner_without_provider(
                 },
                 json=_registration("9876543211"),
             )
-        assert seeded.status_code == seeded_second.status_code == 201
+        assert seeded.status_code == seeded_second.status_code == 202
         delivered = len(sender.sent)
 
         original = registration_service.resolve_idempotent_replay
@@ -379,7 +412,7 @@ def test_preflight_to_register_race_replays_neutral_winner_without_provider(
             release.set()
             target_status, target_body, target_cookie = target.result(timeout=10)
 
-        assert peer.status_code == target_status == 201
+        assert peer.status_code == target_status == 202
         assert peer.json() == target_body
         assert peer_cookie == target_cookie
         assert len(sender.sent) == delivered
@@ -422,7 +455,7 @@ def test_preflight_to_register_race_replays_neutral_winner_without_provider(
                 headers=headers,
                 json={**payload, "first_name": "Mutated"},
             )
-        assert exact.status_code == 201 and exact.json() == target_body
+        assert exact.status_code == 202 and exact.json() == target_body
         assert mismatch.status_code == 409
         assert mismatch.json()["detail"]["code"] == "idempotency_conflict"
         assert len(sender.sent) == delivered
@@ -477,7 +510,7 @@ def test_preflight_to_register_race_replays_neutral_winner_without_provider(
             release.set()
             target_status, target_body, target_cookie = target.result(timeout=10)
 
-        assert peer.status_code == 201
+        assert peer.status_code == 202
         assert target_status == 409
         assert target_body["detail"]["code"] == "idempotency_conflict"
         assert target_body["detail"]["field"] == "Idempotency-Key"
@@ -593,7 +626,7 @@ def test_preflight_to_register_race_replays_neutral_winner_without_provider(
             release.set()
             target_status, target_body, target_cookie = target.result(timeout=10)
 
-        assert peer.status_code == 201
+        assert peer.status_code == 202
         assert target_status == 409
         assert target_body["detail"]["code"] == "idempotency_conflict"
         assert target_body["detail"]["field"] == "Idempotency-Key"
@@ -648,7 +681,7 @@ def test_exact_real_replay_does_not_require_a_provider_binding():
             headers=headers,
             json=_registration(),
         )
-        assert first.status_code == 201
+        assert first.status_code == 202
         assert len(sender.sent) == 1
         client.app.dependency_overrides[auth_student.get_otp_sender] = lambda: None
         replay = client.post(
@@ -656,7 +689,7 @@ def test_exact_real_replay_does_not_require_a_provider_binding():
             headers=headers,
             json=_registration(),
         )
-        assert replay.status_code == 201
+        assert replay.status_code == 202
         assert replay.json() == first.json()
         assert len(sender.sent) == 1
     finally:
@@ -798,7 +831,7 @@ def _activate_signup(client: TestClient, sender: CapturingSender) -> None:
         headers={"Idempotency-Key": "nyay4-activate-signup-0001"},
         json=_registration(),
     )
-    assert created.status_code == 201
+    assert created.status_code == 202
     verified = client.post(
         "/api/v1/auth/student/otp/verify",
         json={"code": sender.sent[-1][1]},
@@ -933,7 +966,7 @@ def test_undelivered_real_and_decoy_signup_verify_fail_identically(monkeypatch):
             headers={"Idempotency-Key": "nyay4-provider-failure-real-0001"},
             json=_registration(),
         )
-        assert real.status_code == 201
+        assert real.status_code == 202
         real_failure = client.post(
             "/api/v1/auth/student/otp/verify", json={"code": "123456"}
         )
@@ -943,7 +976,7 @@ def test_undelivered_real_and_decoy_signup_verify_fail_identically(monkeypatch):
             headers={"Idempotency-Key": "nyay4-provider-failure-decoy-0001"},
             json={**_registration(), "first_name": "Different"},
         )
-        assert decoy.status_code == 201
+        assert decoy.status_code == 202
         assert decoy.json() == real.json()
         decoy_failure = client.post(
             "/api/v1/auth/student/otp/verify", json={"code": "123456"}

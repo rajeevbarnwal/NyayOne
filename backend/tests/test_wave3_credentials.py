@@ -6,18 +6,21 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
+from app.api.v1 import credentials as credential_api
 from app.api.v1.router import api_router
+from app.core.auth import ActorContext, Role, get_actor_context
+from app.core.config import settings
 from app.core.crypto import encrypt, keyed_hash
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import redact_sensitive_path
-from app.db.base import Base
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.integrations.storage import FilesystemStorageAdapter
@@ -29,11 +32,12 @@ from app.models.credentials import (
     CredentialOutbox,
     CredentialRevocation,
     CredentialShareProjection,
+    CredentialVerificationEvent,
     IssuerAuthorisation,
     VerificationAccessLog,
     VerificationToken,
 )
-from app.models.registration import StudentRegistration, User
+from app.models.registration import AuthSession, StudentRegistration, User
 from app.services.credential_storage import (
     EvidenceScanner,
     ScanResult,
@@ -52,6 +56,28 @@ def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
             {"sub": str(user_id), "roles": list(roles)}
         )
     }
+
+
+def _cookie_request(raw_token: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/credentials",
+            "query_string": b"",
+            "headers": [
+                (
+                    b"cookie",
+                    (
+                        f"{settings.auth_session_cookie_name}={raw_token}"
+                    ).encode("ascii"),
+                )
+            ],
+            "scheme": "https",
+            "server": ("testserver", 443),
+            "client": ("127.0.0.1", 1),
+        }
+    )
 
 
 @pytest.fixture(scope="module")
@@ -297,6 +323,614 @@ def test_complete_wallet_verify_share_revoke_journey(ctx):
             )
         )
         assert evidence_row and storage.exists(evidence_row.object_ref)
+
+
+def test_revoked_cookie_cannot_create_sharing_authority_from_stale_actor(
+    ctx,
+):
+    client, SessionLocal, _, ids = ctx
+    raw_token = "revoked-sharing-session"
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        credential = Credential(
+            owner_user_id=ids["student"],
+            issuer_id=None,
+            title="Privacy certificate",
+            credential_type="certificate",
+            status="verified",
+            issue_date=date(2026, 1, 1),
+            expiry_date=None,
+            key_version="v1",
+            version=1,
+            idempotency_key="revoked-session-credential",
+        )
+        session.add(credential)
+        session.flush()
+        fixture_projection = CredentialShareProjection(
+            credential_id=credential.id,
+            owner_user_id=ids["student"],
+            fields_json=["title"],
+            version=1,
+            active=True,
+            idempotency_key="revoked-session-fixture-projection",
+        )
+        session.add_all(
+            [
+                fixture_projection,
+                AuthSession(
+                    user_id=ids["student"],
+                    token_hash=keyed_hash(raw_token),
+                    status="revoked",
+                    expires_at=now + timedelta(hours=1),
+                    last_seen_at=now,
+                    revoked_at=now,
+                ),
+            ]
+        )
+        session.commit()
+        credential_id = credential.id
+        projection_id = fixture_projection.id
+
+    client.cookies.clear()
+    client.cookies.set(settings.auth_session_cookie_name, raw_token)
+    client.app.dependency_overrides[get_actor_context] = lambda: ActorContext(
+        user_id=ids["student"],
+        roles=frozenset({Role.STUDENT}),
+    )
+    try:
+        projection_response = client.post(
+            f"/api/v1/credentials/{credential_id}/share-projections",
+            headers={
+                "Origin": settings.cors_origins[0],
+                "Idempotency-Key": "revoked-session-projection",
+            },
+            json={"fields": ["title"]},
+        )
+        token_response = client.post(
+            f"/api/v1/credentials/{credential_id}/verification-tokens",
+            headers={
+                "Origin": settings.cors_origins[0],
+                "Idempotency-Key": "revoked-session-token",
+            },
+            json={"projection_id": str(projection_id), "lifetime_days": 1},
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_actor_context, None)
+
+    for response in (projection_response, token_response):
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "authentication_required"
+    with SessionLocal() as session:
+        assert session.query(CredentialShareProjection).count() == 1
+        assert session.query(VerificationToken).count() == 0
+
+
+@pytest.mark.parametrize(
+    "operation",
+    (
+        "create",
+        "update",
+        "delete",
+        "evidence",
+        "share",
+        "token_create",
+        "token_delete",
+    ),
+)
+def test_every_student_credential_effect_revalidates_the_presented_cookie(
+    ctx,
+    operation,
+):
+    client, SessionLocal, _, ids = ctx
+    raw_token = f"revoked-{operation}-session"
+    now = datetime.now(timezone.utc)
+    credential_id = None
+    projection_id = None
+    token_id = None
+    with SessionLocal() as session:
+        credential = None
+        if operation != "create":
+            credential = Credential(
+                owner_user_id=ids["student"],
+                issuer_id=None,
+                title="Effect boundary credential",
+                credential_type="certificate",
+                status=(
+                    "verified"
+                    if operation in {"share", "token_create", "token_delete"}
+                    else "self_declared"
+                ),
+                issue_date=date(2026, 1, 1),
+                expiry_date=None,
+                key_version="v1",
+                version=1,
+                idempotency_key=f"effect-{operation}-credential",
+            )
+            session.add(credential)
+            session.flush()
+            credential_id = credential.id
+        if operation in {"token_create", "token_delete"}:
+            projection = CredentialShareProjection(
+                credential_id=credential.id,
+                owner_user_id=ids["student"],
+                fields_json=["title"],
+                version=1,
+                active=True,
+                idempotency_key=f"effect-{operation}-projection",
+            )
+            session.add(projection)
+            session.flush()
+            projection_id = projection.id
+            if operation == "token_delete":
+                token = VerificationToken(
+                    projection_id=projection.id,
+                    credential_id=credential.id,
+                    owner_user_id=ids["student"],
+                    token_hash=keyed_hash("effect-token-delete"),
+                    key_version="v1",
+                    expires_at=now + timedelta(days=1),
+                    idempotency_key="effect-token-delete",
+                )
+                session.add(token)
+                session.flush()
+                token_id = token.id
+        session.add(
+            AuthSession(
+                user_id=ids["student"],
+                token_hash=keyed_hash(raw_token),
+                status="revoked",
+                expires_at=now + timedelta(hours=1),
+                last_seen_at=now,
+                revoked_at=now,
+            )
+        )
+        session.commit()
+        before_counts = tuple(
+            session.query(model).count()
+            for model in (
+                Credential,
+                CredentialEvidence,
+                CredentialShareProjection,
+                VerificationToken,
+                AuditEvent,
+            )
+        )
+        before_credential = (
+            None
+            if credential is None
+            else (
+                credential.status,
+                credential.version,
+                credential.deleted_at,
+                credential.title,
+            )
+        )
+
+    client.cookies.clear()
+    client.cookies.set(settings.auth_session_cookie_name, raw_token)
+    client.app.dependency_overrides[get_actor_context] = lambda: ActorContext(
+        user_id=ids["student"], roles=frozenset({Role.STUDENT})
+    )
+    headers = {"Origin": settings.cors_origins[0]}
+    try:
+        if operation == "create":
+            response = client.post(
+                "/api/v1/credentials",
+                headers={**headers, "Idempotency-Key": "effect-create-request"},
+                json={
+                    "title": "New credential",
+                    "credential_type": "certificate",
+                    "issue_date": "2026-01-15",
+                    "expiry_date": None,
+                    "issuer_id": None,
+                    "identifier": None,
+                },
+            )
+        elif operation == "update":
+            response = client.patch(
+                f"/api/v1/credentials/{credential_id}",
+                headers=headers,
+                json={
+                    "title": "Changed title",
+                    "expiry_date": None,
+                    "identifier": None,
+                    "expected_version": 1,
+                },
+            )
+        elif operation == "delete":
+            response = client.delete(
+                f"/api/v1/credentials/{credential_id}", headers=headers
+            )
+        elif operation == "evidence":
+            response = client.post(
+                f"/api/v1/credentials/{credential_id}/evidence",
+                headers=headers,
+                files={
+                    "file": (
+                        "evidence.pdf",
+                        b"%PDF-1.7\nrevoked session evidence",
+                        "application/pdf",
+                    )
+                },
+            )
+        elif operation == "share":
+            response = client.post(
+                f"/api/v1/credentials/{credential_id}/share-projections",
+                headers={**headers, "Idempotency-Key": "effect-share-request"},
+                json={"fields": ["title"]},
+            )
+        elif operation == "token_create":
+            response = client.post(
+                f"/api/v1/credentials/{credential_id}/verification-tokens",
+                headers={
+                    **headers,
+                    "Idempotency-Key": "effect-token-create-request",
+                },
+                json={"projection_id": str(projection_id), "lifetime_days": 1},
+            )
+        else:
+            response = client.delete(
+                f"/api/v1/credentials/{credential_id}/verification-tokens/{token_id}",
+                headers=headers,
+            )
+    finally:
+        client.app.dependency_overrides.pop(get_actor_context, None)
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "authentication_required"
+    with SessionLocal() as session:
+        assert tuple(
+            session.query(model).count()
+            for model in (
+                Credential,
+                CredentialEvidence,
+                CredentialShareProjection,
+                VerificationToken,
+                AuditEvent,
+            )
+        ) == before_counts
+        if credential_id is not None:
+            credential = session.get(Credential, credential_id)
+            assert (
+                credential.status,
+                credential.version,
+                credential.deleted_at,
+                credential.title,
+            ) == before_credential
+        if token_id is not None:
+            assert session.get(VerificationToken, token_id).revoked_at is None
+
+
+@pytest.mark.parametrize("operation", ("verify", "revoke"))
+def test_every_issuer_credential_effect_revalidates_the_presented_cookie(
+    ctx,
+    operation,
+):
+    client, SessionLocal, _, ids = ctx
+    raw_token = f"revoked-issuer-{operation}-session"
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        credential = Credential(
+            owner_user_id=ids["student"],
+            issuer_id=ids["issuer"],
+            title="Issuer effect boundary",
+            credential_type="certificate",
+            status="pending_verification" if operation == "verify" else "verified",
+            issue_date=date(2026, 1, 1),
+            expiry_date=None,
+            key_version="v1",
+            version=1,
+            idempotency_key=f"issuer-{operation}-credential",
+        )
+        session.add(credential)
+        session.flush()
+        if operation == "verify":
+            session.add(
+                CredentialEvidence(
+                    credential_id=credential.id,
+                    object_ref="evidence/issuer-effect.pdf",
+                    sha256_digest="a" * 64,
+                    declared_mime="application/pdf",
+                    detected_mime="application/pdf",
+                    size_bytes=10,
+                    scan_state="clean",
+                )
+            )
+        session.add(
+            AuthSession(
+                user_id=ids["issuer_actor"],
+                token_hash=keyed_hash(raw_token),
+                status="revoked",
+                expires_at=now + timedelta(hours=1),
+                last_seen_at=now,
+                revoked_at=now,
+            )
+        )
+        session.commit()
+        credential_id = credential.id
+
+    client.cookies.clear()
+    client.cookies.set(settings.auth_session_cookie_name, raw_token)
+    client.app.dependency_overrides[get_actor_context] = lambda: ActorContext(
+        user_id=ids["issuer_actor"], roles=frozenset({Role.LAWYER})
+    )
+    try:
+        if operation == "verify":
+            response = client.post(
+                f"/api/v1/issuer/credentials/{credential_id}/verify",
+                headers={
+                    "Origin": settings.cors_origins[0],
+                    "Idempotency-Key": "revoked-issuer-verify",
+                },
+                json={"expected_version": 1},
+            )
+        else:
+            response = client.post(
+                f"/api/v1/issuer/credentials/{credential_id}/revoke",
+                headers={
+                    "Origin": settings.cors_origins[0],
+                    "Idempotency-Key": "revoked-issuer-revoke",
+                },
+                json={
+                    "reason": "Authoritative issuer revocation reason",
+                    "expected_version": 1,
+                },
+            )
+    finally:
+        client.app.dependency_overrides.pop(get_actor_context, None)
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "authentication_required"
+    with SessionLocal() as session:
+        stored = session.get(Credential, credential_id)
+        assert stored.status == (
+            "pending_verification" if operation == "verify" else "verified"
+        )
+        assert stored.version == 1
+        assert session.query(CredentialVerificationEvent).count() == 0
+        assert session.query(CredentialRevocation).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("operation", "recognized_constraint"),
+    (
+        ("credential", True),
+        ("credential", False),
+        ("share_projection", True),
+        ("share_projection", False),
+        ("verification_token", True),
+        ("verification_token", "token_hash"),
+        ("verification_token", False),
+    ),
+)
+def test_integrity_loser_revalidates_cookie_and_never_replays_unrelated_error(
+    ctx, monkeypatch, operation, recognized_constraint
+):
+    """A duplicate loser cannot reuse the session lock lost by rollback."""
+
+    _, SessionLocal, _, ids = ctx
+    raw_token = f"integrity-loser-{operation}-session"
+    idem = f"integrity-loser-{operation}"
+    now = datetime.now(timezone.utc)
+    credential_id = None
+    projection_id = None
+    with SessionLocal() as setup:
+        setup.add(
+            AuthSession(
+                user_id=ids["student"],
+                token_hash=keyed_hash(raw_token),
+                status="active",
+                expires_at=now + timedelta(hours=1),
+                last_seen_at=now,
+            )
+        )
+        if operation == "credential":
+            setup.add(
+                Credential(
+                    owner_user_id=ids["student"],
+                    issuer_id=None,
+                    title="Winning credential",
+                    credential_type="certificate",
+                    status="self_declared",
+                    issue_date=date(2026, 1, 1),
+                    expiry_date=None,
+                    key_version="v1",
+                    version=1,
+                    idempotency_key=idem,
+                )
+            )
+        else:
+            credential = Credential(
+                owner_user_id=ids["student"],
+                issuer_id=None,
+                title="Winning sharing credential",
+                credential_type="certificate",
+                status="verified",
+                issue_date=date(2026, 1, 1),
+                expiry_date=None,
+                key_version="v1",
+                version=1,
+                idempotency_key=f"{idem}-credential",
+            )
+            setup.add(credential)
+            setup.flush()
+            credential_id = credential.id
+            projection = CredentialShareProjection(
+                credential_id=credential.id,
+                owner_user_id=ids["student"],
+                fields_json=["title"],
+                version=1,
+                active=True,
+                idempotency_key=(
+                    idem if operation == "share_projection" else f"{idem}-projection"
+                ),
+            )
+            setup.add(projection)
+            setup.flush()
+            projection_id = projection.id
+            if operation == "verification_token":
+                raw = credential_api._raw_token(
+                    projection.id, ids["student"], idem
+                )
+                setup.add(
+                    VerificationToken(
+                        projection_id=projection.id,
+                        credential_id=credential.id,
+                        owner_user_id=ids["student"],
+                        token_hash=keyed_hash(raw),
+                        key_version="v1",
+                        expires_at=now + timedelta(days=1),
+                        idempotency_key=idem,
+                    )
+                )
+        setup.commit()
+
+    actor = ActorContext(
+        user_id=ids["student"], roles=frozenset({Role.STUDENT})
+    )
+    request = _cookie_request(raw_token)
+    session = SessionLocal()
+    original_scalar = session.scalar
+    initial_lookup_hidden = False
+    rollback_interleaved = False
+    recovery_lock_order: list[str] = []
+
+    def scalar_with_losing_insert(statement, *args, **kwargs):
+        nonlocal initial_lookup_hidden
+        sql = str(statement)
+        target = {
+            "credential": "credentials.idempotency_key",
+            "share_projection": "credential_share_projections.idempotency_key",
+            "verification_token": "verification_tokens.idempotency_key",
+        }[operation]
+        if not initial_lookup_hidden and target in sql:
+            initial_lookup_hidden = True
+            return None
+        if (
+            rollback_interleaved
+            and operation == "credential"
+            and target in sql
+            and getattr(statement, "_for_update_arg", None) is not None
+        ):
+            recovery_lock_order.append("credential")
+        return original_scalar(statement, *args, **kwargs)
+
+    original_rollback = session.rollback
+
+    def rollback_then_revoke_presented_cookie():
+        nonlocal rollback_interleaved
+        original_rollback()
+        if rollback_interleaved:
+            return
+        rollback_interleaved = True
+        with SessionLocal() as lifecycle:
+            auth_session = lifecycle.scalar(
+                select(AuthSession)
+                .where(AuthSession.token_hash == keyed_hash(raw_token))
+                .with_for_update()
+            )
+            assert auth_session is not None
+            auth_session.status = "revoked"
+            auth_session.revoked_at = now
+            lifecycle.commit()
+
+    monkeypatch.setattr(session, "scalar", scalar_with_losing_insert)
+    monkeypatch.setattr(session, "rollback", rollback_then_revoke_presented_cookie)
+    original_session_revalidation = (
+        credential_api._require_presented_effect_session
+    )
+
+    def record_session_revalidation(*args, **kwargs):
+        if rollback_interleaved and operation == "credential":
+            recovery_lock_order.append("session")
+        return original_session_revalidation(*args, **kwargs)
+
+    monkeypatch.setattr(
+        credential_api,
+        "_require_presented_effect_session",
+        record_session_revalidation,
+    )
+    expected_constraint = {
+        "credential": "uq_credentials_owner_idempotency",
+        "share_projection": (
+            "uq_credential_share_projections_owner_idempotency"
+        ),
+        "verification_token": "uq_verification_tokens_owner_idempotency",
+    }[operation]
+    monkeypatch.setattr(
+        credential_api,
+        "constraint_name",
+        lambda _exc: (
+            "uq_verification_tokens_token_hash"
+            if recognized_constraint == "token_hash"
+            else (
+                expected_constraint
+                if recognized_constraint
+                else "uq_unrelated_integrity_failure"
+            )
+        ),
+    )
+    try:
+        with pytest.raises(
+            HTTPException if recognized_constraint else IntegrityError
+        ) as caught:
+            if operation == "credential":
+                credential_api.create_credential(
+                    credential_api.CredentialCreate(
+                        title="Losing credential",
+                        credential_type="certificate",
+                        issue_date=date(2026, 1, 1),
+                        expiry_date=None,
+                        issuer_id=None,
+                        identifier=None,
+                    ),
+                    request,
+                    idempotency_key=idem,
+                    actor=actor,
+                    session=session,
+                )
+            elif operation == "share_projection":
+                credential_api.create_share_projection(
+                    credential_id,
+                    credential_api.ShareProjectionCreate(fields=["title"]),
+                    request,
+                    idempotency_key=idem,
+                    actor=actor,
+                    session=session,
+                )
+            else:
+                credential_api.create_verification_token(
+                    credential_id,
+                    credential_api.VerificationTokenCreate(
+                        projection_id=projection_id, lifetime_days=1
+                    ),
+                    request,
+                    idempotency_key=idem,
+                    actor=actor,
+                    session=session,
+                )
+    finally:
+        session.close()
+
+    assert initial_lookup_hidden is True
+    assert rollback_interleaved is True
+    if recognized_constraint:
+        assert caught.value.status_code == 401
+        assert caught.value.detail["code"] == "authentication_required"
+        if operation == "credential":
+            assert recovery_lock_order == ["credential", "session"]
+    with SessionLocal() as verify:
+        assert verify.scalar(
+            select(AuthSession.status).where(
+                AuthSession.token_hash == keyed_hash(raw_token)
+            )
+        ) == "revoked"
+        expected = {
+            "credential": verify.query(Credential).count(),
+            "share_projection": verify.query(CredentialShareProjection).count(),
+            "verification_token": verify.query(VerificationToken).count(),
+        }[operation]
+        assert expected == 1
 
 
 @pytest.mark.parametrize(

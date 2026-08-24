@@ -2,22 +2,27 @@
  * The AUTHORISED completion surface (M-01, matrix D4; independent-QA defect D2).
  *
  * Three things are pinned here:
- *   1. who may mount it — `mentorActorFromAuth` denies anonymous, student,
- *      unverified and sentinel-subject sessions, and the screen renders a
- *      denial with no session and no control for them;
- *   2. what it offers — the completion control renders for a verified mentor on
+ *   1. who may mount it — `mentorActorFromAuth` permits only an administrator,
+ *      and the screen renders a denial with no session and no control for
+ *      anonymous, student, lawyer or tutor sessions;
+ *   2. what it offers — the completion control renders for an administrator on
  *      a session that has ended and has no attendance record yet, and is
  *      withheld (with a reason) in every other case;
  *   3. what it dispatches — the control's own mutation issues exactly one
- *      `POST /api/v1/tutoring/sessions/{id}/complete` carrying TUTOR/ADMIN
- *      claims, never the student dev-stub claims.
+ *      `POST /api/v1/tutoring/sessions/{id}/complete` using only the current
+ *      HttpOnly session; it never serialises a subject or role header.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ANONYMOUS_AUTH, AuthProvider, type AuthState } from '../../app/authContext';
-import { mentorActorFromAuth, mentorRouteDenial } from './lib/mentorAuth';
+import {
+  mentorActorFromAuth,
+  mentorRouteDenial,
+  type MentorAdminActor,
+} from './lib/mentorAuth';
 import {
   COMPLETABLE_STATUSES,
   MentorGuard,
@@ -28,10 +33,8 @@ import {
 } from './MentorSessionScreens';
 import { mentorRoutes } from './screens';
 import {
-  DEV_ACTOR_CLAIMS_HEADER,
   tutoringKeys,
   type AttendanceState,
-  type TutoringActor,
   type TutoringSession,
 } from '../student/lib/tutoringApi';
 
@@ -39,7 +42,7 @@ const HOUR = 3_600_000;
 const MENTOR_SUBJECT = 'usr_7f3c9a21b4d6';
 const SESSION_ID = '99999999-8888-4777-8666-555555555555';
 
-const VERIFIED_MENTOR: AuthState = {
+const VERIFIED_LAWYER: AuthState = {
   isAuthenticated: true,
   userId: MENTOR_SUBJECT,
   roles: ['lawyer'],
@@ -49,7 +52,8 @@ const VERIFIED_MENTOR: AuthState = {
   isMinor: false,
 };
 
-const ADMIN: AuthState = { ...VERIFIED_MENTOR, roles: ['admin'], lawyerVerification: 'draft' };
+const TUTOR: AuthState = { ...VERIFIED_LAWYER, roles: ['tutor'], lawyerVerification: 'draft' };
+const ADMIN: AuthState = { ...VERIFIED_LAWYER, roles: ['admin'], lawyerVerification: 'draft' };
 
 function makeSession(overrides: Partial<TutoringSession> = {}): TutoringSession {
   const start = new Date(Date.now() - 3 * HOUR);
@@ -99,14 +103,16 @@ function renderMentor(auth: AuthState, sessions: TutoringSession[] | null): stri
 
 /* ------------------------------------------------------------------ who --- */
 
-describe('who may act as a mentor', () => {
-  it('denies anonymous, student, client and moderator sessions', () => {
+describe('who may access the Sprint 1 M-01 administrator boundary', () => {
+  it('denies anonymous, student, client, moderator, tutor and lawyer sessions', () => {
     const denied: AuthState[] = [
       ANONYMOUS_AUTH,
-      { ...VERIFIED_MENTOR, roles: ['student'] },
-      { ...VERIFIED_MENTOR, roles: ['student', 'lawyer'] },
-      { ...VERIFIED_MENTOR, roles: ['moderator'] },
-      { ...VERIFIED_MENTOR, roles: [] },
+      { ...VERIFIED_LAWYER, roles: ['student'] },
+      { ...VERIFIED_LAWYER, roles: ['student', 'lawyer'] },
+      { ...VERIFIED_LAWYER, roles: ['moderator'] },
+      { ...VERIFIED_LAWYER, roles: [] },
+      VERIFIED_LAWYER,
+      TUTOR,
     ];
     for (const auth of denied) {
       expect(mentorActorFromAuth(auth)).toBeNull();
@@ -116,22 +122,22 @@ describe('who may act as a mentor', () => {
 
   it('denies a lawyer session that has not passed verification', () => {
     for (const phase of ['draft', 'submitted', 'needs_info', 'rejected'] as const) {
-      expect(mentorActorFromAuth({ ...VERIFIED_MENTOR, lawyerVerification: phase })).toBeNull();
+      expect(mentorActorFromAuth({ ...VERIFIED_LAWYER, lawyerVerification: phase })).toBeNull();
     }
   });
 
   it('denies a session with no stable opaque subject', () => {
     for (const userId of [null, '', '  ', '+9198*****21', 'someone@example.com', 'pending_details']) {
-      expect(mentorActorFromAuth({ ...VERIFIED_MENTOR, userId })).toBeNull();
+      expect(mentorActorFromAuth({ ...ADMIN, userId })).toBeNull();
     }
   });
 
-  it('maps a verified lawyer session to the tutor actor and an admin to admin', () => {
-    expect(mentorActorFromAuth(VERIFIED_MENTOR)).toEqual({ userId: MENTOR_SUBJECT, role: 'tutor' });
+  it('maps only a server-authenticated administrator', () => {
+    expect(mentorActorFromAuth(VERIFIED_LAWYER)).toBeNull();
+    expect(mentorActorFromAuth(TUTOR)).toBeNull();
     expect(mentorActorFromAuth(ADMIN)).toEqual({ userId: MENTOR_SUBJECT, role: 'admin' });
-    // Most privileged first, exactly like the server's `_service_role`.
-    expect(mentorActorFromAuth({ ...VERIFIED_MENTOR, roles: ['tutor', 'admin'] })?.role).toBe('admin');
-    expect(mentorRouteDenial(VERIFIED_MENTOR)).toBeNull();
+    expect(mentorActorFromAuth({ ...VERIFIED_LAWYER, roles: ['tutor', 'admin'] })?.role).toBe('admin');
+    expect(mentorRouteDenial(ADMIN)).toBeNull();
   });
 });
 
@@ -187,47 +193,44 @@ describe('the mentor screen', () => {
   it('renders a denial with no session and no control for an unauthorised reader', () => {
     const unauthorised: AuthState[] = [
       ANONYMOUS_AUTH,
-      { ...VERIFIED_MENTOR, roles: ['student'] },
-      { ...VERIFIED_MENTOR, lawyerVerification: 'submitted' },
+      { ...VERIFIED_LAWYER, roles: ['student'] },
+      VERIFIED_LAWYER,
+      TUTOR,
     ];
     for (const auth of unauthorised) {
       const html = renderMentor(auth, [makeSession()]);
-      expect(html).toContain('Mentor sign-in required');
+      expect(html).toContain('Administrator access required');
       expect(html).not.toContain('record-completion');
       expect(html).not.toMatch(/>\s*Record completion\s*</);
       expect(html).not.toContain(SESSION_ID);
+      expect(html).not.toContain('Go to mentor sign-in');
+      expect(html).not.toContain('/auth/lawyer');
     }
   });
 
-  it('renders the completion control for a verified mentor on an ended session', () => {
-    const html = renderMentor(VERIFIED_MENTOR, [makeSession()]);
+  it('renders the completion control only for an administrator', () => {
+    const html = renderMentor(ADMIN, [makeSession()]);
     expect(html).toContain('data-screen="M-01"');
     expect(html).toContain('data-action="record-completion"');
-    expect(html).toMatch(/Record completion/);
+    expect(html).toMatch(/Administrator/);
     expect(html).toContain(SESSION_ID);
   });
 
-  it('renders the same control for an administrator', () => {
-    const html = renderMentor(ADMIN, [makeSession()]);
-    expect(html).toContain('data-action="record-completion"');
-    expect(html).toMatch(/Administrator/);
-  });
-
   it('withholds the control, with a reason, before the end and after a record', () => {
-    const notYet = renderMentor(VERIFIED_MENTOR, [makeSession({
+    const notYet = renderMentor(ADMIN, [makeSession({
       startUtc: new Date(Date.now() + 2 * HOUR).toISOString(),
       endUtc: new Date(Date.now() + 3 * HOUR).toISOString(),
     })]);
     expect(notYet).not.toContain('data-action="record-completion"');
     expect(notYet).toMatch(/Completion opens after the scheduled end/);
 
-    const already = renderMentor(VERIFIED_MENTOR, [makeSession({ attendanceState: 'recorded' })]);
+    const already = renderMentor(ADMIN, [makeSession({ attendanceState: 'recorded' })]);
     expect(already).not.toContain('data-action="record-completion"');
     expect(already).toMatch(/already recorded/i);
   });
 
   it('renders an honest empty state rather than an unusable action', () => {
-    const html = renderMentor(VERIFIED_MENTOR, []);
+    const html = renderMentor(ADMIN, []);
     expect(html).toContain('Nothing waiting to be completed');
     expect(html).not.toContain('data-action="record-completion"');
   });
@@ -244,7 +247,7 @@ describe('what the control dispatches', () => {
         session_id: SESSION_ID,
         state: 'recorded',
         version: 1,
-        recorded_by_role: 'tutor',
+        recorded_by_role: 'admin',
         recorded_at: '2026-07-19T10:00:00+00:00',
         confirmed_at: null,
         disputed_at: null,
@@ -262,26 +265,35 @@ describe('what the control dispatches', () => {
     vi.restoreAllMocks();
   });
 
-  it('posts to the completion endpoint with the signed-in mentor claims', async () => {
-    const actor: TutoringActor = { userId: MENTOR_SUBJECT, role: 'tutor' };
+  it('binds M-01 dispatch and callbacks to the current server-session generation', () => {
+    const source = readFileSync(new URL('./MentorSessionScreens.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(
+      /import \{ useStudentMutation as useMutation \} from ['"]\.\.\/student\/lib\/useStudentMutation['"]/u,
+    );
+    expect(source).not.toMatch(
+      /import \{[^\n]*useMutation[^\n]*\} from ['"]@tanstack\/react-query['"]/u,
+    );
+  });
+
+  it('posts to the completion endpoint using only the signed-in HttpOnly session', async () => {
+    const actor: MentorAdminActor = { userId: MENTOR_SUBJECT, role: 'admin' };
     const record = await completionMutationOptions(actor).mutationFn(SESSION_ID);
     expect(record.state).toBe('recorded');
+    expect(record.recordedByRole).toBe('admin');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain(`/api/v1/tutoring/sessions/${SESSION_ID}/complete`);
     expect(init.method).toBe('POST');
-    const claims = JSON.parse(new Headers(init.headers).get(DEV_ACTOR_CLAIMS_HEADER) ?? '{}');
-    expect(claims).toEqual({ sub: MENTOR_SUBJECT, roles: ['tutor'] });
-    // Never the student dev-stub identity that the S-35 screens use.
-    expect(claims.roles).not.toContain('student');
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+    expect(init.credentials).toBe('include');
   });
 
-  it('posts admin claims when an administrator records it', async () => {
-    const actor: TutoringActor = { userId: MENTOR_SUBJECT, role: 'admin' };
+  it('never serialises administrator identity into request headers', async () => {
+    const actor: MentorAdminActor = { userId: MENTOR_SUBJECT, role: 'admin' };
     await completionMutationOptions(actor).mutationFn(SESSION_ID);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const claims = JSON.parse(new Headers(init.headers).get(DEV_ACTOR_CLAIMS_HEADER) ?? '{}');
-    expect(claims.roles).toEqual(['admin']);
+    expect(new Headers(init.headers).has('X-Actor-Claims')).toBe(false);
+    expect(init.credentials).toBe('include');
   });
 
   it('surfaces a typed server refusal instead of pretending it worked', async () => {
@@ -289,7 +301,7 @@ describe('what the control dispatches', () => {
       JSON.stringify({ detail: { code: 'FORBIDDEN', message: 'nope', retryable: false } }),
       { status: 403, headers: { 'Content-Type': 'application/json' } },
     ));
-    const actor: TutoringActor = { userId: MENTOR_SUBJECT, role: 'tutor' };
+    const actor: MentorAdminActor = { userId: MENTOR_SUBJECT, role: 'admin' };
     await expect(completionMutationOptions(actor).mutationFn(SESSION_ID))
       .rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
   });

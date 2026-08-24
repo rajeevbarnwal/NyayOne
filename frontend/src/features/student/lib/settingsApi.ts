@@ -1,16 +1,16 @@
 /**
- * Server-authoritative student profile, settings and DPDP privacy-request
- * adapter (SAATHI-58 / S-17..S-19). Same typed-adapter + error-class pattern as
+ * Server-authoritative student settings and DPDP privacy-request adapter
+ * (SAATHI-58 / S-18..S-19). Same typed-adapter + error-class pattern as
  * registrationApi.ts: snake_case wire shapes are mapped to camelCase domain
  * types, and non-2xx responses raise a typed SettingsApiError.
  *
- * Privacy: request contents/PII never touch browser storage. Only the opaque
- * server-issued privacy request id may be kept in sessionStorage so polling
- * survives a refresh.
+ * Privacy: request contents and server-issued workflow identifiers never touch
+ * browser storage. Callers may retain the current polling reference only in
+ * component memory; the server remains the durable source of truth.
  */
 import { newRequestId } from '../../../lib/apiClient';
-import { studentApiFetch } from './studentApiClient';
-import { clearStudentBrowserContext } from './studentBrowserContext';
+import { studentApiFetch, type StudentApiLifecycleOptions } from './studentApiClient';
+import { withStudentAuthTransition } from './registrationApi';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type PrivacyConsentKind = 'analytics' | 'marketing' | 'share_partners';
@@ -18,15 +18,6 @@ export type PrivacyConsentKind = 'analytics' | 'marketing' | 'share_partners';
 export interface PrivacyConsent {
   kind: PrivacyConsentKind;
   enabled: boolean;
-}
-
-export interface StudentProfile {
-  firstName: string;
-  middleName: string | null;
-  lastName: string;
-  college: string;
-  yearOfStudy: string;
-  maskedMobile: string;
 }
 
 export interface StudentSettings {
@@ -82,10 +73,15 @@ export class SettingsApiError extends Error {
   }
 }
 
-async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
+async function jsonRequest<T>(
+  path: string,
+  init: RequestInit,
+  expectedStatus?: number,
+  lifecycle: StudentApiLifecycleOptions = {},
+): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  const response = await studentApiFetch(path, { ...init, headers });
+  const response = await studentApiFetch(path, { ...init, headers }, lifecycle);
   const body = (await response.json().catch(() => ({}))) as {
     detail?: { code?: string; field?: string } | string;
   } & T;
@@ -97,19 +93,13 @@ async function jsonRequest<T>(path: string, init: RequestInit): Promise<T> {
       detail?.field,
     );
   }
+  if (expectedStatus !== undefined && response.status !== expectedStatus) {
+    throw new SettingsApiError(502, 'invalid_settings_response_status');
+  }
   return body;
 }
 
 /* ------------------------------- wire shapes ------------------------------ */
-
-interface ProfileWire {
-  first_name: string;
-  middle_name: string | null;
-  last_name: string;
-  college: string;
-  year_of_study: string;
-  masked_mobile: string;
-}
 
 interface SettingsWire {
   theme: ThemePreference;
@@ -128,15 +118,23 @@ interface PrivacyRequestWire {
   created_at: string;
 }
 
-function mapProfile(wire: ProfileWire): StudentProfile {
-  return {
-    firstName: wire.first_name,
-    middleName: wire.middle_name,
-    lastName: wire.last_name,
-    college: wire.college,
-    yearOfStudy: wire.year_of_study,
-    maskedMobile: wire.masked_mobile,
-  };
+function requirePrivacyRequestAccepted(value: unknown): PrivacyRequestAccepted {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new SettingsApiError(502, 'invalid_privacy_request_projection');
+  }
+  const wire = value as Record<string, unknown>;
+  const keys = Object.keys(wire).sort();
+  if (
+    keys.length !== 2
+    || keys[0] !== 'request_id'
+    || keys[1] !== 'status'
+    || typeof wire.request_id !== 'string'
+    || !/^[0-9a-f]{32}$/u.test(wire.request_id)
+    || wire.status !== 'pending'
+  ) {
+    throw new SettingsApiError(502, 'invalid_privacy_request_projection');
+  }
+  return { requestId: wire.request_id, status: wire.status };
 }
 
 function mapSettings(wire: SettingsWire): StudentSettings {
@@ -149,29 +147,6 @@ function mapSettings(wire: SettingsWire): StudentSettings {
     version: wire.version,
     privacy: wire.privacy.map((p) => ({ kind: p.kind, enabled: p.enabled })),
   };
-}
-
-/* --------------------------------- profile -------------------------------- */
-
-export async function getStudentProfile(): Promise<StudentProfile> {
-  return mapProfile(
-    await jsonRequest<ProfileWire>('/api/v1/student/profile', { method: 'GET' }),
-  );
-}
-
-export async function updateStudentProfile(patch: {
-  college?: string;
-  yearOfStudy?: string;
-}): Promise<StudentProfile> {
-  return mapProfile(
-    await jsonRequest<ProfileWire>('/api/v1/student/profile', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        college: patch.college,
-        year_of_study: patch.yearOfStudy,
-      }),
-    }),
-  );
 }
 
 /* -------------------------------- settings -------------------------------- */
@@ -222,20 +197,20 @@ export async function requestDataExport(
 export async function requestAccountDeletion(input: {
   confirmation: string;
 }): Promise<PrivacyRequestAccepted> {
-  const wire = await jsonRequest<{ request_id: string; status: 'pending' }>(
-    '/api/v1/student/privacy/delete',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        confirmation: input.confirmation,
-      }),
-    },
-  );
-  clearStudentBrowserContext({
-    notifyAuthChanged: true,
-    consumeRegisteredActor: true,
-  });
-  return { requestId: wire.request_id, status: wire.status };
+  return withStudentAuthTransition(async (transition) => {
+    const wire = await jsonRequest<unknown>(
+      '/api/v1/student/privacy/delete',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmation: input.confirmation,
+        }),
+      },
+      202,
+      { notifyAuthChanged: false, authTransition: transition },
+    );
+    return requirePrivacyRequestAccepted(wire);
+  }, { requireAnonymousAfterSuccess: true });
 }
 
 export async function getPrivacyRequest(requestId: string): Promise<PrivacyRequest> {
@@ -249,26 +224,4 @@ export async function getPrivacyRequest(requestId: string): Promise<PrivacyReque
     status: wire.status,
     createdAt: wire.created_at,
   };
-}
-
-/* --------------------- opaque request-id session persistence --------------- */
-/* Only the server-issued opaque id is stored — never request contents or PII. */
-
-function refKey(kind: PrivacyRequestKind): string {
-  return `legalsaathi.student.privacy.${kind}.v1`;
-}
-
-export function savePrivacyRequestRef(kind: PrivacyRequestKind, requestId: string): void {
-  if (typeof window === 'undefined') return;
-  try { window.sessionStorage.setItem(refKey(kind), requestId); } catch { /* memory polling still works */ }
-}
-
-export function loadPrivacyRequestRef(kind: PrivacyRequestKind): string | null {
-  if (typeof window === 'undefined') return null;
-  try { return window.sessionStorage.getItem(refKey(kind)); } catch { return null; }
-}
-
-export function clearPrivacyRequestRef(kind: PrivacyRequestKind): void {
-  if (typeof window === 'undefined') return;
-  try { window.sessionStorage.removeItem(refKey(kind)); } catch { /* already unavailable */ }
 }

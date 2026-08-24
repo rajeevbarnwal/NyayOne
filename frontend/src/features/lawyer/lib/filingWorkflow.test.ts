@@ -17,7 +17,7 @@ const BILLING: FilingActor = { id: 'bill-1', role: 'billing_admin' };
 const CLERK: FilingActor = { id: 'clerk-1', role: 'clerk' };
 
 const t = (n: number) => `2026-07-11T0${n}:00:00.000Z`;
-const CASE = 'LS-CASE-2026-014';
+const CASE = 'NYAY-CASE-2026-014';
 
 function setup() {
   const store = new InMemoryKvStore();

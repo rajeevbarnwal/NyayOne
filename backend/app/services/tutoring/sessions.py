@@ -452,11 +452,20 @@ def get_session(
     *,
     user_id: uuid.UUID | None = None,
     role: str = "student",
+    for_update: bool = False,
 ) -> TutoringSession:
     """Fetch one session the caller is entitled to see, else ``NOT_FOUND``."""
     if role not in ACTOR_ROLES:
         raise ValidationError("unknown actor role", field="role")
-    sess = session.get(TutoringSession, session_id)
+    if for_update:
+        sess = session.scalar(
+            select(TutoringSession)
+            .where(TutoringSession.id == session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    else:
+        sess = session.get(TutoringSession, session_id)
     if sess is None or sess.deleted_at is not None:
         raise _not_found()
     if role == "admin":

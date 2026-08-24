@@ -5,10 +5,15 @@ import {
   evaluateGuard,
   hasRole,
   isStudentVerified,
+  applyStudentSessionDiscovery,
+  applyStudentSessionDiscoveryFailure,
   deriveAuthState,
+  reduceStudentSessionState,
   SESSION_MAX_AGE_MS,
+  type StudentSessionState,
   type AuthState,
 } from './authContext';
+import { queryClient } from './queryClient';
 import { InMemoryKvStore } from '../lib/kvStore';
 import {
   clearAuthSnapshot,
@@ -16,6 +21,43 @@ import {
   subscribeAuthChange,
 } from '../features/auth/lib/authPersistence';
 import type { AuthSnapshot, AuthPhase } from '../features/auth/lib/authLifecycle';
+import {
+  captureStudentContextFence,
+  clearStudentBrowserContext,
+  isStudentContextFenceCurrent,
+  observeStudentSessionActor,
+} from '../features/student/lib/studentBrowserContext';
+import {
+  captureActiveProfileReauthDraft,
+  clearProfileReauthHandoff,
+  hasProfileReauthHandoff,
+  profileReauthResumeRoute,
+  resolveProfileReauthActor,
+  restoreCapturedProfileReauthDraft,
+  stageActiveProfileReauthDraft,
+  takeResolvedProfileReauthDraft,
+} from '../features/student/profile/profileReauthHandoff';
+
+const ACTOR_A = '00000000-0000-4000-8000-0000000000a1';
+const ACTOR_B = '00000000-0000-4000-8000-0000000000b2';
+
+function retainPersonalDraft(): void {
+  stageActiveProfileReauthDraft(Symbol('personal-form'), ACTOR_A, {
+    section: 'personal',
+    value: {
+      firstName: 'Aditi',
+      middleName: null,
+      lastName: 'Rao',
+      dateOfBirth: '2000-01-01',
+      preferredLanguage: 'en',
+      city: 'Pune',
+      pronouns: null,
+    },
+  });
+  const captured = captureActiveProfileReauthDraft();
+  clearProfileReauthHandoff();
+  restoreCapturedProfileReauthDraft(captured!);
+}
 
 const student: AuthState = {
   isAuthenticated: true,
@@ -28,6 +70,9 @@ const student: AuthState = {
 };
 
 afterEach(() => {
+  clearProfileReauthHandoff();
+  clearStudentBrowserContext();
+  queryClient.clear();
   vi.unstubAllGlobals();
 });
 
@@ -62,6 +107,133 @@ describe('frontend auth context', () => {
     }
     // allowed
     expect(evaluateGuard(verifiedLawyer, 'lawyer-features')).toBeNull();
+  });
+});
+
+describe('server-authoritative student session discovery', () => {
+  const authenticated: StudentSessionState = {
+    auth: student,
+    phase: 'authenticated',
+    generation: 4,
+  };
+
+  it('unmounts private authority as soon as a newer discovery begins', () => {
+    expect(reduceStudentSessionState(authenticated, {
+      type: 'begin',
+      generation: 5,
+    })).toEqual({
+      auth: ANONYMOUS_AUTH,
+      phase: 'pending',
+      generation: 5,
+    });
+  });
+
+  it('does not let an older session response overwrite a newer pending probe', () => {
+    const pending = reduceStudentSessionState(authenticated, {
+      type: 'begin',
+      generation: 5,
+    });
+    expect(reduceStudentSessionState(pending, {
+      type: 'resolved',
+      generation: 4,
+      actor: {
+        sub: 'stale-actor',
+        roles: ['student'],
+        student_profile_id: null,
+        student_verification: 'verified',
+        is_minor: false,
+        consent_state: [],
+      },
+    })).toBe(pending);
+  });
+
+  it('does not let an older session probe rotate browser ownership after a newer actor wins', () => {
+    observeStudentSessionActor({ subject: 'actor-B', studentProfileId: 'profile-B' });
+    const actorBFence = captureStudentContextFence();
+    queryClient.setQueryData(['student-profile'], { owner: 'B' });
+
+    expect(applyStudentSessionDiscovery(4, 5, {
+      sub: 'actor-A',
+      roles: ['student'],
+      student_profile_id: 'profile-A',
+      student_verification: 'draft',
+      is_minor: false,
+      consent_state: ['privacy_notice', 'terms'],
+    })).toBe(false);
+
+    expect(isStudentContextFenceCurrent(actorBFence)).toBe(true);
+    expect(queryClient.getQueryData(['student-profile'])).toEqual({ owner: 'B' });
+  });
+
+  it('distinguishes an unavailable probe from a proven anonymous session', () => {
+    const pending: StudentSessionState = {
+      auth: ANONYMOUS_AUTH,
+      phase: 'pending',
+      generation: 6,
+    };
+    expect(reduceStudentSessionState(pending, {
+      type: 'failed',
+      generation: 6,
+    })).toEqual({
+      auth: ANONYMOUS_AUTH,
+      phase: 'unavailable',
+      generation: 6,
+    });
+    expect(reduceStudentSessionState(pending, {
+      type: 'resolved',
+      generation: 6,
+      actor: null,
+    })).toEqual({
+      auth: ANONYMOUS_AUTH,
+      phase: 'anonymous',
+      generation: 6,
+    });
+  });
+
+  it('keeps a canonical-401 handoff while anonymous so the user can reauthenticate', () => {
+    retainPersonalDraft();
+
+    expect(applyStudentSessionDiscovery(7, 7, null)).toBe(true);
+
+    expect(hasProfileReauthHandoff()).toBe(true);
+    expect(profileReauthResumeRoute(ACTOR_A)).toBeNull();
+  });
+
+  it('resolves route and values only after authoritative discovery proves the same actor', () => {
+    retainPersonalDraft();
+
+    expect(applyStudentSessionDiscovery(8, 8, {
+      sub: ACTOR_A,
+      roles: ['student'],
+      student_profile_id: '00000000-0000-4000-8000-0000000000a2',
+      student_verification: 'verified',
+      is_minor: false,
+      consent_state: ['privacy_notice', 'terms'],
+    })).toBe(true);
+
+    expect(profileReauthResumeRoute(ACTOR_A)).toBe('/s-10?section=personal');
+    expect(takeResolvedProfileReauthDraft(ACTOR_A, 'personal')).toEqual(expect.objectContaining({
+      firstName: 'Aditi',
+      city: 'Pune',
+    }));
+  });
+
+  it('erases the handoff when a different actor or failed session discovery wins', () => {
+    retainPersonalDraft();
+    expect(applyStudentSessionDiscovery(9, 9, {
+      sub: ACTOR_B,
+      roles: ['student'],
+      student_profile_id: '00000000-0000-4000-8000-0000000000b3',
+      student_verification: 'draft',
+      is_minor: false,
+      consent_state: ['privacy_notice', 'terms'],
+    })).toBe(true);
+    expect(resolveProfileReauthActor(ACTOR_A)).toBe(false);
+    expect(hasProfileReauthHandoff()).toBe(false);
+
+    retainPersonalDraft();
+    expect(applyStudentSessionDiscoveryFailure(10, 10)).toBe(true);
+    expect(hasProfileReauthHandoff()).toBe(false);
   });
 });
 

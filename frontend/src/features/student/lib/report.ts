@@ -16,7 +16,11 @@
  * 04 idempotent submit → moderation_pending · 05 evidence validation · 06 anonymity ·
  * 07 cross-user access refused.
  */
-import { defaultKvStore, type KvStore } from '../../../lib/kvStore';
+import type { KvStore } from '../../../lib/kvStore';
+import {
+  STUDENT_REPORT_STORAGE_KEY_PREFIX,
+  studentReportStorageKey,
+} from './studentLegacyStorage';
 
 export type ReportCategory =
   | 'unsafe'
@@ -198,7 +202,8 @@ interface ReportStoreShape {
   readonly reports: Record<string, ReportRecord>;
   readonly audit: readonly ReportAuditEvent[];
 }
-const key = (userId: string) => `ls-reports-${userId}`;
+export const REPORT_STORAGE_KEY_PREFIX = STUDENT_REPORT_STORAGE_KEY_PREFIX;
+const key = studentReportStorageKey;
 
 export interface DraftInput {
   category?: ReportCategory | null;
@@ -209,7 +214,7 @@ export interface DraftInput {
 export class ReportService {
   private store: KvStore;
   private userId: string;
-  constructor(userId: string, store: KvStore = defaultKvStore()) {
+  constructor(userId: string, store: KvStore) {
     this.userId = userId;
     this.store = store;
   }

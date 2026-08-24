@@ -921,3 +921,42 @@ def test_guardian_check_catalog_definition_requires_exact_semantics():
     )
     assert _normalize_constraint_definition(reflected) == expected
     assert _normalize_constraint_definition(reflected + " OR verified = true") != expected
+
+
+def test_current_head_guardian_inventory_requires_the_nyay5_revoked_semantics():
+    expected = _normalize_constraint_definition(
+        "(status = 'verified' AND verified = true) OR "
+        "(status IN ('pending', 'sent', 'rejected', 'revoked') AND verified = false)"
+    )
+
+    assert _normalize_constraint_definition(gate.CURRENT_GUARDIAN_STATE_SQL) == expected
+    assert gate.CURRENT_GUARDIAN_STATE_SQL != gate.HISTORICAL_GUARDIAN_STATE_SQL
+    assert ("revoked_false", "revoked", False, True) in GUARDIAN_STATE_CASES
+    assert ("revoked_true", "revoked", True, False) in GUARDIAN_STATE_CASES
+
+
+def test_historical_lifecycle_inventory_keeps_the_exact_0017_semantics(monkeypatch):
+    observed: list[str] = []
+
+    def fake_runtime_inventory(_engine, *, guardian_state_sql):
+        observed.append(guardian_state_sql)
+        return {
+            "alembic_revision": gate.HEAD_REVISION,
+            "target_indexes_present": {name: True for name in TARGET_INDEXES},
+            "target_constraints_present": {
+                name: True for name in TARGET_CONSTRAINTS
+            },
+            "target_index_semantics": {name: True for name in TARGET_INDEXES},
+            "target_constraint_semantics": {
+                name: True for name in TARGET_CONSTRAINTS
+            },
+            "index_details": {},
+            "constraint_details": {},
+        }
+
+    monkeypatch.setattr(gate, "_runtime_inventory", fake_runtime_inventory)
+
+    summary, _fingerprint = gate._target_inventory_observation(object())
+
+    assert summary["target_objects_exact"] is True
+    assert observed == [gate.HISTORICAL_GUARDIAN_STATE_SQL]

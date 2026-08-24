@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def _load_capture_server():
     path = Path(__file__).parents[1] / "scripts" / "otp_capture_server.py"
@@ -71,3 +73,11 @@ def test_capture_provider_rejects_missing_mismatched_or_malformed_tokens() -> No
         assert receipt is None
     assert module.DELIVERIES == {}
     assert module.LATEST == {}
+
+
+def test_capture_server_accepts_only_explicit_literal_loopback_bindings() -> None:
+    module = _load_capture_server()
+    assert module.validated_binding("127.0.0.1", "1099") == ("127.0.0.1", 1099)
+    for host, port in (("localhost", "1099"), ("0.0.0.0", "1099"), ("127.0.0.1", "0"), ("127.0.0.1", "abc")):
+        with pytest.raises(ValueError):
+            module.validated_binding(host, port)

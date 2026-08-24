@@ -1,6 +1,12 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  captureStudentMutationSequence,
+  isStudentMutationCancellation,
+  runStudentMutationStep,
+  useStudentMutation as useMutation,
+} from '../lib/useStudentMutation';
 import { Checkbox, InfoTooltip, StudentScreen, TextField } from '../components';
 import {
   REPORT_CATEGORIES,
@@ -148,17 +154,35 @@ export function InternshipReportCreate() {
 
   const save = useMutation({
     mutationFn: async ({ submit }: { submit: boolean }) => {
+      const fence = captureStudentMutationSequence();
       let report = editing
-        ? await updateInternshipReport(editing.id, editing.version, draftPayload(draft))
-        : await createInternshipReport(draftPayload(draft));
+        ? await runStudentMutationStep(
+          fence,
+          () => updateInternshipReport(editing.id, editing.version, draftPayload(draft)),
+        )
+        : await runStudentMutationStep(fence, () => createInternshipReport(draftPayload(draft)));
       for (const file of files) {
-        await uploadInternshipReportEvidence(report.id, report.version, file);
-        report = await getInternshipReport(report.id);
+        await runStudentMutationStep(
+          fence,
+          () => uploadInternshipReportEvidence(report.id, report.version, file),
+        );
+        report = await runStudentMutationStep(fence, () => getInternshipReport(report.id));
       }
-      return submit ? submitInternshipReport(report.id, report.version) : report;
+      return submit
+        ? runStudentMutationStep(fence, () => submitInternshipReport(report.id, report.version))
+        : report;
     },
     onSuccess: async (report, variables) => {
-      await client.invalidateQueries({ queryKey: ['internship-reports'] });
+      const fence = captureStudentMutationSequence();
+      try {
+        await runStudentMutationStep(
+          fence,
+          () => client.invalidateQueries({ queryKey: ['internship-reports'] }),
+        );
+      } catch (error) {
+        if (isStudentMutationCancellation(error)) return;
+        throw error;
+      }
       setEditing(report);
       setFiles([]);
       if (fileInput.current) fileInput.current.value = '';
@@ -220,7 +244,7 @@ export function InternshipReportCreate() {
       <main className="ir-shell">
         <ReportHeader
           title="Share an internship experience safely"
-          intro="Create a factual, private report. It is visible only to authorised LegalSaathi reviewers and is never published automatically."
+          intro="Create a factual, private report. It is visible only to authorised NyayOne reviewers and is never published automatically."
         />
         <nav className="ir-tabs" aria-label="Private report steps">
           <Link to="/s-86" aria-current="page">Create report</Link>
@@ -301,14 +325,14 @@ export function InternshipReportCreate() {
                 <InfoTooltip label="About reporting privacy" text="Anonymous mode keeps identity encrypted and separated from the report. Private-to-platform mode permits authorised internal follow-up. Neither mode publishes your identity or creates a public risk label." />
               </legend>
               <label><input type="radio" name="privacy" value="anonymous" checked={draft.privacyMode === 'anonymous'} onChange={() => set('privacyMode', 'anonymous')} /><span><strong>Anonymous to reviewers</strong><small>Identity remains encrypted and separated; exceptional access requires two authorised approvals and a recorded reason.</small></span></label>
-              <label><input type="radio" name="privacy" value="private_to_platform" checked={draft.privacyMode === 'private_to_platform'} onChange={() => set('privacyMode', 'private_to_platform')} /><span><strong>Private follow-up allowed</strong><small>An authorised LegalSaathi reviewer may contact you privately about this report.</small></span></label>
+              <label><input type="radio" name="privacy" value="private_to_platform" checked={draft.privacyMode === 'private_to_platform'} onChange={() => set('privacyMode', 'private_to_platform')} /><span><strong>Private follow-up allowed</strong><small>An authorised NyayOne reviewer may contact you privately about this report.</small></span></label>
             </fieldset>
             {errors.privacy && <p className="ir-error" role="alert">{errors.privacy}</p>}
             <Checkbox
               id="ir-consent"
               checked={draft.consentAccepted}
               onChange={(checked) => set('consentAccepted', checked)}
-              label="I consent to LegalSaathi processing this private report and evidence for moderation, support and safeguarding under the internship-report-v1 notice."
+              label="I consent to NyayOne processing this private report and evidence for moderation, support and safeguarding under the internship-report-v1 notice."
             />
             {errors.consent && <p className="ir-error" role="alert">{errors.consent}</p>}
           </section>

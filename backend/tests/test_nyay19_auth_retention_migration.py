@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, inspect, text
 BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0019_otp_security_authority"
 HEAD = "0020_auth_retention_lifecycle"
+CURRENT_HEAD = "0021_nyay5_profile_boundary"
 
 
 def _alembic(database: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -517,6 +518,10 @@ def test_0020_populated_upgrade_backfills_and_roundtrips_to_exact_parent(
         row["name"] for row in parent_inspector.get_indexes("login_attempts")
     }
     assert _alembic(database, "upgrade", HEAD).returncode == 0
+    # Alembic ``check`` compares against the repository head.  First prove the
+    # exact 0019<->0020 lifecycle above, then advance through its direct 0021
+    # child before asking Alembic for model/migration drift.
+    assert _alembic(database, "upgrade", CURRENT_HEAD).returncode == 0
     assert _alembic(database, "check").returncode == 0
 
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -21,7 +21,13 @@ from app.core.crypto import decrypt, encrypt, key_version, keyed_hash
 from app.core.config import settings
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
-from app.models.registration import AuthSession, User
+from app.models.registration import (
+    AuthSession,
+    Consent,
+    StudentProfile,
+    StudentRegistration,
+    User,
+)
 from app.models.wave4 import (
     DuplicateCluster,
     DuplicateClusterMember,
@@ -39,7 +45,11 @@ from app.models.wave4 import (
 )
 from tests import apptemplate, dbtemplate
 from app.services.moderation_service import _months_ago
-from scripts.seed_wave4_moderation_e2e import assert_isolated_target, provision
+from scripts.seed_wave4_moderation_e2e import (
+    assert_isolated_target,
+    main as seed_moderation_main,
+    provision,
+)
 from scripts.wave4_postgres_gate import is_isolated_gate_target
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -641,17 +651,143 @@ def test_e2e_seed_refuses_non_test_or_ambiguous_database(monkeypatch):
     assert_isolated_target(local)
 
 
+def test_e2e_seed_cli_requires_student_session_token(
+    monkeypatch,
+    capsys,
+):
+    local = "sqlite+pysqlite:////tmp/nyayone_wave4_cli_qa.db"
+    monkeypatch.setenv("APP_ENV", "testing")
+    monkeypatch.setenv("WAVE4_E2E_ALLOW_SEED", "true")
+    monkeypatch.setenv("DATABASE_URL", local)
+    monkeypatch.setenv("TEST_DATABASE_URL", local)
+    monkeypatch.setenv(
+        "WAVE4_E2E_SESSION_TOKEN",
+        "opaque-cli-moderator-token-with-at-least-32-characters",
+    )
+    monkeypatch.delenv("WAVE4_E2E_STUDENT_SESSION_TOKEN", raising=False)
+    assert seed_moderation_main() == 2
+    assert "WAVE4_E2E_STUDENT_SESSION_TOKEN is required" in capsys.readouterr().err
+
+
+def test_e2e_seed_cli_rejects_reused_student_session_token(
+    monkeypatch,
+    capsys,
+):
+    local = "sqlite+pysqlite:////tmp/nyayone_wave4_cli_qa.db"
+    token = "opaque-cli-reused-token-with-at-least-32-characters"
+    monkeypatch.setenv("APP_ENV", "testing")
+    monkeypatch.setenv("WAVE4_E2E_ALLOW_SEED", "true")
+    monkeypatch.setenv("DATABASE_URL", local)
+    monkeypatch.setenv("TEST_DATABASE_URL", local)
+    monkeypatch.setenv("WAVE4_E2E_SESSION_TOKEN", token)
+    monkeypatch.setenv("WAVE4_E2E_STUDENT_SESSION_TOKEN", token)
+
+    assert seed_moderation_main() == 2
+    diagnostic = capsys.readouterr().err
+    assert "must be distinct" in diagnostic
+    assert token not in diagnostic
+
+
+def test_e2e_fixture_rejects_reused_session_token_before_mutation(ctx):
+    _, SessionLocal, _ = ctx
+    token = "opaque-reused-session-token-with-at-least-32-characters"
+    moderator_id = uuid.UUID("00000000-0000-4000-8000-0000000000c4")
+    student_id = uuid.UUID("00000000-0000-4000-8000-0000000000de")
+
+    with SessionLocal() as session:
+        with pytest.raises(RuntimeError, match="must be distinct"):
+            provision(session, token, token)
+
+    with SessionLocal() as session:
+        assert session.get(User, moderator_id) is None
+        assert session.get(User, student_id) is None
+        assert session.scalar(
+            select(func.count()).select_from(AuthSession).where(
+                AuthSession.user_id.in_((moderator_id, student_id))
+            )
+        ) == 0
+
+
 def test_e2e_fixture_is_idempotent_and_stores_only_session_hash(ctx):
     _, SessionLocal, _ = ctx
     token = "opaque-e2e-token-value-with-at-least-32-characters"
+    student_token = "opaque-e2e-student-token-with-at-least-32-characters"
     with SessionLocal() as session:
-        first = provision(session, token)
+        first = provision(session, token, student_token)
         session.commit()
     with SessionLocal() as session:
-        second = provision(session, token)
+        second = provision(session, token, student_token)
         session.commit()
-        stored = session.scalar(select(AuthSession).where(AuthSession.user_id == uuid.UUID("00000000-0000-4000-8000-0000000000c4")))
-        assert stored and stored.token_hash == keyed_hash(token)
-        assert token != stored.token_hash
-    assert first == {"users": 1, "sessions": 1, "reports": 4, "cases": 4}
-    assert second == {"users": 0, "sessions": 0, "reports": 0, "cases": 0}
+        moderator_session = session.scalar(select(AuthSession).where(
+            AuthSession.user_id == uuid.UUID("00000000-0000-4000-8000-0000000000c4")
+        ))
+        student_id = uuid.UUID("00000000-0000-4000-8000-0000000000de")
+        student_session = session.scalar(select(AuthSession).where(
+            AuthSession.user_id == student_id
+        ))
+        registration = session.scalar(select(StudentRegistration).where(
+            StudentRegistration.user_id == student_id
+        ))
+        profile = session.scalar(select(StudentProfile).where(
+            StudentProfile.registration_id == registration.id
+        ))
+        consent = session.scalar(select(Consent).where(
+            Consent.registration_id == registration.id,
+            Consent.purpose == "registration",
+        ))
+        assert moderator_session and moderator_session.token_hash == keyed_hash(token)
+        assert student_session and student_session.token_hash == keyed_hash(student_token)
+        assert token != moderator_session.token_hash
+        assert student_token != student_session.token_hash
+        assert registration.status == "active" and registration.is_minor is False
+        assert profile is not None and profile.deleted_at is None
+        assert consent is not None and consent.accepted is True
+    assert first == {
+        "users": 2,
+        "sessions": 2,
+        "student_registrations": 1,
+        "student_profiles": 1,
+        "student_consents": 1,
+        "reports": 4,
+        "cases": 4,
+    }
+    assert second == {
+        "users": 0,
+        "sessions": 0,
+        "student_registrations": 0,
+        "student_profiles": 0,
+        "student_consents": 0,
+        "reports": 0,
+        "cases": 0,
+    }
+
+
+def test_e2e_fixture_moderator_only_composition_skips_student_authority(ctx):
+    _, SessionLocal, _ = ctx
+    token = "opaque-composed-moderator-token-with-at-least-32-characters"
+    student_id = uuid.UUID("00000000-0000-4000-8000-0000000000de")
+    with SessionLocal() as session:
+        created = provision(session, token)
+        session.commit()
+    with SessionLocal() as session:
+        moderator_session = session.scalar(select(AuthSession).where(
+            AuthSession.user_id == uuid.UUID("00000000-0000-4000-8000-0000000000c4")
+        ))
+        student_session = session.scalar(select(AuthSession).where(
+            AuthSession.user_id == student_id
+        ))
+        registration = session.scalar(select(StudentRegistration).where(
+            StudentRegistration.user_id == student_id
+        ))
+    assert moderator_session is not None
+    assert student_session is None
+    assert registration is None
+    assert created == {
+        "users": 1,
+        "sessions": 1,
+        "student_registrations": 0,
+        "student_profiles": 0,
+        "student_consents": 0,
+        "reports": 4,
+        "cases": 4,
+    }

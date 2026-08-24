@@ -5,6 +5,7 @@ import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -15,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.api.v1 import auth_student, student_settings
-from app.core.auth import ActorContext, Role
+from app.core.auth import ActorContext, Role, get_actor_context
 from app.core.config import settings
 from app.core.crypto import keyed_hash
 from app.core.exceptions import register_exception_handlers
@@ -35,7 +36,7 @@ from app.models.registration import (
     User,
 )
 from app.models.wave1 import DataSubjectRequest, DeletionJob
-from app.services import otp_authority, otp_flow_service
+from app.services import login_service, otp_authority, otp_flow_service
 from tests import dbtemplate
 
 
@@ -123,6 +124,21 @@ def ctx():
     context[1].dispose()
 
 
+def _registration_body(**overrides) -> dict[str, object]:
+    body: dict[str, object] = {
+        "first_name": "Aditi",
+        "last_name": "Nair",
+        "mobile": "9876543210",
+        "dob": "2004-03-14",
+        "terms_accepted": True,
+        "terms_version": "terms-2026-08.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy-2026-08.v1",
+    }
+    body.update(overrides)
+    return body
+
+
 def _create_account(
     client: TestClient,
     sender: CapturingSender,
@@ -134,16 +150,10 @@ def _create_account(
     client.cookies.clear()
     response = client.post(
         "/api/v1/auth/student/register",
-        json={
-            "first_name": "Aditi",
-            "last_name": "Nair",
-            "mobile": mobile,
-            "dob": dob,
-            "consent": {"accepted": True},
-        },
+        json=_registration_body(mobile=mobile, dob=dob),
     )
-    assert response.status_code == 201
-    assert response.json()["status"] == "pending"
+    assert response.status_code == 202
+    assert response.json()["status"] == "accepted"
     signup_code = sender.sent[-1][1]
     factory = client.app.dependency_overrides[
         auth_student.get_outbox_session_factory
@@ -160,10 +170,68 @@ def _create_account(
         json={"code": signup_code},
     )
     assert verified.status_code == 200
+    _assert_initial_onboarding(verified, purpose="signup", dob=dob)
     assert "HttpOnly" in verified.headers["set-cookie"]
     if not keep_session:
         client.cookies.clear()
     return str(registration_id), signup_code
+
+
+def _assert_initial_onboarding(
+    response, *, purpose: str, dob: str = "2004-03-14"
+) -> None:
+    is_minor = dob == "2012-01-01"
+    assert response.json() == {
+        "status": "authenticated",
+        "purpose": purpose,
+        "destination_masked": None,
+        "attempts_left": None,
+        "expires_in_seconds": None,
+        "resend_in_seconds": None,
+        "locked_for_seconds": None,
+        "resend_allowed": False,
+        "onboarding": {
+            "profile_version": 1,
+            "completion_version": "v1",
+            "completion_percent": 0,
+            "completed_sections": [],
+            "next_incomplete_section": "personal",
+            "is_complete": False,
+            "institutional_email_status": "not_provided",
+            "guardian": (
+                {"required": True, "status": "required_pending"}
+                if is_minor
+                else {"required": False, "status": "not_required"}
+            ),
+            "access_mode": "limited" if is_minor else "full",
+            "disabled_capabilities": (
+                ["community", "sharing"] if is_minor else []
+            ),
+            "profile_prompt": {
+                "should_show": True,
+                "dismissed_for_session": False,
+            },
+            "profile": {
+                "personal": {
+                    "first_name": "Aditi",
+                    "middle_name": None,
+                    "last_name": "Nair",
+                    "date_of_birth": dob,
+                    "preferred_language": None,
+                    "city": None,
+                    "pronouns": None,
+                },
+                "academic": {
+                    "college": None,
+                    "year_of_study": None,
+                    "enrolment_number": None,
+                    "institutional_email": None,
+                    "bar_enrolment_number": None,
+                },
+                "interests": {"interests": [], "goals": []},
+            },
+        },
+    }
 
 
 def _start_login(client: TestClient, sender: CapturingSender, mobile="9876543210"):
@@ -236,10 +304,35 @@ def _signup_session(
 
 def _academic_payload() -> dict[str, str]:
     return {
+        "expected_profile_version": 2,
         "college": "National Law School of India University",
         "year_of_study": "3rd year",
         "enrolment_number": "KA/1234/2023",
         "institutional_email": "aditi@nls.ac.in",
+    }
+
+
+def _personal_payload() -> dict[str, object]:
+    return {
+        "expected_profile_version": 1,
+        "first_name": "Aditi",
+        "middle_name": None,
+        "last_name": "Nair",
+        "date_of_birth": "2004-03-14",
+        "preferred_language": "en",
+        "city": "Bengaluru",
+        "pronouns": None,
+    }
+
+
+def test_verification_transition_policy_exactly_exposes_reviewer_lifecycle_edges():
+    assert auth_student._VERIFICATION_TRANSITIONS == {
+        "pending": {"in_review", "verified", "rejected"},
+        "in_review": {"verified", "rejected"},
+        "verified": {"expired", "revoked"},
+        "rejected": {"in_review"},
+        "expired": {"in_review"},
+        "revoked": {"in_review"},
     }
 
 
@@ -606,11 +699,11 @@ def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
 
     email_request = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={"institutional_email": "aditi@nls.ac.in"},
+        json={},
     )
     missing_email_request = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={"institutional_email": "aditi@nls.ac.in"},
+        json={},
     )
     assert email_request.status_code == missing_email_request.status_code == 401
     assert email_request.json() == missing_email_request.json()
@@ -626,7 +719,11 @@ def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
 
     transition = client.post(
         "/api/v1/auth/student/verification/status",
-        json={"registration_id": registration_id, "status": "in_review"},
+        json={
+            "registration_id": registration_id,
+            "status": "in_review",
+            "expected_profile_version": 1,
+        },
         headers={
             "X-Actor-Claims": json.dumps(
                 {"sub": str(uuid.uuid4()), "roles": ["legal_reviewer"]}
@@ -635,7 +732,11 @@ def test_quarantined_onboarding_capabilities_match_missing_registration(ctx):
     )
     missing_transition = client.post(
         "/api/v1/auth/student/verification/status",
-        json={"registration_id": missing_id, "status": "in_review"},
+        json={
+            "registration_id": missing_id,
+            "status": "in_review",
+            "expected_profile_version": 1,
+        },
         headers={
             "X-Actor-Claims": json.dumps(
                 {"sub": str(uuid.uuid4()), "roles": ["legal_reviewer"]}
@@ -657,15 +758,9 @@ def test_quarantined_registration_cannot_consume_active_signup_otp(ctx):
     client, _, factory, sender = ctx
     response = client.post(
         "/api/v1/auth/student/register",
-        json={
-            "first_name": "Aditi",
-            "last_name": "Nair",
-            "mobile": "9876543210",
-            "dob": "2004-03-14",
-            "consent": {"accepted": True},
-        },
+        json=_registration_body(),
     )
-    assert response.status_code == 201
+    assert response.status_code == 202
     code = sender.sent[-1][1]
     with factory() as session:
         registration = session.scalar(
@@ -712,15 +807,9 @@ def test_soft_deleted_registration_cannot_use_signup_otp_capability(ctx):
     client, _, factory, sender = ctx
     registered = client.post(
         "/api/v1/auth/student/register",
-        json={
-            "first_name": "Aditi",
-            "last_name": "Nair",
-            "mobile": "9876543210",
-            "dob": "2004-03-14",
-            "consent": {"accepted": True},
-        },
+        json=_registration_body(),
     )
-    assert registered.status_code == 201
+    assert registered.status_code == 202
     code = sender.sent[-1][1]
     flow_token = client.cookies.get(settings.otp_flow_cookie_name)
     assert flow_token
@@ -908,6 +997,9 @@ def test_protected_onboarding_uses_actor_not_registration_uuid(ctx):
         client, sender, mobile="9876543210"
     )
     _set_trusted_origin(client)
+    assert client.patch(
+        "/api/v1/student/profile/personal", json=_personal_payload()
+    ).status_code == 200
     saved = client.patch(
         "/api/v1/auth/student/profile", json=_academic_payload()
     )
@@ -955,12 +1047,15 @@ def test_protected_onboarding_uses_actor_not_registration_uuid(ctx):
         )
         assert second_profile is not None
         assert second_profile.enrolment_hash is None
-        audit = session.scalar(
-            select(AuditEvent).where(
-                AuditEvent.action == "student.profile.academic_updated"
+        audit = next(
+            event
+            for event in session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.action == "student.profile.section_updated"
+                )
             )
+            if event.after_state["section"] == "academic"
         )
-        assert audit is not None
         assert audit.actor_user_id == first.user_id
         assert audit.actor_role == "student"
         first_session = session.scalar(
@@ -975,8 +1070,8 @@ def test_protected_onboarding_uses_actor_not_registration_uuid(ctx):
         assert session.scalar(
             select(func.count())
             .select_from(AuditEvent)
-            .where(AuditEvent.action == "student.profile.academic_updated")
-        ) == 1
+            .where(AuditEvent.action == "student.profile.section_updated")
+        ) == 2
 
     client.cookies.clear()
     anonymous = client.patch(
@@ -1030,7 +1125,7 @@ def test_quarantined_actor_registration_is_hidden_from_every_owned_route(ctx):
         ),
         client.post(
             "/api/v1/auth/student/verification/email/request",
-            json={"institutional_email": "aditi@nls.ac.in"},
+            json={},
             headers=actor_headers,
         ),
         client.get(
@@ -1153,11 +1248,15 @@ def test_all_cookie_mutations_require_origin_and_safe_read_does_not(ctx):
         ),
         client.post(
             "/api/v1/auth/student/verification/email/request",
-            json={"institutional_email": "aditi@nls.ac.in"},
+            json={},
         ),
         client.post(
             "/api/v1/auth/student/verification/status",
-            json={"registration_id": registration_id, "status": "in_review"},
+            json={
+                "registration_id": registration_id,
+                "status": "in_review",
+                "expected_profile_version": 1,
+            },
         ),
         client.post("/api/v1/auth/student/logout", json={}),
     )
@@ -1206,13 +1305,20 @@ def test_all_cookie_mutations_require_origin_and_safe_read_does_not(ctx):
         assert session.scalar(
             select(func.count())
             .select_from(AuditEvent)
-            .where(AuditEvent.action == "student.profile.academic_updated")
+            .where(AuditEvent.action == "student.profile.section_updated")
         ) == 0
 
     # A safe cookie-backed read does not require Origin.
     status_probe = client.get("/api/v1/auth/student/verification/status")
     assert status_probe.status_code == 200
     assert status_probe.json()["status"] == "pending"
+
+    exact_personal = client.patch(
+        "/api/v1/student/profile/personal",
+        json={**_personal_payload(), "date_of_birth": "2012-01-01"},
+        headers={"Origin": trusted},
+    )
+    assert exact_personal.status_code == 200
 
     exact_profile = client.patch(
         "/api/v1/auth/student/profile",
@@ -1222,10 +1328,11 @@ def test_all_cookie_mutations_require_origin_and_safe_read_does_not(ctx):
     assert exact_profile.status_code == 200
     exact_email = client.post(
         "/api/v1/auth/student/verification/email/request",
-        json={"institutional_email": "aditi@nls.ac.in"},
+        json={},
         headers={"Origin": trusted},
     )
     assert exact_email.status_code == 202
+    assert exact_email.json()["institutional_email_status"] == "pending"
     self_guardian = client.post(
         "/api/v1/auth/student/guardian-consent/complete",
         json={},
@@ -1235,7 +1342,11 @@ def test_all_cookie_mutations_require_origin_and_safe_read_does_not(ctx):
     assert self_guardian.json()["detail"]["code"] == "guardian_self_approval_forbidden"
     self_review = client.post(
         "/api/v1/auth/student/verification/status",
-        json={"registration_id": registration_id, "status": "verified"},
+        json={
+            "registration_id": registration_id,
+            "status": "verified",
+            "expected_profile_version": 3,
+        },
         headers={"Origin": trusted},
     )
     assert self_review.status_code == 403
@@ -1257,10 +1368,29 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
     _use_session_cookie(client, student_token)
     blocked = client.post(
         "/api/v1/auth/student/verification/status",
-        json={"registration_id": registration_id, "status": "in_review"},
+        json={
+            "registration_id": registration_id,
+            "status": "in_review",
+            "expected_profile_version": 1,
+        },
         headers={"Origin": trusted},
     )
     assert blocked.status_code == 403
+
+    personal = client.patch(
+        "/api/v1/student/profile/personal",
+        json=_personal_payload(),
+        headers={"Origin": trusted},
+    )
+    assert personal.status_code == 200
+    academic = client.patch(
+        "/api/v1/auth/student/profile",
+        json=_academic_payload(),
+        headers={"Origin": trusted},
+    )
+    assert academic.status_code == 200
+    reviewed_version = academic.json()["profile_version"]
+    assert reviewed_version == 3
 
     now = datetime.now(timezone.utc)
     with factory() as session:
@@ -1284,11 +1414,19 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
     for target in ("in_review", "verified"):
         changed = client.post(
             "/api/v1/auth/student/verification/status",
-            json={"registration_id": registration_id, "status": target},
+            json={
+                "registration_id": registration_id,
+                "status": target,
+                "expected_profile_version": reviewed_version,
+            },
             headers={"Origin": trusted},
         )
         assert changed.status_code == 200
-        assert changed.json() == {"status": target}
+        assert changed.json() == {
+            "status": target,
+            "profile_version": reviewed_version,
+            "owner_projection_invalidated": True,
+        }
 
     with factory() as session:
         events = list(
@@ -1309,9 +1447,103 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
             {"status": "in_review"},
         ]
         assert [event.after_state for event in events] == [
-            {"status": "in_review"},
-            {"status": "verified"},
+            {"status": "in_review", "profile_version": 3},
+            {"status": "verified", "profile_version": 3},
         ]
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id
+                == uuid.UUID(registration_id)
+            )
+        )
+        profile = session.scalar(
+            select(StudentProfile).where(
+                StudentProfile.registration_id == uuid.UUID(registration_id)
+            )
+        )
+        assert verification.verified_email_hash == profile.institutional_email_hash
+
+
+@pytest.mark.parametrize("mutated_section", ["personal", "academic"])
+def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
+    ctx, mutated_section
+):
+    client, _, factory, sender = ctx
+    registration_id, student_token = _signup_session(
+        client, sender, mobile="9876543210"
+    )
+    trusted = settings.cors_origins[0]
+    _use_session_cookie(client, student_token)
+
+    if mutated_section == "personal":
+        stale_version = 1
+        mutation = client.patch(
+            "/api/v1/student/profile/personal",
+            json={**_personal_payload(), "date_of_birth": "2003-03-14"},
+            headers={"Origin": trusted},
+        )
+    else:
+        personal = client.patch(
+            "/api/v1/student/profile/personal",
+            json=_personal_payload(),
+            headers={"Origin": trusted},
+        )
+        assert personal.status_code == 200
+        stale_version = 2
+        mutation = client.patch(
+            "/api/v1/student/profile/academic",
+            json=_academic_payload(),
+            headers={"Origin": trusted},
+        )
+    assert mutation.status_code == 200
+    assert mutation.json()["profile_version"] == stale_version + 1
+
+    now = datetime.now(timezone.utc)
+    with factory() as session:
+        reviewer = User(role="legal_reviewer", status="active")
+        session.add(reviewer)
+        session.flush()
+        reviewer_token = f"stale-reviewer-{mutated_section}"
+        session.add(
+            AuthSession(
+                user_id=reviewer.id,
+                token_hash=keyed_hash(reviewer_token),
+                status="active",
+                expires_at=now + timedelta(minutes=5),
+                last_seen_at=now,
+            )
+        )
+        session.commit()
+
+    _use_session_cookie(client, reviewer_token)
+    stale = client.post(
+        "/api/v1/auth/student/verification/status",
+        json={
+            "registration_id": registration_id,
+            "status": "verified",
+            "expected_profile_version": stale_version,
+        },
+        headers={"Origin": trusted},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"] == {
+        "code": "profile_version_conflict",
+        "current_profile_version": stale_version + 1,
+        "message": "Request failed",
+    }
+    with factory() as session:
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id
+                == uuid.UUID(registration_id)
+            )
+        )
+        assert verification is not None and verification.status == "pending"
+        assert session.scalar(
+            select(func.count()).select_from(AuditEvent).where(
+                AuditEvent.action == "student.verification.status_changed"
+            )
+        ) == 0
 
 
 def test_reviewer_cannot_transition_deleted_quarantined_or_missing_target(ctx):
@@ -1360,7 +1592,11 @@ def test_reviewer_cannot_transition_deleted_quarantined_or_missing_target(ctx):
     for registration_id in (deleted_id, quarantined_id, str(uuid.uuid4())):
         denied = client.post(
             "/api/v1/auth/student/verification/status",
-            json={"registration_id": registration_id, "status": "in_review"},
+            json={
+                "registration_id": registration_id,
+                "status": "in_review",
+                "expected_profile_version": 1,
+            },
             headers={"Origin": settings.cors_origins[0]},
         )
         assert denied.status_code == 404
@@ -1379,6 +1615,90 @@ def test_reviewer_cannot_transition_deleted_quarantined_or_missing_target(ctx):
                 AuthSession.token_hash == keyed_hash(reviewer_token)
             )
         ) == reviewer_last_seen
+
+
+def test_revoked_reviewer_cookie_cannot_mutate_from_stale_dependency_actor(ctx):
+    client, _, factory, _ = ctx
+    now = datetime.now(timezone.utc)
+    raw_token = "revoked-reviewer-session"
+    with factory() as session:
+        student = User(role="student", status="active")
+        reviewer = User(role="legal_reviewer", status="active")
+        session.add_all([student, reviewer])
+        session.flush()
+        registration = StudentRegistration(
+            user_id=student.id,
+            first_name="Aditi",
+            middle_name=None,
+            last_name="Nair",
+            mobile_hash=keyed_hash("9876543210"),
+            mobile_ct="ciphertext",
+            dob_hash=keyed_hash("2004-03-14"),
+            dob_ct="ciphertext",
+            dob_hash_state="verified",
+            key_version="v1",
+            status="active",
+            is_minor=False,
+        )
+        session.add(registration)
+        session.flush()
+        session.add_all(
+            [
+                StudentProfile(
+                    registration_id=registration.id,
+                    profile_version=1,
+                ),
+                StudentVerification(
+                    registration_id=registration.id,
+                    method="institutional_email",
+                    status="pending",
+                ),
+                AuthSession(
+                    user_id=reviewer.id,
+                    token_hash=keyed_hash(raw_token),
+                    status="revoked",
+                    expires_at=now + timedelta(hours=1),
+                    last_seen_at=now,
+                    revoked_at=now,
+                ),
+            ]
+        )
+        session.commit()
+        reviewer_id = reviewer.id
+        registration_id = registration.id
+
+    _use_session_cookie(client, raw_token)
+    client.app.dependency_overrides[get_actor_context] = lambda: ActorContext(
+        user_id=reviewer_id,
+        roles=frozenset({Role.LEGAL_REVIEWER}),
+    )
+    try:
+        denied = client.post(
+            "/api/v1/auth/student/verification/status",
+            json={
+                "registration_id": str(registration_id),
+                "status": "in_review",
+                "expected_profile_version": 1,
+            },
+            headers={"Origin": settings.cors_origins[0]},
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_actor_context, None)
+
+    assert denied.status_code == 401
+    assert denied.json()["detail"]["code"] == "authentication_required"
+    with factory() as session:
+        verification = session.scalar(
+            select(StudentVerification).where(
+                StudentVerification.registration_id == registration_id
+            )
+        )
+        assert verification.status == "pending"
+        assert session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "student.verification.status_changed")
+        ) == 0
 
 
 def test_signup_or_recovery_code_cannot_authenticate_login(ctx):
@@ -1408,8 +1728,7 @@ def test_success_sets_hardened_cookie_stores_only_hash_and_authenticates(ctx):
         json={"code": code},
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "authenticated"
-    assert response.json()["purpose"] == "login"
+    _assert_initial_onboarding(response, purpose="login")
     cookie_header = response.headers["set-cookie"]
     assert "HttpOnly" in cookie_header
     assert "SameSite=strict" in cookie_header
@@ -1427,7 +1746,64 @@ def test_success_sets_hardened_cookie_stores_only_hash_and_authenticates(ctx):
         )
         assert actor["sub"] == str(registration.user_id)
         assert row.token_hash != raw_token and len(row.token_hash) == 64
-        assert row.status == "active"
+    assert row.status == "active"
+
+
+@pytest.mark.parametrize("purpose", ["signup", "login"])
+def test_onboarding_projection_failure_rolls_back_otp_and_session_atomically(
+    purpose, monkeypatch
+):
+    client, engine, factory, sender = _context()
+    try:
+        if purpose == "signup":
+            created = client.post(
+                "/api/v1/auth/student/register",
+                json=_registration_body(),
+            )
+            assert created.status_code == 202
+            flow_token = client.cookies.get(settings.otp_flow_cookie_name)
+            code = sender.sent[-1][1]
+            endpoint = "/api/v1/auth/student/otp/verify"
+        else:
+            _create_account(client, sender)
+            flow_token, code = _start_login(client, sender)
+            endpoint = "/api/v1/auth/student/login/otp/verify"
+        assert flow_token and code
+
+        def projection_failure(*_args, **_kwargs):
+            raise RuntimeError("forced onboarding projection failure")
+
+        monkeypatch.setattr(
+            "app.services.profile_service.projection_for_actor",
+            projection_failure,
+        )
+        failed = client.post(endpoint, json={"code": code})
+        assert failed.status_code == 500
+
+        with factory() as session:
+            flow = _flow_for_token(session, flow_token)
+            assert flow is not None and flow.state in {"pending", "code_sent"}
+            assert flow.consumed_at is None
+            challenge = session.get(OtpChallenge, flow.challenge_id)
+            assert challenge is not None and challenge.consumed_at is None
+            if purpose == "signup":
+                registration = session.get(
+                    StudentRegistration, flow.registration_id
+                )
+                assert registration is not None
+                assert registration.status == "otp_pending"
+                assert session.scalar(
+                    select(func.count()).select_from(AuthSession)
+                ) == 0
+            else:
+                assert session.scalar(
+                    select(func.count()).select_from(AuthSession).where(
+                        AuthSession.status == "active"
+                    )
+                ) == 1
+    finally:
+        client.close()
+        engine.dispose()
 
 
 def test_non_local_cookie_is_secure_and_authenticates_over_https(monkeypatch):
@@ -1501,7 +1877,7 @@ def test_valid_cookie_overrides_forged_dev_header_and_blocks_cross_user(ctx):
         },
     )
     assert response.status_code == 200
-    assert response.json()["masked_mobile"] == "******3210"
+    assert response.json()["profile"]["personal"]["first_name"] == "Aditi"
     assert client.get("/api/v1/auth/student/session").json()["actor"]["sub"] != str(other.user_id)
 
 
@@ -1608,6 +1984,57 @@ def test_replay_is_rejected_and_fresh_login_rotates_prior_session(ctx):
     expired_probe = client.get("/api/v1/auth/student/session")
     assert expired_probe.status_code == 200
     assert expired_probe.json() == {"authenticated": False, "actor": None}
+
+
+def test_effect_session_locks_user_before_exact_cookie_and_reloads_both() -> None:
+    """Effect/logout ordering is User -> AuthSession after domain discovery."""
+
+    now = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
+    user_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    raw_token = "effect-lock-order-cookie"
+    locked_user = User(id=user_id, role="admin", status="active")
+    locked_auth_session = AuthSession(
+        id=session_id,
+        user_id=user_id,
+        token_hash=keyed_hash(raw_token),
+        status="active",
+        expires_at=now + timedelta(hours=1),
+        last_seen_at=now,
+    )
+    lock_order: list[str] = []
+
+    class RecordingSession:
+        def execute(self, statement):
+            lock_order.append("cookie_discovery")
+            return SimpleNamespace(
+                one_or_none=lambda: SimpleNamespace(
+                    id=session_id,
+                    user_id=user_id,
+                )
+            )
+
+        def scalar(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            assert statement._for_update_arg is not None
+            assert statement.get_execution_options()["populate_existing"] is True
+            if entity is User:
+                lock_order.append("user")
+                return locked_user
+            assert entity is AuthSession
+            lock_order.append("auth_session")
+            return locked_auth_session
+
+    result = login_service.lock_presented_session_for_effect(
+        RecordingSession(),  # type: ignore[arg-type]
+        raw_token,
+        expected_user_id=user_id,
+        now=now,
+        allowed_roles=frozenset({"admin"}),
+    )
+
+    assert result is locked_auth_session
+    assert lock_order == ["cookie_discovery", "user", "auth_session"]
 
 
 def test_expired_session_and_logout_revoke_authority(ctx):

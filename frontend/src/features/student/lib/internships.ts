@@ -2,7 +2,8 @@
  * Internship browse/filter/save/apply/track logic (SAATHI-60/61 · S4).
  * Pure + testable. Scope is S4 only (browse/detail/save/apply/confirm/track);
  * S18 experience reporting is explicitly out of scope. No external integrations —
- * listings are sample/source-labelled and applications live in a local store.
+ * listings are sample/source-labelled and transitional application state is
+ * tab-memory-only until a server persistence contract exists.
  */
 
 export type StipendFilter = 'any' | 'paid' | 'unpaid';
@@ -128,7 +129,7 @@ let refSeq = 4820;
 /** Generate an application reference id (stub; server-authoritative in prod). */
 export function newApplicationRef(): string {
   refSeq += 1;
-  return `LS-INT-${refSeq}`;
+  return `NYAY-INT-${refSeq}`;
 }
 
 export const MAX_APPLICATION_PDF_BYTES = 5 * 1024 * 1024;
@@ -168,30 +169,25 @@ export function validateApplicationPdf(
   return null;
 }
 
-const SUBMITTED_KEY = 'legalsaathi.internship.applications.v1';
+let submittedApplications: Application[] = [];
 
 export function saveSubmittedApplication(application: Application): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const existing = JSON.parse(window.localStorage.getItem(SUBMITTED_KEY) ?? '[]') as Application[];
-    window.localStorage.setItem(SUBMITTED_KEY, JSON.stringify([application, ...existing.filter((a) => a.id !== application.id)]));
-  } catch {
-    // Storage denial must not make the submit action crash.
-  }
+  submittedApplications = [
+    { ...application },
+    ...submittedApplications.filter((candidate) => candidate.id !== application.id),
+  ];
 }
 
 export function loadSubmittedApplications(): Application[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(SUBMITTED_KEY) ?? '[]') as Application[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return submittedApplications.map((application) => ({ ...application }));
 }
 
 export function loadLatestSubmittedApplication(): Application | null {
   return loadSubmittedApplications()[0] ?? null;
+}
+
+export function clearSubmittedApplications(): void {
+  submittedApplications = [];
 }
 
 export const SAMPLE_LISTINGS: readonly InternshipListing[] = [
@@ -250,5 +246,5 @@ export const SAMPLE_APPLICATIONS: readonly Application[] = [
   { id: 'a5', listingId: 'vidhi', org: 'Vidhi Centre for Legal Policy', role: 'Research fellowship, policy', meta: 'not selected · recorded 28 Jun', status: 'closed' },
 ];
 
-export const APPLY_DPDP = 'Documents leave LegalSaathi only when you submit';
+export const APPLY_DPDP = 'Documents leave NyayOne only when you submit';
 export const TRACKER_SOURCE = 'Source: firm career pages · external listings, unverified · not affiliated. Applications leave only when you submit';

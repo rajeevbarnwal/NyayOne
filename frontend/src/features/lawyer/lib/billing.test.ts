@@ -12,6 +12,7 @@ describe('advance billing state machine (SAATHI-12 / E04)', () => {
   it('issues a payment link only after an invoice exists (pending)', () => {
     expect(canIssuePaymentLink(null)).toBe(false);
     const inv = newInvoice(5000, 'court_fee_advance');
+    expect(inv.id).toMatch(/^NYAY-INV-\d+$/);
     expect(inv.status).toBe('pending');
     expect(canIssuePaymentLink(inv)).toBe(true);
   });

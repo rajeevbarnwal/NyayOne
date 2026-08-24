@@ -72,8 +72,11 @@ def test_no_raw_otp_or_mobile_in_logs_responses_or_audit(caplog):
     mobile = "9812345678"
     r = client.post("/api/v1/auth/student/register", json={
         "first_name": "Aditi", "last_name": "Nair", "mobile": mobile,
-        "dob": "2004-03-14", "consent": {"accepted": True}})
-    assert r.status_code == 201
+        "dob": "2004-03-14", "terms_accepted": True,
+        "terms_version": "terms.v1",
+        "privacy_notice_acknowledged": True,
+        "privacy_notice_version": "privacy.v1"})
+    assert r.status_code == 202
     code = sender.sent[-1][1]  # the raw code only ever left via the sender
 
     # (1) Response bodies never contain the raw code or mobile.
