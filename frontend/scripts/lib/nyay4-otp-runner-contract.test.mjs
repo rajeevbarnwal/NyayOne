@@ -23,12 +23,12 @@ const requestWithHeaders = (headers) => ({
 const validOtpView = (overrides = {}) => ({
   cardCount: 1,
   rowTexts: [
-    'Code expires in 09:59',
-    'Resend available in 00:29',
+    'Expires in 09:59',
+    'Resend in 00:29',
     'Tries left\n5',
   ],
   ledeCount: 1,
-  ledeText: 'Six digits, sent to ••••••1234.',
+  ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below. Change',
   ...overrides,
 });
 
@@ -312,39 +312,63 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
   it.each([
     ['missing card', { cardCount: 0 }],
     ['duplicate card', { cardCount: 2 }],
-    ['missing direct row', { rowTexts: ['Code expires in 09:59', 'Tries left 5'] }],
+    ['missing direct row', { rowTexts: ['Expires in 09:59', 'Tries left 5'] }],
     ['extra direct row', { rowTexts: [
-      'Code expires in 09:59', 'Resend available in 00:29', 'Tries left 5', 'extra',
+      'Expires in 09:59', 'Resend in 00:29', 'Tries left 5', 'extra',
     ] }],
     ['changed attempt', { rowTexts: [
-      'Code expires in 09:59', 'Resend available in 00:29', 'Tries left 4',
+      'Expires in 09:59', 'Resend in 00:29', 'Tries left 4',
     ] }],
     ['attempt substring', { rowTexts: [
-      'Code expires in 09:59', 'Resend available in 00:29', 'Tries left 5 extra',
+      'Expires in 09:59', 'Resend in 00:29', 'Tries left 5 extra',
     ] }],
     ['duplicate attempt row', { rowTexts: [
-      'Code expires in 09:59', 'Tries left 5', 'Tries left 5',
+      'Expires in 09:59', 'Tries left 5', 'Tries left 5',
     ] }],
     ['missing resend row', { rowTexts: [
-      'Code expires in 09:59', 'something else', 'Tries left 5',
+      'Expires in 09:59', 'something else', 'Tries left 5',
     ] }],
     ['malformed countdown width', { rowTexts: [
-      'Code expires in 9:59', 'Resend available in 00:29', 'Tries left 5',
+      'Expires in 9:59', 'Resend in 00:29', 'Tries left 5',
     ] }],
     ['malformed countdown seconds', { rowTexts: [
-      'Code expires in 09:60', 'Resend available in 00:29', 'Tries left 5',
+      'Expires in 09:60', 'Resend in 00:29', 'Tries left 5',
     ] }],
     ['zero countdown', { rowTexts: [
-      'Code expires in 00:00', 'Resend available in 00:29', 'Tries left 5',
+      'Expires in 00:00', 'Resend in 00:29', 'Tries left 5',
     ] }],
     ['duplicate countdown row', { rowTexts: [
-      'Code expires in 09:59', 'Code expires in 09:58', 'Tries left 5',
+      'Expires in 09:59', 'Expires in 09:58', 'Tries left 5',
+    ] }],
+    ['legacy countdown label', { rowTexts: [
+      'Code expires in 09:59', 'Resend in 00:29', 'Tries left 5',
+    ] }],
+    ['malformed resend width', { rowTexts: [
+      'Expires in 09:59', 'Resend in 0:29', 'Tries left 5',
+    ] }],
+    ['malformed resend seconds', { rowTexts: [
+      'Expires in 09:59', 'Resend in 00:60', 'Tries left 5',
+    ] }],
+    ['legacy resend label', { rowTexts: [
+      'Expires in 09:59', 'Resend available in 00:29', 'Tries left 5',
     ] }],
     ['missing lede', { ledeCount: 0, ledeText: undefined }],
     ['duplicate lede', { ledeCount: 2 }],
-    ['fallback destination', { ledeText: 'Six digits, sent to your mobile.' }],
-    ['changed masked suffix', { ledeText: 'Six digits, sent to ••••••1235.' }],
-    ['destination substring', { ledeText: 'Six digits, sent to ••••••1234. extra' }],
+    ['fallback destination', {
+      ledeText: 'Six digits sent to your mobile. Your code stays valid for the time shown below. Change',
+    }],
+    ['changed masked suffix', {
+      ledeText: 'Six digits sent to +91 ••••• ••235. Your code stays valid for the time shown below. Change',
+    }],
+    ['four-digit server suffix', {
+      ledeText: 'Six digits sent to +91 ••••• •1234. Your code stays valid for the time shown below. Change',
+    }],
+    ['missing Change action', {
+      ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below.',
+    }],
+    ['destination substring', {
+      ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below. Change extra',
+    }],
   ])('rejects the planted OTP view mutant: %s', (_label, overrides) => {
     expect(inspectOtpViewSnapshot(
       validOtpView(overrides),
@@ -353,12 +377,19 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     ).pass).toBe(false);
   });
 
+  it('derives the three-digit rendered suffix from the authoritative masked destination', () => {
+    expect(inspectOtpViewSnapshot(validOtpView({
+      ledeText: 'Six digits sent to +91 ••••• ••876. Your code stays valid for the time shown below. Change',
+    }), 5, '••••••9876').pass).toBe(true);
+    expect(inspectOtpViewSnapshot(validOtpView(), 5, '••••••1235').pass).toBe(false);
+  });
+
   it('requires fresh valid snapshots and a non-increasing positive reload countdown', () => {
     const before = inspectOtpViewSnapshot(validOtpView(), 5, MASKED_DESTINATION);
     const after = inspectOtpViewSnapshot(validOtpView({
       rowTexts: [
-        'Code expires in 09:57',
-        'Resend available in 00:27',
+        'Expires in 09:57',
+        'Resend in 00:27',
         'Tries left 5',
       ],
     }), 5, MASKED_DESTINATION);
@@ -371,6 +402,21 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
   it('pins the executable runner to the exact summary builder and failure exit', () => {
     const source = readFileSync(resolve('scripts/nyay4-otp-browser-negative.mjs'), 'utf8');
     expect(() => assertRunnerWiring(source)).not.toThrow();
+  });
+
+  it('uses the exact accessible S-09 resend control across invalidation and recovery', () => {
+    const source = readFileSync(resolve('scripts/nyay4-otp-browser-negative.mjs'), 'utf8');
+    expect(source).toContain(
+      "const resendButton = page.getByRole('button', { name: 'Resend Code', exact: true });",
+    );
+    expect(source).toContain('resendDisabled: await resendButton.isDisabled(),');
+    expect(source).toContain('await resendButton.evaluate((button) => button.click());');
+    expect(source).toContain(
+      'await resendButton.click({ trial: true, timeout: 45_000 });',
+    );
+    expect(source).toContain('await resendButton.click();');
+    expect(source).not.toContain('v34-textlink');
+    expect(source).not.toContain('Resend now');
   });
 
   it('matches the StatusBadge label after excluding its aria-hidden mark, exactly once', () => {
