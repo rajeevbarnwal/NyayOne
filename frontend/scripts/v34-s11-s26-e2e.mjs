@@ -5,6 +5,8 @@ import axe from 'axe-core';
 import { chromium } from 'playwright';
 
 const base = process.env.V34_BASE_URL ?? 'http://127.0.0.1:4177';
+const apiBase = process.env.V34_API_BASE_URL ?? 'http://localhost:1131';
+const canonicalApiOrigin = new URL(apiBase).origin;
 const evidenceDir = resolve(process.env.V34_EVIDENCE_DIR ?? 'test-results/v34-s11-s26');
 const screenshotsDir = resolve(evidenceDir, 'screenshots');
 await mkdir(screenshotsDir, { recursive: true });
@@ -26,6 +28,9 @@ const states = [
   }),
   { id: 'S-17E', path: '/s-17', edit: true, expectedScreen: 'S-10' },
 ];
+const profileDependentStates = new Set([
+  'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-17E',
+]);
 const mobileScrollLimits = {
   'S-11': 111, 'S-12': 0, 'S-13': 22, 'S-14': 0, 'S-15': 463,
   'S-16': 8, 'S-17': 211, 'S-17E': 34, 'S-18': 0, 'S-19': 0,
@@ -166,15 +171,22 @@ function createRuntimeEvidence() {
 
 function attachRuntimeEvidence(page, runtime) {
   page.on('console', (message) => {
-    if (message.type() === 'error') runtime.consoleErrors.push(message.text());
+    if (message.type() === 'error') runtime.consoleErrors.push({ stage: 'console-error' });
   });
-  page.on('pageerror', (error) => runtime.pageErrors.push(error.message));
+  page.on('pageerror', () => runtime.pageErrors.push({ stage: 'page-error' }));
   page.on('requestfailed', (request) => {
-    runtime.failedRequests.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'unknown'}`);
+    runtime.failedRequests.push({
+      stage: 'request-failed',
+      method: request.method(),
+    });
   });
   page.on('response', (response) => {
     if (response.status() >= 400) {
-      runtime.httpErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+      runtime.httpErrors.push({
+        stage: 'http-error',
+        status: response.status(),
+        method: response.request().method(),
+      });
     }
   });
 }
@@ -279,7 +291,10 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
         ? json(200, listing)
         : json(404, { detail: { code: 'internship_not_found', message: 'This internship listing is unavailable.' } });
     }
-    runtime.unmatchedApi.push(`${request.method()} ${url.pathname}${url.search}`);
+    runtime.unmatchedApi.push({
+      stage: 'unmatched-api',
+      method: request.method(),
+    });
     return json(501, { detail: { code: 'qa_route_not_stubbed' } });
   });
 }
@@ -291,16 +306,21 @@ function isCalendarResponse(response, pathname) {
 
 function isExactApiResponse(response, method, pathname) {
   const url = new URL(response.url());
-  return response.request().method() === method && url.pathname === pathname;
+  return response.request().method() === method
+    && url.origin === canonicalApiOrigin
+    && url.pathname === pathname
+    && url.search === ''
+    && url.hash === '';
 }
 
 async function finishResponse(response) {
   const error = await response.finished();
+  const url = new URL(response.url());
   return {
     method: response.request().method(),
-    path: `${new URL(response.url()).pathname}${new URL(response.url()).search}`,
+    path: url.pathname,
     status: response.status(),
-    finishedError: error?.message ?? null,
+    finishedError: error === null ? null : 'response-not-finished',
   };
 }
 
@@ -396,6 +416,20 @@ try {
           ? restrictedProfileProjection
           : completeProfileProjection;
         if (state.id === 'S-26') contextSavedIds.clear();
+        const sessionResponsePromise = profileDependentStates.has(state.id)
+          ? page.waitForResponse((response) => isExactApiResponse(
+            response,
+            'GET',
+            '/api/v1/auth/student/session',
+          ))
+          : null;
+        const profileResponsePromise = profileDependentStates.has(state.id)
+          ? page.waitForResponse((response) => isExactApiResponse(
+            response,
+            'GET',
+            '/api/v1/student/profile',
+          ))
+          : null;
         const calendarResponses = state.id === 'S-14' ? [
           page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/view-preferences')),
           page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/events')),
@@ -414,6 +448,16 @@ try {
           page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
         ] : [];
         await page.goto(`${base}${state.path}`, { waitUntil: 'domcontentloaded' });
+        if (sessionResponsePromise && profileResponsePromise) {
+          const completedSessionResponse = await finishResponse(await sessionResponsePromise);
+          const completedProfileResponse = await finishResponse(await profileResponsePromise);
+          if (completedSessionResponse.status !== 200 || completedSessionResponse.finishedError !== null) {
+            throw new Error(`Canonical session readiness failed for ${state.id}: ${JSON.stringify(completedSessionResponse)}`);
+          }
+          if (completedProfileResponse.status !== 200 || completedProfileResponse.finishedError !== null) {
+            throw new Error(`Canonical profile readiness failed for ${state.id}: ${JSON.stringify(completedProfileResponse)}`);
+          }
+        }
         await page.locator(`[data-screen="${state.id === 'S-17E' ? 'S-17' : state.id}"]`).waitFor({ state: 'visible' });
         if (state.id === 'S-14') {
           const completed = await waitForCalendarDashboardReady(page, calendarResponses);
@@ -526,8 +570,11 @@ try {
     resume.click(),
   ]);
   await waitForDocumentReady(page);
-  record('S-13_resume_branch', 'first incomplete step routes to S-10 academic', new URL(page.url()).pathname + new URL(page.url()).search,
-    new URL(page.url()).pathname === '/s-10' && new URL(page.url()).search === '?section=academic');
+  const resumeRoute = new URL(page.url());
+  record('S-13_resume_branch', 'first incomplete step routes to S-10 academic', {
+    path: resumeRoute.pathname,
+    expectedSection: resumeRoute.search === '?section=academic',
+  }, resumeRoute.pathname === '/s-10' && resumeRoute.search === '?section=academic');
 
   // The resume assertion intentionally uses an incomplete canonical fixture.
   // Open a fresh document before the remaining complete-profile journeys so
@@ -595,10 +642,13 @@ try {
   await page.goto(`${base}/s-21?listing=menon`);
   const completedMenonResponses = await waitForInternshipStateReady(page, menonResponses);
   await waitForDocumentReady(page);
+  const menonRoute = new URL(page.url());
   record('S-21_menon_identity', 'stable menon identity renders Judicial research assistant, never CAM fallback', {
-    url: page.url(), responses: completedMenonResponses,
+    path: menonRoute.pathname,
+    expectedListing: menonRoute.searchParams.get('listing') === 'menon',
+    responses: completedMenonResponses,
   }, await page.getByRole('heading', { name: 'Judicial research assistant' }).isVisible()
-    && new URL(page.url()).searchParams.get('listing') === 'menon'
+    && menonRoute.searchParams.get('listing') === 'menon'
     && completedMenonResponses.every((item) => item.status === 200 && item.finishedError === null));
 
   const saveMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'PUT', '/api/v1/student/internships/menon/saved'));
@@ -702,7 +752,7 @@ try {
     return {
       localKeys: Object.keys(local).sort(),
       sessionKeys: Object.keys(session).sort(),
-      visibleCookieNames,
+      visibleCookieCount: visibleCookieNames.length,
       privateFixtureLeak: serialized.includes('9876543210')
         || serialized.includes('student@nls.ac.in')
         || serialized.includes('aditi'),

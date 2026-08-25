@@ -560,14 +560,17 @@ function transitionDescriptorPolicy(descriptor) {
 }
 
 function retirementDescriptor(value) {
-  if (typeof value === 'string') {
-    return { name: value, policy: authorityCookiePolicy(value) };
-  }
   if (!value || Array.isArray(value) || typeof value !== 'object') return null;
-  if (!Object.keys(value).every((key) => ['name', 'scope'].includes(key))) return null;
+  const keys = Object.keys(value);
+  if (!keys.every((key) => ['action', 'name', 'scope'].includes(key))) return null;
+  if (!Object.hasOwn(value, 'name') || !Object.hasOwn(value, 'action')) return null;
+  if (value.action !== 'retire') return null;
+  if (Object.hasOwn(value, 'scope') && !['current', 'legacy'].includes(value.scope)) return null;
+  const policy = authorityCookiePolicy(value.name, value.scope ?? 'current');
+  if (!policy) return null;
   return {
     name: value.name,
-    policy: authorityCookiePolicy(value.name, value.scope ?? 'current'),
+    policy,
   };
 }
 

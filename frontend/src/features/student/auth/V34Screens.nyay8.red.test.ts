@@ -6,6 +6,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type StudentSessionPhase } from '../../../app/authContext';
 import type { OtpFlowState } from '../lib/registrationApi';
+import {
+  captureActiveProfileReauthDraft,
+  clearProfileReauthHandoff,
+  resolvedProfileReauthResumeRoute,
+  resolveProfileReauthActor,
+  restoreCapturedProfileReauthDraft,
+  stageActiveProfileReauthDraft,
+} from '../profile/profileReauthHandoff';
 
 const otpHook = vi.hoisted(() => ({
   state: null as OtpFlowState | null,
@@ -47,6 +55,28 @@ const MANIFEST_PATH = join(
   process.cwd(),
   'test-baselines/nyay7/option-3.2.1-rev-l/manifest.json',
 );
+const REAUTH_ACTOR_A = '00000000-0000-4000-8000-0000000008a1';
+const REAUTH_ACTOR_B = '00000000-0000-4000-8000-0000000008b2';
+
+function retainPersonalReauthIntent(): void {
+  const owner = Symbol('nyay8-same-actor-reauth');
+  stageActiveProfileReauthDraft(owner, REAUTH_ACTOR_A, {
+    section: 'personal',
+    value: {
+      firstName: 'Aditi',
+      middleName: null,
+      lastName: 'Rao',
+      dateOfBirth: '2000-01-01',
+      preferredLanguage: 'en',
+      city: 'Pune',
+      pronouns: null,
+    },
+  });
+  const captured = captureActiveProfileReauthDraft();
+  if (captured === null) throw new Error('reauth_fixture_capture_failed');
+  clearProfileReauthHandoff();
+  restoreCapturedProfileReauthDraft(captured);
+}
 
 function sourceSlice(source: string, start: string, end: string): string {
   return source.slice(source.indexOf(start), source.indexOf(end));
@@ -87,6 +117,7 @@ afterEach(() => {
   otpHook.adopt.mockReset();
   otpHook.refresh.mockReset();
   otpHookInvocation.enabled = undefined;
+  clearProfileReauthHandoff();
 });
 
 describe('NYAY-8 passwordless mobile authentication RED contracts', () => {
@@ -183,6 +214,70 @@ describe('NYAY-8 passwordless mobile authentication RED contracts', () => {
     expect(challenge).toContain("flow?.status !== 'pending' || flow.purpose !== purpose");
     expect(challenge).toMatch(/await verifyLoginOtp\(code\)[\s\S]*otpFlow\.adopt\(result\)[\s\S]*nav\(resumeRoute \?\? '\/s-07', \{ replace: true \}\)/u);
     expect(challenge).toContain('disabled={busy || code.length !== 6');
+  });
+
+  it('lets a server-proven same-actor reauth intent restore S-10 before the authenticated S-07 fallback', () => {
+    retainPersonalReauthIntent();
+    const authoritativeSession = {
+      status: 200,
+      authenticated: true,
+      actor: { sub: REAUTH_ACTOR_A, roles: ['student'] },
+    } as const;
+    expect(authoritativeSession.status).toBe(200);
+    expect(authoritativeSession.authenticated).toBe(true);
+    expect(authoritativeSession.actor.roles).toContain('student');
+    expect(resolveProfileReauthActor(authoritativeSession.actor.sub)).toBe(true);
+    expect(resolvedProfileReauthResumeRoute()).toBe('/s-10?section=personal');
+
+    const challenge = sourceSlice(
+      authSource,
+      "function V34OtpChallenge({ purpose }",
+      'export function V34ProfileStep1',
+    );
+    const authenticatedFallback = sourceSlice(
+      challenge,
+      "if (session.phase !== 'anonymous')",
+      'if (otpFlow.loadError',
+    );
+    expect(authenticatedFallback).toContain('resolvedProfileReauthResumeRoute()');
+    expect(authenticatedFallback).toContain("?? '/s-07'");
+    expect(authenticatedFallback.indexOf('resolvedProfileReauthResumeRoute()'))
+      .toBeLessThan(authenticatedFallback.indexOf("'/s-07'"));
+  });
+
+  it('keeps anonymous S-05 without a proven pending flow fail-closed to S-03', () => {
+    const challenge = sourceSlice(
+      authSource,
+      "function V34OtpChallenge({ purpose }",
+      'export function V34ProfileStep1',
+    );
+    expect(challenge).toContain(
+      "if (otpFlow.loadError || flow?.status !== 'pending' || flow.purpose !== purpose)",
+    );
+    expect(challenge).toContain('return <Navigate to="/s-03" replace');
+  });
+
+  it('keeps authenticated S-05 without a resolved reauth intent on the S-07 fallback', () => {
+    clearProfileReauthHandoff();
+    expect(resolvedProfileReauthResumeRoute()).toBeNull();
+    const challenge = sourceSlice(
+      authSource,
+      "function V34OtpChallenge({ purpose }",
+      'export function V34ProfileStep1',
+    );
+    const authenticatedFallback = sourceSlice(
+      challenge,
+      "if (session.phase !== 'anonymous')",
+      'if (otpFlow.loadError',
+    );
+    expect(authenticatedFallback).toContain("session.phase === 'authenticated'");
+    expect(authenticatedFallback).toContain("'/s-07'");
+  });
+
+  it('never restores a retained private route after authoritative different-actor reauth', () => {
+    retainPersonalReauthIntent();
+    expect(resolveProfileReauthActor(REAUTH_ACTOR_B)).toBe(false);
+    expect(resolvedProfileReauthResumeRoute()).toBeNull();
   });
 
   it.each([

@@ -937,38 +937,250 @@ async function runThemeMatrix(browser) {
   };
 }
 
+function exactPendingFlowProjection(body, purpose) {
+  const keys = [
+    'attempts_left', 'destination_masked', 'expires_in_seconds',
+    'locked_for_seconds', 'purpose', 'resend_allowed',
+    'resend_in_seconds', 'status',
+  ];
+  return body && typeof body === 'object' && !Array.isArray(body)
+    && Object.keys(body).sort().join(',') === keys.join(',')
+    && body.status === 'pending'
+    && body.purpose === purpose
+    && /^••••••\d{4}$/u.test(body.destination_masked ?? '')
+    && Number.isSafeInteger(body.attempts_left)
+    && body.attempts_left > 0
+    && Number.isSafeInteger(body.expires_in_seconds)
+    && body.expires_in_seconds > 0
+    && Number.isSafeInteger(body.resend_in_seconds)
+    && body.resend_in_seconds >= 0
+    && Number.isSafeInteger(body.locked_for_seconds)
+    && body.locked_for_seconds >= 0
+    && typeof body.resend_allowed === 'boolean';
+}
+
+async function provisionServerPendingFlow(browser, purpose) {
+  const context = await createFreshContext(browser);
+  const start = purpose === 'login'
+    ? await context.request.post(`${WEB}/api/v1/auth/student/login/otp/start`, {
+      data: { mobile: '9000000042' },
+    })
+    : await context.request.post(`${WEB}/api/v1/auth/student/register`, {
+      data: {
+        first_name: 'Design',
+        middle_name: null,
+        last_name: 'Fixture',
+        mobile: '9000000042',
+        dob: '2000-01-01',
+        terms_accepted: true,
+        terms_version: 'dpdp-2023.v1',
+        privacy_notice_acknowledged: true,
+        privacy_notice_version: 'dpdp-2023.v1',
+      },
+    });
+  const stateResponse = await context.request.get(`${WEB}/api/v1/auth/student/otp/state`);
+  const stateBody = stateResponse.ok() ? await stateResponse.json() : null;
+  const cookies = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+  const flowCookies = cookies.filter((cookie) => cookie.name === 'nyayone_otp_flow');
+  const sessionCookies = cookies.filter((cookie) => cookie.name === 'nyayone_session');
+  if (start.status() !== 202
+    || stateResponse.status() !== 200
+    || stateBody?.status !== 'pending'
+    || stateBody?.purpose !== purpose
+    || !exactPendingFlowProjection(stateBody, purpose)
+    || flowCookies.length !== 1
+    || flowCookies[0].httpOnly !== true
+    || flowCookies[0].sameSite !== 'Strict'
+    || flowCookies[0].path !== '/api/v1'
+    || sessionCookies.length !== 0) {
+    await context.close();
+    throw new Error('NYAY18_SERVER_PENDING_FLOW_INVALID');
+  }
+  return { context, startStatus: start.status(), stateStatus: stateResponse.status() };
+}
+
+async function runServerPendingFlowMatrix(browser) {
+  const rows = [];
+  for (const [purpose, route, screenSelector] of [
+    ['login', '/s-05', '[data-screen="S-05"]'],
+    ['signup', '/s-09', '[data-screen="S-09"]'],
+  ]) {
+    const fixture = await provisionServerPendingFlow(browser, purpose);
+    const page = await fixture.context.newPage();
+    let otpStateRequestCount = 0;
+    let sessionRequestCount = 0;
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (request.method() === 'GET'
+        && url.pathname === '/api/v1/auth/student/otp/state') otpStateRequestCount += 1;
+      if (request.method() === 'GET'
+        && url.pathname === '/api/v1/auth/student/session') sessionRequestCount += 1;
+    });
+    await page.goto(`${WEB}${route}`, { waitUntil: 'domcontentloaded' });
+    await page.getByLabel('Six digit code').waitFor({ state: 'visible' });
+    const controls = await page.getByLabel('Six digit code').count();
+    const verifyControls = await page.getByRole('button', {
+      name: 'Verify and continue', exact: true,
+    }).count();
+    const screen = await page.locator(screenSelector).count();
+    const cookies = await fixture.context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+    rows.push({
+      controls,
+      flowCookies: cookies.filter((cookie) => cookie.name === 'nyayone_otp_flow').length,
+      purpose,
+      screen,
+      sessionCookies: cookies.filter((cookie) => cookie.name === 'nyayone_session').length,
+      sessionRequestCount,
+      startStatus: fixture.startStatus,
+      stateStatus: fixture.stateStatus,
+      otpStateRequestCount,
+      verifyControls,
+    });
+    await fixture.context.close();
+  }
+  return {
+    controls: rows.reduce((total, row) => total + row.controls, 0),
+    flowCookies: rows.reduce((total, row) => total + row.flowCookies, 0),
+    flows: rows.length,
+    purposesExact: rows.map((row) => row.purpose).join(',') === 'login,signup',
+    screens: rows.reduce((total, row) => total + row.screen, 0),
+    serverStateRequests: rows.reduce((total, row) => total + row.otpStateRequestCount, 0),
+    sessionCookies: rows.reduce((total, row) => total + row.sessionCookies, 0),
+    sessionRequests: rows.reduce((total, row) => total + row.sessionRequestCount, 0),
+    startResponses: rows.filter((row) => row.startStatus === 202).length,
+    stateResponses: rows.filter((row) => row.stateStatus === 200).length,
+    verifyControls: rows.reduce((total, row) => total + row.verifyControls, 0),
+  };
+}
+
+async function runUnavailableChallengeDenial(page, context) {
+  const before = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+  const stateResponse = await context.request.get(`${WEB}/api/v1/auth/student/otp/state`);
+  const stateBody = stateResponse.status() === 200 ? await stateResponse.json() : null;
+  const unavailableKeys = [
+    'attempts_left', 'destination_masked', 'expires_in_seconds',
+    'locked_for_seconds', 'purpose', 'resend_allowed',
+    'resend_in_seconds', 'status',
+  ];
+  const flowUnavailableProven = stateBody && typeof stateBody === 'object'
+    && !Array.isArray(stateBody)
+    && Object.keys(stateBody).sort().join(',') === unavailableKeys.join(',')
+    && stateBody.status === 'unavailable'
+    && stateBody.purpose === null
+    && stateBody.destination_masked === null
+    && stateBody.attempts_left === null
+    && stateBody.expires_in_seconds === null
+    && stateBody.resend_in_seconds === null
+    && stateBody.locked_for_seconds === null
+    && stateBody.resend_allowed === false;
+  let otpControls = 0;
+  let retiredInlineErrors = 0;
+  let routesDenied = 0;
+  for (const route of ['/s-05', '/s-09']) {
+    await page.goto(`${WEB}${route}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/s-03$/u);
+    await page.locator(S03_SELECTOR).waitFor({ state: 'visible' });
+    otpControls += await page.getByLabel('Six digit code').count();
+    retiredInlineErrors += await page.getByText(
+      'This browser cannot safely change sessions. Check browser privacy support and try again.',
+      { exact: true },
+    ).count();
+    routesDenied += new URL(page.url()).pathname === '/s-03' ? 1 : 0;
+  }
+  const after = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+  const cookieShape = (cookies) => cookies.map((cookie) => ({
+    domain: cookie.domain,
+    httpOnly: cookie.httpOnly,
+    name: cookie.name,
+    path: cookie.path,
+    sameSite: cookie.sameSite,
+    secure: cookie.secure,
+    value: cookie.value,
+  }));
+  return {
+    cookieInventoryUnchanged: JSON.stringify(cookieShape(before)) === JSON.stringify(cookieShape(after)),
+    flowAuthorityAbsent: before.every((cookie) => cookie.name !== 'nyayone_otp_flow')
+      && after.every((cookie) => cookie.name !== 'nyayone_otp_flow'),
+    flowUnavailableProven,
+    otpControlsAbsent: otpControls === 0,
+    retiredInlineErrorAbsent: retiredInlineErrors === 0,
+    routesDenied,
+  };
+}
+
+async function runAnonymousChallengeDenialMatrix(browser) {
+  const context = await createFreshContext(browser);
+  const page = await context.newPage();
+  try {
+    return await runUnavailableChallengeDenial(page, context);
+  } finally {
+    await context.close();
+  }
+}
+
+async function installRuntimeStorageFailure(page, mode) {
+  const applyStorageFailure = (currentMode) => {
+    const legacyKey = 'ls-onboarding-seen';
+    localStorage.setItem(legacyKey, 'nyay18-private-local-value');
+    if (currentMode === 'inaccessible') {
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        get() { throw new DOMException('synthetic storage denial', 'SecurityError'); },
+      });
+      return;
+    }
+    const nativeRemove = Storage.prototype.removeItem;
+    Storage.prototype.removeItem = function removeItem(key) {
+      if (currentMode === 'throw' && String(key) === legacyKey) {
+        throw new DOMException('synthetic removal denial', 'SecurityError');
+      }
+      if (currentMode === 'no_progress' && String(key) === legacyKey) return;
+      return Reflect.apply(nativeRemove, this, [key]);
+    };
+  };
+  await page.context().addInitScript(applyStorageFailure, mode);
+  await page.evaluate(applyStorageFailure, mode);
+}
+
+function internalCookieInventory(cookies) {
+  return cookies.map((cookie) => ({
+    domain: cookie.domain,
+    httpOnly: cookie.httpOnly,
+    name: cookie.name,
+    path: cookie.path,
+    sameSite: cookie.sameSite,
+    secure: cookie.secure,
+    value: cookie.value,
+  })).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function isExactPendingStateResponse(response) {
+  const url = new URL(response.url());
+  return response.request().method() === 'GET'
+    && url.origin === new URL(WEB).origin
+    && url.pathname === '/api/v1/auth/student/otp/state'
+    && url.search === ''
+    && url.hash === '';
+}
+
 async function runFailClosedMatrix(browser) {
   const outcomes = {};
   for (const mode of ['inaccessible', 'throw', 'no_progress', 'unsupported_locks']) {
-    const context = await createFreshContext(browser);
-    await context.addInitScript(({ currentMode }) => {
-      const probe = { cookieOperations: 0 };
-      Object.defineProperty(globalThis, '__nyay18FailClosedProbe', {
-        configurable: false, value: probe,
-      });
-      if (currentMode === 'unsupported_locks') {
+    const fixture = mode === 'unsupported_locks'
+      ? { context: await createFreshContext(browser) }
+      : await provisionServerPendingFlow(browser, 'login');
+    const { context } = fixture;
+    if (mode === 'unsupported_locks') {
+      await context.addInitScript(() => {
+        const probe = { cookieOperations: 0 };
+        Object.defineProperty(globalThis, '__nyay18FailClosedProbe', {
+          configurable: false, value: probe,
+        });
         Object.defineProperty(navigator, 'locks', {
           configurable: true, get: () => undefined,
         });
-        return;
-      }
-      localStorage.setItem('ls-onboarding-seen', 'nyay18-private-local-value');
-      if (currentMode === 'inaccessible') {
-        Object.defineProperty(globalThis, 'localStorage', {
-          configurable: true,
-          get() { throw new DOMException('synthetic storage denial', 'SecurityError'); },
-        });
-        return;
-      }
-      const nativeRemove = Storage.prototype.removeItem;
-      Storage.prototype.removeItem = function removeItem(key) {
-        if (currentMode === 'throw' && String(key) === 'ls-onboarding-seen') {
-          throw new DOMException('synthetic removal denial', 'SecurityError');
-        }
-        if (currentMode === 'no_progress' && String(key) === 'ls-onboarding-seen') return;
-        return Reflect.apply(nativeRemove, this, [key]);
-      };
-    }, { currentMode: mode });
+      });
+    }
     const page = await context.newPage();
     let sessionRequests = 0;
     let cookieOperations = 0;
@@ -981,28 +1193,10 @@ async function runFailClosedMatrix(browser) {
         cookieOperations += 1;
       }
     });
-    await routeCanonicalSession(page, { actor: canonicalStudentActor(700) });
-    if (mode !== 'unsupported_locks') {
-      await page.route('**/api/v1/auth/student/otp/state', async (route) => {
-        await route.fulfill({
-          status: 200, contentType: 'application/json',
-          headers: { 'Cache-Control': 'no-store' },
-          body: JSON.stringify({
-            attempts_left: 5,
-            destination_masked: '••••••0042',
-            expires_in_seconds: 300,
-            locked_for_seconds: 0,
-            purpose: 'login',
-            resend_allowed: false,
-            resend_in_seconds: 30,
-            status: 'pending',
-          }),
-        });
-      });
-    }
-    await page.goto(`${WEB}/s-60`, { waitUntil: 'domcontentloaded' });
-    await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible', timeout: 15_000 });
     if (mode === 'unsupported_locks') {
+      await routeCanonicalSession(page, { actor: canonicalStudentActor(700) });
+      await page.goto(`${WEB}/s-60`, { waitUntil: 'domcontentloaded' });
+      await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible', timeout: 15_000 });
       await page.goto(`${WEB}/s-04`, { waitUntil: 'domcontentloaded' });
       await page.locator('[data-screen="S-04"]').waitFor({ state: 'visible' });
       await page.getByLabel('MOBILE NUMBER').fill('9876543210');
@@ -1014,23 +1208,72 @@ async function runFailClosedMatrix(browser) {
       await rejected.waitFor({ state: 'visible' });
       actionRejected = await rejected.count() === 1 && cookieOperations === 0;
     } else {
+      const pendingStateResponsePromise = page.waitForResponse(isExactPendingStateResponse);
       await page.goto(`${WEB}/s-05`, { waitUntil: 'domcontentloaded' });
+      const pendingStateResponse = await pendingStateResponsePromise;
+      const pendingStateFinishedError = await pendingStateResponse.finished();
+      if (pendingStateResponse.status() !== 200 || pendingStateFinishedError !== null) {
+        throw new Error('NYAY18_PENDING_STATE_READINESS_FAILED');
+      }
       await page.locator('[data-screen="S-05"]').waitFor({ state: 'visible' });
-      await page.getByLabel('Six digit code').fill('123456');
-      actionAttempts += 1;
-      await page.getByRole('button', { name: 'Verify and continue', exact: true }).click();
-      const rejected = page.getByText(
-        'This browser cannot safely change sessions. Check browser privacy support and try again.',
-        { exact: true },
+      const pendingControl = page.getByLabel('Six digit code');
+      await pendingControl.waitFor({ state: 'visible' });
+      const pendingControls = await pendingControl.count();
+      const beforeCookies = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+      const beforeFlowCookies = beforeCookies.filter(
+        (cookie) => cookie.name === 'nyayone_otp_flow',
       );
-      await rejected.waitFor({ state: 'visible' });
-      actionRejected = await rejected.count() === 1 && cookieOperations === 0;
+      const pendingAuthorityProven = pendingControls === 1
+        && beforeFlowCookies.length === 1
+        && beforeFlowCookies[0].httpOnly === true
+        && beforeFlowCookies[0].path === '/api/v1'
+        && beforeFlowCookies[0].sameSite === 'Strict';
+
+      await routeCanonicalSession(page, { actor: canonicalStudentActor(700) });
+      await page.route('**/api/v1/student/profile', async (route) => {
+        await route.fulfill({
+          status: 200, contentType: 'application/json',
+          headers: { 'Cache-Control': 'no-store' },
+          body: JSON.stringify(incompleteProfileProjection()),
+        });
+      });
+      await page.goto(`${WEB}/s-07`, { waitUntil: 'domcontentloaded' });
+      const signOut = page.getByRole('button', { name: 'Sign out', exact: true });
+      await signOut.waitFor({ state: 'visible' });
+      await installRuntimeStorageFailure(page, mode);
+      actionAttempts += 1;
+      await signOut.click();
+      await page.waitForURL(/\/s-03$/u);
+      await page.locator(S03_SELECTOR).waitFor({ state: 'visible' });
+      const safeEntryVisible = await page.locator(S03_SELECTOR).count() === 1;
+      const afterCookies = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
+      const afterFlowCookies = afterCookies.filter(
+        (cookie) => cookie.name === 'nyayone_otp_flow',
+      );
+      const cookieInventoryUnchanged = JSON.stringify(internalCookieInventory(beforeCookies))
+        === JSON.stringify(internalCookieInventory(afterCookies));
+      const flowAuthorityPreserved = beforeFlowCookies.length === 1
+        && afterFlowCookies.length === 1
+        && beforeFlowCookies[0].value === afterFlowCookies[0].value;
+      actionRejected = pendingAuthorityProven
+        && safeEntryVisible
+        && cookieInventoryUnchanged
+        && flowAuthorityPreserved
+        && cookieOperations === 0;
+      outcomes[mode] = {
+        cookieInventoryUnchanged,
+        flowAuthorityPreserved,
+        pendingAuthorityProven,
+        pendingControlsProven: pendingControls === 1,
+        safeEntryVisible,
+      };
     }
     await page.goto(`${WEB}/s-60`, { waitUntil: 'domcontentloaded' });
     await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible', timeout: 15_000 });
     const unavailableVisible = await page.locator(SESSION_UNAVAILABLE).count() === 1;
     const privateMounted = await page.locator(PRIVATE_SCREEN).count() > 0;
     outcomes[mode] = {
+      ...outcomes[mode],
       cookieOperations,
       actionAttempts,
       actionRejected,
@@ -1901,6 +2144,33 @@ async function executeBrowserGate() {
       Object.values(themeMatrix.invalid).every((value) => value === true),
       themeMatrix.invalid);
 
+    failureStage = 'server_pending_flow_matrix';
+    const serverPending = await runServerPendingFlowMatrix(browser);
+    if (serverPending.flows !== 2
+      || serverPending.startResponses !== 2
+      || serverPending.stateResponses !== 2
+      || serverPending.serverStateRequests < 2
+      || serverPending.sessionRequests < 2
+      || serverPending.controls !== 2
+      || serverPending.screens !== 2
+      || serverPending.flowCookies !== 2
+      || serverPending.sessionCookies !== 0
+      || serverPending.verifyControls !== 2
+      || !serverPending.purposesExact) {
+      throw new Error('NYAY18_SERVER_PENDING_FLOW_MATRIX_FAILED');
+    }
+
+    failureStage = 'anonymous_challenge_denial_matrix';
+    const anonymousDenied = await runAnonymousChallengeDenialMatrix(browser);
+    if (!anonymousDenied.cookieInventoryUnchanged
+      || !anonymousDenied.flowAuthorityAbsent
+      || !anonymousDenied.flowUnavailableProven
+      || !anonymousDenied.otpControlsAbsent
+      || !anonymousDenied.retiredInlineErrorAbsent
+      || anonymousDenied.routesDenied !== 2) {
+      throw new Error('NYAY18_ANONYMOUS_CHALLENGE_DENIAL_FAILED');
+    }
+
     failureStage = 'normative_fail_closed_matrix';
     const failClosed = await runFailClosedMatrix(browser);
     const cleanupRows = [
@@ -1913,13 +2183,23 @@ async function executeBrowserGate() {
       const metrics = {
         actionAttempts: outcome.actionAttempts,
         actionRejected: outcome.actionRejected,
+        cookieInventoryUnchanged: outcome.cookieInventoryUnchanged,
         cookieOperations: outcome.cookieOperations,
+        flowAuthorityPreserved: outcome.flowAuthorityPreserved,
         mode,
+        pendingAuthorityProven: outcome.pendingAuthorityProven,
+        pendingControlsProven: outcome.pendingControlsProven,
         privateMounted: outcome.privateMounted,
+        safeEntryVisible: outcome.safeEntryVisible,
         unavailableVisible: outcome.unavailableVisible,
       };
       record(rowId,
         metrics.actionAttempts === 1 && metrics.actionRejected
+          && metrics.cookieInventoryUnchanged
+          && metrics.flowAuthorityPreserved
+          && metrics.pendingAuthorityProven
+          && metrics.pendingControlsProven
+          && metrics.safeEntryVisible
           && metrics.cookieOperations === 0
           && !metrics.privateMounted && metrics.unavailableVisible,
         metrics);
@@ -2125,8 +2405,34 @@ async function executeBrowserGate() {
     });
     record('anonymous_session_canonical',
       anonymous.requestCount >= 1 && anonymous.getRequests === anonymous.requestCount
-        && anonymous.canonicalBodies === anonymous.requestCount && anonymous.otherRequests === 0,
-      anonymous);
+        && anonymous.canonicalBodies === anonymous.requestCount && anonymous.otherRequests === 0
+        && serverPending.flows === 2
+        && serverPending.startResponses === 2
+        && serverPending.stateResponses === 2
+        && serverPending.serverStateRequests >= 2
+        && serverPending.sessionRequests >= 2
+        && serverPending.controls === 2
+        && serverPending.screens === 2
+        && serverPending.flowCookies === 2
+        && serverPending.sessionCookies === 0
+        && serverPending.verifyControls === 2
+        && serverPending.purposesExact
+        && anonymousDenied.cookieInventoryUnchanged
+        && anonymousDenied.flowAuthorityAbsent
+        && anonymousDenied.flowUnavailableProven
+        && anonymousDenied.otpControlsAbsent
+        && anonymousDenied.retiredInlineErrorAbsent
+        && anonymousDenied.routesDenied === 2,
+      {
+        ...anonymous,
+        ...serverPending,
+        denialCookieInventoryUnchanged: anonymousDenied.cookieInventoryUnchanged,
+        denialFlowAuthorityAbsent: anonymousDenied.flowAuthorityAbsent,
+        denialFlowUnavailableProven: anonymousDenied.flowUnavailableProven,
+        denialOtpControlsAbsent: anonymousDenied.otpControlsAbsent,
+        denialRetiredInlineErrorAbsent: anonymousDenied.retiredInlineErrorAbsent,
+        denialRoutesDenied: anonymousDenied.routesDenied,
+      });
 
     const finalGit = gitState();
     const environmentFinal = {
