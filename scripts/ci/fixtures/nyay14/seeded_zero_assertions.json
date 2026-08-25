@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "nyay14-evidence/v1",
+  "claimedVerdict": "PASS",
+  "provenance": {
+    "repository": "rajeevbarnwal/NyayOne",
+    "base": "71bd18534c9fcf3f93c7341bbdb69f4e60792442",
+    "reviewedHead": "1111111111111111111111111111111111111111",
+    "remoteHead": "1111111111111111111111111111111111111111",
+    "prospectiveMerge": "2222222222222222222222222222222222222222",
+    "runtime": {
+      "os": "synthetic-linux",
+      "architecture": "synthetic-x64",
+      "python": "3.12.0",
+      "node": "22.0.0",
+      "chromium": "synthetic-1"
+    }
+  },
+  "assertionGroups": [
+    {
+      "id": "frontend-native",
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "artifactIds": []
+    }
+  ],
+  "rawLogs": [
+    {
+      "id": "backend",
+      "category": "backend",
+      "path": "raw/backend.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "id": "postgres-migration",
+      "category": "postgresql-migration",
+      "path": "raw/postgresql-migration.json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "id": "postgres-concurrency",
+      "category": "postgresql-concurrency",
+      "path": "raw/postgresql-concurrency.json",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "id": "frontend-native",
+      "category": "frontend-native",
+      "path": "raw/frontend-native.json",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "expectedOutcome": {
+    "verdict": "FAIL",
+    "codes": [
+      "MISSING_RAW_LOG",
+      "ZERO_EXECUTED"
+    ],
+    "manifestCreated": false,
+    "archiveCreated": false,
+    "mergeAuthorized": false
+  }
+}

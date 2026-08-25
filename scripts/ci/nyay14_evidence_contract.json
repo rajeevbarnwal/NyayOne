@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "nyay14-evidence/v1",
+  "classifications": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "HEAD_CHANGED",
+    "handoff-only"
+  ],
+  "classificationPrecedence": [
+    "HEAD_CHANGED",
+    "FAIL",
+    "BLOCKED",
+    "handoff-only",
+    "PASS"
+  ],
+  "requiredProvenance": [
+    "repository",
+    "base",
+    "reviewedHead",
+    "remoteHead",
+    "prospectiveMerge",
+    "capturedAt",
+    "runtime"
+  ],
+  "authoritativeInputs": [
+    "repository",
+    "base",
+    "remoteHead",
+    "prospectiveMerge",
+    "approvedVisualMatrix",
+    "protectedRoot"
+  ],
+  "requiredRuntime": [
+    "os",
+    "architecture",
+    "python",
+    "node",
+    "chromium"
+  ],
+  "rawLogCategories": [
+    "backend",
+    "postgresql-migration",
+    "postgresql-concurrency",
+    "frontend-native",
+    "chromium"
+  ],
+  "qualityResultGroups": [
+    "accessibility",
+    "privacy",
+    "credentials",
+    "seededOracle"
+  ],
+  "exactReadbacks": {
+    "exactHead": "remote-head",
+    "exactMerge": "merge-commit"
+  },
+  "manifest": {
+    "algorithm": "SHA-256",
+    "filename": "SHA256SUMS.txt",
+    "exactInventory": true,
+    "selfEntryForbidden": true,
+    "privacyScanRequired": true,
+    "stableSourceSnapshotRequired": true
+  },
+  "packageBinding": {
+    "filename": "VALIDATED_PACKAGE.json",
+    "includedInManifest": true,
+    "includedInArchive": true,
+    "digestRequiredInReport": true
+  },
+  "archive": {
+    "format": "tar.gz",
+    "exactManifestInventory": true,
+    "linksForbidden": true,
+    "nestedArchivesForbidden": true,
+    "singleGzipStreamRequired": true,
+    "embeddedDigestBindingRequired": true,
+    "privacyScanRequired": true,
+    "stableSourceSnapshotRequired": true
+  },
+  "merge": {
+    "mode": "merge",
+    "headPinRequired": true,
+    "postMergeAncestryChecks": 3
+  },
+  "protectedCheckout": {
+    "executionInsideProtectedRootForbidden": true,
+    "beforeAfterSealRequired": true,
+    "mutatingGitOperationsForbidden": true,
+    "inputOutputPathsInsideProtectedRootForbidden": true,
+    "directStructuredReadOnlyOperationsOnly": true
+  },
+  "publication": {
+    "distinctInputAndOutputPathsRequired": true,
+    "existingOutputReplacementForbidden": true,
+    "nonPassLeavesNoGeneratedOutputs": true
+  }
+}

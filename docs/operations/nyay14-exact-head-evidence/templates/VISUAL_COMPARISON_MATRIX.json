@@ -1,0 +1,31 @@
+{
+  "approvedVisualMatrixSha256": "sha256-of-canonical-approvedVisualComparisons",
+  "approvedVisualComparisons": [
+    {
+      "screen": "S-XX",
+      "state": "approved-state",
+      "viewport": {"width": 390, "height": 844},
+      "approvedReference": "design://approved/reference",
+      "testedHead": "1111111111111111111111111111111111111111"
+    }
+  ],
+  "visualComparisons": [
+    {
+      "screen": "S-XX",
+      "state": "approved-state",
+      "viewport": {"width": 390, "height": 844},
+      "approvedReference": "design://approved/reference",
+      "testedHead": "1111111111111111111111111111111111111111",
+      "baselineArtifactId": "visual-baseline",
+      "liveArtifactId": "visual-live",
+      "comparisonArtifactId": "visual-comparison",
+      "executed": 1,
+      "metric": {"value": 0.0, "threshold": 1.0, "unit": "percent"}
+    }
+  ],
+  "evidenceArtifacts": [
+    {"id": "visual-baseline", "path": "visual/baseline.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "visual-live", "path": "visual/live.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "visual-comparison", "path": "visual/comparison.json", "sha256": "replace-with-64-lowercase-hex"}
+  ]
+}
