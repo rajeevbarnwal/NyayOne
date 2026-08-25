@@ -10,9 +10,9 @@ describe('Wave 4 private reporting browser authority contract', () => {
     expect(runner).toContain("process.env.WAVE4_E2E_STUDENT_SESSION_TOKEN");
     expect(runner).toContain('WAVE4_E2E_STUDENT_SESSION_TOKEN with at least 32 characters is required');
     expect(runner).toContain("name: COOKIE, value: STUDENT_SESSION_TOKEN");
-    expect(runner).toContain("path: '/api/v1'");
+    expect(runner).toContain("path: '/'");
     expect(runner).toContain('httpOnly: true');
-    expect(runner).toContain("sameSite: 'Strict'");
+    expect(runner).toContain("sameSite: 'Lax'");
     expect(runner).toContain('validWave4StudentSession(body, ACTOR_A)');
   });
 

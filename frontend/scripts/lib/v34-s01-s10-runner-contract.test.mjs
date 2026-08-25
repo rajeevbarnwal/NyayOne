@@ -23,6 +23,57 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(visualMatrix).toContain('await context.addCookies(authenticatedCookies)');
   });
 
+  it('mounts visual S-05 and S-09 only from real server-issued pending flows', () => {
+    const provision = sourceBetween('const requirePendingFlowCookies', 'try {');
+    const visualMatrix = sourceBetween(
+      'try {',
+      'const context = await browser.newContext({ viewport: { width: 390',
+    );
+
+    expect(provision).toContain("request.post(`${apiBase}/api/v1/auth/student/login/otp/start`");
+    expect(provision).toContain("request.post(`${apiBase}/api/v1/auth/student/register`");
+    expect(provision).toContain("request.get(`${apiBase}/api/v1/auth/student/otp/state`");
+    expect(provision).toContain("stateBody?.status !== 'pending'");
+    expect(provision).toContain('stateBody?.purpose !== purpose');
+    expect(provision).toContain("cookie.name === 'nyayone_otp_flow'");
+    expect(provision).toContain("process.env.V34_VISUAL_SIGNUP_MOBILE ?? '9000000043'");
+    expect(provision).not.toContain('Date.now()');
+    expect(provision).not.toContain("page.route('**/api/v1/auth/student/otp/state'");
+    expect(visualMatrix).toContain('const visualOtpFlowCookies = await provisionVisualOtpFlows()');
+    expect(visualMatrix).toContain("number === 5 ? visualOtpFlowCookies.login");
+    expect(visualMatrix).toContain("number === 9 ? visualOtpFlowCookies.signup");
+    expect(visualMatrix).toContain('await createPendingVisualContext(');
+    expect(visualMatrix).not.toContain("page.route('**/api/v1/auth/student/otp/state'");
+  });
+
+  it('never mixes an authenticated session with the isolated S-05/S-09 pending-flow contexts', () => {
+    const isolatedFactory = sourceBetween(
+      'const createPendingVisualContext',
+      'try {',
+    );
+    const visualMatrix = sourceBetween(
+      'try {',
+      'const context = await browser.newContext({ viewport: { width: 390',
+    );
+
+    expect(isolatedFactory).toContain('await browser.newContext');
+    expect(isolatedFactory).toContain('await isolated.addCookies(flowCookies)');
+    expect(isolatedFactory).toContain("cookie.name === 'nyayone_session'");
+    expect(isolatedFactory).toContain("installedCookies[0]?.name !== 'nyayone_otp_flow'");
+    expect(isolatedFactory).toContain('visual OTP context mixed session and pending-flow authority');
+    expect(isolatedFactory).not.toContain('/api/v1/auth/student/session');
+    expect(isolatedFactory).not.toContain('waitForTimeout');
+    expect(visualMatrix).toContain('await context.addCookies(authenticatedCookies)');
+    expect(visualMatrix).toContain('await createPendingVisualContext(');
+    expect(visualMatrix).toContain('otpStateRequestCount');
+    expect(visualMatrix).toContain("request.method() === 'GET'");
+    expect(visualMatrix).toContain("'/api/v1/auth/student/otp/state'");
+    expect(visualMatrix).toContain("getByLabel('Six digit code').waitFor({ state: 'visible' })");
+    expect(visualMatrix).toContain('otpStateRequestCount < 1');
+    expect(visualMatrix).not.toContain('waitForTimeout');
+    expect(visualMatrix).not.toContain('await context.addCookies(pendingFlowCookies)');
+  });
+
   it('keeps 44px enforcement exact while recognizing only desktop Revision L legal text links', () => {
     const visualMatrix = sourceBetween(
       'try {',
@@ -73,6 +124,38 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(login).not.toContain("getByRole('button', { name: 'Use a one time code' })");
     expect(login).toContain("await page.waitForURL('**/s-05')");
     expect(login).not.toContain("await page.waitForURL('**/s-09')");
+  });
+
+  it('proves Change cancels authority before a fresh S-04 to S-05 to S-07 login', () => {
+    const login = sourceBetween('const loginCalls = []', 'await context.close()');
+
+    expect(login).toContain("page.route('**/api/v1/auth/student/otp/cancel'");
+    expect(login).toContain("route.request().postDataJSON()");
+    expect(login).toContain('await route.fetch()');
+    expect(login).toContain("getByRole('button', { name: 'Change persona', exact: true })");
+    expect(login).toContain("pathWhileCancelResponseDeferred === '/s-05'");
+    expect(login).toContain("cancelRequest?.method === 'POST'");
+    expect(login).toContain("JSON.stringify(cancelRequest?.body) === '{}'");
+    expect(login).toContain("pathAfterCancel === '/s-03'");
+    expect(login).toContain('capturedFlowCookie');
+    expect(login).toContain('cancelledCode');
+    expect(login).toContain('cancelledVerify.status() === 401');
+    expect(login).toContain('await page.waitForFunction(() => {');
+    expect(login).toContain("candidate.textContent?.trim() === 'Resend Code'");
+    expect(login).toContain('button.disabled === false');
+    expect(login).not.toContain('waitForTimeout');
+    expect(login).toContain("await page.waitForURL('**/s-04')");
+    expect(login).toContain("await page.waitForURL('**/s-05')");
+    expect(login).toContain("await page.waitForURL('**/s-07')");
+  });
+
+  it('preserves the exact 137-row inventory while enriching the existing lifecycle row', () => {
+    expect(runner.match(/\brecord\(/gu)).toHaveLength(17);
+    expect(runner).toContain('number <= 10');
+    expect(runner).toContain("for (const theme of ['light', 'dark'])");
+    expect(runner).toContain("{ name: 'mobile', width: 390, height: 844 }");
+    expect(runner).toContain("{ name: 'desktop', width: 1440, height: 900 }");
+    expect(runner).toContain("record('login_otp_server_lifecycle'");
   });
 
   it('samples the exact current S-08 icon tooltip CTA', () => {

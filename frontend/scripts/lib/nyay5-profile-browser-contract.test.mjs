@@ -330,12 +330,14 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(() => readFileSync(CONTRACT, 'utf8')).not.toThrow();
   });
 
-  it('inspects the authenticated cookie at an API path covered by its Path attribute', () => {
+  it('requires the authenticated cookie to be root-scoped and SameSite Lax', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(runner).toContain(
       "context.cookies(`${API}/api/v1/auth/student/session`)",
     );
     expect(runner).not.toContain('context.cookies(API)');
+    expect(runner).toContain("cookie.path === '/' && cookie.sameSite === 'Lax'");
+    expect(runner).not.toContain("cookie.path.startsWith('/api/v1')");
   });
 
   it('runs expired, revoked, deleted, and wrong-role denials through real sessions', () => {

@@ -1354,18 +1354,22 @@ def test_registration_erasure_oracle_rejects_wrong_cardinality(mode):
     assert not _registration_erasure_observation_passes(mutant, mode=mode)
 
 
-def test_cookie_contract_pins_host_only_api_path_strict_http_only_and_secure_parity():
+def test_cookie_contract_pins_exact_named_scopes_http_only_and_secure_parity():
     assert EXPECTED_COOKIE_CONTRACT == {
-        "path": "/api/v1",
-        "same_site": "strict",
+        "auth_path": "/",
+        "auth_same_site": "lax",
+        "flow_path": "/api/v1",
+        "flow_same_site": "strict",
         "http_only": True,
         "secure_parity": True,
         "host_only": True,
     }
     baseline = _oracle_baselines()["logout_expiry"]
     for key, unsafe in (
-        ("path", "/"),
-        ("same_site", "lax"),
+        ("auth_path", "/api/v1"),
+        ("auth_same_site", "strict"),
+        ("flow_path", "/"),
+        ("flow_same_site", "lax"),
         ("http_only", False),
         ("secure_parity", False),
         ("host_only", False),
@@ -1375,11 +1379,13 @@ def test_cookie_contract_pins_host_only_api_path_strict_http_only_and_secure_par
         assert not _logout_expiry_observation_passes(mutant)
 
 
-def _clear_cookie_header(name, *, secure=False):
+def _clear_cookie_header(name, *, secure=False, path=None):
     secure_attribute = "; Secure" if secure else ""
+    path = path or ("/" if name.endswith("session") else "/api/v1")
+    same_site = "lax" if name.endswith("session") and path == "/" else "strict"
     return (
         f'{name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; '
-        "Max-Age=0; Path=/api/v1; SameSite=strict"
+        f"Max-Age=0; Path={path}; SameSite={same_site}"
         f"{secure_attribute}"
     )
 
@@ -1421,8 +1427,10 @@ def test_real_set_cookie_headers_produce_exact_contract_for_both_evaluators():
         headers, names=names, secure=cookie_secure()
     )
     assert contract == EXPECTED_COOKIE_CONTRACT
-    assert type(contract["path"]) is str
-    assert type(contract["same_site"]) is str
+    assert type(contract["auth_path"]) is str
+    assert type(contract["auth_same_site"]) is str
+    assert type(contract["flow_path"]) is str
+    assert type(contract["flow_same_site"]) is str
     assert all(
         type(contract[key]) is bool
         for key in ("http_only", "secure_parity", "host_only")
@@ -1455,46 +1463,70 @@ def test_real_set_cookie_headers_produce_exact_contract_for_both_evaluators():
 @pytest.mark.parametrize(
     "mutate,secure",
     (
-        (lambda rows: [rows[0].replace("/api/v1", "/api/v10"), rows[1]], False),
         (
-            lambda rows: [rows[0].replace("SameSite=strict", "SameSite=Strict"), rows[1]],
+            lambda rows: [rows[0], rows[1], rows[2].replace("/api/v1", "/api/v10")],
             False,
         ),
         (
-            lambda rows: [rows[0].replace("Path=/api/v1", "XPath=/api/v1"), rows[1]],
+            lambda rows: [rows[0].replace("SameSite=lax", "SameSite=Lax"), *rows[1:]],
             False,
         ),
         (
-            lambda rows: [rows[0].replace("HttpOnly", "HttpOnlySuffix"), rows[1]],
+            lambda rows: [rows[0].replace("Path=/", "XPath=/"), *rows[1:]],
+            False,
+        ),
+        (
+            lambda rows: [rows[0].replace("HttpOnly", "HttpOnlySuffix"), *rows[1:]],
             False,
         ),
         (
             lambda rows: [
                 rows[0].replace("Max-Age=0", "X-Max-Age=0"),
-                rows[1],
+                *rows[1:],
             ],
             False,
         ),
         (lambda rows: [*rows, rows[0]], False),
+        (lambda rows: [rows[0], rows[2]], False),
         (
-            lambda rows: [f"{rows[0]}; Path=/api/v1", rows[1]],
+            lambda rows: [
+                rows[0],
+                rows[1].replace("Path=/api/v1", "Path=/legacy"),
+                rows[2],
+            ],
+            False,
+        ),
+        (
+            lambda rows: [
+                rows[0],
+                rows[1].replace("SameSite=strict", "SameSite=lax"),
+                rows[2],
+            ],
+            False,
+        ),
+        (
+            lambda rows: [f"{rows[0]}; Path=/", *rows[1:]],
             False,
         ),
         (lambda rows: rows[:1], False),
-        (lambda rows: [f"{rows[0]}; Domain=example.invalid", rows[1]], False),
-        (lambda rows: [f"{rows[0]}; Secure", rows[1]], False),
-        (lambda rows: [f"{rows[0]}; Secure=false", rows[1]], False),
-        (lambda rows: [f"{rows[0]}; Secure=0", rows[1]], False),
-        (lambda rows: [f"{rows[0]}; Secure=", rows[1]], False),
+        (lambda rows: [f"{rows[0]}; Domain=example.invalid", *rows[1:]], False),
+        (lambda rows: [f"{rows[0]}; Secure", *rows[1:]], False),
+        (lambda rows: [f"{rows[0]}; Secure=false", *rows[1:]], False),
+        (lambda rows: [f"{rows[0]}; Secure=0", *rows[1:]], False),
+        (lambda rows: [f"{rows[0]}; Secure=", *rows[1:]], False),
         (
-            lambda rows: [rows[0].replace("; Secure", "; VerySecure"), rows[1]],
+            lambda rows: [rows[0].replace("; Secure", "; VerySecure"), *rows[1:]],
             True,
         ),
     ),
 )
 def test_cookie_parser_rejects_attribute_and_singleton_mutants(mutate, secure):
     names = ("auth_session", "otp_flow")
-    headers = [_clear_cookie_header(name, secure=secure) for name in names]
+    headers = [
+        _clear_cookie_header("auth_session", secure=secure, path="/"),
+        _clear_cookie_header("auth_session", secure=secure, path="/api/v1"),
+        _clear_cookie_header("otp_flow", secure=secure),
+    ]
     contract, cleared = gate._cookie_clear_contract(
         mutate(headers), names=names, secure=secure
     )
@@ -1508,8 +1540,10 @@ def test_cookie_evaluators_require_exact_contract_keys_and_types():
     ):
         baseline = _oracle_baselines()[section]
         for key, unsafe in (
-            ("path", True),
-            ("same_site", True),
+            ("auth_path", True),
+            ("auth_same_site", True),
+            ("flow_path", True),
+            ("flow_same_site", True),
             ("http_only", 1),
             ("secure_parity", 1),
             ("host_only", 1),
@@ -1518,7 +1552,7 @@ def test_cookie_evaluators_require_exact_contract_keys_and_types():
             mutant["cookie_contract"][key] = unsafe
             assert not evaluator(mutant)
         missing = deepcopy(baseline)
-        missing["cookie_contract"].pop("path")
+        missing["cookie_contract"].pop("auth_path")
         extra = deepcopy(baseline)
         extra["cookie_contract"]["unexpected"] = True
         assert not evaluator(missing)

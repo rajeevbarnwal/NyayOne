@@ -121,26 +121,75 @@ const validRows = () => NYAY19_ASSERTION_INVENTORY.map((name) => ({
   pass: true,
 }));
 
+const cookiePolicy = (name, scope = 'current') => name === SESSION_COOKIE
+  ? (scope === 'legacy'
+    ? { path: '/api/v1', sameSite: 'Strict' }
+    : { path: '/', sameSite: 'Lax' })
+  : { path: '/api/v1', sameSite: 'Strict' };
+
 const validCookie = (name, overrides = {}) => ({
   name,
   value: OPAQUE,
   domain: '127.0.0.1',
-  path: '/api/v1',
+  path: cookiePolicy(name).path,
   httpOnly: true,
   secure: false,
-  sameSite: 'Strict',
+  sameSite: cookiePolicy(name).sameSite,
   ...overrides,
 });
 
-const retirement = (name, suffix = '') => ({
-  name: 'Set-Cookie',
-  value: `${name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Max-Age=0; Path=/api/v1; SameSite=strict${suffix}`,
+const retirement = (name, suffix = '', scope = 'current') => {
+  const policy = cookiePolicy(name, scope);
+  return {
+    name: 'Set-Cookie',
+    value: `${name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Max-Age=0; Path=${policy.path}; SameSite=${policy.sameSite.toLowerCase()}${suffix}`,
+  };
+};
+
+const verifyTransition = () => ({
+  headers: [
+    retirement(SESSION_COOKIE, '', 'legacy'),
+    issuance(SESSION_COOKIE, 20),
+    retirement(FLOW_COOKIE),
+  ],
+  expected: [
+    { name: SESSION_COOKIE, action: 'retire', scope: 'legacy' },
+    { name: SESSION_COOKIE, action: 'issue', maxAge: 20 },
+    { name: FLOW_COOKIE, action: 'retire' },
+  ],
 });
 
-const issuance = (name, maxAge, suffix = '') => ({
-  name: 'Set-Cookie',
-  value: `${name}=${OPAQUE}; HttpOnly; Max-Age=${maxAge}; Path=/api/v1; SameSite=strict${suffix}`,
+const authOnlyRetirement = () => ({
+  headers: [
+    retirement(SESSION_COOKIE),
+    retirement(SESSION_COOKIE, '', 'legacy'),
+  ],
+  expected: [
+    { name: SESSION_COOKIE },
+    { name: SESSION_COOKIE, scope: 'legacy' },
+  ],
 });
+
+const completeRetirement = () => ({
+  headers: [
+    retirement(SESSION_COOKIE),
+    retirement(SESSION_COOKIE, '', 'legacy'),
+    retirement(FLOW_COOKIE),
+  ],
+  expected: [
+    { name: SESSION_COOKIE },
+    { name: SESSION_COOKIE, scope: 'legacy' },
+    { name: FLOW_COOKIE },
+  ],
+});
+
+const issuance = (name, maxAge, suffix = '') => {
+  const policy = cookiePolicy(name);
+  return {
+    name: 'Set-Cookie',
+    value: `${name}=${OPAQUE}; HttpOnly; Max-Age=${maxAge}; Path=${policy.path}; SameSite=${policy.sameSite.toLowerCase()}${suffix}`,
+  };
+};
 
 const contextBefore = () => ({
   managedExpectedCount: 15,
@@ -209,6 +258,42 @@ function assertRunnerWiring(source) {
   if (/getByRole\(['"]button['"], \{ name: ['"]Use a one time code['"] \}\)\.click\(\)/u.test(source)) {
     throw new Error('NYAY19_RUNNER_OBSOLETE_LOGIN_MODE_TOGGLE');
   }
+  const exactDualPathDescriptors = `const ROOT_SESSION_RETIREMENT = Object.freeze({
+  name: SESSION_COOKIE, action: 'retire',
+});
+const LEGACY_SESSION_RETIREMENT = Object.freeze({
+  name: SESSION_COOKIE, action: 'retire', scope: 'legacy',
+});
+const FLOW_RETIREMENT = Object.freeze({
+  name: FLOW_COOKIE, action: 'retire',
+});
+const AUTH_ONLY_SESSION_RETIREMENTS = Object.freeze([
+  ROOT_SESSION_RETIREMENT,
+  LEGACY_SESSION_RETIREMENT,
+]);
+const AUTH_AND_FLOW_RETIREMENTS = Object.freeze([
+  ROOT_SESSION_RETIREMENT,
+  LEGACY_SESSION_RETIREMENT,
+  FLOW_RETIREMENT,
+]);`;
+  if (!source.includes(exactDualPathDescriptors)) {
+    throw new Error('NYAY19_RUNNER_DUAL_PATH_COOKIE_DESCRIPTORS_MISSING');
+  }
+  if (!/const loginCookieTransition = inspectCookieTransitionHeaders\([\s\S]*?\[\s*LEGACY_SESSION_RETIREMENT,\s*\{ name: SESSION_COOKIE, action: ['"]issue['"], maxAge: SESSION_TTL_SECONDS \},\s*FLOW_RETIREMENT,\s*\]/u.test(source)) {
+    throw new Error('NYAY19_RUNNER_VERIFY_COOKIE_INVENTORY_MISMATCH');
+  }
+  const authOnlyRetirementUses = source.match(
+    /inspectCookieRetirementHeaders\([\s\S]{0,160}?AUTH_ONLY_SESSION_RETIREMENTS,/gu,
+  ) ?? [];
+  if (authOnlyRetirementUses.length !== 2) {
+    throw new Error('NYAY19_RUNNER_AUTH_ONLY_RETIREMENT_INVENTORY_MISMATCH');
+  }
+  const authAndFlowRetirementUses = source.match(
+    /inspectCookieRetirementHeaders\([\s\S]{0,160}?AUTH_AND_FLOW_RETIREMENTS,/gu,
+  ) ?? [];
+  if (authAndFlowRetirementUses.length !== 2) {
+    throw new Error('NYAY19_RUNNER_AUTH_AND_FLOW_RETIREMENT_INVENTORY_MISMATCH');
+  }
   if (/(?:'[^'\n]*|"[^"\n]*)\bbearer[ \t]+[-A-Za-z0-9._~+/=]+/iu.test(source)) {
     throw new Error('NYAY19_RUNNER_BEARER_LIKE_EVIDENCE_PROSE');
   }
@@ -257,7 +342,7 @@ function assertRunnerWiring(source) {
     /const startCookieTransition = inspectCookieTransitionHeaders\([\s\S]*maxAge: OTP_FLOW_TTL_SECONDS/,
     /const loginCookieTransition = inspectCookieTransitionHeaders\(/,
     /\{ name: SESSION_COOKIE, action: ['"]issue['"], maxAge: SESSION_TTL_SECONDS \}/,
-    /\{ name: FLOW_COOKIE, action: ['"]retire['"] \}/,
+    /\[\s*LEGACY_SESSION_RETIREMENT,\s*\{ name: SESSION_COOKIE, action: ['"]issue['"], maxAge: SESSION_TTL_SECONDS \},\s*FLOW_RETIREMENT,\s*\]/,
     /const recoveryForLogout = await startRecoveryFlowForLogout\(loginB\.page, mobile\);\s*await latestOtp\(mobile\);/,
     /recoveryForLogout\.startCookieTransitionExact/,
     /const sessionCookieB = cookiesBeforeLogout\.find\(\(cookie\) => cookie\.name === SESSION_COOKIE\);\s*const rawCookieB = sessionCookieB\?\.value \?\? '';/,
@@ -352,7 +437,7 @@ describe('NYAY-19 browser runner exact contract', () => {
   it('pins all frozen gate cardinalities independently', () => {
     expect(NYAY19_ASSERTION_INVENTORY).toHaveLength(18);
     expect(NYAY19_MUTATION_TRACE).toHaveLength(13);
-    expect(NYAY19_SEEDED_MUTANT_INVENTORY).toHaveLength(78);
+    expect(NYAY19_SEEDED_MUTANT_INVENTORY).toHaveLength(82);
   });
 
   it('pins stable abort stages and exception classes', () => {
@@ -693,10 +778,10 @@ describe('NYAY-19 browser runner exact contract', () => {
     ['cookie-duplicate-cookie', [[validCookie(SESSION_COOKIE), validCookie(SESSION_COOKIE)]]],
     ['cookie-domain-cookie', [[validCookie(SESSION_COOKIE, { domain: '.127.0.0.1' })]]],
     ['cookie-wrong-attributes', [
-      [validCookie(SESSION_COOKIE, { path: '/' })],
+      [validCookie(SESSION_COOKIE, { path: '/api/v1' })],
       [validCookie(SESSION_COOKIE, { httpOnly: false })],
       [validCookie(SESSION_COOKIE, { secure: true })],
-      [validCookie(SESSION_COOKIE, { sameSite: 'Lax' })],
+      [validCookie(SESSION_COOKIE, { sameSite: 'Strict' })],
       [validCookie(SESSION_COOKIE, { value: 'short' })],
     ]],
   ];
@@ -706,61 +791,90 @@ describe('NYAY-19 browser runner exact contract', () => {
     }
   });
 
-  it('accepts an ordered exact login issuance and flow retirement transition', () => {
-    expect(inspectCookieTransitionHeaders([
-      issuance(SESSION_COOKIE, 20),
-      retirement(FLOW_COOKIE),
-    ], [
-      { name: SESSION_COOKIE, action: 'issue', maxAge: 20 },
-      { name: FLOW_COOKIE, action: 'retire' },
-    ], API).pass).toBe(true);
+  it('accepts the exact legacy retirement, root issuance and flow retirement verify transition', () => {
+    const transition = verifyTransition();
+    expect(inspectCookieTransitionHeaders(
+      transition.headers,
+      transition.expected,
+      API,
+    ).pass).toBe(true);
   });
 
   const issuanceMutants = [
     ['issuance-domain-attribute', [[
+      retirement(SESSION_COOKIE, '', 'legacy'),
       issuance(SESSION_COOKIE, 20, '; Domain=127.0.0.1'),
       retirement(FLOW_COOKIE),
     ]]],
     ['issuance-wrong-max-age', [[
+      retirement(SESSION_COOKIE, '', 'legacy'),
       issuance(SESSION_COOKIE, 21),
       retirement(FLOW_COOKIE),
     ]]],
-    ['issuance-missing-flow-retirement', [[issuance(SESSION_COOKIE, 20)]]],
+    ['issuance-missing-flow-retirement', [[
+      retirement(SESSION_COOKIE, '', 'legacy'),
+      issuance(SESSION_COOKIE, 20),
+    ]]],
     ['issuance-empty-value', [[
+      retirement(SESSION_COOKIE, '', 'legacy'),
       { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace(`=${OPAQUE}`, '=""') },
       retirement(FLOW_COOKIE),
     ]]],
     ['issuance-wrong-attributes', [
       [
-        { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace('Path=/api/v1', 'Path=/') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace('Path=/', 'Path=/api/v1') },
         retirement(FLOW_COOKIE),
       ],
       [
+        retirement(SESSION_COOKIE, '', 'legacy'),
         { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace('; HttpOnly', '') },
         retirement(FLOW_COOKIE),
       ],
       [
-        { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace('SameSite=strict', 'SameSite=Lax') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        { ...issuance(SESSION_COOKIE, 20), value: issuance(SESSION_COOKIE, 20).value.replace('SameSite=lax', 'SameSite=strict') },
         retirement(FLOW_COOKIE),
       ],
-      [issuance(SESSION_COOKIE, 20, '; Secure'), retirement(FLOW_COOKIE)],
+      [
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        issuance(SESSION_COOKIE, 20, '; Secure'),
+        retirement(FLOW_COOKIE),
+      ],
     ]],
     ['issuance-duplicate-attribute', [[
-      issuance(SESSION_COOKIE, 20, '; Path=/api/v1'),
+      retirement(SESSION_COOKIE, '', 'legacy'),
+      issuance(SESSION_COOKIE, 20, '; Path=/'),
       retirement(FLOW_COOKIE),
     ]]],
     ['issuance-wrong-order-cardinality', [
-      [retirement(FLOW_COOKIE), issuance(SESSION_COOKIE, 20)],
-      [issuance(SESSION_COOKIE, 20), retirement(FLOW_COOKIE), retirement('extra')],
+      [
+        retirement(FLOW_COOKIE),
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        issuance(SESSION_COOKIE, 20),
+      ],
+      [
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        issuance(SESSION_COOKIE, 20),
+        retirement(FLOW_COOKIE),
+        retirement('extra'),
+      ],
     ]],
   ];
   it.each(issuanceMutants)('kills seeded mutant %s', (_name, variants) => {
+    const { expected } = verifyTransition();
     for (const headers of variants) {
-      expect(inspectCookieTransitionHeaders(headers, [
-        { name: SESSION_COOKIE, action: 'issue', maxAge: 20 },
-        { name: FLOW_COOKIE, action: 'retire' },
-      ], API).pass).toBe(false);
+      expect(inspectCookieTransitionHeaders(headers, expected, API).pass).toBe(false);
     }
+  });
+
+  it('accepts exact root then legacy auth-only retirement for stale and rotated sessions', () => {
+    const transition = authOnlyRetirement();
+    expect(inspectCookieRetirementHeaders(
+      transition.headers,
+      transition.expected,
+      API,
+    ).pass).toBe(true);
   });
 
   it('accepts one exact host-only flow issuance', () => {
@@ -792,70 +906,117 @@ describe('NYAY-19 browser runner exact contract', () => {
     }
   });
 
-  it('accepts ordered exact host-only retirement headers', () => {
-    const inspection = inspectCookieRetirementHeaders([
-      retirement(SESSION_COOKIE),
-      retirement(FLOW_COOKIE),
-    ], [SESSION_COOKIE, FLOW_COOKIE], API);
+  it('accepts ordered exact root, legacy and flow retirement headers', () => {
+    const transition = completeRetirement();
+    const inspection = inspectCookieRetirementHeaders(
+      transition.headers,
+      transition.expected,
+      API,
+    );
     expect(inspection.pass).toBe(true);
-    expect(inspection.components).toHaveLength(2);
+    expect(inspection.components).toHaveLength(3);
     expect(inspection.components.every((component) => component.pass)).toBe(true);
     expect(scanNyay19Evidence(inspection)).toBe(true);
   });
 
   const retirementMutants = [
-    ['retirement-missing-header', [[retirement(SESSION_COOKIE)]]],
-    ['retirement-extra-header', [[
-      retirement(SESSION_COOKIE), retirement(FLOW_COOKIE), retirement('extra'),
+    ['retirement-missing-header', [[
+      retirement(SESSION_COOKIE), retirement(SESSION_COOKIE, '', 'legacy'),
     ]]],
-    ['retirement-reordered-header', [[retirement(FLOW_COOKIE), retirement(SESSION_COOKIE)]]],
+    ['retirement-extra-header', [[
+      retirement(SESSION_COOKIE), retirement(SESSION_COOKIE, '', 'legacy'),
+      retirement(FLOW_COOKIE), retirement('extra'),
+    ]]],
+    ['retirement-reordered-header', [[
+      retirement(FLOW_COOKIE), retirement(SESSION_COOKIE),
+      retirement(SESSION_COOKIE, '', 'legacy'),
+    ]]],
     ['retirement-nonempty-value', [[
       { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('=""', '=planted') },
+      retirement(SESSION_COOKIE, '', 'legacy'),
       retirement(FLOW_COOKIE),
     ]]],
     ['retirement-domain-attribute', [[
-      retirement(SESSION_COOKIE, '; Domain=127.0.0.1'), retirement(FLOW_COOKIE),
+      retirement(SESSION_COOKIE, '; Domain=127.0.0.1'),
+      retirement(SESSION_COOKIE, '', 'legacy'), retirement(FLOW_COOKIE),
     ]]],
     ['retirement-wrong-attributes', [
       [
-        { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('Path=/api/v1', 'Path=/') },
+        { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('Path=/', 'Path=/api/v1') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
       [
         { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('; HttpOnly', '') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
       [
-        { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('SameSite=strict', 'SameSite=Lax') },
+        { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('SameSite=lax', 'SameSite=strict') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
-      [retirement(SESSION_COOKIE, '; Secure'), retirement(FLOW_COOKIE)],
+      [
+        retirement(SESSION_COOKIE, '; Secure'), retirement(SESSION_COOKIE, '', 'legacy'),
+        retirement(FLOW_COOKIE),
+      ],
     ]],
     ['retirement-invalid-max-age-or-expiry', [
       [
         { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('; Max-Age=0', '') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
       [
         { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('Thu, 01 Jan 1970 00:00:00 GMT', 'invalid') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
       [
         { ...retirement(SESSION_COOKIE), value: retirement(SESSION_COOKIE).value.replace('Thu, 01 Jan 1970 00:00:00 GMT', 'Thu, 01 Jan 2099 00:00:00 GMT') },
+        retirement(SESSION_COOKIE, '', 'legacy'),
         retirement(FLOW_COOKIE),
       ],
     ]],
     ['retirement-duplicate-attribute', [[
-      retirement(SESSION_COOKIE, '; Path=/api/v1'), retirement(FLOW_COOKIE),
+      retirement(SESSION_COOKIE, '; Path=/'), retirement(SESSION_COOKIE, '', 'legacy'),
+      retirement(FLOW_COOKIE),
     ]]],
   ];
   it.each(retirementMutants)('kills seeded mutant %s', (_name, variants) => {
+    const { expected } = completeRetirement();
     for (const headers of variants) {
-      expect(inspectCookieRetirementHeaders(
-        headers,
-        [SESSION_COOKIE, FLOW_COOKIE],
-        API,
-      ).pass).toBe(false);
+      expect(inspectCookieRetirementHeaders(headers, expected, API).pass).toBe(false);
+    }
+  });
+
+  const legacyRetirementMutants = [
+    ['legacy-retirement-missing', (transition) => {
+      transition.headers.splice(1, 1);
+    }],
+    ['legacy-retirement-wrong-policy', (transition) => {
+      transition.headers[1] = retirement(SESSION_COOKIE);
+    }],
+    ['legacy-retirement-duplicate', (transition) => {
+      transition.headers.splice(1, 0, retirement(SESSION_COOKIE, '', 'legacy'));
+    }],
+    ['legacy-retirement-reordered', (transition) => {
+      [transition.headers[0], transition.headers[1]] = [
+        transition.headers[1], transition.headers[0],
+      ];
+    }],
+  ];
+  it.each(legacyRetirementMutants)('kills seeded mutant %s in every raw inventory', (
+    _name,
+    mutate,
+  ) => {
+    for (const makeTransition of [verifyTransition, authOnlyRetirement, completeRetirement]) {
+      const transition = makeTransition();
+      mutate(transition);
+      const inspection = transition.expected[0]?.action
+        ? inspectCookieTransitionHeaders(transition.headers, transition.expected, API)
+        : inspectCookieRetirementHeaders(transition.headers, transition.expected, API);
+      expect(inspection.pass).toBe(false);
     }
   });
 
@@ -1340,12 +1501,13 @@ describe('NYAY-19 browser runner exact contract', () => {
       ...issuanceMutants,
       ...flowIssuanceMutants,
       ...retirementMutants,
+      ...legacyRetirementMutants,
       ...contextMutants,
       ...evidenceMutants,
       ...advancedMutants,
     ].map(([name]) => name);
     expect(covered).toEqual(NYAY19_SEEDED_MUTANT_INVENTORY);
     expect(new Set(covered).size).toBe(covered.length);
-    expect(covered).toHaveLength(78);
+    expect(covered).toHaveLength(82);
   });
 });

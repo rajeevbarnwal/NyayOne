@@ -238,10 +238,10 @@ async function denialContext(browser, token) {
     name: 'nyayone_session',
     value: token,
     domain: new URL(API).hostname,
-    path: '/api/v1',
+    path: '/',
     httpOnly: true,
     secure: new URL(API).protocol === 'https:',
-    sameSite: 'Strict',
+    sameSite: 'Lax',
   }]);
   return context;
 }
@@ -390,8 +390,8 @@ async function loginStudent(context, mobile) {
   );
   const startedBody = started.ok() ? await started.json() : null;
   const verifiedBody = verified.ok() ? await verified.json() : null;
-  // Cookie Path is /api/v1. Query a covered URL: filtering at the bare origin
-  // would correctly omit that cookie and create a false negative in the gate.
+  // The authenticated session is origin-wide under NYAY-8. Query the exact API
+  // probe and still require the cookie's root/Lax attributes independently.
   const cookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const session = await context.request.get(`${API}/api/v1/auth/student/session`);
   const body = session.ok() ? await session.json() : null;
@@ -399,7 +399,7 @@ async function loginStudent(context, mobile) {
   if (body?.actor?.sub) rememberPrivate(body.actor.sub);
   if (body?.actor?.student_profile_id) rememberPrivate(body.actor.student_profile_id);
   const cookieExact = cookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   let loginFailure = null;
   if (started.status() !== 202) loginFailure = 'NYAY5_LOGIN_START_FAILED';
@@ -759,7 +759,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const signupLanding = new URL(page.url()).pathname;
   const signupCookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const signupCookieExact = signupCookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   signupCookies.forEach((cookie) => rememberPrivate(cookie.value));
 
@@ -801,7 +801,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const loginLanding = new URL(page.url()).pathname;
   const loginCookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const loginCookieExact = loginCookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   loginCookies.forEach((cookie) => rememberPrivate(cookie.value));
 

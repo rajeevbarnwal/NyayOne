@@ -108,6 +108,10 @@ export const NYAY19_SEEDED_MUTANT_INVENTORY = Object.freeze([
   'retirement-wrong-attributes',
   'retirement-invalid-max-age-or-expiry',
   'retirement-duplicate-attribute',
+  'legacy-retirement-missing',
+  'legacy-retirement-wrong-policy',
+  'legacy-retirement-duplicate',
+  'legacy-retirement-reordered',
   'context-browser-backed-actor-registry',
   'context-unseeded-memory',
   'context-retained-storage',
@@ -531,6 +535,42 @@ function isLocalHttp(url) {
   }
 }
 
+function authorityCookiePolicy(name, scope = 'current') {
+  if (name === 'nyayone_session' && scope === 'current') {
+    return { path: '/', sameSite: 'Lax' };
+  }
+  if (name === 'nyayone_session' && scope === 'legacy') {
+    return { path: '/api/v1', sameSite: 'Strict' };
+  }
+  if (name === 'nyayone_otp_flow' && scope === 'current') {
+    return { path: '/api/v1', sameSite: 'Strict' };
+  }
+  return null;
+}
+
+function transitionDescriptorPolicy(descriptor) {
+  if (!descriptor || Array.isArray(descriptor) || typeof descriptor !== 'object') return null;
+  const allowedKeys = descriptor.action === 'issue'
+    ? new Set(['action', 'maxAge', 'name', 'scope'])
+    : new Set(['action', 'name', 'scope']);
+  if (!Object.keys(descriptor).every((key) => allowedKeys.has(key))) return null;
+  if (!['issue', 'retire'].includes(descriptor.action)) return null;
+  if (descriptor.action === 'retire' && Object.hasOwn(descriptor, 'maxAge')) return null;
+  return authorityCookiePolicy(descriptor.name, descriptor.scope ?? 'current');
+}
+
+function retirementDescriptor(value) {
+  if (typeof value === 'string') {
+    return { name: value, policy: authorityCookiePolicy(value) };
+  }
+  if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+  if (!Object.keys(value).every((key) => ['name', 'scope'].includes(key))) return null;
+  return {
+    name: value.name,
+    policy: authorityCookiePolicy(value.name, value.scope ?? 'current'),
+  };
+}
+
 export function inspectAuthorityCookieInventory(cookies, expectedNames, apiBaseUrl) {
   let host = null;
   try { host = new URL(apiBaseUrl).hostname; } catch { /* fail closed below */ }
@@ -546,18 +586,22 @@ export function inspectAuthorityCookieInventory(cookies, expectedNames, apiBaseU
     && names.length === expectedNames.length
     && expectedCounts.size === actualCounts.size
     && [...expectedCounts].every(([name, count]) => actualCounts.get(name) === count);
-  const attributesExact = exactNames && cookies.every((cookie) => (
-    cookie
-    && cookie.domain === host
-    && !cookie.domain.startsWith('.')
-    && cookie.path === '/api/v1'
-    && cookie.httpOnly === true
-    && cookie.secure === expectedSecure
-    && cookie.sameSite === 'Strict'
-    && typeof cookie.value === 'string'
-    && cookie.value.length >= 32
-    && !/^[-\da-f]{36}$/iu.test(cookie.value)
-  ));
+  const attributesExact = exactNames && cookies.every((cookie) => {
+    const policy = authorityCookiePolicy(cookie?.name);
+    return Boolean(
+      cookie
+      && policy
+      && cookie.domain === host
+      && !cookie.domain.startsWith('.')
+      && cookie.path === policy.path
+      && cookie.httpOnly === true
+      && cookie.secure === expectedSecure
+      && cookie.sameSite === policy.sameSite
+      && typeof cookie.value === 'string'
+      && cookie.value.length >= 32
+      && !/^[-\da-f]{36}$/iu.test(cookie.value)
+    );
+  });
   return {
     expectedCount: Array.isArray(expectedNames) ? expectedNames.length : 0,
     total: Array.isArray(cookies) ? cookies.length : 0,
@@ -586,7 +630,8 @@ function parseSetCookie(raw) {
   return { name, rawValue, attributes };
 }
 
-function inspectRetirement(cookie, expectedSecure) {
+function inspectRetirement(cookie, expectedSecure, expectedPolicy = null) {
+  const policy = expectedPolicy;
   const allowedAttributes = new Set([
     'expires', 'httponly', 'max-age', 'path', 'samesite', ...(expectedSecure ? ['secure'] : []),
   ]);
@@ -598,11 +643,13 @@ function inspectRetirement(cookie, expectedSecure) {
     attributeCardinalityExact: cookie?.attributes?.size === allowedAttributes.size,
     onlyExpectedAttributes: Boolean(cookie)
       && [...cookie.attributes.keys()].every((key) => allowedAttributes.has(key)),
-    pathExact: cookie?.attributes?.get('path') === '/api/v1',
+    policyKnown: policy !== null,
+    pathExact: policy !== null && cookie?.attributes?.get('path') === policy.path,
     httpOnlyExact: cookie?.attributes?.get('httponly') === true,
     maxAgeZero: cookie?.attributes?.get('max-age') === '0',
-    sameSiteStrict: typeof cookie?.attributes?.get('samesite') === 'string'
-      && cookie.attributes.get('samesite').toLowerCase() === 'strict',
+    sameSiteExact: policy !== null
+      && typeof cookie?.attributes?.get('samesite') === 'string'
+      && cookie.attributes.get('samesite').toLowerCase() === policy.sameSite.toLowerCase(),
     expiryParseable: Number.isFinite(expiryTime),
     expiryNotFuture: Number.isFinite(expiryTime)
       && expiryTime <= Date.now() + (5 * 60 * 1_000),
@@ -617,8 +664,10 @@ function inspectRetirement(cookie, expectedSecure) {
   };
 }
 
-function exactIssuance(cookie, expectedSecure, expectedMaxAge) {
+function exactIssuance(cookie, expectedSecure, expectedMaxAge, expectedPolicy) {
   if (!cookie || !Number.isSafeInteger(expectedMaxAge) || expectedMaxAge <= 0) return false;
+  const policy = expectedPolicy;
+  if (!policy) return false;
   const allowedAttributes = new Set([
     'httponly', 'max-age', 'path', 'samesite', ...(expectedSecure ? ['secure'] : []),
   ]);
@@ -628,11 +677,11 @@ function exactIssuance(cookie, expectedSecure, expectedMaxAge) {
     && !/^[-\da-f]{36}$/iu.test(cookie.rawValue)
     && cookie.attributes.size === allowedAttributes.size
     && [...cookie.attributes.keys()].every((key) => allowedAttributes.has(key))
-    && cookie.attributes.get('path') === '/api/v1'
+    && cookie.attributes.get('path') === policy.path
     && cookie.attributes.get('httponly') === true
     && cookie.attributes.get('max-age') === String(expectedMaxAge)
     && typeof cookie.attributes.get('samesite') === 'string'
-    && cookie.attributes.get('samesite').toLowerCase() === 'strict'
+    && cookie.attributes.get('samesite').toLowerCase() === policy.sameSite.toLowerCase()
     && (expectedSecure
       ? cookie.attributes.get('secure') === true
       : !cookie.attributes.has('secure'))
@@ -650,11 +699,12 @@ export function inspectCookieTransitionHeaders(headers, expected, apiBaseUrl) {
     && parsed.length === expected.length
     && parsed.every((cookie, index) => {
       const descriptor = expected[index];
-      if (!descriptor || cookie?.name !== descriptor.name) return false;
+      const policy = transitionDescriptorPolicy(descriptor);
+      if (!policy || cookie?.name !== descriptor.name) return false;
       if (descriptor.action === 'issue') {
-        return exactIssuance(cookie, expectedSecure, descriptor.maxAge);
+        return exactIssuance(cookie, expectedSecure, descriptor.maxAge, policy);
       }
-      return descriptor.action === 'retire' && inspectRetirement(cookie, expectedSecure).pass;
+      return inspectRetirement(cookie, expectedSecure, policy).pass;
     });
   return {
     expectedCount: Array.isArray(expected) ? expected.length : 0,
@@ -670,12 +720,24 @@ export function inspectCookieRetirementHeaders(headers, expectedNames, apiBaseUr
     ? headers.filter((header) => header?.name?.toLowerCase() === 'set-cookie')
     : [];
   const parsed = setCookies.map((header) => parseSetCookie(header.value));
+  const descriptors = Array.isArray(expectedNames)
+    ? expectedNames.map(retirementDescriptor)
+    : [];
   const exactNames = Array.isArray(expectedNames)
-    && parsed.length === expectedNames.length
-    && parsed.every((cookie, index) => cookie?.name === expectedNames[index]);
+    && descriptors.every(Boolean)
+    && parsed.length === descriptors.length
+    && parsed.every((cookie, index) => cookie?.name === descriptors[index].name);
   const exactRetirements = exactNames
-    && parsed.every((cookie) => inspectRetirement(cookie, expectedSecure).pass);
-  const components = parsed.map((cookie) => inspectRetirement(cookie, expectedSecure));
+    && parsed.every((cookie, index) => inspectRetirement(
+      cookie,
+      expectedSecure,
+      descriptors[index].policy,
+    ).pass);
+  const components = parsed.map((cookie, index) => inspectRetirement(
+    cookie,
+    expectedSecure,
+    descriptors[index]?.policy ?? null,
+  ));
   return {
     expectedCount: Array.isArray(expectedNames) ? expectedNames.length : 0,
     total: setCookies.length,

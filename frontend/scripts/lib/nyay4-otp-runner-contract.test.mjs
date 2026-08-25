@@ -99,8 +99,8 @@ function assertRunnerWiring(source) {
   for (const required of [
     /cookieInventory\.length === 1/,
     /postAuthCookies\.length === 1/,
-    /postAuthAuthorityCookies\[0\]\.path === ['"]\/api\/v1['"]/,
-    /postAuthAuthorityCookies\[0\]\.sameSite === ['"]Strict['"]/,
+    /postAuthAuthorityCookies\[0\]\.path === ['"]\/['"]/,
+    /postAuthAuthorityCookies\[0\]\.sameSite === ['"]Lax['"]/,
     /postAuthAuthorityCookies\[0\]\.secure === !localHttp/,
     /hasExactSingleOrigin/,
     /hasExactOrderedOriginTrace/,
