@@ -12,6 +12,15 @@ const ACCEPTANCE_MATRIX = resolve(
   '../docs/design/nyayone_auth_profile_option3_2_engineering_handoff_2026-08-17/ACCEPTANCE_MATRIX.md',
 );
 
+function stringArrayConstant(source, name) {
+  const match = source.match(new RegExp(
+    `const ${name} = Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\);`,
+    'u',
+  ));
+  expect(match, `${name} must be an explicit frozen string array`).not.toBeNull();
+  return [...match[1].matchAll(/'([^']+)'/gu)].map((entry) => entry[1]);
+}
+
 const EXPECTED_ASSERTIONS = [
   'runtime_chromium',
   'pending_session_fail_closed',
@@ -826,6 +835,45 @@ describe('NYAY-5 browser release-gate source contract', () => {
       "await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });",
     );
     expect(visualSource).toContain('await page.evaluate(() => document.fonts.ready);');
+  });
+
+  it('scopes the Revision L heading and labelled-lockup census to exactly five screens', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
+      'S-03', 'S-04', 'S-05', 'S-08', 'S-09',
+    ]);
+    expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
+      'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
+    ]);
+    expect(stringArrayConstant(runner, 'LEGACY_CARLITO_HEADING_STACK')).toEqual([
+      'aptos', 'calibri', 'carlito', 'system-ui', 'sans-serif',
+    ]);
+
+    const visualSource = runner.slice(
+      runner.indexOf('async function recordVisualContract'),
+      runner.indexOf('async function resetOtp'),
+    );
+    expect(visualSource).toContain(
+      'revisionLExpected: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId)',
+    );
+    expect(visualSource).toContain(
+      "const isRevisionLLockup = icon.classList.contains('v321-lockup');",
+    );
+    expect(visualSource).toContain(
+      'if (isRevisionLLockup) return contract.revisionLExpected && exactRevisionLLockup(icon);',
+    );
+    for (const exactLockupClause of [
+      "icon.getAttribute('class') === 'v321-lockup'",
+      "icon.getAttribute('role') === 'img'",
+      "icon.getAttribute('aria-label') === 'NyayOne — Legal, on the record'",
+      "!icon.hasAttribute('aria-hidden')",
+      'icon.tabIndex < 0',
+    ]) {
+      expect(visualSource).toContain(exactLockupClause);
+    }
+    expect(visualSource).toMatch(
+      /icon\.getAttribute\('aria-hidden'\) === 'true'[\s\S]*icon\.tabIndex < 0[\s\S]*icon\.closest\('button,a'\)/u,
+    );
   });
 
   it('builds failed-run stdout diagnostics from static privacy-safe inventories only', async () => {

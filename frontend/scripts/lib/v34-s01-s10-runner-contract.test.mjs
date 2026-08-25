@@ -23,6 +23,21 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(visualMatrix).toContain('await context.addCookies(authenticatedCookies)');
   });
 
+  it('keeps 44px enforcement exact while recognizing only desktop Revision L legal text links', () => {
+    const visualMatrix = sourceBetween(
+      'try {',
+      'const context = await browser.newContext({ viewport: { width: 390',
+    );
+    expect(visualMatrix).toContain(
+      "allowDesktopLegalTextLinks: viewport.name === 'desktop'",
+    );
+    expect(visualMatrix).toContain(
+      "allowDesktopLegalTextLinks && element.matches('.v321-legal a')",
+    );
+    expect(visualMatrix).toContain('target.width < 44 || target.height < 44');
+    expect(visualMatrix).not.toContain('targetMinimum');
+  });
+
   it('models the current core-only S-08 form and exact accepted projection', () => {
     const registration = sourceBetween(
       "await page.route('**/api/v1/auth/student/register'",
@@ -58,5 +73,19 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(login).not.toContain("getByRole('button', { name: 'Use a one time code' })");
     expect(login).toContain("await page.waitForURL('**/s-05')");
     expect(login).not.toContain("await page.waitForURL('**/s-09')");
+  });
+
+  it('samples the exact current S-08 icon tooltip CTA', () => {
+    const tooltip = sourceBetween(
+      "await page.goto(`${base}/s-08`);\n  const iconActions",
+      'await resetOtp();',
+    );
+    expect(tooltip).toContain(
+      "getByRole('button', { name: 'Send one time code', exact: true })",
+    );
+    expect(tooltip).toContain('item.tip === item.aria');
+    expect(tooltip).toContain('item.svg === 1');
+    expect(tooltip).not.toContain("await page.goto(`${base}/s-03`)");
+    expect(tooltip).not.toContain("querySelectorAll('.v34-iconbtn')");
   });
 });

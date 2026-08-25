@@ -87,14 +87,16 @@ try {
         await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
         const feature = page.locator(`[data-screen="${id}"]`);
         await feature.waitFor({ state: 'visible' });
-        const geometry = await page.evaluate(() => {
+        const geometry = await page.evaluate(({ allowDesktopLegalTextLinks }) => {
           const visible = (element) => {
             const style = getComputedStyle(element);
             const rect = element.getBoundingClientRect();
             return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
           };
           const smallTargets = [...document.querySelectorAll('button,input,select,a[href]')]
-            .filter((element) => visible(element) && !element.closest('.v34-actions__hint'))
+            .filter((element) => visible(element)
+              && !element.closest('.v34-actions__hint')
+              && !(allowDesktopLegalTextLinks && element.matches('.v321-legal a')))
             .map((element) => {
               const rect = element.getBoundingClientRect();
               return { name: element.getAttribute('aria-label') || element.textContent?.trim() || element.id, width: rect.width, height: rect.height };
@@ -105,7 +107,7 @@ try {
             legacyShells: document.querySelectorAll('.ls-rail,.ls-topbar,.ls-bnav').length,
             smallTargets,
           };
-        });
+        }, { allowDesktopLegalTextLinks: viewport.name === 'desktop' });
         record(`${id}_${viewport.name}_${theme}_overflow`, '0 horizontal px', geometry.horizontalOverflow, geometry.horizontalOverflow === 0);
         record(`${id}_${viewport.name}_${theme}_shell`, '0 legacy shell nodes', geometry.legacyShells, geometry.legacyShells === 0);
         record(`${id}_${viewport.name}_${theme}_targets`, 'all visible targets >=44x44', geometry.smallTargets, geometry.smallTargets.length === 0);
@@ -257,8 +259,9 @@ try {
     Object.values(currentFieldCounts).every((count) => count === 1) && retiredFieldCount === 0,
   );
 
-  await page.goto(`${base}/s-03`);
-  const iconContract = await page.evaluate(() => [...document.querySelectorAll('.v34-iconbtn')].map((button) => ({ aria: button.getAttribute('aria-label'), tip: button.getAttribute('data-tip'), svg: button.querySelectorAll('svg').length })));
+  await page.goto(`${base}/s-08`);
+  const iconActions = page.getByRole('button', { name: 'Send one time code', exact: true });
+  const iconContract = await iconActions.evaluateAll((buttons) => buttons.map((button) => ({ aria: button.getAttribute('aria-label'), tip: button.getAttribute('data-tip'), svg: button.querySelectorAll('svg').length })));
   record('icon_tooltip_contract', 'every icon CTA has SVG, aria-label and visible-tooltip text', iconContract, iconContract.length > 0 && iconContract.every((item) => item.aria && item.tip === item.aria && item.svg === 1));
 
   await resetOtp();

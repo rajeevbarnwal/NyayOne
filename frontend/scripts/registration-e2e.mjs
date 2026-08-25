@@ -260,7 +260,8 @@ for (const [name, values, expected] of [
     serverAttemptsLeft,
     displayedAttemptsMatch,
     destinationRetained: (await page.locator('.v34-lede').innerText()).includes(qaPii.mobile.slice(-3)),
-    resendControlPresent: await page.locator('.v34-textlink').count() === 1,
+    resendControlPresent:
+      await page.getByRole('button', { name: 'Resend Code', exact: true }).count() === 1,
   };
   record(
     'incorrect_otp_preserves_retry_context',
@@ -552,7 +553,8 @@ for (const [name, values, expected] of [
   );
   const file = 's08_s10_full_flow_v34.png';
   await page.goto(`${base}/s-03`);
-  await page.getByRole('heading', { name: 'Welcome. Let us get you in.' }).waitFor({ state: 'visible' });
+  await page.getByRole('heading', { name: 'Where would you like to begin?', exact: true })
+    .waitFor({ state: 'visible' });
   await page.screenshot({ path: path.join(evidence, file), fullPage: true });
   await context.close();
 }
@@ -601,7 +603,10 @@ for (const width of [390, 430, 768, 1024, 1440]) {
     await page.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
     const action = page.getByRole('button', { name: 'Send one time code' });
-    const helpButton = page.getByRole('button', { name: 'More information about MOBILE NUMBER' });
+    const helpButton = page.getByRole('button', {
+      name: 'More information about DATE OF BIRTH',
+      exact: true,
+    });
     await helpButton.focus();
     const tooltip = page.getByRole('tooltip');
     await tooltip.waitFor({ state: 'visible' });
@@ -620,7 +625,8 @@ for (const width of [390, 430, 768, 1024, 1440]) {
       { metrics, actionBox },
       metrics.width <= width
       && metrics.iconActions.every((item) => item.width >= 44 && item.height >= 44 && item.aria && item.tip === item.aria && item.svg === 1)
-      && tooltipText === 'Exactly 10 digits. The one time code is sent here.' && tooltipDismissed
+      && /^Required for eligibility; must be on or before \d{4}-\d{2}-\d{2}\.$/u.test(tooltipText)
+      && tooltipDismissed
       && !!actionBox && actionBox.x >= 0 && actionBox.x + actionBox.width <= width
       && consoleErrors.length === 0);
     const file = `s08_v34_${width}_${theme}.png`;

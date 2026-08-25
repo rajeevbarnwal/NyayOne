@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "authority_sha256": "338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252",
+  "revision_l_authority_screens": ["S-03", "S-04", "S-05"],
+  "security_capture_provenance": {
+    "generated_at": "2026-08-24T18:35:40.044Z",
+    "runner": "scripts/nyay7-ui-foundation.mjs",
+    "production_build": true,
+    "platform": "darwin-arm64",
+    "worktree_parent_commit": "933a8a34bd38bcfb5e5ea6e5018f54e6ac2c9719"
+  },
+  "security_supersession": {
+    "effective_date": "2026-08-25",
+    "authority_tickets": ["NYAY-2", "NYAY-4", "NYAY-19"],
+    "record": "SECURITY_SUPERSESSION.md",
+    "screens": {
+      "S-08": "empty-inputs-two-separate-unchecked-consents",
+      "S-09": "pending-otp-final-static-frame-before-server-authoritative-s-07-redirect"
+    }
+  },
+  "entries": [
+    { "viewport": "1440x1024", "screen": "S-03", "file": "1440x1024/s03.png", "sha256": "6ba2d5784f83ab382ebf0a8db0aad13cc90262f3b4dfc5d54d54192e13a93bc5", "authority": "revision-l-source" },
+    { "viewport": "1440x1024", "screen": "S-04", "file": "1440x1024/s04.png", "sha256": "aa423164eeb06c5b7808d5832e358b2d779f8d89104abb44d1598750650f2a65", "authority": "revision-l-source" },
+    { "viewport": "1440x1024", "screen": "S-05", "file": "1440x1024/s05.png", "sha256": "b033f0a85040ce83a0b9d4798935193df8058010ef4069c6ce44f78c50b7fc93", "authority": "revision-l-source" },
+    { "viewport": "1440x1024", "screen": "S-08", "file": "1440x1024/s08.png", "sha256": "70ce15e76201c816876ae282e906edc942aabd9cf87ec8b72129ae3e02a0ea39", "authority": "security-contracts", "supersedes_sha256": "04cb846ffa2ed9379982ba97715fa524c80a24e8dafe10f91c572c17e9f03c66" },
+    { "viewport": "1440x1024", "screen": "S-09", "file": "1440x1024/s09.png", "sha256": "231f37f3604aa1210809f7aabddfb7f35792c164a6cd0ad39e32d841d2cb9f5d", "authority": "security-contracts", "supersedes_sha256": "ca3ea07af59078dc775b63d5395a2aa63cf582058db04f8bdd74b47a8f8b6f82" },
+    { "viewport": "390x844", "screen": "S-03", "file": "390x844/s03.png", "sha256": "9a842e52c62dfb551c674fb5c08f93d756cbcd35b3a72d8cc225d49d3e188b58", "authority": "revision-l-source" },
+    { "viewport": "390x844", "screen": "S-04", "file": "390x844/s04.png", "sha256": "3f137f782f9dc5cf816dcd1d3e7d9a318d2e0d7eb80bd00dca93ddf36fd0cd6c", "authority": "revision-l-source" },
+    { "viewport": "390x844", "screen": "S-05", "file": "390x844/s05.png", "sha256": "93ccfca131abce3a791585d0f6df762173872ac69dd81994ca0270049ff9a931", "authority": "revision-l-source" },
+    { "viewport": "390x844", "screen": "S-08", "file": "390x844/s08.png", "sha256": "0bb2c19de7bc6135f8b9c42ab11b2b2da0a1ce7595b40bc12ad8e1dc249c5c60", "authority": "security-contracts", "supersedes_sha256": "ff2bb433ee15733bdaba5413d4d8b97fc811a5d30c54cb89295350fb4c1bf608" },
+    { "viewport": "390x844", "screen": "S-09", "file": "390x844/s09.png", "sha256": "91fe93265420db14a631fc17c0f48ebca49da76c68473ce2ca82677e6e73287b", "authority": "security-contracts", "supersedes_sha256": "a4277eae27d2e1c8cbf3c21e0d51856f73b93a5a242e11f5f5692f4fc1281e29" },
+    { "viewport": "360x800", "screen": "S-03", "file": "360x800/s03.png", "sha256": "9897c706505e1f56bf224d831d61321ab2642fa2c17e6a8e0540dd8f28713731", "authority": "revision-l-source" },
+    { "viewport": "360x800", "screen": "S-04", "file": "360x800/s04.png", "sha256": "9851a2fe80158a0310c8f69a2176fa0f41f5346795c041e3e91f95833753fd55", "authority": "revision-l-source" },
+    { "viewport": "360x800", "screen": "S-05", "file": "360x800/s05.png", "sha256": "a5e0b383494c9ede308a7135fa6b380889b905a5797511e7a208bd3f115d0395", "authority": "revision-l-source" },
+    { "viewport": "360x800", "screen": "S-08", "file": "360x800/s08.png", "sha256": "a3fdc5616bd21c1c1b33bebff78feda8ddc0bf3c7096f1f6b30ec656775242c3", "authority": "security-contracts", "supersedes_sha256": "836824be082af1fa91f13f4659e02003b996ef8247bd341b6f6a6c625fa996eb" },
+    { "viewport": "360x800", "screen": "S-09", "file": "360x800/s09.png", "sha256": "bccf2f2c0171cce2ed877d53371ee31a1d9652e9bdecc4d85e76eb3c014fff78", "authority": "security-contracts", "supersedes_sha256": "b8ab19542afb775ece07b59b015c0f87d1e1393f72e3a63c28166eb8a1e998a5" }
+  ]
+}
