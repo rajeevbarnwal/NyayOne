@@ -407,6 +407,8 @@ def _named_cookie_contract(
     cookie_name: str,
     *,
     expected_value: str | None,
+    expected_path: str,
+    expected_same_site: str,
 ) -> dict[str, bool]:
     """Inspect one named Set-Cookie without retaining its bearer value."""
 
@@ -415,11 +417,17 @@ def _named_cookie_contract(
         "value_matches": False,
         "httponly": False,
         "host_only": False,
-        "expected_path": False,
-        "samesite_strict": False,
+        "path_exact": False,
+        "same_site_exact": False,
         "persistent": False,
     }
-    if not cookie_name or not isinstance(expected_value, str) or not expected_value:
+    if (
+        not cookie_name
+        or not isinstance(expected_value, str)
+        or not expected_value
+        or expected_path not in {"/", "/api/v1"}
+        or expected_same_site not in {"lax", "strict"}
+    ):
         return result
     try:
         values = list(response.headers.get_list("set-cookie"))
@@ -460,8 +468,10 @@ def _named_cookie_contract(
             ),
             "httponly": attributes.get("httponly") == (None,),
             "host_only": "domain" not in attributes,
-            "expected_path": morsel["path"] == "/api/v1",
-            "samesite_strict": str(morsel["samesite"]).casefold() == "strict",
+            "path_exact": morsel["path"] == expected_path,
+            "same_site_exact": (
+                str(morsel["samesite"]).casefold() == expected_same_site
+            ),
             "persistent": persistent,
         }
     )
@@ -476,9 +486,150 @@ def _cookie_contract_passes(contract: dict[str, Any]) -> bool:
         "value_matches",
         "httponly",
         "host_only",
-        "expected_path",
-        "samesite_strict",
+        "path_exact",
+        "same_site_exact",
         "persistent",
+    }
+    return set(contract) == expected and all(
+        contract.get(key) is True for key in expected
+    )
+
+
+def _ordered_cookie_header_matches(
+    raw_header: str,
+    *,
+    cookie_name: str,
+    expected_value: str | None,
+    expected_path: str,
+    expected_same_site: str,
+    expected_max_age: int | None,
+) -> bool:
+    """Match one exact cookie slot without projecting its bearer value."""
+
+    if (
+        not cookie_name
+        or expected_path not in {"/", "/api/v1"}
+        or expected_same_site not in {"lax", "strict"}
+    ):
+        return False
+    jar = SimpleCookie()
+    try:
+        jar.load(raw_header)
+    except (CookieError, TypeError, ValueError):
+        return False
+    if tuple(jar) != (cookie_name,):
+        return False
+    attributes = _strict_cookie_attributes(raw_header, cookie_name)
+    if attributes is None:
+        return False
+    required_attributes = {"httponly", "max-age", "path", "samesite"}
+    permitted_attributes = required_attributes | {"secure"}
+    if expected_max_age == 0:
+        permitted_attributes.add("expires")
+    if not required_attributes.issubset(attributes):
+        return False
+    if not set(attributes).issubset(permitted_attributes):
+        return False
+    if attributes.get("httponly") != (None,):
+        return False
+    if "secure" in attributes and attributes["secure"] != (None,):
+        return False
+    if attributes.get("path") != (expected_path,):
+        return False
+    same_site = attributes.get("samesite")
+    if (
+        same_site is None
+        or len(same_site) != 1
+        or not isinstance(same_site[0], str)
+        or same_site[0].casefold() != expected_same_site
+    ):
+        return False
+    try:
+        max_age = int(str(attributes["max-age"][0]))
+    except (TypeError, ValueError):
+        return False
+    if expected_max_age is None:
+        if max_age <= 0:
+            return False
+    elif max_age != expected_max_age:
+        return False
+    actual_value = str(jar[cookie_name].value)
+    if expected_value is None:
+        return actual_value == ""
+    return bool(expected_value) and secrets.compare_digest(
+        actual_value, expected_value
+    )
+
+
+def _signup_verify_cookie_contract(
+    response: Any,
+    *,
+    session_cookie_name: str,
+    flow_cookie_name: str,
+    expected_session_value: str | None,
+) -> dict[str, bool]:
+    """Require the ordered dual-path rotation emitted by signup verification."""
+
+    result = {
+        "exact_set_cookie_count": False,
+        "legacy_session_retired_first": False,
+        "current_session_issued_second": False,
+        "otp_flow_retired_third": False,
+    }
+    if (
+        not session_cookie_name
+        or not flow_cookie_name
+        or session_cookie_name == flow_cookie_name
+        or not isinstance(expected_session_value, str)
+        or not expected_session_value
+    ):
+        return result
+    try:
+        values = list(response.headers.get_list("set-cookie"))
+    except Exception:  # noqa: BLE001 - malformed headers fail closed
+        return result
+    if len(values) != 3:
+        return result
+    result.update(
+        {
+            "exact_set_cookie_count": True,
+            "legacy_session_retired_first": _ordered_cookie_header_matches(
+                values[0],
+                cookie_name=session_cookie_name,
+                expected_value=None,
+                expected_path="/api/v1",
+                expected_same_site="strict",
+                expected_max_age=0,
+            ),
+            "current_session_issued_second": _ordered_cookie_header_matches(
+                values[1],
+                cookie_name=session_cookie_name,
+                expected_value=expected_session_value,
+                expected_path="/",
+                expected_same_site="lax",
+                expected_max_age=None,
+            ),
+            "otp_flow_retired_third": _ordered_cookie_header_matches(
+                values[2],
+                cookie_name=flow_cookie_name,
+                expected_value=None,
+                expected_path="/api/v1",
+                expected_same_site="strict",
+                expected_max_age=0,
+            ),
+        }
+    )
+    return result
+
+
+def _signup_verify_cookie_contract_passes(contract: dict[str, Any]) -> bool:
+    """Fail closed unless every exact signup-verification cookie slot passed."""
+
+    expected = {
+        "exact_set_cookie_count",
+        "legacy_session_retired_first",
+        "current_session_issued_second",
+        "otp_flow_retired_third",
     }
     return set(contract) == expected and all(
         contract.get(key) is True for key in expected
@@ -1573,6 +1724,8 @@ def _run_api_probes(
             registered,
             flow_cookie_name,
             expected_value=signup_flow_token,
+            expected_path="/api/v1",
+            expected_same_site="strict",
         )
         signup_private = _require_private_signup_flow(factory, signup_flow_token)
         signup_registration_id = signup_private["registration_id"]
@@ -1586,10 +1739,11 @@ def _run_api_probes(
         session_probe = signup_client.get(SESSION_PATH)
         verify_payload = _safe_response_object(verified)
         session_payload = _safe_response_object(session_probe)
-        session_cookie_contract = _named_cookie_contract(
+        session_cookie_contract = _signup_verify_cookie_contract(
             verified,
-            cookie_name,
-            expected_value=cookie_value,
+            session_cookie_name=cookie_name,
+            flow_cookie_name=flow_cookie_name,
+            expected_session_value=cookie_value,
         )
         raw_bearers_absent = _raw_values_absent_from_json(
             (signup_flow_token, cookie_value),
@@ -1604,7 +1758,7 @@ def _run_api_probes(
             and isinstance(verify_payload, dict)
             and cookie_value
             and _cookie_contract_passes(flow_cookie_contract)
-            and _cookie_contract_passes(session_cookie_contract)
+            and _signup_verify_cookie_contract_passes(session_cookie_contract)
             and raw_bearers_absent
             and session_probe.status_code == 200
             and isinstance(session_payload, dict)
@@ -2275,6 +2429,8 @@ def _run_api_probes(
                         login_deleted_response,
                         flow_cookie_name,
                         expected_value=login_deleted_token,
+                        expected_path="/api/v1",
+                        expected_same_site="strict",
                     )
                 )
                 and _cookie_contract_passes(
@@ -2282,6 +2438,8 @@ def _run_api_probes(
                         login_unknown_response,
                         flow_cookie_name,
                         expected_value=login_unknown_token,
+                        expected_path="/api/v1",
+                        expected_same_site="strict",
                     )
                 )
             )
@@ -2412,6 +2570,8 @@ def _run_api_probes(
                         recovery_deleted_response,
                         flow_cookie_name,
                         expected_value=recovery_deleted_token,
+                        expected_path="/api/v1",
+                        expected_same_site="strict",
                     )
                 )
                 and _cookie_contract_passes(
@@ -2419,6 +2579,8 @@ def _run_api_probes(
                         recovery_unknown_response,
                         flow_cookie_name,
                         expected_value=recovery_unknown_token,
+                        expected_path="/api/v1",
+                        expected_same_site="strict",
                     )
                 )
             )

@@ -15,6 +15,14 @@ export interface LiveOtpFlowState extends OtpFlowState {
   lockedForSeconds: number | null;
 }
 
+export interface OtpFlowStateOptions {
+  /**
+   * The owning session boundary must settle before OTP discovery begins.
+   * Disabled reads expose no cached capability and dispatch no server request.
+   */
+  enabled?: boolean;
+}
+
 function subtractElapsed(value: number | null, elapsedSeconds: number): number | null {
   return value === null ? null : Math.max(0, value - elapsedSeconds);
 }
@@ -27,7 +35,11 @@ function subtractElapsed(value: number | null, elapsedSeconds: number): number |
  * verification decision: controls remain gated by the latest server boolean
  * and every mutation returns/refetches authoritative state.
  */
-export function useOtpFlowState(initialState?: OtpFlowState) {
+export function useOtpFlowState(
+  initialState?: OtpFlowState,
+  options: OtpFlowStateOptions = {},
+) {
+  const enabled = options.enabled ?? true;
   const [snapshot, setSnapshot] = useState<OtpFlowSnapshot | null>(() => (
     initialState ? { state: initialState, receivedAtMs: Date.now() } : null
   ));
@@ -35,9 +47,19 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
   const [loading, setLoading] = useState(initialState === undefined);
   const [loadError, setLoadError] = useState(false);
   const mutationRevision = useRef(0);
+  const enabledRef = useRef(enabled);
+  // Render-time assignment also protects callbacks retained by an async action
+  // from publishing a capability after the session phase turns pending.
+  enabledRef.current = enabled;
 
   const adopt = useCallback((state: OtpFlowState) => {
     mutationRevision.current += 1;
+    if (!enabledRef.current) {
+      setSnapshot(null);
+      setLoadError(false);
+      setLoading(true);
+      return;
+    }
     const receivedAtMs = Date.now();
     setSnapshot({ state, receivedAtMs });
     setNowMs(receivedAtMs);
@@ -46,12 +68,13 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (!enabledRef.current) throw new Error('otp_flow_state_read_disabled');
     const revisionAtStart = mutationRevision.current;
     try {
       const state = await getOtpFlowState();
       // A start/verify/resend response received while this GET was in flight is
       // newer authority. Never let the stale read overwrite that mutation.
-      if (revisionAtStart === mutationRevision.current) {
+      if (enabledRef.current && revisionAtStart === mutationRevision.current) {
         const receivedAtMs = Date.now();
         setSnapshot({ state, receivedAtMs });
         setNowMs(receivedAtMs);
@@ -60,7 +83,7 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
       }
       return state;
     } catch (error) {
-      if (revisionAtStart === mutationRevision.current) {
+      if (enabledRef.current && revisionAtStart === mutationRevision.current) {
         // A failed later read revokes the browser's ability to act on the
         // previously displayed snapshot. Keep no stale pending/verified
         // capability alive while authority is unreachable; a later successful
@@ -74,8 +97,15 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      mutationRevision.current += 1;
+      setSnapshot(null);
+      setLoadError(false);
+      setLoading(true);
+      return;
+    }
     void refresh().catch(() => undefined);
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
@@ -86,11 +116,12 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
   // picks up a server transition at expiry/cooldown/lock boundaries.  It does
   // not reset or invent any client-side security budget.
   useEffect(() => {
+    if (!enabled) return undefined;
     const timer = window.setInterval(() => {
       void refresh().catch(() => undefined);
     }, 5_000);
     return () => window.clearInterval(timer);
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   const state = useMemo<LiveOtpFlowState | null>(() => {
     if (!snapshot) return null;
@@ -106,5 +137,11 @@ export function useOtpFlowState(initialState?: OtpFlowState) {
     };
   }, [nowMs, snapshot]);
 
-  return { state, loading, loadError, adopt, refresh } as const;
+  return {
+    state: enabled ? state : null,
+    loading: enabled ? loading : true,
+    loadError: enabled ? loadError : false,
+    adopt,
+    refresh,
+  } as const;
 }

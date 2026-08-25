@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
@@ -14,6 +15,30 @@ const V34_PATH = 'src/features/student/auth/V34Screens.tsx';
 const AUTH_CONTEXT_PATH = 'src/app/authContext.tsx';
 const NOTICE_PATH = 'src/features/student/lib/studentAuthTransitionNotice.ts';
 const V34_BROWSER_GATE_PATH = 'scripts/v34-s11-s26-e2e.mjs';
+
+type Wave1ResponseFixture = {
+  url(): string;
+  request(): { method(): string };
+  status(): number;
+  finished(): Promise<Error | null>;
+};
+
+function wave1ResponseFixture(url: string, method = 'GET'): Wave1ResponseFixture {
+  return {
+    url: () => url,
+    request: () => ({ method: () => method }),
+    status: () => 200,
+    finished: async () => null,
+  };
+}
+
+function extractWave1GateFunction(gate: string, name: string): string {
+  const expression = gate.match(
+    new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'),
+  )?.[0];
+  expect(expression, `missing Wave 1 gate function: ${name}`).toBeDefined();
+  return expression ?? '';
+}
 
 function assertLegacyStorageContract(value: string): void {
   for (const required of [
@@ -255,6 +280,157 @@ describe('NYAY-19 browser-context source contract', () => {
       expect(gate, `missing canonical V34 profile/edit contract: ${field}`).toContain(field);
     }
     expect(gate).not.toContain('Edit college & year');
+  });
+
+  it('waits for the canonical profile response before sampling profile-owned screens', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const profileStateInventory = gate.match(
+      /const profileDependentStates = new Set\(\[([\s\S]*?)\]\);/u,
+    )?.[1] ?? '';
+    for (const state of [
+      'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-17E',
+    ]) {
+      expect(profileStateInventory, `missing profile readiness state: ${state}`).toContain(`'${state}'`);
+    }
+    expect(gate).toMatch(
+      /isExactApiResponse\(\s*response,\s*'GET',\s*'\/api\/v1\/student\/profile',?\s*\)/u,
+    );
+    const responseReady = gate.indexOf('await finishResponse(await profileResponsePromise)');
+    const geometrySample = gate.indexOf('const geometry = await page.evaluate(geometryProbe);');
+    expect(responseReady).toBeGreaterThan(0);
+    expect(geometrySample).toBeGreaterThan(responseReady);
+  });
+
+  it('matches canonical session/profile responses by exact method, origin and query-free URL', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    expect(gate).toContain("const apiBase = process.env.V34_API_BASE_URL ?? 'http://localhost:1131';");
+    expect(gate).toContain('const canonicalApiOrigin = new URL(apiBase).origin;');
+    const matcher = runInNewContext(
+      `(${extractWave1GateFunction(gate, 'isExactApiResponse')})`,
+      { URL, canonicalApiOrigin: 'http://localhost:1131' },
+    ) as (response: Wave1ResponseFixture, method: string, pathname: string) => boolean;
+    const path = '/api/v1/auth/student/session';
+
+    expect(matcher(wave1ResponseFixture(`http://localhost:1131${path}`), 'GET', path)).toBe(true);
+    expect(matcher(wave1ResponseFixture(`http://localhost:1131${path}`, 'POST'), 'GET', path)).toBe(false);
+    expect(matcher(wave1ResponseFixture(`http://127.0.0.1:4177${path}`), 'GET', path)).toBe(false);
+    expect(matcher(wave1ResponseFixture(`http://localhost:1131${path}?probe=session`), 'GET', path)).toBe(false);
+    expect(matcher(wave1ResponseFixture(`http://localhost:1131${path}#probe`), 'GET', path)).toBe(false);
+  });
+
+  it('arms and settles exact session plus profile observers before inspecting a private screen', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const sessionArm = gate.indexOf('const sessionResponsePromise = profileDependentStates.has(state.id)');
+    const profileArm = gate.indexOf('const profileResponsePromise = profileDependentStates.has(state.id)');
+    const navigation = gate.indexOf('await page.goto(`${base}${state.path}`');
+    const sessionReady = gate.indexOf('await finishResponse(await sessionResponsePromise)');
+    const profileReady = gate.indexOf('await finishResponse(await profileResponsePromise)');
+    const privateScreenSample = gate.indexOf('await page.locator(`[data-screen="${state.id === \'S-17E\' ? \'S-17\' : state.id}"]`)');
+
+    expect(sessionArm).toBeGreaterThan(0);
+    expect(profileArm).toBeGreaterThan(sessionArm);
+    expect(navigation).toBeGreaterThan(profileArm);
+    expect(sessionReady).toBeGreaterThan(navigation);
+    expect(profileReady).toBeGreaterThan(sessionReady);
+    expect(privateScreenSample).toBeGreaterThan(profileReady);
+  });
+
+  it('emits only privacy-safe response-settlement diagnostics', async () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const finish = runInNewContext(
+      `(${extractWave1GateFunction(gate, 'finishResponse')})`,
+      { URL },
+    ) as (response: Wave1ResponseFixture) => Promise<Record<string, unknown>>;
+    const planted = [
+      'actor=student-private',
+      'cookie=session-private',
+      'otp=123456',
+      'token=credential-private',
+    ].join('&');
+    const diagnostic = await finish(wave1ResponseFixture(
+      `http://127.0.0.1:4177/api/v1/student/profile?${planted}`,
+    ));
+    const serialized = JSON.stringify(diagnostic).toLowerCase();
+
+    expect(diagnostic).toEqual({
+      method: 'GET',
+      path: '/api/v1/student/profile',
+      status: 200,
+      finishedError: null,
+    });
+    expect(serialized).not.toContain('?');
+    for (const secretClass of ['actor', 'cookie', 'otp', 'token', '123456', 'student-private']) {
+      expect(serialized).not.toContain(secretClass);
+    }
+  });
+
+  it('redacts raw path, query and error material from generic runtime diagnostics', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const attach = runInNewContext(
+      `(${extractWave1GateFunction(gate, 'attachRuntimeEvidence')})`,
+      { URL },
+    ) as (
+      page: { on(event: string, listener: (value: unknown) => void): void },
+      runtime: Record<string, unknown[]>,
+    ) => void;
+    const listeners = new Map<string, (value: unknown) => void>();
+    const runtime = {
+      consoleErrors: [] as unknown[],
+      failedRequests: [] as unknown[],
+      httpErrors: [] as unknown[],
+      pageErrors: [] as unknown[],
+      unmatchedApi: [] as unknown[],
+    };
+    attach({
+      on: (event, listener) => { listeners.set(event, listener); },
+    }, runtime);
+
+    const planted = 'actor-private-cookie-private-otp-123456-token-private';
+    listeners.get('console')?.({
+      type: () => 'error',
+      text: () => planted,
+    });
+    listeners.get('pageerror')?.(new Error(planted));
+    listeners.get('requestfailed')?.({
+      method: () => 'GET',
+      url: () => `http://localhost:1131/api/v1/private/${planted}?actor=${planted}`,
+      failure: () => ({ errorText: planted }),
+    });
+    listeners.get('response')?.({
+      status: () => 503,
+      request: () => ({ method: () => 'POST' }),
+      url: () => `http://localhost:1131/api/v1/private/${planted}?token=${planted}`,
+    });
+
+    expect(runtime).toEqual({
+      consoleErrors: [{ stage: 'console-error' }],
+      failedRequests: [{ stage: 'request-failed', method: 'GET' }],
+      httpErrors: [{ stage: 'http-error', status: 503, method: 'POST' }],
+      pageErrors: [{ stage: 'page-error' }],
+      unmatchedApi: [],
+    });
+    const serialized = JSON.stringify(runtime).toLowerCase();
+    for (const forbidden of [
+      'actor', 'cookie', 'otp', '123456', 'token', 'private', '?', 'errorText',
+    ]) {
+      expect(serialized).not.toContain(forbidden.toLowerCase());
+    }
+  });
+
+  it('keeps unmatched API diagnostics free of raw URL and path material', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const start = gate.indexOf('runtime.unmatchedApi.push(');
+    const end = gate.indexOf("return json(501, { detail: { code: 'qa_route_not_stubbed' } });", start);
+    const diagnostic = gate.slice(start, end);
+
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    expect(diagnostic).toContain("stage: 'unmatched-api'");
+    expect(diagnostic).toContain('method: request.method()');
+    expect(diagnostic).not.toContain('path:');
+    expect(diagnostic).not.toContain('request.url()');
+    expect(diagnostic).not.toContain('url.pathname');
+    expect(diagnostic).not.toContain('url.search');
   });
 
   it.each([

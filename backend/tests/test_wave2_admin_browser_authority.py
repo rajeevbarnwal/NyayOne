@@ -57,9 +57,9 @@ def test_m01_browser_leg_uses_an_httponly_cookie_and_no_client_authority():
     assert "await ctx.addCookies([{" in block
     assert "name: 'nyayone_session'" in block
     assert "value: ADMIN_SESSION_TOKEN" in block
-    assert "path: '/api/v1'" in block
+    assert "path: '/'" in block
     assert "httpOnly: true" in block
-    assert "sameSite: 'Strict'" in block
+    assert "sameSite: 'Lax'" in block
     assert "async function recordCompletionAsAdmin(" in block
     assert "role: 'admin'" in block
     assert "localStorage" not in block
@@ -121,9 +121,9 @@ def test_every_student_browser_context_uses_the_canonical_httponly_cookie():
     assert "await ctx.addCookies([{" in block
     assert "name: 'nyayone_session'" in block
     assert "value: STUDENT_SESSION_TOKEN" in block
-    assert "path: '/api/v1'" in block
+    assert "path: '/'" in block
     assert "httpOnly: true" in block
-    assert "sameSite: 'Strict'" in block
+    assert "sameSite: 'Lax'" in block
     assert "X-Actor-Claims" not in block
     assert "/api/v1/auth/student/session" in block
     assert "body?.actor?.sub !== STUDENT" in block

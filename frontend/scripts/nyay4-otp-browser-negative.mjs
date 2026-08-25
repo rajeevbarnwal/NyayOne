@@ -345,27 +345,27 @@ try {
   ));
   failPendingStateReads = true;
   await pendingFailurePromise;
-  await page.getByText('Verification state is unavailable.', { exact: false }).waitFor({ state: 'visible' });
+  await page.waitForURL(/\/s-03$/u);
   const verifyButton = page.getByRole('button', { name: 'Verify and continue', exact: true });
   const resendButton = page.getByRole('button', { name: 'Resend Code', exact: true });
   const pendingFailureUi = {
-    codeReset: await page.getByLabel('Six digit code').inputValue() === '',
-    verifyDisabled: await verifyButton.isDisabled(),
-    resendDisabled: await resendButton.isDisabled(),
+    redirectedToSafeEntry: new URL(page.url()).pathname === '/s-03',
+    codeInputAbsent: await page.getByLabel('Six digit code').count() === 0,
+    verifyAbsent: await verifyButton.count() === 0,
+    resendAbsent: await resendButton.count() === 0,
   };
-  await resendButton.evaluate((button) => button.click());
-  await verifyButton.evaluate((button) => button.click());
   await page.waitForTimeout(250);
   record(
     'pending-refresh-failure-invalidation',
-    'a later GET 503 clears pending state/code, disables verify+resend, and emits no mutation',
+    'a later GET 503 clears pending authority, redirects to S-03, removes OTP controls, and emits no mutation',
     {
       ...pendingFailureUi,
       mutationCountUnchanged: otpRequests.length === pendingMutationsBeforeFailure,
     },
-    pendingFailureUi.codeReset
-      && pendingFailureUi.verifyDisabled
-      && pendingFailureUi.resendDisabled
+    pendingFailureUi.redirectedToSafeEntry
+      && pendingFailureUi.codeInputAbsent
+      && pendingFailureUi.verifyAbsent
+      && pendingFailureUi.resendAbsent
       && otpRequests.length === pendingMutationsBeforeFailure,
   );
 
@@ -375,9 +375,9 @@ try {
       && response.status() === 200
   ));
   failPendingStateReads = false;
+  await page.goto(`${WEB}/s-09`, { waitUntil: 'domcontentloaded' });
   const pendingRecoveryResponse = await pendingRecoveryPromise;
   const pendingRecoveryBody = await pendingRecoveryResponse.json();
-  await page.getByText('Verification state is unavailable.', { exact: false }).waitFor({ state: 'hidden' });
   await page.locator('.v34-kv').filter({ hasText: `Tries left ${initialAttempts}` }).waitFor();
   await page.getByLabel('Six digit code').fill(wrongCode);
   const pendingVerifyRecovered = !(await verifyButton.isDisabled());
@@ -483,7 +483,7 @@ try {
   ));
   record(
     'post-auth-cookie-inventory',
-    'exactly one host-only opaque HttpOnly SameSite=Strict /api/v1 session cookie remains',
+    'exactly one host-only opaque HttpOnly SameSite=Lax / session cookie remains',
     {
       total: postAuthCookies.length,
       authorityCookies: postAuthAuthorityCookies.map((cookie) => ({
@@ -503,9 +503,9 @@ try {
       && postAuthAuthorityCookies[0].name === 'nyayone_session'
       && postAuthAuthorityCookies[0].domain === apiHost
       && !postAuthAuthorityCookies[0].domain.startsWith('.')
-      && postAuthAuthorityCookies[0].path === '/api/v1'
+      && postAuthAuthorityCookies[0].path === '/'
       && postAuthAuthorityCookies[0].httpOnly
-      && postAuthAuthorityCookies[0].sameSite === 'Strict'
+      && postAuthAuthorityCookies[0].sameSite === 'Lax'
       && postAuthAuthorityCookies[0].secure === !localHttp
       && postAuthAuthorityCookies[0].value.length >= 32
       && !postAuthAuthorityCookies[0].value.includes(mobile)
@@ -866,21 +866,28 @@ try {
   await stalePage.goto(`${WEB}/s-09`, { waitUntil: 'domcontentloaded' });
   const unavailableResponse = await unavailableResponsePromise;
   const unavailableBody = await unavailableResponse.json();
-  const staleVerifyDisabled = await stalePage.getByRole('button', { name: 'Verify and continue' }).isDisabled();
+  await stalePage.waitForURL(/\/s-03$/u);
+  const staleDeniedState = {
+    redirectedToSafeEntry: new URL(stalePage.url()).pathname === '/s-03',
+    codeInputAbsent: await stalePage.getByLabel('Six digit code').count() === 0,
+    verifyAbsent: await stalePage.getByRole('button', { name: 'Verify and continue', exact: true }).count() === 0,
+  };
   record(
     'stale-student-snapshot-no-cookie',
-    'legacy route fails closed, key is retired, and unavailable server state cannot enable verify',
+    'legacy route fails closed, key is retired, and unavailable server state redirects without OTP controls',
     {
       retiredAtBoundary,
       stateStatus: unavailableResponse.status(),
       unavailableProjectionValid: safeProjection(unavailableBody, 'unavailable', null),
-      verifyDisabled: staleVerifyDisabled,
+      ...staleDeniedState,
       flowCookies: (await staleContext.cookies(API)).filter((cookie) => cookie.name === 'nyayone_otp_flow').length,
     },
     retiredAtBoundary
       && unavailableResponse.status() === 200
       && safeProjection(unavailableBody, 'unavailable', null)
-      && staleVerifyDisabled
+      && staleDeniedState.redirectedToSafeEntry
+      && staleDeniedState.codeInputAbsent
+      && staleDeniedState.verifyAbsent
       && (await staleContext.cookies(API)).filter((cookie) => cookie.name === 'nyayone_otp_flow').length === 0,
   );
   await staleContext.close();
@@ -904,16 +911,21 @@ try {
     });
   });
   await failedPage.goto(`${WEB}/s-09`, { waitUntil: 'domcontentloaded' });
-  await failedPage.getByText('Verification state is unavailable.', { exact: false }).waitFor({ state: 'visible' });
+  await failedPage.waitForURL(/\/s-03$/u);
   const failedState = {
     retired: await failedPage.evaluate(() => localStorage.getItem('ls-auth-student') === null),
-    verifyDisabled: await failedPage.getByRole('button', { name: 'Verify and continue' }).isDisabled(),
+    redirectedToSafeEntry: new URL(failedPage.url()).pathname === '/s-03',
+    codeInputAbsent: await failedPage.getByLabel('Six digit code').count() === 0,
+    verifyAbsent: await failedPage.getByRole('button', { name: 'Verify and continue', exact: true }).count() === 0,
   };
   record(
     'failed-state-bootstrap',
-    'state transport failure retires legacy storage and leaves verification disabled',
+    'state transport failure retires legacy storage and redirects without OTP controls',
     failedState,
-    failedState.retired && failedState.verifyDisabled,
+    failedState.retired
+      && failedState.redirectedToSafeEntry
+      && failedState.codeInputAbsent
+      && failedState.verifyAbsent,
   );
   await failedContext.close();
 } finally {

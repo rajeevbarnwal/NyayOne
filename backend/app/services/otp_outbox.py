@@ -863,8 +863,9 @@ def fence_expired_flow_deliveries(
     authority: OtpPurposeAuthority,
     *,
     now: datetime,
+    reason: str = "otp_flow_expired",
 ) -> None:
-    """Make every verifier/relay candidate for one expired flow unusable.
+    """Make every verifier/relay candidate for one terminal flow unusable.
 
     The caller owns the authority lock. Challenges and outboxes are then locked
     in canonical order. A stale provider completion cannot activate a candidate
@@ -901,7 +902,7 @@ def fence_expired_flow_deliveries(
                     challenge,
                     row,
                     now=now,
-                    reason="otp_flow_expired",
+                    reason=reason,
                 )
         if challenge.delivery_state in {"active", "pending_delivery"}:
             challenge.delivery_state = "void"

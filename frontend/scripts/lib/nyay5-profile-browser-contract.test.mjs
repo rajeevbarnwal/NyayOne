@@ -330,12 +330,14 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(() => readFileSync(CONTRACT, 'utf8')).not.toThrow();
   });
 
-  it('inspects the authenticated cookie at an API path covered by its Path attribute', () => {
+  it('requires the authenticated cookie to be root-scoped and SameSite Lax', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(runner).toContain(
       "context.cookies(`${API}/api/v1/auth/student/session`)",
     );
     expect(runner).not.toContain('context.cookies(API)');
+    expect(runner).toContain("cookie.path === '/' && cookie.sameSite === 'Lax'");
+    expect(runner).not.toContain("cookie.path.startsWith('/api/v1')");
   });
 
   it('runs expired, revoked, deleted, and wrong-role denials through real sessions', () => {
@@ -757,6 +759,43 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(crossRealmSource).not.toContain(
       'await context.request.post(`${API}/api/v1/auth/student/logout`',
     );
+    const retireCookieIndex = crossRealmSource.indexOf(
+      "await context.clearCookies({ name: 'nyayone_session' });",
+    );
+    const prepareLoginIndex = crossRealmSource.indexOf(
+      'await prepareStudentLoginOtp(initiator, actorAMobile);',
+    );
+    const retireCookieOccurrences = crossRealmSource.match(
+      /await context\.clearCookies\(\{ name: 'nyayone_session' \}\);/gu,
+    ) ?? [];
+    const secondRetireCookieIndex = crossRealmSource.indexOf(
+      "await context.clearCookies({ name: 'nyayone_session' });",
+      retireCookieIndex + 1,
+    );
+    const secondPrepareLoginIndex = crossRealmSource.indexOf(
+      'await prepareStudentLoginOtp(initiator, actorBMobile);',
+    );
+    expect(retireCookieIndex).toBeGreaterThan(-1);
+    expect(prepareLoginIndex).toBeGreaterThan(retireCookieIndex);
+    expect(retireCookieOccurrences).toHaveLength(2);
+    expect(secondRetireCookieIndex).toBeGreaterThan(prepareLoginIndex);
+    expect(secondPrepareLoginIndex).toBeGreaterThan(secondRetireCookieIndex);
+
+    const prepareLoginSource = runner.slice(
+      runner.indexOf('async function prepareStudentLoginOtp'),
+      runner.indexOf('async function installTransitionMessageProbe'),
+    );
+    expect(prepareLoginSource).toContain('startResponse.status() !== 202');
+    expect(prepareLoginSource).toContain(
+      "if (new URL(page.url()).pathname !== '/s-03')",
+    );
+    expect(prepareLoginSource).toContain("stateBody?.status !== 'pending'");
+    expect(prepareLoginSource).toContain("stateBody?.purpose !== 'login'");
+    expect(prepareLoginSource).toContain("cookie.name === 'nyayone_otp_flow'");
+    expect(prepareLoginSource).toContain("cookie.name === 'nyayone_session'");
+    expect(prepareLoginSource).toContain(
+      "page.getByLabel('Six digit code').waitFor({ state: 'visible' })",
+    );
     expect(crossRealmSource).toMatch(
       /recordBrowserExecution\(\s*'cross_realm_auth_transition_barrier',\s*inspected\.pass,\s*33,/u,
     );
@@ -772,6 +811,12 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(promptSource).not.toContain('context.request.post(`${API}/api/v1/auth/student/logout`');
     expect(promptSource).not.toContain('loginStudent(context, mobile)');
     expect(promptSource).toContain('loginStudentThroughUi(rotatedPage, mobile)');
+    const promptCookieRetirement = promptSource.indexOf(
+      "await context.clearCookies({ name: 'nyayone_session' });",
+    );
+    expect(promptCookieRetirement).toBeGreaterThan(-1);
+    expect(promptCookieRetirement)
+      .toBeLessThan(promptSource.indexOf('loginStudentThroughUi(rotatedPage, mobile)'));
     expect(promptSource).toMatch(
       /await page\.waitForFunction\(\(\) => \(\s*document\.activeElement === document\.querySelector/u,
     );
@@ -791,12 +836,31 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(minorSource).not.toContain('context.request.post(`${API}/api/v1/auth/student/logout`');
     expect(minorSource).not.toContain('loginStudent(context, mobile)');
     expect(minorSource).toContain('loginStudentThroughUi(reloginPage, mobile)');
+    const minorCookieRetirement = minorSource.indexOf(
+      "await context.clearCookies({ name: 'nyayone_session' });",
+    );
+    expect(minorCookieRetirement).toBeGreaterThan(-1);
+    expect(minorCookieRetirement)
+      .toBeLessThan(minorSource.indexOf('loginStudentThroughUi(reloginPage, mobile)'));
     expect(minorSource).toMatch(
       /const reloadLimitedMessage = page\.getByText\(\s*'Disabled capabilities: community, sharing\.'[,]?\s*\);\s*await reloadLimitedMessage\.waitFor\(\{ state: 'visible' \}\);\s*const reloadLimited = await reloadLimitedMessage\.isVisible\(\);/u,
     );
     expect(minorSource).toMatch(
       /getByRole\('heading',\s*\{\s*name: 'Some features are still locked'/u,
     );
+
+    const loginUiSource = runner.slice(
+      runner.indexOf('async function loginStudentThroughUi'),
+      runner.indexOf('async function prepareStudentLoginOtp'),
+    );
+    expect(loginUiSource).toContain(
+      'const { startResponse } = await prepareStudentLoginOtp(page, mobile);',
+    );
+    expect(loginUiSource).toContain('const verifiedSessionResponsePromise');
+    expect(loginUiSource).toContain("response.request().method() === 'GET'");
+    expect(loginUiSource).toContain("url.pathname === '/api/v1/auth/student/session'");
+    expect(loginUiSource).toContain('verifiedSessionResponse.finished()');
+    expect(loginUiSource).toContain('verifiedSessionResponse');
   });
 
   it('exercises OTP normalization with a real clipboard paste event', () => {
@@ -922,6 +986,54 @@ describe('NYAY-5 browser release-gate source contract', () => {
     );
     expect(completeSource.match(/const validationSelectorCount =/gu)).toHaveLength(1);
     expect(completeSource.match(/const ceremonyActionSelectorCount =/gu)).toHaveLength(1);
+  });
+
+  it('settles canonical student-session and profile responses before sampling S-10', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const completeSource = runner.slice(
+      runner.indexOf('async function completeProfileProbe'),
+      runner.indexOf('async function promptAndRoutingProbe'),
+    );
+    const sessionObserver = completeSource.indexOf('const s10SessionResponsePromise');
+    const profileObserver = completeSource.indexOf('const s10ProfileResponsePromise');
+    const navigation = completeSource.indexOf("page.goto(`${WEB}/s-10?section=personal`");
+    const settlement = completeSource.indexOf('await Promise.all([');
+    const cityMount = completeSource.indexOf("page.locator('#profile-personal-city').waitFor()");
+
+    expect(sessionObserver).toBeGreaterThan(-1);
+    expect(profileObserver).toBeGreaterThan(-1);
+    expect(sessionObserver).toBeLessThan(navigation);
+    expect(profileObserver).toBeLessThan(navigation);
+    expect(settlement).toBeGreaterThan(navigation);
+    expect(cityMount).toBeGreaterThan(settlement);
+    expect(completeSource).toContain("'/api/v1/auth/student/session'");
+    expect(completeSource).toContain("'/api/v1/student/profile'");
+    expect(completeSource).toContain('s10SessionResponse.finished()');
+    expect(completeSource).toContain('s10ProfileResponse.finished()');
+    expect(completeSource).toContain('s10SessionResponse.status() !== 200');
+    expect(completeSource).toContain('s10ProfileResponse.status() !== 200');
+    expect(completeSource).toContain('s10SessionBody?.authenticated !== true');
+    expect(completeSource).toContain("!s10SessionBody?.actor?.roles?.includes('student')");
+    expect(completeSource).toContain('s10SessionBody?.actor?.sub !== sessionActor?.sub');
+    for (const stage of [
+      'complete_profile_s10_navigation',
+      'complete_profile_s10_authority',
+      'complete_profile_s10_mount',
+      'complete_profile_visual_contract',
+      'complete_profile_initial_projection',
+      'complete_profile_client_validation',
+      'complete_profile_typed_failure_matrix',
+      'complete_profile_personal_write',
+      'complete_profile_resume_projection',
+      'complete_profile_academic_write',
+      'complete_profile_verification_ceremony',
+      'complete_profile_dashboard_return',
+      'complete_profile_interests_write',
+      'complete_profile_final_projection',
+    ]) {
+      expect(completeSource).toContain(`failureStage = '${stage}'`);
+    }
+    expect(completeSource).not.toContain('waitForTimeout');
   });
 
   it('requires directional, ordered traces for exactly two successful auth transitions', async () => {
@@ -1168,6 +1280,21 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect(missingOwnedKeyMutant).not.toBe(source);
       expect(exactFixture(missingOwnedKeyMutant, ownedSeed)).toBe(false);
     }
+  });
+
+  it('requires failed auth-transition cleanup to leave S-05 through the safe entry route', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const cleanupProbe = runner.slice(
+      runner.indexOf('async function transitionCleanupFailureProbe'),
+      runner.indexOf('async function crossRealmAuthTransitionProbe'),
+    );
+    expect(cleanupProbe).not.toContain("getByRole('alert').filter(");
+    expect(cleanupProbe).toContain('await initiator.waitForURL(/\\/s-03$/u);');
+    expect(cleanupProbe).toContain("initiator.getByLabel('Six digit code').count()");
+    expect(cleanupProbe).toMatch(
+      /initiator\s*\.getByRole\('button', \{ name: 'Verify and continue', exact: true \}\)\.count\(\)/u,
+    );
+    expect(cleanupProbe).toContain("throw new Error('NYAY5_FAILED_TRANSITION_OTP_CONTROLS_PRESENT')");
   });
 
   it('pins the sole current device preference and rejects every retired survivor', async () => {

@@ -359,8 +359,10 @@ EXPECTED_MUTANT_INVENTORY = {
 }
 
 EXPECTED_COOKIE_CONTRACT = {
-    "path": "/api/v1",
-    "same_site": "strict",
+    "auth_path": "/",
+    "auth_same_site": "lax",
+    "flow_path": "/api/v1",
+    "flow_same_site": "strict",
     "http_only": True,
     "secure_parity": True,
     "host_only": True,
@@ -3714,10 +3716,14 @@ def _cookie_contract_observation_passes(value: object) -> bool:
     return bool(
         isinstance(value, Mapping)
         and _exact_keys(value, set(EXPECTED_COOKIE_CONTRACT))
-        and type(value.get("path")) is str
-        and value.get("path") == "/api/v1"
-        and type(value.get("same_site")) is str
-        and value.get("same_site") == "strict"
+        and type(value.get("auth_path")) is str
+        and value.get("auth_path") == "/"
+        and type(value.get("auth_same_site")) is str
+        and value.get("auth_same_site") == "lax"
+        and type(value.get("flow_path")) is str
+        and value.get("flow_path") == "/api/v1"
+        and type(value.get("flow_same_site")) is str
+        and value.get("flow_same_site") == "strict"
         and value.get("http_only") is True
         and value.get("secure_parity") is True
         and value.get("host_only") is True
@@ -3727,33 +3733,35 @@ def _cookie_contract_observation_passes(value: object) -> bool:
 def _combine_cookie_contracts(
     *contracts: Mapping[str, object]
 ) -> dict[str, str | bool | None]:
-    """Intersect independently observed cookie contracts without type coercion."""
+    """Require one full logout observation plus exact auth-only expiries."""
 
+    primary_exact = bool(
+        contracts
+        and dict(contracts[0]) == EXPECTED_COOKIE_CONTRACT
+    )
+    expiry_exact = bool(
+        all(
+            _exact_keys(contract, set(EXPECTED_COOKIE_CONTRACT))
+            and contract.get("auth_path") == "/"
+            and contract.get("auth_same_site") == "lax"
+            and contract.get("flow_path") is None
+            and contract.get("flow_same_site") is None
+            and contract.get("http_only") is True
+            and contract.get("secure_parity") is True
+            and contract.get("host_only") is True
+            for contract in contracts[1:]
+        )
+    )
+    if primary_exact and expiry_exact:
+        return dict(EXPECTED_COOKIE_CONTRACT)
     return {
-        "path": (
-            "/api/v1"
-            if contracts
-            and all(contract.get("path") == "/api/v1" for contract in contracts)
-            else None
-        ),
-        "same_site": (
-            "strict"
-            if contracts
-            and all(contract.get("same_site") == "strict" for contract in contracts)
-            else None
-        ),
-        "http_only": bool(
-            contracts
-            and all(contract.get("http_only") is True for contract in contracts)
-        ),
-        "secure_parity": bool(
-            contracts
-            and all(contract.get("secure_parity") is True for contract in contracts)
-        ),
-        "host_only": bool(
-            contracts
-            and all(contract.get("host_only") is True for contract in contracts)
-        ),
+        "auth_path": None,
+        "auth_same_site": None,
+        "flow_path": None,
+        "flow_same_site": None,
+        "http_only": False,
+        "secure_parity": False,
+        "host_only": False,
     }
 
 
@@ -3761,59 +3769,114 @@ def _cookie_clear_contract(
     headers: list[str], *, names: tuple[str, ...], secure: bool
 ) -> tuple[dict[str, str | bool | None], dict[str, bool]]:
     by_name = {name: _cookie_headers_for_name(headers, name) for name in names}
-    parsed = {
-        name: (
-            _parse_set_cookie_attributes(items[0], name=name)
-            if len(items) == 1
+    auth_names = [name for name in names if name.endswith("session")]
+    flow_names = [name for name in names if name.endswith("flow")]
+    parsed: dict[str, dict[str, str | None] | None] = {}
+    legacy_auth: dict[str, dict[str, str | None] | None] = {}
+    for name, items in by_name.items():
+        parsed_items = [
+            _parse_set_cookie_attributes(item, name=name) for item in items
+        ]
+        if name in auth_names:
+            current = [
+                attributes
+                for attributes in parsed_items
+                if attributes is not None
+                and attributes.get("path") == "/"
+                and attributes.get("samesite") == "lax"
+            ]
+            legacy = [
+                attributes
+                for attributes in parsed_items
+                if attributes is not None
+                and attributes.get("path") == "/api/v1"
+                and attributes.get("samesite") == "strict"
+            ]
+            parsed[name] = current[0] if len(items) == 2 and len(current) == 1 else None
+            legacy_auth[name] = (
+                legacy[0] if len(items) == 2 and len(legacy) == 1 else None
+            )
+        else:
+            parsed[name] = (
+                parsed_items[0]
+                if len(items) == 1 and parsed_items[0] is not None
+                else None
+            )
+    selected = [
+        attributes
+        for attributes in (
+            *parsed.values(),
+            *legacy_auth.values(),
+        )
+        if attributes is not None
+    ]
+    exact_inventory = bool(
+        names
+        and len(auth_names) <= 1
+        and len(flow_names) <= 1
+        and len(auth_names) + len(flow_names) == len(names)
+        and all(parsed.get(name) is not None for name in names)
+        and all(legacy_auth.get(name) is not None for name in auth_names)
+        and len(selected) == len(names) + len(auth_names)
+    )
+
+    def named_attribute(
+        role_names: list[str], attribute: str, expected: str
+    ) -> str | None:
+        if not exact_inventory or len(role_names) == 0:
+            return None
+        if len(role_names) != 1:
+            return None
+        attributes = parsed[role_names[0]]
+        return (
+            expected
+            if attributes is not None and attributes.get(attribute) == expected
             else None
         )
-        for name, items in by_name.items()
-    }
-    selected = [attributes for attributes in parsed.values() if attributes is not None]
-    exact_singletons = bool(len(selected) == len(names) and len(names) > 0)
+
     contract = {
-        "path": (
-            "/api/v1"
-            if exact_singletons
-            and all(attributes.get("path") == "/api/v1" for attributes in selected)
-            else None
-        ),
-        "same_site": (
-            "strict"
-            if exact_singletons
-            and all(attributes.get("samesite") == "strict" for attributes in selected)
-            else None
-        ),
+        "auth_path": named_attribute(auth_names, "path", "/"),
+        "auth_same_site": named_attribute(auth_names, "samesite", "lax"),
+        "flow_path": named_attribute(flow_names, "path", "/api/v1"),
+        "flow_same_site": named_attribute(flow_names, "samesite", "strict"),
         "http_only": bool(
-            exact_singletons
+            exact_inventory
             and all(
                 _cookie_flag_exact(attributes, "httponly")
                 for attributes in selected
             )
         ),
         "secure_parity": bool(
-            exact_singletons
+            exact_inventory
             and all(
                 _cookie_secure_parity_exact(attributes, secure=secure)
                 for attributes in selected
             )
         ),
         "host_only": bool(
-            exact_singletons
+            exact_inventory
             and all("domain" not in attributes for attributes in selected)
         ),
     }
     cleared = {
-        name: bool(
-            parsed[name] is not None and parsed[name].get("max-age") == "0"
-        )
+        name: bool(parsed[name] is not None and parsed[name].get("max-age") == "0")
         for name in names
     }
+    for name in auth_names:
+        cleared[name] = bool(
+            cleared[name]
+            and legacy_auth[name] is not None
+            and legacy_auth[name].get("max-age") == "0"
+        )
     return contract, cleared
 
 
-def _set_client_cookie(client: TestClient, name: str, value: str) -> None:
-    client.cookies.set(name, value, path="/api/v1")
+def _set_client_cookie(
+    client: TestClient, name: str, value: str, *, path: str
+) -> None:
+    if path not in {"/", "/api/v1"}:
+        raise ProductGateFailure("client cookie fixture path is invalid")
+    client.cookies.set(name, value, path=path)
 
 
 def _run_logout_expiry_probe(
@@ -3837,11 +3900,17 @@ def _run_logout_expiry_probe(
         raise_server_exceptions=False,
         headers={"Origin": settings.cors_origins[0]},
     ) as client:
-        _set_client_cookie(client, settings.auth_session_cookie_name, logout_token)
-        _set_client_cookie(client, settings.otp_flow_cookie_name, "stale-flow")
+        _set_client_cookie(
+            client, settings.auth_session_cookie_name, logout_token, path="/"
+        )
+        _set_client_cookie(
+            client, settings.otp_flow_cookie_name, "stale-flow", path="/api/v1"
+        )
         logout = client.post("/api/v1/auth/student/logout", json={})
         logout_headers = _response_cookie_headers(logout)
-        _set_client_cookie(client, settings.auth_session_cookie_name, logout_token)
+        _set_client_cookie(
+            client, settings.auth_session_cookie_name, logout_token, path="/"
+        )
         replay = client.get("/api/v1/auth/student/session")
 
     with factory() as session:
@@ -3871,7 +3940,9 @@ def _run_logout_expiry_probe(
     with TestClient(
         app, base_url="http://testserver", raise_server_exceptions=False
     ) as client:
-        _set_client_cookie(client, settings.auth_session_cookie_name, untrusted_token)
+        _set_client_cookie(
+            client, settings.auth_session_cookie_name, untrusted_token, path="/"
+        )
         untrusted = client.post(
             "/api/v1/auth/student/logout",
             json={},
@@ -3892,7 +3963,9 @@ def _run_logout_expiry_probe(
     with TestClient(
         app, base_url="http://testserver", raise_server_exceptions=False
     ) as client:
-        _set_client_cookie(client, settings.auth_session_cookie_name, expired_token)
+        _set_client_cookie(
+            client, settings.auth_session_cookie_name, expired_token, path="/"
+        )
         expired = client.get("/api/v1/auth/student/session")
         expired_headers = _response_cookie_headers(expired)
     with factory() as session:
@@ -3948,6 +4021,7 @@ def _run_rotation_probe(
     factory: sessionmaker[Session],
     sender: Any,
 ) -> dict[str, Any]:
+    from app.core.auth_cookies import cookie_secure
     from app.core.config import settings
     from app.models.registration import AuthSession, OtpPurposeAuthority
 
@@ -3999,7 +4073,7 @@ def _run_rotation_probe(
         app, base_url="http://testserver", raise_server_exceptions=False
     ) as replay_client:
         _set_client_cookie(
-            replay_client, settings.auth_session_cookie_name, first_token
+            replay_client, settings.auth_session_cookie_name, first_token, path="/"
         )
         old_replay = replay_client.get("/api/v1/auth/student/session")
         old_headers = _response_cookie_headers(old_replay)
@@ -4007,7 +4081,7 @@ def _run_rotation_probe(
         app, base_url="http://testserver", raise_server_exceptions=False
     ) as current_client:
         _set_client_cookie(
-            current_client, settings.auth_session_cookie_name, second_token
+            current_client, settings.auth_session_cookie_name, second_token, path="/"
         )
         current = current_client.get("/api/v1/auth/student/session")
 
@@ -4037,18 +4111,12 @@ def _run_rotation_probe(
                 row.token_hash not in {first_token, second_token} for row in rows
             )
         )
-    old_cleared = bool(
-        len(
-            _cookie_headers_for_name(
-                old_headers, settings.auth_session_cookie_name
-            )
-        )
-        == 1
-        and "max-age=0"
-        in _cookie_headers_for_name(
-            old_headers, settings.auth_session_cookie_name
-        )[0].casefold()
+    _, old_clear_inventory = _cookie_clear_contract(
+        old_headers,
+        names=(settings.auth_session_cookie_name,),
+        secure=cookie_secure(),
     )
+    old_cleared = old_clear_inventory[settings.auth_session_cookie_name]
     return {
         "first_verify_status": int(
             first_verify.status_code if first_start.status_code == 202 else 0
@@ -4820,7 +4888,9 @@ def _run_privacy_delete_probe(
         raise_server_exceptions=False,
         headers={"Origin": settings.cors_origins[0]},
     ) as client:
-        _set_client_cookie(client, settings.auth_session_cookie_name, auth_token)
+        _set_client_cookie(
+            client, settings.auth_session_cookie_name, auth_token, path="/"
+        )
         delivered_before = len(sender.sent)
         recovery = client.post(
             "/api/v1/auth/student/recovery/start",
@@ -4895,7 +4965,7 @@ def _run_privacy_delete_probe(
         app, base_url="http://testserver", raise_server_exceptions=False
     ) as replay_client:
         _set_client_cookie(
-            replay_client, settings.auth_session_cookie_name, auth_token
+            replay_client, settings.auth_session_cookie_name, auth_token, path="/"
         )
         replay = replay_client.get("/api/v1/auth/student/session")
 
@@ -4914,7 +4984,10 @@ def _run_privacy_delete_probe(
         headers={"Origin": settings.cors_origins[0]},
     ) as client:
         _set_client_cookie(
-            client, settings.auth_session_cookie_name, rollback_auth_token
+            client,
+            settings.auth_session_cookie_name,
+            rollback_auth_token,
+            path="/",
         )
         delivered_before = len(sender.sent)
         recovery = client.post(
@@ -6720,17 +6793,26 @@ def _seeded_mutant_results() -> dict[str, bool]:
         1,
     )
     cookie_drift = deepcopy(baseline["logout_expiry"])
-    cookie_drift["cookie_contract"]["path"] = "/"
+    cookie_drift["cookie_contract"]["auth_path"] = "/api/v1"
     results["LOGOUT-COOKIE-PATH-DRIFT"] = bool(
         _logout_expiry_observation_passes(baseline["logout_expiry"])
         and not _logout_expiry_observation_passes(cookie_drift)
     )
     cookie_names = ("auth_session", "otp_flow")
 
-    def cookie_header(name: str, *, secure: bool = False) -> str:
+    def cookie_header(
+        name: str,
+        *,
+        secure: bool = False,
+        path: str | None = None,
+    ) -> str:
+        path = path or ("/" if name.endswith("session") else "/api/v1")
+        same_site = (
+            "lax" if name.endswith("session") and path == "/" else "strict"
+        )
         return (
             f'{name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; '
-            "Max-Age=0; Path=/api/v1; SameSite=strict"
+            f"Max-Age=0; Path={path}; SameSite={same_site}"
             + ("; Secure" if secure else "")
         )
 
@@ -6745,18 +6827,26 @@ def _seeded_mutant_results() -> dict[str, bool]:
             or not all(cleared.values())
         )
 
-    cookie_headers = [cookie_header(name) for name in cookie_names]
+    cookie_headers = [
+        cookie_header("auth_session", path="/"),
+        cookie_header("auth_session", path="/api/v1"),
+        cookie_header("otp_flow"),
+    ]
     results["COOKIE-ATTRIBUTE-VALUE-CASING-DRIFT"] = parser_rejects(
         [
-            cookie_headers[0].replace("SameSite=strict", "SameSite=Strict"),
-            cookie_headers[1],
+            cookie_headers[0].replace("SameSite=lax", "SameSite=Lax"),
+            *cookie_headers[1:],
         ]
     )
-    secure_headers = [cookie_header(name, secure=True) for name in cookie_names]
+    secure_headers = [
+        cookie_header("auth_session", secure=True, path="/"),
+        cookie_header("auth_session", secure=True, path="/api/v1"),
+        cookie_header("otp_flow", secure=True),
+    ]
     results["COOKIE-ATTRIBUTE-SUBSTRING-ACCEPTED"] = parser_rejects(
         [
             secure_headers[0].replace("; Secure", "; VerySecure"),
-            secure_headers[1],
+            *secure_headers[1:],
         ],
         secure=True,
     )
@@ -6764,16 +6854,16 @@ def _seeded_mutant_results() -> dict[str, bool]:
         [*cookie_headers, cookie_headers[0]]
     )
     results["COOKIE-DUPLICATE-ATTRIBUTE-ACCEPTED"] = parser_rejects(
-        [f"{cookie_headers[0]}; Path=/api/v1", cookie_headers[1]]
+        [f"{cookie_headers[0]}; Path=/", *cookie_headers[1:]]
     )
     results["COOKIE-MISSING-HEADER-ACCEPTED"] = parser_rejects(
         cookie_headers[:1]
     )
     results["COOKIE-DOMAIN-ACCEPTED"] = parser_rejects(
-        [f"{cookie_headers[0]}; Domain=example.invalid", cookie_headers[1]]
+        [f"{cookie_headers[0]}; Domain=example.invalid", *cookie_headers[1:]]
     )
     results["COOKIE-SECURE-PARITY-DRIFT"] = parser_rejects(
-        [f"{cookie_headers[0]}; Secure", cookie_headers[1]]
+        [f"{cookie_headers[0]}; Secure", *cookie_headers[1:]]
     )
     for identifier, value in (
         ("COOKIE-VALUED-SECURE-FALSE-ACCEPTED", "false"),
@@ -6781,7 +6871,7 @@ def _seeded_mutant_results() -> dict[str, bool]:
         ("COOKIE-VALUED-SECURE-EMPTY-ACCEPTED", ""),
     ):
         results[identifier] = parser_rejects(
-            [f"{cookie_headers[0]}; Secure={value}", cookie_headers[1]]
+            [f"{cookie_headers[0]}; Secure={value}", *cookie_headers[1:]]
         )
     cookie_type_drift = deepcopy(baseline["logout_expiry"])
     cookie_type_drift["cookie_contract"]["http_only"] = 1

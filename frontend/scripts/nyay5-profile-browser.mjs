@@ -238,10 +238,10 @@ async function denialContext(browser, token) {
     name: 'nyayone_session',
     value: token,
     domain: new URL(API).hostname,
-    path: '/api/v1',
+    path: '/',
     httpOnly: true,
     secure: new URL(API).protocol === 'https:',
-    sameSite: 'Strict',
+    sameSite: 'Lax',
   }]);
   return context;
 }
@@ -390,8 +390,8 @@ async function loginStudent(context, mobile) {
   );
   const startedBody = started.ok() ? await started.json() : null;
   const verifiedBody = verified.ok() ? await verified.json() : null;
-  // Cookie Path is /api/v1. Query a covered URL: filtering at the bare origin
-  // would correctly omit that cookie and create a false negative in the gate.
+  // The authenticated session is origin-wide under NYAY-8. Query the exact API
+  // probe and still require the cookie's root/Lax attributes independently.
   const cookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const session = await context.request.get(`${API}/api/v1/auth/student/session`);
   const body = session.ok() ? await session.json() : null;
@@ -399,7 +399,7 @@ async function loginStudent(context, mobile) {
   if (body?.actor?.sub) rememberPrivate(body.actor.sub);
   if (body?.actor?.student_profile_id) rememberPrivate(body.actor.student_profile_id);
   const cookieExact = cookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   let loginFailure = null;
   if (started.status() !== 202) loginFailure = 'NYAY5_LOGIN_START_FAILED';
@@ -420,50 +420,85 @@ async function loginStudent(context, mobile) {
 }
 
 async function loginStudentThroughUi(page, mobile) {
-  await resetOtp();
-  await page.waitForTimeout(1_100);
-  if (new URL(page.url()).pathname !== '/s-03') {
-    await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
-  }
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.waitForURL(/\/s-04$/u);
-  await page.locator('#v34-login-mobile').fill(mobile);
-  const startResponsePromise = page.waitForResponse((response) => (
-    response.request().method() === 'POST'
-    && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
-  ));
-  await page.getByRole('button', { name: 'Send one time code', exact: true }).click();
-  const startResponse = await startResponsePromise;
-  await page.waitForURL(/\/s-05$/u);
-  const code = await latestOtp(mobile);
+  const { startResponse } = await prepareStudentLoginOtp(page, mobile);
+  failureStage = 'student_login_verify_submit';
   const verifyResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/verify'
   ));
-  await page.getByLabel('Six digit code').fill(code);
+  const verifiedSessionResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.origin === API_ORIGIN
+      && url.pathname === '/api/v1/auth/student/session'
+      && url.search === ''
+      && url.hash === '';
+  });
   await page.getByRole('button', { name: 'Verify and continue', exact: true }).click();
-  const verifyResponse = await verifyResponsePromise;
-  return { startResponse, verifyResponse };
+  const [verifyResponse, verifiedSessionResponse] = await Promise.all([
+    verifyResponsePromise,
+    verifiedSessionResponsePromise,
+  ]);
+  const verifiedSessionFinishedError = await verifiedSessionResponse.finished();
+  return {
+    startResponse,
+    verifyResponse,
+    verifiedSessionResponse,
+    verifiedSessionFinishedError,
+  };
 }
 
 async function prepareStudentLoginOtp(page, mobile) {
+  failureStage = 'student_login_otp_reset';
   await resetOtp();
   // The isolated service intentionally keeps a one-second OTP resend floor.
   // Wait past it so this probe exercises the auth-transition barrier rather
   // than a rate-limit decoy from the immediately preceding account setup.
+  failureStage = 'student_login_resend_floor';
   await page.waitForTimeout(1_100);
-  await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
+  failureStage = 'student_login_entry_navigation';
+  if (new URL(page.url()).pathname !== '/s-03') {
+    await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
+  }
+  failureStage = 'student_login_entry_action';
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(/\/s-04$/u);
   await page.locator('#v34-login-mobile').fill(mobile);
+  failureStage = 'student_login_start_submit';
   const startResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
   await page.getByRole('button', { name: 'Send one time code', exact: true }).click();
   const startResponse = await startResponsePromise;
+  if (startResponse.status() !== 202) {
+    throw new Error(`NYAY5_STUDENT_LOGIN_START_REJECTED_${startResponse.status()}`);
+  }
+  failureStage = 'student_login_pending_navigation';
   await page.waitForURL(/\/s-05$/u);
+  failureStage = 'student_login_pending_authority';
+  const stateResponse = await page.context().request.get(
+    `${API}/api/v1/auth/student/otp/state`,
+    { headers: { Origin: WEB_ORIGIN } },
+  );
+  const stateBody = stateResponse.status() === 200 ? await stateResponse.json() : null;
+  const authorityCookies = await page.context().cookies(
+    `${API}/api/v1/auth/student/otp/state`,
+  );
+  const flowCookies = authorityCookies.filter((cookie) => cookie.name === 'nyayone_otp_flow');
+  const sessionCookies = authorityCookies.filter((cookie) => cookie.name === 'nyayone_session');
+  if (stateResponse.status() !== 200
+      || stateBody?.status !== 'pending'
+      || stateBody?.purpose !== 'login'
+      || flowCookies.length !== 1
+      || !flowCookies[0].httpOnly
+      || sessionCookies.length !== 0) {
+    throw new Error('NYAY5_STUDENT_LOGIN_PENDING_AUTHORITY_INVALID');
+  }
+  failureStage = 'student_login_otp_capture';
   const code = await latestOtp(mobile);
+  failureStage = 'student_login_otp_controls';
+  await page.getByLabel('Six digit code').waitFor({ state: 'visible' });
   await page.getByLabel('Six digit code').fill(code);
   return { startResponse };
 }
@@ -759,7 +794,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const signupLanding = new URL(page.url()).pathname;
   const signupCookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const signupCookieExact = signupCookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   signupCookies.forEach((cookie) => rememberPrivate(cookie.value));
 
@@ -801,7 +836,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const loginLanding = new URL(page.url()).pathname;
   const loginCookies = await context.cookies(`${API}/api/v1/auth/student/session`);
   const loginCookieExact = loginCookies.some((cookie) => (
-    cookie.httpOnly && cookie.value && cookie.path.startsWith('/api/v1')
+    cookie.httpOnly && cookie.value && cookie.path === '/' && cookie.sameSite === 'Lax'
   ));
   loginCookies.forEach((cookie) => rememberPrivate(cookie.value));
 
@@ -905,10 +940,13 @@ async function transitionCleanupFailureProbe(browser, mobile, mode) {
   });
   await initiator.getByRole('button', { name: 'Verify and continue', exact: true }).click();
   failureStage = `cross_realm_${mode}_failure_ui`;
-  const failureMessage = initiator.getByRole('alert').filter({
-    hasText: /session|browser|try again|unavailable/iu,
-  }).first();
-  await failureMessage.waitFor({ state: 'visible' });
+  await initiator.waitForURL(/\/s-03$/u);
+  const failedOtpControlsAbsent = await initiator.getByLabel('Six digit code').count() === 0
+    && await initiator
+      .getByRole('button', { name: 'Verify and continue', exact: true }).count() === 0;
+  if (!failedOtpControlsAbsent) {
+    throw new Error('NYAY5_FAILED_TRANSITION_OTP_CONTROLS_PRESENT');
+  }
   const evidencePage = peer ?? initiator;
   await evidencePage.evaluate(() => {
     history.pushState({}, '', '/s-10?section=personal');
@@ -1030,6 +1068,11 @@ async function crossRealmAuthTransitionProbe(browser) {
   if (m01ServerSettledStatus !== 200) throw new Error('NYAY5_M01_HOLDER_WRITE_FAILED');
 
   failureStage = 'cross_realm_m01_prepare_student_login';
+  // The administrator write has already settled on the server. Retire only its
+  // browser credential so the real login-start endpoint can issue the pending
+  // flow that S-05 now requires; verification below remains the production
+  // Web-Locks-controlled cookie transition under test.
+  await context.clearCookies({ name: 'nyayone_session' });
   await prepareStudentLoginOtp(initiator, actorAMobile);
   let m01VerifyRequests = 0;
   initiator.on('request', (request) => {
@@ -1162,6 +1205,10 @@ async function crossRealmAuthTransitionProbe(browser) {
   if (await serverSettled !== 200) throw new Error('NYAY5_BARRIER_HOLDER_WRITE_FAILED');
 
   failureStage = 'cross_realm_prepare_second_login';
+  // Retire actor A's browser credential only after its profile write has
+  // settled. The subsequent start/state ceremony must mint and prove a fresh
+  // server-owned actor B login flow before S-05 can expose OTP controls.
+  await context.clearCookies({ name: 'nyayone_session' });
   await prepareStudentLoginOtp(initiator, actorBMobile);
   let verifyRequests = 0;
   initiator.on('request', (request) => {
@@ -1431,6 +1478,7 @@ async function typedFailureMatrixProbe(page, context, mobile, sessionActor) {
   const rows = [];
 
   for (const [index, fixture] of cases.entries()) {
+    failureStage = `complete_profile_typed_failure_${fixture.kind}_prepare`;
     const city = `Pune ${index + 1}`;
     await page.locator('#profile-personal-city').fill(city);
     let markHandled;
@@ -1499,9 +1547,11 @@ async function typedFailureMatrixProbe(page, context, mobile, sessionActor) {
     }, { times: 1 });
 
     const previousError = page.getByTestId('profile-save-error');
+    failureStage = `complete_profile_typed_failure_${fixture.kind}_submit`;
     await page.getByRole('button', { name: 'Save & continue' }).click();
     const observedStatus = await handled;
     if (fixture.kind === '401') {
+      failureStage = 'complete_profile_typed_failure_401_boundary';
       const pending = page.getByTestId('student-session-pending');
       await pending.waitFor({ state: 'visible' });
       const pendingObserved = await pending.isVisible();
@@ -1509,8 +1559,36 @@ async function typedFailureMatrixProbe(page, context, mobile, sessionActor) {
       releaseSessionDiscovery();
       await page.waitForURL(/\/s-03(?:$|[?#])/u);
       const anonymousObserved = new URL(page.url()).pathname === '/s-03';
-      const { startResponse, verifyResponse } = await loginStudentThroughUi(page, mobile);
-      await page.waitForURL(/\/s-10\?section=personal$/u);
+      failureStage = 'complete_profile_typed_failure_401_reauthentication';
+      const {
+        startResponse,
+        verifyResponse,
+        verifiedSessionResponse,
+        verifiedSessionFinishedError,
+      } = await loginStudentThroughUi(page, mobile);
+      const verifiedSessionBody = verifiedSessionResponse.status() === 200
+        && verifiedSessionFinishedError === null
+        ? await verifiedSessionResponse.json().catch(() => null)
+        : null;
+      if (verifiedSessionResponse.status() !== 200
+          || verifiedSessionFinishedError !== null
+          || verifiedSessionBody?.authenticated !== true
+          || !verifiedSessionBody?.actor?.roles?.includes('student')
+          || verifiedSessionBody?.actor?.sub !== sessionActor?.sub) {
+        failureStage = 'complete_profile_typed_failure_401_reauth_authority_invalid';
+        throw new Error('NYAY5_CANONICAL_401_REAUTH_AUTHORITY_INVALID');
+      }
+      failureStage = 'complete_profile_typed_failure_401_private_rediscovery';
+      try {
+        await page.waitForURL(/\/s-10\?section=personal$/u);
+      } catch (error) {
+        const observedPath = new URL(page.url()).pathname;
+        const screenMatch = /^\/s-(\d{2})$/u.exec(observedPath);
+        const safeRoute = screenMatch ? `s${screenMatch[1]}`
+          : observedPath === '/' ? 'root' : 'other';
+        failureStage = `complete_profile_typed_failure_401_private_rediscovery_${safeRoute}`;
+        throw error;
+      }
       const restored = page.getByTestId('profile-reauth-draft-restored');
       await restored.waitFor({ state: 'visible' });
       const session = await context.request.get(`${API}/api/v1/auth/student/session`);
@@ -1546,6 +1624,7 @@ async function typedFailureMatrixProbe(page, context, mobile, sessionActor) {
       page.off('request', trackPatch);
       continue;
     }
+    failureStage = `complete_profile_typed_failure_${fixture.kind}_error_state`;
     await previousError.waitFor({ state: 'visible', timeout: 25_000 });
     const row = {
       kind: fixture.kind,
@@ -1829,11 +1908,55 @@ async function completeProfileProbe(browser) {
   const { context, mobile, sessionActor } = await provisionStudent(browser);
   const page = await context.newPage();
   trackActorBoundary(page);
+  failureStage = 'complete_profile_s10_navigation';
+  const s10SessionResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.origin === API_ORIGIN
+      && url.pathname === '/api/v1/auth/student/session'
+      && url.search === ''
+      && url.hash === '';
+  });
+  const s10ProfileResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.origin === API_ORIGIN
+      && url.pathname === '/api/v1/student/profile'
+      && url.search === ''
+      && url.hash === '';
+  });
   await page.goto(`${WEB}/s-10?section=personal`, { waitUntil: 'domcontentloaded' });
+  failureStage = 'complete_profile_s10_authority';
+  const [s10SessionResponse, s10ProfileResponse] = await Promise.all([
+    s10SessionResponsePromise,
+    s10ProfileResponsePromise,
+  ]);
+  const [s10SessionFinishedError, s10ProfileFinishedError] = await Promise.all([
+    s10SessionResponse.finished(),
+    s10ProfileResponse.finished(),
+  ]);
+  const s10SessionBody = s10SessionResponse.status() === 200
+    && s10SessionFinishedError === null
+    ? await s10SessionResponse.json().catch(() => null)
+    : null;
+  if (s10SessionResponse.status() !== 200
+      || s10SessionFinishedError !== null
+      || s10SessionBody?.authenticated !== true
+      || !s10SessionBody?.actor?.roles?.includes('student')
+      || s10SessionBody?.actor?.sub !== sessionActor?.sub) {
+    throw new Error('NYAY5_COMPLETE_PROFILE_SESSION_AUTHORITY_INVALID');
+  }
+  if (s10ProfileResponse.status() !== 200 || s10ProfileFinishedError !== null) {
+    throw new Error('NYAY5_COMPLETE_PROFILE_PROJECTION_UNAVAILABLE');
+  }
+  failureStage = 'complete_profile_s10_mount';
   await page.locator('#profile-personal-city').waitFor();
+  failureStage = 'complete_profile_visual_contract';
   await recordVisualContract(page, 'S-10');
+  failureStage = 'complete_profile_initial_projection';
   const initial = await profileProjection(context);
 
+  failureStage = 'complete_profile_client_validation';
   await page.locator('#profile-personal-city').fill('');
   await page.getByRole('button', { name: 'Save & continue' }).click();
   const errorSummary = page.getByTestId('profile-error-summary');
@@ -1845,9 +1968,11 @@ async function completeProfileProbe(browser) {
     + await page.locator('#profile-personal-city').count();
 
   await fillPersonal(page, { city: 'Pune' });
+  failureStage = 'complete_profile_typed_failure_matrix';
   const typedFailures = await typedFailureMatrixProbe(page, context, mobile, sessionActor);
   await page.locator('#profile-personal-city').fill('Pune');
 
+  failureStage = 'complete_profile_personal_write';
   let releaseWrite;
   let markStarted;
   const writeHeld = new Promise((resolveHeld) => { releaseWrite = resolveHeld; });
@@ -1872,6 +1997,7 @@ async function completeProfileProbe(browser) {
     '[data-testid="profile-completion-percent"], #profile-academic-college',
   ).count();
 
+  failureStage = 'complete_profile_resume_projection';
   const resumed = await context.newPage();
   trackActorBoundary(resumed);
   await resumed.goto(`${WEB}/s-13`, { waitUntil: 'domcontentloaded' });
@@ -1883,6 +2009,7 @@ async function completeProfileProbe(browser) {
   const reloadStillResume = (await resumed.getByText(/34% done/u).count()) === 1;
   await resumed.close();
 
+  failureStage = 'complete_profile_academic_write';
   await page.locator('#profile-academic-college').selectOption({ index: 1 });
   await page.locator('#profile-academic-year').selectOption({ index: 1 });
   await page.locator('#profile-academic-enrolment').fill('QA/42/2026');
@@ -1892,6 +2019,7 @@ async function completeProfileProbe(browser) {
   await page.waitForURL(/\/s-11$/u);
   const afterAcademic = await profileProjection(context);
 
+  failureStage = 'complete_profile_verification_ceremony';
   const ceremonyPosts = [];
   const profileReadsBeforeS15 = requests.length;
   page.on('request', (request) => {
@@ -1939,6 +2067,7 @@ async function completeProfileProbe(browser) {
   const ceremonyRetryStatus = ceremonyRetryResponse.status();
   const ceremonyRetryBody = ceremonyRetryResponse.ok()
     ? await ceremonyRetryResponse.json() : null;
+  failureStage = 'complete_profile_dashboard_return';
   const ceremonyRetryProjectionExact = inspectNyay5Projection(ceremonyRetryBody).pass;
   const s15BackButton = page.getByRole('button', { name: 'Back to dashboard', exact: true });
   const s15BackSelectorCount = await s15BackButton.count();
@@ -1951,6 +2080,7 @@ async function completeProfileProbe(browser) {
     && s15BackUrl.search === ''
     && s15BackUrl.hash === '';
   await recordVisualContract(page, 'S-14');
+  failureStage = 'complete_profile_interests_write';
   await page.goto(`${WEB}/s-11`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('heading', { name: 'What should find you?', exact: true }).waitFor({ state: 'visible' });
   await recordVisualContract(page, 'S-11');
@@ -1962,6 +2092,7 @@ async function completeProfileProbe(browser) {
   await page.getByRole('button', { name: 'Finish setup' }).click();
   await page.waitForURL(/\/s-12$/u);
   await recordVisualContract(page, 'S-12');
+  failureStage = 'complete_profile_final_projection';
   const completed = await profileProjection(context);
 
   observe('single_authoritative_projection', initial.status === 200
@@ -2174,6 +2305,7 @@ async function promptAndRoutingProbe(browser) {
   failureStage = 'prompt_routing_rotate_session';
   const rotatedPage = await context.newPage();
   trackActorBoundary(rotatedPage);
+  await context.clearCookies({ name: 'nyayone_session' });
   const rotated = await loginStudentThroughUi(rotatedPage, mobile);
   const rotatedAuthenticated = rotated.startResponse.status() === 202
     && rotated.verifyResponse.status() === 200;
@@ -2759,6 +2891,7 @@ async function minorAndResponsiveProbe(browser) {
   const capabilityDenied = new URL(page.url()).pathname === '/s-16';
   const reloginPage = await context.newPage();
   trackActorBoundary(reloginPage);
+  await context.clearCookies({ name: 'nyayone_session' });
   const relogin = await loginStudentThroughUi(reloginPage, mobile);
   const reloginAuthenticated = relogin.startResponse.status() === 202
     && relogin.verifyResponse.status() === 200;

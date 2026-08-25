@@ -290,6 +290,8 @@ def test_named_cookie_contract_is_exact_private_and_never_returns_its_value():
         response,
         "nyayone_otp_flow",
         expected_value=raw_token,
+        expected_path="/api/v1",
+        expected_same_site="strict",
     )
 
     assert contract == {
@@ -297,12 +299,139 @@ def test_named_cookie_contract_is_exact_private_and_never_returns_its_value():
         "value_matches": True,
         "httponly": True,
         "host_only": True,
-        "expected_path": True,
-        "samesite_strict": True,
+        "path_exact": True,
+        "same_site_exact": True,
         "persistent": True,
     }
     assert _cookie_contract_passes(contract)
     assert raw_token not in json.dumps(contract, sort_keys=True)
+
+
+def test_named_session_cookie_requires_root_lax_and_rejects_flow_policy():
+    raw_session = "private-session-capability-must-not-be-serialized"
+    response = _Response(
+        200,
+        {"status": "authenticated"},
+        header_items=((
+            "Set-Cookie",
+            "nyayone_session="
+            f"{raw_session}; HttpOnly; Max-Age=3600; Path=/; SameSite=lax",
+        ),),
+    )
+
+    session_contract = _named_cookie_contract(
+        response,
+        "nyayone_session",
+        expected_value=raw_session,
+        expected_path="/",
+        expected_same_site="lax",
+    )
+    wrong_flow_policy = _named_cookie_contract(
+        response,
+        "nyayone_session",
+        expected_value=raw_session,
+        expected_path="/api/v1",
+        expected_same_site="strict",
+    )
+
+    assert _cookie_contract_passes(session_contract)
+    assert _cookie_contract_passes(wrong_flow_policy) is False
+    assert raw_session not in json.dumps(session_contract, sort_keys=True)
+
+
+def _canonical_signup_verify_cookie_headers(
+    raw_session: str,
+) -> tuple[tuple[str, str], ...]:
+    return (
+        (
+            "Set-Cookie",
+            "nyayone_session=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; "
+            "HttpOnly; Max-Age=0; Path=/api/v1; SameSite=strict",
+        ),
+        (
+            "Set-Cookie",
+            "nyayone_session="
+            f"{raw_session}; HttpOnly; Max-Age=3600; Path=/; SameSite=lax",
+        ),
+        (
+            "Set-Cookie",
+            "nyayone_otp_flow=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; "
+            "HttpOnly; Max-Age=0; Path=/api/v1; SameSite=strict",
+        ),
+    )
+
+
+def test_signup_verify_cookie_contract_requires_exact_ordered_dual_path_rotation():
+    raw_session = "private-session-capability-must-not-be-serialized"
+    response = _Response(
+        200,
+        {"status": "authenticated"},
+        header_items=_canonical_signup_verify_cookie_headers(raw_session),
+    )
+
+    contract = gate._signup_verify_cookie_contract(
+        response,
+        session_cookie_name="nyayone_session",
+        flow_cookie_name="nyayone_otp_flow",
+        expected_session_value=raw_session,
+    )
+
+    assert contract == {
+        "exact_set_cookie_count": True,
+        "legacy_session_retired_first": True,
+        "current_session_issued_second": True,
+        "otp_flow_retired_third": True,
+    }
+    assert gate._signup_verify_cookie_contract_passes(contract)
+    assert raw_session not in json.dumps(contract, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda headers: headers[1:],
+        lambda headers: headers + (headers[1],),
+        lambda headers: (headers[1], headers[0], headers[2]),
+        lambda headers: (
+            (headers[0][0], headers[0][1].replace("Path=/api/v1", "Path=/")),
+            headers[1],
+            headers[2],
+        ),
+        lambda headers: (
+            headers[0],
+            (headers[1][0], headers[1][1].replace("Path=/;", "Path=/api/v1;")),
+            headers[2],
+        ),
+        lambda headers: (
+            headers[0],
+            headers[1],
+            (headers[2][0], headers[2][1].replace("Path=/api/v1", "Path=/")),
+        ),
+        lambda headers: headers
+        + (("Set-Cookie", "unowned=value; HttpOnly; Path=/; SameSite=lax"),),
+    ),
+    ids=(
+        "missing",
+        "duplicate",
+        "reordered",
+        "legacy-wrong-path",
+        "current-wrong-path",
+        "flow-wrong-path",
+        "arbitrary-extra",
+    ),
+)
+def test_signup_verify_cookie_contract_rejects_noncanonical_header_inventory(mutate):
+    raw_session = "private-session-capability"
+    headers = mutate(_canonical_signup_verify_cookie_headers(raw_session))
+
+    contract = gate._signup_verify_cookie_contract(
+        _Response(200, {"status": "authenticated"}, header_items=headers),
+        session_cookie_name="nyayone_session",
+        flow_cookie_name="nyayone_otp_flow",
+        expected_session_value=raw_session,
+    )
+
+    assert gate._signup_verify_cookie_contract_passes(contract) is False
 
 
 def test_named_session_cookie_cannot_borrow_httponly_from_flow_cookie_deletion():
@@ -314,7 +443,7 @@ def test_named_session_cookie_cannot_borrow_httponly_from_flow_cookie_deletion()
             (
                 "Set-Cookie",
                 "nyayone_session="
-                f"{raw_session}; Max-Age=3600; Path=/api/v1; SameSite=strict",
+                f"{raw_session}; Max-Age=3600; Path=/; SameSite=lax",
             ),
             (
                 "Set-Cookie",
@@ -328,6 +457,8 @@ def test_named_session_cookie_cannot_borrow_httponly_from_flow_cookie_deletion()
         response,
         "nyayone_session",
         expected_value=raw_session,
+        expected_path="/",
+        expected_same_site="lax",
     )
 
     assert session_contract["httponly"] is False
@@ -365,10 +496,22 @@ def test_named_cookie_contract_fails_closed_on_duplicate_or_scoped_cookie():
     )
 
     assert not _cookie_contract_passes(
-        _named_cookie_contract(duplicate, "flow", expected_value=raw_token)
+        _named_cookie_contract(
+            duplicate,
+            "flow",
+            expected_value=raw_token,
+            expected_path="/api/v1",
+            expected_same_site="strict",
+        )
     )
     assert not _cookie_contract_passes(
-        _named_cookie_contract(scoped, "flow", expected_value=raw_token)
+        _named_cookie_contract(
+            scoped,
+            "flow",
+            expected_value=raw_token,
+            expected_path="/api/v1",
+            expected_same_site="strict",
+        )
     )
 
 
@@ -398,7 +541,13 @@ def test_named_cookie_contract_requires_exact_valueless_httponly(
     )
 
     assert not _cookie_contract_passes(
-        _named_cookie_contract(response, "flow", expected_value=raw_token)
+        _named_cookie_contract(
+            response,
+            "flow",
+            expected_value=raw_token,
+            expected_path="/api/v1",
+            expected_same_site="strict",
+        )
     )
 
 
@@ -422,7 +571,13 @@ def test_named_cookie_contract_rejects_duplicate_attributes(attributes):
     )
 
     assert not _cookie_contract_passes(
-        _named_cookie_contract(response, "flow", expected_value=raw_token)
+        _named_cookie_contract(
+            response,
+            "flow",
+            expected_value=raw_token,
+            expected_path="/api/v1",
+            expected_same_site="strict",
+        )
     )
 
 

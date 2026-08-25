@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RegistrationApiError,
+  cancelStudentOtp,
   clearRegistrationSession,
   completeRecovery,
   getOtpFlowState,
@@ -20,6 +21,10 @@ import {
   STUDENT_AUTH_CHANGED_EVENT,
   STUDENT_AUTH_TRANSITION_STARTED_EVENT,
 } from './studentBrowserContext';
+import {
+  getRegistrationAttempt,
+  setRegistrationAttempt,
+} from './registrationAttemptStore';
 
 class TestBroadcastChannel {
   readonly name: string;
@@ -46,6 +51,17 @@ const PENDING_WIRE = {
 const AUTHENTICATED_WIRE = {
   status: 'authenticated',
   purpose: 'signup',
+  destination_masked: null,
+  attempts_left: null,
+  expires_in_seconds: null,
+  resend_in_seconds: null,
+  locked_for_seconds: null,
+  resend_allowed: false,
+} as const;
+
+const UNAVAILABLE_WIRE = {
+  status: 'unavailable',
+  purpose: null,
   destination_masked: null,
   attempts_left: null,
   expires_in_seconds: null,
@@ -125,6 +141,53 @@ afterEach(() => {
 });
 
 describe('server-owned student OTP flow API (NYAY-4)', () => {
+  it('retires the server-owned OTP context with an empty-body POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(UNAVAILABLE_WIRE));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(cancelStudentOtp()).resolves.toEqual({
+      status: 'unavailable',
+      purpose: null,
+      destinationMasked: null,
+      attemptsLeft: null,
+      expiresInSeconds: null,
+      resendInSeconds: null,
+      lockedForSeconds: null,
+      resendAllowed: false,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/auth/student/otp/cancel');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({});
+    expect(init.credentials).toBe('include');
+  });
+
+  it('clears an uncertain page-memory registration attempt before cancellation resolves', async () => {
+    let finishRequest: ((value: Response) => void) | undefined;
+    const fetchResult = new Promise<Response>((resolve) => { finishRequest = resolve; });
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(fetchResult));
+    setRegistrationAttempt({ body: '{"mobile":"9876543210"}', key: 'attempt-key' });
+
+    const cancellation = cancelStudentOtp();
+    expect(getRegistrationAttempt()).toBeNull();
+
+    finishRequest?.(response(UNAVAILABLE_WIRE));
+    await expect(cancellation).resolves.toMatchObject({
+      status: 'unavailable',
+      purpose: null,
+    });
+  });
+
+  it('rejects a nonterminal cancellation projection fail closed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(PENDING_WIRE)));
+
+    await expect(cancelStudentOtp()).rejects.toEqual(expect.objectContaining({
+      status: 502,
+      code: 'invalid_otp_cancel_projection',
+    }));
+  });
+
   it('holds every realm pending before signup can replace the shared auth cookie', async () => {
     const order: string[] = [];
     const browserWindow = new EventTarget();
