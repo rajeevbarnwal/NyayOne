@@ -681,7 +681,7 @@ def test_cookie_backed_lawyer_tutor_profile_cannot_mount_m01_authority(ctx):
     ctx.client.cookies.set(
         settings.auth_session_cookie_name,
         raw_token,
-        path="/api/v1",
+        path="/",
     )
     try:
         response = ctx.client.post(
@@ -689,7 +689,7 @@ def test_cookie_backed_lawyer_tutor_profile_cannot_mount_m01_authority(ctx):
             headers={"Origin": settings.cors_origins[0]},
         )
     finally:
-        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/")
 
     # The student-session resolver does not manufacture an authenticated tutor
     # actor from a lawyer account, so the request is denied before M-01 mounts
@@ -737,7 +737,7 @@ def test_admin_completion_revalidates_the_exact_cookie_after_domain_lock(ctx, mo
     ctx.client.cookies.set(
         settings.auth_session_cookie_name,
         raw_token,
-        path="/api/v1",
+        path="/",
     )
     try:
         response = ctx.client.post(
@@ -745,7 +745,7 @@ def test_admin_completion_revalidates_the_exact_cookie_after_domain_lock(ctx, mo
             headers={"Origin": settings.cors_origins[0]},
         )
     finally:
-        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/")
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "session_authority_required"
@@ -808,7 +808,7 @@ def test_admin_completion_effect_winner_locks_domain_before_exact_cookie(
     ctx.client.cookies.set(
         settings.auth_session_cookie_name,
         raw_token,
-        path="/api/v1",
+        path="/",
     )
     try:
         response = ctx.client.post(
@@ -816,7 +816,7 @@ def test_admin_completion_effect_winner_locks_domain_before_exact_cookie(
             headers={"Origin": settings.cors_origins[0]},
         )
     finally:
-        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/api/v1")
+        ctx.client.cookies.delete(settings.auth_session_cookie_name, path="/")
 
     assert response.status_code == 200, response.text
     assert response.json()["recorded_by_role"] == "admin"

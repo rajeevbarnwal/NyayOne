@@ -483,7 +483,7 @@ try {
   ));
   record(
     'post-auth-cookie-inventory',
-    'exactly one host-only opaque HttpOnly SameSite=Strict /api/v1 session cookie remains',
+    'exactly one host-only opaque HttpOnly SameSite=Lax / session cookie remains',
     {
       total: postAuthCookies.length,
       authorityCookies: postAuthAuthorityCookies.map((cookie) => ({
@@ -503,9 +503,9 @@ try {
       && postAuthAuthorityCookies[0].name === 'nyayone_session'
       && postAuthAuthorityCookies[0].domain === apiHost
       && !postAuthAuthorityCookies[0].domain.startsWith('.')
-      && postAuthAuthorityCookies[0].path === '/api/v1'
+      && postAuthAuthorityCookies[0].path === '/'
       && postAuthAuthorityCookies[0].httpOnly
-      && postAuthAuthorityCookies[0].sameSite === 'Strict'
+      && postAuthAuthorityCookies[0].sameSite === 'Lax'
       && postAuthAuthorityCookies[0].secure === !localHttp
       && postAuthAuthorityCookies[0].value.length >= 32
       && !postAuthAuthorityCookies[0].value.includes(mobile)

@@ -67,9 +67,82 @@ const provisionLoginStudent = async () => {
   await fixtureContext.close();
   return cookies;
 };
+const requirePendingFlowCookies = async (fixtureContext, purpose) => {
+  const stateResponse = await fixtureContext.request.get(`${apiBase}/api/v1/auth/student/otp/state`, {
+    headers: { Origin: webOrigin },
+  });
+  const stateBody = stateResponse.ok() ? await stateResponse.json() : null;
+  const cookies = await fixtureContext.cookies(`${apiBase}/api/v1/auth/student/otp/state`);
+  const flowCookies = cookies.filter((cookie) => cookie.name === 'nyayone_otp_flow');
+  if (
+    stateResponse.status() !== 200
+    || stateBody?.status !== 'pending'
+    || stateBody?.purpose !== purpose
+    || flowCookies.length !== 1
+    || !flowCookies[0].httpOnly
+  ) throw new Error(`visual ${purpose} fixture did not establish a server-owned pending flow`);
+  return flowCookies;
+};
+const provisionVisualOtpFlows = async () => {
+  const loginContext = await browser.newContext();
+  const loginResponse = await loginContext.request.post(`${apiBase}/api/v1/auth/student/login/otp/start`, {
+    headers: { 'Content-Type': 'application/json', Origin: webOrigin },
+    data: { mobile: loginMobile },
+  });
+  if (loginResponse.status() !== 202) throw new Error(`visual login flow failed: ${loginResponse.status()}`);
+  const login = await requirePendingFlowCookies(loginContext, 'login');
+  await loginContext.close();
+
+  const signupMobile = process.env.V34_VISUAL_SIGNUP_MOBILE ?? '9000000043';
+  const signupContext = await browser.newContext();
+  const signupResponse = await signupContext.request.post(`${apiBase}/api/v1/auth/student/register`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `v34-visual-signup-${signupMobile}`,
+      Origin: webOrigin,
+    },
+    data: {
+      first_name: 'Visual',
+      middle_name: null,
+      last_name: 'Fixture',
+      mobile: signupMobile,
+      dob: '2004-03-14',
+      terms_accepted: true,
+      terms_version: 'dpdp-2023.v1',
+      privacy_notice_acknowledged: true,
+      privacy_notice_version: 'dpdp-2023.v1',
+    },
+  });
+  if (signupResponse.status() !== 202) throw new Error(`visual signup flow failed: ${signupResponse.status()}`);
+  const signup = await requirePendingFlowCookies(signupContext, 'signup');
+  await signupContext.close();
+  return { login, signup };
+};
+const createPendingVisualContext = async (viewport, theme, flowCookies) => {
+  const isolated = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    colorScheme: theme,
+  });
+  await isolated.addInitScript(
+    ({ themeValue }) => localStorage.setItem('nyayone.theme.v1', themeValue),
+    { themeValue: theme },
+  );
+  await isolated.addCookies(flowCookies);
+  const installedCookies = await isolated.cookies(`${apiBase}/api/v1/auth/student/otp/state`);
+  if (
+    installedCookies.some((cookie) => cookie.name === 'nyayone_session')
+    || installedCookies.length !== 1
+    || installedCookies[0]?.name !== 'nyayone_otp_flow'
+  ) {
+    await isolated.close();
+    throw new Error('visual OTP context mixed session and pending-flow authority');
+  }
+  return isolated;
+};
 
 try {
   const authenticatedCookies = await provisionLoginStudent();
+  const visualOtpFlowCookies = await provisionVisualOtpFlows();
   for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }]) {
     for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: theme });
@@ -84,10 +157,42 @@ try {
       for (let number = 1; number <= 10; number += 1) {
         const id = `S-${String(number).padStart(2, '0')}`;
         const path = `/s-${String(number).padStart(2, '0')}`;
-        await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
-        const feature = page.locator(`[data-screen="${id}"]`);
+        const pendingFlowCookies = number === 5 ? visualOtpFlowCookies.login
+          : number === 9 ? visualOtpFlowCookies.signup
+            : null;
+        const screenContext = pendingFlowCookies
+          ? await createPendingVisualContext(viewport, theme, pendingFlowCookies)
+          : context;
+        const screenPage = pendingFlowCookies ? await screenContext.newPage() : page;
+        if (pendingFlowCookies) {
+          screenPage.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          screenPage.on('pageerror', (error) => pageErrors.push(error.message));
+        }
+        let otpStateRequestCount = 0;
+        screenPage.on('request', (request) => {
+          const requestUrl = new URL(request.url());
+          if (
+            pendingFlowCookies
+            && request.method() === 'GET'
+            && requestUrl.origin === new URL(apiBase).origin
+            && requestUrl.pathname === '/api/v1/auth/student/otp/state'
+          ) otpStateRequestCount += 1;
+        });
+        await screenPage.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
+        const feature = screenPage.locator(`[data-screen="${id}"]`);
         await feature.waitFor({ state: 'visible' });
-        const geometry = await page.evaluate(({ allowDesktopLegalTextLinks }) => {
+        if (pendingFlowCookies) {
+          await screenPage.getByLabel('Six digit code').waitFor({ state: 'visible' });
+          if (!await feature.isVisible()) {
+            await screenContext.close();
+            throw new Error(`visual ${id} left its server-pending screen before capture`);
+          }
+        }
+        if (pendingFlowCookies && otpStateRequestCount < 1) {
+          await screenContext.close();
+          throw new Error(`visual ${id} cold load did not request server OTP state`);
+        }
+        const geometry = await screenPage.evaluate(({ allowDesktopLegalTextLinks }) => {
           const visible = (element) => {
             const style = getComputedStyle(element);
             const rect = element.getBoundingClientRect();
@@ -111,7 +216,8 @@ try {
         record(`${id}_${viewport.name}_${theme}_overflow`, '0 horizontal px', geometry.horizontalOverflow, geometry.horizontalOverflow === 0);
         record(`${id}_${viewport.name}_${theme}_shell`, '0 legacy shell nodes', geometry.legacyShells, geometry.legacyShells === 0);
         record(`${id}_${viewport.name}_${theme}_targets`, 'all visible targets >=44x44', geometry.smallTargets, geometry.smallTargets.length === 0);
-        await page.screenshot({ path: resolve(screenshotsDir, `${id}__${viewport.name}__${theme}.png`), fullPage: true });
+        await screenPage.screenshot({ path: resolve(screenshotsDir, `${id}__${viewport.name}__${theme}.png`), fullPage: true });
+        if (pendingFlowCookies) await screenContext.close();
       }
       record(`${viewport.name}_${theme}_runtime`, '0 console/page errors', { consoleErrors, pageErrors }, consoleErrors.length === 0 && pageErrors.length === 0);
       await context.close();
@@ -266,12 +372,69 @@ try {
 
   await resetOtp();
   const loginCalls = [];
+  let cancelRequest = null;
+  let markCancelObserved;
+  const cancelObserved = new Promise((resolvePromise) => { markCancelObserved = resolvePromise; });
+  let releaseCancelResponse;
+  const cancelResponseReleased = new Promise((resolvePromise) => { releaseCancelResponse = resolvePromise; });
+  await page.route('**/api/v1/auth/student/otp/cancel', async (route) => {
+    cancelRequest = {
+      method: route.request().method(),
+      body: route.request().postDataJSON(),
+    };
+    const upstream = await route.fetch();
+    markCancelObserved({ status: upstream.status() });
+    await cancelResponseReleased;
+    await route.fulfill({ response: upstream });
+  });
   page.on('request', (request) => {
     if (request.url().includes('/api/v1/auth/student/')) {
       loginCalls.push(`${request.method()} ${new URL(request.url()).pathname}`);
     }
   });
   await page.goto(`${base}/s-04`);
+  await page.locator('#v34-login-mobile').fill(loginMobile);
+  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.waitForURL('**/s-05');
+  const cancelledCode = await latestOtp();
+  // A same-identity restart remains subject to the server's issue floor even
+  // after explicit cancellation. Observe the product's authoritative poll
+  // projection rather than sleeping for a runner-dependent duration.
+  const restartFloorHandle = await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Resend Code',
+    );
+    const resendRow = [...document.querySelectorAll('.v34-kv span')].find(
+      (candidate) => candidate.textContent?.includes('Resend in'),
+    );
+    return button instanceof HTMLButtonElement
+      && button.disabled === false
+      && resendRow?.textContent?.replace(/\s+/gu, ' ').trim() === 'Resend in 00:00';
+  });
+  const restartFloorReady = await restartFloorHandle.jsonValue();
+  const capturedFlowCookie = (await context.cookies(`${apiBase}/api/v1/auth/student/otp/state`))
+    .find((cookie) => cookie.name === 'nyayone_otp_flow');
+  if (!capturedFlowCookie) throw new Error('login cancellation fixture did not expose its HttpOnly flow cookie to Playwright');
+  await page.getByRole('button', { name: 'Change persona', exact: true }).click();
+  const cancelUpstream = await cancelObserved;
+  const pathWhileCancelResponseDeferred = new URL(page.url()).pathname;
+  releaseCancelResponse();
+  await page.waitForURL('**/s-03');
+  const pathAfterCancel = new URL(page.url()).pathname;
+  await page.unroute('**/api/v1/auth/student/otp/cancel');
+
+  const cancelledVerifyContext = await browser.newContext();
+  await cancelledVerifyContext.addCookies([capturedFlowCookie]);
+  const cancelledVerify = await cancelledVerifyContext.request.post(`${apiBase}/api/v1/auth/student/login/otp/verify`, {
+    headers: { 'Content-Type': 'application/json', Origin: webOrigin },
+    data: { code: cancelledCode },
+  });
+  const cancelledVerifyBody = await cancelledVerify.json();
+  await cancelledVerifyContext.close();
+
+  await resetOtp();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.waitForURL('**/s-04');
   await page.locator('#v34-login-mobile').fill(loginMobile);
   await page.getByRole('button', { name: 'Send one time code' }).click();
   await page.waitForURL('**/s-05');
@@ -311,9 +474,26 @@ try {
       authCookieVisible: visibleCookieNames.some((name) => /(?:session|auth|token|bearer)/i.test(name)),
     };
   }, { mobile: loginMobile, otp: loginCode });
-  record('login_otp_server_lifecycle', 'real start + verify + cookie session endpoints', { loginCalls, authenticated },
-    loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/start'))
+  record('login_otp_server_lifecycle', 'real cancel retirement + fresh start + verify + cookie session endpoints', {
+    loginCalls,
+    cancelRequest,
+    cancelUpstream,
+    pathWhileCancelResponseDeferred,
+    pathAfterCancel,
+    restartFloorReady,
+    cancelledVerify: { status: cancelledVerify.status(), body: cancelledVerifyBody },
+    authenticated,
+  },
+    loginCalls.filter((call) => call.includes('POST /api/v1/auth/student/login/otp/start')).length >= 2
+      && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/otp/cancel'))
       && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/verify'))
+      && cancelRequest?.method === 'POST'
+      && JSON.stringify(cancelRequest?.body) === '{}'
+      && cancelUpstream.status === 200
+      && pathWhileCancelResponseDeferred === '/s-05'
+      && pathAfterCancel === '/s-03'
+      && restartFloorReady === true
+      && cancelledVerify.status() === 401
       && authenticated.status === 200
       && authenticated.body?.actor?.roles?.includes('student'));
   record('login_secret_storage_privacy', 'no raw mobile, OTP, or session cookie visible to JavaScript storage', loginBrowserState,

@@ -37,6 +37,7 @@ from app.core.auth import (
 )
 from app.core.auth_cookies import (
     clear_auth_session_cookie,
+    clear_legacy_auth_session_cookie,
     clear_otp_flow_cookie,
     cookie_secure,
 )
@@ -82,6 +83,7 @@ _REGISTRATION_IDEMPOTENCY_CONSTRAINT = (
     "uq_registration_idempotency_records_idempotency_key_hash"
 )
 _REGISTRATION_MOBILE_CONSTRAINT = "uq_student_registrations_mobile_hash"
+_SIGNUP_RESTART_COOKIE_PATH = "/api/v1/auth/student/register"
 
 # Allowed student-verification status transitions (finite-state machine).
 _VERIFICATION_TRANSITIONS = {
@@ -205,6 +207,35 @@ def _set_flow_cookie(
 
 def _clear_flow_cookie(response: Response) -> None:
     clear_otp_flow_cookie(response)
+
+
+def _set_signup_restart_cookie(
+    response: Response,
+    token: str,
+    *,
+    max_age: int,
+) -> None:
+    """Bind a canceled signup capability to the register endpoint only."""
+
+    response.set_cookie(
+        key=settings.otp_flow_cookie_name,
+        value=token,
+        max_age=max_age,
+        path=_SIGNUP_RESTART_COOKIE_PATH,
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="strict",
+    )
+
+
+def _clear_signup_restart_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.otp_flow_cookie_name,
+        path=_SIGNUP_RESTART_COOKIE_PATH,
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="strict",
+    )
 
 
 def _client_ip(request: Request) -> str | None:
@@ -647,28 +678,51 @@ def register(
         now=now,
     )
 
-    duplicate = False
+    restart_token = request.cookies.get(settings.otp_flow_cookie_name)
+    if restart_token is not None:
+        # A path-scoped restart bearer is single-use for every accepted
+        # registration attempt, including a neutral mismatch. Error responses
+        # do not serialize this injected Response, so validation/provider/rate
+        # failures leave the capability available for a safe retry.
+        _clear_signup_restart_cookie(response)
     try:
-        result = register_student(session, payload, idempotency_key, now=now)
-    except RegistrationError as exc:
-        if exc.code == "mobile_already_registered":
-            session.rollback()
-            duplicate = True
-        else:
-            raise _registration_http_error(exc) from exc
-    except IntegrityError as exc:
+        result = otp_flow_service.restart_cancelled_signup(
+            session,
+            restart_token,
+            payload,
+            idempotency_key,
+            now=now,
+        )
+    except otp_service.OtpError as exc:
+        raise _otp_http_error(
+            session,
+            restart_token,
+            exc,
+            now=now,
+        ) from exc
+    duplicate = False
+    if result is None:
         try:
-            result = _recover_registration_integrity_conflict(
-                session, payload, idempotency_key, exc, now=now
-            )
-        except HTTPException as conflict:
-            if (
-                isinstance(conflict.detail, dict)
-                and conflict.detail.get("code") == "mobile_already_registered"
-            ):
+            result = register_student(session, payload, idempotency_key, now=now)
+        except RegistrationError as exc:
+            if exc.code == "mobile_already_registered":
+                session.rollback()
                 duplicate = True
             else:
-                raise
+                raise _registration_http_error(exc) from exc
+        except IntegrityError as exc:
+            try:
+                result = _recover_registration_integrity_conflict(
+                    session, payload, idempotency_key, exc, now=now
+                )
+            except HTTPException as conflict:
+                if (
+                    isinstance(conflict.detail, dict)
+                    and conflict.detail.get("code") == "mobile_already_registered"
+                ):
+                    duplicate = True
+                else:
+                    raise
 
     if not duplicate and (
         isinstance(
@@ -1101,6 +1155,36 @@ def otp_state(
     )
 
 
+@router.post("/otp/cancel")
+def otp_cancel(
+    _: EmptyOtpRequest,
+    request: Request,
+    response: Response,
+    origin: None = Depends(require_trusted_mutation_origin),
+    session: Session = Depends(get_session),
+) -> otp_flow_service.OtpFlowState:
+    """Retire the current signup/login capability before persona change."""
+
+    del origin
+    _otp_projection_headers(response)
+    cancellation = otp_flow_service.cancel_onboarding_flow(
+        session,
+        _flow_cookie_value(request),
+        now=_now(),
+    )
+    session.commit()
+    _clear_flow_cookie(response)
+    if cancellation.signup_restart_token is not None:
+        if cancellation.signup_restart_max_age is None:
+            raise RuntimeError("signup restart lifetime is missing")
+        _set_signup_restart_cookie(
+            response,
+            cancellation.signup_restart_token,
+            max_age=cancellation.signup_restart_max_age,
+        )
+    return cancellation.state
+
+
 # --------------------------------------------------------------------------- #
 # Academic profile (S-10)                                                     #
 # --------------------------------------------------------------------------- #
@@ -1217,14 +1301,18 @@ def _cookie_secure() -> bool:
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
+    # Cookie identity includes Path. Retire the pre-NYAY-8 `/api/v1` instance
+    # before issuing the browser-wide actor cookie so an older actor cannot
+    # reappear after root-cookie rotation or logout.
+    clear_legacy_auth_session_cookie(response)
     response.set_cookie(
         key=settings.auth_session_cookie_name,
         value=token,
         max_age=settings.auth_session_ttl_seconds,
-        path="/api/v1",
+        path="/",
         secure=_cookie_secure(),
         httponly=True,
-        samesite="strict",
+        samesite="lax",
     )
 
 

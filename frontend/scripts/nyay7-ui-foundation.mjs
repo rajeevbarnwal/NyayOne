@@ -286,9 +286,12 @@ async function observeSelectorContext(page, screenId) {
 
   if (screenId === 'S-04' || screenId === 'S-05') {
     return {
-      pass: Object.values(counts).every((count) => count === 0),
+      pass: counts.createContexts === 1
+        && counts.personaChanges === 1
+        && counts.languageTriggers === 1
+        && counts.personaTriggers === 0,
       counts,
-      expected: 'no persona or locale authority on sign-in screens',
+      expected: 'one Student/English sign-in context',
     };
   }
   if (screenId === 'S-08' || screenId === 'S-09') {

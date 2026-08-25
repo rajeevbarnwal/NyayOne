@@ -171,7 +171,7 @@ def _create_account(
     )
     assert verified.status_code == 200
     _assert_initial_onboarding(verified, purpose="signup", dob=dob)
-    assert "HttpOnly" in verified.headers["set-cookie"]
+    _assert_session_issuance_transition(verified.headers.get_list("set-cookie"))
     if not keep_session:
         client.cookies.clear()
     return str(registration_id), signup_code
@@ -264,6 +264,56 @@ def _use_flow_cookie(client: TestClient, token: str) -> None:
         domain="testserver.local",
         path="/api/v1",
     )
+
+
+def _assert_dual_auth_cookie_clear(headers: list[str]) -> None:
+    matching = [
+        header
+        for header in headers
+        if header.startswith(f"{settings.auth_session_cookie_name}=")
+    ]
+    assert len(matching) == 2
+    root = [header for header in matching if "Path=/;" in header]
+    legacy = [header for header in matching if "Path=/api/v1" in header]
+    assert len(root) == 1
+    assert len(legacy) == 1
+    for header in matching:
+        assert "Max-Age=0" in header
+        assert "HttpOnly" in header
+    assert "SameSite=lax" in root[0]
+    assert "SameSite=strict" in legacy[0]
+
+
+def _assert_session_issuance_transition(headers: list[str]) -> None:
+    assert len(headers) == 3
+    auth_headers = [
+        header
+        for header in headers
+        if header.startswith(f"{settings.auth_session_cookie_name}=")
+    ]
+    assert len(auth_headers) == 2
+    issued = [header for header in auth_headers if "Max-Age=0" not in header]
+    legacy = [
+        header
+        for header in auth_headers
+        if "Max-Age=0" in header and "Path=/api/v1" in header
+    ]
+    assert len(issued) == len(legacy) == 1
+    assert "Path=/;" in issued[0]
+    assert "HttpOnly" in issued[0]
+    assert "SameSite=lax" in issued[0]
+    assert "HttpOnly" in legacy[0]
+    assert "SameSite=strict" in legacy[0]
+    flow_headers = [
+        header
+        for header in headers
+        if header.startswith(f"{settings.otp_flow_cookie_name}=")
+    ]
+    assert len(flow_headers) == 1
+    assert "Max-Age=0" in flow_headers[0]
+    assert "Path=/api/v1" in flow_headers[0]
+    assert "HttpOnly" in flow_headers[0]
+    assert "SameSite=strict" in flow_headers[0]
 
 
 def _flow_for_token(session: Session, token: str) -> OtpFlow | None:
@@ -1729,10 +1779,16 @@ def test_success_sets_hardened_cookie_stores_only_hash_and_authenticates(ctx):
     )
     assert response.status_code == 200
     _assert_initial_onboarding(response, purpose="login")
-    cookie_header = response.headers["set-cookie"]
+    _assert_session_issuance_transition(response.headers.get_list("set-cookie"))
+    cookie_header = next(
+        item
+        for item in response.headers.get_list("set-cookie")
+        if item.startswith(f"{settings.auth_session_cookie_name}=")
+        and "Max-Age=0" not in item
+    )
     assert "HttpOnly" in cookie_header
-    assert "SameSite=strict" in cookie_header
-    assert "Path=/api/v1" in cookie_header
+    assert "SameSite=lax" in cookie_header
+    assert "Path=/" in cookie_header
     raw_token = client.cookies.get(settings.auth_session_cookie_name)
     assert raw_token and raw_token not in response.text and raw_token not in cookie_header.split(";", 1)[1]
 
@@ -1817,6 +1873,9 @@ def test_non_local_cookie_is_secure_and_authenticates_over_https(monkeypatch):
             json={"code": code},
         )
         assert response.status_code == 200
+        _assert_session_issuance_transition(
+            response.headers.get_list("set-cookie")
+        )
         assert "Secure" in response.headers["set-cookie"]
         assert "HttpOnly" in response.headers["set-cookie"]
 
@@ -2053,12 +2112,8 @@ def test_expired_session_and_logout_revoke_authority(ctx):
     assert logged_out_probe.status_code == 200
     assert logged_out_probe.json() == {"authenticated": False, "actor": None}
     invalidation = logged_out_probe.headers.get_list("set-cookie")
-    assert len(invalidation) == 1
-    assert invalidation[0].startswith(f"{settings.auth_session_cookie_name}=")
-    assert "Max-Age=0" in invalidation[0]
-    assert "Path=/api/v1" in invalidation[0]
-    assert "HttpOnly" in invalidation[0]
-    assert "SameSite=strict" in invalidation[0]
+    assert len(invalidation) == 2
+    _assert_dual_auth_cookie_clear(invalidation)
 
     # Logout is idempotent even after expiry and always clears the cookie.
     client.cookies.set(
@@ -2074,19 +2129,25 @@ def test_expired_session_and_logout_revoke_authority(ctx):
     )
     assert logout.status_code == 200
     logout_cookies = logout.headers.get_list("set-cookie")
+    assert len(logout_cookies) == 3
     assert {
         header.split("=", 1)[0] for header in logout_cookies
     } == {
         settings.auth_session_cookie_name,
         settings.otp_flow_cookie_name,
     }
-    assert all(
-        "Max-Age=0" in header
-        and "Path=/api/v1" in header
-        and "HttpOnly" in header
-        and "SameSite=strict" in header
+    _assert_dual_auth_cookie_clear(logout_cookies)
+    flow_headers = [
+        header
         for header in logout_cookies
-    )
+        if header.startswith(f"{settings.otp_flow_cookie_name}=")
+    ]
+    assert len(flow_headers) == 1
+    flow_clear = flow_headers[0]
+    assert "Max-Age=0" in flow_clear
+    assert "Path=/api/v1" in flow_clear
+    assert "HttpOnly" in flow_clear
+    assert "SameSite=strict" in flow_clear
 
 
 def test_privacy_delete_freezes_account_revokes_session_and_clears_both_cookies(
@@ -2120,16 +2181,18 @@ def test_privacy_delete_freezes_account_revokes_session_and_clears_both_cookies(
     )
     assert deleted.status_code == 202
     cookie_headers = deleted.headers.get_list("set-cookie")
-    for name in (
-        settings.auth_session_cookie_name,
-        settings.otp_flow_cookie_name,
-    ):
-        matching = [header for header in cookie_headers if header.startswith(f"{name}=")]
-        assert len(matching) == 1
-        assert "Max-Age=0" in matching[0]
-        assert "Path=/api/v1" in matching[0]
-        assert "HttpOnly" in matching[0]
-        assert "SameSite=strict" in matching[0]
+    assert len(cookie_headers) == 3
+    _assert_dual_auth_cookie_clear(cookie_headers)
+    flow_matching = [
+        header
+        for header in cookie_headers
+        if header.startswith(f"{settings.otp_flow_cookie_name}=")
+    ]
+    assert len(flow_matching) == 1
+    assert "Max-Age=0" in flow_matching[0]
+    assert "HttpOnly" in flow_matching[0]
+    assert "Path=/api/v1" in flow_matching[0]
+    assert "SameSite=strict" in flow_matching[0]
 
     with factory() as session:
         registration = session.get(
@@ -2168,7 +2231,7 @@ def test_privacy_delete_freezes_account_revokes_session_and_clears_both_cookies(
         settings.auth_session_cookie_name,
         auth_token,
         domain="testserver.local",
-        path="/api/v1",
+        path="/",
     )
     client.cookies.set(
         settings.otp_flow_cookie_name,
