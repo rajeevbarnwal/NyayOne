@@ -165,8 +165,8 @@ const authOnlyRetirement = () => ({
     retirement(SESSION_COOKIE, '', 'legacy'),
   ],
   expected: [
-    { name: SESSION_COOKIE },
-    { name: SESSION_COOKIE, scope: 'legacy' },
+    { name: SESSION_COOKIE, action: 'retire' },
+    { name: SESSION_COOKIE, action: 'retire', scope: 'legacy' },
   ],
 });
 
@@ -177,9 +177,9 @@ const completeRetirement = () => ({
     retirement(FLOW_COOKIE),
   ],
   expected: [
-    { name: SESSION_COOKIE },
-    { name: SESSION_COOKIE, scope: 'legacy' },
-    { name: FLOW_COOKIE },
+    { name: SESSION_COOKIE, action: 'retire' },
+    { name: SESSION_COOKIE, action: 'retire', scope: 'legacy' },
+    { name: FLOW_COOKIE, action: 'retire' },
   ],
 });
 
@@ -875,6 +875,84 @@ describe('NYAY-19 browser runner exact contract', () => {
       transition.expected,
       API,
     ).pass).toBe(true);
+  });
+
+  it('accepts only exact action-qualified retirement descriptors with known policy', () => {
+    const inspection = inspectCookieRetirementHeaders(
+      [
+        retirement(SESSION_COOKIE),
+        retirement(SESSION_COOKIE, '', 'legacy'),
+        retirement(FLOW_COOKIE),
+      ],
+      [
+        { name: SESSION_COOKIE, action: 'retire' },
+        { name: SESSION_COOKIE, action: 'retire', scope: 'legacy' },
+        { name: FLOW_COOKIE, action: 'retire' },
+      ],
+      API,
+    );
+
+    expect(inspection.pass).toBe(true);
+    expect(inspection.components).toHaveLength(3);
+    expect(inspection.components.every((component) => component.policyKnown)).toBe(true);
+  });
+
+  it('rejects malformed retirement descriptors fail closed', () => {
+    const exactHeader = [retirement(SESSION_COOKIE)];
+    const invalidDescriptors = [
+      SESSION_COOKIE,
+      { name: SESSION_COOKIE },
+      { name: SESSION_COOKIE, action: 'issue' },
+      { action: 'retire' },
+      { name: '', action: 'retire' },
+      { name: 'unowned_cookie', action: 'retire' },
+      { name: SESSION_COOKIE, action: 'retire', scope: null },
+      { name: SESSION_COOKIE, action: 'retire', scope: undefined },
+      { name: SESSION_COOKIE, action: 'retire', scope: 'unowned' },
+      { name: SESSION_COOKIE, action: 'retire', extra: true },
+    ];
+
+    for (const descriptor of invalidDescriptors) {
+      const inspection = inspectCookieRetirementHeaders(
+        exactHeader,
+        [descriptor],
+        API,
+      );
+      expect(inspection.pass).toBe(false);
+      expect(inspection.components[0]?.policyKnown).toBe(false);
+    }
+  });
+
+  it('keeps exact Path and SameSite retirement attributes mandatory', () => {
+    const expected = [{ name: SESSION_COOKIE, action: 'retire' }];
+    const exact = retirement(SESSION_COOKIE);
+    const wrongPath = {
+      ...exact,
+      value: exact.value.replace('Path=/', 'Path=/api/v1'),
+    };
+    const wrongSameSite = {
+      ...exact,
+      value: exact.value.replace('SameSite=lax', 'SameSite=strict'),
+    };
+
+    const wrongPathInspection = inspectCookieRetirementHeaders([wrongPath], expected, API);
+    const wrongSameSiteInspection = inspectCookieRetirementHeaders(
+      [wrongSameSite],
+      expected,
+      API,
+    );
+    expect(wrongPathInspection.pass).toBe(false);
+    expect(wrongPathInspection.components[0]).toMatchObject({
+      policyKnown: true,
+      pathExact: false,
+      sameSiteExact: true,
+    });
+    expect(wrongSameSiteInspection.pass).toBe(false);
+    expect(wrongSameSiteInspection.components[0]).toMatchObject({
+      policyKnown: true,
+      pathExact: true,
+      sameSiteExact: false,
+    });
   });
 
   it('accepts one exact host-only flow issuance', () => {

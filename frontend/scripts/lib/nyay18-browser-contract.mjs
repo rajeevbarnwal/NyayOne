@@ -120,6 +120,8 @@ export const NYAY18_PLANTED_MUTANT_NAMES = Object.freeze([
   'dirty-worktree',
   'non-chromium-runtime',
   'noncanonical-anonymous-session',
+  'pending-flow-authority-unproven',
+  'pending-flow-controls-missing',
   'undersized-local-seed',
   'missing-local-family',
   'undersized-cache-seed',
@@ -137,6 +139,10 @@ export const NYAY18_PLANTED_MUTANT_NAMES = Object.freeze([
   'failed-removal-mounted-private',
   'no-progress-mounted-private',
   'cleanup-failure-vacuous-action',
+  'cleanup-failure-pending-control-unproven',
+  'cleanup-failure-mutated-cookie-authority',
+  'cleanup-failure-safe-entry-missing',
+  'cleanup-failure-pending-authority-unproven',
   'unsupported-locks-cookie-work',
   'unsupported-locks-vacuous-action',
   'missing-lifecycle-scenario',
@@ -342,12 +348,35 @@ function validFreshProfiles(metrics) {
 
 function validAnonymous(metrics) {
   return exactKeys(metrics, [
-    'canonicalBodies', 'getRequests', 'otherRequests', 'requestCount',
+    'canonicalBodies', 'controls', 'flowCookies', 'flows', 'getRequests',
+    'denialCookieInventoryUnchanged', 'denialFlowAuthorityAbsent',
+    'denialFlowUnavailableProven', 'denialOtpControlsAbsent',
+    'denialRetiredInlineErrorAbsent', 'denialRoutesDenied', 'otherRequests',
+    'purposesExact', 'requestCount', 'screens', 'serverStateRequests',
+    'sessionCookies', 'sessionRequests', 'startResponses', 'stateResponses',
+    'verifyControls',
   ])
     && metrics.requestCount >= 1
     && metrics.getRequests === metrics.requestCount
     && metrics.canonicalBodies === metrics.requestCount
-    && metrics.otherRequests === 0;
+    && metrics.otherRequests === 0
+    && metrics.flows === 2
+    && metrics.startResponses === metrics.flows
+    && metrics.stateResponses === metrics.flows
+    && metrics.serverStateRequests >= metrics.flows
+    && metrics.sessionRequests >= metrics.flows
+    && metrics.controls === metrics.flows
+    && metrics.screens === metrics.flows
+    && metrics.flowCookies === metrics.flows
+    && metrics.sessionCookies === 0
+    && metrics.verifyControls === metrics.flows
+    && metrics.purposesExact === true
+    && metrics.denialCookieInventoryUnchanged === true
+    && metrics.denialFlowAuthorityAbsent === true
+    && metrics.denialFlowUnavailableProven === true
+    && metrics.denialOtpControlsAbsent === true
+    && metrics.denialRetiredInlineErrorAbsent === true
+    && metrics.denialRoutesDenied === 2;
 }
 
 function validLocalSeed(metrics) {
@@ -475,14 +504,21 @@ function validInvalidTheme(metrics) {
 
 function validCleanupFailure(metrics, mode) {
   return exactKeys(metrics, [
-    'actionAttempts', 'actionRejected', 'cookieOperations', 'mode',
-    'privateMounted', 'unavailableVisible',
+    'actionAttempts', 'actionRejected', 'cookieInventoryUnchanged',
+    'cookieOperations', 'flowAuthorityPreserved', 'mode',
+    'pendingAuthorityProven', 'pendingControlsProven', 'privateMounted',
+    'safeEntryVisible', 'unavailableVisible',
   ])
     && metrics.mode === mode
     && metrics.actionAttempts === 1
     && metrics.actionRejected === true
+    && metrics.cookieInventoryUnchanged === true
     && metrics.cookieOperations === 0
+    && metrics.flowAuthorityPreserved === true
+    && metrics.pendingAuthorityProven === true
+    && metrics.pendingControlsProven === true
     && metrics.privateMounted === false
+    && metrics.safeEntryVisible === true
     && metrics.unavailableVisible === true;
 }
 
@@ -861,7 +897,13 @@ function validRows() {
       strictModeRoot: true, strictModeSessionSettled: true,
     },
     anonymous_session_canonical: {
-      canonicalBodies: 2, getRequests: 2, otherRequests: 0, requestCount: 2,
+      canonicalBodies: 2, controls: 2, flowCookies: 2, flows: 2,
+      denialCookieInventoryUnchanged: true, denialFlowAuthorityAbsent: true,
+      denialFlowUnavailableProven: true, denialOtpControlsAbsent: true,
+      denialRetiredInlineErrorAbsent: true, denialRoutesDenied: 2,
+      getRequests: 2, otherRequests: 0, purposesExact: true, requestCount: 2,
+      screens: 2, serverStateRequests: 2, sessionCookies: 0,
+      sessionRequests: 2, startResponses: 2, stateResponses: 2, verifyControls: 2,
     },
     legacy_local_seed_complete: {
       exactFamilies: NYAY18_LEGACY_LOCAL_EXACT_KEYS.length,
@@ -927,18 +969,24 @@ function validRows() {
       oldThemeAbsent: true, resolvedLight: true,
     },
     inaccessible_storage_fail_closed: {
-      actionAttempts: 1, actionRejected: true,
-      cookieOperations: 0, mode: 'inaccessible', privateMounted: false,
+      actionAttempts: 1, actionRejected: true, cookieInventoryUnchanged: true,
+      cookieOperations: 0, flowAuthorityPreserved: true, mode: 'inaccessible',
+      pendingAuthorityProven: true, pendingControlsProven: true,
+      privateMounted: false, safeEntryVisible: true,
       unavailableVisible: true,
     },
     failed_removal_fail_closed: {
-      actionAttempts: 1, actionRejected: true,
-      cookieOperations: 0, mode: 'throw', privateMounted: false,
+      actionAttempts: 1, actionRejected: true, cookieInventoryUnchanged: true,
+      cookieOperations: 0, flowAuthorityPreserved: true, mode: 'throw',
+      pendingAuthorityProven: true, pendingControlsProven: true,
+      privateMounted: false, safeEntryVisible: true,
       unavailableVisible: true,
     },
     no_progress_fail_closed: {
-      actionAttempts: 1, actionRejected: true,
-      cookieOperations: 0, mode: 'no_progress', privateMounted: false,
+      actionAttempts: 1, actionRejected: true, cookieInventoryUnchanged: true,
+      cookieOperations: 0, flowAuthorityPreserved: true, mode: 'no_progress',
+      pendingAuthorityProven: true, pendingControlsProven: true,
+      privateMounted: false, safeEntryVisible: true,
       unavailableVisible: true,
     },
     unsupported_locks_fail_closed: {
@@ -1081,6 +1129,8 @@ const MUTATORS = Object.freeze({
   'dirty-worktree': (report) => { fixtureRow(report, 'required_environment_exact').metrics.worktreeClean = false; },
   'non-chromium-runtime': (report) => { fixtureRow(report, 'runtime_chromium').metrics.engine = 'webkit'; },
   'noncanonical-anonymous-session': (report) => { fixtureRow(report, 'anonymous_session_canonical').metrics.canonicalBodies = 0; },
+  'pending-flow-authority-unproven': (report) => { fixtureRow(report, 'anonymous_session_canonical').metrics.startResponses = 1; },
+  'pending-flow-controls-missing': (report) => { fixtureRow(report, 'anonymous_session_canonical').metrics.controls = 1; },
   'undersized-local-seed': (report) => { fixtureRow(report, 'legacy_local_seed_complete').metrics.seededCount = 256; },
   'missing-local-family': (report) => { fixtureRow(report, 'legacy_local_seed_complete').metrics.prefixFamilies -= 1; },
   'undersized-cache-seed': (report) => { fixtureRow(report, 'legacy_cache_seed_complete').metrics.seededCount = 256; },
@@ -1098,6 +1148,10 @@ const MUTATORS = Object.freeze({
   'failed-removal-mounted-private': (report) => { fixtureRow(report, 'failed_removal_fail_closed').metrics.privateMounted = true; },
   'no-progress-mounted-private': (report) => { fixtureRow(report, 'no_progress_fail_closed').metrics.privateMounted = true; },
   'cleanup-failure-vacuous-action': (report) => { fixtureRow(report, 'inaccessible_storage_fail_closed').metrics.actionAttempts = 0; },
+  'cleanup-failure-pending-control-unproven': (report) => { fixtureRow(report, 'inaccessible_storage_fail_closed').metrics.pendingControlsProven = false; },
+  'cleanup-failure-mutated-cookie-authority': (report) => { fixtureRow(report, 'inaccessible_storage_fail_closed').metrics.cookieInventoryUnchanged = false; },
+  'cleanup-failure-safe-entry-missing': (report) => { fixtureRow(report, 'inaccessible_storage_fail_closed').metrics.safeEntryVisible = false; },
+  'cleanup-failure-pending-authority-unproven': (report) => { fixtureRow(report, 'inaccessible_storage_fail_closed').metrics.pendingAuthorityProven = false; },
   'unsupported-locks-cookie-work': (report) => { fixtureRow(report, 'unsupported_locks_fail_closed').metrics.cookieOperations = 1; },
   'unsupported-locks-vacuous-action': (report) => { fixtureRow(report, 'unsupported_locks_fail_closed').metrics.actionAttempts = 0; },
   'missing-lifecycle-scenario': (report) => { fixtureRow(report, 'lifecycle_boundaries_complete').metrics.completed = 5; },

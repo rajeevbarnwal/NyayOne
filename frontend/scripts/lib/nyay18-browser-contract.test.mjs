@@ -74,6 +74,8 @@ const EXPECTED_MUTANTS = [
   'dirty-worktree',
   'non-chromium-runtime',
   'noncanonical-anonymous-session',
+  'pending-flow-authority-unproven',
+  'pending-flow-controls-missing',
   'undersized-local-seed',
   'missing-local-family',
   'undersized-cache-seed',
@@ -91,6 +93,10 @@ const EXPECTED_MUTANTS = [
   'failed-removal-mounted-private',
   'no-progress-mounted-private',
   'cleanup-failure-vacuous-action',
+  'cleanup-failure-pending-control-unproven',
+  'cleanup-failure-mutated-cookie-authority',
+  'cleanup-failure-safe-entry-missing',
+  'cleanup-failure-pending-authority-unproven',
   'unsupported-locks-cookie-work',
   'unsupported-locks-vacuous-action',
   'missing-lifecycle-scenario',
@@ -266,7 +272,13 @@ describe('NYAY-18 pure browser evidence contract', () => {
       ['leading_unrelated_keys_preserved', (metrics) => { metrics.targetRemoved = false; }],
       ['theme_current_precedence', (metrics) => { metrics.currentWon = false; }],
       ['invalid_theme_retired', (metrics) => { metrics.oldThemeAbsent = false; }],
+      ['anonymous_session_canonical', (metrics) => { metrics.denialRoutesDenied = 1; }],
+      ['anonymous_session_canonical', (metrics) => { metrics.denialOtpControlsAbsent = false; }],
+      ['anonymous_session_canonical', (metrics) => { metrics.denialFlowAuthorityAbsent = false; }],
+      ['anonymous_session_canonical', (metrics) => { metrics.denialCookieInventoryUnchanged = false; }],
       ['inaccessible_storage_fail_closed', (metrics) => { metrics.privateMounted = true; }],
+      ['inaccessible_storage_fail_closed', (metrics) => { metrics.pendingAuthorityProven = false; }],
+      ['inaccessible_storage_fail_closed', (metrics) => { metrics.flowAuthorityPreserved = false; }],
       ['failed_removal_fail_closed', (metrics) => { metrics.unavailableVisible = false; }],
       ['no_progress_fail_closed', (metrics) => { metrics.actionRejected = false; }],
       ['no_progress_fail_closed', (metrics) => { metrics.cookieOperations = 1; }],
@@ -409,6 +421,102 @@ describe('NYAY-18 real Chromium runner source contract', () => {
     expect(source).not.toContain('legal[-_.:]?saathi');
   });
 
+  it('requires server-issued pending authority before observing S05 and S09 OTP controls', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    const provisionStart = source.indexOf('async function provisionServerPendingFlow');
+    const provisionEnd = source.indexOf('async function runServerPendingFlowMatrix', provisionStart);
+    const matrixEnd = source.indexOf('async function runUnavailableChallengeDenial', provisionEnd);
+    const provision = source.slice(provisionStart, provisionEnd);
+    const matrix = source.slice(provisionEnd, matrixEnd);
+    expect(source).toContain('async function provisionServerPendingFlow');
+    expect(source).toContain('async function runServerPendingFlowMatrix');
+    expect(source).toContain("context.request.post(`${WEB}/api/v1/auth/student/login/otp/start`");
+    expect(source).toContain("context.request.post(`${WEB}/api/v1/auth/student/register`");
+    expect(source).toContain("context.request.get(`${WEB}/api/v1/auth/student/otp/state`");
+    expect(source).toContain("stateBody?.status !== 'pending'");
+    expect(source).toContain('stateBody?.purpose !== purpose');
+    expect(source).toContain("cookie.name === 'nyayone_otp_flow'");
+    expect(source).toContain("cookie.name === 'nyayone_session'");
+    expect(source).toContain("['login', '/s-05', '[data-screen=\"S-05\"]']");
+    expect(source).toContain("['signup', '/s-09', '[data-screen=\"S-09\"]']");
+    expect(source).toContain('otpStateRequestCount');
+    expect(provision).not.toContain("page.route('**/api/v1/auth/student/otp/state'");
+    expect(provision).not.toMatch(/\bcode\b/u);
+    expect(matrix).not.toContain("page.route('**/api/v1/auth/student/otp/state'");
+  });
+
+  it('requires unavailable challenge navigation to prove S03 denial and zero OTP controls', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    expect(source).toContain('async function runUnavailableChallengeDenial');
+    expect(source).toContain("await page.waitForURL(/\\/s-03$/u)");
+    expect(source).toContain("page.getByLabel('Six digit code').count()");
+    expect(source).toContain('cookieInventoryUnchanged');
+    expect(source).toContain('flowAuthorityAbsent');
+    expect(source).toContain('flowUnavailableProven');
+    expect(source).toContain('otpControlsAbsent');
+    const start = source.indexOf('async function runUnavailableChallengeDenial');
+    const end = source.indexOf('async function runFailClosedMatrix', start);
+    const denial = source.slice(start, end);
+    expect(denial).not.toContain("getByLabel('Six digit code').fill(");
+    expect(denial).not.toContain("name: 'Verify and continue'");
+    expect(denial).toContain("stateBody.status === 'unavailable'");
+  });
+
+  it('keeps anonymous challenge denial separate from the storage-failure mutation barrier', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    expect(source).toContain('async function runAnonymousChallengeDenialMatrix');
+    expect(source).toContain('const anonymousDenied = await runAnonymousChallengeDenialMatrix(browser);');
+    const start = source.indexOf('async function runFailClosedMatrix');
+    const end = source.indexOf('async function runLifecycleMatrix', start);
+    const matrix = source.slice(start, end);
+    expect(matrix).not.toContain('runUnavailableChallengeDenial(page, context)');
+  });
+
+  it('uses a real pending-flow authority and a logout UI mutation to prove cleanup failure blocks cookie work', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    const start = source.indexOf('async function runFailClosedMatrix');
+    const end = source.indexOf('async function runLifecycleMatrix', start);
+    const matrix = source.slice(start, end);
+    expect(matrix).toContain("await provisionServerPendingFlow(browser, 'login')");
+    expect(matrix).toContain('pendingAuthorityProven');
+    expect(matrix).toContain('installRuntimeStorageFailure');
+    expect(matrix).toContain("page.getByRole('button', { name: 'Sign out', exact: true })");
+    expect(matrix).toContain('await signOut.click()');
+    expect(matrix).toContain('cookieInventoryUnchanged');
+    expect(matrix).toContain('flowAuthorityPreserved');
+    expect(matrix).toContain('cookieOperations === 0');
+    expect(matrix).toContain(
+      'const pendingStateResponsePromise = page.waitForResponse(isExactPendingStateResponse);',
+    );
+    expect(matrix.indexOf(
+      'const pendingStateResponsePromise = page.waitForResponse(isExactPendingStateResponse);',
+    )).toBeLessThan(matrix.indexOf('await page.goto(`${WEB}/s-05`'));
+    expect(matrix).toContain('await pendingStateResponse.finished()');
+    expect(matrix).toContain("await pendingControl.waitFor({ state: 'visible' })");
+    expect(matrix).toContain("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })");
+    expect(matrix.indexOf("await page.waitForURL(/\\/s-03$/u);")).toBeLessThan(
+      matrix.indexOf("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })"),
+    );
+    expect(matrix.indexOf("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })")).toBeLessThan(
+      matrix.indexOf('const safeEntryVisible ='),
+    );
+    expect(matrix).not.toContain("getByLabel('Six digit code').fill(");
+    expect(matrix).not.toContain("name: 'Verify and continue'");
+  });
+
+  it('matches storage-failure readiness only to the exact canonical OTP-state response', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    const start = source.indexOf('function isExactPendingStateResponse');
+    const end = source.indexOf('async function runFailClosedMatrix', start);
+    const matcher = source.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(matcher).toContain("response.request().method() === 'GET'");
+    expect(matcher).toContain("url.origin === new URL(WEB).origin");
+    expect(matcher).toContain("url.pathname === '/api/v1/auth/student/otp/state'");
+    expect(matcher).toContain("url.search === ''");
+    expect(matcher).toContain("url.hash === ''");
+  });
+
   it('measures the credential-omitted hostile asset fetch at the loopback server', () => {
     const source = readFileSync(PREVIEW, 'utf8');
     expect(source).toContain("'/assets/nyay18-private-canary.js'");
@@ -419,6 +527,21 @@ describe('NYAY-18 real Chromium runner source contract', () => {
     expect(source).toContain("'Cache-Control': 'private, no-store'");
     expect(source).toContain("Vary: 'Cookie'");
     expect(source).toContain("'Cache-Control': 'public, max-age=60'");
+  });
+
+  it('requires the preview fixture to own pending flow state in an HttpOnly cookie', () => {
+    const source = readFileSync(PREVIEW, 'utf8');
+    expect(source).toContain("'/api/v1/auth/student/login/otp/start'");
+    expect(source).toContain("'/api/v1/auth/student/register'");
+    expect(source).toContain("'/api/v1/auth/student/otp/state'");
+    expect(source).toContain("'/api/v1/auth/student/session'");
+    expect(source).toContain("'Set-Cookie'");
+    expect(source).toContain('HttpOnly');
+    expect(source).toContain('SameSite=Strict');
+    expect(source).toContain('flowAuthority.set(');
+    expect(source).toContain('flowAuthority.get(');
+    expect(source).not.toContain('otp_code');
+    expect(source).not.toContain('one_time_code');
   });
 
   it('passes exact commit, tree and parent bindings through the isolated orchestrator', () => {

@@ -770,7 +770,9 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   if (session.phase !== 'anonymous') {
     return (
       <Navigate
-        to={session.phase === 'authenticated' ? '/s-07' : '/s-03'}
+        to={session.phase === 'authenticated'
+          ? (purpose === 'login' ? resolvedProfileReauthResumeRoute() : null) ?? '/s-07'
+          : '/s-03'}
         replace
         state={{ nyay7Focus: 'persona' }}
       />
