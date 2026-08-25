@@ -48,6 +48,24 @@ const API_LOCAL_HTTP = new URL(API).protocol === 'http:'
   && ['127.0.0.1', 'localhost', '::1'].includes(API_HOST);
 const SESSION_COOKIE = 'nyayone_session';
 const FLOW_COOKIE = 'nyayone_otp_flow';
+const ROOT_SESSION_RETIREMENT = Object.freeze({
+  name: SESSION_COOKIE, action: 'retire',
+});
+const LEGACY_SESSION_RETIREMENT = Object.freeze({
+  name: SESSION_COOKIE, action: 'retire', scope: 'legacy',
+});
+const FLOW_RETIREMENT = Object.freeze({
+  name: FLOW_COOKIE, action: 'retire',
+});
+const AUTH_ONLY_SESSION_RETIREMENTS = Object.freeze([
+  ROOT_SESSION_RETIREMENT,
+  LEGACY_SESSION_RETIREMENT,
+]);
+const AUTH_AND_FLOW_RETIREMENTS = Object.freeze([
+  ROOT_SESSION_RETIREMENT,
+  LEGACY_SESSION_RETIREMENT,
+  FLOW_RETIREMENT,
+]);
 const SESSION_BOOTSTRAP_EXPECTED = 1;
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 10_000;
 let lastLoginIssueConfirmedAt = 0;
@@ -255,8 +273,9 @@ async function loginWithBrowser(browser, mobile) {
   const loginCookieTransition = inspectCookieTransitionHeaders(
     await verifyResponse.headersArray(),
     [
+      LEGACY_SESSION_RETIREMENT,
       { name: SESSION_COOKIE, action: 'issue', maxAge: SESSION_TTL_SECONDS },
-      { name: FLOW_COOKIE, action: 'retire' },
+      FLOW_RETIREMENT,
     ],
     API,
   );
@@ -511,10 +530,10 @@ async function ambientCookieOnlyProtectedProbe(browser, rawCookie) {
       name: SESSION_COOKIE,
       value: rawCookie,
       domain: API_HOST,
-      path: '/api/v1',
+      path: '/',
       httpOnly: true,
       secure: !API_LOCAL_HTTP,
-      sameSite: 'Strict',
+      sameSite: 'Lax',
     }]);
     const protectedRequests = [];
     page.on('request', (request) => {
@@ -623,15 +642,15 @@ async function staleCookieSessionProbe(browser, rawCookie) {
       name: SESSION_COOKIE,
       value: rawCookie,
       domain: API_HOST,
-      path: '/api/v1',
+      path: '/',
       httpOnly: true,
       secure: !API_LOCAL_HTTP,
-      sameSite: 'Strict',
+      sameSite: 'Lax',
     }]);
     const session = await productStudentSession(page);
     const retirement = inspectCookieRetirementHeaders(
       await session.response.headersArray(),
-      [SESSION_COOKIE],
+      AUTH_ONLY_SESSION_RETIREMENTS,
       API,
     );
     const absent = inspectAuthorityCookieInventory(await context.cookies(), [], API);
@@ -807,7 +826,7 @@ try {
   const rotatedSession = await productStudentSession(loginA.page);
   const rotationRetirement = inspectCookieRetirementHeaders(
     await rotatedSession.response.headersArray(),
-    [SESSION_COOKIE],
+    AUTH_ONLY_SESSION_RETIREMENTS,
     API,
   );
   await loginA.page.reload({ waitUntil: 'domcontentloaded' });
@@ -883,7 +902,7 @@ try {
   await loginB.page.waitForURL('**/s-03');
   const logoutRetirement = inspectCookieRetirementHeaders(
     await logoutResponse.headersArray(),
-    [SESSION_COOKIE, FLOW_COOKIE],
+    AUTH_AND_FLOW_RETIREMENTS,
     API,
   );
   const emptyCookiesB = inspectAuthorityCookieInventory(
@@ -1133,7 +1152,7 @@ try {
     .waitFor({ state: 'visible' });
   const deletionRetirement = inspectCookieRetirementHeaders(
     await deletionResponse.headersArray(),
-    [SESSION_COOKIE, FLOW_COOKIE],
+    AUTH_AND_FLOW_RETIREMENTS,
     API,
   );
   const emptyDeleteCookies = inspectAuthorityCookieInventory(

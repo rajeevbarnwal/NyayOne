@@ -152,7 +152,33 @@ def _verify_signup(client, sender):
     assert verified.status_code == 200
     assert verified.json()["status"] == "authenticated"
     assert verified.json()["purpose"] == "signup"
-    assert "HttpOnly" in verified.headers["set-cookie"]
+    cookie_headers = verified.headers.get_list("set-cookie")
+    assert len(cookie_headers) == 3
+    auth_headers = [
+        header
+        for header in cookie_headers
+        if header.startswith(f"{settings.auth_session_cookie_name}=")
+    ]
+    assert len(auth_headers) == 2
+    issued = [header for header in auth_headers if "Max-Age=0" not in header]
+    legacy = [
+        header
+        for header in auth_headers
+        if "Max-Age=0" in header and "Path=/api/v1" in header
+    ]
+    assert len(issued) == 1 and "Path=/" in issued[0]
+    assert "HttpOnly" in issued[0] and "SameSite=lax" in issued[0]
+    assert len(legacy) == 1
+    assert "HttpOnly" in legacy[0] and "SameSite=strict" in legacy[0]
+    flow_headers = [
+        header
+        for header in cookie_headers
+        if header.startswith(f"{settings.otp_flow_cookie_name}=")
+    ]
+    assert len(flow_headers) == 1
+    assert "Max-Age=0" in flow_headers[0]
+    assert "Path=/api/v1" in flow_headers[0]
+    assert "SameSite=strict" in flow_headers[0]
     client.headers["Origin"] = settings.cors_origins[0]
 
 

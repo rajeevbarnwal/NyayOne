@@ -75,15 +75,44 @@ describe('NYAY-4 frontend authority source contract', () => {
       join(FRONTEND_ROOT, 'src/features/student/lib/useOtpFlowState.ts'),
       'utf8',
     );
-    expect(hookSource).toMatch(/catch \(error\)[\s\S]*setSnapshot\(null\)[\s\S]*setLoadError\(true\)/);
+    const refreshFailure = hookSource.slice(
+      hookSource.indexOf('catch (error)'),
+      hookSource.indexOf('throw error;', hookSource.indexOf('catch (error)')),
+    );
+    expect(refreshFailure).toMatch(/setSnapshot\(null\)[\s\S]*setLoadError\(true\)/);
+  });
+
+  it('keeps OTP reads and snapshots disabled until the owning session boundary explicitly enables them', () => {
+    const hookSource = readFileSync(
+      join(FRONTEND_ROOT, 'src/features/student/lib/useOtpFlowState.ts'),
+      'utf8',
+    );
+
+    expect(hookSource).toContain('export interface OtpFlowStateOptions');
+    expect(hookSource).toContain('const enabled = options.enabled ?? true;');
+    expect(hookSource).toMatch(
+      /if \(!enabled\) \{[\s\S]*mutationRevision\.current \+= 1;[\s\S]*setSnapshot\(null\);[\s\S]*setLoading\(true\);[\s\S]*return;/u,
+    );
+    expect(hookSource).toMatch(
+      /if \(!enabled\) return undefined;[\s\S]*setInterval\(\(\) => \{[\s\S]*refresh\(\)/u,
+    );
+    expect(hookSource).toContain('state: enabled ? state : null');
   });
 
   it('detects a planted stale-snapshot-on-refresh-failure source mutant', () => {
     const hookSource = readFileSync(
       join(FRONTEND_ROOT, 'src/features/student/lib/useOtpFlowState.ts'),
       'utf8',
-    ).replace('setSnapshot(null);', '/* planted stale snapshot */');
-    expect(hookSource).not.toMatch(/catch \(error\)[\s\S]*setSnapshot\(null\)[\s\S]*setLoadError\(true\)/);
+    );
+    const refreshFailure = hookSource.slice(
+      hookSource.indexOf('catch (error)'),
+      hookSource.indexOf('throw error;', hookSource.indexOf('catch (error)')),
+    );
+    const mutant = refreshFailure.replace(
+      'setSnapshot(null);',
+      '/* planted stale snapshot */',
+    );
+    expect(mutant).not.toMatch(/setSnapshot\(null\)[\s\S]*setLoadError\(true\)/);
   });
 
   it('keeps production auth entries disconnected from every local OTP authority and fixed code', () => {

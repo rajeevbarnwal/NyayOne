@@ -258,20 +258,50 @@ def test_delete_requires_typed_confirmation_and_real_reauth(ctx):
         assert s.get(StudentRegistration, rid).status == "suspended"
         assert s.get(User, uid).status == "suspended"
     deleted_cookies = ok.headers.get_list("set-cookie")
-    assert any(
-        header.startswith(f"{settings.auth_session_cookie_name}=")
-        and "Max-Age=0" in header
-        and "Path=/api/v1" in header
-        and "HttpOnly" in header
-        and "SameSite=strict" in header
+    assert len(deleted_cookies) == 3
+    root_auth = [
+        header
         for header in deleted_cookies
-    )
-    assert any(
-        header.startswith(f"{settings.otp_flow_cookie_name}=")
-        and "Max-Age=0" in header
+        if header.startswith(f"{settings.auth_session_cookie_name}=")
+        and "Path=/;" in header
+    ]
+    legacy_auth = [
+        header
+        for header in deleted_cookies
+        if header.startswith(f"{settings.auth_session_cookie_name}=")
         and "Path=/api/v1" in header
-        and "HttpOnly" in header
-        and "SameSite=strict" in header
+    ]
+    flow_clear = [
+        header
+        for header in deleted_cookies
+        if header.startswith(f"{settings.otp_flow_cookie_name}=")
+    ]
+    assert len(root_auth) == len(legacy_auth) == len(flow_clear) == 1
+    assert all(
+        token in root_auth[0]
+        for token in ("Max-Age=0", "Path=/", "HttpOnly", "SameSite=lax")
+    )
+    assert all(
+        token in legacy_auth[0]
+        for token in (
+            "Max-Age=0",
+            "Path=/api/v1",
+            "HttpOnly",
+            "SameSite=strict",
+        )
+    )
+    assert all(
+        token in flow_clear[0]
+        for token in (
+            "Max-Age=0",
+            "Path=/api/v1",
+            "HttpOnly",
+            "SameSite=strict",
+        )
+    )
+    assert not any(
+        header.startswith(f"{settings.auth_session_cookie_name}=")
+        and "Domain=" in header
         for header in deleted_cookies
     )
     replay = client.post("/api/v1/student/privacy/delete", headers=h,

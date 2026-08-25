@@ -99,8 +99,8 @@ function assertRunnerWiring(source) {
   for (const required of [
     /cookieInventory\.length === 1/,
     /postAuthCookies\.length === 1/,
-    /postAuthAuthorityCookies\[0\]\.path === ['"]\/api\/v1['"]/,
-    /postAuthAuthorityCookies\[0\]\.sameSite === ['"]Strict['"]/,
+    /postAuthAuthorityCookies\[0\]\.path === ['"]\/['"]/,
+    /postAuthAuthorityCookies\[0\]\.sameSite === ['"]Lax['"]/,
     /postAuthAuthorityCookies\[0\]\.secure === !localHttp/,
     /hasExactSingleOrigin/,
     /hasExactOrderedOriginTrace/,
@@ -409,14 +409,27 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     expect(source).toContain(
       "const resendButton = page.getByRole('button', { name: 'Resend Code', exact: true });",
     );
-    expect(source).toContain('resendDisabled: await resendButton.isDisabled(),');
-    expect(source).toContain('await resendButton.evaluate((button) => button.click());');
+    expect(source).toContain('resendAbsent: await resendButton.count() === 0,');
     expect(source).toContain(
       'await resendButton.click({ trial: true, timeout: 45_000 });',
     );
     expect(source).toContain('await resendButton.click();');
     expect(source).not.toContain('v34-textlink');
     expect(source).not.toContain('Resend now');
+  });
+
+  it('treats unavailable S-09 authority as a safe redirect with no OTP controls', () => {
+    const source = readFileSync(resolve('scripts/nyay4-otp-browser-negative.mjs'), 'utf8');
+    expect(source).not.toContain("getByText('Verification state is unavailable.'");
+    expect(source).toContain("await page.waitForURL(/\\/s-03$/u);");
+    expect(source).toContain("await stalePage.waitForURL(/\\/s-03$/u);");
+    expect(source).toContain("await failedPage.waitForURL(/\\/s-03$/u);");
+    expect(source).toContain("page.getByLabel('Six digit code').count()");
+    expect(source).toContain("stalePage.getByLabel('Six digit code').count()");
+    expect(source).toContain("failedPage.getByLabel('Six digit code').count()");
+    expect(source).toContain('verifyAbsent: await verifyButton.count() === 0');
+    expect(source).toContain("stalePage.getByRole('button', { name: 'Verify and continue', exact: true }).count()");
+    expect(source).toContain("failedPage.getByRole('button', { name: 'Verify and continue', exact: true }).count()");
   });
 
   it('matches the StatusBadge label after excluding its aria-hidden mark, exactly once', () => {

@@ -401,6 +401,22 @@ export async function resendStudentOtp(): Promise<OtpFlowState> {
   return requireOtpFlowState(result);
 }
 
+export async function cancelStudentOtp(): Promise<OtpFlowState> {
+  // Persona Change abandons the local registration attempt immediately. Its
+  // request body may contain PII and must not survive while server retirement
+  // is in flight or after a network failure.
+  clearRegistrationAttempt();
+  const result = await jsonRequest<unknown>(
+    '/api/v1/auth/student/otp/cancel',
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  const state = requireOtpFlowState(result);
+  if (state.status !== 'unavailable' || state.purpose !== null) {
+    throw new RegistrationApiError(502, 'invalid_otp_cancel_projection');
+  }
+  return state;
+}
+
 export async function saveAcademicProfile(
   input: AcademicProfileInput,
 ): Promise<void> {

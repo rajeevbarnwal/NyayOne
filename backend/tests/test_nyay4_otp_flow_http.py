@@ -210,15 +210,36 @@ def test_signup_verify_uses_code_only_and_returns_terminal_projection():
         assert client.cookies.get(settings.auth_session_cookie_name)
         assert client.cookies.get(settings.otp_flow_cookie_name) is None
         cookies = verified.headers.get_list("set-cookie")
-        session_cookie = next(
+        assert len(cookies) == 3
+        session_headers = [
             item
             for item in cookies
             if item.startswith(f"{settings.auth_session_cookie_name}=")
+        ]
+        assert len(session_headers) == 2
+        session_cookie = next(
+            item for item in session_headers if "Max-Age=0" not in item
         )
-        assert "Path=/api/v1" in session_cookie
+        legacy_clear = next(
+            item
+            for item in session_headers
+            if "Max-Age=0" in item and "Path=/api/v1" in item
+        )
+        assert "Path=/" in session_cookie
         assert "HttpOnly" in session_cookie
-        assert "SameSite=strict" in session_cookie
+        assert "SameSite=lax" in session_cookie
         assert "Domain=" not in session_cookie
+        assert "HttpOnly" in legacy_clear
+        assert "SameSite=strict" in legacy_clear
+        flow_clear = [
+            item
+            for item in cookies
+            if item.startswith(f"{settings.otp_flow_cookie_name}=")
+        ]
+        assert len(flow_clear) == 1
+        assert "Max-Age=0" in flow_clear[0]
+        assert "Path=/api/v1" in flow_clear[0]
+        assert "SameSite=strict" in flow_clear[0]
     finally:
         client.close()
         engine.dispose()

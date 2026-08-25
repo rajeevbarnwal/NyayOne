@@ -1,9 +1,12 @@
 """HttpOnly-cookie OTP flow capabilities and safe public state (NYAY-4)."""
 from __future__ import annotations
 
+import hmac
 import math
 import secrets
 import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 from typing_extensions import TypedDict
@@ -13,12 +16,19 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crypto import active_key_version, decrypt, encrypt, keyed_hash
-from app.models.registration import OtpChallenge, OtpFlow, OtpPurposeAuthority
-from app.models.registration import RegistrationIdempotencyRecord
+from app.models.registration import (
+    OtpChallenge,
+    OtpFlow,
+    OtpPurposeAuthority,
+    RegistrationIdempotencyRecord,
+    StudentRegistration,
+)
+from app.schemas.registration import StudentRegisterRequest
 from app.services.otp_authority import as_utc, locked_for_seconds
 from app.services import registration_service
 
 _NONTERMINAL = ("pending", "code_sent", "verified", "locked")
+_CANCELLABLE_ONBOARDING = frozenset({"pending", "code_sent", "locked"})
 
 
 class OtpFlowState(TypedDict):
@@ -30,6 +40,13 @@ class OtpFlowState(TypedDict):
     resend_in_seconds: int | None
     locked_for_seconds: int | None
     resend_allowed: bool
+
+
+@dataclass(frozen=True)
+class OnboardingCancellation:
+    state: OtpFlowState
+    signup_restart_token: str | None
+    signup_restart_max_age: int | None
 
 
 def unavailable_state() -> OtpFlowState:
@@ -403,6 +420,266 @@ def state_for_token(
     if graph is None:
         return unavailable_state()
     return project(*graph, now=now)
+
+
+def cancel_onboarding_flow(
+    session: Session,
+    raw_token: str | None,
+    *,
+    now: datetime,
+) -> OnboardingCancellation:
+    """Atomically retire one cookie-owned signup/login authority graph.
+
+    Missing, expired, random, and non-onboarding capabilities share the same
+    unavailable projection. A live onboarding flow is consumed only after its
+    active or pending challenge and every relayable outbox row are locked and
+    fenced, so a captured cookie/code pair or stale delivery worker cannot win
+    after the cancellation commit.
+    """
+
+    graph = resolve_flow(session, raw_token)
+    if graph is None:
+        return OnboardingCancellation(unavailable_state(), None, None)
+    authority, flow = graph
+    now = as_utc(now)
+    if (
+        flow.purpose not in {"signup", "login"}
+        or flow.state not in _CANCELLABLE_ONBOARDING
+        or flow.consumed_at is not None
+        or as_utc(flow.expires_at) <= now
+    ):
+        return OnboardingCancellation(unavailable_state(), None, None)
+
+    # Local import avoids a module cycle: otp_outbox imports the OtpFlow model
+    # and coordinates the same authority-first locking discipline.
+    from app.services import otp_outbox
+
+    otp_outbox.fence_expired_flow_deliveries(
+        session,
+        authority,
+        now=now,
+        reason="otp_flow_cancelled",
+    )
+    signup_restart_token = None
+    signup_restart_max_age = None
+    if (
+        flow.purpose == "signup"
+        and raw_token is not None
+        and flow.registration_id is not None
+        and flow.registration_idempotency_record_id is not None
+    ):
+        record = session.get(
+            RegistrationIdempotencyRecord,
+            flow.registration_idempotency_record_id,
+        )
+        if (
+            record is None
+            or record.registration_id != flow.registration_id
+            or record.state not in {"pending", "succeeded"}
+            or record.request_fingerprint is None
+            or record.request_fingerprint_version
+            not in registration_service.REGISTRATION_REQUEST_FINGERPRINT_VERSIONS
+        ):
+            raise RuntimeError("signup cancellation authority is invalid")
+        # Preserve only the keyed, versioned request fingerprint on the
+        # consumed capability. This permits one exact restart without retaining
+        # the browser's old idempotency authority or exposing any PII.
+        flow.metadata_json = {
+            "terminal_reason": "user_cancelled",
+            "request_fingerprint": record.request_fingerprint,
+            "request_fingerprint_version": record.request_fingerprint_version,
+        }
+        registration = session.get(StudentRegistration, flow.registration_id)
+        if (
+            registration is None
+            or registration.status != "otp_pending"
+            or registration.deleted_at is not None
+        ):
+            raise RuntimeError("signup cancellation registration is invalid")
+        registration_service.terminalize_registration_idempotency(
+            session,
+            registration,
+            state="retired",
+            locked_record=record,
+        )
+        signup_restart_token = raw_token
+        signup_restart_max_age = _seconds_until(flow.expires_at, now)
+    flow.state = "consumed"
+    flow.consumed_at = now
+    flow.destination_masked_ct = None
+    flow.key_version = None
+    session.flush()
+    return OnboardingCancellation(
+        unavailable_state(),
+        signup_restart_token,
+        signup_restart_max_age,
+    )
+
+
+def restart_cancelled_signup(
+    session: Session,
+    raw_token: str | None,
+    request: StudentRegisterRequest,
+    idempotency_key: str | None,
+    *,
+    now: datetime,
+) -> registration_service.RegistrationResult | None:
+    """Restart one exact canceled signup through its path-scoped capability.
+
+    The old ledger is already a terminal tombstone. The consumed flow carries
+    only a keyed request fingerprint, so a different payload or replayed
+    capability receives no authority and falls through to the neutral duplicate
+    path. A successful restart consumes this marker before staging a new
+    challenge and binds a fresh idempotency ledger.
+    """
+
+    if not raw_token or idempotency_key is None:
+        return None
+    candidate = session.execute(
+        select(
+            OtpFlow.purpose,
+            OtpFlow.state,
+            OtpFlow.registration_id,
+            OtpFlow.registration_idempotency_record_id,
+            OtpFlow.expires_at,
+            OtpFlow.metadata_json,
+        ).where(OtpFlow.token_hash == flow_token_hash(raw_token))
+    ).one_or_none()
+    if candidate is None:
+        return None
+    (
+        purpose,
+        state,
+        registration_id,
+        record_id,
+        candidate_expires_at,
+        candidate_metadata,
+    ) = candidate
+    candidate_metadata = candidate_metadata or {}
+    if not isinstance(candidate_metadata, Mapping):
+        return None
+    candidate_version = candidate_metadata.get("request_fingerprint_version")
+    candidate_fingerprint = candidate_metadata.get("request_fingerprint")
+    if (
+        purpose != "signup"
+        or state != "consumed"
+        or registration_id is None
+        or record_id is None
+        or as_utc(candidate_expires_at) <= as_utc(now)
+        or candidate_metadata.get("terminal_reason") != "user_cancelled"
+        or candidate_version
+        not in registration_service.REGISTRATION_REQUEST_FINGERPRINT_VERSIONS
+        or not isinstance(candidate_fingerprint, str)
+        or len(candidate_fingerprint) != 64
+    ):
+        # The OTP cookie name is intentionally shared across purposes and its
+        # Path attribute is not visible to the server. Broad legacy, active,
+        # neutralized, and retention-tombstoned cookies are therefore ordinary
+        # registration context—not restart capabilities. Only the exact marker
+        # shape proceeds into the strict, canonically locked graph resolver.
+        return None
+    graph = resolve_flow(session, raw_token)
+    if graph is None:
+        return None
+    authority, flow = graph
+    metadata = flow.metadata_json or {}
+    version = metadata.get("request_fingerprint_version")
+    stored_fingerprint = metadata.get("request_fingerprint")
+    if (
+        flow.purpose != "signup"
+        or flow.state != "consumed"
+        or flow.registration_id is None
+        or flow.registration_idempotency_record_id is None
+        or as_utc(flow.expires_at) <= as_utc(now)
+        or metadata.get("terminal_reason") != "user_cancelled"
+        or version
+        not in registration_service.REGISTRATION_REQUEST_FINGERPRINT_VERSIONS
+        or not isinstance(stored_fingerprint, str)
+        or len(stored_fingerprint) != 64
+    ):
+        return None
+    try:
+        expected_fingerprint = registration_service.registration_request_fingerprint(
+            request,
+            version=version,
+        )
+    except ValueError:
+        return None
+    if not hmac.compare_digest(stored_fingerprint, expected_fingerprint):
+        return None
+
+    from app.services import otp_service
+
+    registration = session.get(StudentRegistration, flow.registration_id)
+    record = session.get(
+        RegistrationIdempotencyRecord,
+        flow.registration_idempotency_record_id,
+    )
+    if (
+        registration is None
+        or registration.status != "otp_pending"
+        or registration.deleted_at is not None
+        or record is None
+        or record.state != "retired"
+        or record.registration_id is not None
+        or record.outbox_id is not None
+    ):
+        raise RuntimeError("signup restart authority is invalid")
+
+    if (
+        authority.cooldown_until is not None
+        and as_utc(authority.cooldown_until) > as_utc(now)
+    ):
+        retry_after = max(
+            1,
+            math.ceil(
+                (
+                    as_utc(authority.cooldown_until) - as_utc(now)
+                ).total_seconds()
+            ),
+        )
+        raise otp_service.OtpError(
+            429,
+            "resend_cooldown",
+            retry_after_seconds=retry_after,
+        )
+    otp_service.consume_resend_window(authority, now)
+    session.flush()
+
+    # Consume the one-use restart marker before creating successor authority.
+    flow.metadata_json = {"terminal_reason": "signup_restart_consumed"}
+    _, intent = otp_service.issue_challenge(
+        session,
+        registration.id,
+        now,
+        purpose="signup",
+        destination=request.mobile,
+    )
+    fingerprint_version = registration_service.registration_request_fingerprint_version(
+        request
+    )
+    replacement_record = RegistrationIdempotencyRecord(
+        idempotency_key_hash=registration_service.registration_idempotency_key_hash(
+            idempotency_key
+        ),
+        request_fingerprint=registration_service.registration_request_fingerprint(
+            request,
+            version=fingerprint_version,
+        ),
+        request_fingerprint_version=fingerprint_version,
+        state="pending",
+        outcome_code=None,
+        registration_id=registration.id,
+        outbox_id=intent.outbox_id,
+    )
+    session.add(replacement_record)
+    session.flush()
+    return registration_service.RegistrationResult(
+        registration=registration,
+        delivery=intent,
+        idempotency_record=replacement_record,
+        replayed=False,
+    )
 
 
 def subject_for_token(session: Session, raw_token: str | None) -> str:

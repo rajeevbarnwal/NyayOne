@@ -15,6 +15,7 @@ import {
 import { PRIVACY_NOTICE_VERSION, TERMS_VERSION } from '../lib/consent';
 import {
   RegistrationApiError,
+  cancelStudentOtp,
   registerStudent,
   resendStudentOtp,
   startLoginOtp,
@@ -186,10 +187,48 @@ function PrivacyNote() {
   );
 }
 
-function CreateAccountContext({ onChangePersona }: { onChangePersona: () => void }) {
+export async function retireStudentOtpPersonaContext(
+  retire: () => ReturnType<typeof cancelStudentOtp>,
+  onRetired: ((state: Awaited<ReturnType<typeof cancelStudentOtp>>) => void) | undefined,
+  returnToPersona: () => void,
+): Promise<void> {
+  const state = await retire();
+  onRetired?.(state);
+  returnToPersona();
+}
+
+function CreateAccountContext({
+  disabled = false,
+  onChangeStart,
+  onRetired,
+  onChangeError,
+}: {
+  disabled?: boolean;
+  onChangeStart?: () => void;
+  onRetired?: (state: Awaited<ReturnType<typeof cancelStudentOtp>>) => void;
+  onChangeError?: () => void;
+}) {
+  const nav = useNavigate();
+  const [changing, setChanging] = useState(false);
+  async function changePersona() {
+    if (disabled || changing) return;
+    onChangeStart?.();
+    setChanging(true);
+    try {
+      await retireStudentOtpPersonaContext(
+        cancelStudentOtp,
+        onRetired,
+        () => nav('/s-03', { replace: true, state: { nyay7Focus: 'persona' } }),
+      );
+    } catch {
+      onChangeError?.();
+    } finally {
+      setChanging(false);
+    }
+  }
   return (
     <div className="v321-context" data-nyayone-create-context="">
-      <span className="v321-context__persona"><NyayOneRevLIcon name="users"/>Joining as <b>Student</b><button type="button" data-nyayone-persona-change="" onClick={onChangePersona}>Change</button></span>
+      <span className="v321-context__persona"><NyayOneRevLIcon name="users"/>Joining as <b>Student</b><button type="button" data-nyayone-persona-change="" aria-label="Change persona" onClick={() => { void changePersona(); }} disabled={disabled || changing}>Change</button></span>
       <NyayOneAuthSelectors showPersona={false} compact/>
     </div>
   );
@@ -373,6 +412,14 @@ export function V34Login(props: ScreenProps) {
     <Screen id="S-04" aside={<RevLBrandPanel/>}>
       <RevLTopbar {...props}/>
       <Pane><main id="main-content" aria-labelledby="S-04-title" className="v34-main v321-form v321-form--login">
+        <CreateAccountContext
+          disabled={busy}
+          onChangeStart={() => { setBusy(true); setMobile(''); setErrors({}); }}
+          onChangeError={() => {
+            setBusy(false);
+            setErrors({ submit: 'Your sign-in context could not be safely cleared. Please retry.' });
+          }}
+        />
         <span className="v321-eyebrow">Sign in</span>
         <h1 id="S-04-title" className="v34-title">How do you want to sign in?</h1>
         <div className="v321-segment" role="group" aria-label="Sign-in identity">
@@ -605,7 +652,18 @@ export function V34Register(props: ScreenProps) {
     <Screen id="S-08" aside={<RevLBrandPanel/>}>
       <RevLTopbar {...props}/>
       <Pane><main id="main-content" aria-labelledby="S-08-title" className="v34-main v321-form v321-form--register">
-        <CreateAccountContext onChangePersona={() => nav('/s-03', { state: { nyay7Focus: 'persona' } })}/>
+        <CreateAccountContext
+          disabled={busy}
+          onChangeStart={() => {
+            setBusy(true);
+            setFirstName(''); setMiddleName(''); setLastName(''); setMobile(''); setDob('');
+            setTermsAccepted(false); setPrivacyNoticeAcknowledged(false); setErrors({});
+          }}
+          onChangeError={() => {
+            setBusy(false);
+            setErrors({ submit: 'Your registration context could not be safely cleared. Please retry.' });
+          }}
+        />
         <div><span className="v321-eyebrow">Create account</span><h1 id="S-08-title" className="v34-title">Create your student account.</h1></div>
         <div ref={errorSummaryRef} id="s08-error-summary" tabIndex={-1} role={errorRows.length > 0 ? 'alert' : undefined} hidden={errorRows.length === 0} className="v34-well">
           <h2>Review the highlighted fields</h2><ul>{errorRows.map(([field, message]) => <li key={field}><a href={`#${errorTargets[field] ?? 'S-08-title'}`}>{message}</a></li>)}</ul>
@@ -625,11 +683,14 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const otpFlow = useOtpFlowState();
+  const session = useStudentSession();
+  const otpFlow = useOtpFlowState(undefined, { enabled: session.phase === 'anonymous' });
   const flow = otpFlow.state;
   const expires = flow?.expiresInSeconds ?? 0;
   const resend = flow?.resendInSeconds ?? 0;
   const attempts = flow?.attemptsLeft;
+  const screenId = purpose === 'signup' ? 'S-09' : 'S-05';
+  const backRoute = purpose === 'signup' ? '/s-08' : '/s-04';
 
   useEffect(() => {
     if (!otpFlow.loadError) return;
@@ -683,9 +744,44 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
       setBusy(false);
     }
   }
+  const studentContext = (
+    <CreateAccountContext
+      disabled={busy}
+      onChangeStart={() => { setBusy(true); setCode(''); setStatus(''); }}
+      onRetired={otpFlow.adopt}
+      onChangeError={() => {
+        setBusy(false);
+        setStatus('Your verification context could not be safely cleared. Please retry.');
+      }}
+    />
+  );
+  if (session.phase === 'pending' || (session.phase === 'anonymous' && otpFlow.loading)) {
+    return (
+      <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
+        <RevLTopbar/>
+        <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
+          {studentContext}
+          <h1 id={`${screenId}-title`} className="v34-title">Checking verification state</h1>
+          <div className="v34-well" role="status">Restoring the server verification state…</div>
+        </main><RevLLegalFooter/></Pane>
+      </Screen>
+    );
+  }
+  if (session.phase !== 'anonymous') {
+    return (
+      <Navigate
+        to={session.phase === 'authenticated'
+          ? (purpose === 'login' ? resolvedProfileReauthResumeRoute() : null) ?? '/s-07'
+          : '/s-03'}
+        replace
+        state={{ nyay7Focus: 'persona' }}
+      />
+    );
+  }
+  if (otpFlow.loadError || flow?.status !== 'pending' || flow.purpose !== purpose) {
+    return <Navigate to="/s-03" replace state={{ nyay7Focus: 'persona' }}/>;
+  }
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? '');
-  const screenId = purpose === 'signup' ? 'S-09' : 'S-05';
-  const backRoute = purpose === 'signup' ? '/s-08' : '/s-04';
   const destination = flow?.destinationMasked?.match(/^••••••\d{4}$/u)
     ? `+91 ••••• ••${flow.destinationMasked.slice(-3)}`
     : (flow?.destinationMasked ?? 'your mobile');
@@ -693,12 +789,10 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
       <RevLTopbar/>
       <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
-        {purpose === 'signup' && <CreateAccountContext onChangePersona={() => nav('/s-03', { state: { nyay7Focus: 'persona' } })}/>}
-        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" onClick={() => nav(backRoute)}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
-        <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
+        {studentContext}
+        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={purpose === 'signup' ? 'Change registration details' : 'Change mobile number'} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
+        <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={busy} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
         <p className="v321-otp-help">Paste or platform autofill works. The field accepts the full code at once.</p>
-        {otpFlow.loading && <div className="v34-well" role="status">Restoring the server verification state…</div>}
-        {otpFlow.loadError && <div className="v34-banner" role="alert">Verification state is unavailable. Retry the state check before continuing.</div>}
         {status && <div className="v34-banner" role="alert">{status}</div>}
         <div className="v34-card v34-kv"><span>Expires in <b className="v321-mono">{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend in <b className="v321-mono">{flow?.resendAllowed ? '00:00' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</b></span><span>Tries left <b>{attempts ?? '—'}</b></span></div>
         <div className="v321-button-row"><button type="button" className="v321-primary" aria-label="Verify and continue" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}><NyayOneRevLIcon name="checkc"/><span>Verify and Continue</span></button><button type="button" className="v321-secondary" disabled={!flow?.resendAllowed || busy} onClick={resendCode}><span className="v321-icon--indigo"><NyayOneRevLIcon name="refresh"/></span><span>Resend Code</span></button></div>

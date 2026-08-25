@@ -100,8 +100,8 @@ async function authenticatedStudentContext(browser, options = {}) {
   const apiUrl = new URL(API);
   await context.addCookies([{
     name: COOKIE, value: STUDENT_SESSION_TOKEN,
-    domain: apiUrl.hostname, path: '/api/v1', httpOnly: true,
-    secure: apiUrl.protocol === 'https:', sameSite: 'Strict',
+    domain: apiUrl.hostname, path: '/', httpOnly: true,
+    secure: apiUrl.protocol === 'https:', sameSite: 'Lax',
   }]);
   const session = await context.request.get(`${API}/api/v1/auth/student/session`);
   const body = await session.json().catch(() => null);

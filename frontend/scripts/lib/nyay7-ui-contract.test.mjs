@@ -79,7 +79,7 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
     ]);
   });
 
-  it('seals all 15 mixed-authority visual baselines and the security supersession', () => {
+  it('seals all 15 mixed-authority visual baselines and exact supersessions', () => {
     const manifest = JSON.parse(source('test-baselines/nyay7/option-3.2.1-rev-l/manifest.json'));
     expect(manifest.schema_version).toBe(2);
     expect(manifest.authority_sha256).toBe(NYAY7_AUTHORITY_SHA256);
@@ -100,6 +100,22 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
         'S-09': 'pending-otp-final-static-frame-before-server-authoritative-s-07-redirect',
       },
     });
+    expect(manifest.nyay8_auth_context_supersession).toEqual({
+      effective_date: '2026-08-25',
+      authority_ticket: 'NYAY-8',
+      record: 'NYAY8_AUTH_CONTEXT_SUPERSESSION.md',
+      screens: {
+        'S-04': 'empty-mobile-student-context-and-persona-change',
+        'S-05': 'server-proven-pending-login-student-context-and-persona-change',
+      },
+      capture_provenance: {
+        generated_at: '2026-08-25T09:20:48.844Z',
+        runner: 'scripts/nyay7-ui-foundation.mjs',
+        production_build: true,
+        platform: 'darwin-arm64',
+        worktree_parent_commit: '0ac8fb77cd736a7b5edde28d0d08790d00bc2d09',
+      },
+    });
     expect(manifest.entries).toHaveLength(15);
     const identities = manifest.entries.map(({ viewport, screen }) => `${viewport}:${screen}`);
     expect(new Set(identities).size).toBe(15);
@@ -114,15 +130,30 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
       ['360x800:S-08', 'a3fdc5616bd21c1c1b33bebff78feda8ddc0bf3c7096f1f6b30ec656775242c3'],
       ['360x800:S-09', 'bccf2f2c0171cce2ed877d53371ee31a1d9652e9bdecc4d85e76eb3c014fff78'],
     ]);
-    const supersededEntries = manifest.entries
+    const nyay8ContractHashes = new Map([
+      ['1440x1024:S-04', '106da9aba4b25f87c0e8f7b8c9c73dfd0d533aa67a8a83e35f25c25bd4519129'],
+      ['1440x1024:S-05', '5d64b5ba642ebe15cc309c859d31417f7a3c6fb1a609ed73f2ea3f1f2db0aec5'],
+      ['390x844:S-04', 'e58080b38099d68b98fc62961506d72fa7a919dcb162170723896f950f911a10'],
+      ['390x844:S-05', 'c998e65650667f1de9654a3783c88f512e8bbe2f53b3f72f51db3587d6b12794'],
+      ['360x800:S-04', '2e2058bcd541fb04a2332cec31d8bb36b08ccd15598ea335c77235298f7454ac'],
+      ['360x800:S-05', 'e7427c4e80ea35ee9d10accb474a5d00a3fe2a45aab3ba9145188ee04bf0bd53'],
+    ]);
+    const securitySupersededEntries = manifest.entries
       .filter(({ screen }) => ['S-08', 'S-09'].includes(screen));
-    expect(supersededEntries).toHaveLength(6);
+    const nyay8SupersededEntries = manifest.entries
+      .filter(({ screen }) => ['S-04', 'S-05'].includes(screen));
+    expect(securitySupersededEntries).toHaveLength(6);
+    expect(nyay8SupersededEntries).toHaveLength(6);
     expect(manifest.entries.filter(({ authority }) => authority === 'revision-l-source'))
-      .toHaveLength(9);
+      .toHaveLength(3);
     expect(manifest.entries.every(({ authority }) => (
-      ['revision-l-source', 'security-contracts'].includes(authority)
+      [
+        'revision-l-source',
+        'revision-l-plus-nyay8-contract',
+        'security-contracts',
+      ].includes(authority)
     ))).toBe(true);
-    for (const entry of supersededEntries) {
+    for (const entry of securitySupersededEntries) {
       expect(entry.authority).toBe('security-contracts');
       expect(entry.sha256).toBe(securityContractHashes.get(`${entry.viewport}:${entry.screen}`));
       expect(entry.supersedes_sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -131,7 +162,7 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
     const supersession = source(
       'test-baselines/nyay7/option-3.2.1-rev-l/SECURITY_SUPERSESSION.md',
     );
-    for (const entry of supersededEntries) {
+    for (const entry of securitySupersededEntries) {
       expect(supersession).toContain(entry.supersedes_sha256);
       expect(supersession).toContain(entry.sha256);
     }
@@ -139,6 +170,19 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
       expect(supersession).toContain(ticket);
     }
     expect(supersession).toMatch(/persistent client-side success screen is\s+intentionally absent/u);
+    const authContextSupersession = source(
+      'test-baselines/nyay7/option-3.2.1-rev-l/NYAY8_AUTH_CONTEXT_SUPERSESSION.md',
+    );
+    for (const entry of nyay8SupersededEntries) {
+      expect(entry.authority).toBe('revision-l-plus-nyay8-contract');
+      expect(entry.sha256).toBe(nyay8ContractHashes.get(`${entry.viewport}:${entry.screen}`));
+      expect(entry.supersedes_sha256).toMatch(/^[a-f0-9]{64}$/u);
+      expect(entry.supersedes_sha256).not.toBe(entry.sha256);
+      expect(authContextSupersession).toContain(entry.supersedes_sha256);
+      expect(authContextSupersession).toContain(entry.sha256);
+    }
+    expect(authContextSupersession).toContain('NYAY-8');
+    expect(authContextSupersession).toContain('unchanged one-percent threshold');
   });
 
   it('keeps the official brand SVG bytes unchanged', () => {
@@ -245,5 +289,21 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
     const routeTransition = otpNavigation.indexOf("history.pushState({}, '', path)");
     expect(layoutReset).toBeGreaterThan(-1);
     expect(routeTransition).toBeGreaterThan(layoutReset);
+  });
+
+  it('requires the exact Student and English context on the NYAY-8 sign-in screens', () => {
+    const runner = source('scripts/nyay7-ui-foundation.mjs');
+    const branchStart = runner.indexOf("if (screenId === 'S-04' || screenId === 'S-05')");
+    const branchEnd = runner.indexOf("if (screenId === 'S-08' || screenId === 'S-09')", branchStart);
+    const signInContext = runner.slice(branchStart, branchEnd);
+
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(branchEnd).toBeGreaterThan(branchStart);
+    expect(signInContext).toContain('counts.createContexts === 1');
+    expect(signInContext).toContain('counts.personaChanges === 1');
+    expect(signInContext).toContain('counts.languageTriggers === 1');
+    expect(signInContext).toContain('counts.personaTriggers === 0');
+    expect(signInContext).toContain('one Student/English sign-in context');
+    expect(signInContext).not.toContain('Object.values(counts)');
   });
 });

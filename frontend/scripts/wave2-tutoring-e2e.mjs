@@ -1469,10 +1469,10 @@ async function studentContext(browser, options = {}) {
     name: 'nyayone_session',
     value: STUDENT_SESSION_TOKEN,
     domain: apiUrl.hostname,
-    path: '/api/v1',
+    path: '/',
     httpOnly: true,
     secure: apiUrl.protocol === 'https:',
-    sameSite: 'Strict',
+    sameSite: 'Lax',
   }]);
   const response = await ctx.request.get(`${API}/api/v1/auth/student/session`);
   const body = response.ok() ? await response.json() : null;
@@ -1515,10 +1515,10 @@ async function adminContext(browser) {
     name: 'nyayone_session',
     value: ADMIN_SESSION_TOKEN,
     domain: apiUrl.hostname,
-    path: '/api/v1',
+    path: '/',
     httpOnly: true,
     secure: apiUrl.protocol === 'https:',
-    sameSite: 'Strict',
+    sameSite: 'Lax',
   }]);
   const page = await ctx.newPage();
   attachCapture(page);
