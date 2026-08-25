@@ -1755,14 +1755,16 @@ jobs:
             root = Path(directory)
             browser = root / "nyay4-otp-browser-negative.mjs"
             contract = root / "nyay4-otp-runner-contract.mjs"
+            contract_test = root / "nyay4-otp-runner-contract.test.mjs"
             package = root / "package.json"
             browser.write_bytes(policy.NYAY4_BROWSER_GATE.read_bytes())
             contract.write_bytes(policy.NYAY4_BROWSER_CONTRACT.read_bytes())
+            contract_test.write_bytes(policy.NYAY4_BROWSER_CONTRACT_TEST.read_bytes())
             package.write_bytes(policy.FRONTEND_PACKAGE.read_bytes())
 
             def failures() -> list[str]:
                 return policy.check_nyay4_browser_gate_contract(
-                    browser, contract, package
+                    browser, contract, package, contract_test
                 )
 
             browser.write_bytes(browser.read_bytes() + b"\n// planted no-op drift\n")
@@ -1779,6 +1781,12 @@ jobs:
             )
             self.assertTrue(failures())
             contract.write_bytes(policy.NYAY4_BROWSER_CONTRACT.read_bytes())
+
+            contract_test.write_bytes(
+                contract_test.read_bytes() + b"\n// planted contract-test drift\n"
+            )
+            self.assertTrue(failures())
+            contract_test.write_bytes(policy.NYAY4_BROWSER_CONTRACT_TEST.read_bytes())
 
             document = json.loads(package.read_text(encoding="utf-8"))
             document["scripts"]["qa:nyay4:otp-negative"] = "true"

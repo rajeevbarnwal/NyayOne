@@ -40,6 +40,65 @@
     U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
     U+FEFF, U+FFFD;
 }
+
+/* NyayOne 3.2.1 Revision L approved latin subsets, extracted byte-for-byte
+   from the provenance-corrected authoring artifact. */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/PublicSans-latin.woff2') format('woff2');
+}
+@font-face { font-family: 'Public Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/PublicSans-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Public Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/PublicSans-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Public Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/PublicSans-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Public Sans'; font-style: normal; font-weight: 800; font-display: swap; src: url('/fonts/PublicSans-latin.woff2') format('woff2'); }
+@font-face {
+  font-family: 'NyayOne Revision L Heading';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Carlito-Regular-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'NyayOne Revision L Heading';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Carlito-Bold-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/SpaceGrotesk-latin.woff2') format('woff2');
+}
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/SpaceGrotesk-latin.woff2') format('woff2'); }
+@font-face {
+  font-family: 'Spline Sans Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/SplineSansMono-latin.woff2') format('woff2');
+}
+@font-face { font-family: 'Spline Sans Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/SplineSansMono-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Spline Sans Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/SplineSansMono-latin.woff2') format('woff2'); }
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/Spectral-Light-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Spectral-Semibold-latin.woff2') format('woff2');
+}
 @font-face {
   font-family: 'IBM Plex Mono';
   font-style: normal;

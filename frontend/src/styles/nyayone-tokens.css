@@ -1,0 +1,83 @@
+/*
+ * NyayOne 3.2.1 — Revision L foundation.
+ *
+ * Appearance authority:
+ *   NYAYONE_OPTION3_2_1_REVL_SOURCE.html
+ *   sha256 338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252
+ *
+ * These namespaced values are the only production source for the 3.2.1 auth
+ * foundation. Legacy modules keep their existing tokens until they migrate;
+ * components must consume these values rather than repeat source literals.
+ */
+:root {
+  /* Brand and surfaces */
+  --nyayone-color-indigo: #2e3a8c;
+  --nyayone-color-deep: #1c2454;
+  --nyayone-color-deep-end: #151b40;
+  --nyayone-color-gold: #c89a3a;
+  --nyayone-color-gold-raised: #dfb458;
+  --nyayone-color-paper: #efedf6;
+  --nyayone-color-card: #ffffff;
+  --nyayone-color-soft: #e4e1ef;
+
+  /* Text and dividers */
+  --nyayone-color-ink: #14161a;
+  --nyayone-color-ink-secondary: #3e4254;
+  --nyayone-color-muted: #5c5f7a;
+  --nyayone-color-line: #d8d5e6;
+  --nyayone-color-line-strong: #b9b5cf;
+
+  /* Semantic states — never used without text or shape */
+  --nyayone-color-success: #1e6b4a;
+  --nyayone-color-success-surface: #e2f0e9;
+  --nyayone-color-risk: #9a2b21;
+  --nyayone-color-risk-surface: #f9e8e5;
+  --nyayone-color-warning: #7a5a10;
+  --nyayone-color-warning-surface: #f7efd9;
+  --nyayone-color-gold-surface: #f6edda;
+  --nyayone-color-indigo-surface: #e7e9f7;
+  --nyayone-color-focus: #2e3a8c;
+
+  /* Typography */
+  --nyayone-font-body: 'Public Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --nyayone-font-heading: Aptos, Calibri, 'NyayOne Revision L Heading', system-ui, sans-serif;
+  --nyayone-font-eyebrow: 'Space Grotesk', var(--nyayone-font-body);
+  --nyayone-font-mono: 'Spline Sans Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --nyayone-font-brand: Spectral, Georgia, serif;
+  --nyayone-font-size-eyebrow: 0.625rem;
+  --nyayone-font-size-label: 0.75rem;
+  --nyayone-font-size-help: 0.71875rem;
+  --nyayone-font-size-body: 0.84375rem;
+  --nyayone-font-size-control: 0.9375rem;
+  --nyayone-line-height-heading: 1.1;
+  --nyayone-line-height-body: 1.55;
+  --nyayone-letter-spacing-heading: -0.01em;
+  --nyayone-letter-spacing-eyebrow: 0.18em;
+
+  /* Four-pixel spacing grid */
+  --nyayone-space-1: 4px;
+  --nyayone-space-2: 8px;
+  --nyayone-space-3: 12px;
+  --nyayone-space-4: 16px;
+  --nyayone-space-5: 20px;
+  --nyayone-space-6: 24px;
+  --nyayone-space-8: 32px;
+  --nyayone-space-11: 44px;
+  --nyayone-space-16: 64px;
+
+  /* Geometry */
+  --nyayone-target-min: 44px;
+  --nyayone-input-min-height: 46px;
+  --nyayone-control-min-height: 48px;
+  --nyayone-critical-action-min-height: 56px;
+  --nyayone-border-width: 1.5px;
+  --nyayone-radius-control: 12px;
+  --nyayone-radius-popup: 14px;
+  --nyayone-radius-card: 16px;
+  --nyayone-radius-dialog: 20px;
+  --nyayone-radius-mobile-brand: 0 0 22px 22px;
+  --nyayone-focus-width: 2.5px;
+  --nyayone-focus-offset: 2px;
+  --nyayone-shadow-elevated: 0 20px 44px -28px rgba(20, 22, 26, 0.35);
+  --nyayone-brand-gradient: linear-gradient(168deg, var(--nyayone-color-deep), var(--nyayone-color-deep-end));
+}

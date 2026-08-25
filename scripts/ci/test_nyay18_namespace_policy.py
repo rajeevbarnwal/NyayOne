@@ -126,6 +126,11 @@ class NamespacePolicyTests(unittest.TestCase):
     def test_repository_shipped_surface_passes_sealed_contract(self) -> None:
         report = policy.audit(policy.ROOT, policy.load_contract())
         self.assertEqual(report.failures, ())
+        self.assertEqual(report.source_inventory_count, 156)
+        self.assertEqual(
+            report.source_inventory_sha256,
+            "3583c39dcf357b9fe71f090681fddc983ff646b815c49788382ab31a9be3beeb",
+        )
         self.assertTrue(report.self_test_passed)
 
     def test_closed_active_runtime_map_is_explicit_and_drift_fails_closed(self) -> None:
@@ -290,13 +295,13 @@ class NamespacePolicyTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 report = policy.audit(root, contract)
-            self.assertTrue(
-                any(
-                    item.code == "uncontracted-runtime-namespace"
-                    for item in report.failures
-                ),
-                report.failures,
-            )
+                self.assertTrue(
+                    any(
+                        item.code == "uncontracted-runtime-namespace"
+                        for item in report.failures
+                    ),
+                    report.failures,
+                )
 
     def test_legacy_literal_is_allowed_only_in_exact_hash_sealed_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -484,6 +489,228 @@ class NamespacePolicyTests(unittest.TestCase):
             )
             report = policy.audit(root, contract)
         self.assertEqual(report.failures, ())
+
+    def test_nyayone_presentation_identifiers_are_not_runtime_namespaces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, contract = self._fixture(directory)
+            source = root / "frontend/src/main.tsx"
+            source.write_text(
+                source.read_text(encoding="utf-8")
+                + "import './styles/nyayone-tokens.css';\n"
+                + "const trigger = document.querySelector(\n"
+                + "  '[data-nyayone-persona-trigger] .nyayone-selector',\n"
+                + ");\n"
+                + "const hooks = { 'data-nyayone-value': 'student' };\n"
+                + "export const shell = (\n"
+                + "  <div className={`nyayone-selector${trigger ? ' is-open' : ''}`}\n"
+                + "    data-nyayone-selector=\"persona\" {...hooks} />\n"
+                + ");\n",
+                encoding="utf-8",
+            )
+            styles = root / "frontend/src/styles/nyayone-tokens.css"
+            styles.parent.mkdir(parents=True, exist_ok=True)
+            styles.write_text(
+                ":root { --nyayone-color-focus: #2e3a8c; }\n"
+                ".nyayone-selector { color: var(--nyayone-color-focus); }\n",
+                encoding="utf-8",
+            )
+            contract["source_inventory_sha256"] = policy.source_inventory_sha256(
+                policy.shipped_source_inventory(root)
+            )
+            report = policy.audit(root, contract)
+        self.assertEqual(report.failures, ())
+
+    def test_browser_authority_contexts_remain_fail_closed(self) -> None:
+        canaries = {
+            "local storage": (
+                "localStorage.setItem('nyayone.planted.local.v1', 'secret');\n"
+            ),
+            "session storage dynamic template": (
+                "const family = window.name;\n"
+                "sessionStorage.setItem(`nyayone.${family}.v1`, 'secret');\n"
+            ),
+            "storage side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "localStorage.setItem('nyayone.planted.nested.v1', 'secret')"
+                " as never} />;\n"
+            ),
+            "bracket storage side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "localStorage['setItem']('nyayone.planted.bracket.v1', 'secret')"
+                " as never} />;\n"
+            ),
+            "optional storage side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "localStorage?.setItem('nyayone.planted.optional.v1', 'secret')"
+                " as never} />;\n"
+            ),
+            "aliased dynamic storage side effect nested in presentation expression": (
+                "const plantedStore = localStorage;\n"
+                "export const planted = <div className={"
+                "plantedStore.setItem(`nyayone.${window.name}.alias.v1`, 'secret')"
+                " as never} />;\n"
+            ),
+            "named storage property nested in presentation expression": (
+                "export const planted = <div className={"
+                "localStorage['nyayone.planted.named-property.v1']"
+                " as never} />;\n"
+            ),
+            "browser authority nested in presentation template": (
+                "export const planted = <div className={`plain-${"
+                "localStorage.setItem('nyayone.planted.template.v1', 'secret')"
+                "}`} />;\n"
+            ),
+            "cache storage": "caches.open('nyayone-planted-cache');\n",
+            "cache storage dynamic template": (
+                "const family = window.name;\n"
+                "caches.open(`nyayone-${family}-cache`);\n"
+            ),
+            "bracket cache side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "caches['open']('nyayone-planted-bracket-cache') as never} />;\n"
+            ),
+            "document cookie": "document.cookie = 'nyayone.planted.cookie=1';\n",
+            "bracket cookie side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "(document['cookie'] = 'nyayone.planted.bracket.cookie=1')"
+                " as never} />;\n"
+            ),
+            "cookie store dynamic template": (
+                "const family = window.name;\n"
+                "cookieStore.set(`nyayone.${family}.cookie`, '1');\n"
+            ),
+            "indexeddb side effect nested in presentation expression": (
+                "export const planted = <div className={"
+                "indexedDB.open('nyayone.planted.indexeddb.v1') as never} />;\n"
+            ),
+            "custom event": "new CustomEvent('nyayone:planted-event');\n",
+            "qualified custom event nested in presentation expression": (
+                "export const planted = <div className={"
+                "new window.CustomEvent('nyayone:planted-qualified-event')"
+                " as never} />;\n"
+            ),
+            "event listener dynamic template": (
+                "const family = window.name;\n"
+                "window.addEventListener(`nyayone:${family}`, () => {});\n"
+            ),
+            "broadcast channel": (
+                "new BroadcastChannel('nyayone:planted-channel');\n"
+            ),
+            "broadcast channel dynamic template": (
+                "const family = window.name;\n"
+                "new BroadcastChannel(`nyayone:${family}`);\n"
+            ),
+            "qualified broadcast channel nested in presentation expression": (
+                "export const planted = <div className={"
+                "new window.BroadcastChannel('nyayone:planted-qualified-channel')"
+                " as never} />;\n"
+            ),
+            "data hook object reused as storage authority": (
+                "const plantedHooks = { 'data-nyayone-storage-authority': 'x' };\n"
+                "export const planted = <div {...plantedHooks} />;\n"
+                "localStorage.setItem(Object.keys(plantedHooks)[0], 'secret');\n"
+            ),
+            "DOM-derived presentation value reused as storage authority": (
+                "export const planted = <button "
+                "className='nyayone.planted.dom-key.v1' "
+                "onClick={(event) => localStorage.setItem("
+                "event.currentTarget.className, 'secret')} />;\n"
+            ),
+            "aliased DOM-derived presentation value reused as storage authority": (
+                "export function persist(event) {\n"
+                "  const plantedKey = event.currentTarget.className;\n"
+                "  localStorage.setItem(plantedKey, 'secret');\n"
+                "}\n"
+                "export const planted = <button "
+                "className='nyayone.planted.aliased-dom-key.v1' "
+                "onClick={persist} />;\n"
+            ),
+            "bracket DOM-derived presentation value reused as storage authority": (
+                "export const planted = <button "
+                "className='nyayone.planted.bracket-dom-key.v1' "
+                "onClick={(event) => localStorage['setItem']("
+                "event.currentTarget['className'], 'secret')} />;\n"
+            ),
+            "optional DOM-derived presentation value reused as storage authority": (
+                "export const planted = <button "
+                "className='nyayone.planted.optional-dom-key.v1' "
+                "onClick={(event) => localStorage?.setItem("
+                "event.currentTarget?.className, 'secret')} />;\n"
+            ),
+            "storage alias consumes DOM-derived presentation value": (
+                "const plantedStore = localStorage;\n"
+                "export const planted = <button "
+                "className='nyayone.planted.store-alias-dom-key.v1' "
+                "onClick={(event) => plantedStore.setItem("
+                "event.currentTarget.className, 'secret')} />;\n"
+            ),
+            "destructured DOM presentation value reused as storage authority": (
+                "export function persist(event) {\n"
+                "  const { className: plantedKey } = event.currentTarget;\n"
+                "  localStorage.setItem(plantedKey, 'secret');\n"
+                "}\n"
+                "export const planted = <button "
+                "className='nyayone.planted.destructured-dom-key.v1' "
+                "onClick={persist} />;\n"
+            ),
+            "destructured storage method consumes DOM presentation value": (
+                "const { setItem: persist } = localStorage;\n"
+                "export const planted = <button "
+                "className='nyayone.planted.destructured-storage.v1' "
+                "onClick={(event) => persist("
+                "event.currentTarget.className, 'secret')} />;\n"
+            ),
+            "qualified destructured storage method consumes DOM presentation value": (
+                "const { setItem: persist } = window.localStorage;\n"
+                "export const planted = <button "
+                "className='nyayone.planted.qualified-destructured-storage.v1' "
+                "onClick={(event) => persist("
+                "event.currentTarget.className, 'secret')} />;\n"
+            ),
+            "storage authority passed through helper with DOM presentation value": (
+                "function persist(store, event) {\n"
+                "  store.setItem(event.currentTarget.className, 'secret');\n"
+                "}\n"
+                "export const planted = <button "
+                "className='nyayone.planted.helper-storage.v1' "
+                "onClick={(event) => persist(localStorage, event)} />;\n"
+            ),
+            "DOM class-list value reused as storage authority": (
+                "export const planted = <button "
+                "className='nyayone.planted.class-list.v1' "
+                "onClick={(event) => localStorage.setItem("
+                "event.currentTarget.classList.value, 'secret')} />;\n"
+            ),
+            "attribute lookalike inside JSX expression": (
+                "export const planted = <div title={(className = "
+                "'nyayone.planted.attribute-lookalike.v1') as never} />;\n"
+            ),
+            "data hook lookalike inside another attribute": (
+                "export const planted = <div "
+                "title='data-nyayone-planted-lookalike' />;\n"
+            ),
+            "regex brace cannot truncate presentation projection": (
+                "export const shell = <div className={"
+                "/{/.test(window.name) ? 'plain' : ''} />;\n"
+                "const plantedAfterJsx = 'nyayone.planted.after-jsx.v1';\n"
+            ),
+        }
+        for label, canary in canaries.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root, contract = self._fixture(directory)
+                source = root / "frontend/src/main.tsx"
+                source.write_text(
+                    source.read_text(encoding="utf-8") + canary,
+                    encoding="utf-8",
+                )
+                report = policy.audit(root, contract)
+            self.assertTrue(
+                any(
+                    item.code == "uncontracted-runtime-namespace"
+                    for item in report.failures
+                ),
+                report.failures,
+            )
 
     def test_self_test_and_evidence_projection_do_not_disclose_canary(self) -> None:
         result = policy.run_self_test()

@@ -79,18 +79,21 @@ export function inspectOtpViewSnapshot(raw, expectedAttempts, expectedDestinatio
     && expectedAttemptsExact
     && rows[2] === attemptsText
     && rows.filter((row) => row === attemptsText).length === 1;
+  const renderedDestination = expectedDestinationExact
+    ? `+91 ••••• ••${expectedDestinationMasked.slice(-3)}`
+    : null;
   const destinationExact = structureExact
     && expectedDestinationExact
     && normalizeDomText(raw.ledeText)
-      === `Six digits, sent to ${expectedDestinationMasked}.`;
+      === `Six digits sent to ${renderedDestination}. Your code stays valid for the time shown below. Change`;
   const countdownMatch = structureExact
-    ? /^Code expires in (\d{2}):([0-5]\d)$/u.exec(rows[0])
+    ? /^Expires in (\d{2}):([0-5]\d)$/u.exec(rows[0])
     : null;
   const countdownRowExact = countdownMatch !== null
-    && rows.filter((row) => row.startsWith('Code expires in ')).length === 1;
+    && rows.filter((row) => row.startsWith('Expires in ')).length === 1;
   const resendRowExact = structureExact
-    && /^Resend available in (?:Resend now|\d{2}:[0-5]\d)$/u.test(rows[1])
-    && rows.filter((row) => row.startsWith('Resend available in ')).length === 1;
+    && /^Resend in \d{2}:[0-5]\d$/u.test(rows[1])
+    && rows.filter((row) => row.startsWith('Resend in ')).length === 1;
   const countdownSeconds = countdownMatch
     ? Number.parseInt(countdownMatch[1], 10) * 60
       + Number.parseInt(countdownMatch[2], 10)

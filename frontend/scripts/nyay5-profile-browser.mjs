@@ -53,6 +53,27 @@ const privateValues = new Set();
 const requests = [];
 const visualScreens = new Map();
 const screenshotNames = new Set();
+const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
+  'S-03',
+  'S-04',
+  'S-05',
+  'S-08',
+  'S-09',
+]);
+const REVISION_L_HEADING_STACK = Object.freeze([
+  'aptos',
+  'calibri',
+  'nyayone revision l heading',
+  'system-ui',
+  'sans-serif',
+]);
+const LEGACY_CARLITO_HEADING_STACK = Object.freeze([
+  'aptos',
+  'calibri',
+  'carlito',
+  'system-ui',
+  'sans-serif',
+]);
 let authWireExact = false;
 let registrationA11yExact = false;
 let crossRealmTransitionExact = false;
@@ -282,16 +303,25 @@ async function recordVisualContract(page, screenId) {
   await screen.waitFor({ state: 'visible' });
   await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });
   await page.evaluate(() => document.fonts.ready);
-  const observation = await screen.evaluate((node) => {
+  const observation = await screen.evaluate((node, contract) => {
     const normalizedFamily = (element) => getComputedStyle(element).fontFamily
       .replace(/["']/gu, '')
       .split(',')
       .map((name) => name.trim().toLowerCase());
-    const expected = ['aptos', 'calibri', 'carlito', 'system-ui', 'sans-serif'];
+    const expected = contract.revisionLExpected
+      ? contract.revisionLHeadingStack
+      : contract.legacyCarlitoHeadingStack;
     const headings = [...node.querySelectorAll('h1,h2')]
       .filter((element) => element.getClientRects().length > 0);
     const icons = [...node.querySelectorAll('svg')]
       .filter((element) => element.getClientRects().length > 0);
+    const exactRevisionLLockup = (icon) => (
+      icon.getAttribute('class') === 'v321-lockup'
+      && icon.getAttribute('role') === 'img'
+      && icon.getAttribute('aria-label') === 'NyayOne — Legal, on the record'
+      && !icon.hasAttribute('aria-hidden')
+      && icon.tabIndex < 0
+    );
     return {
       headingCount: headings.length,
       typographyExact: headings.length > 0 && headings.every((heading) => {
@@ -300,15 +330,21 @@ async function recordVisualContract(page, screenId) {
           && family.every((name, index) => name === expected[index]);
       }),
       iconCount: icons.length,
-      iconsExact: icons.every((icon) => (
-        icon.getAttribute('aria-hidden') === 'true'
-        && icon.tabIndex < 0
-        && (!(icon.closest('button,a'))
-          || Boolean(icon.closest('button,a')?.getAttribute('aria-label')
-            || icon.closest('button,a')?.textContent?.trim()))
-      )),
+      iconsExact: icons.every((icon) => {
+        const isRevisionLLockup = icon.classList.contains('v321-lockup');
+        if (isRevisionLLockup) return contract.revisionLExpected && exactRevisionLLockup(icon);
+        return icon.getAttribute('aria-hidden') === 'true'
+          && icon.tabIndex < 0
+          && (!(icon.closest('button,a'))
+            || Boolean(icon.closest('button,a')?.getAttribute('aria-label')
+              || icon.closest('button,a')?.textContent?.trim()));
+      }),
       legacyBrandVisible: /\blegalsaathi\b/iu.test(node.textContent ?? ''),
     };
+  }, {
+    revisionLExpected: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId),
+    revisionLHeadingStack: REVISION_L_HEADING_STACK,
+    legacyCarlitoHeadingStack: LEGACY_CARLITO_HEADING_STACK,
   });
   const previous = visualScreens.get(screenId);
   visualScreens.set(screenId, {
