@@ -2115,6 +2115,43 @@ jobs:
                     failures,
                 )
 
+    def test_nyay21_history_purge_tooling_is_sealed_and_blocking(self) -> None:
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay21_history_purge_contract(), [])
+
+        for label, source in policy.NYAY21_HISTORY_PURGE_FILES.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                mutant = Path(directory) / source.name
+                mutant.write_bytes(source.read_bytes() + b"\n# planted NYAY-21 drift\n")
+                failures = policy.check_nyay21_history_purge_contract(
+                    {label: mutant}
+                )
+                self.assertTrue(
+                    any("NYAY-21" in item and "SHA-256 differs" in item for item in failures),
+                    failures,
+                )
+
+        workflow = policy.WORKFLOWS / "nyayone-policy-gate.yml"
+        original = workflow.read_text(encoding="utf-8")
+        command = policy.EXPECTED_NYAY21_POLICY_COMMAND
+        self.assertIn(command, original)
+        with tempfile.TemporaryDirectory() as directory:
+            mutant = Path(directory) / workflow.name
+            mutant.write_text(
+                original.replace(
+                    "      - name: Validate NYAY-21 history-purge tooling\n"
+                    f"        run: {command}\n",
+                    "",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            failures = policy.check_workflow(mutant)
+        self.assertTrue(
+            any("required gate command" in item for item in failures),
+            failures,
+        )
+
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (
             HERE.parent.parent / ".github" / "workflows" /

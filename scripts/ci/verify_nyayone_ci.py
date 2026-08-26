@@ -199,10 +199,65 @@ EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
     "protected_checkout_template": "ad6dd9e2c93605b6d4bfe02218f67f6457a8a1bf18701d5527659620c99b1a46",
     "readbacks_template": "11dbcba84df854b1e3c58e0bf6bd1f8f6f72b400d51db9754a2b92a221881ded",
 }
+NYAY21_HISTORY_PURGE_FILES: dict[str, Path] = {
+    "gate": ROOT / "scripts" / "ci" / "nyay21_history_purge.py",
+    "tests": ROOT / "scripts" / "ci" / "test_nyay21_history_purge.py",
+    "contract": ROOT / "scripts" / "ci" / "nyay21_history_purge_contract.json",
+    "execution_plan": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge" / "EXECUTION_PLAN.md"
+    ),
+    "backup_and_rollback": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay21-history-purge"
+        / "BACKUP_AND_ROLLBACK.md"
+    ),
+    "collaborator_realignment": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay21-history-purge"
+        / "COLLABORATOR_REALIGNMENT.md"
+    ),
+    "host_residual_surfaces": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay21-history-purge"
+        / "HOST_RESIDUAL_SURFACES.md"
+    ),
+    "evidence_rebinding_manifest": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay21-history-purge"
+        / "EVIDENCE_REBINDING_MANIFEST.json"
+    ),
+    "rewrite_execution_request": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay21-history-purge"
+        / "REWRITE_EXECUTION_REQUEST.md"
+    ),
+}
+EXPECTED_NYAY21_HISTORY_PURGE_SHA256: dict[str, str] = {
+    "gate": "25f1198ebf7bbbdb786471cf998b88f030aac90425368d0cd191d1516bd214e4",
+    "tests": "763c41bae850e65fbdfdaa7c8be325085b7d62a22f0793e9aa0a4a7c1afb56cf",
+    "contract": "2576b8b22d58369291ae1a2ed726b22dd1f286558180b3c5561b8d89bf81db52",
+    "execution_plan": "7e8f648dc84be8100ff77781ffa2b7a86182fd89ac5b17f41134619dbeed2672",
+    "backup_and_rollback": "991f7fe9734e078f4ab5a316158a2f3fb3d5e51cdd48ed9bc7fad798cbad9ee8",
+    "collaborator_realignment": "85303ca8884966389e89379d2f197f9135d46adf4125c944ef2a0fca53256279",
+    "host_residual_surfaces": "93c02759f8a60a675e248c8af6ff7ae368f8a7f6407a0a300cce046c466290ab",
+    "evidence_rebinding_manifest": "583ccaa028ff21170faa878c503130d56a159b975491be4a4f79acc8b07638c5",
+    "rewrite_execution_request": "889ca584f5d13b5562e89ccdf128b089f438820aaecb4b4122283e3aab774ac5",
+}
 EXPECTED_NYAY14_POLICY_COMMAND = "python scripts/ci/test_nyay14_evidence_gate.py"
 EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
     "python scripts/ci/test_nyay14_evidence_gate_security.py"
 )
+EXPECTED_NYAY21_POLICY_COMMAND = "python scripts/ci/test_nyay21_history_purge.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
 )
@@ -1137,6 +1192,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): {
         EXPECTED_NYAY14_POLICY_COMMAND,
         EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
+        EXPECTED_NYAY21_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
         "python scripts/ci/test_nyay18_namespace_boundary_doc.py",
@@ -1199,7 +1255,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "889f8cd8696c5280fe84233921baefa429cee0c9f4211e41e240f5a94889dd25",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "d3e016c2bd6a5000f9788b4c5d6beca797ec43313005e97ece88d247af038b31",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -2415,6 +2471,97 @@ def check_nyay14_evidence_gate_contract(
     return failures
 
 
+def check_nyay21_history_purge_contract(
+    overrides: dict[str, Path] | None = None,
+) -> list[str]:
+    """Seal the non-executing NYAY-21 planner, contracts, and operator packet."""
+
+    failures: list[str] = []
+    selected = dict(NYAY21_HISTORY_PURGE_FILES)
+    if overrides:
+        unknown = set(overrides) - set(selected)
+        if unknown:
+            failures.append(
+                "NYAY-21 history-purge contract received unknown source overrides: "
+                f"{sorted(unknown)}"
+            )
+        selected.update({key: value for key, value in overrides.items() if key in selected})
+
+    for label, path in selected.items():
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: NYAY-21 {label} source is missing or unsafe")
+            continue
+        try:
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            failures.append(f"{path}: NYAY-21 {label} source is unreadable")
+            continue
+        if actual != EXPECTED_NYAY21_HISTORY_PURGE_SHA256[label]:
+            failures.append(
+                f"{path}: NYAY-21 {label} SHA-256 differs from the sealed contract"
+            )
+
+    contract_path = selected["contract"]
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{contract_path}: NYAY-21 contract is unreadable")
+    else:
+        expected_arguments = [
+            "--sensitive-data-removal",
+            "--invert-paths",
+            "--preserve-commit-hashes",
+            "--replace-refs",
+            "delete-no-add",
+            "--prune-empty",
+            "auto",
+            "--prune-degenerate",
+            "auto",
+            "--path",
+            "backend/legalsaathi_dev.db-shm",
+            "--path",
+            "backend/legalsaathi_dev.db-wal",
+        ]
+        if (
+            not isinstance(contract, dict)
+            or contract.get("schemaVersion") != "nyay21-history-purge/v1"
+            or contract.get("repository") != "rajeevbarnwal/NyayOne"
+            or contract.get("defaultMode") != "plan-only"
+            or contract.get("visibilityInvariant") != "PRIVATE"
+            or contract.get("filterRepoVersion") != "a40bce548d2c"
+            or contract.get("reachableCommitCount") != 297
+            or contract.get("expectedAffectedCommitCount") != 243
+            or contract.get("signedCommitCount") != 31
+            or contract.get("signatureDisposition")
+            != "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads"
+            or contract.get("filterRepoArguments") != expected_arguments
+            or contract.get("approvalGates")
+            != ["rewrite-local-mirror", "atomic-force-with-lease"]
+            or not isinstance(contract.get("targets"), list)
+            or len(contract["targets"]) != 2
+        ):
+            failures.append(f"{contract_path}: NYAY-21 contract schema is not exact")
+
+    gate_path = selected["gate"]
+    try:
+        tree = ast.parse(gate_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, SyntaxError):
+        failures.append(f"{gate_path}: NYAY-21 planner cannot be statically audited")
+    else:
+        forbidden_imports = {"subprocess", "socket", "requests", "urllib", "http", "shutil"}
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".", 1)[0])
+        if imported.intersection(forbidden_imports):
+            failures.append(
+                f"{gate_path}: NYAY-21 planner contains an execution or network import"
+            )
+    return failures
+
+
 def check_nyay18_browser_gate_contract(
     orchestrator_path: Path = NYAY18_BROWSER_ORCHESTRATOR,
     browser_path: Path = NYAY18_BROWSER_GATE,
@@ -3505,6 +3652,7 @@ def main() -> int:
     failures.extend(check_nyay19_browser_gate_contract())
     failures.extend(check_nyay5_gate_contract())
     failures.extend(check_nyay14_evidence_gate_contract())
+    failures.extend(check_nyay21_history_purge_contract())
     failures.extend(check_nyay18_static_gate_contract())
     failures.extend(check_nyay18_browser_gate_contract())
     failures.extend(check_alembic_execution_contracts())
