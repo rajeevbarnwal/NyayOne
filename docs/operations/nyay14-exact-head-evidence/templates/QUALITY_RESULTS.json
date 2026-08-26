@@ -1,0 +1,29 @@
+{
+  "accessibility": {
+    "executed": 1,
+    "tool": "axe-core",
+    "toolVersion": "record-version",
+    "ruleInventoryDigest": "replace-with-64-lowercase-hex",
+    "serious": 0,
+    "critical": 0,
+    "artifactId": "backend"
+  },
+  "privacy": {
+    "executed": 1,
+    "scanner": "record-scanner",
+    "scannerVersion": "record-version",
+    "findings": 0,
+    "artifactId": "postgresql-migration"
+  },
+  "credentials": {
+    "executed": 1,
+    "findings": 0,
+    "artifactId": "postgresql-concurrency"
+  },
+  "seededOracle": {
+    "executed": 1,
+    "planted": 1,
+    "detected": 1,
+    "artifactId": "frontend-native"
+  }
+}

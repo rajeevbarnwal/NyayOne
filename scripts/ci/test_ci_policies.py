@@ -2069,6 +2069,52 @@ jobs:
                     failures,
                 )
 
+    def test_nyay14_evidence_gate_contract_rejects_source_and_workflow_drift(self) -> None:
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay14_evidence_gate_contract(), [])
+
+        for label, source in policy.NYAY14_EVIDENCE_FILES.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                mutant = Path(directory) / source.name
+                mutant.write_bytes(source.read_bytes() + b"\n# planted NYAY-14 drift\n")
+                failures = policy.check_nyay14_evidence_gate_contract(
+                    {label: mutant}
+                )
+                self.assertTrue(
+                    any("SHA-256 differs" in item for item in failures),
+                    failures,
+                )
+
+        workflow = policy.WORKFLOWS / "nyayone-policy-gate.yml"
+        original = workflow.read_text(encoding="utf-8")
+        required_steps = (
+            (
+                "Validate NYAY-14 exact-head evidence gate",
+                policy.EXPECTED_NYAY14_POLICY_COMMAND,
+            ),
+            (
+                "Prove NYAY-14 evidence gate fails closed under adversarial inputs",
+                policy.EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
+            ),
+        )
+        for name, command in required_steps:
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as directory:
+                self.assertIn(command, original)
+                mutant = Path(directory) / workflow.name
+                mutant.write_text(
+                    original.replace(
+                        f"      - name: {name}\n        run: {command}\n",
+                        "",
+                        1,
+                    ),
+                    encoding="utf-8",
+                )
+                failures = policy.check_workflow(mutant)
+                self.assertTrue(
+                    any("required gate command" in item for item in failures),
+                    failures,
+                )
+
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (
             HERE.parent.parent / ".github" / "workflows" /

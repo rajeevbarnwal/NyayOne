@@ -107,6 +107,102 @@ NYAY18_BROWSER_CONTRACT_TEST = (
     / "nyay18-browser-contract.test.mjs"
 )
 FRONTEND_PACKAGE = ROOT / "frontend" / "package.json"
+NYAY14_EVIDENCE_FILES: dict[str, Path] = {
+    "gate": ROOT / "scripts" / "ci" / "nyay14_evidence_gate.py",
+    "tests": ROOT / "scripts" / "ci" / "test_nyay14_evidence_gate.py",
+    "security_tests": (
+        ROOT / "scripts" / "ci" / "test_nyay14_evidence_gate_security.py"
+    ),
+    "contract": ROOT / "scripts" / "ci" / "nyay14_evidence_contract.json",
+    "seeded_fixture": (
+        ROOT / "scripts" / "ci" / "fixtures" / "nyay14" / "seeded_zero_assertions.json"
+    ),
+    "readme": ROOT / "docs" / "operations" / "nyay14-exact-head-evidence" / "README.md",
+    "provenance_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "PROVENANCE.json"
+    ),
+    "raw_log_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "RAW_LOG_INVENTORY.json"
+    ),
+    "visual_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "VISUAL_COMPARISON_MATRIX.json"
+    ),
+    "quality_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "QUALITY_RESULTS.json"
+    ),
+    "comment_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "PR_COMMENT.md"
+    ),
+    "merge_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "GUARDED_MERGE.md"
+    ),
+    "protected_checkout_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "PROTECTED_CHECKOUT.json"
+    ),
+    "readbacks_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "READBACKS.json"
+    ),
+}
+EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
+    "gate": "628cf5db7f22d1b381673dc1f8459977663c79566a7bc8941cc083e599735aa9",
+    "tests": "071553d21b37b79dc596fc851df43854164951a39d7897bfb37cc4fe35616c5d",
+    "security_tests": "005691904fdb20f5513989a98ae8fc2ad9fb7c141e4f5fd5a844398c83a5fc3b",
+    "contract": "058900f0bc33563a6ce05a3109b53bb86433203540e30b3e7ee982a3e0d1bd8e",
+    "seeded_fixture": "2e2bff9a8369e244ced90dc7bdc491714e7febfa72e891cf18c6bc877767a3f3",
+    "readme": "1465e36b38e7e7db94021be38ae1d20bfd4a9089cb97ad535a9f025fc2623ae1",
+    "provenance_template": "1e2e42cfbe21db9b057f0b231f8c1836e3dca843f22e7f9e9a347288389e9b68",
+    "raw_log_template": "fb0f2cf3cd69f78995efeab5a85a4fb4bbdff1e3a72fddf35e2d32dba20ed94f",
+    "visual_template": "afcfdffa7f257ed2391c148a35c720a7a6a4d57b172a56a76f1a0f7e015eea42",
+    "quality_template": "0954ed9eaffc9687c4ac851d8ab7a4b48a2d7c54343ebd3e633962ce5fe8a30b",
+    "comment_template": "175e946242502100e4a99ab4cda8afec595c1d10d1a652873a4cb03c7cde4ec6",
+    "merge_template": "d2c9d9d2d83bbfe97ccdc50cf58bdbd7d5e66c2adb72fd0af3ff545bf85d5834",
+    "protected_checkout_template": "ad6dd9e2c93605b6d4bfe02218f67f6457a8a1bf18701d5527659620c99b1a46",
+    "readbacks_template": "11dbcba84df854b1e3c58e0bf6bd1f8f6f72b400d51db9754a2b92a221881ded",
+}
+EXPECTED_NYAY14_POLICY_COMMAND = "python scripts/ci/test_nyay14_evidence_gate.py"
+EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
+    "python scripts/ci/test_nyay14_evidence_gate_security.py"
+)
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
 )
@@ -1038,6 +1134,10 @@ DIRECT_EVIDENCE_UPLOAD_PATHS: dict[tuple[str, str], str] = {
     ): "$RUNNER_TEMP/nyay18-browser-uploadable",
 }
 REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
+    ("nyayone-policy-gate.yml", "policy-contracts"): {
+        EXPECTED_NYAY14_POLICY_COMMAND,
+        EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
+    },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
         "python scripts/ci/test_nyay18_namespace_boundary_doc.py",
         "python scripts/ci/test_nyay18_namespace_policy.py",
@@ -1099,7 +1199,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "151bbfbfcab418fa90213523175b7b50ce0597d6504afcc2f5dd30eb79531838",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "889f8cd8696c5280fe84233921baefa429cee0c9f4211e41e240f5a94889dd25",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -2226,6 +2326,95 @@ def check_nyay18_static_gate_contract(
     return failures
 
 
+def check_nyay14_evidence_gate_contract(
+    overrides: dict[str, Path] | None = None,
+) -> list[str]:
+    """Seal the NYAY-14 validator, oracle, fixture, contract and templates."""
+
+    failures: list[str] = []
+    selected = dict(NYAY14_EVIDENCE_FILES)
+    if overrides:
+        unknown = set(overrides) - set(selected)
+        if unknown:
+            failures.append(
+                "NYAY-14 evidence contract received unknown source overrides: "
+                f"{sorted(unknown)}"
+            )
+        selected.update({key: value for key, value in overrides.items() if key in selected})
+
+    for label, path in selected.items():
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: NYAY-14 {label} source is missing or unsafe")
+            continue
+        try:
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            failures.append(f"{path}: NYAY-14 {label} source is unreadable")
+            continue
+        if actual != EXPECTED_NYAY14_EVIDENCE_SHA256[label]:
+            failures.append(
+                f"{path}: NYAY-14 {label} SHA-256 differs from the sealed contract"
+            )
+
+    contract_path = selected["contract"]
+    fixture_path = selected["seeded_fixture"]
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{contract_path}: NYAY-14 evidence contract is unreadable")
+    else:
+        if (
+            not isinstance(contract, dict)
+            or contract.get("schemaVersion") != "nyay14-evidence/v1"
+            or contract.get("classifications")
+            != ["PASS", "FAIL", "BLOCKED", "HEAD_CHANGED", "handoff-only"]
+            or contract.get("classificationPrecedence")
+            != ["HEAD_CHANGED", "FAIL", "BLOCKED", "handoff-only", "PASS"]
+            or contract.get("rawLogCategories")
+            != [
+                "backend",
+                "postgresql-migration",
+                "postgresql-concurrency",
+                "frontend-native",
+                "chromium",
+            ]
+        ):
+            failures.append(f"{contract_path}: NYAY-14 evidence contract schema is not exact")
+
+    try:
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{fixture_path}: NYAY-14 seeded fixture is unreadable")
+    else:
+        outcome = fixture.get("expectedOutcome") if isinstance(fixture, dict) else None
+        raw_logs = fixture.get("rawLogs") if isinstance(fixture, dict) else None
+        groups = fixture.get("assertionGroups") if isinstance(fixture, dict) else None
+        categories = {
+            row.get("category")
+            for row in raw_logs or []
+            if isinstance(row, dict)
+        }
+        if (
+            fixture.get("claimedVerdict") != "PASS"
+            or not isinstance(outcome, dict)
+            or outcome.get("verdict") != "FAIL"
+            or outcome.get("mergeAuthorized") is not False
+            or "chromium" in categories
+            or not isinstance(groups, list)
+            or not any(
+                isinstance(group, dict) and group.get("executed") == 0
+                for group in groups
+            )
+            or not {"MISSING_RAW_LOG", "ZERO_EXECUTED"}.issubset(
+                set(outcome.get("codes", []))
+            )
+        ):
+            failures.append(
+                f"{fixture_path}: NYAY-14 seeded fail-closed fixture is not exact"
+            )
+    return failures
+
+
 def check_nyay18_browser_gate_contract(
     orchestrator_path: Path = NYAY18_BROWSER_ORCHESTRATOR,
     browser_path: Path = NYAY18_BROWSER_GATE,
@@ -3315,6 +3504,7 @@ def main() -> int:
     failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(check_nyay19_browser_gate_contract())
     failures.extend(check_nyay5_gate_contract())
+    failures.extend(check_nyay14_evidence_gate_contract())
     failures.extend(check_nyay18_static_gate_contract())
     failures.extend(check_nyay18_browser_gate_contract())
     failures.extend(check_alembic_execution_contracts())
