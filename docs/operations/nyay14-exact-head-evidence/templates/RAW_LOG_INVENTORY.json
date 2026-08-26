@@ -1,0 +1,27 @@
+{
+  "rawLogs": [
+    {"id": "backend", "category": "backend", "path": "raw/backend.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "postgresql-migration", "category": "postgresql-migration", "path": "raw/postgresql-migration.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "postgresql-concurrency", "category": "postgresql-concurrency", "path": "raw/postgresql-concurrency.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "frontend-native", "category": "frontend-native", "path": "raw/frontend-native.json", "sha256": "replace-with-64-lowercase-hex"},
+    {"id": "chromium", "category": "chromium", "path": "raw/chromium.json", "sha256": "replace-with-64-lowercase-hex"}
+  ],
+  "assertionGroups": [
+    {
+      "id": "required-gates",
+      "executed": 1,
+      "passed": 1,
+      "failed": 0,
+      "artifactIds": ["backend", "postgresql-migration", "postgresql-concurrency", "frontend-native", "chromium"]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "required-gate-count",
+      "value": 5,
+      "artifactId": "backend",
+      "sha256": "replace-with-the-backend-artifact-digest",
+      "jsonPointer": "/assertions"
+    }
+  ]
+}

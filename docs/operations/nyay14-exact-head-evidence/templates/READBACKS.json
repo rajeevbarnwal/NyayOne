@@ -1,0 +1,16 @@
+{
+  "readbacks": {
+    "exactHead": {
+      "kind": "remote-head",
+      "sha": "1111111111111111111111111111111111111111",
+      "capturedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "artifactId": "backend"
+    },
+    "exactMerge": {
+      "kind": "merge-commit",
+      "sha": "2222222222222222222222222222222222222222",
+      "capturedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "artifactId": "postgresql-migration"
+    }
+  }
+}

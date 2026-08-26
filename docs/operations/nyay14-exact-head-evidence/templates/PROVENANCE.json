@@ -1,0 +1,15 @@
+{
+  "repository": "owner/private-repository",
+  "base": "0000000000000000000000000000000000000000",
+  "reviewedHead": "1111111111111111111111111111111111111111",
+  "remoteHead": "1111111111111111111111111111111111111111",
+  "prospectiveMerge": "2222222222222222222222222222222222222222",
+  "capturedAt": "YYYY-MM-DDTHH:MM:SSZ",
+  "runtime": {
+    "os": "record-version",
+    "architecture": "record-architecture",
+    "python": "record-version",
+    "node": "record-version",
+    "chromium": "record-version"
+  }
+}

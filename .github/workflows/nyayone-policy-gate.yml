@@ -43,6 +43,10 @@ jobs:
           python scripts/ci/verify_nyayone_ci.py
           python scripts/ci/test_ci_policies.py
           python scripts/ci/test_evidence_policy.py
+      - name: Validate NYAY-14 exact-head evidence gate
+        run: python scripts/ci/test_nyay14_evidence_gate.py
+      - name: Prove NYAY-14 evidence gate fails closed under adversarial inputs
+        run: python scripts/ci/test_nyay14_evidence_gate_security.py
       - name: Validate NyayOne runtime and Compose isolation
         run: |
           cp .env.example .env

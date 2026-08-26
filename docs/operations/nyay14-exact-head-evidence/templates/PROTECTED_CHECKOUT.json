@@ -1,0 +1,20 @@
+{
+  "protectedCheckout": {
+    "before": {
+      "head": "0000000000000000000000000000000000000000",
+      "entries": 0,
+      "statusSha256": "replace-with-64-lowercase-hex",
+      "nulStatusSha256": "replace-with-64-lowercase-hex"
+    },
+    "after": {
+      "head": "0000000000000000000000000000000000000000",
+      "entries": 0,
+      "statusSha256": "replace-with-same-64-lowercase-hex",
+      "nulStatusSha256": "replace-with-same-64-lowercase-hex"
+    },
+    "operations": [
+      "git status --porcelain=v1 -z",
+      "git rev-parse HEAD"
+    ]
+  }
+}
