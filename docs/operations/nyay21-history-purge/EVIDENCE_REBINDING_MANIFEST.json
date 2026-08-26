@@ -1,0 +1,217 @@
+{
+  "schemaVersion": "nyay21-evidence-rebinding/v1",
+  "documentStatus": "TEMPLATE_NOT_EXECUTED",
+  "repository": "rajeevbarnwal/NyayOne",
+  "requiredVisibility": "PRIVATE",
+  "planningHead": "422b3dbbeddb25c6735cd093003ccaef335cb60a",
+  "executionId": null,
+  "generatedAt": null,
+  "originRewrite": {
+    "separatelyAuthorized": false,
+    "executed": false,
+    "forceUpdateSeparatelyAuthorized": false,
+    "forceUpdateExecuted": false,
+    "visibilityChangeAuthorized": false
+  },
+  "targetManifest": [
+    {
+      "path": "backend/legalsaathi_dev.db-shm",
+      "blob": "c3d899c19aa30ca15b2d3c952c0f98f96c6e5337",
+      "size": 32768
+    },
+    {
+      "path": "backend/legalsaathi_dev.db-wal",
+      "blob": "9b2634ba5293ee2ceb0a28c19a448e9714c0799e",
+      "size": 457352
+    }
+  ],
+  "rewriteIdentityBoundary": {
+    "reachableCommitCountBefore": 297,
+    "expectedChangedOrPrunedCommitCount": 243,
+    "gpgSignedCommitCountBefore": 31,
+    "gpgSignedCommitCountAfter": 0,
+    "signatureDisposition": "Old signed objects remain verifiable only in the restricted recovery backup; rewritten release and merge attestations require fresh signatures.",
+    "nonSignatureMetadataDriftAllowed": false
+  },
+  "mappingArtifacts": {
+    "commitMapPath": null,
+    "commitMapSha256": null,
+    "refMapPath": null,
+    "refMapSha256": null,
+    "plannedRefInventorySha256": null,
+    "authoritativePrePushRefInventorySha256": null,
+    "authoritativePostPushRefInventorySha256": null
+  },
+  "knownHistoricalCommitBindings": [
+    {
+      "oldSha": "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374",
+      "newSha": null,
+      "mappingDisposition": "PENDING_REWRITE",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    },
+    {
+      "oldSha": "928a2f5f7d51341b3c01c24c423e5f1742d50e5f",
+      "newSha": null,
+      "mappingDisposition": "PENDING_REWRITE",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    },
+    {
+      "oldSha": "140906ba986a1567d9fee34e4aacb2776dff79e9",
+      "newSha": null,
+      "mappingDisposition": "PENDING_REWRITE",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    },
+    {
+      "oldSha": "3678eba9cb54df09005dcd2d7453954336cb1305",
+      "newSha": null,
+      "mappingDisposition": "PENDING_REWRITE",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    },
+    {
+      "oldSha": "422b3dbbeddb25c6735cd093003ccaef335cb60a",
+      "newSha": null,
+      "mappingDisposition": "PENDING_REWRITE",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    },
+    {
+      "oldSha": "d58d1fbac48db5a29158ca5b3b168b8951d526d1",
+      "newSha": "0000000000000000000000000000000000000000",
+      "mappingDisposition": "EXPECTED_PRUNED_EMPTY_SUBJECT_TO_MAP_PROOF",
+      "historicalEvidenceDisposition": "IMMUTABLE_HISTORICAL_INVALIDATED_BY_REWRITE",
+      "newExactHeadEvidenceId": null
+    }
+  ],
+  "historicalEvidence": {
+    "mutateExistingRecords": false,
+    "relabelOldArtifactsToNewSha": false,
+    "retainOriginalTestedHead": true,
+    "requiredStatusAfterRewrite": "historical-invalidated-by-history-rewrite",
+    "records": []
+  },
+  "newExactHead": {
+    "sha": null,
+    "prospectiveMergeSha": null,
+    "commitMapVerified": false,
+    "refMapVerified": false,
+    "targetPathsReachable": null,
+    "targetBlobsReachable": null,
+    "nonTargetRetentionVerified": false
+  },
+  "requiredGateReadbacks": [
+    {
+      "id": "nyayone-registration-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-wave1-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-wave2-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-wave3-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-wave4-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-wave5-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    },
+    {
+      "id": "nyayone-policy-required",
+      "testedHead": null,
+      "executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "oracleDigest": null,
+      "rawArtifactId": null,
+      "status": "BLOCKED_PENDING_EXACT_HEAD_RERUN"
+    }
+  ],
+  "residualSurfaces": {
+    "registerPath": "docs/operations/nyay21-history-purge/HOST_RESIDUAL_SURFACES.md",
+    "githubSupportCaseId": null,
+    "allApplicableRowsDispositioned": false,
+    "unresolvedCount": null,
+    "publicReadiness": "BLOCKED"
+  },
+  "backupGovernance": {
+    "created": false,
+    "classification": "restricted-private-pre-rewrite",
+    "artifactSha256": null,
+    "ownerCustodian": "Rajeev Barnwal",
+    "securityPrivacyApprover": null,
+    "maximumRetentionDaysAfterForceUpdate": 30,
+    "absoluteDestructionAt": "2026-09-30T18:29:59Z",
+    "destructionCertificateId": null
+  },
+  "protectedCheckout": {
+    "root": "/Users/rajeevbarnwal/Desktop/Codes/NyayOne",
+    "expectedEntries": 299,
+    "expectedStatusSha256": "2bddf5cb49dd5c49919226c21be65fa32df2b1d7328f7e3d105a0dac42080a27",
+    "beforeSealVerified": false,
+    "afterSealVerified": false,
+    "modifiedByProcess": false
+  },
+  "approvals": {
+    "owner": null,
+    "securityPrivacy": null,
+    "rewriteApprovalId": null,
+    "forceUpdateApprovalId": null,
+    "approvalIdsDistinct": false,
+    "publicVisibilityApprovalId": null
+  },
+  "finalClassification": "BLOCKED",
+  "limitations": [
+    "Template only: no production history rewrite or force update has occurred.",
+    "Old-to-new SHA values must come from the sealed git-filter-repo commit map.",
+    "PASS is impossible until every exact-head gate executes nonzero assertions at the new head.",
+    "NYAY-21 never authorizes a repository visibility change."
+  ]
+}

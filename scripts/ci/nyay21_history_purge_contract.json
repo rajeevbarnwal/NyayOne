@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "nyay21-history-purge/v1",
+  "repository": "rajeevbarnwal/NyayOne",
+  "sourceHead": "422b3dbbeddb25c6735cd093003ccaef335cb60a",
+  "sourceCommit": "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374",
+  "deletionCommit": "d58d1fbac48db5a29158ca5b3b168b8951d526d1",
+  "defaultMode": "plan-only",
+  "visibilityInvariant": "PRIVATE",
+  "filterRepoVersion": "a40bce548d2c",
+  "reachableCommitCount": 297,
+  "expectedAffectedCommitCount": 243,
+  "signedCommitCount": 31,
+  "signatureDisposition": "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads",
+  "filterRepoArguments": [
+    "--sensitive-data-removal",
+    "--invert-paths",
+    "--preserve-commit-hashes",
+    "--replace-refs",
+    "delete-no-add",
+    "--prune-empty",
+    "auto",
+    "--prune-degenerate",
+    "auto",
+    "--path",
+    "backend/legalsaathi_dev.db-shm",
+    "--path",
+    "backend/legalsaathi_dev.db-wal"
+  ],
+  "approvalGates": [
+    "rewrite-local-mirror",
+    "atomic-force-with-lease"
+  ],
+  "targets": [
+    {
+      "path": "backend/legalsaathi_dev.db-shm",
+      "blob": "c3d899c19aa30ca15b2d3c952c0f98f96c6e5337",
+      "size": 32768
+    },
+    {
+      "path": "backend/legalsaathi_dev.db-wal",
+      "blob": "9b2634ba5293ee2ceb0a28c19a448e9714c0799e",
+      "size": 457352
+    }
+  ]
+}
