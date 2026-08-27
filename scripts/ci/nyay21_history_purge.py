@@ -10,6 +10,8 @@ authorized operator to inspect and execute in a disposable private mirror.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
@@ -21,6 +23,17 @@ BASE_SHA = "422b3dbbeddb25c6735cd093003ccaef335cb60a"
 SOURCE_COMMIT = "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374"
 DELETION_COMMIT = "d58d1fbac48db5a29158ca5b3b168b8951d526d1"
 FILTER_REPO_VERSION = "a40bce548d2c"
+APPROVAL_REGISTRY_SCHEMA = "nyay21-approval-consumption/v1"
+OWNER_APPROVER = "Rajeev Barnwal"
+STRICT_REQUIRED_CHECKS = (
+    "nyayone-registration-required",
+    "nyayone-wave1-required",
+    "nyayone-wave2-required",
+    "nyayone-wave3-required",
+    "nyayone-wave4-required",
+    "nyayone-wave5-required",
+    "nyayone-policy-required",
+)
 TARGETS = (
     {
         "path": "backend/legalsaathi_dev.db-shm",
@@ -36,6 +49,16 @@ TARGETS = (
 
 _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_APPROVAL_ID = {
+    "rewrite": re.compile(
+        r"^NYAY21-REWRITE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
+        r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    ),
+    "force": re.compile(
+        r"^NYAY21-FORCE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
+        r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    ),
+}
 _PUBLISHABLE_KINDS = frozenset({"branch", "protected-branch", "annotated-tag"})
 _KNOWN_REF_KINDS = _PUBLISHABLE_KINDS | frozenset(
     {"symbolic-head", "server-managed-pull"}
@@ -72,6 +95,134 @@ def _target_rows(value: object) -> tuple[dict[str, object], ...]:
     return tuple(rows)
 
 
+def _canonical_json_sha256(value: object) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _inventory_content_seal_is_valid(inventory: object) -> bool:
+    if not isinstance(inventory, Mapping):
+        return False
+    refs = inventory.get("refs")
+    targets = inventory.get("targetManifest")
+    if not isinstance(refs, list) or not refs or _target_rows(targets) != TARGETS:
+        return False
+    try:
+        ref_digest = _canonical_json_sha256(refs)
+        target_digest = _canonical_json_sha256(targets)
+    except (TypeError, ValueError):
+        return False
+    return (
+        inventory.get("refInventorySha256") == ref_digest
+        and inventory.get("targetManifestSha256") == target_digest
+    )
+
+
+def _inventory_seal_is_valid(inventory: object) -> bool:
+    return (
+        isinstance(inventory, Mapping)
+        and inventory.get("repository") == REPOSITORY
+        and inventory.get("visibility") == "PRIVATE"
+        and inventory.get("defaultBranch") == "main"
+        and inventory.get("sourceHead") == BASE_SHA
+        and _inventory_content_seal_is_valid(inventory)
+    )
+
+
+def _approval_uuid_body(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    if not any(pattern.fullmatch(value) for pattern in _APPROVAL_ID.values()):
+        return None
+    return value[-36:]
+
+
+def _validate_approval_records(
+    gate: Mapping[str, object], *, expected_id_kind: str
+) -> tuple[list[str], str | None]:
+    codes: list[str] = []
+    approval_id = gate.get("approvalId")
+    if (
+        not isinstance(approval_id, str)
+        or _APPROVAL_ID[expected_id_kind].fullmatch(approval_id) is None
+    ):
+        codes.append("APPROVAL_ID_INVALID")
+
+    owner = gate.get("ownerApproval")
+    security = gate.get("securityPrivacyApproval")
+    if not (
+        isinstance(owner, Mapping)
+        and owner.get("name") == OWNER_APPROVER
+        and owner.get("role") == "repository-owner"
+        and owner.get("decision") == "APPROVE"
+        and isinstance(security, Mapping)
+        and isinstance(security.get("name"), str)
+        and bool(security.get("name", "").strip())
+        and security.get("role") == "security-privacy"
+        and security.get("decision") == "APPROVE"
+    ):
+        codes.append("NAMED_APPROVERS_REQUIRED")
+    if not (
+        isinstance(owner, Mapping)
+        and _is_hex(owner.get("approvalRecordSha256"), 64)
+        and isinstance(security, Mapping)
+        and _is_hex(security.get("approvalRecordSha256"), 64)
+    ):
+        codes.append("APPROVAL_RECORD_REQUIRED")
+    security_name = (
+        security.get("name")
+        if isinstance(security, Mapping) and isinstance(security.get("name"), str)
+        else None
+    )
+    return codes, security_name
+
+
+def _validate_approval_registry(
+    registry: object,
+    *,
+    authoritative_sha256: str | None,
+) -> tuple[list[str], set[str]]:
+    codes: list[str] = []
+    row = registry if isinstance(registry, Mapping) else {}
+    consumed = row.get("consumedApprovalIds")
+    consumed_uuids = (
+        [_approval_uuid_body(value) for value in consumed]
+        if isinstance(consumed, list)
+        else []
+    )
+    consumed_is_valid_list = (
+        isinstance(consumed, list)
+        and all(value is not None for value in consumed_uuids)
+    )
+    if (
+        row.get("schemaVersion") != APPROVAL_REGISTRY_SCHEMA
+        or not consumed_is_valid_list
+        or (
+            consumed_is_valid_list
+            and len(consumed_uuids) != len(set(consumed_uuids))
+        )
+    ):
+        codes.append("APPROVAL_REGISTRY_INVALID")
+        consumed_ids: set[str] = set()
+    else:
+        consumed_ids = set(consumed_uuids)
+    payload = {
+        "schemaVersion": row.get("schemaVersion"),
+        "consumedApprovalIds": consumed if isinstance(consumed, list) else [],
+    }
+    observed_digest = row.get("registrySha256")
+    if (
+        not _is_hex(observed_digest, 64)
+        or observed_digest != _canonical_json_sha256(payload)
+        or not _is_hex(authoritative_sha256, 64)
+        or observed_digest != authoritative_sha256
+    ):
+        codes.append("APPROVAL_REGISTRY_MISMATCH")
+    return codes, consumed_ids
+
+
 def validate_target_manifest(targets: object) -> dict[str, Any]:
     """Require the exact two content-addressed objects approved for removal."""
 
@@ -98,6 +249,8 @@ def validate_authorizations(
     *,
     authoritative_commit_map_sha256: str | None = None,
     authoritative_ref_map_sha256: str | None = None,
+    authoritative_inventory: object = None,
+    authoritative_approval_registry_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Validate the two independent approvals without granting visibility."""
 
@@ -108,18 +261,63 @@ def validate_authorizations(
     force = document.get("forceUpdate")
     visibility = document.get("visibility")
 
-    if not isinstance(rewrite, Mapping) or not rewrite.get("approved"):
+    rewrite_is_mapping = isinstance(rewrite, Mapping)
+    rewrite_approved = rewrite.get("approved") if rewrite_is_mapping else None
+    if rewrite_is_mapping and rewrite_approved is not True and rewrite_approved is not False:
+        rewrite_codes.append("APPROVAL_BOOLEAN_REQUIRED")
+    if not rewrite_is_mapping or rewrite_approved is not True:
         rewrite_codes.append("REWRITE_APPROVAL_REQUIRED")
-        rewrite = {}
-    force_present = isinstance(force, Mapping) and force.get("approved") is True
+        if not rewrite_is_mapping:
+            rewrite = {}
+    force_is_mapping = isinstance(force, Mapping)
+    force_approved = force.get("approved") if force_is_mapping else None
+    if force_is_mapping and force_approved is not True and force_approved is not False:
+        force_codes.append("APPROVAL_BOOLEAN_REQUIRED")
+    force_present = force_is_mapping and force_approved is True
     if not force_present:
-        force = {}
+        if not force_is_mapping:
+            force = {}
     rewrite_id = rewrite.get("approvalId")
     force_id = force.get("approvalId")
-    if not rewrite_id:
-        rewrite_codes.append("REWRITE_APPROVAL_ID_REQUIRED")
-    if force_present and (not force_id or rewrite_id == force_id):
-        force_codes.append("DISTINCT_FORCE_APPROVAL_REQUIRED")
+    record_codes, rewrite_security_name = _validate_approval_records(
+        rewrite,
+        expected_id_kind="rewrite",
+    )
+    rewrite_codes.extend(record_codes)
+    force_security_name: str | None = None
+    if force_present:
+        record_codes, force_security_name = _validate_approval_records(
+            force,
+            expected_id_kind="force",
+        )
+        force_codes.extend(record_codes)
+    if force_present:
+        rewrite_uuid = _approval_uuid_body(rewrite_id)
+        force_uuid = _approval_uuid_body(force_id)
+        rewrite_records = {
+            row.get("approvalRecordSha256")
+            for row in (
+                rewrite.get("ownerApproval"),
+                rewrite.get("securityPrivacyApproval"),
+            )
+            if isinstance(row, Mapping)
+        }
+        force_records = {
+            row.get("approvalRecordSha256")
+            for row in (
+                force.get("ownerApproval"),
+                force.get("securityPrivacyApproval"),
+            )
+            if isinstance(row, Mapping)
+        }
+        if (
+            rewrite_id == force_id
+            or rewrite_uuid == force_uuid
+            or bool(rewrite_records.intersection(force_records))
+        ):
+            force_codes.append("DISTINCT_FORCE_APPROVAL_REQUIRED")
+    if force_present and rewrite_security_name != force_security_name:
+        force_codes.append("SECURITY_APPROVER_MISMATCH")
     if rewrite.get("action") != "rewrite-local-mirror":
         rewrite_codes.append("REWRITE_APPROVAL_SCOPE_MISMATCH")
     if rewrite.get("sourceHead") != BASE_SHA:
@@ -128,6 +326,24 @@ def validate_authorizations(
         rewrite.get("targetManifestSha256"), 64
     ):
         rewrite_codes.append("APPROVAL_SEAL_MISSING")
+    inventory = authoritative_inventory if isinstance(authoritative_inventory, Mapping) else {}
+    if not inventory:
+        rewrite_codes.append("APPROVAL_INVENTORY_AUTHORITY_REQUIRED")
+    else:
+        if not _inventory_seal_is_valid(inventory):
+            rewrite_codes.append("APPROVAL_INPUT_SEAL_MISMATCH")
+        if (
+            rewrite.get("refInventorySha256")
+            != inventory.get("refInventorySha256")
+            or rewrite.get("targetManifestSha256")
+            != inventory.get("targetManifestSha256")
+        ):
+            rewrite_codes.append("APPROVAL_INPUT_SEAL_MISMATCH")
+        rewrite_ref_result = validate_rewrite_refs(
+            rewrite.get("approvedRefs"), inventory
+        )
+        if rewrite_ref_result["verdict"] != "PASS":
+            rewrite_codes.append("UNSAFE_REF_SCOPE")
     if force_present:
         if force.get("action") != "atomic-force-with-lease":
             force_codes.append("FORCE_APPROVAL_SCOPE_MISMATCH")
@@ -135,6 +351,10 @@ def validate_authorizations(
             force_codes.append("APPROVAL_HEAD_MISMATCH")
         if rewrite.get("approvedRefs") != force.get("approvedRefs"):
             force_codes.append("APPROVED_REF_SCOPE_MISMATCH")
+        if not inventory or validate_rewrite_refs(
+            force.get("approvedRefs"), inventory
+        )["verdict"] != "PASS":
+            force_codes.append("UNSAFE_REF_SCOPE")
         if (
             not _is_hex(force.get("commitMapSha256"), 64)
             or not _is_hex(force.get("refMapSha256"), 64)
@@ -142,6 +362,17 @@ def validate_authorizations(
             or force.get("refMapSha256") != authoritative_ref_map_sha256
         ):
             force_codes.append("FORCE_MAP_AUTHORITY_MISMATCH")
+    registry_codes, consumed_ids = _validate_approval_registry(
+        document.get("approvalRegistry"),
+        authoritative_sha256=authoritative_approval_registry_sha256,
+    )
+    rewrite_codes.extend(registry_codes)
+    rewrite_uuid = _approval_uuid_body(rewrite_id)
+    force_uuid = _approval_uuid_body(force_id)
+    if rewrite_uuid in consumed_ids or (
+        force_present and force_uuid in consumed_ids
+    ):
+        rewrite_codes.append("APPROVAL_ALREADY_CONSUMED")
     if isinstance(visibility, Mapping) and (
         visibility.get("approved") is not False
         or visibility.get("action") != "remain-private"
@@ -150,7 +381,7 @@ def validate_authorizations(
     rewrite_authorized = not rewrite_codes
     push_authorized = rewrite_authorized and force_present and not force_codes
     codes = rewrite_codes + force_codes
-    if rewrite_authorized and not force_present:
+    if rewrite_authorized and not force_present and not force_codes:
         codes.append("FORCE_UPDATE_APPROVAL_PENDING")
         verdict = "PASS_FOR_LOCAL_MIRROR"
     elif push_authorized:
@@ -160,7 +391,7 @@ def validate_authorizations(
     return _result(
         codes,
         verdict=verdict,
-        rewriteAuthorized=rewrite_authorized and not force_codes,
+        rewriteAuthorized=rewrite_authorized,
         pushAuthorized=push_authorized,
         visibilityChangeAuthorized=False,
     )
@@ -172,6 +403,11 @@ def validate_operations(
     authorizations: object,
     authoritative_commit_map_sha256: str | None = None,
     authoritative_ref_map_sha256: str | None = None,
+    planned_inventory: object = None,
+    authoritative_inventory: object = None,
+    authoritative_ref_inventory_sha256: str | None = None,
+    authoritative_target_manifest_sha256: str | None = None,
+    authoritative_approval_registry_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Classify an invocation; the unauthorised/default path never mutates."""
 
@@ -187,29 +423,86 @@ def validate_operations(
         kind for kind in requested if kind not in allowed_non_mutating | allowed_mutating
     ]
     mutation_operations = [kind for kind in requested if kind in allowed_mutating]
-    auth = validate_authorizations(
-        authorizations,
-        authoritative_commit_map_sha256=authoritative_commit_map_sha256,
-        authoritative_ref_map_sha256=authoritative_ref_map_sha256,
-    )
-    rewrite_authorized = auth["rewriteAuthorized"] is True
     codes: list[str] = []
     if unknown:
         codes.append("UNKNOWN_OR_FORBIDDEN_OPERATION")
         mutation_operations = []
-    if not rewrite_authorized:
+    if mutation_operations:
+        if not isinstance(planned_inventory, Mapping) or not isinstance(
+            authoritative_inventory, Mapping
+        ):
+            auth = _result(
+                ["APPROVAL_INPUT_SEAL_MISMATCH"],
+                verdict="BLOCKED",
+                rewriteAuthorized=False,
+                pushAuthorized=False,
+            )
+        elif (
+            not _is_hex(authoritative_ref_inventory_sha256, 64)
+            or not _is_hex(authoritative_target_manifest_sha256, 64)
+            or not _inventory_content_seal_is_valid(authoritative_inventory)
+            or authoritative_inventory.get("refInventorySha256")
+            != authoritative_ref_inventory_sha256
+            or authoritative_inventory.get("targetManifestSha256")
+            != authoritative_target_manifest_sha256
+        ):
+            auth = _result(
+                ["AUTHORITATIVE_SEAL_MISMATCH"],
+                verdict="BLOCKED",
+                rewriteAuthorized=False,
+                pushAuthorized=False,
+            )
+        elif (
+            planned_inventory.get("repository")
+            == authoritative_inventory.get("repository")
+            and planned_inventory.get("sourceHead")
+            == authoritative_inventory.get("sourceHead")
+            and planned_inventory.get("refInventorySha256")
+            == authoritative_inventory.get("refInventorySha256")
+            and planned_inventory.get("targetManifestSha256")
+            == authoritative_inventory.get("targetManifestSha256")
+            and planned_inventory.get("refs") == authoritative_inventory.get("refs")
+            and not _inventory_seal_is_valid(authoritative_inventory)
+        ):
+            auth = _result(
+                ["AUTHORITATIVE_SEAL_MISMATCH"],
+                verdict="BLOCKED",
+                rewriteAuthorized=False,
+                pushAuthorized=False,
+            )
+        else:
+            auth = validate_preflight(
+                authorizations,
+                planned_inventory=planned_inventory,
+                authoritative_inventory=authoritative_inventory,
+                authoritative_approval_registry_sha256=(
+                    authoritative_approval_registry_sha256
+                ),
+            )
+    else:
+        auth = validate_authorizations(
+            authorizations,
+            authoritative_commit_map_sha256=authoritative_commit_map_sha256,
+            authoritative_ref_map_sha256=authoritative_ref_map_sha256,
+            authoritative_inventory=authoritative_inventory,
+            authoritative_approval_registry_sha256=(
+                authoritative_approval_registry_sha256
+            ),
+        )
+    rewrite_authorized = auth["rewriteAuthorized"] is True
+    if not rewrite_authorized or auth["verdict"] in {"BLOCKED", "HEAD_CHANGED", "FAIL"}:
+        codes.extend(auth.get("codes", []))
         codes.append("SEPARATE_APPROVALS_REQUIRED")
         # Unauthorised operations are discarded, not returned as runnable work.
         mutation_operations = []
+    verdict = auth["verdict"] if rewrite_authorized and not codes else "BLOCKED"
+    if auth["verdict"] == "HEAD_CHANGED":
+        verdict = "HEAD_CHANGED"
     return _result(
         codes,
-        verdict=(
-            auth["verdict"]
-            if rewrite_authorized and not codes
-            else "BLOCKED"
-        ),
+        verdict=verdict,
         rewriteAuthorized=rewrite_authorized,
-        pushAuthorized=auth["pushAuthorized"] if not codes else False,
+        pushAuthorized=False,
         mutationOperations=mutation_operations,
         planOnly=not rewrite_authorized,
     )
@@ -249,6 +542,8 @@ def validate_ref_inventory(
     refs = document.get("refs") if isinstance(document.get("refs"), list) else []
     expected = authoritative_refs if isinstance(authoritative_refs, list) else []
     codes: list[str] = []
+    if not refs or not expected:
+        codes.append("REF_INVENTORY_EMPTY")
     names: set[str] = set()
     for row in refs:
         if not isinstance(row, Mapping):
@@ -287,7 +582,9 @@ def validate_rewrite_refs(approved_refs: object, inventory: object) -> dict[str,
     }
     refs = list(approved_refs) if isinstance(approved_refs, Sequence) and not isinstance(approved_refs, (str, bytes)) else []
     codes: list[str] = []
-    if not refs or set(refs) != publishable or len(refs) != len(set(refs)):
+    refs_are_strings = all(isinstance(name, str) for name in refs)
+    ref_set = set(refs) if refs_are_strings else set()
+    if not refs or not refs_are_strings or ref_set != publishable or len(refs) != len(ref_set):
         codes.append("UNSAFE_REF_SCOPE")
     for name in refs:
         if (
@@ -312,6 +609,8 @@ def validate_pre_rewrite_reachability(
     }
     rows = observations if isinstance(observations, list) else []
     codes: list[str] = []
+    if not expected_refs or not rows:
+        codes.append("TARGET_REACHABILITY_EMPTY")
     if {
         row.get("ref") for row in rows if isinstance(row, Mapping)
     } != expected_refs:
@@ -331,6 +630,7 @@ def validate_preflight(
     *,
     planned_inventory: object,
     authoritative_inventory: object,
+    authoritative_approval_registry_sha256: str | None = None,
 ) -> dict[str, Any]:
     planned = planned_inventory if isinstance(planned_inventory, Mapping) else {}
     current = (
@@ -340,6 +640,8 @@ def validate_preflight(
         planned.get("repository") != current.get("repository")
         or planned.get("sourceHead") != current.get("sourceHead")
         or planned.get("refInventorySha256") != current.get("refInventorySha256")
+        or planned.get("targetManifestSha256")
+        != current.get("targetManifestSha256")
         or planned.get("refs") != current.get("refs")
     )
     if drift:
@@ -367,13 +669,24 @@ def validate_preflight(
         )
     gate_r = {
         "rewrite": dict(rewrite),
+        "approvalRegistry": (
+            authorizations.get("approvalRegistry")
+            if isinstance(authorizations, Mapping)
+            else None
+        ),
         "visibility": (
             authorizations.get("visibility")
             if isinstance(authorizations, Mapping)
             else None
         ),
     }
-    auth = validate_authorizations(gate_r)
+    auth = validate_authorizations(
+        gate_r,
+        authoritative_inventory=current,
+        authoritative_approval_registry_sha256=(
+            authoritative_approval_registry_sha256
+        ),
+    )
     return _result(
         auth.get("codes", []),
         verdict=auth["verdict"],
@@ -529,6 +842,8 @@ def validate_commit_map(
 ) -> dict[str, Any]:
     mappings = rows if isinstance(rows, list) else []
     codes: list[str] = []
+    if not mappings:
+        codes.append("COMMIT_MAP_EMPTY")
     if len(mappings) != expectedReachableCount:
         codes.append("COMMIT_MAP_INCOMPLETE")
     by_old: dict[str, str] = {}
@@ -569,6 +884,8 @@ def validate_ref_map(
         if isinstance(row, Mapping)
     }
     codes: list[str] = []
+    if not mappings or not approved or not inventory_by_name:
+        codes.append("REF_MAP_EMPTY")
     by_name = {
         row.get("ref"): row for row in mappings if isinstance(row, Mapping)
     }
@@ -669,6 +986,8 @@ def render_force_update_commands(
 
     rows = mapping if isinstance(mapping, Mapping) else {}
     refs = list(approved_refs) if isinstance(approved_refs, Sequence) else []
+    if not rows or not refs:
+        raise ValueError("force-update plan requires a non-empty exact ref mapping")
     if set(rows) != set(refs) or len(refs) != len(set(refs)):
         raise ValueError("force-update map must exactly equal the approved ref set")
     leases: list[str] = []
@@ -770,17 +1089,37 @@ def validate_evidence_rebinding(old: object, rebound: object) -> dict[str, Any]:
 def validate_gate_readbacks(gates: object, expected_head: str) -> dict[str, Any]:
     rows = gates if isinstance(gates, list) else []
     codes: list[str] = []
+    gate_ids = [
+        row.get("id") for row in rows if isinstance(row, Mapping)
+    ]
+    ids_are_strings = all(isinstance(gate_id, str) for gate_id in gate_ids)
+    gate_id_set = set(gate_ids) if ids_are_strings else set()
+    if not _is_hex(expected_head, 40):
+        codes.append("GATE_READBACK_INVALID_HEAD")
+    if (
+        len(rows) != len(STRICT_REQUIRED_CHECKS)
+        or len(gate_ids) != len(rows)
+        or not ids_are_strings
+        or len(gate_id_set) != len(gate_ids)
+        or gate_id_set != set(STRICT_REQUIRED_CHECKS)
+    ):
+        codes.append("GATE_READBACK_INCOMPLETE")
     for row in rows:
         if not isinstance(row, Mapping):
             codes.append("GATE_READBACK_MALFORMED")
             continue
-        if row.get("executed", 0) <= 0:
+        executed = row.get("executed")
+        passed = row.get("passed")
+        failed = row.get("failed")
+        if type(executed) is not int or executed <= 0:
             codes.append("ZERO_ASSERTIONS")
         if row.get("testedHead") != expected_head:
             codes.append("STALE_EXACT_HEAD_EVIDENCE")
         if (
-            row.get("passed") != row.get("executed")
-            or row.get("failed") != 0
+            type(passed) is not int
+            or type(failed) is not int
+            or passed != executed
+            or failed != 0
             or not _is_hex(row.get("oracleDigest"), 64)
         ):
             codes.append("GATE_READBACK_FAILED")
@@ -823,6 +1162,9 @@ __all__ = [
     "SOURCE_COMMIT",
     "DELETION_COMMIT",
     "FILTER_REPO_VERSION",
+    "APPROVAL_REGISTRY_SCHEMA",
+    "OWNER_APPROVER",
+    "STRICT_REQUIRED_CHECKS",
     "TARGETS",
     "render_force_update_commands",
     "render_local_rewrite_argv",
