@@ -173,7 +173,7 @@ def test_historical_gate_revision_is_not_repository_head() -> None:
         "script_location", str(BACKEND / "app" / "db" / "migrations")
     )
     script = ScriptDirectory.from_config(config)
-    assert script.get_current_head() == "0021_nyay5_profile_boundary"
+    assert script.get_current_head() == "0022_nyay9_owner_profile_api"
     assert HEAD != script.get_current_head()
     assert script.get_revision(HEAD).down_revision == PARENT
 

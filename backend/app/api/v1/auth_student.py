@@ -58,6 +58,7 @@ from app.schemas.registration import (
     StudentAcademicProfileRequest,
     StudentRegisterRequest,
 )
+from app.schemas.student_profile import StudentProfileProjectionResponse
 from app.services import (
     login_service,
     otp_authority,
@@ -1188,7 +1189,7 @@ def otp_cancel(
 # --------------------------------------------------------------------------- #
 # Academic profile (S-10)                                                     #
 # --------------------------------------------------------------------------- #
-@router.patch("/profile")
+@router.patch("/profile", response_model=StudentProfileProjectionResponse)
 def update_academic_profile(
     payload: StudentAcademicProfileRequest,
     request: Request,
@@ -1210,7 +1211,11 @@ def update_academic_profile(
     if reg.status not in {"otp_verified", "active"}:
         raise HTTPException(status_code=403, detail={"code": "otp_verification_required"})
     try:
-        return profile_service.update_academic(
+        idempotency_values = request.headers.getlist("Idempotency-Key")
+        idempotency_key = (
+            idempotency_values[0] if len(idempotency_values) == 1 else ""
+        )
+        projection = profile_service.update_academic(
             session,
             actor.user_id,
             expected_profile_version=payload.expected_profile_version,
@@ -1223,7 +1228,12 @@ def update_academic_profile(
             raw_session_token=request.cookies.get(
                 settings.auth_session_cookie_name
             ),
+            idempotency_key=idempotency_key,
         )
+        response.headers["Idempotency-Replayed"] = (
+            "true" if getattr(projection, "replayed", False) else "false"
+        )
+        return projection
     except profile_service.ProfileBoundaryError as error:
         session.rollback()
         detail: dict[str, object] = {"code": error.code}
@@ -1238,6 +1248,8 @@ def update_academic_profile(
                     "current_projection": error.projection,
                 }
             )
+        if isinstance(error, profile_service.ProfileIdempotencyConflict):
+            detail["section"] = error.section
         raise HTTPException(
             status_code=error.status_code,
             detail=detail,

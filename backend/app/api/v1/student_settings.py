@@ -33,6 +33,7 @@ from app.schemas.student_profile import (
     InterestsProfileMutation,
     PersonalProfileMutation,
     PromptDismissRequest,
+    StudentProfileProjectionResponse,
 )
 from app.services import login_service, otp_flow_service, registration_service
 from app.services import profile_service
@@ -99,6 +100,8 @@ def _raise_profile_error(error: profile_service.ProfileBoundaryError) -> None:
                 "current_projection": error.projection,
             }
         )
+    if isinstance(error, profile_service.ProfileIdempotencyConflict):
+        detail["section"] = error.section
     raise HTTPException(
         status_code=error.status_code,
         detail=detail,
@@ -118,7 +121,27 @@ def _require_empty_profile_query(request: Request) -> None:
         )
 
 
-@router.get("/profile")
+def _profile_idempotency_key(request: Request) -> str:
+    """Preserve one raw value; an invalid sentinel remains fail-closed.
+
+    Validation occurs inside the service only after canonical session authority
+    is re-proven.  This preserves the NYAY-5 rule that a revoked cookie returns
+    the authoritative session denial before any request-shape observation.
+    Missing and duplicate headers become the empty invalid sentinel and are
+    still rejected as ``invalid_idempotency_key`` before any profile write.
+    """
+
+    values = request.headers.getlist("Idempotency-Key")
+    return values[0] if len(values) == 1 else ""
+
+
+def _mark_profile_replay(response: Response, projection: dict) -> None:
+    response.headers["Idempotency-Replayed"] = (
+        "true" if getattr(projection, "replayed", False) else "false"
+    )
+
+
+@router.get("/profile", response_model=StudentProfileProjectionResponse)
 def get_profile(
     request: Request,
     response: Response,
@@ -138,7 +161,7 @@ def get_profile(
         _raise_profile_error(error)
 
 
-@router.patch("/profile/personal")
+@router.patch("/profile/personal", response_model=StudentProfileProjectionResponse)
 def patch_personal_profile(
     payload: PersonalProfileMutation,
     request: Request,
@@ -150,19 +173,22 @@ def patch_personal_profile(
     _mark_profile_projection_private(response)
     _require_empty_profile_query(request)
     try:
-        return profile_service.update_personal(
+        projection = profile_service.update_personal(
             session,
             actor.user_id,
             **payload.model_dump(),
             now=_now(),
             raw_session_token=_raw_session_token(request),
+            idempotency_key=_profile_idempotency_key(request),
         )
+        _mark_profile_replay(response, projection)
+        return projection
     except profile_service.ProfileBoundaryError as error:
         session.rollback()
         _raise_profile_error(error)
 
 
-@router.patch("/profile/academic")
+@router.patch("/profile/academic", response_model=StudentProfileProjectionResponse)
 def patch_academic_profile(
     payload: AcademicProfileMutation,
     request: Request,
@@ -174,19 +200,22 @@ def patch_academic_profile(
     _mark_profile_projection_private(response)
     _require_empty_profile_query(request)
     try:
-        return profile_service.update_academic(
+        projection = profile_service.update_academic(
             session,
             actor.user_id,
             **payload.model_dump(),
             now=_now(),
             raw_session_token=_raw_session_token(request),
+            idempotency_key=_profile_idempotency_key(request),
         )
+        _mark_profile_replay(response, projection)
+        return projection
     except profile_service.ProfileBoundaryError as error:
         session.rollback()
         _raise_profile_error(error)
 
 
-@router.patch("/profile/interests")
+@router.patch("/profile/interests", response_model=StudentProfileProjectionResponse)
 def patch_interests_profile(
     payload: InterestsProfileMutation,
     request: Request,
@@ -198,13 +227,16 @@ def patch_interests_profile(
     _mark_profile_projection_private(response)
     _require_empty_profile_query(request)
     try:
-        return profile_service.update_interests(
+        projection = profile_service.update_interests(
             session,
             actor.user_id,
             **payload.model_dump(),
             now=_now(),
             raw_session_token=_raw_session_token(request),
+            idempotency_key=_profile_idempotency_key(request),
         )
+        _mark_profile_replay(response, projection)
+        return projection
     except profile_service.ProfileBoundaryError as error:
         session.rollback()
         _raise_profile_error(error)

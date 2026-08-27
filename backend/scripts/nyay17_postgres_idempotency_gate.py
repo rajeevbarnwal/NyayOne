@@ -73,8 +73,11 @@ PREVIOUS_REVISION = "0017_registration_invariants"
 PINNED_HEAD = "0018_registration_idempotency"
 # Historical NYAY-17 migration lifecycle remains sealed at 0018. Current ORM,
 # routes and services must instead execute on the repository head, including
-# the OTP-authority and auth-retention lifecycle contracts added after 0018.
-APPLICATION_HEAD = "0021_nyay5_profile_boundary"
+# the OTP-authority, auth-retention, NYAY-5 profile-boundary and NYAY-9
+# owner-scoped profile contracts added after 0018.  Keep 0021 named as a
+# checkpoint so advancing the repository head cannot erase its chain oracle.
+NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
+APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
 REGISTER_PATH = "/api/v1/auth/student/register"
 REGISTRATION_ACCEPTED_STATUS = 202
 RECENT_PROBE_HISTORY_AGE_DAYS = 2
@@ -2722,6 +2725,15 @@ def _signup_authenticated_projection_is_exact(
             "completion_version": "v1",
             "completion_percent": 0,
             "completed_sections": [],
+            "missing_requirements": [
+                "personal.preferred_language",
+                "personal.city",
+                "academic.college",
+                "academic.year_of_study",
+                "academic.enrolment_number",
+                "interests.interests",
+                "interests.goals",
+            ],
             "next_incomplete_section": "personal",
             "is_complete": False,
             "institutional_email_status": "not_provided",

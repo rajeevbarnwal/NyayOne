@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.db.migration_release_guard import (
     APPLICATION_HEAD_REVISION,
     MigrationApprovalError,
+    NYAY5_REVISION,
     enforce_nyay19_migration_postflight,
     enforce_nyay19_migration_release_guard,
     install_authenticated_migration_loader,
@@ -35,8 +36,8 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     # Offline SQL cannot prove the live revision, target identity, transaction,
-    # privacy-zero state, or direct 0020->0021 parentage. It is deliberately
-    # outside the authenticated migration path and therefore fails closed.
+    # privacy-zero state, or authenticated direct-child parentage. It is
+    # deliberately outside the authenticated path and therefore fails closed.
     raise MigrationApprovalError(
         "NYAY migration offline execution is not authorized; refusing to migrate"
     )
@@ -80,12 +81,15 @@ def run_migrations_online() -> None:
                     requested_revision = getattr(
                         getattr(config, "cmd_opts", None), "revision", None
                     )
-                    expected_revision = (
-                        APPLICATION_HEAD_REVISION
-                        if requested_revision
-                        in {APPLICATION_HEAD_REVISION, "head"}
-                        else "0020_auth_retention_lifecycle"
-                    )
+                    if requested_revision in {
+                        APPLICATION_HEAD_REVISION,
+                        "head",
+                    }:
+                        expected_revision = APPLICATION_HEAD_REVISION
+                    elif requested_revision == NYAY5_REVISION:
+                        expected_revision = NYAY5_REVISION
+                    else:
+                        expected_revision = "0020_auth_retention_lifecycle"
                     if expected_revision == "0020_auth_retention_lifecycle":
                         # Preserve the sealed NYAY-19 postflight call and its
                         # source-bound operations contract verbatim.

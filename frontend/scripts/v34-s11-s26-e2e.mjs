@@ -45,6 +45,7 @@ const completeProfileProjection = {
   completion_version: 'v1',
   completion_percent: 100,
   completed_sections: ['personal', 'academic', 'interests'],
+  missing_requirements: [],
   next_incomplete_section: null,
   is_complete: true,
   institutional_email_status: 'pending',

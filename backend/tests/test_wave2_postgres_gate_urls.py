@@ -18,8 +18,8 @@ BASE_URL = make_url(
 
 
 def test_wave_database_gates_target_current_application_head():
+    assert gate.HEAD == "0022_nyay9_owner_profile_api"
     assert {
-        gate.HEAD,
         wave4_postgres_gate.HEAD,
         wave5_postgres_gate.HEAD,
     } == {"0021_nyay5_profile_boundary"}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from itertools import count
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -29,6 +30,7 @@ TOP_LEVEL_KEYS = {
     "completed_sections",
     "next_incomplete_section",
     "is_complete",
+    "missing_requirements",
     "institutional_email_status",
     "guardian",
     "access_mode",
@@ -85,6 +87,25 @@ def profile_ctx(_mounted, db_session, monkeypatch):
     from app.api.v1 import student_settings
 
     monkeypatch.setattr(student_settings, "_now", lambda: NOW)
+    original_patch = client.patch
+    mutation_sequence = count(1)
+
+    def canonical_profile_patch(url, *args, **kwargs):
+        if url in {
+            "/api/v1/auth/student/profile",
+            "/api/v1/student/profile/personal",
+            "/api/v1/student/profile/academic",
+            "/api/v1/student/profile/interests",
+        }:
+            headers = dict(kwargs.get("headers") or {})
+            if not any(name.casefold() == "idempotency-key" for name in headers):
+                headers["Idempotency-Key"] = (
+                    f"nyay5-fixture-profile-mutation-{next(mutation_sequence):08d}"
+                )
+            kwargs["headers"] = headers
+        return original_patch(url, *args, **kwargs)
+
+    monkeypatch.setattr(client, "patch", canonical_profile_patch)
     yield client, db_session, user, registration, profile
 
 
@@ -216,6 +237,15 @@ def test_canonical_get_is_exact_owner_projection(profile_ctx):
     assert body["profile_version"] == 1
     assert body["completion_percent"] == 0
     assert body["completed_sections"] == []
+    assert body["missing_requirements"] == [
+        "personal.preferred_language",
+        "personal.city",
+        "academic.college",
+        "academic.year_of_study",
+        "academic.enrolment_number",
+        "interests.interests",
+        "interests.goals",
+    ]
     assert body["next_incomplete_section"] == "personal"
     assert body["profile"]["personal"] == {
         "first_name": "Aditi",

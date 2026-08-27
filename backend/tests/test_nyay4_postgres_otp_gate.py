@@ -307,7 +307,8 @@ def test_immutable_migration_oracle_pins_every_0001_through_0018_byte(
 def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0018_registration_idempotency"
     assert gate.PINNED_HEAD == "0019_otp_security_authority"
-    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
+    assert gate.NYAY5_CHECKPOINT == "0021_nyay5_profile_boundary"
+    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
 
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option(
@@ -315,8 +316,12 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     )
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
+    nyay5_checkpoint = scripts.get_revision(gate.NYAY5_CHECKPOINT)
     retention = scripts.get_revision("0020_auth_retention_lifecycle")
-    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == retention.revision
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
+        nyay5_checkpoint.revision
+    )
+    assert nyay5_checkpoint.down_revision == retention.revision
     assert retention.down_revision == gate.PINNED_HEAD
 
     lifecycle_source = getsource(gate._run_migration_lifecycle_probe)

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "nyay9-profile-api-postgres/v1",
+  "ticket": "NYAY-9",
+  "producer": "backend/scripts/nyay9_postgres_profile_gate.py",
+  "orchestrator": "scripts/ci/nyay9-profile-api-postgres.mjs",
+  "runtime": {
+    "postgresMajor": 16,
+    "pgvectorRequired": true,
+    "controlUrl": {
+      "literalLoopbackIpOnly": true,
+      "queryFree": true,
+      "ambientLibpqRejected": true
+    },
+    "scratchDatabasePrefix": "nyay9_profile_",
+    "scratchPurposeInventory": [
+      "runtime",
+      "migration",
+      "behavior"
+    ]
+  },
+  "migration": {
+    "revision": "0022_nyay9_owner_profile_api",
+    "downRevision": "0021_nyay5_profile_boundary",
+    "path": "backend/app/db/migrations/versions/0022_nyay9_owner_profile_api.py",
+    "sha256Authority": "backend/app/db/migration_release_guard.py#APPLICATION_HEAD_SOURCE_SHA256"
+  },
+  "oracleCount": 7,
+  "oracleInventory": [
+    "OWNER_ONLY_SESSION_AUTHORITY",
+    "CROSS_OWNER_ISOLATION",
+    "IDEMPOTENT_SAME_KEY_CONCURRENCY",
+    "VERSION_CONFLICT_DIFFERENT_KEYS",
+    "DOB_GUARDIAN_ATOMIC_TRANSITION",
+    "PII_CLEAN_DIAGNOSTICS",
+    "MIGRATION_UP_DOWN_UP"
+  ],
+  "requiredOutcomes": {
+    "OWNER_ONLY_SESSION_AUTHORITY": {
+      "anonymousDenied": true,
+      "invalidCookieDenied": true,
+      "clientOwnerSelectorsDenied": true,
+      "cookieActorWinsOverForgedClaims": true
+    },
+    "CROSS_OWNER_ISOLATION": {
+      "sameOpaqueKeyAllowedAcrossActors": true,
+      "independentActorScopes": 2,
+      "crossOwnerMutationCount": 0
+    },
+    "IDEMPOTENT_SAME_KEY_CONCURRENCY": {
+      "concurrentRequests": 2,
+      "httpSuccesses": 2,
+      "committedMutations": 1,
+      "durableLedgerRows": 1,
+      "replayHeaderObserved": true,
+      "sameKeyDifferentPayloadTypedConflict": true
+    },
+    "VERSION_CONFLICT_DIFFERENT_KEYS": {
+      "concurrentRequests": 2,
+      "httpSuccesses": 1,
+      "typedConflicts": 1,
+      "committedMutations": 1
+    },
+    "DOB_GUARDIAN_ATOMIC_TRANSITION": {
+      "committedTransitions": 1,
+      "guardianRows": 1,
+      "rejectedPartialTransitions": 1
+    },
+    "PII_CLEAN_DIAGNOSTICS": {
+      "aggregateOnly": true,
+      "privacyFindings": 0,
+      "scratchCleanupExact": true
+    },
+    "MIGRATION_UP_DOWN_UP": {
+      "lifecycleStages": 3,
+      "schemaRoundtripExact": true,
+      "sourceAuthorityExact": true,
+      "alembicCheck": true
+    }
+  },
+  "evidence": {
+    "aggregateOnly": true,
+    "exactOracleInventoryRequired": true,
+    "zeroExecutedCannotPass": true,
+    "producerExitMustBeZero": true,
+    "scratchCleanupRequired": true,
+    "forbiddenData": [
+      "database URLs or names",
+      "UUIDs or actor identifiers",
+      "cookies or session tokens",
+      "raw idempotency keys or hashes",
+      "request payloads or profile values",
+      "ciphertext or request fingerprints",
+      "email, mobile, DOB, or legal-name values"
+    ]
+  }
+}

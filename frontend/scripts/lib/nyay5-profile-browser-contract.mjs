@@ -970,6 +970,7 @@ const PROJECTION_KEYS = Object.freeze([
   'completion_version',
   'completion_percent',
   'completed_sections',
+  'missing_requirements',
   'next_incomplete_section',
   'is_complete',
   'institutional_email_status',
@@ -1192,6 +1193,25 @@ export function inspectNyay5Projection(value) {
   const interestsComplete = interestsExact
     && interests.interests.length > 0
     && interests.goals.length > 0;
+  const expectedMissing = [];
+  if (personal?.preferred_language === null) {
+    expectedMissing.push('personal.preferred_language');
+  }
+  if (!personal?.city) expectedMissing.push('personal.city');
+  if (!academic?.college) expectedMissing.push('academic.college');
+  if (!academic?.year_of_study) expectedMissing.push('academic.year_of_study');
+  if (!academic?.enrolment_number) expectedMissing.push('academic.enrolment_number');
+  if (!Array.isArray(interests?.interests) || interests.interests.length === 0) {
+    expectedMissing.push('interests.interests');
+  }
+  if (!Array.isArray(interests?.goals) || interests.goals.length === 0) {
+    expectedMissing.push('interests.goals');
+  }
+  const missingExact = Array.isArray(value?.missing_requirements)
+    && value.missing_requirements.length === expectedMissing.length
+    && value.missing_requirements.every(
+      (requirement, index) => requirement === expectedMissing[index],
+    );
   let completedByProfile = 0;
   if (personalComplete) {
     completedByProfile = 1;
@@ -1238,6 +1258,7 @@ export function inspectNyay5Projection(value) {
     && Number.isInteger(value.profile_version)
     && value.profile_version >= 1
     && value.completion_version === 'v1'
+    && missingExact
     && completedExact
     && value.completion_percent === percentByCount
     && completed.length === completedByProfile
@@ -1261,6 +1282,7 @@ export function inspectNyay5Projection(value) {
     personalExact,
     academicExact,
     interestsExact,
+    missingExact,
     guardianConsistent,
     institutionalConsistent,
     promptConsistent,
@@ -1410,6 +1432,15 @@ function validEmptyProjection() {
     completion_version: 'v1',
     completion_percent: 0,
     completed_sections: [],
+    missing_requirements: [
+      'personal.preferred_language',
+      'personal.city',
+      'academic.college',
+      'academic.year_of_study',
+      'academic.enrolment_number',
+      'interests.interests',
+      'interests.goals',
+    ],
     next_incomplete_section: 'personal',
     is_complete: false,
     institutional_email_status: 'not_provided',

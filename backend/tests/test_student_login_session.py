@@ -38,6 +38,7 @@ from app.models.registration import (
 from app.models.wave1 import DataSubjectRequest, DeletionJob
 from app.services import login_service, otp_authority, otp_flow_service
 from tests import dbtemplate
+from tests.profile_idempotency_fixture import install_profile_mutation_idempotency
 
 
 class CapturingSender:
@@ -103,13 +104,15 @@ def _context(
     app.dependency_overrides[get_session] = request_session
     app.dependency_overrides[auth_student.get_otp_sender] = lambda: sender
     app.dependency_overrides[auth_student.get_outbox_session_factory] = lambda: factory
+    client = TestClient(
+        app,
+        base_url=base_url,
+        raise_server_exceptions=False,
+        headers={"Origin": settings.cors_origins[0]},
+    )
+    install_profile_mutation_idempotency(client, prefix="login-session-profile")
     return (
-        TestClient(
-            app,
-            base_url=base_url,
-            raise_server_exceptions=False,
-            headers={"Origin": settings.cors_origins[0]},
-        ),
+        client,
         engine,
         factory,
         sender,
@@ -195,6 +198,15 @@ def _assert_initial_onboarding(
             "completion_version": "v1",
             "completion_percent": 0,
             "completed_sections": [],
+            "missing_requirements": [
+                "personal.preferred_language",
+                "personal.city",
+                "academic.college",
+                "academic.year_of_study",
+                "academic.enrolment_number",
+                "interests.interests",
+                "interests.goals",
+            ],
             "next_incomplete_section": "personal",
             "is_complete": False,
             "institutional_email_status": "not_provided",

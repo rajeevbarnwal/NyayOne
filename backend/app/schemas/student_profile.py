@@ -1,4 +1,4 @@
-"""Canonical versioned student-profile request contracts (NYAY-5)."""
+"""Canonical versioned student-profile wire contracts (NYAY-5/NYAY-9)."""
 from __future__ import annotations
 
 import re
@@ -15,6 +15,18 @@ from app.core.institutional_email import (
     INSTITUTIONAL_EMAIL_RE,
 )
 from app.services.profile_service import normalize_legal_name
+
+
+ProfileSection = Literal["personal", "academic", "interests"]
+MissingProfileRequirement = Literal[
+    "personal.preferred_language",
+    "personal.city",
+    "academic.college",
+    "academic.year_of_study",
+    "academic.enrolment_number",
+    "interests.interests",
+    "interests.goals",
+]
 
 
 def _optional_text(value: str | None, maximum: int) -> str | None:
@@ -146,6 +158,94 @@ class InterestsProfileMutation(BaseModel):
                 seen.add(normalized)
                 result.append(normalized)
         return result
+
+
+class PersonalProfileProjection(BaseModel):
+    """PII-safe owner projection for the personal profile section."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str
+    middle_name: str | None
+    last_name: str
+    date_of_birth: date
+    preferred_language: Literal["en", "hi"] | None
+    city: str | None
+    pronouns: str | None
+
+
+class AcademicProfileProjection(BaseModel):
+    """PII-safe owner projection for the academic profile section."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    college: str | None
+    year_of_study: str | None
+    enrolment_number: str | None
+    institutional_email: str | None
+    bar_enrolment_number: str | None
+
+
+class InterestsProfileProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interests: list[str]
+    goals: list[str]
+
+
+class StudentProfileSectionsProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    personal: PersonalProfileProjection
+    academic: AcademicProfileProjection
+    interests: InterestsProfileProjection
+
+
+class GuardianProfileProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required: bool
+    status: Literal[
+        "not_required",
+        "required_pending",
+        "verified",
+        "rejected",
+        "revoked",
+    ]
+
+
+class ProfilePromptProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    should_show: bool
+    dismissed_for_session: bool
+
+
+class StudentProfileProjectionResponse(BaseModel):
+    """Exact owner-scoped response shared by reads, writes, and onboarding."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile_version: int = Field(ge=1)
+    completion_version: Literal["v1"]
+    completion_percent: Literal[0, 34, 67, 100]
+    completed_sections: list[ProfileSection]
+    missing_requirements: list[MissingProfileRequirement]
+    next_incomplete_section: ProfileSection | None
+    is_complete: bool
+    institutional_email_status: Literal[
+        "not_provided",
+        "pending",
+        "verified",
+        "rejected",
+        "expired",
+        "revoked",
+    ]
+    guardian: GuardianProfileProjection
+    access_mode: Literal["limited", "full"]
+    disabled_capabilities: list[Literal["community", "sharing"]]
+    profile_prompt: ProfilePromptProjection
+    profile: StudentProfileSectionsProjection
 
 
 class PromptDismissRequest(BaseModel):

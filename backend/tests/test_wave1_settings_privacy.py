@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 # Test-suite plumbing: create_all-equivalent schema copies + a module-scoped
 # route-materialised app (see tests/dbtemplate.py, tests/apptemplate.py).
 from tests import apptemplate, dbtemplate
+from tests.profile_idempotency_fixture import install_profile_mutation_idempotency
 
 NOW = datetime(2026, 7, 27, 9, 0, tzinfo=timezone.utc)
 
@@ -58,6 +59,7 @@ def ctx(_mounted):
 
     app, client = _mounted
     apptemplate.fresh(app, client)
+    install_profile_mutation_idempotency(client, prefix="wave1-profile-mutation")
     app.dependency_overrides[get_session] = prod_session
     with SessionLocal() as s:
         reg = register_student(s, StudentRegisterRequest(

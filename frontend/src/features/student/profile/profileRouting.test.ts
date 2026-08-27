@@ -16,6 +16,13 @@ function projection(
     completionVersion: 'v1',
     completionPercent: complete ? 100 : completedSections.length === 2 ? 67 : completedSections.length === 1 ? 34 : 0,
     completedSections,
+    missingRequirements: complete
+      ? []
+      : nextIncompleteSection === 'interests'
+        ? ['interests.interests', 'interests.goals']
+        : nextIncompleteSection === 'academic'
+          ? ['academic.college', 'academic.year_of_study', 'academic.enrolment_number', 'interests.interests', 'interests.goals']
+          : ['personal.preferred_language', 'personal.city', 'academic.college', 'academic.year_of_study', 'academic.enrolment_number', 'interests.interests', 'interests.goals'],
     nextIncompleteSection,
     isComplete: complete,
     institutionalEmailStatus: 'not_provided',

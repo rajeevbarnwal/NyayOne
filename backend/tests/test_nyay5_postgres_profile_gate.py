@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from app.services import login_service
+from app.db import migration_release_guard
 
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -118,6 +119,57 @@ def test_behavior_gate_executes_registration_and_non_test_authority_contracts() 
     assert "register_exception_handlers(app)" in source
     assert 'settings.app_env = "production"' in source
     assert 'student_verification_denied' in source
+
+
+def test_behavior_gate_runs_current_product_on_the_authoritative_application_head() -> None:
+    gate = _gate_module()
+    assert gate.BEHAVIOR_HEAD == migration_release_guard.APPLICATION_HEAD_REVISION
+    source = inspect.getsource(gate._behavior_probe)
+    assert '_run_alembic(scratch_url, "upgrade", BEHAVIOR_HEAD)' in source
+
+
+def test_historical_migration_oracle_checks_drift_only_after_current_head() -> None:
+    source = inspect.getsource(_gate_module()._migration_and_schema_probe)
+    pinned_upgrade = source.index('_run_alembic(scratch_url, "upgrade", PINNED_HEAD)')
+    current_upgrade = source.index(
+        '_run_alembic(scratch_url, "upgrade", BEHAVIOR_HEAD)',
+        pinned_upgrade,
+    )
+    drift_check = source.index('_run_alembic(scratch_url, "check")')
+    assert pinned_upgrade < current_upgrade < drift_check
+
+
+def test_behavior_profile_fixture_adds_one_key_without_collapsing_headers() -> None:
+    gate = _gate_module()
+    duplicate_origin = [
+        ("Origin", "https://first.invalid"),
+        ("Origin", "https://second.invalid"),
+    ]
+    augmented = gate._profile_mutation_headers(
+        "/api/v1/student/profile/personal",
+        duplicate_origin,
+        "nyay5-fixture-idempotency-0001",
+    )
+    assert augmented == [
+        *duplicate_origin,
+        ("Idempotency-Key", "nyay5-fixture-idempotency-0001"),
+    ]
+    assert gate._profile_mutation_headers(
+        "/api/v1/student/profile/personal",
+        [("idempotency-key", "caller-owned")],
+        "must-not-replace",
+    ) == [("idempotency-key", "caller-owned")]
+    assert gate._profile_mutation_headers(
+        "/api/v1/student/profile/prompt-dismiss",
+        duplicate_origin,
+        "must-not-add",
+    ) == duplicate_origin
+
+
+def test_behavior_projection_oracle_includes_server_derived_requirements() -> None:
+    source = inspect.getsource(_gate_module()._behavior_probe)
+    exact_top = source[source.index("exact_top = {") : source.index("nested = body.get")]
+    assert '"missing_requirements"' in exact_top
 
 
 def test_behavior_gate_serializes_dob_with_both_credential_creation_paths() -> None:
