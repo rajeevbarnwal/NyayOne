@@ -243,9 +243,9 @@ NYAY21_HISTORY_PURGE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY21_HISTORY_PURGE_SHA256: dict[str, str] = {
-    "gate": "25f1198ebf7bbbdb786471cf998b88f030aac90425368d0cd191d1516bd214e4",
-    "tests": "763c41bae850e65fbdfdaa7c8be325085b7d62a22f0793e9aa0a4a7c1afb56cf",
-    "contract": "2576b8b22d58369291ae1a2ed726b22dd1f286558180b3c5561b8d89bf81db52",
+    "gate": "3eee00f99111d86fe94e9c30716a81c4034649bf84d71ce0507fd140bdff35f0",
+    "tests": "c3b8bb5eb2d74792fa02c97c2a68235d7993a6f1f0d6cf0166ae5d1af5b18cc4",
+    "contract": "df47524b6ec372bfeef8ad4fed927aaae1cb85a9a4be28435a2d5ac34448cfcb",
     "execution_plan": "7e8f648dc84be8100ff77781ffa2b7a86182fd89ac5b17f41134619dbeed2672",
     "backup_and_rollback": "991f7fe9734e078f4ab5a316158a2f3fb3d5e51cdd48ed9bc7fad798cbad9ee8",
     "collaborator_realignment": "85303ca8884966389e89379d2f197f9135d46adf4125c944ef2a0fca53256279",
@@ -2522,6 +2522,27 @@ def check_nyay21_history_purge_contract(
             "--path",
             "backend/legalsaathi_dev.db-wal",
         ]
+        expected_approval_policy = {
+            "registrySchemaVersion": "nyay21-approval-consumption/v1",
+            "ownerApprover": "Rajeev Barnwal",
+            "requiredRoles": ["repository-owner", "security-privacy"],
+            "sameSecurityPrivacyApproverAcrossGates": True,
+            "approvalIdFormat": "NYAY21-(REWRITE|FORCE)-UUIDv4",
+            "approvalUuidDistinctAcrossGates": True,
+            "approvalRecordSha256Required": True,
+            "approvalRecordsDistinctAcrossGates": True,
+            "authoritativeSealRecomputation": True,
+            "singleUse": True,
+        }
+        expected_required_gate_ids = [
+            "nyayone-registration-required",
+            "nyayone-wave1-required",
+            "nyayone-wave2-required",
+            "nyayone-wave3-required",
+            "nyayone-wave4-required",
+            "nyayone-wave5-required",
+            "nyayone-policy-required",
+        ]
         if (
             not isinstance(contract, dict)
             or contract.get("schemaVersion") != "nyay21-history-purge/v1"
@@ -2537,6 +2558,8 @@ def check_nyay21_history_purge_contract(
             or contract.get("filterRepoArguments") != expected_arguments
             or contract.get("approvalGates")
             != ["rewrite-local-mirror", "atomic-force-with-lease"]
+            or contract.get("approvalPolicy") != expected_approval_policy
+            or contract.get("requiredGateIds") != expected_required_gate_ids
             or not isinstance(contract.get("targets"), list)
             or len(contract["targets"]) != 2
         ):

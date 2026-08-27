@@ -30,6 +30,30 @@
     "rewrite-local-mirror",
     "atomic-force-with-lease"
   ],
+  "approvalPolicy": {
+    "registrySchemaVersion": "nyay21-approval-consumption/v1",
+    "ownerApprover": "Rajeev Barnwal",
+    "requiredRoles": [
+      "repository-owner",
+      "security-privacy"
+    ],
+    "sameSecurityPrivacyApproverAcrossGates": true,
+    "approvalIdFormat": "NYAY21-(REWRITE|FORCE)-UUIDv4",
+    "approvalUuidDistinctAcrossGates": true,
+    "approvalRecordSha256Required": true,
+    "approvalRecordsDistinctAcrossGates": true,
+    "authoritativeSealRecomputation": true,
+    "singleUse": true
+  },
+  "requiredGateIds": [
+    "nyayone-registration-required",
+    "nyayone-wave1-required",
+    "nyayone-wave2-required",
+    "nyayone-wave3-required",
+    "nyayone-wave4-required",
+    "nyayone-wave5-required",
+    "nyayone-policy-required"
+  ],
   "targets": [
     {
       "path": "backend/legalsaathi_dev.db-shm",

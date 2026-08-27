@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""NYAY-21 RED contracts for the SQLite WAL/SHM history purge.
+"""NYAY-21 contracts for the SQLite WAL/SHM history purge.
 
-This suite is intentionally committed before ``nyay21_history_purge.py``.
-Every test loads the future subject lazily, so the first run is a granular
-24-contract RED result instead of an import-time collection error.  The suite
-must never rewrite this checkout, update a remote, or change repository
-visibility: all future rewrite integration work is confined to disposable
-synthetic repositories and requires a separately sealed owner authorization.
+The first 24 tests preserve the original RED baseline; the remaining tests
+encode the Independent Senior Tester's fail-open bypass matrix.  Every test
+loads the subject lazily and the suite must never rewrite this checkout, update
+a remote, or change repository visibility.  All rewrite integration work is
+confined to disposable synthetic repositories and requires separately sealed
+authorizations.
 """
 
 from __future__ import annotations
@@ -59,6 +59,13 @@ STRICT_REQUIRED_CHECKS = (
     "nyayone-wave5-required",
     "nyayone-policy-required",
 )
+APPROVAL_REGISTRY_SCHEMA = "nyay21-approval-consumption/v1"
+OWNER_APPROVER = "Rajeev Barnwal"
+SECURITY_PRIVACY_APPROVER = "Named Security/Privacy Approver"
+REWRITE_APPROVAL_ID = (
+    "NYAY21-REWRITE-11111111-1111-4111-8111-111111111111"
+)
+FORCE_APPROVAL_ID = "NYAY21-FORCE-22222222-2222-4222-8222-222222222222"
 
 
 def load_subject(test_case: unittest.TestCase, contract_id: str) -> ModuleType:
@@ -99,6 +106,16 @@ def full_sha(seed: int) -> str:
 def canonical_json_sha256(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def canonical_approval_registry(
+    consumed: tuple[str, ...] = (),
+) -> dict[str, object]:
+    payload = {
+        "schemaVersion": APPROVAL_REGISTRY_SCHEMA,
+        "consumedApprovalIds": list(consumed),
+    }
+    return {**payload, "registrySha256": canonical_json_sha256(payload)}
 
 
 def canonical_remote_refs() -> list[dict[str, object]]:
@@ -178,29 +195,85 @@ def canonical_authorizations() -> dict[str, object]:
         for row in inventory["refs"]
         if row["kind"] in {"branch", "protected-branch", "annotated-tag"}
     ]
+    owner_rewrite = {
+        "name": OWNER_APPROVER,
+        "role": "repository-owner",
+        "decision": "APPROVE",
+        "approvalRecordSha256": "4" * 64,
+    }
+    security_rewrite = {
+        "name": SECURITY_PRIVACY_APPROVER,
+        "role": "security-privacy",
+        "decision": "APPROVE",
+        "approvalRecordSha256": "5" * 64,
+    }
     return {
+        "approvalRegistry": canonical_approval_registry(),
         "rewrite": {
-            "approvalId": "OWNER-NYAY21-REWRITE-SEPARATE",
+            "approvalId": REWRITE_APPROVAL_ID,
             "approved": True,
             "action": "rewrite-local-mirror",
             "sourceHead": BASE_SHA,
             "refInventorySha256": inventory["refInventorySha256"],
             "targetManifestSha256": inventory["targetManifestSha256"],
             "approvedRefs": publishable_refs,
+            "ownerApproval": owner_rewrite,
+            "securityPrivacyApproval": security_rewrite,
         },
         "forceUpdate": {
-            "approvalId": "OWNER-NYAY21-FORCE-UPDATE-SEPARATE",
+            "approvalId": FORCE_APPROVAL_ID,
             "approved": True,
             "action": "atomic-force-with-lease",
             "sourceHead": BASE_SHA,
             "approvedRefs": publishable_refs,
             "commitMapSha256": "c" * 64,
             "refMapSha256": "d" * 64,
+            "ownerApproval": {
+                **owner_rewrite,
+                "approvalRecordSha256": "6" * 64,
+            },
+            "securityPrivacyApproval": {
+                **security_rewrite,
+                "approvalRecordSha256": "7" * 64,
+            },
         },
         "visibility": {
             "approved": False,
             "action": "remain-private",
         },
+    }
+
+
+def authorization_context(
+    authorizations: dict[str, object],
+) -> dict[str, object]:
+    registry = authorizations["approvalRegistry"]
+    return {
+        "authoritative_inventory": authoritative_inventory(),
+        "authoritative_approval_registry_sha256": registry["registrySha256"],
+    }
+
+
+def operation_context(
+    authorizations: dict[str, object],
+    *,
+    planned: dict[str, object] | None = None,
+    current: dict[str, object] | None = None,
+) -> dict[str, object]:
+    planned_inventory = planned or authoritative_inventory()
+    current_inventory = current or copy.deepcopy(planned_inventory)
+    return {
+        "planned_inventory": planned_inventory,
+        "authoritative_inventory": current_inventory,
+        "authoritative_ref_inventory_sha256": current_inventory[
+            "refInventorySha256"
+        ],
+        "authoritative_target_manifest_sha256": current_inventory[
+            "targetManifestSha256"
+        ],
+        "authoritative_approval_registry_sha256": authorizations[
+            "approvalRegistry"
+        ]["registrySha256"],
     }
 
 
@@ -236,6 +309,22 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         self.assertEqual(contract["expectedAffectedCommitCount"], 243)
         self.assertEqual(contract["signedCommitCount"], 31)
         self.assertEqual(
+            contract["approvalPolicy"],
+            {
+                "registrySchemaVersion": APPROVAL_REGISTRY_SCHEMA,
+                "ownerApprover": OWNER_APPROVER,
+                "requiredRoles": ["repository-owner", "security-privacy"],
+                "sameSecurityPrivacyApproverAcrossGates": True,
+                "approvalIdFormat": "NYAY21-(REWRITE|FORCE)-UUIDv4",
+                "approvalUuidDistinctAcrossGates": True,
+                "approvalRecordSha256Required": True,
+                "approvalRecordsDistinctAcrossGates": True,
+                "authoritativeSealRecomputation": True,
+                "singleUse": True,
+            },
+        )
+        self.assertEqual(contract["requiredGateIds"], list(STRICT_REQUIRED_CHECKS))
+        self.assertEqual(
             contract["signatureDisposition"],
             "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads",
         )
@@ -257,18 +346,27 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
                 approvals,
                 authoritative_commit_map_sha256="c" * 64,
                 authoritative_ref_map_sha256="d" * 64,
+                **authorization_context(approvals),
             )["verdict"],
             "PASS",
         )
         approvals["forceUpdate"]["approvalId"] = approvals["rewrite"]["approvalId"]
-        result = gate.validate_authorizations(approvals)
+        result = gate.validate_authorizations(
+            approvals,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            **authorization_context(approvals),
+        )
         self.assertEqual(result["verdict"], "BLOCKED")
         self.assertIn("DISTINCT_FORCE_APPROVAL_REQUIRED", finding_codes(result))
         self.assertFalse(result["visibilityChangeAuthorized"])
 
         rewrite_only = canonical_authorizations()
         rewrite_only.pop("forceUpdate")
-        result = gate.validate_authorizations(rewrite_only)
+        result = gate.validate_authorizations(
+            rewrite_only,
+            **authorization_context(rewrite_only),
+        )
         self.assertEqual(result["verdict"], "PASS_FOR_LOCAL_MIRROR")
         self.assertTrue(result["rewriteAuthorized"])
         self.assertFalse(result["pushAuthorized"])
@@ -290,6 +388,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         result = gate.validate_operations(
             [{"kind": "rewrite-local-mirror"}],
             authorizations=rewrite_only,
+            **operation_context(rewrite_only),
         )
         self.assertEqual(result["verdict"], "PASS_FOR_LOCAL_MIRROR")
         self.assertTrue(result["rewriteAuthorized"])
@@ -299,6 +398,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         result = gate.validate_operations(
             [{"kind": "change-visibility"}],
             authorizations=rewrite_only,
+            **operation_context(rewrite_only),
         )
         self.assertEqual(result["verdict"], "BLOCKED")
         self.assertIn("UNKNOWN_OR_FORBIDDEN_OPERATION", finding_codes(result))
@@ -749,6 +849,378 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         invalid = gate.validate_pre_public_audit(audit)
         self.assertEqual(invalid["verdict"], "FAIL")
         self.assertIn("VISIBILITY_CHANGED_WITHOUT_APPROVAL", finding_codes(invalid))
+
+    def test_25_empty_ref_scope_cannot_authorize_or_render_force_plan(self) -> None:
+        gate = load_subject(self, "NYAY21-EMPTY-FORCE-PLAN")
+        for remove_key in (False, True):
+            with self.subTest(remove_key=remove_key):
+                approvals = canonical_authorizations()
+                for gate_name in ("rewrite", "forceUpdate"):
+                    if remove_key:
+                        approvals[gate_name].pop("approvedRefs")
+                    else:
+                        approvals[gate_name]["approvedRefs"] = []
+                result = gate.validate_authorizations(
+                    approvals,
+                    authoritative_commit_map_sha256="c" * 64,
+                    authoritative_ref_map_sha256="d" * 64,
+                    **authorization_context(approvals),
+                )
+                self.assertEqual(result["verdict"], "BLOCKED")
+                self.assertFalse(result["rewriteAuthorized"])
+                self.assertFalse(result["pushAuthorized"])
+                self.assertIn("UNSAFE_REF_SCOPE", finding_codes(result))
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            gate.render_force_update_commands({}, [])
+
+    def test_26_gate_readbacks_require_the_exact_closed_required_set(self) -> None:
+        gate = load_subject(self, "NYAY21-CLOSED-GATE-READBACKS")
+        expected_head = full_sha(2600)
+        complete = [
+            {
+                "id": name,
+                "testedHead": expected_head,
+                "executed": 1,
+                "passed": 1,
+                "failed": 0,
+                "oracleDigest": "8" * 64,
+            }
+            for name in STRICT_REQUIRED_CHECKS
+        ]
+        self.assertEqual(
+            gate.validate_gate_readbacks(complete, expected_head)["verdict"],
+            "PASS",
+        )
+        for rows in (
+            [],
+            complete[:-1],
+            complete + [copy.deepcopy(complete[0])],
+            [{**row, "id": "unknown-required-check"} for row in complete],
+        ):
+            with self.subTest(rows=len(rows)):
+                result = gate.validate_gate_readbacks(rows, expected_head)
+                self.assertEqual(result["verdict"], "FAIL")
+                self.assertIn("GATE_READBACK_INCOMPLETE", finding_codes(result))
+
+    def test_27_mutation_operations_are_bound_to_authoritative_preflight(self) -> None:
+        gate = load_subject(self, "NYAY21-OPERATIONS-SEAL-BINDING")
+        approvals = canonical_authorizations()
+        approvals.pop("forceUpdate")
+        planned = authoritative_inventory()
+        valid = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **operation_context(approvals, planned=planned),
+        )
+        self.assertEqual(valid["verdict"], "PASS_FOR_LOCAL_MIRROR")
+        self.assertEqual(valid["mutationOperations"], ["rewrite-local-mirror"])
+
+        approvals["rewrite"]["refInventorySha256"] = "a" * 64
+        direct = gate.validate_authorizations(
+            approvals,
+            **authorization_context(approvals),
+        )
+        self.assertEqual(direct["verdict"], "BLOCKED")
+        self.assertFalse(direct["rewriteAuthorized"])
+        self.assertFalse(direct["pushAuthorized"])
+        self.assertIn("APPROVAL_INPUT_SEAL_MISMATCH", finding_codes(direct))
+        mismatch = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **operation_context(approvals, planned=planned),
+        )
+        self.assertEqual(mismatch["verdict"], "BLOCKED")
+        self.assertEqual(mismatch["mutationOperations"], [])
+        self.assertIn("APPROVAL_INPUT_SEAL_MISMATCH", finding_codes(mismatch))
+
+        approvals = canonical_authorizations()
+        approvals.pop("forceUpdate")
+        wrong_authority = operation_context(approvals, planned=planned)
+        wrong_authority["authoritative_ref_inventory_sha256"] = "b" * 64
+        mismatch = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **wrong_authority,
+        )
+        self.assertEqual(mismatch["verdict"], "BLOCKED")
+        self.assertEqual(mismatch["mutationOperations"], [])
+        self.assertIn("AUTHORITATIVE_SEAL_MISMATCH", finding_codes(mismatch))
+
+        approvals = canonical_authorizations()
+        approvals.pop("forceUpdate")
+        drifted = copy.deepcopy(planned)
+        drifted["sourceHead"] = full_sha(2700)
+        changed = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **operation_context(approvals, planned=planned, current=drifted),
+        )
+        self.assertEqual(changed["verdict"], "HEAD_CHANGED")
+        self.assertEqual(changed["mutationOperations"], [])
+        self.assertIn("HEAD_CHANGED", finding_codes(changed))
+
+    def test_28_approvals_are_named_recorded_typed_and_single_use(self) -> None:
+        gate = load_subject(self, "NYAY21-STATEFUL-APPROVALS")
+        valid = canonical_authorizations()
+        self.assertEqual(
+            gate.validate_authorizations(
+                valid,
+                authoritative_commit_map_sha256="c" * 64,
+                authoritative_ref_map_sha256="d" * 64,
+                **authorization_context(valid),
+            )["verdict"],
+            "PASS",
+        )
+
+        consumed = canonical_authorizations()
+        registry = canonical_approval_registry((REWRITE_APPROVAL_ID,))
+        consumed["approvalRegistry"] = registry
+        result = gate.validate_authorizations(
+            consumed,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            authoritative_inventory=authoritative_inventory(),
+            authoritative_approval_registry_sha256=registry["registrySha256"],
+        )
+        self.assertIn("APPROVAL_ALREADY_CONSUMED", finding_codes(result))
+        self.assertFalse(result["rewriteAuthorized"])
+        self.assertFalse(result["pushAuthorized"])
+
+        cross_namespace = canonical_authorizations()
+        force_uuid = cross_namespace["forceUpdate"]["approvalId"].removeprefix(
+            "NYAY21-FORCE-"
+        )
+        registry = canonical_approval_registry(
+            (f"NYAY21-REWRITE-{force_uuid}",)
+        )
+        cross_namespace["approvalRegistry"] = registry
+        result = gate.validate_authorizations(
+            cross_namespace,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            authoritative_inventory=authoritative_inventory(),
+            authoritative_approval_registry_sha256=registry["registrySha256"],
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertFalse(result["pushAuthorized"])
+        self.assertIn("APPROVAL_ALREADY_CONSUMED", finding_codes(result))
+
+        adversaries = []
+        unnamed = canonical_authorizations()
+        unnamed["rewrite"]["securityPrivacyApproval"]["name"] = ""
+        adversaries.append((unnamed, "NAMED_APPROVERS_REQUIRED"))
+        different = canonical_authorizations()
+        different["forceUpdate"]["securityPrivacyApproval"]["name"] = "Other Reviewer"
+        adversaries.append((different, "SECURITY_APPROVER_MISMATCH"))
+        unsigned = canonical_authorizations()
+        unsigned["rewrite"]["ownerApproval"].pop("approvalRecordSha256")
+        adversaries.append((unsigned, "APPROVAL_RECORD_REQUIRED"))
+        malformed_id = canonical_authorizations()
+        malformed_id["rewrite"]["approvalId"] = "free-form"
+        adversaries.append((malformed_id, "APPROVAL_ID_INVALID"))
+        for approvals, expected_code in adversaries:
+            with self.subTest(expected_code=expected_code):
+                result = gate.validate_authorizations(
+                    approvals,
+                    authoritative_commit_map_sha256="c" * 64,
+                    authoritative_ref_map_sha256="d" * 64,
+                    **authorization_context(approvals),
+                )
+                self.assertEqual(result["verdict"], "BLOCKED")
+                self.assertIn(expected_code, finding_codes(result))
+
+        mismatch = canonical_authorizations()
+        result = gate.validate_authorizations(
+            mismatch,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            authoritative_inventory=authoritative_inventory(),
+            authoritative_approval_registry_sha256="f" * 64,
+        )
+        self.assertIn("APPROVAL_REGISTRY_MISMATCH", finding_codes(result))
+
+        malformed_registry = canonical_authorizations()
+        registry_payload = {
+            "schemaVersion": APPROVAL_REGISTRY_SCHEMA,
+            "consumedApprovalIds": [{}],
+        }
+        malformed_registry["approvalRegistry"] = {
+            **registry_payload,
+            "registrySha256": canonical_json_sha256(registry_payload),
+        }
+        result = gate.validate_authorizations(
+            malformed_registry,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            authoritative_inventory=authoritative_inventory(),
+            authoritative_approval_registry_sha256=malformed_registry[
+                "approvalRegistry"
+            ]["registrySha256"],
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertIn("APPROVAL_REGISTRY_INVALID", finding_codes(result))
+
+    def test_29_strict_booleans_and_empty_validators_fail_closed(self) -> None:
+        gate = load_subject(self, "NYAY21-STRICT-NONEMPTY-INPUTS")
+        for gate_name in ("rewrite", "forceUpdate"):
+            for invalid_boolean in ("false", {}):
+                with self.subTest(
+                    gate_name=gate_name,
+                    invalid_boolean=type(invalid_boolean).__name__,
+                ):
+                    approvals = canonical_authorizations()
+                    approvals[gate_name]["approved"] = invalid_boolean
+                    result = gate.validate_authorizations(
+                        approvals,
+                        authoritative_commit_map_sha256="c" * 64,
+                        authoritative_ref_map_sha256="d" * 64,
+                        **authorization_context(approvals),
+                    )
+                    self.assertEqual(result["verdict"], "BLOCKED")
+                    self.assertIn(
+                        "APPROVAL_BOOLEAN_REQUIRED", finding_codes(result)
+                    )
+
+        empty_results = (
+            (
+                gate.validate_ref_inventory({}, []),
+                "REF_INVENTORY_EMPTY",
+            ),
+            (
+                gate.validate_ref_map([], {}, []),
+                "REF_MAP_EMPTY",
+            ),
+            (
+                gate.validate_pre_rewrite_reachability({}, []),
+                "TARGET_REACHABILITY_EMPTY",
+            ),
+            (
+                gate.validate_commit_map(
+                    [],
+                    expectedReachableCount=0,
+                    expectedAffectedCount=0,
+                    requiredOldShas=(),
+                ),
+                "COMMIT_MAP_EMPTY",
+            ),
+        )
+        for result, expected_code in empty_results:
+            with self.subTest(expected_code=expected_code):
+                self.assertEqual(result["verdict"], "FAIL")
+                self.assertIn(expected_code, finding_codes(result))
+
+    def test_30_authoritative_seals_are_recomputed_and_gate_ids_are_distinct(self) -> None:
+        gate = load_subject(self, "NYAY21-INTERNAL-SEALS-AND-DISTINCT-GATES")
+        approvals = canonical_authorizations()
+        approvals.pop("forceUpdate")
+        stale_inventory = authoritative_inventory()
+        stale_inventory["refs"][0]["target"] = full_sha(3000)
+        stale_context = operation_context(
+            approvals,
+            planned=copy.deepcopy(stale_inventory),
+            current=stale_inventory,
+        )
+        result = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **stale_context,
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["mutationOperations"], [])
+        self.assertIn("AUTHORITATIVE_SEAL_MISMATCH", finding_codes(result))
+
+        stale_targets = authoritative_inventory()
+        stale_targets["targetManifest"][0]["size"] = 1
+        stale_context = operation_context(
+            approvals,
+            planned=copy.deepcopy(stale_targets),
+            current=stale_targets,
+        )
+        result = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **stale_context,
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["mutationOperations"], [])
+        self.assertIn("AUTHORITATIVE_SEAL_MISMATCH", finding_codes(result))
+
+        stale_head = authoritative_inventory()
+        stale_head["sourceHead"] = full_sha(3001)
+        stale_context = operation_context(
+            approvals,
+            planned=copy.deepcopy(stale_head),
+            current=stale_head,
+        )
+        result = gate.validate_operations(
+            [{"kind": "rewrite-local-mirror"}],
+            authorizations=approvals,
+            **stale_context,
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["mutationOperations"], [])
+        self.assertIn("AUTHORITATIVE_SEAL_MISMATCH", finding_codes(result))
+
+        approvals = canonical_authorizations()
+        shared_uuid = "33333333-3333-4333-8333-333333333333"
+        approvals["rewrite"]["approvalId"] = f"NYAY21-REWRITE-{shared_uuid}"
+        approvals["forceUpdate"]["approvalId"] = f"NYAY21-FORCE-{shared_uuid}"
+        approvals["forceUpdate"]["ownerApproval"]["approvalRecordSha256"] = (
+            approvals["rewrite"]["ownerApproval"]["approvalRecordSha256"]
+        )
+        result = gate.validate_authorizations(
+            approvals,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            **authorization_context(approvals),
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertFalse(result["pushAuthorized"])
+        self.assertIn("DISTINCT_FORCE_APPROVAL_REQUIRED", finding_codes(result))
+
+    def test_31_malformed_collections_and_expected_head_fail_structurally(self) -> None:
+        gate = load_subject(self, "NYAY21-MALFORMED-COLLECTIONS")
+        inventory = authoritative_inventory()
+        approvals = canonical_authorizations()
+        approvals["rewrite"]["approvedRefs"] = [{}]
+        result = gate.validate_authorizations(
+            approvals,
+            authoritative_commit_map_sha256="c" * 64,
+            authoritative_ref_map_sha256="d" * 64,
+            **authorization_context(approvals),
+        )
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertIn("UNSAFE_REF_SCOPE", finding_codes(result))
+
+        malformed_gates = [
+            {
+                "id": {},
+                "testedHead": full_sha(3100),
+                "executed": 1,
+                "passed": 1,
+                "failed": 0,
+                "oracleDigest": "9" * 64,
+            }
+            for _ in STRICT_REQUIRED_CHECKS
+        ]
+        result = gate.validate_gate_readbacks(malformed_gates, full_sha(3100))
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertIn("GATE_READBACK_INCOMPLETE", finding_codes(result))
+
+        empty_head_gates = [
+            {
+                "id": name,
+                "testedHead": "",
+                "executed": 1,
+                "passed": 1,
+                "failed": 0,
+                "oracleDigest": "9" * 64,
+            }
+            for name in STRICT_REQUIRED_CHECKS
+        ]
+        result = gate.validate_gate_readbacks(empty_head_gates, "")
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertIn("GATE_READBACK_INVALID_HEAD", finding_codes(result))
 
 
 if __name__ == "__main__":
