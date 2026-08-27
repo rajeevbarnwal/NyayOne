@@ -285,16 +285,16 @@ EXPECTED_NYAY5_BROWSER_GATE_SHA256 = (
     "1886f1ff2e6cbb72639c1ed83bb940893950929230f5c00c63d6e426bbcba5db"
 )
 EXPECTED_NYAY5_BROWSER_CONTRACT_SHA256 = (
-    "b3e7323128d4a50ccd80c8605bf9ae8000f4d3059345e7ec9e66f0fc43fa2e72"
+    "b1dbbfefc9f85ac6d96d5849bff6e7491b8826d15e6514f6695b9c7af865160e"
 )
 EXPECTED_NYAY5_BROWSER_CONTRACT_TEST_SHA256 = (
-    "03e7a67a756ec7910e36b5e3129433a7abbc1ef7719cc86f18af4d6e78abd10a"
+    "3941c2a1582a27884ed5d78108e9a6c98ce2b71b1bd22e05a79eda5b72507b13"
 )
 EXPECTED_NYAY5_BROWSER_CONTROL_SHA256 = (
     "d24b07f325adc630756a6821bd11fecedbcddc76ae42c8cbf5f783ef9615fba8"
 )
 EXPECTED_NYAY5_POSTGRES_GATE_SHA256 = (
-    "b696de5cb796262eaf8ba0b7c9b9a38faae01386e10b6d94c7b26cfb17b4db9b"
+    "8dfc4778b1ae661cc0e453085daffabf2e2aee36af22da3cc3fbf2129120d908"
 )
 EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_SHA256 = (
     "319a7aace482b04ee97af4fe6ce9ae9234bbf428f64b4d8fd8ada2b4f6923181"
@@ -327,7 +327,7 @@ EXPECTED_NYAY18_BROWSER_ORCHESTRATOR_SHA256 = (
     "9eb4089410b79d6ef4fd786f79cf6ae92bedf8448ccdf4340ada54acc6da9592"
 )
 EXPECTED_NYAY18_BROWSER_GATE_SHA256 = (
-    "e16bb7c61791e2f5756143a1110d16e8717ab5e64fa3d41178b4415d246d92ae"
+    "39850c55d708250e072594825c893bf000d19f84b159d0af53ccb357b18adb67"
 )
 EXPECTED_NYAY18_BROWSER_PREVIEW_SERVER_SHA256 = (
     "5a42234e4be15a882d3e4154247b9bf2df96b0ce835f54daeb03d9f06ad25037"
@@ -564,6 +564,7 @@ EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
     "backend/scripts/nyay3_postgres_characterization.py",
     "backend/scripts/nyay4_postgres_otp_gate.py",
     "backend/scripts/nyay5_postgres_profile_gate.py",
+    "backend/scripts/nyay9_postgres_profile_gate.py",
     "backend/scripts/nyay16_postgres_gate.py",
     "backend/scripts/nyay17_postgres_idempotency_gate.py",
     "backend/scripts/nyay19_migrate.py",
@@ -602,7 +603,7 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "648fc1a3959edf7bc147a56b166c5b6bcfa00b66065a1ae0def43964fc277cec"
+EXPECTED_DB_GATE_SHA256 = "1aa0d05a3747e681188a7be6aaeafb7274aac5a23ab0b1feaf7672f398a38080"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -619,6 +620,12 @@ EXPECTED_NYAY5_DB_GATE_COMMAND = (
     'NYAY5_POSTGRES_GATE=1 "$PY" scripts/nyay5_postgres_profile_gate.py '
     '--execute --database-url "$DATABASE_URL" '
     "--output test-results/nyay5-postgres/summary.json"
+)
+EXPECTED_NYAY9_DB_GATE_COMMAND = (
+    'NYAY9_POSTGRES_GATE=1 node ../scripts/ci/nyay9-profile-api-postgres.mjs '
+    '--execute --python "$PY" --database-url "$DATABASE_URL" '
+    "--producer-output test-results/nyay9-postgres/producer-summary.json "
+    "--output test-results/nyay9-postgres/summary.json"
 )
 EXPECTED_NYAY17_DB_GATE_COMMAND = (
     '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
@@ -1964,6 +1971,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
     nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
     nyay5 = _canonical_shell(EXPECTED_NYAY5_DB_GATE_COMMAND)
+    nyay9 = _canonical_shell(EXPECTED_NYAY9_DB_GATE_COMMAND)
     nyay17 = _canonical_shell(EXPECTED_NYAY17_DB_GATE_COMMAND)
     nyay4 = _canonical_shell(EXPECTED_NYAY4_DB_GATE_COMMAND)
     nyay19 = _canonical_shell(EXPECTED_NYAY19_DB_GATE_COMMAND)
@@ -1983,6 +1991,10 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-5 PostgreSQL gate once"
         )
+    if canonical.count(nyay9) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-9 PostgreSQL gate once"
+        )
     if canonical.count(nyay17) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-17 PostgreSQL gate once"
@@ -1994,6 +2006,14 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay19) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-19 PostgreSQL gate once"
+        )
+    if (
+        nyay5 in canonical
+        and nyay9 in canonical
+        and canonical.index(nyay9) < canonical.index(nyay5)
+    ):
+        failures.append(
+            f"{path}: NYAY-9 PostgreSQL gate must remain after the inherited NYAY-5 stage"
         )
     wave2 = _canonical_shell('PYTHON="$PY" bash scripts/wave2_db_gate.sh')
     if (

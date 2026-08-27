@@ -25,7 +25,7 @@ from app.services.internship_service import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD = "0021_nyay5_profile_boundary"
+HEAD = "0022_nyay9_owner_profile_api"
 PARENT = "0013_wave5_calendar_interop"
 
 

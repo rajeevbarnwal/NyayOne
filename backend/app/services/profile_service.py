@@ -6,6 +6,7 @@ from the wire.
 """
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 import uuid
@@ -34,6 +35,7 @@ from app.models.registration import (
     AuthSession,
     AuthSessionProfilePrompt,
     GuardianConsent,
+    ProfileMutationIdempotencyRecord,
     StudentProfile,
     StudentProfileGoal,
     StudentProfileInterest,
@@ -47,6 +49,17 @@ from app.services.registration_service import _is_minor
 COMPLETION_VERSION = "v1"
 PROFILE_SECTIONS = ("personal", "academic", "interests")
 DISABLED_MINOR_CAPABILITIES = ("community", "sharing")
+PROFILE_REQUIREMENTS = (
+    "personal.preferred_language",
+    "personal.city",
+    "academic.college",
+    "academic.year_of_study",
+    "academic.enrolment_number",
+    "interests.interests",
+    "interests.goals",
+)
+_PROFILE_IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9._~-]{16,200}")
+_PROFILE_FINGERPRINT_VERSION = "v1"
 
 
 class ProfileBoundaryError(RuntimeError):
@@ -63,6 +76,24 @@ class ProfileVersionConflict(ProfileBoundaryError):
     def __init__(self, projection: dict) -> None:
         super().__init__(409, "profile_version_conflict")
         self.projection = projection
+
+
+class ProfileIdempotencyConflict(ProfileBoundaryError):
+    """One actor/section key was already bound to a different request."""
+
+    def __init__(self, section: str) -> None:
+        super().__init__(409, "profile_idempotency_conflict")
+        self.section = section
+
+
+class ProfileMutationProjection(dict):
+    """Wire projection carrying response-only replay metadata out of band."""
+
+    replayed: bool
+
+    def __init__(self, projection: dict, *, replayed: bool) -> None:
+        super().__init__(projection)
+        self.replayed = replayed
 
 
 @dataclass(frozen=True)
@@ -370,6 +401,31 @@ def _profile_values(
     return sorted(values)
 
 
+def _missing_requirements(
+    authority: ProfileAuthority,
+    *,
+    interests: list[str],
+    goals: list[str],
+) -> list[str]:
+    """Reduce the versioned field requirements from persisted owner state."""
+
+    profile = authority.profile
+    present = {
+        "personal.preferred_language": profile.preferred_language in {"en", "hi"},
+        "personal.city": bool(profile.city),
+        "academic.college": bool(profile.college),
+        "academic.year_of_study": bool(profile.year_of_study),
+        "academic.enrolment_number": bool(profile.enrolment_ct),
+        "interests.interests": bool(interests),
+        "interests.goals": bool(goals),
+    }
+    return [
+        requirement
+        for requirement in PROFILE_REQUIREMENTS
+        if not present[requirement]
+    ]
+
+
 def project(
     session: Session,
     authority: ProfileAuthority,
@@ -432,6 +488,11 @@ def project(
     return {
         "profile_version": profile.profile_version,
         **completion,
+        "missing_requirements": _missing_requirements(
+            authority,
+            interests=interests,
+            goals=goals,
+        ),
         "institutional_email_status": _verification_status(session, authority),
         "guardian": guardian,
         "access_mode": "limited" if limited else "full",
@@ -491,6 +552,180 @@ def projection_for_actor(
         now=now,
         raw_session_token=raw_session_token,
     )
+
+
+def export_profile_for_actor(
+    session: Session,
+    actor_user_id: uuid.UUID | None,
+    *,
+    now: datetime,
+) -> dict:
+    """Materialize the complete owner profile through an explicit export allowlist."""
+
+    projection = projection_for_actor(session, actor_user_id, now=now)
+    profile = projection["profile"]
+    personal = profile["personal"]
+    academic = profile["academic"]
+    interests = profile["interests"]
+    return {
+        "schema_version": "student-profile-export.v1",
+        "profile_version": projection["profile_version"],
+        "profile": {
+            "personal": {
+                "first_name": personal["first_name"],
+                "middle_name": personal["middle_name"],
+                "last_name": personal["last_name"],
+                "date_of_birth": personal["date_of_birth"],
+                "preferred_language": personal["preferred_language"],
+                "city": personal["city"],
+                "pronouns": personal["pronouns"],
+            },
+            "academic": {
+                "college": academic["college"],
+                "year_of_study": academic["year_of_study"],
+                "enrolment_number": academic["enrolment_number"],
+                "institutional_email": academic["institutional_email"],
+                "bar_enrolment_number": academic["bar_enrolment_number"],
+            },
+            "interests": {
+                "interests": interests["interests"],
+                "goals": interests["goals"],
+            },
+        },
+    }
+
+
+def validate_profile_idempotency_key(value: str | None) -> str:
+    """Require one opaque, bounded, non-PII profile mutation token."""
+
+    if (
+        not isinstance(value, str)
+        or _PROFILE_IDEMPOTENCY_KEY.fullmatch(value) is None
+    ):
+        raise ProfileBoundaryError(
+            422,
+            "invalid_idempotency_key",
+            field="Idempotency-Key",
+        )
+    return value
+
+
+def _profile_idempotency_key_hash(value: str) -> str:
+    return keyed_hash(f"profile-mutation-idempotency-key:v1:{value}")
+
+
+def _profile_request_fingerprint(section: str, payload: dict) -> str:
+    encoded = json.dumps(
+        {"section": section, "payload": payload},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    return keyed_hash(f"profile-mutation-request:v1:{encoded}")
+
+
+def _decode_replay(record: ProfileMutationIdempotencyRecord) -> dict:
+    if (
+        record.state != "succeeded"
+        or record.outcome_status != 200
+        or record.outcome_ct is None
+        or record.key_version is None
+        or record.profile_version is None
+    ):
+        raise ProfileBoundaryError(409, "profile_idempotency_replay_unavailable")
+    try:
+        decoded = json.loads(decrypt(record.outcome_ct))
+    except (TypeError, ValueError):
+        raise ProfileBoundaryError(
+            409, "profile_idempotency_replay_unavailable"
+        ) from None
+    if (
+        not isinstance(decoded, dict)
+        or decoded.get("profile_version") != record.profile_version
+    ):
+        raise ProfileBoundaryError(409, "profile_idempotency_replay_unavailable")
+    return decoded
+
+
+def _begin_profile_mutation(
+    session: Session,
+    authority: ProfileAuthority,
+    *,
+    section: str,
+    idempotency_key: str | None,
+    fingerprint_payload: dict,
+) -> tuple[ProfileMutationIdempotencyRecord | None, ProfileMutationProjection | None]:
+    """Resolve replay/conflict before any profile version or field mutation.
+
+    Trusted internal callers remain compatible when no key is supplied; every
+    HTTP mutation boundary requires and validates the header before reaching
+    this seam.  PostgreSQL serializes requests on the already-locked profile
+    graph, so the unique ledger scope has one deterministic winner.
+    """
+
+    if idempotency_key is None:
+        return None, None
+    key = validate_profile_idempotency_key(idempotency_key)
+    key_hash = _profile_idempotency_key_hash(key)
+    fingerprint = _profile_request_fingerprint(section, fingerprint_payload)
+    actor_user_id = authority.registration.user_id
+    record = session.scalar(
+        select(ProfileMutationIdempotencyRecord)
+        .where(
+            ProfileMutationIdempotencyRecord.actor_user_id == actor_user_id,
+            ProfileMutationIdempotencyRecord.section == section,
+            ProfileMutationIdempotencyRecord.idempotency_key_hash == key_hash,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if record is not None:
+        if (
+            record.request_fingerprint_version != _PROFILE_FINGERPRINT_VERSION
+            or record.request_fingerprint != fingerprint
+        ):
+            raise ProfileIdempotencyConflict(section)
+        if record.state == "succeeded":
+            return None, ProfileMutationProjection(
+                _decode_replay(record), replayed=True
+            )
+        if record.state == "erased":
+            raise ProfileBoundaryError(409, "profile_idempotency_replay_expired")
+        raise ProfileBoundaryError(409, "profile_mutation_in_progress")
+
+    record = ProfileMutationIdempotencyRecord(
+        actor_user_id=actor_user_id,
+        section=section,
+        idempotency_key_hash=key_hash,
+        request_fingerprint=fingerprint,
+        request_fingerprint_version=_PROFILE_FINGERPRINT_VERSION,
+        state="pending",
+    )
+    session.add(record)
+    session.flush()
+    return record, None
+
+
+def _seal_profile_mutation_outcome(
+    record: ProfileMutationIdempotencyRecord,
+    projection: dict,
+    *,
+    now: datetime,
+) -> None:
+    encoded = json.dumps(
+        projection,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    record.state = "succeeded"
+    record.outcome_status = 200
+    record.outcome_ct = encrypt(encoded)
+    record.key_version = active_key_version()
+    record.profile_version = int(projection["profile_version"])
+    record.updated_at = _as_utc(now)
 
 
 def _audit_success(
@@ -609,6 +844,7 @@ def _commit_projection(
     now: datetime,
     raw_session_token: str | None,
     section: str,
+    idempotency_record: ProfileMutationIdempotencyRecord | None = None,
 ) -> dict:
     projected = project(
         session, authority, now=now, raw_session_token=raw_session_token
@@ -629,8 +865,15 @@ def _commit_projection(
         profile_version=authority.profile.profile_version,
         guardian_required=authority.registration.is_minor,
     )
+    if idempotency_record is not None:
+        _seal_profile_mutation_outcome(
+            idempotency_record,
+            projected,
+            now=now,
+        )
+        session.flush()
     session.commit()
-    return projected
+    return ProfileMutationProjection(projected, replayed=False)
 
 
 def _current_completion(session: Session, authority: ProfileAuthority, *, now: datetime) -> list[str]:
@@ -651,6 +894,7 @@ def update_personal(
     pronouns: str | None,
     now: datetime,
     raw_session_token: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     authority = resolve_authority(
         session,
@@ -684,6 +928,26 @@ def update_personal(
     request_date = now.date()
     if date_of_birth > request_date:
         raise ProfileBoundaryError(422, "invalid_date_of_birth", field="date_of_birth")
+
+    idempotency_record, replay = _begin_profile_mutation(
+        session,
+        authority,
+        section="personal",
+        idempotency_key=idempotency_key,
+        fingerprint_payload={
+            "expected_profile_version": expected_profile_version,
+            "first_name": normalized_first,
+            "middle_name": normalized_middle,
+            "last_name": normalized_last,
+            "date_of_birth": date_of_birth.isoformat(),
+            "preferred_language": preferred_language,
+            "city": normalized_city,
+            "pronouns": normalized_pronouns,
+        },
+    )
+    if replay is not None:
+        session.commit()
+        return replay
 
     registration = authority.registration
     current_dob = date.fromisoformat(decrypt(registration.dob_ct))
@@ -742,6 +1006,7 @@ def update_personal(
         now=now,
         raw_session_token=raw_session_token,
         section="personal",
+        idempotency_record=idempotency_record,
     )
 
 
@@ -757,6 +1022,7 @@ def update_academic(
     bar_enrolment_number: str | None,
     now: datetime,
     raw_session_token: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     authority = resolve_authority(
         session,
@@ -765,15 +1031,6 @@ def update_academic(
         now=now,
         raw_session_token=raw_session_token,
     )
-    _require_expected_profile_version(
-        session,
-        authority,
-        expected_profile_version,
-        now=now,
-        raw_session_token=raw_session_token,
-    )
-    if "personal" not in _current_completion(session, authority, now=now):
-        raise ProfileBoundaryError(409, "profile_section_prerequisite_incomplete")
     normalized_college_text = _normalize_optional_text(
         college, maximum=160, field="college"
     )
@@ -807,6 +1064,33 @@ def update_academic(
     normalized_bar = _normalize_optional_text(
         bar_enrolment_number, maximum=120, field="bar_enrolment_number"
     )
+
+    idempotency_record, replay = _begin_profile_mutation(
+        session,
+        authority,
+        section="academic",
+        idempotency_key=idempotency_key,
+        fingerprint_payload={
+            "expected_profile_version": expected_profile_version,
+            "college": normalized_college,
+            "year_of_study": normalized_year,
+            "enrolment_number": normalized_enrolment,
+            "institutional_email": normalized_email,
+            "bar_enrolment_number": normalized_bar,
+        },
+    )
+    if replay is not None:
+        session.commit()
+        return replay
+    _require_expected_profile_version(
+        session,
+        authority,
+        expected_profile_version,
+        now=now,
+        raw_session_token=raw_session_token,
+    )
+    if "personal" not in _current_completion(session, authority, now=now):
+        raise ProfileBoundaryError(409, "profile_section_prerequisite_incomplete")
 
     _cas(
         session,
@@ -849,6 +1133,7 @@ def update_academic(
         now=now,
         raw_session_token=raw_session_token,
         section="academic",
+        idempotency_record=idempotency_record,
     )
 
 
@@ -929,6 +1214,7 @@ def update_interests(
     goals: Iterable[str],
     now: datetime,
     raw_session_token: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     authority = resolve_authority(
         session,
@@ -937,6 +1223,22 @@ def update_interests(
         now=now,
         raw_session_token=raw_session_token,
     )
+    normalized_interests = normalize_list(interests, field="interests")
+    normalized_goals = normalize_list(goals, field="goals")
+    idempotency_record, replay = _begin_profile_mutation(
+        session,
+        authority,
+        section="interests",
+        idempotency_key=idempotency_key,
+        fingerprint_payload={
+            "expected_profile_version": expected_profile_version,
+            "interests": sorted(normalized_interests),
+            "goals": sorted(normalized_goals),
+        },
+    )
+    if replay is not None:
+        session.commit()
+        return replay
     _require_expected_profile_version(
         session,
         authority,
@@ -947,8 +1249,6 @@ def update_interests(
     completed = _current_completion(session, authority, now=now)
     if completed[:2] != ["personal", "academic"]:
         raise ProfileBoundaryError(409, "profile_section_prerequisite_incomplete")
-    normalized_interests = normalize_list(interests, field="interests")
-    normalized_goals = normalize_list(goals, field="goals")
     _cas(
         session,
         authority,
@@ -981,6 +1281,7 @@ def update_interests(
         now=now,
         raw_session_token=raw_session_token,
         section="interests",
+        idempotency_record=idempotency_record,
     )
 
 

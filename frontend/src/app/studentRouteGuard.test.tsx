@@ -35,6 +35,7 @@ const FULL_PROFILE: StudentProfileProjection = {
   completionVersion: 'v1',
   completionPercent: 100,
   completedSections: ['personal', 'academic', 'interests'],
+  missingRequirements: [],
   nextIncompleteSection: null,
   isComplete: true,
   institutionalEmailStatus: 'not_provided',

@@ -18,6 +18,7 @@ const PROJECTION_WIRE = {
   completion_version: 'v1',
   completion_percent: 67,
   completed_sections: ['personal', 'academic'],
+  missing_requirements: ['interests.interests', 'interests.goals'],
   next_incomplete_section: 'interests',
   is_complete: false,
   institutional_email_status: 'pending',
@@ -69,6 +70,7 @@ describe('canonical server-authoritative profile projection', () => {
       completionVersion: 'v1',
       completionPercent: 67,
       completedSections: ['personal', 'academic'],
+      missingRequirements: ['interests.interests', 'interests.goals'],
       nextIncompleteSection: 'interests',
       isComplete: false,
       institutionalEmailStatus: 'pending',
@@ -213,6 +215,9 @@ describe('versioned section mutations', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/v1/student/profile/personal');
     expect(init.method).toBe('PATCH');
+    expect(new Headers(init.headers).get('Idempotency-Key')).toMatch(
+      /^[A-Za-z0-9._~-]{16,200}$/,
+    );
     expect(JSON.parse(String(init.body))).toEqual({
       expected_profile_version: 7,
       first_name: 'Á',
