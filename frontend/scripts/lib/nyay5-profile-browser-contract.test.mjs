@@ -100,6 +100,15 @@ const VALID_EMPTY_PROJECTION = {
   completion_version: 'v1',
   completion_percent: 0,
   completed_sections: [],
+  missing_requirements: [
+    'personal.preferred_language',
+    'personal.city',
+    'academic.college',
+    'academic.year_of_study',
+    'academic.enrolment_number',
+    'interests.interests',
+    'interests.goals',
+  ],
   next_incomplete_section: 'personal',
   is_complete: false,
   institutional_email_status: 'not_provided',
@@ -1459,6 +1468,16 @@ describe('NYAY-5 browser release-gate source contract', () => {
       known: { ...structuredClone(wire), body: { ...body, status: 'account_exists' } },
       unknown: structuredClone(wire),
     }).pass).toBe(false);
+  });
+
+  it('gives every direct profile-mutation fixture a fresh NYAY-9 idempotency key', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+
+    expect(runner).toContain('function profileFixtureIdempotencyKey()');
+    expect(runner).toContain('rememberPrivate(key);');
+    expect(
+      runner.match(/'Idempotency-Key': profileFixtureIdempotencyKey\(\)/gu),
+    ).toHaveLength(3);
   });
 
   it('kills exactly one deterministic perturbation for every named mutant', async () => {

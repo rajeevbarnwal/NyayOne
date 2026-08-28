@@ -39,6 +39,7 @@ from app.workers.otp_outbox_relay import relay_pending
 
 # Schema builder: a create_all-equivalent template copy (see tests/dbtemplate.py).
 from tests import dbtemplate
+from tests.profile_idempotency_fixture import install_profile_mutation_idempotency
 
 
 class Capturing:
@@ -109,6 +110,7 @@ def _make_ctx(session_class=Session, sender=None, raise_server_exceptions=True):
         raise_server_exceptions=raise_server_exceptions,
         headers={"Origin": settings.cors_origins[0]},
     )
+    install_profile_mutation_idempotency(client, prefix="http-contract-profile")
     return client, engine, SessionLocal, sender, app
 
 

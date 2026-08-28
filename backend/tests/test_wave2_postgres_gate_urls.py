@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import inspect
 
 import pytest
 from sqlalchemy.engine import make_url
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION
 from scripts import wave2_postgres_gate as gate
 from scripts import wave4_postgres_gate, wave5_postgres_gate
 
@@ -17,12 +19,35 @@ BASE_URL = make_url(
 ).set(password=PASSWORD).render_as_string(hide_password=False)
 
 
-def test_wave_database_gates_target_current_application_head():
-    assert {
-        gate.HEAD,
-        wave4_postgres_gate.HEAD,
-        wave5_postgres_gate.HEAD,
-    } == {"0021_nyay5_profile_boundary"}
+@pytest.mark.parametrize(
+    "migration_gate",
+    [gate, wave4_postgres_gate, wave5_postgres_gate],
+)
+def test_wave_database_gates_target_current_application_head(migration_gate):
+    assert APPLICATION_HEAD_REVISION == "0022_nyay9_owner_profile_api"
+    assert migration_gate.HEAD == APPLICATION_HEAD_REVISION
+
+
+def test_wave4_roundtrip_targets_current_head_and_checks_after_reupgrade():
+    source = inspect.getsource(wave4_postgres_gate.main)
+
+    initial_up = source.index('("initial_up", ("upgrade", HEAD))')
+    downgrade = source.index('("down", ("downgrade", PARENT))')
+    reupgrade = source.index('("up", ("upgrade", HEAD))')
+    drift_check = source.index('("check", ("check",))')
+
+    assert initial_up < downgrade < reupgrade < drift_check
+    assert wave4_postgres_gate.HEAD == APPLICATION_HEAD_REVISION
+
+
+def test_wave5_roundtrip_rechecks_drift_and_exact_head_after_reupgrade():
+    source = inspect.getsource(wave5_postgres_gate.main)
+
+    assert 'reup = _alembic("upgrade", HEAD)' in source
+    assert 'reup_check = _alembic("check")' in source
+    assert 'reup_head == HEAD' in source
+    assert 'TABLES <= reup_tables' in source
+    assert wave5_postgres_gate.HEAD == APPLICATION_HEAD_REVISION
 
 
 @pytest.mark.parametrize("database", ["postgres", "qa_scratch_01"])

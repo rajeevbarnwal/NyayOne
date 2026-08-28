@@ -67,11 +67,12 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: SAATHI-60 internship catalogue, and 0015 adds governed public-risk and
 #: right-of-reply tables, 0016 adds the DOB reconciliation ledger, 0017 adds
 #: registration cardinality invariants, 0018 adds request-bound registration
-#: idempotency, 0019 adds durable OTP security authority, and 0020 adds the
-#: explicit login-attempt/auth-session retention lifecycle.
+#: idempotency, 0019 adds durable OTP security authority, 0020 adds the
+#: explicit login-attempt/auth-session retention lifecycle, and 0022 adds the
+#: owner-scoped profile mutation ledger.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0021_nyay5_profile_boundary"
+HEAD_REVISION = "0022_nyay9_owner_profile_api"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",
@@ -116,7 +117,15 @@ POST_WAVE2_TABLES = {
     "student_profile_interests",
     "student_profile_goals",
     "auth_session_profile_prompts",
+    "profile_mutation_idempotency_records",
 }
+
+
+def test_native_wave2_gate_tracks_authenticated_application_head():
+    source = (BACKEND / "scripts/wave2_postgres_gate.py").read_text(
+        encoding="utf-8"
+    )
+    assert f'HEAD = "{HEAD_REVISION}"' in source
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently
 # pass because the assertion was derived from the same source as the code.

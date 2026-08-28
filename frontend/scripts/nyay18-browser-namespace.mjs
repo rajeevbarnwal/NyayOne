@@ -1290,6 +1290,11 @@ function incompleteProfileProjection() {
   return {
     access_mode: 'full', completed_sections: [], completion_percent: 0,
     completion_version: 'v1', disabled_capabilities: [],
+    missing_requirements: [
+      'personal.preferred_language', 'personal.city', 'academic.college',
+      'academic.year_of_study', 'academic.enrolment_number',
+      'interests.interests', 'interests.goals',
+    ],
     guardian: { required: false, status: 'not_required' },
     institutional_email_status: 'not_provided', is_complete: false,
     next_incomplete_section: 'personal',

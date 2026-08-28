@@ -32,13 +32,21 @@ TARGET_SOURCE_PATH = (
     Path(__file__).resolve().parent
     / "migrations/versions/0020_auth_retention_lifecycle.py"
 )
-APPLICATION_HEAD_REVISION = "0021_nyay5_profile_boundary"
-APPLICATION_HEAD_SOURCE_SHA256 = (
+NYAY5_REVISION = "0021_nyay5_profile_boundary"
+NYAY5_SOURCE_SHA256 = (
     "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
+)
+NYAY5_SOURCE_PATH = (
+    Path(__file__).resolve().parent
+    / "migrations/versions/0021_nyay5_profile_boundary.py"
+)
+APPLICATION_HEAD_REVISION = "0022_nyay9_owner_profile_api"
+APPLICATION_HEAD_SOURCE_SHA256 = (
+    "e66fcfd7ac270569e05fde17c0563ec7d0245023d8ab9f1c87d941373eb1653a"
 )
 APPLICATION_HEAD_SOURCE_PATH = (
     Path(__file__).resolve().parent
-    / "migrations/versions/0021_nyay5_profile_boundary.py"
+    / "migrations/versions/0022_nyay9_owner_profile_api.py"
 )
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 VERSIONS_PATH = TARGET_SOURCE_PATH.parent
@@ -105,6 +113,7 @@ HISTORICAL_SOURCE_SHA256 = {
 ALL_MIGRATION_SOURCE_SHA256 = {
     **HISTORICAL_SOURCE_SHA256,
     TARGET_SOURCE_PATH.name: TARGET_SOURCE_SHA256,
+    NYAY5_SOURCE_PATH.name: NYAY5_SOURCE_SHA256,
     APPLICATION_HEAD_SOURCE_PATH.name: APPLICATION_HEAD_SOURCE_SHA256,
 }
 IRREVERSIBLE_FREEZE_ACK = (
@@ -164,6 +173,7 @@ _ISOLATED_DATABASE_MARKERS = {
     "nyay3",
     "nyay4",
     "nyay5",
+    "nyay9",
     "nyay16",
     "nyay17",
     "nyay19",
@@ -409,7 +419,7 @@ def target_source_is_exact() -> bool:
 
 
 def source_authority_is_valid() -> bool:
-    """Verify exact 0001-0021 bytes, inventory, graph and baseline ledger."""
+    """Verify exact 0001-0022 bytes, inventory, graph and baseline ledger."""
 
     expected_names = set(ALL_MIGRATION_SOURCE_SHA256)
     try:
@@ -1365,6 +1375,23 @@ def _target_module() -> Any:
 def _nyay5_module() -> Any:
     module = _load_authenticated_migration_module(
         "nyay5_authenticated_0021",
+        NYAY5_SOURCE_PATH,
+        NYAY5_SOURCE_SHA256,
+    )
+    module_path = getattr(module, "__file__", None)
+    if (
+        not isinstance(module_path, str)
+        or Path(module_path).resolve() != NYAY5_SOURCE_PATH
+        or getattr(module, "revision", None) != NYAY5_REVISION
+        or getattr(module, "down_revision", None) != TARGET_REVISION
+    ):
+        raise RuntimeError("migration authority rejected")
+    return module
+
+
+def _nyay9_module() -> Any:
+    module = _load_authenticated_migration_module(
+        "nyay9_authenticated_0022",
         APPLICATION_HEAD_SOURCE_PATH,
         APPLICATION_HEAD_SOURCE_SHA256,
     )
@@ -1373,7 +1400,7 @@ def _nyay5_module() -> Any:
         not isinstance(module_path, str)
         or Path(module_path).resolve() != APPLICATION_HEAD_SOURCE_PATH
         or getattr(module, "revision", None) != APPLICATION_HEAD_REVISION
-        or getattr(module, "down_revision", None) != TARGET_REVISION
+        or getattr(module, "down_revision", None) != NYAY5_REVISION
     ):
         raise RuntimeError("migration authority rejected")
     return module
@@ -1415,14 +1442,19 @@ def _validate_at_head(connection: Connection) -> None:
         raise RuntimeError("migration source changed")
 
 
-def _validate_nyay5_at_head(connection: Connection) -> None:
-    """Re-prove exact 0021 schema plus inherited security/privacy authority."""
+def _validate_nyay5_inherited_authority(
+    connection: Connection,
+    *,
+    expected_revision: str,
+    head: bool,
+) -> None:
+    """Re-prove frozen 0021 schema plus inherited security/privacy authority."""
 
     module = _nyay5_module()
-    if _current_revision(connection) != APPLICATION_HEAD_REVISION:
+    if _current_revision(connection) != expected_revision:
         raise RuntimeError("head revision changed")
     _validate_authority_catalog(connection)
-    module._validate_postflight(connection, head=True)
+    module._validate_postflight(connection, head=head)
     _target_fingerprint(connection)
     _validate_legacy_deletion_authority(connection)
     remaining = (
@@ -1447,6 +1479,35 @@ def _validate_nyay5_at_head(connection: Connection) -> None:
     )
     if any(remaining) or not source_authority_is_valid():
         raise RuntimeError("NYAY-5 inherited authority validation rejected")
+
+
+def _validate_nyay5_at_head(connection: Connection) -> None:
+    """Re-prove exact 0021 head plus inherited security/privacy authority."""
+
+    _validate_nyay5_inherited_authority(
+        connection,
+        expected_revision=NYAY5_REVISION,
+        head=True,
+    )
+
+
+def _validate_nyay9_at_head(connection: Connection) -> None:
+    """Re-prove exact 0022 plus the complete inherited 0021 authority."""
+
+    nyay5_module = _nyay5_module()
+    module = _nyay9_module()
+    nyay5_module._lock(connection)
+    module._lock(connection, include_ledger=True)
+    if _current_revision(connection) != APPLICATION_HEAD_REVISION:
+        raise RuntimeError("head revision changed")
+    _validate_nyay5_inherited_authority(
+        connection,
+        expected_revision=APPLICATION_HEAD_REVISION,
+        head=False,
+    )
+    module._validate_postflight(connection, head=True)
+    if not source_authority_is_valid():
+        raise RuntimeError("NYAY-9 migration source changed")
 
 
 def locked_parent_report(
@@ -1590,6 +1651,30 @@ def _nyay5_upgrade_intent_agrees(
 
     options = getattr(config, "cmd_opts", None)
     configured = getattr(options, "revision", None)
+    return bool(
+        command is alembic_command.upgrade
+        and configured == NYAY5_REVISION
+        and getattr(options, "sql", None) is False
+        and getattr(options, "tag", None) is None
+        and type(intent) is RuntimeMigrationIntent
+        and intent.operation == "upgrade"
+        and intent.destination_revision == NYAY5_REVISION
+        and intent.as_sql is False
+        and intent.tag is None
+        and intent.dont_mutate is False
+        and _nyay5_module().down_revision == TARGET_REVISION
+    )
+
+
+def _nyay9_upgrade_intent_agrees(
+    config: Any,
+    command: Any,
+    intent: RuntimeMigrationIntent | None,
+) -> bool:
+    """Bind a forward request to only the direct, authenticated 0022 child."""
+
+    options = getattr(config, "cmd_opts", None)
+    configured = getattr(options, "revision", None)
     expected_runtime = (
         configured
         if configured in {APPLICATION_HEAD_REVISION, "head"}
@@ -1606,7 +1691,7 @@ def _nyay5_upgrade_intent_agrees(
         and intent.as_sql is False
         and intent.tag is None
         and intent.dont_mutate is False
-        and _nyay5_module().down_revision == TARGET_REVISION
+        and _nyay9_module().down_revision == NYAY5_REVISION
     )
 
 
@@ -1622,8 +1707,10 @@ def enforce_nyay19_migration_postflight(
             raise RuntimeError
         if expected_revision == TARGET_REVISION:
             _validate_at_head(connection)
-        elif expected_revision == APPLICATION_HEAD_REVISION:
+        elif expected_revision == NYAY5_REVISION:
             _validate_nyay5_at_head(connection)
+        elif expected_revision == APPLICATION_HEAD_REVISION:
+            _validate_nyay9_at_head(connection)
         else:
             raise RuntimeError
     except Exception:
@@ -1640,7 +1727,7 @@ def enforce_nyay19_migration_release_guard(
     environ: Mapping[str, str] | None = None,
     runtime_intent: RuntimeMigrationIntent | None = None,
 ) -> bool:
-    """Authorize sealed 0019->0020, then only its exact direct 0021 child."""
+    """Authorize frozen direct edges without widening an earlier approval."""
 
     authority = os.environ if environ is None else environ
     if authority.get(FORCE_APPROVAL_ENV) != "1" and _is_explicit_isolated_target(
@@ -1663,7 +1750,12 @@ def enforce_nyay19_migration_release_guard(
         == "postgresql"
         and _nyay5_upgrade_intent_agrees(config, command, runtime_intent)
     )
-    if not (nyay19_upgrade or nyay5_upgrade):
+    nyay9_upgrade = bool(
+        getattr(getattr(connection, "dialect", None), "name", None)
+        == "postgresql"
+        and _nyay9_upgrade_intent_agrees(config, command, runtime_intent)
+    )
+    if not (nyay19_upgrade or nyay5_upgrade or nyay9_upgrade):
         raise MigrationApprovalError(
             "NYAY-19 migration command is not authorized; refusing to migrate"
         )
@@ -1686,8 +1778,34 @@ def enforce_nyay19_migration_release_guard(
         raise MigrationApprovalError(
             "NYAY-19 live target rejected; refusing to migrate"
         ) from None
-    if nyay5_upgrade:
+    if nyay9_upgrade:
         if revision == APPLICATION_HEAD_REVISION:
+            try:
+                _validate_nyay9_at_head(connection)
+            except Exception:
+                raise MigrationApprovalError(
+                    "NYAY-9 head validation rejected; refusing to migrate"
+                ) from None
+            return True
+        if revision != NYAY5_REVISION:
+            raise MigrationApprovalError(
+                "NYAY-9 database revision rejected; refusing to migrate"
+            )
+        try:
+            # Authenticate and re-prove the exact 0021 parent.  The frozen
+            # NYAY-19 approval and the absence of a NYAY-5 production approval
+            # cannot authorize this distinct 0021->0022 transition.
+            _validate_nyay5_at_head(connection)
+        except Exception:
+            raise MigrationApprovalError(
+                "NYAY-9 parent validation rejected; refusing to migrate"
+            ) from None
+        raise MigrationApprovalError(
+            "NYAY-9 production approval unavailable; refusing to migrate"
+        )
+
+    if nyay5_upgrade:
+        if revision == NYAY5_REVISION:
             try:
                 _validate_nyay5_at_head(connection)
             except Exception:

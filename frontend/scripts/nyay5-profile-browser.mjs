@@ -1418,9 +1418,18 @@ function personalMutation(projection, expectedProfileVersion, overrides = {}) {
   };
 }
 
+function profileFixtureIdempotencyKey() {
+  const key = `nyay5-profile-${randomBytes(24).toString('hex')}`;
+  rememberPrivate(key);
+  return key;
+}
+
 async function patchPersonalProjection(context, projection, overrides = {}) {
   return context.request.patch(`${API}/api/v1/student/profile/personal`, {
-    headers: { Origin: WEB_ORIGIN },
+    headers: {
+      Origin: WEB_ORIGIN,
+      'Idempotency-Key': profileFixtureIdempotencyKey(),
+    },
     data: personalMutation(projection, projection?.profile_version, overrides),
   });
 }
@@ -2748,7 +2757,10 @@ async function staleCrossUserAndUncertainProbe(browser) {
   const wrongStale = await first.context.request.patch(
     `${API}/api/v1/student/profile/personal`,
     {
-      headers: { Origin: WEB_ORIGIN },
+      headers: {
+        Origin: WEB_ORIGIN,
+        'Idempotency-Key': profileFixtureIdempotencyKey(),
+      },
       data: {
         expected_profile_version: 1,
         first_name: latestPersonal?.first_name,
@@ -3091,7 +3103,10 @@ async function unicodeAndRegistrationProbe(browser) {
     const backendResponse = await context.request.patch(
       `${API}/api/v1/student/profile/personal`,
       {
-        headers: { Origin: WEB_ORIGIN },
+        headers: {
+          Origin: WEB_ORIGIN,
+          'Idempotency-Key': profileFixtureIdempotencyKey(),
+        },
         data: personalMutation(
           backendBefore.body,
           backendBefore.body?.profile_version,

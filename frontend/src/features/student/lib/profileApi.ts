@@ -17,6 +17,7 @@ const PROJECTION_KEYS = [
   'guardian',
   'institutional_email_status',
   'is_complete',
+  'missing_requirements',
   'next_incomplete_section',
   'profile',
   'profile_prompt',
@@ -24,6 +25,14 @@ const PROJECTION_KEYS = [
 ] as const;
 
 export type ProfileSection = 'personal' | 'academic' | 'interests';
+export type ProfileRequirement =
+  | 'personal.preferred_language'
+  | 'personal.city'
+  | 'academic.college'
+  | 'academic.year_of_study'
+  | 'academic.enrolment_number'
+  | 'interests.interests'
+  | 'interests.goals';
 export type InstitutionalEmailStatus =
   | 'not_provided'
   | 'pending'
@@ -68,6 +77,7 @@ export interface StudentProfileProjection {
   completionVersion: 'v1';
   completionPercent: 0 | 34 | 67 | 100;
   completedSections: ProfileSection[];
+  missingRequirements: ProfileRequirement[];
   nextIncompleteSection: ProfileSection | null;
   isComplete: boolean;
   institutionalEmailStatus: InstitutionalEmailStatus;
@@ -105,6 +115,7 @@ interface StudentProfileProjectionWire {
   completion_version: 'v1';
   completion_percent: 0 | 34 | 67 | 100;
   completed_sections: ProfileSection[];
+  missing_requirements: ProfileRequirement[];
   next_incomplete_section: ProfileSection | null;
   is_complete: boolean;
   institutional_email_status: InstitutionalEmailStatus;
@@ -278,6 +289,28 @@ function isProjectionWire(value: unknown): value is StudentProfileProjectionWire
     || !isAcademicWire(value.profile.academic)
     || !isInterestsWire(value.profile.interests)) return false;
 
+  const expectedMissing: ProfileRequirement[] = [];
+  if (value.profile.personal.preferred_language === null) {
+    expectedMissing.push('personal.preferred_language');
+  }
+  if (!value.profile.personal.city) expectedMissing.push('personal.city');
+  if (!value.profile.academic.college) expectedMissing.push('academic.college');
+  if (!value.profile.academic.year_of_study) expectedMissing.push('academic.year_of_study');
+  if (!value.profile.academic.enrolment_number) {
+    expectedMissing.push('academic.enrolment_number');
+  }
+  if (value.profile.interests.interests.length === 0) {
+    expectedMissing.push('interests.interests');
+  }
+  if (value.profile.interests.goals.length === 0) {
+    expectedMissing.push('interests.goals');
+  }
+  if (!Array.isArray(value.missing_requirements)
+    || value.missing_requirements.length !== expectedMissing.length
+    || !value.missing_requirements.every(
+      (requirement, index) => requirement === expectedMissing[index],
+    )) return false;
+
   const guardianConsistent = value.guardian.required
     ? value.guardian.status !== 'not_required'
     : value.guardian.status === 'not_required';
@@ -314,6 +347,7 @@ function mapProjection(wire: StudentProfileProjectionWire): StudentProfileProjec
     completionVersion: wire.completion_version,
     completionPercent: wire.completion_percent,
     completedSections: [...wire.completed_sections],
+    missingRequirements: [...wire.missing_requirements],
     nextIncompleteSection: wire.next_incomplete_section,
     isComplete: wire.is_complete,
     institutionalEmailStatus: wire.institutional_email_status,
@@ -520,6 +554,7 @@ async function sectionMutation(
   matches: (projection: StudentProfileProjection) => boolean,
 ): Promise<ProfileMutationResult> {
   const fence = captureStudentContextFence();
+  const idempotencyKey = newProfileMutationIdempotencyKey();
   if (!Number.isSafeInteger(expectedProfileVersion) || expectedProfileVersion < 1) {
     throw new ProfileApiError(422, 'invalid_expected_profile_version', 'expected_profile_version');
   }
@@ -528,6 +563,7 @@ async function sectionMutation(
       fence,
       (signal) => boundedProfileRequest(path, {
         method: 'PATCH',
+        headers: { 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify({ expected_profile_version: expectedProfileVersion, ...body }),
         signal,
       }),
@@ -545,6 +581,18 @@ async function sectionMutation(
     }
     return reconcileAfterUnknown(expectedProfileVersion, matches, fence);
   }
+}
+
+/** One memory-only opaque key per profile mutation attempt. */
+export function newProfileMutationIdempotencyKey(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return randomUuid;
+  const bytes = new Uint8Array(24);
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new ProfileApiError(0, 'secure_idempotency_unavailable');
+  }
+  globalThis.crypto.getRandomValues(bytes);
+  return `profile-${[...bytes].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export function updatePersonalProfile(input: PersonalProfileInput): Promise<ProfileMutationResult> {

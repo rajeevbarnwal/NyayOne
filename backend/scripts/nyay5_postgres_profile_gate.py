@@ -38,6 +38,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION
+
 BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0020_auth_retention_lifecycle"
 PINNED_HEAD = "0021_nyay5_profile_boundary"
@@ -47,6 +49,7 @@ PINNED_HEAD_PATH = (
 PINNED_HEAD_SHA256 = (
     "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
 )
+BEHAVIOR_HEAD = APPLICATION_HEAD_REVISION
 OPT_IN_ENV = "NYAY5_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay5_profile_"
 
@@ -156,6 +159,38 @@ _FORBIDDEN_REPORT_KEYS = frozenset(
         "user_id",
     }
 )
+
+_PROFILE_MUTATION_PATHS = frozenset(
+    {
+        "/api/v1/auth/student/profile",
+        "/api/v1/student/profile/personal",
+        "/api/v1/student/profile/academic",
+        "/api/v1/student/profile/interests",
+    }
+)
+
+
+def _profile_mutation_headers(
+    path: str,
+    headers: object,
+    idempotency_key: str,
+) -> object:
+    """Add one fixture key without rewriting caller-supplied header structure."""
+
+    if path not in _PROFILE_MUTATION_PATHS:
+        return headers
+    if headers is None:
+        return {"Idempotency-Key": idempotency_key}
+    if isinstance(headers, Mapping):
+        if any(str(name).casefold() == "idempotency-key" for name in headers):
+            return headers
+        augmented = dict(headers)
+        augmented["Idempotency-Key"] = idempotency_key
+        return augmented
+    pairs = list(headers)  # type: ignore[arg-type]
+    if any(str(name).casefold() == "idempotency-key" for name, _value in pairs):
+        return pairs
+    return [*pairs, ("Idempotency-Key", idempotency_key)]
 
 
 class Blocked(RuntimeError):
@@ -1036,7 +1071,6 @@ def _migration_and_schema_probe(scratch_url: str) -> dict[str, object]:
         }
         upgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
         after = _current_revision(engine)
-        check = _run_alembic(scratch_url, "check")
         inspector = inspect(engine)
         after_tables = set(inspector.get_table_names())
         after_profile_columns = {
@@ -1128,6 +1162,9 @@ def _migration_and_schema_probe(scratch_url: str) -> dict[str, object]:
                 "first_name", "middle_name", "last_name", "date_of_birth", "mobile", "mobile_hash"
             }.intersection(boundary_columns),
         }
+        current_upgrade = _run_alembic(scratch_url, "upgrade", BEHAVIOR_HEAD)
+        current = _current_revision(engine)
+        check = _run_alembic(scratch_url, "check")
         downgrade = _run_alembic(scratch_url, "downgrade", PREVIOUS_REVISION)
         down = _current_revision(engine)
         reupgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
@@ -1135,8 +1172,14 @@ def _migration_and_schema_probe(scratch_url: str) -> dict[str, object]:
         migration_observation = {
             "parent_exact": before == PREVIOUS_REVISION,
             "head_exact": upgrade["returncode"] == 0 and after == PINNED_HEAD,
-            "single_head": check["returncode"] == 0,
-            "alembic_check": check["returncode"] == 0,
+            "single_head": bool(
+                current_upgrade["returncode"] == 0 and current == BEHAVIOR_HEAD
+            ),
+            "alembic_check": bool(
+                current_upgrade["returncode"] == 0
+                and current == BEHAVIOR_HEAD
+                and check["returncode"] == 0
+            ),
             "clean_roundtrip": bool(
                 downgrade["returncode"] == 0
                 and down == PREVIOUS_REVISION
@@ -1386,7 +1429,7 @@ def _populated_migration_probe(scratch_url: str) -> dict[str, object]:
 def _behavior_probe(scratch_url: str) -> dict[str, bool]:
     """Exercise the real NYAY-5 HTTP/service boundary on migrated PostgreSQL."""
 
-    upgrade = _run_alembic(scratch_url, "upgrade", PINNED_HEAD)
+    upgrade = _run_alembic(scratch_url, "upgrade", BEHAVIOR_HEAD)
     if upgrade["returncode"] != 0:
         raise ProductGateFailure("behavior database migration failed")
     observations = {name: False for name in _BEHAVIOR_OBSERVATION_KEYS}
@@ -1562,6 +1605,18 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                     settings.auth_session_cookie_name,
                     str(actor["token"]),
                 )
+            original_patch = client.patch
+
+            def profile_patch(url: object, *args: object, **kwargs: object):
+                path = str(url)
+                kwargs["headers"] = _profile_mutation_headers(
+                    path,
+                    kwargs.get("headers"),
+                    f"nyay5-gate-profile-{uuid.uuid4().hex}",
+                )
+                return original_patch(url, *args, **kwargs)
+
+            client.patch = profile_patch  # type: ignore[method-assign]
             return client
 
         def personal(version: int, dob: str = "2000-01-01", city: str = "Pune") -> dict:
@@ -1583,7 +1638,8 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 "profile_version", "completion_version", "completion_percent",
                 "completed_sections", "next_incomplete_section", "is_complete",
                 "institutional_email_status", "guardian", "access_mode",
-                "disabled_capabilities", "profile_prompt", "profile",
+                "disabled_capabilities", "profile_prompt", "missing_requirements",
+                "profile",
             }
             nested = body.get("profile")
             return bool(

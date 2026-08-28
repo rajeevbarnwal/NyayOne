@@ -1458,6 +1458,23 @@ def test_signup_bootstrap_uses_the_current_idempotency_header_contract():
     assert _trusted_mutation_headers() == {"Origin": gate.TRUSTED_ORIGIN}
 
 
+def test_profile_probe_headers_add_one_key_without_collapsing_origin_duplicates():
+    helper = getattr(gate, "_profile_mutation_headers", None)
+    assert callable(helper)
+    assert helper("owner-a") == {
+        "Origin": gate.TRUSTED_ORIGIN,
+        "Idempotency-Key": "nyay2-profile-owner-a-0001",
+    }
+    duplicate_origins = [
+        ("Origin", gate.TRUSTED_ORIGIN),
+        ("Origin", gate.TRUSTED_ORIGIN),
+    ]
+    assert helper("origin-duplicate", headers=duplicate_origins) == [
+        *duplicate_origins,
+        ("Idempotency-Key", "nyay2-profile-origin-duplicate-0001"),
+    ]
+
+
 def test_signup_bootstrap_uses_current_separate_legal_acknowledgement_contract():
     assert len(REQUIRED_ASSERTION_IDS) == 21
     assert SIGNUP_ACCEPTED_STATUS == 202
@@ -1523,7 +1540,8 @@ def test_email_request_and_status_probe_uses_current_public_internal_projection(
 def test_seed_actor_starts_at_current_academic_mutation_prerequisite(
     db_session, engine
 ):
-    from app.models.registration import StudentProfile
+    from app.core.crypto import decrypt
+    from app.models.registration import StudentProfile, StudentRegistration
 
     factory = sessionmaker(
         bind=engine,
@@ -1534,11 +1552,16 @@ def test_seed_actor_starts_at_current_academic_mutation_prerequisite(
     actor = _seed_actor(factory, label="current-profile-prerequisite")
 
     with factory() as session:
+        registration = session.get(
+            StudentRegistration, actor["registration_id"]
+        )
         profile = session.scalar(
             select(StudentProfile).where(
                 StudentProfile.registration_id == actor["registration_id"]
             )
         )
+        assert registration is not None
+        assert decrypt(registration.dob_ct) == "2000-01-02"
         assert profile is not None
         assert profile.profile_version == 1
         assert profile.preferred_language == "en"

@@ -1149,6 +1149,7 @@ def _seed_actor(
         if registration:
             identity = f"nyay2-{label}"
             mobile = mobile_value or f"{identity}-mobile"
+            dob_value = "2012-01-02" if is_minor else "2000-01-02"
             reg = StudentRegistration(
                 user_id=user.id,
                 first_name="Test",
@@ -1156,8 +1157,8 @@ def _seed_actor(
                 last_name="Actor",
                 mobile_hash=keyed_hash(mobile),
                 mobile_ct=encrypt(mobile),
-                dob_hash=keyed_hash(f"{identity}-dob"),
-                dob_ct=encrypt(f"{identity}-dob"),
+                dob_hash=keyed_hash(dob_value),
+                dob_ct=encrypt(dob_value),
                 dob_hash_state=dob_hash_state,
                 key_version="v1",
                 institution_ref="Initial Institute",
@@ -1238,6 +1239,23 @@ def _trusted_mutation_headers() -> dict[str, str]:
     """Bind every cookie-authority mutation to the exact trusted origin."""
 
     return {"Origin": TRUSTED_ORIGIN}
+
+
+def _profile_mutation_headers(
+    label: str,
+    *,
+    headers: dict[str, str] | list[tuple[str, str]] | None = None,
+) -> dict[str, str] | list[tuple[str, str]]:
+    """Add one opaque profile key without normalizing repeated Origin rows."""
+
+    if re.fullmatch(r"[A-Za-z0-9._~-]+", label) is None:
+        raise ValueError("profile probe label must be opaque")
+    key = f"nyay2-profile-{label}-0001"
+    if headers is None:
+        return {**_trusted_mutation_headers(), "Idempotency-Key": key}
+    if isinstance(headers, list):
+        return [*headers, ("Idempotency-Key", key)]
+    return {**headers, "Idempotency-Key": key}
 
 
 def _signup_registration_headers() -> dict[str, str]:
@@ -1970,7 +1988,7 @@ def _run_api_probes(
         # authority must come from the resolved session.
         owner_response = owner_a_client.patch(
             PROFILE_PATH,
-            headers={"Origin": TRUSTED_ORIGIN},
+            headers=_profile_mutation_headers("owner-a"),
             json=valid_profile,
         )
         with factory() as session:
@@ -2053,7 +2071,7 @@ def _run_api_probes(
         )
         b_response = owner_b_client.patch(
             PROFILE_PATH,
-            headers={"Origin": TRUSTED_ORIGIN},
+            headers=_profile_mutation_headers("owner-b"),
             json=b_payload,
         )
         with factory() as session:
@@ -2845,6 +2863,9 @@ def _run_api_probes(
                 headers = [("Origin", value) for value in origin]
             else:
                 headers = {"Origin": origin} if origin is not None else {}
+            headers = _profile_mutation_headers(
+                f"origin-{label}", headers=headers
+            )
             before_counts = _table_counts(factory)
             before_state = _business_state_digest(factory)
             response = owner_b_client.patch(
@@ -2939,7 +2960,7 @@ def _run_api_probes(
         try:
             mutant_ownership_response = owner_b_client.patch(
                 PROFILE_PATH,
-                headers={"Origin": TRUSTED_ORIGIN},
+                headers=_profile_mutation_headers("mutant-owner"),
                 json=mutant_owner_payload,
             )
         finally:
@@ -3058,7 +3079,10 @@ def _run_api_probes(
         try:
             origin_mutant_response = owner_b_client.patch(
                 PROFILE_PATH,
-                headers={"Origin": "http://localhost.invalid:1130"},
+                headers=_profile_mutation_headers(
+                    "mutant-origin",
+                    headers={"Origin": "http://localhost.invalid:1130"},
+                ),
                 json=_profile_payload(
                     "mutant-origin",
                     expected_profile_version=_current_profile_version(
