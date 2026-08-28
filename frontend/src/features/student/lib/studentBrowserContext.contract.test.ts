@@ -282,6 +282,26 @@ describe('NYAY-19 browser-context source contract', () => {
     expect(gate).not.toContain('Edit college & year');
   });
 
+  it('keeps the incomplete Wave 1 profile fixture valid under the NYAY-9 projection contract', () => {
+    const gate = source(V34_BROWSER_GATE_PATH);
+    const incompleteProjection = gate.match(
+      /profileProjection = \{([\s\S]*?)const context = await browser\.newContext/u,
+    )?.[1] ?? '';
+
+    expect(incompleteProjection).toContain('profile_version: 8');
+    expect(incompleteProjection).toContain("completed_sections: ['personal']");
+    expect(incompleteProjection).toContain('missing_requirements: [');
+    for (const requirement of [
+      'academic.college',
+      'academic.year_of_study',
+      'academic.enrolment_number',
+      'interests.interests',
+      'interests.goals',
+    ]) {
+      expect(incompleteProjection).toContain(`'${requirement}'`);
+    }
+  });
+
   it('waits for the canonical profile response before sampling profile-owned screens', () => {
     const gate = source(V34_BROWSER_GATE_PATH);
     const profileStateInventory = gate.match(

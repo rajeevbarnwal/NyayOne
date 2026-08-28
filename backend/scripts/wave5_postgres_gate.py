@@ -21,8 +21,10 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION
+
 BLOCKED = 78
-HEAD = "0021_nyay5_profile_boundary"
+HEAD = APPLICATION_HEAD_REVISION
 PARENT = "0012_wave4_moderation"
 TABLES = {
     "calendar_event_sources",
@@ -291,8 +293,25 @@ def main() -> int:
 
     down = _alembic("downgrade", PARENT)
     after_down = set(inspect(engine).get_table_names())
-    reup = _alembic("upgrade", "head")
-    results.add("W5-PG-06", "downgrade removes and re-upgrade restores Wave 5", down.returncode == reup.returncode == 0 and not (TABLES & after_down), {"down_rc": down.returncode, "up_rc": reup.returncode})
+    reup = _alembic("upgrade", HEAD)
+    reup_check = _alembic("check")
+    reup_tables = set(inspect(engine).get_table_names())
+    with engine.connect() as connection:
+        reup_head = connection.scalar(text("SELECT version_num FROM alembic_version"))
+    results.add(
+        "W5-PG-06",
+        "downgrade removes and re-upgrade restores Wave 5",
+        down.returncode == reup.returncode == reup_check.returncode == 0
+        and not (TABLES & after_down)
+        and reup_head == HEAD
+        and TABLES <= reup_tables,
+        {
+            "down_rc": down.returncode,
+            "up_rc": reup.returncode,
+            "check_rc": reup_check.returncode,
+            "head_exact": reup_head == HEAD,
+        },
+    )
 
     SessionLocal = get_sessionmaker()
     with SessionLocal() as session:

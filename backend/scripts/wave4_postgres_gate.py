@@ -28,9 +28,10 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.core.config import is_isolated_wave4_database_url
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION
 
 BLOCKED = 78
-HEAD = "0021_nyay5_profile_boundary"
+HEAD = APPLICATION_HEAD_REVISION
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",
