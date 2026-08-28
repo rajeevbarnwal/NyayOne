@@ -129,7 +129,7 @@ def seed_denial_fixtures(database_raw: str, output_path: Path) -> None:
     try:
         with engine.connect() as connection:
             revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
-        if revision != postgres_gate.PINNED_HEAD:
+        if revision != postgres_gate.BEHAVIOR_HEAD:
             raise ValueError("denial fixtures require the exact application head")
 
         from app.core.crypto import encrypt, keyed_hash

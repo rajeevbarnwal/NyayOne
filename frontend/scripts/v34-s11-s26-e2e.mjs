@@ -539,6 +539,13 @@ try {
     profile_version: 8,
     completion_percent: 34,
     completed_sections: ['personal'],
+    missing_requirements: [
+      'academic.college',
+      'academic.year_of_study',
+      'academic.enrolment_number',
+      'interests.interests',
+      'interests.goals',
+    ],
     next_incomplete_section: 'academic',
     is_complete: false,
     institutional_email_status: 'not_provided',

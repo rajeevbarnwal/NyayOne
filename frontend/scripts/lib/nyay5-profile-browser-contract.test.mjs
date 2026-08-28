@@ -1470,6 +1470,16 @@ describe('NYAY-5 browser release-gate source contract', () => {
     }).pass).toBe(false);
   });
 
+  it('gives every direct profile-mutation fixture a fresh NYAY-9 idempotency key', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+
+    expect(runner).toContain('function profileFixtureIdempotencyKey()');
+    expect(runner).toContain('rememberPrivate(key);');
+    expect(
+      runner.match(/'Idempotency-Key': profileFixtureIdempotencyKey\(\)/gu),
+    ).toHaveLength(3);
+  });
+
   it('kills exactly one deterministic perturbation for every named mutant', async () => {
     const contract = await import('./nyay5-profile-browser-contract.mjs');
     expect(contract.NYAY5_SEEDED_MUTANT_INVENTORY).toEqual(EXPECTED_MUTANTS);
