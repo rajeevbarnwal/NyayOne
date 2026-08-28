@@ -77,6 +77,8 @@ REGISTRATION_IDEMPOTENCY_STATES = (
     "retired",
     "erased",
 )
+PROFILE_MUTATION_SECTIONS = ("personal", "academic", "interests")
+PROFILE_MUTATION_IDEMPOTENCY_STATES = ("pending", "succeeded", "erased")
 DOB_HASH_STATES = ("verified", "quarantined", "erased")
 DOB_RECONCILIATION_OUTCOMES = ("reconciled", "quarantined")
 DOB_RECONCILIATION_REASONS = (
@@ -316,6 +318,93 @@ class RegistrationIdempotencyRecord(Base):
             "outbox_id IS NULL AND "
             "outcome_code = 'registration_replay_expired')",
             name="state_links",
+        ),
+    )
+
+
+class ProfileMutationIdempotencyRecord(Base):
+    """Durable, owner-and-section-scoped profile mutation ledger (NYAY-9).
+
+    Opaque wire keys and request bodies never enter this table.  The lookup key
+    and canonical request are represented only by domain-separated keyed HMACs;
+    the exact successful response is encrypted so a later replay can return the
+    first outcome without retaining a plaintext profile projection.
+    """
+
+    __tablename__ = "profile_mutation_idempotency_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            name="fk_profile_mutation_idempotency_actor",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    section: Mapped[str] = mapped_column(String(16), nullable=False)
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    request_fingerprint_version: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    outcome_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome_ct: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
+    key_version: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+        nullable=False,
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_user_id",
+            "section",
+            "idempotency_key_hash",
+            name="uq_profile_mutation_idempotency_records_scope",
+        ),
+        _in("section", PROFILE_MUTATION_SECTIONS, "section"),
+        _in("state", PROFILE_MUTATION_IDEMPOTENCY_STATES, "state"),
+        CheckConstraint(
+            "length(idempotency_key_hash) = 64 AND "
+            f"length({_IDEMPOTENCY_KEY_HASH_HEX_ONLY_SQL}) = 0",
+            name="key_hash_shape",
+        ),
+        CheckConstraint(
+            "((state IN ('pending', 'succeeded') AND "
+            "request_fingerprint_version = 'v1' AND "
+            "request_fingerprint IS NOT NULL AND "
+            "length(request_fingerprint) = 64 AND "
+            f"length({_REQUEST_FINGERPRINT_HEX_ONLY_SQL}) = 0) OR "
+            "(state = 'erased' AND request_fingerprint IS NULL AND "
+            "request_fingerprint_version IS NULL))",
+            name="fingerprint_shape",
+        ),
+        CheckConstraint(
+            "(state = 'pending' AND outcome_status IS NULL AND "
+            "outcome_ct IS NULL AND key_version IS NULL AND "
+            "profile_version IS NULL) OR "
+            "(state = 'succeeded' AND outcome_status = 200 AND "
+            "outcome_ct IS NOT NULL AND length(outcome_ct) BETWEEN 1 AND 32768 "
+            "AND key_version IS NOT NULL AND length(key_version) BETWEEN 1 AND 8 "
+            "AND outcome_ct LIKE key_version || ':%' "
+            "AND length(outcome_ct) > length(key_version) + 1 "
+            "AND profile_version IS NOT NULL AND profile_version >= 1) OR "
+            "(state = 'erased' AND outcome_status IS NULL AND "
+            "outcome_ct IS NULL AND key_version IS NULL AND "
+            "profile_version IS NULL)",
+            name="state_outcome",
         ),
     )
 

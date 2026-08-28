@@ -26,6 +26,7 @@ from app.models.registration import (
     OtpOutbox,
     OtpPurposeAuthority,
     OtpRateLimitBucket,
+    ProfileMutationIdempotencyRecord,
     RecoverySession,
     RegistrationIdempotencyRecord,
     StudentProfile,
@@ -914,6 +915,30 @@ def _anonymise_locked(
         session.execute(
             delete(StudentProfileGoal).where(StudentProfileGoal.profile_id == prof.id)
         )
+    mutation_ledgers = list(
+        session.scalars(
+            select(ProfileMutationIdempotencyRecord)
+            .where(
+                ProfileMutationIdempotencyRecord.actor_user_id == reg.user_id
+            )
+            .order_by(ProfileMutationIdempotencyRecord.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    erased_at = datetime.now(timezone.utc)
+    for ledger in mutation_ledgers:
+        ledger.idempotency_key_hash = keyed_hash(
+            f"profile-mutation-erased:v1:{ledger.id}"
+        )
+        ledger.request_fingerprint = None
+        ledger.request_fingerprint_version = None
+        ledger.state = "erased"
+        ledger.outcome_status = None
+        ledger.outcome_ct = None
+        ledger.key_version = None
+        ledger.profile_version = None
+        ledger.updated_at = erased_at
     session.add(
         AuditEvent(
             actor_role="system",

@@ -53,7 +53,8 @@ BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0018_registration_idempotency"
 PINNED_HEAD = "0019_otp_security_authority"
 APPLICATION_PARENT = "0020_auth_retention_lifecycle"
-APPLICATION_HEAD = "0021_nyay5_profile_boundary"
+NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
+APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
@@ -3422,11 +3423,14 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != retention.revision
+            or application.down_revision != nyay5_checkpoint.revision
+            or nyay5_checkpoint.down_revision != retention.revision
             or retention.down_revision != PINNED_HEAD
         ):
             raise ProductGateFailure(

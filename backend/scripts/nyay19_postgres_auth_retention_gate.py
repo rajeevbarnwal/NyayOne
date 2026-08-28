@@ -69,10 +69,15 @@ PREVIOUS_REVISION = "0019_otp_security_authority"
 PINNED_HEAD = "0020_auth_retention_lifecycle"
 PINNED_HEAD_FILENAME = "0020_auth_retention_lifecycle.py"
 PINNED_HEAD_SHA256 = "8b462f0d35839a0edd7166f4e5881fafaeb368f8816cba673144d3c745270dbe"
-APPLICATION_HEAD = "0021_nyay5_profile_boundary"
-APPLICATION_HEAD_FILENAME = "0021_nyay5_profile_boundary.py"
-APPLICATION_HEAD_SHA256 = (
+NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
+NYAY5_CHECKPOINT_FILENAME = "0021_nyay5_profile_boundary.py"
+NYAY5_CHECKPOINT_SHA256 = (
     "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
+)
+APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
+APPLICATION_HEAD_FILENAME = "0022_nyay9_owner_profile_api.py"
+APPLICATION_HEAD_SHA256 = (
+    "e66fcfd7ac270569e05fde17c0563ec7d0245023d8ab9f1c87d941373eb1653a"
 )
 OPT_IN_ENV = "NYAY19_POSTGRES_GATE_EXECUTE"
 
@@ -2344,6 +2349,7 @@ def _historical_migration_inventory(
         "hash_inventory_exact": False,
         "ledger_crosscheck_exact": False,
         "pinned_head_hash_exact": False,
+        "nyay5_checkpoint_hash_exact": False,
         "application_head_hash_exact": False,
         "forward_application_head_exact": False,
     }
@@ -2356,7 +2362,11 @@ def _historical_migration_inventory(
         result["file_inventory_exact"] = (
             version_files
             == set(HISTORICAL_MIGRATION_SHA256)
-            | {PINNED_HEAD_FILENAME, APPLICATION_HEAD_FILENAME}
+            | {
+                PINNED_HEAD_FILENAME,
+                NYAY5_CHECKPOINT_FILENAME,
+                APPLICATION_HEAD_FILENAME,
+            }
         )
         result["hash_inventory_exact"] = bool(
             result["file_inventory_exact"]
@@ -2371,6 +2381,13 @@ def _historical_migration_inventory(
             and hashlib.sha256((versions / PINNED_HEAD_FILENAME).read_bytes()).hexdigest()
             == PINNED_HEAD_SHA256
         )
+        result["nyay5_checkpoint_hash_exact"] = bool(
+            result["file_inventory_exact"]
+            and hashlib.sha256(
+                (versions / NYAY5_CHECKPOINT_FILENAME).read_bytes()
+            ).hexdigest()
+            == NYAY5_CHECKPOINT_SHA256
+        )
         result["application_head_hash_exact"] = bool(
             result["file_inventory_exact"]
             and hashlib.sha256(
@@ -2378,21 +2395,37 @@ def _historical_migration_inventory(
             ).hexdigest()
             == APPLICATION_HEAD_SHA256
         )
+        checkpoint_tree = ast.parse(
+            (versions / NYAY5_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
+        )
         forward_tree = ast.parse(
             (versions / APPLICATION_HEAD_FILENAME).read_text(encoding="utf-8")
         )
-        assignments: dict[str, object] = {}
-        for node in forward_tree.body:
-            if isinstance(node, (ast.Assign, ast.AnnAssign)):
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                for target in targets:
-                    if isinstance(target, ast.Name) and target.id in {"revision", "down_revision"}:
-                        assignments[target.id] = ast.literal_eval(node.value)
+        def _revision_assignments(tree: ast.Module) -> dict[str, object]:
+            assignments: dict[str, object] = {}
+            for node in tree.body:
+                if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    targets = (
+                        node.targets if isinstance(node, ast.Assign) else [node.target]
+                    )
+                    for target in targets:
+                        if isinstance(target, ast.Name) and target.id in {
+                            "revision",
+                            "down_revision",
+                        }:
+                            assignments[target.id] = ast.literal_eval(node.value)
+            return assignments
+
+        checkpoint_assignments = _revision_assignments(checkpoint_tree)
+        application_assignments = _revision_assignments(forward_tree)
         result["forward_application_head_exact"] = bool(
             result["file_inventory_exact"]
+            and result["nyay5_checkpoint_hash_exact"]
             and result["application_head_hash_exact"]
-            and assignments
-            == {"revision": APPLICATION_HEAD, "down_revision": PINNED_HEAD}
+            and checkpoint_assignments
+            == {"revision": NYAY5_CHECKPOINT, "down_revision": PINNED_HEAD}
+            and application_assignments
+            == {"revision": APPLICATION_HEAD, "down_revision": NYAY5_CHECKPOINT}
         )
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         migrations = ledger["migrations"]

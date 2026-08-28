@@ -18,6 +18,7 @@ const PROJECTION: StudentProfileProjection = {
   completionVersion: 'v1',
   completionPercent: 67,
   completedSections: ['personal', 'academic'],
+  missingRequirements: ['interests.interests', 'interests.goals'],
   nextIncompleteSection: 'interests',
   isComplete: false,
   institutionalEmailStatus: 'rejected',

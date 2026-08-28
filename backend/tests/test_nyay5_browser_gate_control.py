@@ -85,3 +85,14 @@ def test_create_prepares_pgvector_before_publishing_private_state() -> None:
     extension = source.index('CREATE EXTENSION IF NOT EXISTS vector')
     state = source.index('_write_private_json(\n            state_path', extension)
     assert extension < state
+
+
+def test_denial_fixtures_require_the_authoritative_application_head() -> None:
+    """The browser scratch DB is upgraded to ``head``, not the NYAY-5 checkpoint."""
+
+    source = CONTROL.read_text(encoding="utf-8")
+    seed = source[source.index("def seed_denial_fixtures") :]
+    seed = seed[: seed.index("def ", 1)]
+
+    assert "revision != postgres_gate.BEHAVIOR_HEAD" in seed
+    assert "revision != postgres_gate.PINNED_HEAD" not in seed

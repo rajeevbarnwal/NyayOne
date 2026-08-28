@@ -19,6 +19,7 @@ from app.db.base import Base
 from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.models.registration import StudentRegistration, StudentVerification
+from tests.profile_idempotency_fixture import install_profile_mutation_idempotency
 
 
 class CapturingSender:
@@ -78,11 +79,9 @@ def ctx():
     app.dependency_overrides[ep.get_otp_sender] = lambda: sender
     app.dependency_overrides[ep.get_outbox_session_factory] = lambda: factory
 
-    yield (
-        TestClient(app, headers={"Origin": settings.cors_origins[0]}),
-        factory,
-        sender,
-    )
+    client = TestClient(app, headers={"Origin": settings.cors_origins[0]})
+    install_profile_mutation_idempotency(client, prefix="s15-profile-mutation")
+    yield (client, factory, sender)
     Base.metadata.drop_all(engine)
 
 

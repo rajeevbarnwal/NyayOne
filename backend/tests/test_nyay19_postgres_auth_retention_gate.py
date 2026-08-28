@@ -88,12 +88,25 @@ def test_historical_lifecycle_and_application_head_are_exact():
         "script_location", str(gate.BACKEND / "app/db/migrations")
     )
     scripts = ScriptDirectory.from_config(config)
-    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
+    assert gate.NYAY5_CHECKPOINT == "0021_nyay5_profile_boundary"
+    assert gate.NYAY5_CHECKPOINT_SHA256 == hashlib.sha256(
+        (
+            gate.BACKEND
+            / "app/db/migrations/versions"
+            / gate.NYAY5_CHECKPOINT_FILENAME
+        ).read_bytes()
+    ).hexdigest()
+    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
     assert gate.APPLICATION_HEAD_SHA256 == hashlib.sha256(
         (gate.BACKEND / "app/db/migrations/versions" / gate.APPLICATION_HEAD_FILENAME).read_bytes()
     ).hexdigest()
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
-    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == gate.PINNED_HEAD
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
+        gate.NYAY5_CHECKPOINT
+    )
+    assert scripts.get_revision(gate.NYAY5_CHECKPOINT).down_revision == (
+        gate.PINNED_HEAD
+    )
     assert scripts.get_revision(gate.PINNED_HEAD).down_revision == gate.PREVIOUS_REVISION
 
 
@@ -183,6 +196,7 @@ def test_immutable_migration_inventory_is_pinned_through_0019():
         "hash_inventory_exact": True,
         "ledger_crosscheck_exact": True,
         "pinned_head_hash_exact": True,
+        "nyay5_checkpoint_hash_exact": True,
         "application_head_hash_exact": True,
         "forward_application_head_exact": True,
     }
@@ -204,7 +218,11 @@ def test_immutable_migration_oracle_rejects_changed_post_ledger_file(tmp_path):
     for filename in gate.POST_LEDGER_HISTORICAL_SHA256:
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
-    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
+    for filename in (
+        gate.PINNED_HEAD_FILENAME,
+        gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.APPLICATION_HEAD_FILENAME,
+    ):
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
     ledger_target = tmp_path / "backend/app/db/migrations/MIGRATION_SHA256_LEDGER.json"
@@ -222,7 +240,11 @@ def test_immutable_migration_oracle_rejects_changed_application_head_body(tmp_pa
     for filename in gate.HISTORICAL_MIGRATION_SHA256:
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
-    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
+    for filename in (
+        gate.PINNED_HEAD_FILENAME,
+        gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.APPLICATION_HEAD_FILENAME,
+    ):
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
     ledger_source = source_root / "backend/app/db/migrations/MIGRATION_SHA256_LEDGER.json"
@@ -246,7 +268,11 @@ def test_immutable_migration_oracle_rejects_missing_and_extra_historical_files(
     for filename in gate.HISTORICAL_MIGRATION_SHA256:
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
-    for filename in (gate.PINNED_HEAD_FILENAME, gate.APPLICATION_HEAD_FILENAME):
+    for filename in (
+        gate.PINNED_HEAD_FILENAME,
+        gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.APPLICATION_HEAD_FILENAME,
+    ):
         source = source_root / "backend/app/db/migrations/versions" / filename
         (versions / filename).write_bytes(source.read_bytes())
     ledger_source = (

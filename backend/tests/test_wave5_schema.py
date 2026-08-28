@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, inspect
 
 import app.models  # noqa: F401  (registers every mapper)
 from app.db.base import Base
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION
 from scripts.wave5_postgres_gate import (
     _legacy_foreign_key_is_indexed,
     foreign_key_is_indexed,
@@ -26,7 +27,7 @@ from scripts.wave5_postgres_gate import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "0021_nyay5_profile_boundary"
+HEAD_REVISION = APPLICATION_HEAD_REVISION
 PARENT_REVISION = "0012_wave4_moderation"
 
 #: The exact ordered composite-index contract this migration owes its FKs.
@@ -168,11 +169,19 @@ def test_downgrade_drops_the_composite_indexes_and_reupgrade_restores_them(
 
     up = _alembic(database, "upgrade", HEAD_REVISION)
     assert up.returncode == 0, up.stderr[-2000:]
-    after_up = inspect(create_engine(f"sqlite+pysqlite:///{database}"))
+    after_up_engine = create_engine(f"sqlite+pysqlite:///{database}")
+    after_up = inspect(after_up_engine)
+    with after_up_engine.connect() as connection:
+        assert connection.exec_driver_sql(
+            "SELECT version_num FROM alembic_version"
+        ).scalar_one() == HEAD_REVISION
+    check = _alembic(database, "check")
+    assert check.returncode == 0, check.stdout + check.stderr
     for table, expected in COMPOSITE_FK_INDEXES.items():
         actual = _named_index_columns(after_up, table)
         for name, columns in expected.items():
             assert actual.get(name) == columns, (name, actual.get(name))
+    after_up_engine.dispose()
 
 
 # --------------------------------------------------------------------------- #

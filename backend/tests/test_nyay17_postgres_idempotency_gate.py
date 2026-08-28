@@ -61,17 +61,19 @@ def _without_ambient_libpq_authority(monkeypatch):
 def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0017_registration_invariants"
     assert gate.PINNED_HEAD == "0018_registration_idempotency"
-    assert gate.APPLICATION_HEAD == "0021_nyay5_profile_boundary"
+    assert gate.NYAY5_CHECKPOINT == "0021_nyay5_profile_boundary"
+    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(gate.BACKEND / "app/db/migrations"))
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     otp_security_head = scripts.get_revision("0019_otp_security_authority")
     retention_head = scripts.get_revision("0020_auth_retention_lifecycle")
-    assert (
-        scripts.get_revision(gate.APPLICATION_HEAD).down_revision
-        == retention_head.revision
+    nyay5_checkpoint = scripts.get_revision(gate.NYAY5_CHECKPOINT)
+    assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
+        nyay5_checkpoint.revision
     )
+    assert nyay5_checkpoint.down_revision == retention_head.revision
     assert retention_head.down_revision == otp_security_head.revision
     assert otp_security_head.down_revision == gate.PINNED_HEAD
     behavior_source = pyinspect.getsource(gate._execute_behavior)
@@ -1838,6 +1840,15 @@ def _expected_signup_onboarding(payload):
             "completion_version": "v1",
             "completion_percent": 0,
             "completed_sections": [],
+            "missing_requirements": [
+                "personal.preferred_language",
+                "personal.city",
+                "academic.college",
+                "academic.year_of_study",
+                "academic.enrolment_number",
+                "interests.interests",
+                "interests.goals",
+            ],
             "next_incomplete_section": "personal",
             "is_complete": False,
             "institutional_email_status": "not_provided",

@@ -22,7 +22,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0017_registration_invariants"
 HEAD = "0018_registration_idempotency"
 OTP_HEAD = "0019_otp_security_authority"
-CURRENT_HEAD = "0021_nyay5_profile_boundary"
+NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
+CURRENT_HEAD = "0022_nyay9_owner_profile_api"
 LEDGER = "registration_idempotency_records"
 TEST_ENV = {
     "APP_ENV": "testing",
@@ -225,9 +226,12 @@ def test_revision_chain_is_single_forward_head():
     retention_head = scripts.get_revision("0020_auth_retention_lifecycle")
     assert retention_head is not None
     assert retention_head.down_revision == OTP_HEAD
+    nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
+    assert nyay5_checkpoint is not None
+    assert nyay5_checkpoint.down_revision == retention_head.revision
     current = scripts.get_revision(CURRENT_HEAD)
     assert current is not None
-    assert current.down_revision == retention_head.revision
+    assert current.down_revision == nyay5_checkpoint.revision
     assert scripts.get_heads() == [CURRENT_HEAD]
 
 
