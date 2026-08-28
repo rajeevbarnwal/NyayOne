@@ -1,0 +1,176 @@
+{
+  "schemaVersion": "nyay29-ceremony-design/v1",
+  "ticket": "NYAY-29",
+  "implementationTicket": "NYAY-22",
+  "scope": "design-and-threat-model-only",
+  "guardrails": [
+    "No backend, frontend, migration, cookie, session, route, or storage implementation is authorized by this contract.",
+    "Sprint 1 M-01 remains administrator-only until NYAY-22 receives separate approval.",
+    "Lawyer verification alone is never tutor authority.",
+    "A student or owner browser context is never promoted in place into mentor authority."
+  ],
+  "artifacts": [
+    {
+      "id": "stride-threat-model",
+      "path": "docs/architecture/nyay29-tutor-lawyer-ceremony/STRIDE_THREAT_MODEL.md",
+      "format": "markdown",
+      "requiredTerms": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information disclosure",
+        "Denial of service",
+        "Elevation of privilege",
+        "threat",
+        "control",
+        "verification",
+        "residual risk"
+      ],
+      "units": [
+        {
+          "id": "stride-session-initiation",
+          "heading": "Session initiation boundary",
+          "requiredTerms": ["student", "owner", "mentor", "server", "replay", "non-enumerating"]
+        },
+        {
+          "id": "stride-identity-verification",
+          "heading": "Identity verification boundary",
+          "requiredTerms": ["identity proof", "TutorProfile", "ownership", "unverified", "substitution"]
+        },
+        {
+          "id": "stride-privilege-escalation",
+          "heading": "Privilege escalation boundary",
+          "requiredTerms": ["server-derived", "capability", "student", "lawyer", "tutor", "least privilege"]
+        },
+        {
+          "id": "stride-coverage-matrix",
+          "heading": "STRIDE coverage matrix",
+          "requiredTerms": ["threat", "asset", "control", "verification", "owner", "residual risk"]
+        }
+      ]
+    },
+    {
+      "id": "trust-boundaries-data-flow",
+      "path": "docs/architecture/nyay29-tutor-lawyer-ceremony/TRUST_BOUNDARIES_AND_DATA_FLOW.md",
+      "format": "markdown",
+      "requiredTerms": ["trust boundary", "data flow", "TutorProfile", "authoritative", "data minimisation", "teardown"],
+      "units": [
+        {
+          "id": "trust-actors-authority",
+          "heading": "Actors and authoritative state",
+          "requiredTerms": ["student", "owner", "lawyer", "tutor", "administrator", "server"]
+        },
+        {
+          "id": "trust-boundary-inventory",
+          "heading": "Trust-boundary inventory",
+          "requiredTerms": ["browser", "API", "verification", "PostgreSQL", "audit", "evidence"]
+        },
+        {
+          "id": "trust-owner-mentor-handoff",
+          "heading": "Student or owner to mentor handoff",
+          "requiredTerms": ["end", "re-authenticate", "new session", "same actor", "TutorProfile ownership", "fail closed"]
+        },
+        {
+          "id": "trust-data-lifecycle",
+          "heading": "Data lifecycle, minimisation, and teardown",
+          "requiredTerms": ["issuance", "rotation", "expiry", "revocation", "logout", "recovery", "deletion"]
+        }
+      ]
+    },
+    {
+      "id": "ceremony-sequence-diagrams",
+      "path": "docs/architecture/nyay29-tutor-lawyer-ceremony/CEREMONY_SEQUENCE_DIAGRAMS.md",
+      "format": "markdown",
+      "requiredTerms": ["sequenceDiagram", "Browser", "Auth API", "Ceremony store", "TutorProfile", "Session authority"],
+      "units": [
+        {
+          "id": "sequence-initiate-challenge",
+          "heading": "Initiate and challenge",
+          "requiredTerms": ["sequenceDiagram", "challenge", "nonce", "expiry", "Origin"]
+        },
+        {
+          "id": "sequence-verify-mint",
+          "heading": "Verify and mint an isolated mentor session",
+          "requiredTerms": ["sequenceDiagram", "identity proof", "TutorProfile ownership", "server-derived", "HttpOnly"]
+        },
+        {
+          "id": "sequence-reject-adversarial",
+          "heading": "Reject replay, expiry, and actor substitution",
+          "requiredTerms": ["sequenceDiagram", "replay", "expired", "cross-user", "no mutation", "non-enumerating"]
+        },
+        {
+          "id": "sequence-revoke-return",
+          "heading": "Revoke, tear down, and return to owner context",
+          "requiredTerms": ["sequenceDiagram", "revocation", "logout", "cookie", "authoritative probe", "private route"]
+        }
+      ]
+    },
+    {
+      "id": "ceremony-api-contract",
+      "path": "docs/architecture/nyay29-tutor-lawyer-ceremony/CEREMONY_API_CONTRACT.openapi.json",
+      "format": "openapi-json",
+      "requiredFailureStatuses": ["400", "401", "403", "404", "409", "410"],
+      "requiredSchemas": [
+        "MentorCeremonyInitiateRequest",
+        "MentorCeremonyChallenge",
+        "MentorIdentityProofRequest",
+        "MentorSessionProjection",
+        "MentorLifecycleRequest",
+        "MentorRecoveryRequest",
+        "MentorFailure"
+      ],
+      "units": [
+        {
+          "id": "api-initiation",
+          "operationIds": ["initiateTutorCeremony"]
+        },
+        {
+          "id": "api-proof-exchange",
+          "operationIds": ["verifyTutorIdentity", "exchangeTutorCeremony"]
+        },
+        {
+          "id": "api-session-lifecycle",
+          "operationIds": ["getTutorSession", "rotateTutorSession", "revokeTutorSession", "logoutTutorSession"]
+        },
+        {
+          "id": "api-recovery-deletion",
+          "operationIds": ["recoverTutorCeremony", "deleteTutorAuthority"]
+        }
+      ]
+    }
+  ],
+  "crossCuttingRequirements": [
+    {
+      "id": "verified-ownership",
+      "terms": ["verified TutorProfile ownership", "active TutorProfile"]
+    },
+    {
+      "id": "separate-session-boundary",
+      "terms": ["student or owner context is never promoted", "isolated mentor session"]
+    },
+    {
+      "id": "lawyer-is-not-tutor",
+      "terms": ["lawyer verification alone is not tutor authority"]
+    },
+    {
+      "id": "fail-closed-negative-inventory",
+      "terms": ["anonymous", "wrong-role", "unverified", "cross-user", "revoked", "deleted", "stale-session"]
+    },
+    {
+      "id": "secret-exclusion",
+      "terms": ["Web Storage", "URLs", "logs", "evidence", "raw proof", "session secret"]
+    },
+    {
+      "id": "qa-review-gates",
+      "terms": ["unit", "HTTP", "PostgreSQL concurrency", "real-Chromium", "privacy", "independent review"]
+    },
+    {
+      "id": "typed-failure-inventory",
+      "terms": ["typed failure inventory", "no mutation", "non-enumerating"]
+    },
+    {
+      "id": "separate-implementation-approval",
+      "terms": ["NYAY-22", "separate approval", "implementation handoff"]
+    }
+  ]
+}
