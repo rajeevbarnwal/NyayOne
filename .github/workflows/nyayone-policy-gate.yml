@@ -47,6 +47,8 @@ jobs:
         run: python scripts/ci/test_nyay14_evidence_gate.py
       - name: Prove NYAY-14 evidence gate fails closed under adversarial inputs
         run: python scripts/ci/test_nyay14_evidence_gate_security.py
+      - name: Enforce NYAY-27 future contact-sheet evidence
+        run: python scripts/ci/test_nyay27_contact_sheet_gate.py
       - name: Validate NYAY-21 history-purge tooling
         run: python scripts/ci/test_nyay21_history_purge.py
       - name: Validate NyayOne runtime and Compose isolation
