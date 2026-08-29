@@ -1435,6 +1435,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
     observations = {name: False for name in _BEHAVIOR_OBSERVATION_KEYS}
     engine = create_engine(scratch_url, poolclass=NullPool)
     fixed_now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    session_anchor = datetime.now(timezone.utc)
     origin = "https://nyay5-gate.invalid"
     try:
         from fastapi import FastAPI
@@ -1570,17 +1571,18 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 profile = StudentProfile(registration_id=registration.id)
                 session.add(profile)
                 session.flush()
-                revoked = fixed_now if session_status != "active" else None
+                revoked = session_anchor if session_status != "active" else None
                 auth_session = AuthSession(
                     user_id=user.id,
                     token_hash=keyed_hash(raw_token),
                     status=session_status,
                     expires_at=(
-                        fixed_now - timedelta(minutes=1)
+                        session_anchor - timedelta(minutes=1)
                         if session_expired
-                        else fixed_now + timedelta(days=30)
+                        else session_anchor
+                        + timedelta(seconds=settings.auth_session_ttl_seconds)
                     ),
-                    last_seen_at=fixed_now,
+                    last_seen_at=session_anchor,
                     revoked_at=revoked,
                 )
                 session.add(auth_session)
@@ -2149,7 +2151,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
             if prior_registration is None:
                 raise ProductGateFailure("prompt session rotation setup failed")
             rotated_token, rotated_session = login_service.rotate_authenticated_session(
-                session, prior_registration, fixed_now + timedelta(minutes=1)
+                session, prior_registration, session_anchor + timedelta(minutes=1)
             )
             rotated_session_id = rotated_session.id
         with factory() as session:
@@ -2213,7 +2215,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 token, auth_session = login_service.rotate_authenticated_session(
                     session,
                     registration,
-                    fixed_now + timedelta(minutes=2),
+                    session_anchor + timedelta(minutes=2),
                 )
                 return token, auth_session.id
 
@@ -3181,7 +3183,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                         and not lifecycle_first_future.done()
                     )
                     locked_session.status = "revoked"
-                    locked_session.revoked_at = fixed_now + timedelta(minutes=10)
+                    locked_session.revoked_at = session_anchor + timedelta(minutes=10)
                     lifecycle_session.commit()
                     lifecycle_response = lifecycle_first_future.result(timeout=10)
             finally:
@@ -4079,7 +4081,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 token, auth_session = login_service.rotate_authenticated_session(
                     session,
                     registration,
-                    fixed_now + timedelta(minutes=20),
+                    session_anchor + timedelta(minutes=20),
                 )
                 return token, auth_session.id
 
@@ -4260,7 +4262,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                                     f"{kind} rollback-gap session missing"
                                 )
                             presented.status = "revoked"
-                            presented.revoked_at = fixed_now + timedelta(minutes=30)
+                            presented.revoked_at = session_anchor + timedelta(minutes=30)
                     unique_gap_release.set()
                     loser_response = loser_future.result(timeout=10)
             finally:
