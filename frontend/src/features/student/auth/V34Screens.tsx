@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { ThemeMode } from '../../../hooks/useTheme';
 import { useStudentSession, type StudentSessionPhase } from '../../../app/authContext';
@@ -43,6 +43,7 @@ import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
+const OtpScreenThemeContext = createContext<ScreenProps>({});
 type IconName =
   | 'add' | 'back' | 'calendar' | 'career' | 'check' | 'clinical' | 'close'
   | 'community' | 'digest' | 'drafting' | 'forward' | 'home' | 'key' | 'moon'
@@ -138,7 +139,7 @@ function AuthAside({ title, copy }: { title: string; copy: string }) {
 function RevLTopbar({ theme, toggleTheme }: ScreenProps) {
   return (
     <header className="v321-topbar">
-      <NyayOneRevLLockup/>
+      <NyayOneRevLLockup reversed={theme === 'dark'}/>
       <nav aria-label="Product areas">
         <button type="button" disabled aria-disabled="true">Home</button>
         <button type="button" disabled aria-disabled="true">Research</button>
@@ -165,7 +166,7 @@ function RevLBrandPanel({ verification = false }: { verification?: boolean }) {
         <p>{verification
           ? 'Successful verification signs you in. Profile completion is recommended, not forced.'
           : <><span className="v321-brandpanel__desktop-copy">Research, opportunities, mentoring and your professional profile, connected through one trusted NyayOne identity.</span><span className="v321-brandpanel__mobile-copy">Internships, moots, research and mentors: one verified student identity, private by default.</span></>}</p>
-        <div className="v321-brandpanel__benefits" aria-label="Account benefits">
+        <div className="v321-brandpanel__benefits" role="group" aria-label="Account benefits">
           <span>{verification ? 'Passwordless' : 'Passwordless access'}</span><span>Private by design</span><span>Built for law students</span>
         </div>
       </div>
@@ -680,6 +681,7 @@ export function V34Register(props: ScreenProps) {
 
 function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const nav = useNavigate();
+  const topbarProps = useContext(OtpScreenThemeContext);
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -758,7 +760,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   if (session.phase === 'pending' || (session.phase === 'anonymous' && otpFlow.loading)) {
     return (
       <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
-        <RevLTopbar/>
+        <RevLTopbar {...topbarProps}/>
         <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
           {studentContext}
           <h1 id={`${screenId}-title`} className="v34-title">Checking verification state</h1>
@@ -787,7 +789,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     : (flow?.destinationMasked ?? 'your mobile');
   return (
     <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
-      <RevLTopbar/>
+      <RevLTopbar {...topbarProps}/>
       <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
         {studentContext}
         <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={purpose === 'signup' ? 'Change registration details' : 'Change mobile number'} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
@@ -801,12 +803,12 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   );
 }
 
-export function V34LoginOtp() {
-  return <V34OtpChallenge purpose="login"/>;
+export function V34LoginOtp(props: ScreenProps) {
+  return <OtpScreenThemeContext.Provider value={props}><V34OtpChallenge purpose="login"/></OtpScreenThemeContext.Provider>;
 }
 
-export function V34OtpVerify() {
-  return <V34OtpChallenge purpose="signup"/>;
+export function V34OtpVerify(props: ScreenProps) {
+  return <OtpScreenThemeContext.Provider value={props}><V34OtpChallenge purpose="signup"/></OtpScreenThemeContext.Provider>;
 }
 
 export function V34ProfileStep1() {
