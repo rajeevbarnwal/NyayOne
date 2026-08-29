@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "nyay27-contact-sheet-contract/v1",
+  "futureEvidenceSchemaVersion": "nyay14-evidence/v2",
+  "legacyEvidenceSchemaVersion": "nyay14-evidence/v1",
+  "publishers": [
+    "codex",
+    "claude-code"
+  ],
+  "requiredProvenance": [
+    "sheetSha256",
+    "sourceArchiveSha256",
+    "generatedAt",
+    "reviewedHead"
+  ],
+  "formats": {
+    "ui-design-parity": {
+      "ticketType": "ui",
+      "requiredPanels": [
+        {
+          "role": "approved-baseline",
+          "position": "left"
+        },
+        {
+          "role": "live-implementation",
+          "position": "right"
+        }
+      ]
+    },
+    "rendered-evidence": {
+      "ticketType": "non-ui",
+      "panelInventoryAuthority": "external"
+    }
+  },
+  "privacy": {
+    "scanner": "scripts/ci/scan_evidence.py",
+    "renderedTextSidecarRequired": true,
+    "pixelContentScanRecordAccepted": true
+  },
+  "historicalPolicy": {
+    "mode": "exact-seal-only",
+    "immutableTicketKeys": [
+      "NYAY-7",
+      "NYAY-9",
+      "NYAY-14",
+      "NYAY-21",
+      "NYAY-28",
+      "NYAY-29"
+    ],
+    "selfDeclaredTimestampIsAuthority": false
+  },
+  "failureCodes": [
+    "CONTACT_SHEET_MISSING",
+    "CONTACT_SHEET_EMPTY",
+    "CONTACT_SHEET_UNMANIFESTED",
+    "CONTACT_SHEET_HASH_MISMATCH",
+    "CONTACT_SHEET_PROVENANCE_MISMATCH",
+    "CONTACT_SHEET_FORMAT_MISMATCH",
+    "CONTACT_SHEET_PANEL_SET_INVALID",
+    "CONTACT_SHEET_ZERO_PANELS",
+    "CONTACT_SHEET_SIDECAR_MISSING",
+    "CONTACT_SHEET_SIDECAR_HASH_MISMATCH",
+    "CONTACT_SHEET_PRIVACY_SCAN_FAILED",
+    "HISTORICAL_SEAL_MISMATCH"
+  ]
+}

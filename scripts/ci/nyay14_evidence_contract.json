@@ -1,5 +1,11 @@
 {
-  "schemaVersion": "nyay14-evidence/v1",
+  "schemaVersion": "nyay14-evidence/v2",
+  "legacySchemaVersion": "nyay14-evidence/v1",
+  "supportedSchemaVersions": [
+    "nyay14-evidence/v1",
+    "nyay14-evidence/v2"
+  ],
+  "defaultAuthoritativeSchemaVersion": "nyay14-evidence/v2",
   "classifications": [
     "PASS",
     "FAIL",
@@ -95,5 +101,82 @@
     "distinctInputAndOutputPathsRequired": true,
     "existingOutputReplacementForbidden": true,
     "nonPassLeavesNoGeneratedOutputs": true
+  },
+  "combinedContactSheet": {
+    "policyVersion": "nyay27-contact-sheet-contract/v1",
+    "requiredForSchemaVersion": "nyay14-evidence/v2",
+    "artifactManifestBindingRequired": true,
+    "requiredProvenance": [
+      "sheetSha256",
+      "sourceArchiveSha256",
+      "generatedAt",
+      "reviewedHead"
+    ],
+    "formats": {
+      "ui": "ui-design-parity",
+      "non-ui": "rendered-evidence"
+    },
+    "panelInventoryAuthority": "external",
+    "zeroPanelsForbidden": true,
+    "panelSourcesMustBeManifested": true,
+    "pngChunkAllowlist": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "pngMetadataForbidden": true,
+    "renderedTextSidecarOrPixelScanRecordRequired": true,
+    "sidecarContentBindings": [
+      "sheetSha256",
+      "sourceArchiveSha256",
+      "reviewedHead",
+      "panelCount",
+      "panelRoles"
+    ],
+    "privacyScannerVersionRequired": true,
+    "repositoryPrivacyScannerRequired": true,
+    "diagnosticsRedacted": true
+  },
+  "downgradeResistance": {
+    "packageSchemaIsAuthority": false,
+    "packageTimestampIsAuthority": false,
+    "cliDefault": "nyay14-evidence/v2",
+    "historicalV1RequiresExactExternalPackageSha256": true,
+    "admissibleHistoricalV1PackageSha256": [
+      "a822ccace60c2c067553bff9c33866a329a811d048d846c9c46317c73bda357f"
+    ],
+    "historicalRecordsPreservedByExactSeal": [
+      {
+        "ticket": "NYAY-7",
+        "recordKind": "senior-qa-archive",
+        "sealSha256": "35538af7e62e8338c08ac74c2bdde29c4eba62b7341f92d3e2a33344a36146e1"
+      },
+      {
+        "ticket": "NYAY-9",
+        "recordKind": "validated-v1-package",
+        "sealSha256": "a822ccace60c2c067553bff9c33866a329a811d048d846c9c46317c73bda357f"
+      },
+      {
+        "ticket": "NYAY-14",
+        "recordKind": "senior-qa-archive",
+        "sealSha256": "cfd906a6e0a043225312ec4bb47ae8c78597e3715c7aafd8619886ab07140677"
+      },
+      {
+        "ticket": "NYAY-21",
+        "recordKind": "senior-qa-archive",
+        "sealSha256": "9d3f4670c93c26ca7c2bff3127469de00da25a8bf33970958ee3a6b92875903b"
+      },
+      {
+        "ticket": "NYAY-28",
+        "recordKind": "combined-contact-sheet",
+        "sealSha256": "5fac67ec822a0dc230e4664ef6c45c407576aa3f56c69074a339cce7aff21a03"
+      },
+      {
+        "ticket": "NYAY-29",
+        "recordKind": "senior-security-archive",
+        "sealSha256": "d90c4dec3d7726b517d2de62c94cd4c76c084b8edef5a613451b8b73641ac56d"
+      }
+    ],
+    "mismatchCode": "HISTORICAL_SEAL_MISMATCH"
   }
 }
