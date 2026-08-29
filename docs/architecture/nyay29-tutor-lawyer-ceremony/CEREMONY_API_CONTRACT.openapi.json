@@ -1,0 +1,2414 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NyayOne Tutor/Lawyer Mentor Ceremony Contract",
+    "version": "nyay29-design-v2",
+    "summary": "Design-only, fail-closed contract stubs for a server-issued mentor session ceremony.",
+    "description": "This is an NYAY-29 design artifact and not an implemented API. NYAY-22 requires separate approval and an implementation handoff before any route may ship. Every ceremony transition is server-authoritative: invitation, acceptance, challenge, identity proof, verified TutorProfile ownership, purpose consent, isolated mentor session issuance, rotation, revocation, expiry, logout, recovery, and deletion live only in server-side state. A student or owner context is never promoted; exchange may mint only an isolated mentor session after the prior browser authority is ended and a fresh same-actor verification proves a currently verified, active TutorProfile with positive provenance. Lawyer verification alone is not tutor authority. Anonymous, wrong-role, unverified, cross-user, revoked, deleted, and stale-session attempts fail closed with the typed PII-safe failure inventory, no mutation, and non-enumerating responses. Session secrets and raw proof are excluded from Web Storage, URLs, logs, and evidence. Authorization-domain isolation follows persisted owner-subject-invitation-engagement-profile relations; no client tenant selector or invented tenant table is part of this contract. Before implementation, unit, HTTP, PostgreSQL concurrency, real-Chromium, privacy, and independent review gates are mandatory."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://{host}",
+      "description": "Same-origin NyayOne API; the concrete production host is deployment-bound.",
+      "variables": {
+        "host": {
+          "default": "nyayone.invalid",
+          "description": "Documentation placeholder only; never an evidence credential or deployable default."
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Mentor ceremony",
+      "description": "Design-only server-authoritative tutor/lawyer ceremony. No endpoint in this document grants authority by itself."
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/mentor/ceremony/initiate": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "initiateTutorCeremony",
+        "summary": "Start a non-enumerating mentor ceremony",
+        "description": "Creates a server-owned challenge_issued ceremony and replaces the non-authoritative bootstrap cookie with the host-only HttpOnly ceremony cookie. The request carries no user, owner, student, TutorProfile, invitation, or session identifier. Any existing student/owner context must already have ended; it is never promoted in place. The response is deliberately indistinguishable for unknown, ineligible, and potentially eligible actors. The server derives any invitation match only after external identity proof has settled. Before actor binding, the Idempotency-Key ledger is scoped to the server-side digest of the bootstrap or existing ceremony cookie plus operation and canonical purpose request; it is never globally keyed. requestedMentorRole is non-authorizing intent only and must be reduced against the later server-derived invitation, role policy, current verification provenance, and active TutorProfile.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorBootstrapCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": []
+          }
+        ],
+        "x-nyayone-security-by-state": {
+          "newAttempt": [
+            "TrustedOrigin",
+            "MentorBootstrapCookie"
+          ],
+          "exactRetry": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie"
+          ]
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorCeremonyInitiateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Generic ceremony challenge projection accepted; no eligibility or identity fact is disclosed.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/CeremonyCookieIssued"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorCeremonyChallenge"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/CeremonyGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProviderUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/ceremony/verify": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "verifyTutorIdentity",
+        "summary": "Verify a server-held external identity result and TutorProfile ownership",
+        "description": "Consumes only the server-side identity-provider result already bound to the ceremony cookie and server-held correlation. The browser submits neither provider selection nor a raw assertion, provider code, challenge nonce, consent version, mobile, email, registration ID, or TutorProfile ID. The server derives the authenticated actor, requires it to equal TutorProfile.user_id, verifies positive provenance and currentness rather than trusting a status flag, requires an active TutorProfile, and treats lawyer verification alone as insufficient for tutor authority. For mentor_session intent, the server derives exactly one relation-consistent live invitation and its server-held purpose, consent receipt, disclosure classes, and acceptance-text version. For authority_deletion_step_up intent, it instead revalidates the existing live mentor session and current TutorProfile; it neither derives an owner invitation nor grants disclosure. Successful verification advances challenge_issued to proof_verified atomically and returns the intent-specific bounded acceptance projection. Replays return the exact sealed outcome for the same cookie-bound actor/ceremony, operation, purpose or deletion intent, key, and payload; a changed payload returns typed 409 with no mutation.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": [],
+            "MentorSessionCookie": []
+          }
+        ],
+        "x-nyayone-security-by-intent": {
+          "mentor_session": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie"
+          ],
+          "authority_deletion_step_up": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie",
+            "MentorSessionCookie"
+          ]
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorIdentityProofRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The cookie-bound ceremony is proof_verified; no raw identity or TutorProfile identifier is returned.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/CeremonyCookieRotated"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorAcceptanceProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/CeremonyGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProviderUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/ceremony/exchange": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "exchangeTutorCeremony",
+        "summary": "Exchange a proof-verified ceremony for an isolated mentor session",
+        "description": "Atomically rechecks same-actor verified TutorProfile ownership and positive verification provenance/currentness, active TutorProfile status, explicit acceptance, the server-held per-purpose consent receipt, invitation state, relation-based authority domain, subject sharing eligibility, expiry, revocation, deletion, and absence of any conflicting owner-session handoff. For mentor_session intent it first revokes every prior actor/profile mentor generation when the ceremony is a recovery, then mints a distinct, narrower, purpose-bound mentor session whose configured absolute lifetime cannot exceed 28,800 seconds. For authority_deletion_step_up intent it requires the same live mentor session throughout and issues only a short-lived global-mentor-authority-deletion StepUpCookie/projection with no purpose scope; it never creates a mentor session. The server marks the ceremony exchanged, appends immutable PII-free audit evidence, expires the ceremony cookie, and issues the intent-specific host-only HttpOnly cookie. No client-selected scope or role is honored and no student/owner session is promoted.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": [],
+            "MentorSessionCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": [],
+            "MentorAuthorityStepUpCookie": []
+          }
+        ],
+        "x-nyayone-security-by-state": {
+          "uncommitted": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie"
+          ],
+          "uncommittedDeletionStepUp": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie",
+            "MentorSessionCookie"
+          ],
+          "committedMentorSessionExactReconciliation": [
+            "TrustedOrigin",
+            "MentorSessionCookie"
+          ],
+          "committedDeletionStepUpExactReconciliation": [
+            "TrustedOrigin",
+            "MentorSessionCookie",
+            "MentorAuthorityStepUpCookie"
+          ]
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorExchangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A short-lived, global-mentor-authority-deletion step-up was issued; no mentor session or profile authority was created.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorAuthorityStepUpCookieIssued"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorAuthorityStepUpProjection"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "An isolated mentor session was issued from server-derived role, purpose, scope, and minimum profile slices.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorSessionCookieRotated"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorSessionProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/CeremonyGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProviderUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/session": {
+      "get": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "getTutorSession",
+        "summary": "Probe the authoritative mentor session",
+        "description": "Safe, read-only authoritative probe. The session cookie selects server state; no actor, TutorProfile, owner, student, engagement, or session selector is accepted in the URL, query, body, or custom headers. A live projection exposes only bounded role, purpose, consent, expiry, scopes, and minimum profile-slice names. Expired, revoked, logged-out, deleted, stale, wrong-role, and cross-user states return typed non-enumerating failures and never fall back to browser state.",
+        "security": [
+          {
+            "MentorSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded live mentor-session projection.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorSessionProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/SessionGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/session/rotate": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "rotateTutorSession",
+        "summary": "Rotate the isolated mentor-session secret",
+        "description": "Revalidates the live session, same actor, current positive TutorProfile verification provenance, active TutorProfile, invitation, purpose consent, subject sharing eligibility, expiry, and revocation under one server-side lock. Rotation atomically marks the predecessor generation rotated_out, mints a fresh active successor with no scope or lifetime expansion, records an immutable PII-free audit event, and only then changes the HttpOnly cookie. rotated_out is terminal internal state and is never returned as a live projection. A concurrent revoke, expiry, logout, or deletion wins fail closed.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rotation committed and the old secret was retired before response.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorSessionCookieIssued"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorSessionProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/SessionGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/session/revoke": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "revokeTutorSession",
+        "summary": "Revoke the current purpose-bound mentor session",
+        "description": "Linearizes revocation against rotation, active requests, expiry, logout, deletion, and recovery. The server retires the authoritative session and secret plus every deletion ceremony or step-up bound to that session, appends the revocation event, strips access to the mentor engagement and consent-derived profile slices, and expires the session-bound mentor cookies before returning. Mandatory idempotency prevents duplicate effects while the cookie is live. After cookie retirement, the client performs the canonical terminal session probe; the API does not promise an impossible unauthenticated replay of the prior response body.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The authoritative mentor session is revoked and its browser cookie retired.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorSessionBoundCookiesCleared"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorRevokedOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/SessionGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/session/logout": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "logoutTutorSession",
+        "summary": "End the mentor session and clear browser authority",
+        "description": "Ends only the isolated mentor authority after server-side linearization, invalidates every deletion ceremony or step-up bound to that session, and clears every session-bound mentor-cookie path variant. It does not restore or infer a student/owner session. Returning to owner context requires a new independent owner authentication ceremony and authoritative probe. Mandatory idempotency prevents duplicate terminal effects while the cookie is live; after cookie retirement, a canonical terminal session probe confirms absence rather than attempting unauthenticated body replay. Logout is immutably audited without PII or raw identifiers.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mentor authority ended; owner re-entry, if desired, must authenticate separately.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorSessionBoundCookiesCleared"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorLoggedOutOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/SessionGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/ceremony/recover": {
+      "post": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "recoverTutorCeremony",
+        "summary": "Start a fresh identity-bound recovery ceremony",
+        "description": "Recovery never reactivates, selects, or reveals a stale session. It only creates a generic short-lived server-owned pre-authentication ceremony bound to the non-authoritative bootstrap cookie; it cannot identify or revoke any prior actor authority at this stage. The external identity-provider result remains server-side. After verify binds the same actor and a current positively verified active TutorProfile, the server marks all prior actor/profile generations for mandatory revocation; exchange must commit that revocation before it may issue a recovered session. For authority_deletion_step_up intent, recovery additionally requires the existing live mentor session and may ultimately issue only a short-lived StepUpCookie, never a replacement session. The response remains generic and non-enumerating.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorBootstrapCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorCeremonyCookie": [],
+            "MentorSessionCookie": []
+          },
+          {
+            "TrustedOrigin": [],
+            "MentorBootstrapCookie": [],
+            "MentorSessionCookie": []
+          }
+        ],
+        "x-nyayone-security-by-intent": {
+          "mentor_session.newAttempt": [
+            "TrustedOrigin",
+            "MentorBootstrapCookie"
+          ],
+          "mentor_session.exactRetry": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie"
+          ],
+          "authority_deletion_step_up.newAttempt": [
+            "TrustedOrigin",
+            "MentorBootstrapCookie",
+            "MentorSessionCookie"
+          ],
+          "authority_deletion_step_up.exactRetry": [
+            "TrustedOrigin",
+            "MentorCeremonyCookie",
+            "MentorSessionCookie"
+          ]
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorRecoveryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Generic recovery challenge projection; no account, invitation, or profile existence is disclosed.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/CeremonyCookieIssued"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorCeremonyChallenge"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/CeremonyGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProviderUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mentor/authority": {
+      "delete": {
+        "tags": [
+          "Mentor ceremony"
+        ],
+        "operationId": "deleteTutorAuthority",
+        "summary": "Delete mentor-session authority for the authenticated TutorProfile owner",
+        "description": "Schedules global mentor-authority erasure only when the same request presents both a live MentorSessionCookie and a fresh unexpired authority_deletion_step_up cookie/record for the same server-derived actor and current positively verified active TutorProfile. It atomically revokes every mentor session and live ceremony for that actor/profile authority domain before returning, appends an immutable PII-free deletion audit event, and applies NYAY-19 retention plus cryptographic-erasure windows. It does not delete unrelated owner/student data, unrelated relation-based authority domains, or legally retained aggregate evidence. No purpose, raw identifier, client-selected role, authority domain, or profile may be supplied.",
+        "security": [
+          {
+            "TrustedOrigin": [],
+            "MentorSessionCookie": [],
+            "MentorAuthorityStepUpCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorAuthorityDeletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "All live mentor authority is revoked and a bounded erasure workflow is scheduled.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/MentorAuthorityCookiesCleared"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/VaryCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorAuthorityDeletionOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/AuthorityGone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "TrustedOrigin": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Origin",
+        "description": "CSRF boundary for every mutation: exactly one trusted canonical Origin must match the deployment allowlist. Production accepts HTTPS only. Local/test may additionally accept exact numeric loopback HTTP origins and no other HTTP host. Missing, duplicated, null, wildcard, userinfo-bearing, path/query/fragment-bearing, cross-scheme, cross-host, or cross-port values fail before any idempotency, ceremony, session, consent, audit, or cookie mutation. Referer is never a substitute."
+      },
+      "MentorBootstrapCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "nyayone_mentor_bootstrap",
+        "description": "Non-authoritative pre-authentication binding created by the same-origin public mentor-entry response outside the nine API operations. Host-only (no Domain), Secure in production, HttpOnly, SameSite=Strict, Path=/api/v1/auth/mentor, Max-Age no more than 900 seconds. Its server-side keyed digest scopes pre-auth idempotency; possession never proves identity, invitation, role, profile, consent, or session authority."
+      },
+      "MentorCeremonyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "nyayone_mentor_ceremony",
+        "description": "Opaque lookup of server-owned ceremony state. Host-only (no Domain), Secure in production, HttpOnly, SameSite=Strict, Path=/api/v1/auth/mentor, Max-Age no more than 900 seconds. It is never exposed to JavaScript, Web Storage, URLs, service-worker caches, logs, or evidence."
+      },
+      "MentorSessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "nyayone_mentor_session",
+        "description": "Opaque lookup of the isolated mentor session. Host-only (no Domain), Secure in production, HttpOnly, SameSite=Lax, Path=/, Max-Age not beyond the configured absolute expiry and never above 28,800 seconds. The configured idle ceiling is at most 1,800 seconds. The cookie is never accepted as owner/student authority and never appears in logs or evidence."
+      },
+      "MentorAuthorityStepUpCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "nyayone_mentor_authority_step_up",
+        "description": "Opaque server-bound proof of a fresh authority_deletion_step_up ceremony. Host-only (no Domain), Secure in production, HttpOnly, SameSite=Strict, Path=/api/v1/auth/mentor/authority, Max-Age no more than 300 seconds, single-use, and bound to the same actor/current TutorProfile verification and live MentorSessionCookie. It grants no mentor-session or profile-reading authority."
+      }
+    },
+    "parameters": {
+      "Origin": {
+        "name": "Origin",
+        "in": "header",
+        "required": true,
+        "description": "Exactly one trusted same-origin value for mutation CSRF defense. Production is HTTPS-only; local/test may use exact 127.0.0.1 or [::1] HTTP origins.",
+        "schema": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://[^@/?#]+(?::[0-9]{1,5})?$",
+              "maxLength": 255
+            },
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^http://(?:127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{1,5})?$",
+              "maxLength": 64,
+              "description": "Allowed only when the server is explicitly configured for local/test."
+            }
+          ]
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Exactly one opaque, PII-free key. The server validates the canonical alphabet and length and hashes the raw key before durable storage. Before verification the ledger is scoped to the keyed server digest of the bootstrap/ceremony cookie plus operation, intent, and canonical purpose request; it is never globally keyed. After verification it is rebound to the server-derived actor, operation, intent/purpose, and canonical payload. Same key plus same payload replays the exact result while a valid pre- or post-transition cookie proves the same scope. Same key plus a different payload returns IDEMPOTENCY_CONFLICT with no mutation. Concurrent claimers linearize through PostgreSQL; an in-progress or uncertain result never creates a second effect.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._~-]{16,200}$",
+          "minLength": 16,
+          "maxLength": 200
+        }
+      }
+    },
+    "headers": {
+      "NoStore": {
+        "description": "Every authentication, ceremony, session, step-up, lifecycle, and failure response is private and never cached.",
+        "schema": {
+          "type": "string",
+          "const": "private, no-store"
+        }
+      },
+      "VaryCookie": {
+        "description": "Prevents shared response reuse across cookie-bound authority contexts.",
+        "schema": {
+          "type": "string",
+          "const": "Cookie"
+        }
+      },
+      "CeremonyCookieIssued": {
+        "description": "Expires nyayone_mentor_bootstrap and issues or reasserts nyayone_mentor_ceremony as host-only; Secure in production; HttpOnly; SameSite=Strict; Path=/api/v1/auth/mentor; Max-Age<=900. Multiple Set-Cookie fields are emitted where required. Values are omitted from documentation and evidence.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "CeremonyCookieRotated": {
+        "description": "Atomically retires the prior ceremony capability and issues a new host-only, Secure-in-production, HttpOnly, SameSite=Strict, path-scoped value with Max-Age<=900. Values are never logged.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "MentorSessionCookieIssued": {
+        "description": "Issues nyayone_mentor_session as host-only; Secure in production; HttpOnly; SameSite=Lax; Path=/; absolute Max-Age<=28800 and configured idle<=1800. The ceremony cookie is expired in the same response. No owner/student cookie is minted or promoted.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "MentorSessionCookieRotated": {
+        "description": "Atomically expires the predecessor nyayone_mentor_session and issues its active successor with the same host-only, Secure-in-production, HttpOnly, SameSite=Lax, Path=/ attributes and no lifetime or scope expansion. It does not clear a separate ceremony or step-up cookie.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "MentorSessionBoundCookiesCleared": {
+        "description": "After authoritative session retirement, expires every recognized nyayone_mentor_session variant plus any ceremony and authority-step-up cookie bound to that session. It does not clear the non-authoritative public bootstrap cookie or any owner/student cookie.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "CeremonyCookieCleared": {
+        "description": "Expires nyayone_mentor_bootstrap, nyayone_mentor_ceremony, and their recognized path variants after the server has committed terminal pre-authentication state; it does not clear an unrelated live mentor session.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "MentorAuthorityStepUpCookieIssued": {
+        "description": "Expires the ceremony cookie and issues nyayone_mentor_authority_step_up as host-only; Secure in production; HttpOnly; SameSite=Strict; Path=/api/v1/auth/mentor/authority; Max-Age<=300; single-use. It is not a mentor session.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "MentorAuthorityCookiesCleared": {
+        "description": "Expires the mentor session, ceremony, bootstrap, and authority step-up cookie classes only after global mentor-authority deletion commits. It never clears an owner/student cookie or unrelated browser storage.",
+        "schema": {
+          "type": "string",
+          "writeOnly": true
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed, over-broad, non-canonical, duplicate-header, or invalid idempotency request. No authoritative state changes.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorBadRequestFailure"
+            }
+          }
+        }
+      },
+      "AuthenticationRequired": {
+        "description": "The required server-owned bootstrap, ceremony, mentor session, or step-up binding is absent or invalid. No existence fact is disclosed.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorAuthenticationFailure"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Generic authorization or consent/policy denial. It intentionally collapses role, invitation, TutorProfile ownership/currentness, guardian/limited-mode, relationship, and cross-user distinctions and discloses no PII or authority-domain fact.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorForbiddenFailure"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Non-enumerating ceremony/session/invitation/relationship result. Existing, absent, and unauthorized resources use the same bounded shape and no mutation.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorNotFoundFailure"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Replay payload mismatch, concurrent lifecycle winner, already-exchanged ceremony, stale generation, or incompatible session class/state/version. The winning server state remains authoritative.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorConflictFailure"
+            }
+          }
+        }
+      },
+      "CeremonyGone": {
+        "description": "The bootstrap/ceremony is expired, revoked, exchanged, deleted, or otherwise terminal. It cannot reactivate and only the ceremony cookie class is retired.",
+        "headers": {
+          "Set-Cookie": {
+            "$ref": "#/components/headers/CeremonyCookieCleared"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorCeremonyGoneFailure"
+            }
+          }
+        }
+      },
+      "SessionGone": {
+        "description": "The mentor session is expired, rotated_out, revoked, logged out, deleted, or otherwise terminal. Only mentor-session cookie variants are retired.",
+        "headers": {
+          "Set-Cookie": {
+            "$ref": "#/components/headers/MentorSessionBoundCookiesCleared"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorSessionGoneFailure"
+            }
+          }
+        }
+      },
+      "AuthorityGone": {
+        "description": "The session, step-up, or mentor authority is terminal or deleted. All mentor-only cookie classes are retired; owner/student authority is untouched.",
+        "headers": {
+          "Set-Cookie": {
+            "$ref": "#/components/headers/MentorAuthorityCookiesCleared"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorAuthorityGoneFailure"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "A bounded server-side rate or attempt budget is exhausted. No eligibility, profile, invitation, or actor fact is disclosed and no authority is granted.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorRateLimitFailure"
+            }
+          }
+        }
+      },
+      "ProviderUnavailable": {
+        "description": "The configured identity provider or server-side backchannel is unavailable within its bounded deadline. No partial proof or authority mutation is committed.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryCookie"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MentorProviderUnavailableFailure"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "MentorPurposeCode": {
+        "type": "string",
+        "enum": [
+          "student_guidance",
+          "legal_education",
+          "document_review",
+          "case_discussion"
+        ],
+        "description": "Server-recognized purpose class. It is not an owner/student selector and cannot expand persisted consent."
+      },
+      "MentorCeremonyInitiateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intent",
+          "requestedMentorRole",
+          "purposeCode",
+          "privacyNoticeVersion"
+        ],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "const": "mentor_session"
+          },
+          "requestedMentorRole": {
+            "type": "string",
+            "enum": [
+              "tutor",
+              "lawyer_tutor"
+            ],
+            "description": "Non-authorizing UI intent only. The server must reduce it against the derived owner invitation, current role policy, positive verification provenance, and active TutorProfile. A mismatch is generic denial; lawyer_tutor still requires TutorProfile ownership and a legal credential alone grants nothing."
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "privacyNoticeVersion": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "MentorCeremonyChallenge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "status",
+          "ceremonyState",
+          "next",
+          "intent",
+          "expiresInSeconds"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-ceremony.v1"
+          },
+          "status": {
+            "type": "string",
+            "const": "accepted"
+          },
+          "ceremonyState": {
+            "type": "string",
+            "const": "challenge_issued"
+          },
+          "next": {
+            "type": "string",
+            "const": "external_identity"
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "mentor_session",
+              "authority_deletion_step_up"
+            ]
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 900,
+            "description": "Bounded relative expiry; no internal identifier, token, challenge nonce, or proof is returned."
+          }
+        }
+      },
+      "MentorIdentityProofRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedCeremonyState"
+        ],
+        "properties": {
+          "expectedCeremonyState": {
+            "type": "string",
+            "const": "challenge_issued"
+          }
+        },
+        "description": "The external provider selection, authorization result/code, assertion, challenge nonce, identity proof, consent version, actor, and TutorProfile identifiers remain server-side. This request only asks the server to consume the provider result already bound to its cookie-selected ceremony."
+      },
+      "MentorAcceptanceProjection": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MentorPurposeAcceptanceProjection"
+          },
+          {
+            "$ref": "#/components/schemas/MentorDeletionStepUpAcceptanceProjection"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "intent",
+          "mapping": {
+            "mentor_session": "#/components/schemas/MentorPurposeAcceptanceProjection",
+            "authority_deletion_step_up": "#/components/schemas/MentorDeletionStepUpAcceptanceProjection"
+          }
+        }
+      },
+      "MentorPurposeAcceptanceProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "status",
+          "ceremonyState",
+          "intent",
+          "serverDerivedMentorRole",
+          "purposeCode",
+          "consentReceiptVersion",
+          "disclosureClasses",
+          "acceptanceTextVersion",
+          "verification",
+          "expiresInSeconds"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-acceptance.v1"
+          },
+          "status": {
+            "type": "string",
+            "const": "acceptance_required"
+          },
+          "ceremonyState": {
+            "type": "string",
+            "const": "proof_verified"
+          },
+          "intent": {
+            "type": "string",
+            "const": "mentor_session"
+          },
+          "serverDerivedMentorRole": {
+            "type": "string",
+            "enum": [
+              "tutor",
+              "lawyer_tutor"
+            ]
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "consentReceiptVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "disclosureClasses": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 7,
+            "items": {
+              "$ref": "#/components/schemas/MentorDisclosureClass"
+            },
+            "description": "Names data classes only; it contains no profile values or direct identifiers."
+          },
+          "acceptanceTextVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/MentorVerificationProvenance"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 900
+          }
+        }
+      },
+      "MentorDeletionStepUpAcceptanceProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "status",
+          "ceremonyState",
+          "intent",
+          "deletionScope",
+          "acceptanceTextVersion",
+          "verification",
+          "expiresInSeconds"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-acceptance.v1"
+          },
+          "status": {
+            "type": "string",
+            "const": "acceptance_required"
+          },
+          "ceremonyState": {
+            "type": "string",
+            "const": "proof_verified"
+          },
+          "intent": {
+            "type": "string",
+            "const": "authority_deletion_step_up"
+          },
+          "deletionScope": {
+            "type": "string",
+            "const": "global_mentor_authority"
+          },
+          "acceptanceTextVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/MentorVerificationProvenance"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          }
+        }
+      },
+      "ContractVersion": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "MentorDisclosureClass": {
+        "type": "string",
+        "enum": [
+          "display_identity",
+          "preferred_language",
+          "city",
+          "education_context",
+          "interests",
+          "goals"
+        ]
+      },
+      "MentorVerificationProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "result",
+          "provenanceClass",
+          "policyVersion",
+          "verifiedAt",
+          "currentAt",
+          "ownershipBinding"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "const": "current_positive"
+          },
+          "provenanceClass": {
+            "type": "string",
+            "enum": [
+              "nyayone_reviewed_identity",
+              "approved_federated_attestation"
+            ],
+            "description": "Bounded provenance class only; no provider subject, assertion, reviewer identifier, or raw proof."
+          },
+          "policyVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ownershipBinding": {
+            "type": "string",
+            "const": "tutor_profile_user_equals_actor"
+          }
+        },
+        "description": "A bare positive status is never sufficient. The server verifies protected provenance, proof-to-profile binding, current policy, validity/expiry/revocation, and same-actor ownership on verify, exchange, and every session request."
+      },
+      "MentorExchangeRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MentorSessionExchangeRequest"
+          },
+          {
+            "$ref": "#/components/schemas/MentorAuthorityStepUpExchangeRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "intent",
+          "mapping": {
+            "mentor_session": "#/components/schemas/MentorSessionExchangeRequest",
+            "authority_deletion_step_up": "#/components/schemas/MentorAuthorityStepUpExchangeRequest"
+          }
+        }
+      },
+      "MentorSessionExchangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intent",
+          "expectedCeremonyState",
+          "acceptPurpose",
+          "purposeCode",
+          "consentReceiptVersion",
+          "acceptanceTextVersion"
+        ],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "const": "mentor_session"
+          },
+          "expectedCeremonyState": {
+            "type": "string",
+            "const": "proof_verified"
+          },
+          "acceptPurpose": {
+            "type": "boolean",
+            "const": true,
+            "description": "Explicit mentor acceptance of the bounded purpose, consent version, disclosure classes, and acceptance text returned by verify."
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "consentReceiptVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "acceptanceTextVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        }
+      },
+      "MentorAuthorityStepUpExchangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intent",
+          "expectedCeremonyState",
+          "acceptAuthorityDeletionStepUp",
+          "acceptanceTextVersion"
+        ],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "const": "authority_deletion_step_up"
+          },
+          "expectedCeremonyState": {
+            "type": "string",
+            "const": "proof_verified"
+          },
+          "acceptAuthorityDeletionStepUp": {
+            "type": "boolean",
+            "const": true
+          },
+          "acceptanceTextVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        }
+      },
+      "MentorSessionProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "sessionClass",
+          "mentorRole",
+          "state",
+          "purposeCode",
+          "scopes",
+          "permittedProfileSlices",
+          "sameActorVerified",
+          "tutorProfileStatus",
+          "verification",
+          "subjectSharingEligibility",
+          "consent",
+          "absoluteLifetimeSeconds",
+          "idleTimeoutSeconds",
+          "issuedAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-session.v1"
+          },
+          "sessionClass": {
+            "type": "string",
+            "const": "mentor"
+          },
+          "mentorRole": {
+            "type": "string",
+            "enum": [
+              "tutor",
+              "lawyer_tutor"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "const": "active",
+            "description": "Only the live successor is projected. A rotated predecessor is terminal rotated_out and can never satisfy this schema."
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "enum": [
+                "engagement:read",
+                "engagement:respond",
+                "profile-slice:read",
+                "consent:read",
+                "session:rotate",
+                "session:end"
+              ]
+            },
+            "description": "Server-derived least-privilege capability set; the client cannot request or enlarge it."
+          },
+          "permittedProfileSlices": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 7,
+            "items": {
+              "type": "string",
+              "enum": [
+                "display_name",
+                "preferred_language",
+                "city",
+                "college",
+                "year_of_study",
+                "interests",
+                "goals"
+              ]
+            },
+            "description": "Intersection of purpose need and explicit server-held consent. DOB, unmasked mobile, email, registration UUID, profile ID, and raw identifiers are never projected by this contract."
+          },
+          "sameActorVerified": {
+            "type": "boolean",
+            "const": true,
+            "description": "The authenticated ceremony user equals TutorProfile.user_id at issuance and every lifecycle mutation."
+          },
+          "tutorProfileStatus": {
+            "type": "string",
+            "const": "active"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/MentorVerificationProvenance"
+          },
+          "subjectSharingEligibility": {
+            "type": "string",
+            "const": "allowed",
+            "description": "Exchange fails closed when the subject is a minor with missing/revoked guardian authority or when NYAY-5 access_mode is limited; no sharing scope or profile slice is issued in that state."
+          },
+          "consent": {
+            "$ref": "#/components/schemas/MentorConsentProjection"
+          },
+          "absoluteLifetimeSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28800,
+            "description": "Deployment configuration may shorten but never exceed eight hours."
+          },
+          "idleTimeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1800,
+            "description": "Deployment configuration may shorten but never exceed thirty minutes."
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MentorConsentProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purposeCode",
+          "version",
+          "status",
+          "recordedAt"
+        ],
+        "properties": {
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "status": {
+            "type": "string",
+            "const": "granted"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MentorAuthorityStepUpProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "status",
+          "intent",
+          "deletionScope",
+          "sameActorVerified",
+          "verification",
+          "expiresInSeconds"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-authority-step-up.v1"
+          },
+          "status": {
+            "type": "string",
+            "const": "step_up_ready"
+          },
+          "intent": {
+            "type": "string",
+            "const": "authority_deletion_step_up"
+          },
+          "deletionScope": {
+            "type": "string",
+            "const": "global_mentor_authority"
+          },
+          "sameActorVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "verification": {
+            "$ref": "#/components/schemas/MentorVerificationProvenance"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          }
+        },
+        "description": "A single-use deletion step-up bound server-side to the same live mentor session and actor/profile verification. It is not a session and grants no profile or engagement scope."
+      },
+      "MentorLifecycleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedSessionState",
+          "purposeCode",
+          "reasonCode"
+        ],
+        "properties": {
+          "expectedSessionState": {
+            "type": "string",
+            "const": "active"
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "routine_rotation",
+              "mentor_requested",
+              "purpose_complete",
+              "suspected_compromise"
+            ]
+          }
+        }
+      },
+      "MentorRecoveryRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MentorSessionRecoveryRequest"
+          },
+          {
+            "$ref": "#/components/schemas/MentorAuthorityDeletionStepUpRequest"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "intent",
+          "mapping": {
+            "mentor_session": "#/components/schemas/MentorSessionRecoveryRequest",
+            "authority_deletion_step_up": "#/components/schemas/MentorAuthorityDeletionStepUpRequest"
+          }
+        }
+      },
+      "MentorSessionRecoveryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intent",
+          "requestedMentorRole",
+          "purposeCode",
+          "recoveryMethod",
+          "privacyNoticeVersion"
+        ],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "const": "mentor_session"
+          },
+          "requestedMentorRole": {
+            "type": "string",
+            "enum": [
+              "tutor",
+              "lawyer_tutor"
+            ],
+            "description": "Non-authorizing intent only; it is reduced against server-derived invitation, policy, verification provenance, and TutorProfile."
+          },
+          "purposeCode": {
+            "$ref": "#/components/schemas/MentorPurposeCode"
+          },
+          "recoveryMethod": {
+            "type": "string",
+            "const": "fresh_external_identity"
+          },
+          "privacyNoticeVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        },
+        "description": "No email, mobile, TutorProfile identifier, owner identifier, recovery token, or stale session secret is accepted."
+      },
+      "MentorAuthorityDeletionStepUpRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intent",
+          "recoveryMethod",
+          "stepUpNoticeVersion"
+        ],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "const": "authority_deletion_step_up"
+          },
+          "recoveryMethod": {
+            "type": "string",
+            "const": "fresh_external_identity"
+          },
+          "stepUpNoticeVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        },
+        "description": "Requires the same request to carry the live MentorSessionCookie under the operation's intent-specific security rule. It accepts no purpose or authority selector."
+      },
+      "MentorAuthorityDeletionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedSessionState",
+          "expectedStepUpIntent",
+          "confirmation",
+          "retentionNoticeVersion"
+        ],
+        "properties": {
+          "expectedSessionState": {
+            "type": "string",
+            "const": "active"
+          },
+          "expectedStepUpIntent": {
+            "type": "string",
+            "const": "authority_deletion_step_up"
+          },
+          "confirmation": {
+            "type": "string",
+            "const": "delete_mentor_authority"
+          },
+          "retentionNoticeVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        },
+        "description": "Global deletion request. Purpose, actor, profile, session, invitation, engagement, and authority-domain selectors are forbidden; both cookies derive and bind the actor server-side."
+      },
+      "MentorLifecycleOutcome": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MentorRevokedOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/MentorLoggedOutOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/MentorAuthorityDeletionOutcome"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "action",
+          "mapping": {
+            "revoked": "#/components/schemas/MentorRevokedOutcome",
+            "logged_out": "#/components/schemas/MentorLoggedOutOutcome",
+            "authority_deletion_scheduled": "#/components/schemas/MentorAuthorityDeletionOutcome"
+          }
+        }
+      },
+      "MentorRevokedOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "action",
+          "state",
+          "sessionAuthorityPresent",
+          "auditEventRecorded",
+          "effectiveAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-lifecycle.v1"
+          },
+          "action": {
+            "type": "string",
+            "const": "revoked"
+          },
+          "state": {
+            "type": "string",
+            "const": "revoked"
+          },
+          "sessionAuthorityPresent": {
+            "type": "boolean",
+            "const": false
+          },
+          "auditEventRecorded": {
+            "type": "boolean",
+            "const": true
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MentorLoggedOutOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "action",
+          "state",
+          "sessionAuthorityPresent",
+          "auditEventRecorded",
+          "effectiveAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-lifecycle.v1"
+          },
+          "action": {
+            "type": "string",
+            "const": "logged_out"
+          },
+          "state": {
+            "type": "string",
+            "const": "logged_out"
+          },
+          "sessionAuthorityPresent": {
+            "type": "boolean",
+            "const": false
+          },
+          "auditEventRecorded": {
+            "type": "boolean",
+            "const": true
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MentorAuthorityDeletionOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "action",
+          "state",
+          "sessionAuthorityPresent",
+          "stepUpAuthorityPresent",
+          "auditEventRecorded",
+          "effectiveAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "mentor-lifecycle.v1"
+          },
+          "action": {
+            "type": "string",
+            "const": "authority_deletion_scheduled"
+          },
+          "state": {
+            "type": "string",
+            "const": "deletion_pending"
+          },
+          "sessionAuthorityPresent": {
+            "type": "boolean",
+            "const": false
+          },
+          "stepUpAuthorityPresent": {
+            "type": "boolean",
+            "const": false
+          },
+          "auditEventRecorded": {
+            "type": "boolean",
+            "const": true
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MentorFailure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "INVALID_REQUEST",
+                  "INVALID_IDEMPOTENCY_KEY",
+                  "ORIGIN_REJECTED",
+                  "AUTHENTICATION_REQUIRED",
+                  "AUTHORIZATION_DENIED",
+                  "CONSENT_OR_POLICY_DENIED",
+                  "RESOURCE_UNAVAILABLE",
+                  "IDEMPOTENCY_CONFLICT",
+                  "CONCURRENT_STATE_CHANGED",
+                  "CEREMONY_REPLAYED",
+                  "SESSION_CONFLICT",
+                  "SESSION_STALE",
+                  "SESSION_EXPIRED",
+                  "AUTHORITY_TERMINAL",
+                  "STEP_UP_REQUIRED",
+                  "STEP_UP_EXPIRED",
+                  "RATE_LIMITED",
+                  "PROVIDER_UNAVAILABLE"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "const": "Request failed",
+                "description": "Stable PII-safe text; no account, actor, TutorProfile, owner, invitation, purpose subject, or session existence is disclosed."
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "Idempotency-Key",
+                  "Origin",
+                  "request"
+                ]
+              },
+              "retryAfterSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 900
+              }
+            }
+          }
+        }
+      },
+      "MentorBadRequestFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "required": [
+              "detail"
+            ],
+            "properties": {
+              "detail": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_REQUEST",
+                      "INVALID_IDEMPOTENCY_KEY",
+                      "ORIGIN_REJECTED"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorAuthenticationFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+              "enum": [
+                "AUTHENTICATION_REQUIRED"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorForbiddenFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "AUTHORIZATION_DENIED",
+                      "CONSENT_OR_POLICY_DENIED",
+                      "STEP_UP_REQUIRED"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorNotFoundFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "RESOURCE_UNAVAILABLE"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorConflictFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "IDEMPOTENCY_CONFLICT",
+                      "CONCURRENT_STATE_CHANGED",
+                      "CEREMONY_REPLAYED",
+                      "SESSION_CONFLICT",
+                      "SESSION_STALE"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorCeremonyGoneFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "AUTHORITY_TERMINAL"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorSessionGoneFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "SESSION_EXPIRED",
+                      "AUTHORITY_TERMINAL"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorAuthorityGoneFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "SESSION_EXPIRED",
+                      "STEP_UP_EXPIRED",
+                      "AUTHORITY_TERMINAL"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorRateLimitFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "RATE_LIMITED"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MentorProviderUnavailableFailure": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MentorFailure"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "PROVIDER_UNAVAILABLE"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "x-nyayone-prerequisites": {
+    "ownerInvitation": {
+      "status": "separately-approved-server-owned-prerequisite",
+      "publicOperationIdInThisDocument": false,
+      "requirement": "Before mentor_session exchange, an owner/student authenticated by its existing HttpOnly session must have created one live purpose-scoped invitation and consent grant through a separately approved owner API. That future API derives the owner/subject and relation domain server-side, accepts no mentor authority selector, uses a strict schema plus Origin and Idempotency-Key, and returns/transfers no mentor cookie, token, URL capability, nonce, or proof. The mentor API derives exactly one matching invitation only after same-actor identity verification; zero or multiple matches fail with the same generic denial."
+    },
+    "publicBootstrapResponse": {
+      "status": "same-origin-public-entry-response-not-an-api-operation",
+      "publicOperationIdInThisDocument": false,
+      "responsePolicy": "The canonical public mentor-entry document response establishes nyayone_mentor_bootstrap as host-only, Secure in production, HttpOnly, SameSite=Strict, Path=/api/v1/auth/mentor, Max-Age<=900, Cache-Control=private,no-store, Vary=Cookie. The cookie is a non-authoritative idempotency/rate binding only and is replaced by the ceremony cookie."
+    }
+  },
+  "x-nyayone-identity-provider-boundary": {
+    "publicOperationIdInThisDocument": false,
+    "providerStartHandler": "A server-controlled same-origin handler consumes only the HttpOnly ceremony cookie, creates and stores provider correlation, nonce digest, expected issuer/audience/algorithm, intent, and expiry server-side, and then initiates the configured provider protocol. It never accepts provider selection, actor, profile, invitation, role, consent, or callback URI from frontend state.",
+    "providerBackchannel": "The configured provider returns a signed result to an allowlisted server-to-server backchannel. The server validates TLS channel policy, issuer, audience, algorithm, signature, nonce, freshness, one-time correlation, and assurance before recording a protected minimal result. Raw proof is erased after bounded verification handling and never enters general logs/audit/evidence.",
+    "browserCompletion": "The browser returns only to a fixed same-origin generic completion route. No provider code, access token, ID token, proof, nonce, actor, invitation, or authority value appears in a frontend-readable query, fragment, URL, Web Storage, postMessage payload, log, or evidence artifact. verifyTutorIdentity merely requests consumption of the already-bound server result.",
+    "failure": "Missing, duplicate, mismatched, late, replayed, or unavailable provider results cause a generic typed failure with no authority mutation."
+  },
+  "x-nyayone-failure-status-map": {
+    "400": [
+      "INVALID_REQUEST",
+      "INVALID_IDEMPOTENCY_KEY",
+      "ORIGIN_REJECTED"
+    ],
+    "401": [
+      "AUTHENTICATION_REQUIRED"
+    ],
+    "403": [
+      "AUTHORIZATION_DENIED",
+      "CONSENT_OR_POLICY_DENIED",
+      "STEP_UP_REQUIRED"
+    ],
+    "404": [
+      "RESOURCE_UNAVAILABLE"
+    ],
+    "409": [
+      "IDEMPOTENCY_CONFLICT",
+      "CONCURRENT_STATE_CHANGED",
+      "CEREMONY_REPLAYED",
+      "SESSION_CONFLICT",
+      "SESSION_STALE"
+    ],
+    "410": [
+      "SESSION_EXPIRED",
+      "AUTHORITY_TERMINAL",
+      "STEP_UP_EXPIRED"
+    ],
+    "429": [
+      "RATE_LIMITED"
+    ],
+    "503": [
+      "PROVIDER_UNAVAILABLE"
+    ],
+    "internalOnlyReasons": "Role, invitation, TutorProfile ownership/currentness, guardian/limited-mode, relation-domain, and cross-user distinctions may appear only as protected bounded audit reason classes; they never appear in the public error code/message."
+  },
+  "x-nyayone-design-contract": {
+    "ticket": "NYAY-29",
+    "implementationTicket": "NYAY-22",
+    "status": "design-only",
+    "existingProductBoundary": "M-01 remains administrator-only. These stubs create no tutor/lawyer control, route, session, or authority until NYAY-22 receives separate implementation approval and independent review.",
+    "stateAuthority": "server-only",
+    "ceremonyStates": [
+      "pending_invitation",
+      "challenge_issued",
+      "proof_verified",
+      "exchanged",
+      "expired",
+      "revoked",
+      "deleted"
+    ],
+    "sessionStates": [
+      "active",
+      "rotated_out",
+      "expired",
+      "revoked",
+      "logged_out",
+      "deleted"
+    ],
+    "idempotencyScope": [
+      "bootstrap-or-ceremony-keyed-digest-before-verification",
+      "server-derived-actor-after-verification",
+      "operation",
+      "intent-and-purpose",
+      "canonical-payload"
+    ],
+    "sessionCeilings": {
+      "bootstrapSeconds": 900,
+      "ceremonySeconds": 900,
+      "mentorSessionAbsoluteSeconds": 28800,
+      "mentorSessionIdleSeconds": 1800,
+      "authorityDeletionStepUpSeconds": 300,
+      "configurationRule": "Deployment may shorten every ceiling and may never lengthen it."
+    },
+    "browserLinearization": {
+      "lock": "nyayone.student.auth-session.v1",
+      "channel": "nyayone.student.auth-transition.v2",
+      "scope": "The existing exact shared/exclusive cross-tab protocol governs owner, mentor, bootstrap, ceremony, session, and step-up cookie operations. Unsupported coordination fails closed without a timer/storage fallback."
+    },
+    "verificationAuthority": "Positive TutorProfile authorization requires protected provenance, same-actor ownership, active profile, current non-revoked/non-expired verification, approved policy/assurance, and proof-to-profile binding. A bare positive status column, browser role, lawyer credential, or stale reviewer/provider result never suffices.",
+    "subjectSharingGate": "Before acceptance/exchange and every disclosure, the server derives the owner-subject relation and current NYAY-5 access state. A minor lacking current required guardian authority, guardian revocation, or access_mode=limited prohibits mentor sharing and profile-slice scope; the result is generic CONSENT_OR_POLICY_DENIED with zero disclosure.",
+    "authorityDomainIsolation": "Isolation is derived from persisted owner-subject-invitation-engagement-TutorProfile relations and composite integrity checks. The wire contract contains no tenant, authority-domain, owner, subject, engagement, invitation, actor, or profile selector and does not require inventing a tenant table.",
+    "audit": "Issuance, rotation, revocation, expiry, logout, recovery, consent, step-up, and deletion transitions append immutable PII-free event classes with protected non-public correlations and server time. Audit records never contain raw proof, cookie values, session secrets, external-provider assertions, idempotency keys, profile values, or direct owner/student/profile identifiers. Where an approved immutable record must survive erasure, linkable protected correlation is cryptographically erased by destruction of its dedicated key while the non-linkable event class, policy version, and bounded time bucket remain immutable.",
+    "retention": "Ceremony, session, consent, engagement, audit, recovery, step-up, and deletion records require explicit NYAY-19-aligned retention classes and cryptographic-erasure behavior before NYAY-22 implementation. Terminal authority is revoked immediately; retained evidence is purpose-limited and pseudonymised.",
+    "dataMinimisation": "A mentor sees only the current explicit per-purpose consent and policy intersection. DOB, unmasked mobile, raw email, registration UUID, profile ID, session ID, internal authority-domain keys, and unrelated relationship linkage are excluded.",
+    "responsePolicy": "Every success and failure response is Cache-Control=private,no-store and Vary=Cookie. Production cookie-authenticated mutations require exact allowlisted HTTPS Origin; only explicitly configured local/test may allow exact numeric-loopback HTTP.",
+    "implementationGate": "No backend, frontend, migration, cookie, route, or storage implementation is authorized until NYAY-22 receives separate approval plus unit, HTTP, PostgreSQL concurrency, real-Chromium, privacy, and independent review evidence."
+  }
+}
