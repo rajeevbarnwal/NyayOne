@@ -2128,6 +2128,12 @@ def render_guarded_merge_commands(repository: str, pr_number: int, reviewed_head
         raise ValueError("PR number must be a positive integer")
     if not _is_git_sha(reviewed_head):
         raise ValueError("reviewed head must be a full lowercase Git SHA")
+    owner, name = repository.split("/", 1)
+    review_threads_query = (
+        "query($owner:String!,$name:String!,$number:Int!){"
+        "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+        "reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}"
+    )
     return "\n".join(
         (
             "set -euo pipefail",
@@ -2136,6 +2142,11 @@ def render_guarded_merge_commands(repository: str, pr_number: int, reviewed_head
             f'test "$(gh pr view {pr_number} --repo {repository} --json isDraft --jq .isDraft)" = "false"',
             f'test "$(gh pr view {pr_number} --repo {repository} --json baseRefName --jq .baseRefName)" = "main"',
             f'test "$(gh pr view {pr_number} --repo {repository} --json headRefOid --jq .headRefOid)" = "{reviewed_head}"',
+            f'test "$(gh pr view {pr_number} --repo {repository} --json reviewRequests --jq \'.reviewRequests | length\')" = "0"',
+            f'test "$(gh pr view {pr_number} --repo {repository} --json reviews --jq \'[.reviews[] | select(.state == "CHANGES_REQUESTED")] | length\')" = "0"',
+            f'NYAY14_THREADS_JSON="$(gh api graphql -f query=\'{review_threads_query}\' -F owner={owner} -F name={name} -F number={pr_number})"',
+            'test "$(printf %s "$NYAY14_THREADS_JSON" | jq -r .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage)" = "false"',
+            'test "$(printf %s "$NYAY14_THREADS_JSON" | jq \'[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length\')" = "0"',
             f'test "$(gh pr view {pr_number} --repo {repository} --json mergeStateStatus --jq .mergeStateStatus)" = "CLEAN"',
             f"gh pr checks {pr_number} --repo {repository} --required",
             f"gh pr merge {pr_number} --repo {repository} --merge --match-head-commit {reviewed_head}",
