@@ -33,6 +33,13 @@ import {
   summarizeNyay5BrowserFailure,
   summarizeNyay5Rows,
 } from './lib/nyay5-profile-browser-contract.mjs';
+import {
+  armCanonicalReadiness,
+  settleCanonicalReadiness,
+  waitForRouteDomSettled,
+  waitForVisualCensusSettled,
+} from './lib/browser-response-readiness.mjs';
+import { runSeededHeadingStackVariance } from './lib/nyay26-readiness-variance-fixture.mjs';
 
 const WEB = process.env.NYAY5_WEB_BASE_URL ?? 'http://localhost:1190';
 const API = process.env.NYAY5_API_BASE_URL ?? 'http://127.0.0.1:1191';
@@ -299,6 +306,12 @@ async function captureSafeScreenshot(page, name) {
 }
 
 async function recordVisualContract(page, screenId) {
+  await waitForVisualCensusSettled(page, {
+    assertion: 'browser:redesigned_heading_stack',
+    expectedTheme: 'light',
+    requireRevisionLLockup: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId),
+    readinessAttempts: 1,
+  });
   const screen = page.locator(`[data-screen="${screenId}"]`).first();
   await screen.waitFor({ state: 'visible' });
   await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });
@@ -465,17 +478,26 @@ async function prepareStudentLoginOtp(page, mobile) {
   await page.waitForURL(/\/s-04$/u);
   await page.locator('#v34-login-mobile').fill(mobile);
   failureStage = 'student_login_start_submit';
+  const otpRouteReadiness = armCanonicalReadiness(page, {
+    apiOrigin: API_ORIGIN,
+    requirements: [{ kind: 'otpState' }],
+    stage: 'student_login_pending',
+  });
   const startResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
   await page.getByRole('button', { name: 'Send one time code', exact: true }).click();
+  const settledReadiness = settleCanonicalReadiness(otpRouteReadiness);
   const startResponse = await startResponsePromise;
   if (startResponse.status() !== 202) {
     throw new Error(`NYAY5_STUDENT_LOGIN_START_REJECTED_${startResponse.status()}`);
   }
   failureStage = 'student_login_pending_navigation';
-  await page.waitForURL(/\/s-05$/u);
+  await waitForRouteDomSettled(page, '/s-05', {
+    settledReadiness,
+    selector: '[data-screen="S-05"]',
+  });
   failureStage = 'student_login_pending_authority';
   const stateResponse = await page.context().request.get(
     `${API}/api/v1/auth/student/otp/state`,
@@ -747,14 +769,23 @@ async function authWireAndPasswordlessProbe(browser) {
   uncheckedConsentDenied = beforeUncheckedConsent === afterUncheckedConsent
     && await privacy.getAttribute('aria-invalid') === 'true';
   await privacy.check();
+  const signupOtpRouteReadiness = armCanonicalReadiness(page, {
+    apiOrigin: API_ORIGIN,
+    requirements: [{ kind: 'otpState' }],
+    stage: 'signup_pending',
+  });
   const signupStarted = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/register'
   ));
   await page.getByRole('button', { name: 'Send one time code' }).click();
+  const signupSettledReadiness = settleCanonicalReadiness(signupOtpRouteReadiness);
   const signupStartResponse = await signupStarted;
   const signupStartBody = signupStartResponse.ok() ? await signupStartResponse.json() : null;
-  await page.waitForURL(/\/s-09$/u);
+  await waitForRouteDomSettled(page, '/s-09', {
+    settledReadiness: signupSettledReadiness,
+    selector: '[data-screen="S-09"]',
+  });
   await recordVisualContract(page, 'S-09');
   const signupScreenExact = await page.locator('[data-screen="S-09"]').count() === 1
     && await page.locator('[data-screen="S-05"]').count() === 0;
@@ -805,14 +836,23 @@ async function authWireAndPasswordlessProbe(browser) {
   await page.goto(`${WEB}/s-04`, { waitUntil: 'domcontentloaded' });
   await recordVisualContract(page, 'S-04');
   await page.locator('#v34-login-mobile').fill(mobile);
+  const loginOtpRouteReadiness = armCanonicalReadiness(page, {
+    apiOrigin: API_ORIGIN,
+    requirements: [{ kind: 'otpState' }],
+    stage: 'login_pending',
+  });
   const loginStarted = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
   await page.getByRole('button', { name: 'Send one time code' }).click();
+  const loginSettledReadiness = settleCanonicalReadiness(loginOtpRouteReadiness);
   const loginStartResponse = await loginStarted;
   const loginStartBody = loginStartResponse.ok() ? await loginStartResponse.json() : null;
-  await page.waitForURL(/\/s-05$/u);
+  await waitForRouteDomSettled(page, '/s-05', {
+    settledReadiness: loginSettledReadiness,
+    selector: '[data-screen="S-05"]',
+  });
   await recordVisualContract(page, 'S-05');
   const loginScreenExact = await page.locator('[data-screen="S-05"]').count() === 1
     && await page.locator('[data-screen="S-09"]').count() === 0;
@@ -1918,6 +1958,14 @@ async function completeProfileProbe(browser) {
   const page = await context.newPage();
   trackActorBoundary(page);
   failureStage = 'complete_profile_s10_navigation';
+  const s10Readiness = armCanonicalReadiness(page, {
+    apiOrigin: API_ORIGIN,
+    requirements: [
+      { kind: 'session' },
+      { kind: 'profile' },
+    ],
+    stage: 'complete_profile_s10',
+  });
   const s10SessionResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return response.request().method() === 'GET'
@@ -1935,6 +1983,7 @@ async function completeProfileProbe(browser) {
       && url.hash === '';
   });
   await page.goto(`${WEB}/s-10?section=personal`, { waitUntil: 'domcontentloaded' });
+  const settledReadiness = settleCanonicalReadiness(s10Readiness);
   failureStage = 'complete_profile_s10_authority';
   const [s10SessionResponse, s10ProfileResponse] = await Promise.all([
     s10SessionResponsePromise,
@@ -1959,6 +2008,11 @@ async function completeProfileProbe(browser) {
     throw new Error('NYAY5_COMPLETE_PROFILE_PROJECTION_UNAVAILABLE');
   }
   failureStage = 'complete_profile_s10_mount';
+  await waitForRouteDomSettled(page, '/s-10', {
+    settledReadiness,
+    selector: '#profile-personal-city',
+    expectedSearch: '?section=personal',
+  });
   await page.locator('#profile-personal-city').waitFor();
   failureStage = 'complete_profile_visual_contract';
   await recordVisualContract(page, 'S-10');
@@ -3378,6 +3432,14 @@ async function extendedStorageBoundaryProbe(browser) {
 async function run() {
   let browser;
   try {
+    const readinessVarianceProof = runSeededHeadingStackVariance({ attempts: 1 });
+    const readinessVarianceProofExact = readinessVarianceProof.attempts === 1
+      && readinessVarianceProof.assertion === 'browser:redesigned_heading_stack'
+      && readinessVarianceProof.legacyOutcome === 'FAIL_EARLY_SAMPLE'
+      && readinessVarianceProof.settledOutcome === 'PASS';
+    if (!readinessVarianceProofExact) {
+      throw new Error('NYAY26_SEEDED_VARIANCE_PROOF_INVALID');
+    }
     browser = await chromium.launch({ headless: true });
     observe('runtime_chromium', true, { engine: 'chromium', headless: true });
     failureStage = 'auth_wire_passwordless';
