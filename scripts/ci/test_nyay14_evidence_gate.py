@@ -567,9 +567,23 @@ class Nyay14EvidenceGateRedTests(unittest.TestCase):
         commands = gate.render_guarded_merge_commands(REPOSITORY, 14, HEAD_SHA)
         self.assertIn(f"gh pr view 14 --repo {REPOSITORY}", commands)
         self.assertIn(f"gh pr merge 14 --repo {REPOSITORY}", commands)
+        for required_review_guard in (
+            "--json reviewRequests",
+            "--json reviews",
+            "CHANGES_REQUESTED",
+            "reviewThreads(first:100)",
+            "pageInfo{hasNextPage}",
+            "hasNextPage",
+            "isResolved",
+        ):
+            self.assertIn(required_review_guard, commands)
+            self.assertLess(
+                commands.index(required_review_guard),
+                commands.index(f"gh pr merge 14 --repo {REPOSITORY}"),
+            )
         self.assertIn("--merge", commands)
         self.assertIn(f"--match-head-commit {HEAD_SHA}", commands)
-        for forbidden in ("--squash", "--rebase", "--admin", "--force"):
+        for forbidden in ("--squash", "--rebase", "--admin", "--auto", "--force"):
             self.assertNotIn(forbidden, commands)
 
     def test_29_post_merge_validation_reads_exact_commit_and_both_ancestries(self) -> None:

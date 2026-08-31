@@ -199,8 +199,8 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
-    "gate": "15428ebebff16591ad4ab9bfe5a3e0269d63fa2856664487bf82de13ae3bcbd8",
-    "tests": "5d6299e3107902f7440e0fafe76ebfe6bdc522ce68f500768cacf375d8b78aea",
+    "gate": "00311af5cf3a3a7d1bdf840e468ca3259e27f712d0c73d35935a8248a88208ff",
+    "tests": "a0a8dd8a05fcaac010c4c627ccdc166c50dc8c002cf48f09fb90602dd96db208",
     "security_tests": "6a1a61f45013bfe98518ad246d67079f1d4be49b57916a7329acfbda8befe5f3",
     "contact_sheet_tests": "36c70a1ee17e037f52ab3bcf9382ac5b6252fad76cefdebdb5cf009977a03b9c",
     "contract": "2790051d8364ea3bbfde5d4dd101d7926b30873dafc0eb68dfa6d89ee487c9a9",
@@ -214,7 +214,7 @@ EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
     "contact_sheet_template": "d73d9ea97eac9599c249fa6d1c6ac11ddd5e9588fd735010bb20465aaddd891b",
     "quality_template": "0954ed9eaffc9687c4ac851d8ab7a4b48a2d7c54343ebd3e633962ce5fe8a30b",
     "comment_template": "175e946242502100e4a99ab4cda8afec595c1d10d1a652873a4cb03c7cde4ec6",
-    "merge_template": "d2c9d9d2d83bbfe97ccdc50cf58bdbd7d5e66c2adb72fd0af3ff545bf85d5834",
+    "merge_template": "d8c429d2b9b197e3ddc787d74c9b651e12b7e3c3a74737695b6ec5c194da16ca",
     "protected_checkout_template": "ad6dd9e2c93605b6d4bfe02218f67f6457a8a1bf18701d5527659620c99b1a46",
     "readbacks_template": "11dbcba84df854b1e3c58e0bf6bd1f8f6f72b400d51db9754a2b92a221881ded",
 }
