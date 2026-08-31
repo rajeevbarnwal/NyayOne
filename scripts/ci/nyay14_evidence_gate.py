@@ -10,6 +10,7 @@ required contract is satisfied.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import hashlib
 import io
 import json
@@ -18,6 +19,7 @@ import os
 import re
 import shlex
 import stat
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -27,6 +29,12 @@ from typing import BinaryIO, Iterable, Mapping, Sequence
 
 
 SCHEMA_VERSION = "nyay14-evidence/v1"
+FUTURE_SCHEMA_VERSION = "nyay14-evidence/v2"
+CONTACT_SHEET_POLICY_VERSION = "nyay27-contact-sheet-contract/v1"
+SUPPORTED_SCHEMA_VERSIONS = (SCHEMA_VERSION, FUTURE_SCHEMA_VERSION)
+HISTORICAL_V1_PACKAGE_SHA256 = (
+    "a822ccace60c2c067553bff9c33866a329a811d048d846c9c46317c73bda357f",
+)
 CLASSIFICATIONS = ("PASS", "FAIL", "BLOCKED", "HEAD_CHANGED", "handoff-only")
 RAW_CATEGORIES = (
     "backend",
@@ -44,6 +52,10 @@ _MAX_ARCHIVE_MEMBERS = 4096
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+_UTC_RFC3339 = re.compile(
+    r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])"
+    r"T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+)
 _MANIFEST_ROW = re.compile(r"^([0-9a-f]{64})  ([^\r\n]+)$")
 _NESTED_ARCHIVE_SUFFIXES = (
     ".zip",
@@ -359,7 +371,11 @@ def validate_readbacks(package: object) -> list[str]:
     return _dedupe(codes)
 
 
-def validate_raw_logs(inventory: object, evidence_root: Path) -> list[str]:
+def validate_raw_logs(
+    inventory: object,
+    evidence_root: Path,
+    expected_schema_version: str = SCHEMA_VERSION,
+) -> list[str]:
     if not isinstance(inventory, list):
         return ["MISSING_RAW_LOG"]
     root = Path(evidence_root).resolve(strict=False)
@@ -412,7 +428,7 @@ def validate_raw_logs(inventory: object, evidence_root: Path) -> list[str]:
             assertions = document.get("assertions") if isinstance(document, Mapping) else None
             if (
                 not isinstance(document, Mapping)
-                or document.get("schemaVersion") != SCHEMA_VERSION
+                or document.get("schemaVersion") != expected_schema_version
                 or not isinstance(assertions, list)
                 or not assertions
                 or any(
@@ -649,6 +665,475 @@ def validate_visual_matrix(
         codes.append("DUPLICATE_VISUAL_ROW")
     if expected and set(keys) != set(expected_by_key):
         codes.append("VISUAL_MATRIX_MISMATCH")
+    return _dedupe(codes)
+
+
+def _contact_sheet_artifact(
+    package: Mapping[str, object],
+    *,
+    artifact_id: object,
+    path: object,
+) -> Mapping[str, object] | None:
+    artifacts = package.get("evidenceArtifacts")
+    if not isinstance(artifacts, list):
+        return None
+    matches = [
+        row
+        for row in artifacts
+        if isinstance(row, Mapping)
+        and row.get("id") == artifact_id
+        and row.get("path") == path
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _contact_sheet_file(
+    evidence_root: Path,
+    raw_path: object,
+) -> tuple[Path | None, int | None, str | None]:
+    relative = _safe_relative(raw_path)
+    if relative is None:
+        return None, None, None
+    root = evidence_root.resolve(strict=False)
+    target = root / relative
+    try:
+        metadata = target.lstat()
+        if (
+            not _inside(target, root)
+            or stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISREG(metadata.st_mode)
+        ):
+            return None, None, None
+        return target, metadata.st_size, _hash_file(target)
+    except OSError:
+        return None, None, None
+
+
+def _valid_contact_sheet_png(target: Path) -> bool:
+    """Require a closed-world, metadata-free PNG with bounded decoded pixels.
+
+    Contact-sheet text is sealed and scanned through the rendered-text sidecar.
+    Consequently the image container accepts only the three chunks required for
+    a non-interlaced 8-bit grayscale or true-colour raster, with or without
+    alpha (PNG colour types 0, 2, 4, or 6). This prevents an otherwise unscanned
+    ancillary chunk from becoming a covert PII or credential channel.
+    """
+
+    try:
+        payload = target.read_bytes()
+    except OSError:
+        return False
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return False
+    offset = 8
+    seen_ihdr = False
+    seen_idat = False
+    idat_finished = False
+    idat_payload = bytearray()
+    expected_decoded_bytes: int | None = None
+    while offset < len(payload):
+        if offset + 12 > len(payload):
+            return False
+        length = int.from_bytes(payload[offset : offset + 4], "big")
+        kind = payload[offset + 4 : offset + 8]
+        end = offset + 12 + length
+        if length > 64 * 1024 * 1024 or end > len(payload):
+            return False
+        body = payload[offset + 8 : offset + 8 + length]
+        declared_crc = int.from_bytes(payload[offset + 8 + length : end], "big")
+        if zlib.crc32(kind + body) & 0xFFFFFFFF != declared_crc:
+            return False
+        if kind not in {b"IHDR", b"IDAT", b"IEND"}:
+            return False
+        if not seen_ihdr:
+            if kind != b"IHDR" or length != 13:
+                return False
+            width = int.from_bytes(body[0:4], "big")
+            height = int.from_bytes(body[4:8], "big")
+            bit_depth, colour_type, compression, filtering, interlace = body[8:13]
+            channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(colour_type)
+            if (
+                width <= 0
+                or height <= 0
+                or width > 32768
+                or height > 32768
+                or width * height > 32_000_000
+                or bit_depth != 8
+                or channels is None
+                or compression != 0
+                or filtering != 0
+                or interlace != 0
+            ):
+                return False
+            expected_decoded_bytes = height * (1 + width * channels)
+            seen_ihdr = True
+        elif kind == b"IHDR":
+            return False
+        if kind == b"IDAT":
+            if idat_finished:
+                return False
+            seen_idat = True
+            idat_payload.extend(body)
+            if len(idat_payload) > 64 * 1024 * 1024:
+                return False
+        elif seen_idat:
+            idat_finished = True
+        if kind == b"IEND":
+            if (
+                length != 0
+                or not seen_ihdr
+                or not seen_idat
+                or end != len(payload)
+                or expected_decoded_bytes is None
+            ):
+                return False
+            try:
+                decompressor = zlib.decompressobj()
+                decoded = decompressor.decompress(
+                    bytes(idat_payload), expected_decoded_bytes + 1
+                )
+                if (
+                    len(decoded) > expected_decoded_bytes
+                    or decompressor.unconsumed_tail
+                ):
+                    return False
+                remaining = expected_decoded_bytes - len(decoded)
+                decoded += decompressor.flush(remaining + 1)
+            except zlib.error:
+                return False
+            return (
+                decompressor.eof
+                and not decompressor.unused_data
+                and not decompressor.unconsumed_tail
+                and len(decoded) == expected_decoded_bytes
+            )
+        offset = end
+    return False
+
+
+def _repository_privacy_scanner_path() -> Path | None:
+    """Return the fixed scanner only when it is a regular, non-symlink file."""
+
+    scanner_path = Path(__file__).resolve().with_name("scan_evidence.py")
+    try:
+        metadata = scanner_path.lstat()
+    except OSError:
+        return None
+    return scanner_path if stat.S_ISREG(metadata.st_mode) else None
+
+
+def _repository_privacy_scan_passes(target: Path, declared_path: object) -> bool:
+    """Run the repository scanner over one textual visual-evidence record.
+
+    The scanner's detailed strings can contain fragments from hostile input,
+    so this boundary deliberately collapses every scanner finding or error to a
+    boolean. Callers publish only the static NYAY-27 finding code.
+    """
+
+    scanner_path = _repository_privacy_scanner_path()
+    if scanner_path is None:
+        return False
+    module_name = "_nyay27_repository_evidence_scanner"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, scanner_path)
+        if spec is None or spec.loader is None:
+            return False
+        scanner = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = scanner
+        spec.loader.exec_module(scanner)
+        payload = target.read_bytes()
+        path_findings = scanner._path_findings(
+            "contact-sheet-sidecar",
+            str(declared_path),
+        )
+        _scanned, findings, errors = scanner._dispatch_payload(
+            "contact-sheet-sidecar",
+            "contact-sheet-sidecar.txt",
+            payload,
+            depth=0,
+            archive_depth=0,
+        )
+        return not path_findings and not findings and not errors
+    except Exception:
+        return False
+    finally:
+        sys.modules.pop(module_name, None)
+
+
+def _repository_privacy_scanner_version() -> str | None:
+    """Return the exact repository scanner identity or fail closed.
+
+    The package may record this value for sealed provenance, but it cannot
+    choose it: the digest is derived from the scanner next to this gate at the
+    reviewed head.
+    """
+
+    scanner_path = _repository_privacy_scanner_path()
+    if scanner_path is None:
+        return None
+    try:
+        return f"sha256:{_hash_file(scanner_path)}"
+    except OSError:
+        return None
+
+
+def _valid_utc_rfc3339(value: object) -> bool:
+    if not isinstance(value, str) or _UTC_RFC3339.fullmatch(value) is None:
+        return False
+    try:
+        # Round-tripping through date parsing rejects impossible calendar dates.
+        import datetime
+
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return True
+
+
+def validate_combined_contact_sheet(
+    package: object,
+    evidence_root: Path,
+    *,
+    authoritative_reviewed_head: str,
+    authoritative_source_archive_sha256: str,
+    authoritative_ticket_type: str,
+    authoritative_panel_roles: Sequence[str],
+    contract: object,
+) -> list[str]:
+    """Validate the NYAY-27 v2 combined visual-evidence boundary.
+
+    All authority inputs are supplied independently of the package. Historical
+    v1 evidence never enters this function; if it does, it is treated as an
+    attempted downgrade rather than trusting a package-controlled timestamp.
+    """
+
+    if not isinstance(package, Mapping):
+        return ["CONTACT_SHEET_MISSING"]
+    codes: list[str] = []
+    if package.get("schemaVersion") != FUTURE_SCHEMA_VERSION:
+        codes.append("HISTORICAL_SEAL_MISMATCH")
+    if (
+        not isinstance(contract, Mapping)
+        or contract.get("schemaVersion") != CONTACT_SHEET_POLICY_VERSION
+        or contract.get("futureEvidenceSchemaVersion") != FUTURE_SCHEMA_VERSION
+        or contract.get("legacyEvidenceSchemaVersion") != SCHEMA_VERSION
+        or authoritative_ticket_type not in {"ui", "non-ui"}
+        or not _is_git_sha(authoritative_reviewed_head)
+        or not _is_sha256(authoritative_source_archive_sha256)
+        or not isinstance(authoritative_panel_roles, Sequence)
+        or isinstance(authoritative_panel_roles, (str, bytes))
+        or not authoritative_panel_roles
+        or any(not _is_nonempty_string(role) for role in authoritative_panel_roles)
+    ):
+        codes.append("CONTACT_SHEET_PROVENANCE_MISMATCH")
+
+    allowed_publishers = contract.get("publishers") if isinstance(contract, Mapping) else None
+    ticket = package.get("ticket")
+    package_provenance = package.get("provenance")
+    if (
+        not isinstance(allowed_publishers, list)
+        or package.get("publisher") not in allowed_publishers
+        or not isinstance(ticket, Mapping)
+        or ticket.get("type") != authoritative_ticket_type
+        or not isinstance(package_provenance, Mapping)
+        or package_provenance.get("reviewedHead") != authoritative_reviewed_head
+    ):
+        codes.append("CONTACT_SHEET_PROVENANCE_MISMATCH")
+
+    sheet = package.get("combinedContactSheet")
+    if not isinstance(sheet, Mapping):
+        return _dedupe([*codes, "CONTACT_SHEET_MISSING"])
+
+    sheet_id = sheet.get("artifactId")
+    sheet_path = sheet.get("path")
+    declared_sheet_sha = sheet.get("sha256")
+    artifact = _contact_sheet_artifact(
+        package,
+        artifact_id=sheet_id,
+        path=sheet_path,
+    )
+    target, size, actual_sheet_sha = _contact_sheet_file(Path(evidence_root), sheet_path)
+    if target is None:
+        codes.append("CONTACT_SHEET_MISSING")
+    elif size == 0:
+        codes.append("CONTACT_SHEET_EMPTY")
+    if artifact is None:
+        codes.append("CONTACT_SHEET_UNMANIFESTED")
+    elif (
+        artifact.get("sha256") != declared_sheet_sha
+        or (
+            "bytes" in artifact
+            and (not _is_integer(artifact.get("bytes")) or artifact.get("bytes") != size)
+        )
+    ):
+        codes.append("CONTACT_SHEET_HASH_MISMATCH")
+    if (
+        not _is_sha256(declared_sheet_sha)
+        or actual_sheet_sha != declared_sheet_sha
+    ):
+        codes.append("CONTACT_SHEET_HASH_MISMATCH")
+    if (
+        target is None
+        or not isinstance(sheet_path, str)
+        or Path(sheet_path).suffix.lower() != ".png"
+        or not _valid_contact_sheet_png(target)
+    ):
+        codes.append("CONTACT_SHEET_FORMAT_MISMATCH")
+
+    provenance = sheet.get("provenance")
+    package_reviewed_head = (
+        package_provenance.get("reviewedHead")
+        if isinstance(package_provenance, Mapping)
+        else None
+    )
+    if (
+        not isinstance(provenance, Mapping)
+        or provenance.get("sheetSha256") != declared_sheet_sha
+        or provenance.get("sheetSha256") != actual_sheet_sha
+        or provenance.get("sourceArchiveSha256")
+        != authoritative_source_archive_sha256
+        or provenance.get("reviewedHead") != authoritative_reviewed_head
+        or provenance.get("reviewedHead") != package_reviewed_head
+        or not _valid_utc_rfc3339(provenance.get("generatedAt"))
+    ):
+        codes.append("CONTACT_SHEET_PROVENANCE_MISMATCH")
+
+    expected_format = (
+        "ui-design-parity" if authoritative_ticket_type == "ui" else "rendered-evidence"
+    )
+    if sheet.get("format") != expected_format:
+        codes.append("CONTACT_SHEET_FORMAT_MISMATCH")
+    panels = sheet.get("panels")
+    panel_count = sheet.get("panelCount")
+    if (
+        not isinstance(panels, list)
+        or not panels
+        or not _is_integer(panel_count)
+        or panel_count <= 0
+    ):
+        codes.append("CONTACT_SHEET_ZERO_PANELS")
+    panel_rows = panels if isinstance(panels, list) else []
+    roles = [
+        row.get("role") if isinstance(row, Mapping) else None for row in panel_rows
+    ]
+    ids = [row.get("id") if isinstance(row, Mapping) else None for row in panel_rows]
+    panel_artifact_ids = [
+        row.get("artifactId") if isinstance(row, Mapping) else None
+        for row in panel_rows
+    ]
+    artifact_inventory = {
+        row.get("id")
+        for collection in (package.get("rawLogs"), package.get("evidenceArtifacts"))
+        if isinstance(collection, list)
+        for row in collection
+        if isinstance(row, Mapping) and _is_nonempty_string(row.get("id"))
+    }
+    required_roles = list(authoritative_panel_roles)
+    if authoritative_ticket_type == "ui" and required_roles != [
+        "approved-baseline",
+        "live-implementation",
+    ]:
+        codes.append("CONTACT_SHEET_PANEL_SET_INVALID")
+    panel_set_valid = (
+        _is_integer(panel_count)
+        and panel_count == len(panel_rows)
+        and panel_count > 0
+        and roles == required_roles
+        and all(_is_nonempty_string(value) for value in ids)
+        and len(ids) == len(set(ids))
+        and all(_is_nonempty_string(value) for value in panel_artifact_ids)
+        and all(value in artifact_inventory for value in panel_artifact_ids)
+    )
+    if authoritative_ticket_type == "ui":
+        positions = [
+            row.get("position") if isinstance(row, Mapping) else None
+            for row in panel_rows
+        ]
+        panel_set_valid = panel_set_valid and positions == ["left", "right"]
+    if not panel_set_valid:
+        codes.append("CONTACT_SHEET_PANEL_SET_INVALID")
+
+    sidecar = sheet.get("renderedTextSidecar")
+    if not isinstance(sidecar, Mapping):
+        sidecar = sheet.get("pixelContentScanRecord")
+    if not isinstance(sidecar, Mapping):
+        return _dedupe([*codes, "CONTACT_SHEET_SIDECAR_MISSING"])
+    sidecar_id = sidecar.get("artifactId")
+    sidecar_path = sidecar.get("path")
+    declared_sidecar_sha = sidecar.get("sha256")
+    sidecar_artifact = _contact_sheet_artifact(
+        package,
+        artifact_id=sidecar_id,
+        path=sidecar_path,
+    )
+    sidecar_target, sidecar_size, actual_sidecar_sha = _contact_sheet_file(
+        Path(evidence_root), sidecar_path
+    )
+    if sidecar_target is None or sidecar_size in (None, 0) or sidecar_artifact is None:
+        codes.append("CONTACT_SHEET_SIDECAR_MISSING")
+    if sidecar_artifact is not None and (
+        sidecar_artifact.get("sha256") != declared_sidecar_sha
+        or (
+            "bytes" in sidecar_artifact
+            and (
+                not _is_integer(sidecar_artifact.get("bytes"))
+                or sidecar_artifact.get("bytes") != sidecar_size
+            )
+        )
+    ):
+        codes.append("CONTACT_SHEET_SIDECAR_HASH_MISMATCH")
+    if (
+        not _is_sha256(declared_sidecar_sha)
+        or actual_sidecar_sha != declared_sidecar_sha
+    ):
+        codes.append("CONTACT_SHEET_SIDECAR_HASH_MISMATCH")
+
+    scan = sidecar.get("privacyScan")
+    bindings = sidecar.get("contentBindings")
+    expected_scanner_version = _repository_privacy_scanner_version()
+    expected_binding_lines = {
+        f"sheetSha256={declared_sheet_sha}",
+        f"sourceArchiveSha256={authoritative_source_archive_sha256}",
+        f"reviewedHead={authoritative_reviewed_head}",
+        f"panelCount={panel_count}",
+        "panelRoles=" + ",".join(str(role) for role in roles),
+    }
+    binding_claim_valid = (
+        isinstance(bindings, Mapping)
+        and bindings.get("sheetSha256") == declared_sheet_sha
+        and bindings.get("sourceArchiveSha256")
+        == authoritative_source_archive_sha256
+        and bindings.get("reviewedHead") == authoritative_reviewed_head
+        and bindings.get("panelCount") == panel_count
+        and bindings.get("panelRoles") == roles
+    )
+    scan_claim_valid = (
+        isinstance(scan, Mapping)
+        and scan.get("scanner") == "scripts/ci/scan_evidence.py"
+        and expected_scanner_version is not None
+        and scan.get("scannerVersion") == expected_scanner_version
+        and _is_integer(scan.get("executed"))
+        and scan.get("executed", 0) > 0
+        and scan.get("findings") == 0
+        and scan.get("passed") is True
+    )
+    sidecar_binds_content = False
+    if sidecar_target is not None:
+        try:
+            rendered_text = sidecar_target.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            rendered_text = ""
+        sidecar_binds_content = expected_binding_lines.issubset(
+            set(rendered_text.splitlines())
+        )
+    if not binding_claim_valid or not sidecar_binds_content:
+        codes.append("CONTACT_SHEET_PROVENANCE_MISMATCH")
+    if (
+        not scan_claim_valid
+        or sidecar_target is None
+        or not _repository_privacy_scan_passes(sidecar_target, sidecar_path)
+    ):
+        codes.append("CONTACT_SHEET_PRIVACY_SCAN_FAILED")
     return _dedupe(codes)
 
 
@@ -1723,15 +2208,26 @@ def validate_package(
     authoritative_base: str | None = None,
     authoritative_prospective_merge: str | None = None,
     authoritative_visual_matrix: object = None,
+    authoritative_evidence_schema_version: str,
+    authoritative_source_archive_sha256: str | None = None,
+    authoritative_ticket_type: str | None = None,
+    authoritative_contact_sheet_panel_roles: Sequence[str] | None = None,
+    contact_sheet_contract: object = None,
     execution_root: Path | None = None,
     protected_root: Path | None = None,
     report_path: Path | None = None,
     archive_path: Path | None = None,
 ) -> dict[str, object]:
     codes: list[str] = []
+    enforced_schema = (
+        authoritative_evidence_schema_version
+        if authoritative_evidence_schema_version in SUPPORTED_SCHEMA_VERSIONS
+        else FUTURE_SCHEMA_VERSION
+    )
     if not isinstance(package, Mapping):
         return {
-            "schemaVersion": SCHEMA_VERSION,
+            "schemaVersion": enforced_schema,
+            "declaredSchemaVersion": None,
             "verdict": "FAIL",
             "codes": ["INVALID_PACKAGE"],
             "mergeAuthorized": False,
@@ -1739,8 +2235,14 @@ def validate_package(
     root = Path(evidence_root).resolve(strict=False)
     initial_snapshot, initial_snapshot_codes = _evidence_snapshot(root)
     codes.extend(initial_snapshot_codes)
-    if package.get("schemaVersion") != SCHEMA_VERSION:
+    declared_schema = package.get("schemaVersion")
+    if declared_schema not in SUPPORTED_SCHEMA_VERSIONS:
         codes.append("INVALID_SCHEMA_VERSION")
+    required_schema = authoritative_evidence_schema_version
+    if required_schema not in SUPPORTED_SCHEMA_VERSIONS:
+        codes.append("INVALID_SCHEMA_VERSION")
+    if required_schema == FUTURE_SCHEMA_VERSION and declared_schema != FUTURE_SCHEMA_VERSION:
+        codes.append("SCHEMA_DOWNGRADE")
     claimed = package.get("claimedVerdict")
     codes.extend(validate_classification(claimed))
     if any(
@@ -1760,7 +2262,16 @@ def validate_package(
         authoritative_prospective_merge,
     )
     codes.extend(provenance_codes)
-    codes.extend(validate_raw_logs(package.get("rawLogs"), Path(evidence_root)))
+    # The v2 bump applies to the sealed package envelope. Raw-log producers
+    # retain their independently versioned v1 assertion-document format.
+    raw_schema = SCHEMA_VERSION
+    codes.extend(
+        validate_raw_logs(
+            package.get("rawLogs"),
+            Path(evidence_root),
+            raw_schema,
+        )
+    )
     codes.extend(validate_assertion_groups(package.get("assertionGroups")))
     codes.extend(validate_metric_traceability(package, Path(evidence_root)))
     codes.extend(validate_evidence_artifacts(package.get("evidenceArtifacts"), Path(evidence_root)))
@@ -1803,6 +2314,41 @@ def validate_package(
         codes.append("VISUAL_HEAD_MISMATCH")
     codes.extend(validate_quality_results(package.get("qualityResults")))
     codes.extend(validate_readbacks(package))
+    if (
+        declared_schema == FUTURE_SCHEMA_VERSION
+        or required_schema == FUTURE_SCHEMA_VERSION
+    ):
+        if contact_sheet_contract is None:
+            try:
+                contact_sheet_contract = _strict_json_loads(
+                    Path(__file__)
+                    .resolve()
+                    .with_name("nyay27_contact_sheet_contract.json")
+                    .read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeError, ValueError):
+                contact_sheet_contract = None
+        if (
+            authoritative_source_archive_sha256 is None
+            or authoritative_ticket_type is None
+            or authoritative_contact_sheet_panel_roles is None
+        ):
+            codes.append("CONTACT_SHEET_PROVENANCE_MISMATCH")
+        codes.extend(
+            validate_combined_contact_sheet(
+                package,
+                Path(evidence_root),
+                authoritative_reviewed_head=authoritative_remote_head,
+                authoritative_source_archive_sha256=(
+                    authoritative_source_archive_sha256 or ""
+                ),
+                authoritative_ticket_type=authoritative_ticket_type or "",
+                authoritative_panel_roles=(
+                    authoritative_contact_sheet_panel_roles or ()
+                ),
+                contract=contact_sheet_contract,
+            )
+        )
     limitations = package.get("limitations")
     if not isinstance(limitations, list) or not limitations:
         codes.append("LIMITATIONS_MISSING")
@@ -1894,7 +2440,8 @@ def validate_package(
         if verdict != "HEAD_CHANGED":
             verdict = "FAIL"
     result: dict[str, object] = {
-        "schemaVersion": SCHEMA_VERSION,
+        "schemaVersion": enforced_schema,
+        "declaredSchemaVersion": declared_schema,
         "verdict": verdict,
         "codes": codes,
         "mergeAuthorized": False,
@@ -2038,6 +2585,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate.add_argument("--authoritative-remote-head", required=True)
     validate.add_argument("--authoritative-prospective-merge", required=True)
     validate.add_argument("--approved-visual-matrix", type=Path, required=True)
+    validate.add_argument(
+        "--authoritative-evidence-schema-version",
+        choices=SUPPORTED_SCHEMA_VERSIONS,
+        default=FUTURE_SCHEMA_VERSION,
+        help="authoritative package generation; defaults to the enforced v2 boundary",
+    )
+    validate.add_argument(
+        "--authoritative-source-archive-sha256",
+        help="digest of the independently sealed source archive embedded by the sheet",
+    )
+    validate.add_argument(
+        "--authoritative-ticket-type",
+        choices=("ui", "non-ui"),
+    )
+    validate.add_argument(
+        "--authoritative-contact-sheet-panel-role",
+        action="append",
+        default=[],
+        help="repeat in the approved panel order; package declarations are not authority",
+    )
+    validate.add_argument(
+        "--historical-v1-package-sha256",
+        help="exact external file seal required only for explicit v1 re-validation",
+    )
     validate.add_argument("--protected-root", type=Path, required=True)
     validate.add_argument("--execution-root", type=Path, default=Path.cwd())
     validate.add_argument("--report", type=Path, required=True)
@@ -2079,19 +2650,40 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result = _classified_failure("UNSAFE_EXECUTION_ROOT")
                 _emit(result)
                 return 1
+            package_bytes = args.package.read_bytes()
+            package_document = _strict_json_loads(package_bytes.decode("utf-8"))
+            package_file_sha256 = hashlib.sha256(package_bytes).hexdigest()
+            if args.authoritative_evidence_schema_version == SCHEMA_VERSION and (
+                not _is_sha256(args.historical_v1_package_sha256)
+                or args.historical_v1_package_sha256 != package_file_sha256
+                or package_file_sha256 not in HISTORICAL_V1_PACKAGE_SHA256
+            ):
+                result = _classified_failure("HISTORICAL_SEAL_MISMATCH")
+                _emit(result)
+                return 1
             approved_document = _read_json(args.approved_visual_matrix)
             if isinstance(approved_document, Mapping):
                 approved_matrix = approved_document.get("approvedVisualComparisons")
             else:
                 approved_matrix = approved_document
             result = validate_package(
-                _read_json(args.package),
+                package_document,
                 evidence_root=args.evidence_root,
                 authoritative_repository=args.authoritative_repository,
                 authoritative_base=args.authoritative_base,
                 authoritative_remote_head=args.authoritative_remote_head,
                 authoritative_prospective_merge=args.authoritative_prospective_merge,
                 authoritative_visual_matrix=approved_matrix,
+                authoritative_evidence_schema_version=(
+                    args.authoritative_evidence_schema_version
+                ),
+                authoritative_source_archive_sha256=(
+                    args.authoritative_source_archive_sha256
+                ),
+                authoritative_ticket_type=args.authoritative_ticket_type,
+                authoritative_contact_sheet_panel_roles=(
+                    tuple(args.authoritative_contact_sheet_panel_role)
+                ),
                 execution_root=args.execution_root,
                 protected_root=args.protected_root,
                 report_path=args.report,

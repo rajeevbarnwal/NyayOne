@@ -626,6 +626,7 @@ class Nyay14EvidenceGateRedTests(unittest.TestCase):
                 package,
                 evidence_root=root,
                 authoritative_remote_head=HEAD_SHA,
+                authoritative_evidence_schema_version=SCHEMA_VERSION,
                 report_path=report,
                 archive_path=archive,
             )

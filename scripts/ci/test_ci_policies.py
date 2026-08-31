@@ -2096,6 +2096,10 @@ jobs:
                 "Prove NYAY-14 evidence gate fails closed under adversarial inputs",
                 policy.EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
             ),
+            (
+                "Enforce NYAY-27 future contact-sheet evidence",
+                policy.EXPECTED_NYAY27_POLICY_COMMAND,
+            ),
         )
         for name, command in required_steps:
             with self.subTest(command=command), tempfile.TemporaryDirectory() as directory:

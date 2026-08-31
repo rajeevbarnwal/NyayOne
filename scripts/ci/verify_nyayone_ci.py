@@ -113,7 +113,14 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
     "security_tests": (
         ROOT / "scripts" / "ci" / "test_nyay14_evidence_gate_security.py"
     ),
+    "contact_sheet_tests": (
+        ROOT / "scripts" / "ci" / "test_nyay27_contact_sheet_gate.py"
+    ),
     "contract": ROOT / "scripts" / "ci" / "nyay14_evidence_contract.json",
+    "contact_sheet_contract": (
+        ROOT / "scripts" / "ci" / "nyay27_contact_sheet_contract.json"
+    ),
+    "privacy_scanner": ROOT / "scripts" / "ci" / "scan_evidence.py",
     "seeded_fixture": (
         ROOT / "scripts" / "ci" / "fixtures" / "nyay14" / "seeded_zero_assertions.json"
     ),
@@ -141,6 +148,14 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
         / "nyay14-exact-head-evidence"
         / "templates"
         / "VISUAL_COMPARISON_MATRIX.json"
+    ),
+    "contact_sheet_template": (
+        ROOT
+        / "docs"
+        / "operations"
+        / "nyay14-exact-head-evidence"
+        / "templates"
+        / "COMBINED_CONTACT_SHEET.json"
     ),
     "quality_template": (
         ROOT
@@ -184,15 +199,19 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
-    "gate": "628cf5db7f22d1b381673dc1f8459977663c79566a7bc8941cc083e599735aa9",
-    "tests": "071553d21b37b79dc596fc851df43854164951a39d7897bfb37cc4fe35616c5d",
-    "security_tests": "005691904fdb20f5513989a98ae8fc2ad9fb7c141e4f5fd5a844398c83a5fc3b",
-    "contract": "058900f0bc33563a6ce05a3109b53bb86433203540e30b3e7ee982a3e0d1bd8e",
+    "gate": "15428ebebff16591ad4ab9bfe5a3e0269d63fa2856664487bf82de13ae3bcbd8",
+    "tests": "5d6299e3107902f7440e0fafe76ebfe6bdc522ce68f500768cacf375d8b78aea",
+    "security_tests": "6a1a61f45013bfe98518ad246d67079f1d4be49b57916a7329acfbda8befe5f3",
+    "contact_sheet_tests": "36c70a1ee17e037f52ab3bcf9382ac5b6252fad76cefdebdb5cf009977a03b9c",
+    "contract": "2790051d8364ea3bbfde5d4dd101d7926b30873dafc0eb68dfa6d89ee487c9a9",
+    "contact_sheet_contract": "393bb8cf153567b1b0fa50a899de5c34ff6343ee229b708dba91f5dd010b3773",
+    "privacy_scanner": "4798a1357a386deb4b6b3ef9c08b85e1b3a4598de35b0d0789e4c318817bea92",
     "seeded_fixture": "2e2bff9a8369e244ced90dc7bdc491714e7febfa72e891cf18c6bc877767a3f3",
-    "readme": "1465e36b38e7e7db94021be38ae1d20bfd4a9089cb97ad535a9f025fc2623ae1",
+    "readme": "d984818da6f4639d1085a012c04d065ffe6243f7d2247188cfdc745287a694f8",
     "provenance_template": "1e2e42cfbe21db9b057f0b231f8c1836e3dca843f22e7f9e9a347288389e9b68",
     "raw_log_template": "fb0f2cf3cd69f78995efeab5a85a4fb4bbdff1e3a72fddf35e2d32dba20ed94f",
     "visual_template": "afcfdffa7f257ed2391c148a35c720a7a6a4d57b172a56a76f1a0f7e015eea42",
+    "contact_sheet_template": "d73d9ea97eac9599c249fa6d1c6ac11ddd5e9588fd735010bb20465aaddd891b",
     "quality_template": "0954ed9eaffc9687c4ac851d8ab7a4b48a2d7c54343ebd3e633962ce5fe8a30b",
     "comment_template": "175e946242502100e4a99ab4cda8afec595c1d10d1a652873a4cb03c7cde4ec6",
     "merge_template": "d2c9d9d2d83bbfe97ccdc50cf58bdbd7d5e66c2adb72fd0af3ff545bf85d5834",
@@ -257,6 +276,7 @@ EXPECTED_NYAY14_POLICY_COMMAND = "python scripts/ci/test_nyay14_evidence_gate.py
 EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
     "python scripts/ci/test_nyay14_evidence_gate_security.py"
 )
+EXPECTED_NYAY27_POLICY_COMMAND = "python scripts/ci/test_nyay27_contact_sheet_gate.py"
 EXPECTED_NYAY21_POLICY_COMMAND = "python scripts/ci/test_nyay21_history_purge.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
@@ -1199,6 +1219,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): {
         EXPECTED_NYAY14_POLICY_COMMAND,
         EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
+        EXPECTED_NYAY27_POLICY_COMMAND,
         EXPECTED_NYAY21_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
@@ -1262,7 +1283,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "d3e016c2bd6a5000f9788b4c5d6beca797ec43313005e97ece88d247af038b31",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "80f9e5757fbdc0b01bd7d85752cc35c0eb41e51e99048544e482cc862ff62d9f",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -2441,7 +2462,12 @@ def check_nyay14_evidence_gate_contract(
     else:
         if (
             not isinstance(contract, dict)
-            or contract.get("schemaVersion") != "nyay14-evidence/v1"
+            or contract.get("schemaVersion") != "nyay14-evidence/v2"
+            or contract.get("legacySchemaVersion") != "nyay14-evidence/v1"
+            or contract.get("supportedSchemaVersions")
+            != ["nyay14-evidence/v1", "nyay14-evidence/v2"]
+            or contract.get("defaultAuthoritativeSchemaVersion")
+            != "nyay14-evidence/v2"
             or contract.get("classifications")
             != ["PASS", "FAIL", "BLOCKED", "HEAD_CHANGED", "handoff-only"]
             or contract.get("classificationPrecedence")
@@ -2454,8 +2480,74 @@ def check_nyay14_evidence_gate_contract(
                 "frontend-native",
                 "chromium",
             ]
+            or not isinstance(contract.get("combinedContactSheet"), dict)
+            or contract["combinedContactSheet"].get("policyVersion")
+            != "nyay27-contact-sheet-contract/v1"
+            or contract["combinedContactSheet"].get("requiredForSchemaVersion")
+            != "nyay14-evidence/v2"
+            or contract["combinedContactSheet"].get("panelInventoryAuthority")
+            != "external"
+            or contract["combinedContactSheet"].get("panelSourcesMustBeManifested")
+            is not True
+            or contract["combinedContactSheet"].get("pngChunkAllowlist")
+            != ["IHDR", "IDAT", "IEND"]
+            or contract["combinedContactSheet"].get("pngMetadataForbidden")
+            is not True
+            or contract["combinedContactSheet"].get("sidecarContentBindings")
+            != [
+                "sheetSha256",
+                "sourceArchiveSha256",
+                "reviewedHead",
+                "panelCount",
+                "panelRoles",
+            ]
+            or contract["combinedContactSheet"].get(
+                "privacyScannerVersionRequired"
+            )
+            is not True
+            or contract["combinedContactSheet"].get("repositoryPrivacyScannerRequired")
+            is not True
+            or not isinstance(contract.get("downgradeResistance"), dict)
+            or contract["downgradeResistance"].get("packageSchemaIsAuthority")
+            is not False
+            or contract["downgradeResistance"].get("packageTimestampIsAuthority")
+            is not False
+            or contract["downgradeResistance"].get("cliDefault")
+            != "nyay14-evidence/v2"
+            or contract["downgradeResistance"].get(
+                "historicalV1RequiresExactExternalPackageSha256"
+            )
+            is not True
+            or contract["downgradeResistance"].get(
+                "admissibleHistoricalV1PackageSha256"
+            )
+            != [
+                "a822ccace60c2c067553bff9c33866a329a811d048d846c9c46317c73bda357f"
+            ]
         ):
             failures.append(f"{contract_path}: NYAY-14 evidence contract schema is not exact")
+        historical = (
+            contract.get("downgradeResistance", {}).get(
+                "historicalRecordsPreservedByExactSeal"
+            )
+            if isinstance(contract, dict)
+            else None
+        )
+        if (
+            not isinstance(historical, list)
+            or [row.get("ticket") for row in historical if isinstance(row, dict)]
+            != ["NYAY-7", "NYAY-9", "NYAY-14", "NYAY-21", "NYAY-28", "NYAY-29"]
+            or any(
+                not isinstance(row, dict)
+                or not isinstance(row.get("recordKind"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", str(row.get("sealSha256")))
+                is None
+                for row in historical or []
+            )
+        ):
+            failures.append(
+                f"{contract_path}: historical evidence exact-seal registry is not exact"
+            )
 
     try:
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))

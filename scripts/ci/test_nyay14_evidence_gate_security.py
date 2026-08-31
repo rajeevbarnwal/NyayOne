@@ -9,12 +9,14 @@ import io
 import importlib.util
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
 import zipfile
+import zlib
 from pathlib import Path
 from types import ModuleType
 from unittest import mock
@@ -39,13 +41,22 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def png_chunk(kind: bytes, payload: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(payload))
+        + kind
+        + payload
+        + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+    )
+
+
 class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.gate = load(SUBJECT, "nyay14_evidence_gate_security_subject")
         cls.fixtures = load(CONTRACT_TEST, "nyay14_evidence_gate_security_fixtures")
 
-    def package(self, root: Path) -> dict[str, object]:
+    def package(self, root: Path, *, future_contact_sheet: bool = False) -> dict[str, object]:
         package = self.fixtures.canonical_package(root)
         package["approvedVisualComparisons"] = json.loads(
             json.dumps(package["visualComparisons"])
@@ -89,6 +100,113 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
             "after": dict(protected_seal),
             "operations": ["git status --porcelain=v1 -z"],
         }
+        if future_contact_sheet:
+            panel_roles = (
+                "classification-matrix",
+                "guarded-merge-checklist",
+                "pr-comment-template",
+            )
+            panel_ids = ("matrix", "merge", "comment")
+            panel_artifact_ids: list[str] = []
+            for panel_id, role in zip(panel_ids, panel_roles, strict=True):
+                artifact_id = f"contact-panel-{panel_id}"
+                path = root / "visual" / f"{artifact_id}.json"
+                path.write_text(
+                    json.dumps({"panel": panel_id, "role": role}, sort_keys=True)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                artifacts.append(
+                    {
+                        "id": artifact_id,
+                        "path": path.relative_to(root).as_posix(),
+                        "sha256": sha256(path),
+                    }
+                )
+                panel_artifact_ids.append(artifact_id)
+
+            sheet = root / "visual" / "NYAY27_COMBINED_CONTACT_SHEET.png"
+            sheet.write_bytes(
+                b"\x89PNG\r\n\x1a\n"
+                + png_chunk(
+                    b"IHDR",
+                    struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0),
+                )
+                + png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+                + png_chunk(b"IEND", b"")
+            )
+            source_archive_sha = "a" * 64
+            sidecar = (
+                root / "visual" / "NYAY27_COMBINED_CONTACT_SHEET.rendered-text.txt"
+            )
+            sidecar.write_text(
+                "classification matrix\n"
+                "guarded merge checklist\n"
+                "PR comment template\n"
+                f"sheetSha256={sha256(sheet)}\n"
+                f"sourceArchiveSha256={source_archive_sha}\n"
+                f"reviewedHead={self.fixtures.HEAD_SHA}\n"
+                f"panelCount={len(panel_roles)}\n"
+                f"panelRoles={','.join(panel_roles)}\n",
+                encoding="utf-8",
+            )
+            for artifact_id, path in (
+                ("combined-contact-sheet", sheet),
+                ("combined-contact-sheet-sidecar", sidecar),
+            ):
+                artifacts.append(
+                    {
+                        "id": artifact_id,
+                        "path": path.relative_to(root).as_posix(),
+                        "sha256": sha256(path),
+                        "bytes": path.stat().st_size,
+                    }
+                )
+            package["schemaVersion"] = self.gate.FUTURE_SCHEMA_VERSION
+            package["publisher"] = "codex"
+            package["ticket"] = {"key": "NYAY-27", "type": "non-ui"}
+            package["combinedContactSheet"] = {
+                "artifactId": "combined-contact-sheet",
+                "format": "rendered-evidence",
+                "path": sheet.relative_to(root).as_posix(),
+                "sha256": sha256(sheet),
+                "panelCount": len(panel_roles),
+                "panels": [
+                    {
+                        "id": panel_id,
+                        "role": role,
+                        "artifactId": artifact_id,
+                    }
+                    for panel_id, role, artifact_id in zip(
+                        panel_ids, panel_roles, panel_artifact_ids, strict=True
+                    )
+                ],
+                "provenance": {
+                    "sheetSha256": sha256(sheet),
+                    "sourceArchiveSha256": source_archive_sha,
+                    "generatedAt": "2026-08-29T15:00:00Z",
+                    "reviewedHead": self.fixtures.HEAD_SHA,
+                },
+                "renderedTextSidecar": {
+                    "artifactId": "combined-contact-sheet-sidecar",
+                    "path": sidecar.relative_to(root).as_posix(),
+                    "sha256": sha256(sidecar),
+                    "contentBindings": {
+                        "sheetSha256": sha256(sheet),
+                        "sourceArchiveSha256": source_archive_sha,
+                        "reviewedHead": self.fixtures.HEAD_SHA,
+                        "panelCount": len(panel_roles),
+                        "panelRoles": list(panel_roles),
+                    },
+                    "privacyScan": {
+                        "scanner": "scripts/ci/scan_evidence.py",
+                        "scannerVersion": f"sha256:{sha256(HERE / 'scan_evidence.py')}",
+                        "executed": 1,
+                        "findings": 0,
+                        "passed": True,
+                    },
+                },
+            }
         return package
 
     def validate(
@@ -107,9 +225,22 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
             "authoritative_visual_matrix": package.get(
                 "approvedVisualComparisons"
             ),
+            "authoritative_evidence_schema_version": package.get("schemaVersion"),
             "execution_root": root.parent / "execution",
             "protected_root": root.parent / "protected",
         }
+        if package.get("schemaVersion") == self.gate.FUTURE_SCHEMA_VERSION:
+            authority.update(
+                {
+                    "authoritative_source_archive_sha256": "a" * 64,
+                    "authoritative_ticket_type": "non-ui",
+                    "authoritative_contact_sheet_panel_roles": (
+                        "classification-matrix",
+                        "guarded-merge-checklist",
+                        "pr-comment-template",
+                    ),
+                }
+            )
         authority.update(overrides)
         return self.gate.validate_package(
             package,
@@ -124,7 +255,17 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
             run = Path(directory)
             root = run / "evidence"
             root.mkdir()
-            package = self.package(root)
+            package = self.package(root, future_contact_sheet=True)
+            sheet = root / str(package["combinedContactSheet"]["path"])
+            self.assertTrue(self.gate._valid_contact_sheet_png(sheet))
+            ancillary = run / "contact-sheet-with-unscanned-metadata.png"
+            png_payload = sheet.read_bytes()
+            ancillary.write_bytes(
+                png_payload[:-12]
+                + png_chunk(b"tEXt", b"unscanned-channel")
+                + png_payload[-12:]
+            )
+            self.assertFalse(self.gate._valid_contact_sheet_png(ancillary))
             result = self.validate(package, root, run / "report.json", run / "evidence.tar.gz")
             archive_result = self.gate.verify_clean_archive(run / "evidence.tar.gz")
             package_record = root / self.gate.PACKAGE_RECORD_NAME
@@ -144,6 +285,31 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
             archive_result["manifestSha256"], result["manifestSha256"]
         )
         self.assertEqual(report["packageSha256"], result["packageSha256"])
+
+        # The package-authored scanner version is sealed provenance, not a
+        # free-form display claim.  A forged digest must fail even though the
+        # gate also executes the repository scanner independently.
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            root = run / "evidence"
+            root.mkdir()
+            package = self.package(root, future_contact_sheet=True)
+            package["combinedContactSheet"]["renderedTextSidecar"][
+                "privacyScan"
+            ]["scannerVersion"] = "sha256:" + "f" * 64
+            result = self.validate(
+                package,
+                root,
+                run / "report.json",
+                run / "evidence.tar.gz",
+            )
+            self.assertEqual(result["verdict"], "FAIL", result)
+            self.assertFalse(result["mergeAuthorized"])
+            self.assertIn("CONTACT_SHEET_PRIVACY_SCAN_FAILED", result["codes"])
+            self.assertFalse((run / "report.json").exists())
+            self.assertFalse((run / "evidence.tar.gz").exists())
+            self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
+            self.assertFalse((root / self.gate.PACKAGE_RECORD_NAME).exists())
 
     def test_false_claimed_head_changed_is_a_failure_not_exit_zero_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -894,6 +1060,47 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
                 self.assertFalse(result["mergeAuthorized"])
                 self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
                 self.assertFalse((run / "archive.tar.gz").exists())
+
+        # A package declaration is diagnostic-only.  The result must identify
+        # the independently supplied schema as authoritative while retaining
+        # the hostile declaration in a separate, non-authoritative field.
+        for declared in (self.gate.SCHEMA_VERSION, "nyay14-evidence/foreign"):
+            with (
+                self.subTest(declared_schema=declared),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                run = Path(directory)
+                root = run / "evidence"
+                root.mkdir()
+                package = self.package(root, future_contact_sheet=True)
+                package["schemaVersion"] = declared
+                result = self.validate(
+                    package,
+                    root,
+                    run / "report.json",
+                    run / "archive.tar.gz",
+                    authoritative_evidence_schema_version=(
+                        self.gate.FUTURE_SCHEMA_VERSION
+                    ),
+                    authoritative_source_archive_sha256="a" * 64,
+                    authoritative_ticket_type="non-ui",
+                    authoritative_contact_sheet_panel_roles=(
+                        "classification-matrix",
+                        "guarded-merge-checklist",
+                        "pr-comment-template",
+                    ),
+                )
+                self.assertEqual(
+                    result["schemaVersion"], self.gate.FUTURE_SCHEMA_VERSION
+                )
+                self.assertEqual(result["declaredSchemaVersion"], declared)
+                self.assertEqual(result["verdict"], "FAIL", result)
+                self.assertFalse(result["mergeAuthorized"])
+                self.assertIn("SCHEMA_DOWNGRADE", result["codes"])
+                self.assertFalse((run / "report.json").exists())
+                self.assertFalse((run / "evidence.tar.gz").exists())
+                self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
+                self.assertFalse((root / self.gate.PACKAGE_RECORD_NAME).exists())
 
 
 if __name__ == "__main__":
