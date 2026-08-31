@@ -714,7 +714,8 @@ def _valid_contact_sheet_png(target: Path) -> bool:
 
     Contact-sheet text is sealed and scanned through the rendered-text sidecar.
     Consequently the image container accepts only the three chunks required for
-    a non-interlaced true-colour raster. This prevents an otherwise unscanned
+    a non-interlaced 8-bit grayscale or true-colour raster, with or without
+    alpha (PNG colour types 0, 2, 4, or 6). This prevents an otherwise unscanned
     ancillary chunk from becoming a covert PII or credential channel.
     """
 
@@ -810,6 +811,17 @@ def _valid_contact_sheet_png(target: Path) -> bool:
     return False
 
 
+def _repository_privacy_scanner_path() -> Path | None:
+    """Return the fixed scanner only when it is a regular, non-symlink file."""
+
+    scanner_path = Path(__file__).resolve().with_name("scan_evidence.py")
+    try:
+        metadata = scanner_path.lstat()
+    except OSError:
+        return None
+    return scanner_path if stat.S_ISREG(metadata.st_mode) else None
+
+
 def _repository_privacy_scan_passes(target: Path, declared_path: object) -> bool:
     """Run the repository scanner over one textual visual-evidence record.
 
@@ -818,7 +830,9 @@ def _repository_privacy_scan_passes(target: Path, declared_path: object) -> bool
     boolean. Callers publish only the static NYAY-27 finding code.
     """
 
-    scanner_path = Path(__file__).resolve().with_name("scan_evidence.py")
+    scanner_path = _repository_privacy_scanner_path()
+    if scanner_path is None:
+        return False
     module_name = "_nyay27_repository_evidence_scanner"
     try:
         spec = importlib.util.spec_from_file_location(module_name, scanner_path)
@@ -844,6 +858,23 @@ def _repository_privacy_scan_passes(target: Path, declared_path: object) -> bool
         return False
     finally:
         sys.modules.pop(module_name, None)
+
+
+def _repository_privacy_scanner_version() -> str | None:
+    """Return the exact repository scanner identity or fail closed.
+
+    The package may record this value for sealed provenance, but it cannot
+    choose it: the digest is derived from the scanner next to this gate at the
+    reviewed head.
+    """
+
+    scanner_path = _repository_privacy_scanner_path()
+    if scanner_path is None:
+        return None
+    try:
+        return f"sha256:{_hash_file(scanner_path)}"
+    except OSError:
+        return None
 
 
 def _valid_utc_rfc3339(value: object) -> bool:
@@ -1059,6 +1090,7 @@ def validate_combined_contact_sheet(
 
     scan = sidecar.get("privacyScan")
     bindings = sidecar.get("contentBindings")
+    expected_scanner_version = _repository_privacy_scanner_version()
     expected_binding_lines = {
         f"sheetSha256={declared_sheet_sha}",
         f"sourceArchiveSha256={authoritative_source_archive_sha256}",
@@ -1078,7 +1110,8 @@ def validate_combined_contact_sheet(
     scan_claim_valid = (
         isinstance(scan, Mapping)
         and scan.get("scanner") == "scripts/ci/scan_evidence.py"
-        and _is_nonempty_string(scan.get("scannerVersion"))
+        and expected_scanner_version is not None
+        and scan.get("scannerVersion") == expected_scanner_version
         and _is_integer(scan.get("executed"))
         and scan.get("executed", 0) > 0
         and scan.get("findings") == 0
@@ -2186,9 +2219,15 @@ def validate_package(
     archive_path: Path | None = None,
 ) -> dict[str, object]:
     codes: list[str] = []
+    enforced_schema = (
+        authoritative_evidence_schema_version
+        if authoritative_evidence_schema_version in SUPPORTED_SCHEMA_VERSIONS
+        else FUTURE_SCHEMA_VERSION
+    )
     if not isinstance(package, Mapping):
         return {
-            "schemaVersion": SCHEMA_VERSION,
+            "schemaVersion": enforced_schema,
+            "declaredSchemaVersion": None,
             "verdict": "FAIL",
             "codes": ["INVALID_PACKAGE"],
             "mergeAuthorized": False,
@@ -2401,11 +2440,8 @@ def validate_package(
         if verdict != "HEAD_CHANGED":
             verdict = "FAIL"
     result: dict[str, object] = {
-        "schemaVersion": (
-            declared_schema
-            if declared_schema in SUPPORTED_SCHEMA_VERSIONS
-            else FUTURE_SCHEMA_VERSION
-        ),
+        "schemaVersion": enforced_schema,
+        "declaredSchemaVersion": declared_schema,
         "verdict": verdict,
         "codes": codes,
         "mergeAuthorized": False,
