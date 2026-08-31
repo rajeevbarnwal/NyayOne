@@ -286,6 +286,31 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
         )
         self.assertEqual(report["packageSha256"], result["packageSha256"])
 
+        # The package-authored scanner version is sealed provenance, not a
+        # free-form display claim.  A forged digest must fail even though the
+        # gate also executes the repository scanner independently.
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            root = run / "evidence"
+            root.mkdir()
+            package = self.package(root, future_contact_sheet=True)
+            package["combinedContactSheet"]["renderedTextSidecar"][
+                "privacyScan"
+            ]["scannerVersion"] = "sha256:" + "f" * 64
+            result = self.validate(
+                package,
+                root,
+                run / "report.json",
+                run / "evidence.tar.gz",
+            )
+            self.assertEqual(result["verdict"], "FAIL", result)
+            self.assertFalse(result["mergeAuthorized"])
+            self.assertIn("CONTACT_SHEET_PRIVACY_SCAN_FAILED", result["codes"])
+            self.assertFalse((run / "report.json").exists())
+            self.assertFalse((run / "evidence.tar.gz").exists())
+            self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
+            self.assertFalse((root / self.gate.PACKAGE_RECORD_NAME).exists())
+
     def test_false_claimed_head_changed_is_a_failure_not_exit_zero_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
@@ -1035,6 +1060,47 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
                 self.assertFalse(result["mergeAuthorized"])
                 self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
                 self.assertFalse((run / "archive.tar.gz").exists())
+
+        # A package declaration is diagnostic-only.  The result must identify
+        # the independently supplied schema as authoritative while retaining
+        # the hostile declaration in a separate, non-authoritative field.
+        for declared in (self.gate.SCHEMA_VERSION, "nyay14-evidence/foreign"):
+            with (
+                self.subTest(declared_schema=declared),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                run = Path(directory)
+                root = run / "evidence"
+                root.mkdir()
+                package = self.package(root, future_contact_sheet=True)
+                package["schemaVersion"] = declared
+                result = self.validate(
+                    package,
+                    root,
+                    run / "report.json",
+                    run / "archive.tar.gz",
+                    authoritative_evidence_schema_version=(
+                        self.gate.FUTURE_SCHEMA_VERSION
+                    ),
+                    authoritative_source_archive_sha256="a" * 64,
+                    authoritative_ticket_type="non-ui",
+                    authoritative_contact_sheet_panel_roles=(
+                        "classification-matrix",
+                        "guarded-merge-checklist",
+                        "pr-comment-template",
+                    ),
+                )
+                self.assertEqual(
+                    result["schemaVersion"], self.gate.FUTURE_SCHEMA_VERSION
+                )
+                self.assertEqual(result["declaredSchemaVersion"], declared)
+                self.assertEqual(result["verdict"], "FAIL", result)
+                self.assertFalse(result["mergeAuthorized"])
+                self.assertIn("SCHEMA_DOWNGRADE", result["codes"])
+                self.assertFalse((run / "report.json").exists())
+                self.assertFalse((run / "evidence.tar.gz").exists())
+                self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
+                self.assertFalse((root / self.gate.PACKAGE_RECORD_NAME).exists())
 
 
 if __name__ == "__main__":

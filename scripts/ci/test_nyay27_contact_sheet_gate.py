@@ -466,6 +466,30 @@ class Nyay27CombinedContactSheetRedTests(unittest.TestCase):
             self.assertIn("CONTACT_SHEET_PRIVACY_SCAN_FAILED", codes)
             self.assertNotIn(canary, json.dumps(sorted(codes)))
 
+        # A syntactically plausible package claim cannot choose which scanner
+        # version is recorded in sealed evidence.  The expected digest comes
+        # from the repository-owned scanner at the reviewed head.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = _write_artifacts(root, ticket_type="non-ui")
+            package["combinedContactSheet"]["renderedTextSidecar"][
+                "privacyScan"
+            ]["scannerVersion"] = "sha256:" + "f" * 64
+            codes = _validate(
+                self,
+                gate,
+                package,
+                root,
+                ticket_type="non-ui",
+                panel_roles=(
+                    "classification-matrix",
+                    "guarded-merge-checklist",
+                    "pr-comment-template",
+                ),
+            )
+            self.assertIn("CONTACT_SHEET_PRIVACY_SCAN_FAILED", codes)
+            self.assertEqual(gate.classify({"failed": bool(codes)}), "FAIL")
+
 
 if __name__ == "__main__":
     unittest.main()

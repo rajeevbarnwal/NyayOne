@@ -199,10 +199,10 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
-    "gate": "e1041ace50f565d4d01e6fa3ff73b7e5c52b2df35228f074f4cb69d5820a2403",
+    "gate": "15428ebebff16591ad4ab9bfe5a3e0269d63fa2856664487bf82de13ae3bcbd8",
     "tests": "5d6299e3107902f7440e0fafe76ebfe6bdc522ce68f500768cacf375d8b78aea",
-    "security_tests": "be151b7d6771f7eae838ecbeabdfb73873fe22e72c42838104d982f041d101ef",
-    "contact_sheet_tests": "860116d14f5cfa221fb4bd81846d5fd89addc023ffab4575f1351514ec9de368",
+    "security_tests": "6a1a61f45013bfe98518ad246d67079f1d4be49b57916a7329acfbda8befe5f3",
+    "contact_sheet_tests": "36c70a1ee17e037f52ab3bcf9382ac5b6252fad76cefdebdb5cf009977a03b9c",
     "contract": "2790051d8364ea3bbfde5d4dd101d7926b30873dafc0eb68dfa6d89ee487c9a9",
     "contact_sheet_contract": "393bb8cf153567b1b0fa50a899de5c34ff6343ee229b708dba91f5dd010b3773",
     "privacy_scanner": "4798a1357a386deb4b6b3ef9c08b85e1b3a4598de35b0d0789e4c318817bea92",
