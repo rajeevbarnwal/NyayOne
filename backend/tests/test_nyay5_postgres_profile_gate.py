@@ -128,6 +128,20 @@ def test_behavior_gate_runs_current_product_on_the_authoritative_application_hea
     assert '_run_alembic(scratch_url, "upgrade", BEHAVIOR_HEAD)' in source
 
 
+def test_behavior_gate_auth_session_fixtures_are_run_relative() -> None:
+    source = inspect.getsource(_gate_module()._behavior_probe)
+
+    assert "session_anchor = datetime.now(timezone.utc)" in source
+    assert (
+        "timedelta(seconds=settings.auth_session_ttl_seconds)" in source
+    )
+    assert "fixed_now + timedelta(days=30)" not in source
+    assert not re.search(
+        r"rotate_authenticated_session\([\s\S]{0,180}fixed_now",
+        source,
+    )
+
+
 def test_historical_migration_oracle_checks_drift_only_after_current_head() -> None:
     source = inspect.getsource(_gate_module()._migration_and_schema_probe)
     pinned_upgrade = source.index('_run_alembic(scratch_url, "upgrade", PINNED_HEAD)')
