@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import ast
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -34,7 +34,6 @@ from app.services import profile_service
 from tests import apptemplate
 
 
-NOW = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parent
 
@@ -82,6 +81,7 @@ def _mounted():
 
 @pytest.fixture()
 def nyay9_ctx(_mounted, db_session, monkeypatch):
+    fixture_now = datetime.now(timezone.utc)
     owner, owner_registration, owner_profile = _student(
         db_session, suffix="10", first_name="Aditi"
     )
@@ -96,7 +96,7 @@ def nyay9_ctx(_mounted, db_session, monkeypatch):
     app, client = _mounted
     apptemplate.fresh(app, client)
     app.dependency_overrides[get_session] = request_session
-    monkeypatch.setattr(student_settings, "_now", lambda: NOW)
+    monkeypatch.setattr(student_settings, "_now", lambda: fixture_now)
     yield {
         "app": app,
         "client": client,
@@ -107,6 +107,7 @@ def nyay9_ctx(_mounted, db_session, monkeypatch):
         "other": other,
         "other_registration": other_registration,
         "other_profile": other_profile,
+        "now": fixture_now,
     }
     app.dependency_overrides.clear()
 
@@ -119,14 +120,26 @@ def _activate_cookie(ctx, user, *, token_suffix: str):
         user_id=user.id,
         token_hash=keyed_hash(raw_token),
         status="active",
-        expires_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
-        last_seen_at=NOW,
+        expires_at=ctx["now"]
+        + timedelta(seconds=settings.auth_session_ttl_seconds),
+        last_seen_at=ctx["now"],
     )
     session.add(row)
     session.commit()
     client.cookies.clear()
     client.cookies.set(settings.auth_session_cookie_name, raw_token)
     return row, raw_token
+
+
+def test_owner_api_session_fixture_uses_configured_run_relative_ttl(nyay9_ctx):
+    row, _ = _activate_cookie(
+        nyay9_ctx, nyay9_ctx["owner"], token_suffix="fixture-clock"
+    )
+
+    assert row.last_seen_at == nyay9_ctx["now"]
+    assert row.expires_at == nyay9_ctx["now"] + timedelta(
+        seconds=settings.auth_session_ttl_seconds
+    )
 
 
 def _headers(*, idempotency_key: str | None = None, forged_actor=None):
@@ -237,7 +250,7 @@ def test_missing_requirements_shrink_server_side_after_each_owner_write(nyay9_ct
     # A fresh server-issued session must hydrate the exact saved projection;
     # no client-side completion state participates in the read.
     first_session.status = "revoked"
-    first_session.revoked_at = NOW
+    first_session.revoked_at = nyay9_ctx["now"]
     nyay9_ctx["session"].commit()
     _activate_cookie(nyay9_ctx, nyay9_ctx["owner"], token_suffix="j")
     hydrated = client.get("/api/v1/student/profile")
@@ -290,7 +303,7 @@ def test_owner_is_derived_from_session_and_projection_cannot_be_client_selected(
 
     session = nyay9_ctx["session"]
     active_session.status = "revoked"
-    active_session.revoked_at = NOW
+    active_session.revoked_at = nyay9_ctx["now"]
     session.commit()
     assert client.get("/api/v1/student/profile").status_code == 401
 
@@ -299,7 +312,7 @@ def test_owner_is_derived_from_session_and_projection_cannot_be_client_selected(
     )
     expired.status = "expired"
     expired.expires_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    expired.revoked_at = NOW
+    expired.revoked_at = nyay9_ctx["now"]
     session.commit()
     assert client.get("/api/v1/student/profile").status_code == 401
 
@@ -316,7 +329,7 @@ def test_nyay8_authenticated_session_and_onboarding_use_one_exact_projection(nya
         actor_user_id=owner.id,
         raw_session_token=raw_token,
         purpose="login",
-        now=NOW,
+        now=nyay9_ctx["now"],
     )["onboarding"]
     fresh_read = nyay9_ctx["client"].get("/api/v1/student/profile")
 
@@ -573,6 +586,17 @@ def test_native_postgres_gate_seals_idempotent_concurrency_and_storage_contracts
     assert "idempotency_key" not in model.__table__.columns
 
 
+def test_native_postgres_gate_cookie_fixtures_are_run_relative():
+    gate = BACKEND / "scripts/nyay9_postgres_profile_gate.py"
+    source = gate.read_text(encoding="utf-8")
+
+    assert "session_anchor = datetime.now(timezone.utc)" in source
+    assert (
+        "timedelta(seconds=settings.auth_session_ttl_seconds)" in source
+    )
+    assert "expires_at=FIXED_NOW + timedelta(days=30)" not in source
+
+
 def test_privacy_export_materializes_every_owner_profile_field_without_internals(
     nyay9_ctx,
 ):
@@ -605,7 +629,7 @@ def test_privacy_export_materializes_every_owner_profile_field_without_internals
     exported = exporter(
         nyay9_ctx["session"],
         nyay9_ctx["owner"].id,
-        now=NOW,
+        now=nyay9_ctx["now"],
     )
     assert set(exported) == {"schema_version", "profile_version", "profile"}
     assert exported["schema_version"] == "student-profile-export.v1"
