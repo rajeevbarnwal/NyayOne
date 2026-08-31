@@ -8,8 +8,22 @@ render_post_merge_validation("owner/private-repository", PR_NUMBER, REVIEWED_HEA
 ```
 
 The generated preflight verifies private visibility, OPEN and non-Draft PR
-state, `main` base, exact head, CLEAN merge state, and required checks. The only
-generated merge operation is:
+state, `main` base, exact head, and a closed review state before considering
+mergeability. A merge requires all of the following:
+
+- zero pending user or team review requests;
+- zero `CHANGES_REQUESTED` reviews;
+- a pagination-complete review-thread inventory with zero unresolved threads;
+- CLEAN merge state; and
+- every ruleset-required status check successful.
+
+`COMMENTED` reviews are permitted only after every associated thread is
+triaged and resolved. Informational/style threads may be resolved with an
+evidence-backed reply. Any substantive security, correctness, oracle, or policy
+thread requires a corrective commit and re-review; it must never be resolved as
+an administrative bypass.
+
+The only generated merge operation is:
 
 ```text
 gh pr merge PR_NUMBER --repo owner/private-repository --merge --match-head-commit FULL_HEAD_SHA
