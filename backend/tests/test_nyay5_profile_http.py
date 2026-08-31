@@ -23,6 +23,7 @@ from app.services import login_service
 from tests import apptemplate
 
 NOW = datetime(2026, 8, 22, 10, 30, tzinfo=timezone.utc)
+FIXTURE_NOW_KEY = "nyay5_profile_http_fixture_now"
 TOP_LEVEL_KEYS = {
     "profile_version",
     "completion_version",
@@ -40,6 +41,24 @@ TOP_LEVEL_KEYS = {
 }
 
 
+def _session_fixture_anchor() -> datetime:
+    """Return the session anchor used by real-clock HTTP fixture paths."""
+
+    return datetime.now(timezone.utc)
+
+
+def test_session_fixture_anchor_cannot_expire_against_wall_clock():
+    started_at = datetime.now(timezone.utc)
+    anchor = _session_fixture_anchor()
+    observed_at = datetime.now(timezone.utc)
+
+    assert started_at <= anchor <= observed_at
+    assert (
+        anchor + timedelta(seconds=settings.auth_session_ttl_seconds)
+        > observed_at
+    )
+
+
 def _claims(user_id, roles=("student",)) -> dict[str, str]:
     return {
         "X-Actor-Claims": json.dumps(
@@ -55,6 +74,8 @@ def _mounted():
 
 @pytest.fixture()
 def profile_ctx(_mounted, db_session, monkeypatch):
+    fixture_now = _session_fixture_anchor()
+    db_session.info[FIXTURE_NOW_KEY] = fixture_now
     user = User(role="student", status="active")
     db_session.add(user)
     db_session.flush()
@@ -86,7 +107,7 @@ def profile_ctx(_mounted, db_session, monkeypatch):
     app.dependency_overrides[get_session] = request_session
     from app.api.v1 import student_settings
 
-    monkeypatch.setattr(student_settings, "_now", lambda: NOW)
+    monkeypatch.setattr(student_settings, "_now", lambda: fixture_now)
     original_patch = client.patch
     mutation_sequence = count(1)
 
@@ -125,12 +146,14 @@ def _personal(version: int, **overrides) -> dict:
 
 
 def _active_cookie(client, session, user, *, raw_token="p" * 43):
+    fixture_now = session.info[FIXTURE_NOW_KEY]
     row = AuthSession(
         user_id=user.id,
         token_hash=keyed_hash(raw_token),
         status="active",
-        expires_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
-        last_seen_at=NOW,
+        expires_at=fixture_now
+        + timedelta(seconds=settings.auth_session_ttl_seconds),
+        last_seen_at=fixture_now,
     )
     session.add(row)
     session.commit()
@@ -592,8 +615,18 @@ def test_prompt_dismiss_survives_reload_is_idempotent_and_clears_on_rotation_rev
         select(func.count()).select_from(AuthSessionProfilePrompt)
     ) == 1
 
+    fixture_now = session.info[FIXTURE_NOW_KEY]
+    rotation_anchor = fixture_now + timedelta(minutes=1)
     new_token, new_session = login_service.rotate_authenticated_session(
-        session, registration, NOW + timedelta(minutes=1)
+        session, registration, rotation_anchor
+    )
+    wall_clock_now = datetime.now(timezone.utc)
+    assert new_session.expires_at > wall_clock_now
+    assert (
+        login_service.session_claims(
+            session, new_token, wall_clock_now, touch=False
+        )
+        is not None
     )
     client.cookies.clear()
     client.cookies.set(settings.auth_session_cookie_name, new_token)
@@ -612,7 +645,7 @@ def test_prompt_dismiss_survives_reload_is_idempotent_and_clears_on_rotation_rev
     ) == 0
 
     new_session.status = "revoked"
-    new_session.revoked_at = NOW + timedelta(minutes=2)
+    new_session.revoked_at = fixture_now + timedelta(minutes=2)
     session.commit()
     assert client.get("/api/v1/student/profile").status_code == 401
 

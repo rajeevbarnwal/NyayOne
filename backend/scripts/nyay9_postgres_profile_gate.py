@@ -571,6 +571,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
             "cors_origins": list(settings.cors_origins),
             "now": student_settings._now,
         }
+        session_anchor = datetime.now(timezone.utc)
         settings.app_env = "testing"
         settings.cors_origins = [TRUSTED_ORIGIN]
         student_settings._now = lambda: FIXED_NOW
@@ -610,8 +611,9 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                     user_id=user.id,
                     token_hash=keyed_hash(token),
                     status="active",
-                    expires_at=FIXED_NOW + timedelta(days=30),
-                    last_seen_at=FIXED_NOW,
+                    expires_at=session_anchor
+                    + timedelta(seconds=settings.auth_session_ttl_seconds),
+                    last_seen_at=session_anchor,
                 )
                 session.add(auth_session)
                 session.flush()
