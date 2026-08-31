@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "nyay14-evidence/v2",
+  "publisher": "codex",
+  "ticket": {
+    "key": "NYAY-000",
+    "type": "non-ui"
+  },
+  "provenance": {
+    "reviewedHead": "<40-lowercase-git-sha>"
+  },
+  "evidenceArtifacts": [
+    {
+      "id": "classification-matrix-artifact",
+      "path": "visual/panels/classification-matrix.json",
+      "sha256": "<64-lowercase-hex>"
+    },
+    {
+      "id": "guarded-merge-artifact",
+      "path": "visual/panels/guarded-merge-checklist.txt",
+      "sha256": "<64-lowercase-hex>"
+    },
+    {
+      "id": "pr-comment-artifact",
+      "path": "visual/panels/pr-comment-template.txt",
+      "sha256": "<64-lowercase-hex>"
+    },
+    {
+      "id": "combined-contact-sheet",
+      "path": "visual/COMBINED_CONTACT_SHEET.png",
+      "sha256": "<sheet-sha256>",
+      "bytes": "<positive-integer>"
+    },
+    {
+      "id": "combined-contact-sheet-sidecar",
+      "path": "visual/COMBINED_CONTACT_SHEET.rendered-text.txt",
+      "sha256": "<sidecar-sha256>",
+      "bytes": "<positive-integer>"
+    }
+  ],
+  "combinedContactSheet": {
+    "artifactId": "combined-contact-sheet",
+    "format": "rendered-evidence",
+    "path": "visual/COMBINED_CONTACT_SHEET.png",
+    "sha256": "<64-lowercase-hex>",
+    "panelCount": 3,
+    "panels": [
+      {
+        "id": "matrix",
+        "role": "classification-matrix",
+        "artifactId": "classification-matrix-artifact"
+      },
+      {
+        "id": "merge",
+        "role": "guarded-merge-checklist",
+        "artifactId": "guarded-merge-artifact"
+      },
+      {
+        "id": "comment",
+        "role": "pr-comment-template",
+        "artifactId": "pr-comment-artifact"
+      }
+    ],
+    "provenance": {
+      "sheetSha256": "<64-lowercase-hex>",
+      "sourceArchiveSha256": "<independently-sealed-source-archive-sha256>",
+      "generatedAt": "<UTC-RFC3339>",
+      "reviewedHead": "<40-lowercase-git-sha>"
+    },
+    "renderedTextSidecar": {
+      "artifactId": "combined-contact-sheet-sidecar",
+      "path": "visual/COMBINED_CONTACT_SHEET.rendered-text.txt",
+      "sha256": "<64-lowercase-hex>",
+      "contentBindings": {
+        "sheetSha256": "<same-sheet-sha256>",
+        "sourceArchiveSha256": "<same-source-archive-sha256>",
+        "reviewedHead": "<same-40-lowercase-git-sha>",
+        "panelCount": 3,
+        "panelRoles": [
+          "classification-matrix",
+          "guarded-merge-checklist",
+          "pr-comment-template"
+        ]
+      },
+      "privacyScan": {
+        "scanner": "scripts/ci/scan_evidence.py",
+        "scannerVersion": "<scanner-source-sha256-or-version>",
+        "executed": 1,
+        "findings": 0,
+        "passed": true
+      }
+    }
+  }
+}

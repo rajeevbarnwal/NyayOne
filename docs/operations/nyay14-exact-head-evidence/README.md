@@ -73,11 +73,58 @@ python scripts/ci/nyay14_evidence_gate.py validate \
   --authoritative-remote-head 0123456789abcdef0123456789abcdef01234567 \
   --authoritative-prospective-merge 2222222222222222222222222222222222222222 \
   --approved-visual-matrix /absolute/input/approved-visual-matrix.json \
+  --authoritative-evidence-schema-version nyay14-evidence/v2 \
+  --authoritative-source-archive-sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --authoritative-ticket-type non-ui \
+  --authoritative-contact-sheet-panel-role classification-matrix \
+  --authoritative-contact-sheet-panel-role guarded-merge-checklist \
+  --authoritative-contact-sheet-panel-role pr-comment-template \
   --protected-root /absolute/protected/checkout \
   --execution-root /absolute/isolated/worktree \
   --report /absolute/run/VALIDATION_REPORT.json \
   --archive /absolute/run/evidence.tar.gz
 ```
+
+Version 2 requires a combined contact sheet. UI tickets use the ordered
+`approved-baseline:left` / `live-implementation:right` design-parity pair.
+Non-UI tickets use `rendered-evidence` with the independently approved panel
+roles supplied on the command line. The sheet binds the reviewed head and an
+already sealed source-archive digest; the final evidence envelope then binds
+the source archive, sheet, and privacy-clean rendered-text sidecar. This
+two-stage construction avoids a self-referential final-archive digest.
+
+The PNG container is closed-world: it may contain only one `IHDR`, contiguous
+`IDAT` data, and one terminal `IEND`, with no metadata or ancillary chunks and
+no trailing bytes. The rendered-text sidecar is therefore the only textual
+representation of the pixels. It must be manifest-bound, name the repository
+privacy scanner and its version, and repeat the exact sheet digest, source
+archive digest, reviewed head, panel count, and ordered panel roles in both its
+structured `contentBindings` and its scanned text. Every panel also names a
+manifested raw-log or evidence-artifact source. A missing, empty, mismatched,
+or privacy-positive sidecar fails closed with redacted diagnostic codes only.
+The scanned text uses exact binding lines:
+
+```text
+sheetSha256=<64-lowercase-hex>
+sourceArchiveSha256=<64-lowercase-hex>
+reviewedHead=<40-lowercase-git-sha>
+panelCount=<positive-integer>
+panelRoles=<ordered,comma-separated,roles>
+```
+
+The command line defaults to v2. A package cannot select v1 or backdate its own
+timestamp to avoid the contact-sheet boundary. Re-validating an immutable v1
+record requires both explicit `--authoritative-evidence-schema-version
+nyay14-evidence/v1` and the exact external file seal through
+`--historical-v1-package-sha256`; a mismatch fails with
+`HISTORICAL_SEAL_MISMATCH`.
+
+The v2 contract also records the exact primary seals for the six immutable
+pre-enforcement evidence records (NYAY-7, NYAY-9, NYAY-14, NYAY-21, NYAY-28,
+and NYAY-29). Only NYAY-9 contains a literal NYAY-14 v1
+`VALIDATED_PACKAGE.json`; the other five are earlier sealed evidence records
+whose archive or contact-sheet seal is preserved without relabelling their
+historical format. None is regenerated or made subject to the v2 sheet rule.
 
 Exit codes are `0` for `PASS`, `1` for `FAIL`, `2` for `BLOCKED`, `3` for
 `HEAD_CHANGED`, and `4` for `handoff-only`. A non-PASS validation never creates
