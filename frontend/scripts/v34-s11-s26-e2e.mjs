@@ -3,6 +3,12 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import axe from 'axe-core';
 import { chromium } from 'playwright';
+import {
+  armCanonicalReadiness,
+  settleCanonicalReadiness,
+  waitForRouteDomSettled,
+  waitForVisualCensusSettled,
+} from './lib/browser-response-readiness.mjs';
 
 const base = process.env.V34_BASE_URL ?? 'http://127.0.0.1:4177';
 const apiBase = process.env.V34_API_BASE_URL ?? 'http://localhost:1131';
@@ -30,6 +36,10 @@ const states = [
 ];
 const profileDependentStates = new Set([
   'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-17E',
+]);
+const privateStates = new Set([
+  'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-17E',
+  'S-18', 'S-19', 'S-22', 'S-23', 'S-24',
 ]);
 const mobileScrollLimits = {
   'S-11': 111, 'S-12': 0, 'S-13': 22, 'S-14': 0, 'S-15': 463,
@@ -417,6 +427,21 @@ try {
           ? restrictedProfileProjection
           : completeProfileProjection;
         if (state.id === 'S-26') contextSavedIds.clear();
+        const readinessRequirements = state.path === '/s-05' || state.path === '/s-09'
+          ? [{ kind: 'otpState' }]
+          : privateStates.has(state.id)
+            ? [
+              { kind: 'session' },
+              ...(profileDependentStates.has(state.id)
+                ? [{ kind: 'profile' }]
+                : []),
+            ]
+            : [];
+        const wave1Readiness = armCanonicalReadiness(page, {
+          apiOrigin: canonicalApiOrigin,
+          requirements: readinessRequirements,
+          stage: `wave1_${state.id.toLowerCase()}`,
+        });
         const sessionResponsePromise = profileDependentStates.has(state.id)
           ? page.waitForResponse((response) => isExactApiResponse(
             response,
@@ -449,6 +474,7 @@ try {
           page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
         ] : [];
         await page.goto(`${base}${state.path}`, { waitUntil: 'domcontentloaded' });
+        const settledReadiness = settleCanonicalReadiness(wave1Readiness);
         if (sessionResponsePromise && profileResponsePromise) {
           const completedSessionResponse = await finishResponse(await sessionResponsePromise);
           const completedProfileResponse = await finishResponse(await profileResponsePromise);
@@ -459,6 +485,12 @@ try {
             throw new Error(`Canonical profile readiness failed for ${state.id}: ${JSON.stringify(completedProfileResponse)}`);
           }
         }
+        const expectedRoute = new URL(state.path, base);
+        await waitForRouteDomSettled(page, expectedRoute.pathname, {
+          settledReadiness,
+          selector: `[data-screen="${state.id === 'S-17E' ? 'S-17' : state.id}"]`,
+          expectedSearch: expectedRoute.search,
+        });
         await page.locator(`[data-screen="${state.id === 'S-17E' ? 'S-17' : state.id}"]`).waitFor({ state: 'visible' });
         if (state.id === 'S-14') {
           const completed = await waitForCalendarDashboardReady(page, calendarResponses);
@@ -490,6 +522,12 @@ try {
           await page.getByRole('heading', { name: 'About you', exact: true }).waitFor({ state: 'visible' });
           await waitForDocumentReady(page);
         }
+        await waitForVisualCensusSettled(page, {
+          assertion: 'browser:redesigned_heading_stack',
+          expectedTheme: theme,
+          requireRevisionLLockup: false,
+          readinessAttempts: 1,
+        });
         const geometry = await page.evaluate(geometryProbe);
         const prefix = `${state.id}__${viewport.name}__${theme}`;
         const expectedScreen = state.expectedScreen ?? state.id;
