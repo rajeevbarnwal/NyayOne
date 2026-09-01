@@ -32,6 +32,12 @@ function safeDiagnostic(stage, kind, descriptor, status, errorClass) {
   };
 }
 
+function canonicalApiOriginError() {
+  return new CanonicalReadinessError('CANONICAL_API_ORIGIN_INVALID', safeDiagnostic(
+    'arm', 'unknown', { method: 'GET', path: '/' }, null, 'CANONICAL_API_ORIGIN_INVALID',
+  ));
+}
+
 export function isCanonicalReadinessResponse(response, apiOrigin, descriptor) {
   const url = new URL(response.url());
   return response.request().method() === descriptor.method
@@ -42,11 +48,14 @@ export function isCanonicalReadinessResponse(response, apiOrigin, descriptor) {
 }
 
 export function armCanonicalReadiness(page, { apiOrigin, requirements, stage = 'observe' }) {
-  const normalizedOrigin = new URL(apiOrigin).origin;
+  let normalizedOrigin;
+  try {
+    normalizedOrigin = new URL(apiOrigin).origin;
+  } catch {
+    throw canonicalApiOriginError();
+  }
   if (normalizedOrigin !== apiOrigin) {
-    throw new CanonicalReadinessError('CANONICAL_API_ORIGIN_INVALID', safeDiagnostic(
-      'arm', 'unknown', { method: 'GET', path: '/' }, null, 'CANONICAL_API_ORIGIN_INVALID',
-    ));
+    throw canonicalApiOriginError();
   }
   const frozenRequirements = Object.freeze([...requirements]);
   const kinds = frozenRequirements.map((requirement) => requirement.kind);
