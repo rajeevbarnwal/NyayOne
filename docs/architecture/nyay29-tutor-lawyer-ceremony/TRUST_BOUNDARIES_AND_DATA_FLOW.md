@@ -182,29 +182,35 @@ Handoff preconditions, in order:
    not tutor authority.
 7. `verifyTutorIdentity` consumes the backchannel result and returns only the
    purpose disclosure and current consent version. It does not issue a session.
-   A recovery attempt revokes old actor/profile generations only now, after
-   same-actor proof, and before exchange can proceed.
+   For a recovery attempt, same-actor proof marks old actor/profile generations
+   for mandatory revocation; verification itself does not revoke authority.
 8. `exchangeTutorCeremony` requires the mentor's explicit acceptance of that
    exact disclosure/version and rechecks the invitation, profile proof,
    purpose, owner/student consent, authority domain, and—when the subject is a
    minor—current server-proven guardian authority plus the separate purpose/
    slice guardian consent. Limited mode or a revocation race denies sharing.
-   Under lifecycle locks the server consumes proof/invitation, activates the
-   engagement, mints one `active` session, and appends PII-free issuance audit
-   evidence in one transaction.
+   Under lifecycle locks a recovery exchange revokes old actor/profile generations
+   previously marked at verification, then the server consumes
+   proof/invitation, activates the engagement, mints one `active` session, and
+   appends PII-free issuance audit evidence in one transaction.
 9. Cookie issuance occurs under the same global exclusive barrier. The client
    reacquires the shared lease and performs a canonical mentor-session probe.
    Private mentor UI mounts only after HTTP 200 proves the exact session class,
    purpose, and bounded projection.
 
-Failures use a closed public inventory: `401 AUTH_REQUIRED` for no live cookie-
-derived session; `401 SESSION_UNAVAILABLE` for any terminal/stale/wrong-class
-session; `403 CEREMONY_NOT_ALLOWED` for wrong role, unverified/current-proof,
-cross-user/owner/domain, invitation ambiguity, provider selection, guardian or
-consent failure, and forbidden purpose; `409 CEREMONY_UNAVAILABLE` for a
-terminal/consumed ceremony or non-exact replay; `409 IDEMPOTENCY_CONFLICT` for
-same-key/different fingerprint; `409 SESSION_CLASS_CONFLICT`;
-`429 RATE_LIMITED`; and `503 IDENTITY_PROVIDER_UNAVAILABLE`. Every response uses the
+Failures use a closed public inventory: `400 INVALID_REQUEST`,
+`400 INVALID_IDEMPOTENCY_KEY`, and `400 ORIGIN_REJECTED` for malformed public
+input; `401 AUTHENTICATION_REQUIRED` for absent cookie-derived authority;
+`403 AUTHORIZATION_DENIED` as the single collapsed public code for wrong role,
+unverified/current-proof, cross-user/owner/domain, invitation ambiguity,
+provider selection, guardian or consent failure, and forbidden purpose;
+`403 STEP_UP_REQUIRED` only for the distinct action-bound deletion condition;
+`404 RESOURCE_UNAVAILABLE` for a protected resource that cannot be disclosed;
+`409 IDEMPOTENCY_CONFLICT`, `409 CONCURRENT_STATE_CHANGED`,
+`409 CEREMONY_REPLAYED`, `409 SESSION_CONFLICT`, and `409 SESSION_STALE` for
+their bounded conflict classes; `410 SESSION_EXPIRED`,
+`410 AUTHORITY_TERMINAL`, and `410 STEP_UP_EXPIRED` for terminal authority;
+`429 RATE_LIMITED`; and `503 PROVIDER_UNAVAILABLE`. Every response uses the
 fixed message `Request failed`, `Cache-Control: private, no-store`, `Vary:
 Cookie`, and a strict PII-safe schema. Internal reasons are never returned.
 Every failure guarantees no mutation unless it is the exact bounded outcome of
@@ -222,14 +228,14 @@ hard-coded in this design, and teardown never restores or extends authority.
 |---|---|---|---|
 | Invitation issuance | Derive subject and authority domain from the owner session; create one purpose/policy/version-bound protected mentor match or exact replay through the separately approved prerequisite. For a minor, require current guardian authority and separate purpose/slice consent. | Store only the protected match, allowlist, expiry, keyed fingerprint, and PII-free audit event/version. | Partial uniqueness prevents ambiguous live matches; expiry/revocation/deletion/guardian withdrawal makes the generation terminal and unusable. |
 | Bootstrap/challenge issuance | Create random server attempt and non-authorizing HttpOnly bootstrap binding; choose provider server-side; bind nonce/digest, pushed-start transaction, policy, fingerprint, and expiry at or before 900 seconds. Actor/invitation binding waits for proof. | Browser receives a generic next step only. Raw nonce/proof, invitation existence, provider/transaction token, and actor values are excluded from URLs, Web Storage, logs, evidence, and responses. | Consumed/expired/revoked challenge cannot be retried; a lost pre-cookie response expires unbound; recovery starts a fresh generic attempt. |
-| Identity verification | Consume the non-public backchannel result; enforce same actor and the exact current persisted `TutorProfileOwnershipProof`; derive one protected invitation. Return only purpose disclosure/current consent version. | No raw provider proof in ordinary audit; access-controlled proof provenance retained only for configured need. | Failed/ambiguous result creates no authority. Recovery revokes old actor/profile generations only after this same-actor proof and before exchange. |
+| Identity verification | Consume the non-public backchannel result; enforce same actor and the exact current persisted `TutorProfileOwnershipProof`; derive one protected invitation. Return only purpose disclosure/current consent version. | No raw provider proof in ordinary audit; access-controlled proof provenance retained only for configured need. | Failed/ambiguous result creates no authority. Recovery marks old actor/profile generations for mandatory revocation only after this same-actor proof; verification does not revoke them. |
 | Scoped session issuance | Require explicit mentor acceptance of the unchanged disclosure/version; recheck profile proof, authority domain, purpose, invitation, student consent, and guardian authority/consent where applicable; consume proof and mint one keyed-digest `active` session. | Cookie is opaque; response omits actor/profile/domain raw IDs; immutable audit records only issuance class, generation, and purpose/policy/consent versions. | Global barrier and authoritative probe must prove the new session before private mount; server rejects conflicting session classes. |
 | Active projection | Intersect the session ceiling with live consent/policy/engagement/profile proof/domain and guardian predicates on every request. Absolute session lifetime is at most 28,800 seconds and idle lifetime at most 1,800 seconds. | Default projection excludes DOB, unmasked mobile, raw identifiers, enrollment identifiers, and unrelated sections. Every field requires explicit current purpose policy and consent. | Any authority loss denies immediately; minor limited mode disables sharing; stale client display is untrusted and private UI unmounts on canonical 401. |
 | Rotation | Under the global barrier and fixed DB locks, make the predecessor terminal `rotated_out`, create exactly one `active` successor with a fresh digest, append both PII-free events, then set the cookie. | No raw old/new token in database logs, audit, diagnostics, or evidence. | Old cookie never authorizes. With the predecessor binding, exact retry returns the bounded prior outcome and re-clears; without it, return generic unavailable and rely only on canonical probe. |
 | Expiry | Server clock transitions or treats session/ceremony as expired at exact boundary before effect. | Keep only configured terminal metadata needed for security/accountability. | Cookie is cleared when presented; every request rejects expired generation; retention later erases/anonymises. |
 | Revocation/consent withdrawal | Lock guardian/age, engagement, consent, profile proof, and sessions in fixed order; revoke targeted/all generations and append bounded events atomically. | Audit records stable reason class and versions, not narrative, guardian identity, DOB, or disclosed fields. | Revocation, DOB-to-minor transition, guardian loss, limited mode, and owner deletion win every read/verify/exchange/rotation race; subsequent reads disclose nothing. |
 | Logout | Revoke the presented session idempotently, clear cookie under the exact global exclusive transition, complete teardown/end, reacquire shared, and probe authoritative absence. | No actor/profile details in an already absent or exact terminal replay. | Private state unmounts in every realm; missing locks/channel or ambiguous probe is fail-closed, with no timer/storage fallback. |
-| Recovery | Initiation creates only a generic bootstrap attempt and revokes nothing. After same-actor backchannel proof, lock and revoke every old actor/profile session generation before later exchange can issue a successor. | Never reuse cookie, nonce, proof, or prior attempt; PII-free audit records bounded recovery stages. | Any uncertain proof or incomplete revocation blocks recovery exchange; initiation cannot enumerate an actor or terminate another user's sessions. |
+| Recovery | Initiation creates only a generic bootstrap attempt and revokes nothing. Same-actor backchannel proof marks every old actor/profile session generation for mandatory revocation; exchange locks and commits that revocation before issuing a successor. | Never reuse cookie, nonce, proof, or prior attempt; PII-free audit records bounded recovery stages. | Any uncertain proof or incomplete exchange-time revocation blocks recovery; initiation and verification cannot enumerate an actor or terminate another user's sessions. |
 | Authority deletion | Require both a live mentor session and a distinct fresh server-proven action/fingerprint-bound step-up record plus HttpOnly `nyayone_mentor_authority_step_up` (maximum 300 seconds); lock the full graph, revoke sessions/proofs/invitations, and mark deletion before erasure. | Keep immutable PII-free audit events. Store reversible linkage only in a separately encrypted link record and cryptographically erase its row/per-subject key within the approved window. | Deleted authority cannot reactivate. Same-key exact terminal replay may repeat cookie clearing but never authority; restore requires privacy reconciliation, never direct rollback. |
 
 Purpose projections are allowlists, not deny lists. A baseline tutoring purpose
