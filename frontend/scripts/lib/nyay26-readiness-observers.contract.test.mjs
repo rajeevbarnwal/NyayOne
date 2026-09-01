@@ -2,6 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import {
+  armCanonicalReadiness,
+  READINESS_DIAGNOSTIC_FIELDS,
+} from './browser-response-readiness.mjs';
+
 const ROOT = resolve(import.meta.dirname, '../..');
 const SHARED = resolve(import.meta.dirname, 'browser-response-readiness.mjs');
 const SEEDED_VARIANCE = resolve(
@@ -26,6 +31,49 @@ function between(whole, start, end) {
 }
 
 describe('NYAY-26 canonical readiness observer contract', () => {
+  it('fails closed with a privacy-safe canonical error for invalid API origins', () => {
+    const invalidOrigins = [
+      'http://[NYAY26_PRIVATE_MARKER',
+      'api.nyayone.test/path?token=NYAY26_PRIVATE_MARKER',
+      'NYAY26_PRIVATE_MARKER is not a URL',
+    ];
+
+    for (const apiOrigin of invalidOrigins) {
+      let observedError;
+      try {
+        armCanonicalReadiness({}, { apiOrigin, requirements: [] });
+      } catch (error) {
+        observedError = error;
+      }
+
+      expect(observedError).toMatchObject({
+        name: 'CanonicalReadinessError',
+        message: 'CANONICAL_API_ORIGIN_INVALID',
+        diagnostic: {
+          stage: 'arm',
+          kind: 'unknown',
+          method: 'GET',
+          path: '/',
+          status: null,
+          errorClass: 'CANONICAL_API_ORIGIN_INVALID',
+        },
+      });
+      expect(observedError).not.toBeInstanceOf(TypeError);
+      expect(Object.keys(observedError.diagnostic).sort()).toEqual(
+        [...READINESS_DIAGNOSTIC_FIELDS].sort(),
+      );
+      expect(Object.isFrozen(observedError.diagnostic)).toBe(true);
+      expect('cause' in observedError).toBe(false);
+      const publicError = JSON.stringify({
+        name: observedError.name,
+        message: observedError.message,
+        diagnostic: observedError.diagnostic,
+      });
+      expect(publicError).not.toContain(apiOrigin);
+      expect(publicError).not.toContain('NYAY26_PRIVATE_MARKER');
+    }
+  });
+
   it('declares the closed session, profile, and OTP-state response inventory', () => {
     expect(sharedSource).toContain('CANONICAL_READINESS_RESPONSES');
     expect(sharedSource).toContain("session: Object.freeze({ method: 'GET', path: '/api/v1/auth/student/session' })");
