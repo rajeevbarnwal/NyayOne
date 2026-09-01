@@ -93,13 +93,13 @@ identifiers, not implemented routes:
 | Operation ID | Security effect | Minimum required precondition |
 |---|---|---|
 | `initiateTutorCeremony` | Create or exactly replay a bounded, non-authorizing mentor ceremony/challenge generation; any matching owner invitation remains server-derived and undisclosed. | Any incompatible student/owner context has ended; strict requested mentor class, purpose, privacy-notice version, trusted Origin, and idempotency. |
-| `verifyTutorIdentity` | Bind a provider-validated identity result to the server-held nonce and actor, derive exactly one invitation, revoke old generations for a recovery attempt, and return only the purpose disclosure plus current consent version. | Live challenge, same actor, server-selected allowlisted provider result, freshness, issuer/audience/nonce validation, unique protected invitation match. |
-| `exchangeTutorCeremony` | Record explicit mentor acceptance of the disclosed purpose/version, consume one verified ceremony, and issue the isolated mentor session. | Unconsumed proof, explicit acceptance, unchanged disclosure/consent version, verified active `TutorProfile` ownership, current consent/guardian authority, scope reduction, exclusive cookie transition. |
+| `verifyTutorIdentity` | Bind a provider-validated identity result to the server-held nonce and actor, derive exactly one invitation, mark old generations for mandatory revocation for a recovery attempt, and return only the purpose disclosure plus current consent version. Verification does not itself revoke authority. | Live challenge, same actor, server-selected allowlisted provider result, freshness, issuer/audience/nonce validation, unique protected invitation match. |
+| `exchangeTutorCeremony` | Record explicit mentor acceptance of the disclosed purpose/version, consume one verified ceremony, and issue the isolated mentor session. For recovery, revoke old generations previously marked at verification in the same transaction before issuing the successor. | Unconsumed proof, explicit acceptance, unchanged disclosure/consent version, verified active `TutorProfile` ownership, current consent/guardian authority, scope reduction, exclusive cookie transition. |
 | `getTutorSession` | Return the bounded session/purpose projection. | Valid mentor cookie and live server row; no client-selected actor, profile, subject, or tenant. |
 | `rotateTutorSession` | Atomically make the predecessor terminal `rotated_out` and create one `active` successor. | Live mentor session, trusted Origin, idempotency, unchanged actor/profile/purpose/consent authority. |
 | `revokeTutorSession` | Revoke the cookie-derived mentor session for its current purpose; broader owner/administrator engagement revocation belongs to a separately approved owner/admin contract. | Live or terminally replayable mentor-session context, trusted Origin, idempotency, and no arbitrary session selector. |
 | `logoutTutorSession` | End the presented mentor session and clear its cookie. | Presented session; terminal response remains safe and idempotent even when already absent. |
-| `recoverTutorCeremony` | Start only a generic, non-authorizing pre-authentication attempt after loss. It does not identify an actor or revoke authority at initiation. | Bootstrap binding, trusted Origin, idempotency; after same-actor proof all old actor/profile generations must be revoked before any later exchange. |
+| `recoverTutorCeremony` | Start only a generic, non-authorizing pre-authentication attempt after loss. It does not identify an actor or revoke authority at initiation. | Bootstrap binding, trusted Origin, idempotency; same-actor proof marks old actor/profile generations for mandatory revocation, and the later exchange must commit that revocation before issuing a successor. |
 | `deleteTutorAuthority` | Revoke all mentor authority and apply configured erasure/anonymisation. | Live mentor session plus a distinct, fresh, action-bound server-proven step-up record and short-lived HttpOnly step-up cookie, trusted Origin, idempotency, lifecycle locks, immutable audit marker. |
 
 Every mutation returns a strict response schema and a typed failure from the
@@ -318,8 +318,9 @@ Required authorization model:
   closed.
 - Session issuance is capped at 28,800 seconds absolute and 1,800 seconds idle.
   Rotation makes the predecessor terminal `rotated_out` and one successor
-  `active`; recovery cannot revoke old generations until same-actor proof has
-  settled, and must revoke them before exchange.
+  `active`; recovery verification can only mark old generations after same-
+  actor proof has settled, and exchange atomically commits their revocation
+  before issuing a successor.
 
 Threats include confused deputy use of an owner cookie, cross-purpose scope
 reuse, consent-version rollback, stale session generation, forged role claims,
@@ -385,14 +386,23 @@ The public typed failure inventory is closed and generic:
 
 | HTTP status | Stable public code | Collapsed internal reasons | Mutation rule |
 |---|---|---|---|
-| `401` | `AUTH_REQUIRED` | no live cookie-derived session | none; clear an invalid cookie under the global barrier |
-| `401` | `SESSION_UNAVAILABLE` | expired, revoked, deleted, logged-out, `rotated_out`, stale generation, wrong session class, or recovery not yet proven | none, except exact terminal idempotent replay of an already committed outcome |
-| `403` | `CEREMONY_NOT_ALLOWED` | wrong role; unverified/current-proof failure; cross-user, cross-owner, cross-domain, provider-selection, invitation ambiguity; guardian/consent absent or changed; forbidden purpose | none |
-| `409` | `CEREMONY_UNAVAILABLE` | ceremony expired/revoked/deleted/consumed, replay without an exact idempotency binding, or disclosure/version changed | none |
+| `400` | `INVALID_REQUEST` | malformed or unsupported request shape | none |
+| `400` | `INVALID_IDEMPOTENCY_KEY` | absent or invalid mutation idempotency key | none |
+| `400` | `ORIGIN_REJECTED` | absent, malformed, or untrusted mutation Origin | none |
+| `401` | `AUTHENTICATION_REQUIRED` | no live cookie-derived session for the requested operation | none; clear an invalid cookie under the global barrier |
+| `403` | `AUTHORIZATION_DENIED` | wrong role; unverified/current-proof failure; cross-user, cross-owner, cross-domain, provider-selection, invitation ambiguity; guardian/consent absent or changed; forbidden purpose | none; all sensitive reasons collapse to this single public code |
+| `403` | `STEP_UP_REQUIRED` | the separately action-bound deletion step-up has not been established | none |
+| `404` | `RESOURCE_UNAVAILABLE` | missing, mismatched, ambiguous, or inaccessible protected resource | none |
 | `409` | `IDEMPOTENCY_CONFLICT` | same key with a different canonical fingerprint | none |
-| `409` | `SESSION_CLASS_CONFLICT` | live or ambiguous owner/student-versus-mentor class | none and no cookie issuance |
+| `409` | `CONCURRENT_STATE_CHANGED` | a concurrent terminal or authority transition won | none |
+| `409` | `CEREMONY_REPLAYED` | a consumed ceremony is replayed without the exact sealed outcome binding | none |
+| `409` | `SESSION_CONFLICT` | live or ambiguous owner/student-versus-mentor class | none and no cookie issuance |
+| `409` | `SESSION_STALE` | stale session generation or state observation | none |
+| `410` | `SESSION_EXPIRED` | server-clock session expiry | terminalize and retire only the presented session cookie |
+| `410` | `AUTHORITY_TERMINAL` | ceremony or authority expired, revoked, deleted, or otherwise terminal | none beyond materializing the terminal state once |
+| `410` | `STEP_UP_EXPIRED` | server-clock expiry of the action-bound deletion step-up | retire only the step-up cookie |
 | `429` | `RATE_LIMITED` | bounded actor/attempt/origin budget exceeded | none |
-| `503` | `IDENTITY_PROVIDER_UNAVAILABLE` | server-selected provider deadline, circuit, or backchannel failure | none |
+| `503` | `PROVIDER_UNAVAILABLE` | server-selected provider deadline, circuit, or backchannel failure | none |
 
 Every response has the fixed message `Request failed`, strict schema, PII-safe
 headers/body, `Cache-Control: private, no-store`, and `Vary: Cookie`. Internal
