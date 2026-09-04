@@ -283,9 +283,9 @@ NYAY21_HISTORY_PURGE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY21_HISTORY_PURGE_SHA256: dict[str, str] = {
-    "gate": "e0ff9fc30a85a64cb30c6f33da15660f17ded7fe396c5fd21ab680ab7084bcd1",
+    "gate": "8602051e2c89ee9dec05285bd0e0df912b45e41ca00028d574b84d151d3a26f0",
     "tests": "8a636cc714197203f3541b1d667bda7dde9785ec25012b3da1567d7618a7dfc0",
-    "path_to_go_tests": "a9464fe7dd6fbc351cfa3c6591f5345b451221f9f2afb813b6c6601a08f3de2d",
+    "path_to_go_tests": "3aa103aa8dd0b2e95c30168d932a744e30bcbd178c1277fcff0a6d05222cf94f",
     "contract": "3f0e4fd5d8f1525f3a64c3c583f405816e27d4c728e1c21a2addadd1480dd0e1",
     "execution_plan": "fdd3a11587bc040d04460b3aa3038b170243cff86d7d3f3cf295433703cf7b00",
     "backup_and_rollback": "3e05560b32a9ba7d1549fec008ce89ac5f8539d416408f16399aa8e86043bcd5",

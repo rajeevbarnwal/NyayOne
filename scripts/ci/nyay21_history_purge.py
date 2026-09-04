@@ -73,6 +73,7 @@ TARGETS = (
 
 _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_SAFE_PUBLISHABLE_REF = re.compile(r"^refs/(?:heads|tags)/[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _APPROVAL_ID = {
     "rewrite": re.compile(
         r"^NYAY21-REWRITE-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
@@ -106,6 +107,29 @@ def _is_hex(value: object, width: int) -> bool:
         return False
     matcher = _HEX40 if width == 40 else _HEX64
     return matcher.fullmatch(value) is not None
+
+
+def _is_nonzero_hex40(value: object) -> bool:
+    return _is_hex(value, 40) and value != "0" * 40
+
+
+def _is_safe_publishable_ref_name(value: object) -> bool:
+    if not isinstance(value, str) or _SAFE_PUBLISHABLE_REF.fullmatch(value) is None:
+        return False
+    suffix = value.removeprefix("refs/heads/").removeprefix("refs/tags/")
+    components = suffix.split("/")
+    return not (
+        ".." in value
+        or "@{" in value
+        or "//" in value
+        or value.endswith(("/", "."))
+        or any(
+            not component
+            or component.startswith(".")
+            or component.endswith(".lock")
+            for component in components
+        )
+    )
 
 
 def _target_rows(value: object) -> tuple[dict[str, object], ...]:
@@ -987,9 +1011,11 @@ def validate_ref_map(
         source = inventory_by_name.get(name)
         if (
             source is None
+            or not _is_safe_publishable_ref_name(name)
             or row.get("old") != source.get("target")
             or row.get("kind") != source.get("kind")
-            or not _is_hex(row.get("new"), 40)
+            or not _is_nonzero_hex40(row.get("old"))
+            or not _is_nonzero_hex40(row.get("new"))
         ):
             codes.append("REF_MAP_IDENTITY_MISMATCH")
     return _result(codes)
@@ -1087,13 +1113,13 @@ def render_force_update_commands(
     for name in refs:
         entry = rows.get(name)
         if (
-            not isinstance(name, str)
+            not _is_safe_publishable_ref_name(name)
             or name in {"HEAD", "--all"}
             or name.startswith("refs/pull/")
             or any(symbol in name for symbol in "*?[]")
             or not isinstance(entry, Mapping)
-            or not _is_hex(entry.get("old"), 40)
-            or not _is_hex(entry.get("new"), 40)
+            or not _is_nonzero_hex40(entry.get("old"))
+            or not _is_nonzero_hex40(entry.get("new"))
         ):
             raise ValueError("unsafe force-update ref mapping")
         leases.append(f"--force-with-lease={name}:{entry['old']}")

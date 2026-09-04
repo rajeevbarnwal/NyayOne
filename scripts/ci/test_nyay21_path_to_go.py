@@ -243,6 +243,41 @@ class Nyay21PathToGoContracts(unittest.TestCase):
         self.assertEqual(subset_result["verdict"], "FAIL")
         self.assertIn("DRY_RUN_REF_SCOPE_INCOMPLETE", codes(subset_result))
 
+        null_target_mapping = copy.deepcopy(mapping)
+        null_target_mapping[approved[0]]["new"] = "0" * 40
+        with self.assertRaisesRegex(ValueError, "unsafe force-update ref mapping"):
+            gate.render_force_update_dry_run_commands(
+                null_target_mapping, approved
+            )
+        null_ref_rows = [
+            {
+                "ref": name,
+                "old": value["old"],
+                "new": value["new"],
+                "kind": next(
+                    row["kind"] for row in concrete if row["name"] == name
+                ),
+            }
+            for name, value in null_target_mapping.items()
+        ]
+        null_ref_result = gate.validate_ref_map(
+            null_ref_rows, seal, approved
+        )
+        self.assertEqual(null_ref_result["verdict"], "FAIL")
+        self.assertIn("REF_MAP_IDENTITY_MISMATCH", codes(null_ref_result))
+
+        injected_ref = "refs/heads/main;unsafe-token"
+        injected_mapping = {
+            injected_ref: {
+                "old": "1" * 40,
+                "new": "2" * 40,
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "unsafe force-update ref mapping"):
+            gate.render_force_update_dry_run_commands(
+                injected_mapping, [injected_ref]
+            )
+
     def test_05_backup_and_request_encode_signed_owner_decisions(self) -> None:
         backup = (DOCS / "BACKUP_AND_ROLLBACK.md").read_text(encoding="utf-8")
         request = (DOCS / "REWRITE_EXECUTION_REQUEST.md").read_text(encoding="utf-8")
