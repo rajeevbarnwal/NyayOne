@@ -1170,6 +1170,9 @@ def validate_atomic_dry_run_lease_readback(
         and not isinstance(approved_refs, (str, bytes))
         else []
     )
+    rewrite_ref_result = validate_rewrite_refs(approved, seal)
+    if rewrite_ref_result["verdict"] != "PASS":
+        codes.append("DRY_RUN_REF_SCOPE_INCOMPLETE")
     if not approved or set(mapping_rows) != set(approved):
         codes.append("DRY_RUN_PLAN_INVALID")
     else:
@@ -1247,18 +1250,31 @@ def render_ruleset_restoration_trap(payload_pair: object) -> str:
 
     pair = payload_pair if isinstance(payload_pair, Mapping) else {}
     before_digest = pair.get("canonicalGetBeforeSha256")
+    relaxation_digest = pair.get("relaxationPayloadSha256")
     restoration_digest = pair.get("restorationPayloadSha256")
+    try:
+        observed_before_digest = _canonical_json_sha256(
+            pair.get("canonicalGetBefore")
+        )
+        observed_relaxation_digest = _canonical_json_sha256(
+            pair.get("relaxationPayload")
+        )
+        observed_restoration_digest = _canonical_json_sha256(
+            pair.get("restorationPayload")
+        )
+    except (TypeError, ValueError):
+        raise ValueError("ruleset restoration pair is not sealed") from None
     if (
         pair.get("rulesetId") != RULESET_ID
         or not _is_hex(before_digest, 64)
+        or not _is_hex(relaxation_digest, 64)
         or not _is_hex(restoration_digest, 64)
         or before_digest != AUTHORITATIVE_RULESET_GET_SHA256
-        or pair.get("relaxationPayloadSha256")
-        != AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256
+        or relaxation_digest != AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256
         or restoration_digest != AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256
-        or _canonical_json_sha256(pair.get("canonicalGetBefore")) != before_digest
-        or _canonical_json_sha256(pair.get("restorationPayload"))
-        != restoration_digest
+        or observed_before_digest != before_digest
+        or observed_relaxation_digest != relaxation_digest
+        or observed_restoration_digest != restoration_digest
     ):
         raise ValueError("ruleset restoration pair is not sealed")
     return f"""#!/usr/bin/env bash
@@ -1297,6 +1313,8 @@ def validate_ruleset_restoration_trap_events(
         row.get("path") for row in rows if isinstance(row, Mapping)
     }
     codes: list[str] = []
+    if sealed_before_sha256 != AUTHORITATIVE_RULESET_GET_SHA256:
+        codes.append("RULESET_GET_AUTHORITY_MISMATCH")
     if (
         not _is_hex(sealed_before_sha256, 64)
         or observed_paths != required_paths

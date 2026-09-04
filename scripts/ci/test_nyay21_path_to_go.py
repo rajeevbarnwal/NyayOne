@@ -166,6 +166,11 @@ class Nyay21PathToGoContracts(unittest.TestCase):
         self.assertEqual(result["verdict"], "FAIL")
         self.assertIn("RULESET_GET_AUTHORITY_MISMATCH", codes(result))
 
+        forged_relaxation = copy.deepcopy(pair)
+        forged_relaxation["relaxationPayload"]["rules"] = []
+        with self.assertRaisesRegex(ValueError, "not sealed"):
+            gate.render_ruleset_restoration_trap(forged_relaxation)
+
     def test_04_atomic_dry_run_requires_closed_42_ref_readback_and_exact_leases(self) -> None:
         gate = load_gate()
         seal = json.loads(REF_SEAL.read_text(encoding="utf-8"))
@@ -219,6 +224,25 @@ class Nyay21PathToGoContracts(unittest.TestCase):
             self.assertEqual(result["verdict"], "FAIL")
             self.assertIn(expected, codes(result))
 
+        # Reading every remote ref is not enough: the atomic transaction itself
+        # must cover the complete closed set of publishable refs.  A single-ref
+        # dry run must never be accepted as proof for the 42-ref inventory.
+        subset_approved = [approved[0]]
+        subset_mapping = {subset_approved[0]: mapping[subset_approved[0]]}
+        subset_command = gate.render_force_update_dry_run_commands(
+            subset_mapping, subset_approved
+        )[0]
+        subset_proof = copy.deepcopy(proof)
+        subset_proof["command"] = subset_command
+        subset_proof["commandSha256"] = hashlib.sha256(
+            subset_command.encode("utf-8")
+        ).hexdigest()
+        subset_result = gate.validate_atomic_dry_run_lease_readback(
+            subset_proof, seal, subset_mapping, subset_approved
+        )
+        self.assertEqual(subset_result["verdict"], "FAIL")
+        self.assertIn("DRY_RUN_REF_SCOPE_INCOMPLETE", codes(subset_result))
+
     def test_05_backup_and_request_encode_signed_owner_decisions(self) -> None:
         backup = (DOCS / "BACKUP_AND_ROLLBACK.md").read_text(encoding="utf-8")
         request = (DOCS / "REWRITE_EXECUTION_REQUEST.md").read_text(encoding="utf-8")
@@ -229,6 +253,8 @@ class Nyay21PathToGoContracts(unittest.TestCase):
             self.assertIn("human countersign", text.lower())
         self.assertIn("Claude Code", request)
         self.assertIn("Rajeev Barnwal", request)
+        self.assertEqual(request.count("--preserve-commit-hashes"), 1)
+        self.assertEqual(request.count("--replace-refs delete-no-add"), 1)
 
     def test_06_gpg_inventory_canary_and_attestation_template_are_complete(self) -> None:
         text = (DOCS / "GPG_SIGNATURE_DISPOSITION.md").read_text(encoding="utf-8")
@@ -299,6 +325,20 @@ class Nyay21PathToGoContracts(unittest.TestCase):
             )
             self.assertEqual(result["verdict"], "FAIL")
             self.assertIn("RESTORATION_EXIT_PATH_UNPROVEN", codes(result))
+
+        forged_digest = "0" * 64
+        forged_events = [
+            {
+                **row,
+                "canonicalGetSha256": forged_digest,
+            }
+            for row in events
+        ]
+        forged_result = gate.validate_ruleset_restoration_trap_events(
+            forged_events, forged_digest
+        )
+        self.assertEqual(forged_result["verdict"], "FAIL")
+        self.assertIn("RULESET_GET_AUTHORITY_MISMATCH", codes(forged_result))
 
 
 if __name__ == "__main__":
