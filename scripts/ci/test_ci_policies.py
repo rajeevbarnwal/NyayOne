@@ -2206,6 +2206,25 @@ jobs:
             failures,
         )
 
+        path_to_go_command = policy.EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND
+        self.assertIn(path_to_go_command, original)
+        with tempfile.TemporaryDirectory() as directory:
+            mutant = Path(directory) / workflow.name
+            mutant.write_text(
+                original.replace(
+                    "      - name: Validate NYAY-21 path-to-GO seal and restoration ceremony\n"
+                    f"        run: {path_to_go_command}\n",
+                    "",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            failures = policy.check_workflow(mutant)
+        self.assertTrue(
+            any("required gate command" in item for item in failures),
+            failures,
+        )
+
     def test_committed_nyayone_evidence_is_scanned_in_place(self) -> None:
         workflow = (
             HERE.parent.parent / ".github" / "workflows" /

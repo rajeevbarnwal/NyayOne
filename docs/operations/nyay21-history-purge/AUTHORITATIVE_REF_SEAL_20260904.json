@@ -1,0 +1,290 @@
+{
+  "authority": "PATH_TO_GO INPUT SEAL; NOT AN EXECUTION APPROVAL",
+  "expectedAffectedCommitCount": 267,
+  "expectedChangedCommitCount": 266,
+  "expectedPostRewriteCommitCount": 320,
+  "expectedPrunedCommitCount": 1,
+  "mergeCommitCount": 48,
+  "observedAt": "2026-09-04T09:21:28.896725Z",
+  "packet": "PATH-TO-GO R2 INPUT",
+  "protectedCheckout": {
+    "expectedStatusEntryCount": 299,
+    "expectedStatusSha256": "2bddf5cb49dd5c49919226c21be65fa32df2b1d7328f7e3d105a0dac42080a27",
+    "head": "454a40784ee2e084d9a756a713f287b627f1c4d4",
+    "identifier": "protected-main-checkout",
+    "statusEntryCount": 299,
+    "statusSha256": "2bddf5cb49dd5c49919226c21be65fa32df2b1d7328f7e3d105a0dac42080a27"
+  },
+  "rawRemoteInventorySha256": "edd05fd0405a5dd1132b8de2f61315e6790bc003fbc6e895cedc42862f51e904",
+  "reachableCommitCount": 321,
+  "refCounts": {
+    "annotatedTags": 1,
+    "concreteRefs": 42,
+    "heads": 21,
+    "serverManagedPulls": 20,
+    "symbolicHeads": 1,
+    "totalRowsIncludingSymbolicHead": 43
+  },
+  "refInventorySha256": "292a8bbaeba262de21c700546790e3c2b0e6c55f0174b4f5e9098b125be7edc7",
+  "refs": [
+    {
+      "kind": "symbolic-head",
+      "name": "HEAD",
+      "symbolicTarget": "refs/heads/main",
+      "target": "454a40784ee2e084d9a756a713f287b627f1c4d4"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/guarded-merge-review-state",
+      "target": "578d8a8d11cbfd4b544700b33a056a569e585fc1"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay-15-evidence-gates",
+      "target": "e91f4febfd0903b79ed8c908fa2a773ddd1bbc3b"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay-16-migration-baseline",
+      "target": "08f34912a33f0053d946d9c766255d14444e9175"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay-20-runtime-isolation",
+      "target": "87df8abac5c8d3425db295a8ba87eab36bdcaca4"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay-3-db-invariants",
+      "target": "71d8295563892d1cb1b6dd57bf4b666ec132d9e4"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay14-exact-head-qa-evidence",
+      "target": "a0568bffd496bb487191e83c5fdc5e2143567481"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay21-wal-shm-purge",
+      "target": "214da39a43b23ed754ae302c9f7c619d048fc4d5"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay26-readiness-observers",
+      "target": "30bcaffb6adb8701356da999fdeffaa8faab85cf"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay27-contact-sheet-gate",
+      "target": "b574770674d74676ceb4e3f26b9c30047d061ffa"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay28-accessibility-advisories",
+      "target": "1af90fcbe266553eab9635ad70ae12a896805be1"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay29-tutor-ceremony-design",
+      "target": "4fa68e5d1487e4e5b38313f6b9acdcf6ba4b0994"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay33-doc-polish",
+      "target": "744b04ee6e88ad9df9f32bc2cb5aaee667effa8b"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay34-session-fixture-timebomb",
+      "target": "14e266d4309f49f4e4f15d0264521278172dcb2e"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay5-nyay18-server-authority",
+      "target": "f95c8e9f338e27937180ae4b7bb93b7a797b9a7f"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay7-sprint2-ui-foundation",
+      "target": "a6f2a22005ebcb1a1d67b4c851370195c8452f99"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay8-passwordless-otp",
+      "target": "7831fd0c0dffd9377b6448ec8f6164e48b314826"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyay9-owner-scoped-profile-api",
+      "target": "a32da9eee596824c6b760315dc432769366b9d87"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyayone-ci-governance",
+      "target": "982b8509f1d7d011cd5a9f357f71da19bb034282"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/nyayone-option32-engineering-handoff",
+      "target": "33caacb92ebfa6a3d95d9d44530354c29f09756d"
+    },
+    {
+      "kind": "branch",
+      "name": "refs/heads/codex/sprint1-remaining-remediation-reconstructed",
+      "target": "140906ba986a1567d9fee34e4aacb2776dff79e9"
+    },
+    {
+      "kind": "protected-branch",
+      "name": "refs/heads/main",
+      "target": "454a40784ee2e084d9a756a713f287b627f1c4d4"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/1/head",
+      "target": "982b8509f1d7d011cd5a9f357f71da19bb034282"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/10/head",
+      "target": "7831fd0c0dffd9377b6448ec8f6164e48b314826"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/11/head",
+      "target": "a0568bffd496bb487191e83c5fdc5e2143567481"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/12/head",
+      "target": "214da39a43b23ed754ae302c9f7c619d048fc4d5"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/13/head",
+      "target": "a32da9eee596824c6b760315dc432769366b9d87"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/14/head",
+      "target": "4fa68e5d1487e4e5b38313f6b9acdcf6ba4b0994"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/15/head",
+      "target": "1af90fcbe266553eab9635ad70ae12a896805be1"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/16/head",
+      "target": "b574770674d74676ceb4e3f26b9c30047d061ffa"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/17/head",
+      "target": "14e266d4309f49f4e4f15d0264521278172dcb2e"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/18/head",
+      "target": "578d8a8d11cbfd4b544700b33a056a569e585fc1"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/19/head",
+      "target": "30bcaffb6adb8701356da999fdeffaa8faab85cf"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/2/head",
+      "target": "33caacb92ebfa6a3d95d9d44530354c29f09756d"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/20/head",
+      "target": "744b04ee6e88ad9df9f32bc2cb5aaee667effa8b"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/3/head",
+      "target": "87df8abac5c8d3425db295a8ba87eab36bdcaca4"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/4/head",
+      "target": "e91f4febfd0903b79ed8c908fa2a773ddd1bbc3b"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/5/head",
+      "target": "08f34912a33f0053d946d9c766255d14444e9175"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/6/head",
+      "target": "71d8295563892d1cb1b6dd57bf4b666ec132d9e4"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/7/head",
+      "target": "140906ba986a1567d9fee34e4aacb2776dff79e9"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/8/head",
+      "target": "f95c8e9f338e27937180ae4b7bb93b7a797b9a7f"
+    },
+    {
+      "kind": "server-managed-pull",
+      "name": "refs/pull/9/head",
+      "target": "a6f2a22005ebcb1a1d67b4c851370195c8452f99"
+    },
+    {
+      "kind": "annotated-tag",
+      "name": "refs/tags/nyayone-bootstrap-20260815",
+      "peeledTarget": "f6f25070dee9180da57447264d6110a5ef9be1f5",
+      "target": "794f1cd9cc61bb3e6b9cb65a8e7c5850bb0ba06d"
+    }
+  ],
+  "remoteReadMethod": "git ls-remote --symref origin (read-only)",
+  "repository": "rajeevbarnwal/NyayOne",
+  "rootCommitCount": 1,
+  "schemaVersion": "nyay21-authoritative-ref-seal/v2",
+  "signedCommitCount": 40,
+  "signedCommitManifestSha256": "015eddc709eb0230057a4ea912bbf2e840fd32fef8023bcde81832dba8ee2952",
+  "sourceHead": "454a40784ee2e084d9a756a713f287b627f1c4d4",
+  "targetManifest": [
+    {
+      "blob": "c3d899c19aa30ca15b2d3c952c0f98f96c6e5337",
+      "path": "backend/legalsaathi_dev.db-shm",
+      "size": 32768
+    },
+    {
+      "blob": "9b2634ba5293ee2ceb0a28c19a448e9714c0799e",
+      "path": "backend/legalsaathi_dev.db-wal",
+      "size": 457352
+    }
+  ],
+  "targetManifestSha256": "c3c9f242fae37a434a9f11ec547ffdd6c675612c48a2917f12e1577327dfd8d5",
+  "targetReachability": [
+    {
+      "blob": "c3d899c19aa30ca15b2d3c952c0f98f96c6e5337",
+      "objectRows": [
+        "c3d899c19aa30ca15b2d3c952c0f98f96c6e5337 backend/legalsaathi_dev.db-shm"
+      ],
+      "path": "backend/legalsaathi_dev.db-shm",
+      "reachable": true,
+      "size": 32768
+    },
+    {
+      "blob": "9b2634ba5293ee2ceb0a28c19a448e9714c0799e",
+      "objectRows": [
+        "9b2634ba5293ee2ceb0a28c19a448e9714c0799e backend/legalsaathi_dev.db-wal"
+      ],
+      "path": "backend/legalsaathi_dev.db-wal",
+      "reachable": true,
+      "size": 457352
+    }
+  ],
+  "ticket": "NYAY-21",
+  "visibility": "PRIVATE"
+}

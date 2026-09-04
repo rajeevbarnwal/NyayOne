@@ -51,6 +51,8 @@ jobs:
         run: python scripts/ci/test_nyay27_contact_sheet_gate.py
       - name: Validate NYAY-21 history-purge tooling
         run: python scripts/ci/test_nyay21_history_purge.py
+      - name: Validate NYAY-21 path-to-GO seal and restoration ceremony
+        run: python scripts/ci/test_nyay21_path_to_go.py
       - name: Validate NYAY-33 documentation reconciliation
         run: python scripts/ci/test_nyay33_documentation_polish.py
       - name: Validate NyayOne runtime and Compose isolation

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "nyay21-ci-budget/v2",
+  "repository": "rajeevbarnwal/NyayOne",
+  "exactHead": "454a40784ee2e084d9a756a713f287b627f1c4d4",
+  "status": "PATH_TO_GO_ONLY_NO_EXECUTION_AUTHORITY",
+  "reservationMinutes": 250,
+  "blockingCampaign": {
+    "requiredContexts": 7,
+    "fullCheckInventory": 22,
+    "measuredMainLinuxMinutes": 153,
+    "quarantinedNyay4Minutes": 7,
+    "measuredMinimumMinutes": 160,
+    "reserveIncludesFailedJobRerunMargin": true
+  },
+  "quarantinedNyay4": {
+    "workflow": "ci-flaky PostgreSQL 16/pgvector",
+    "dispatch": "manual",
+    "requiredAfterRewrite": true,
+    "basisCorrection": "The quarantined assertion is not part of the automatic main campaign; reserve and dispatch it explicitly after the rewritten exact head exists."
+  },
+  "headroom": {
+    "status": "PENDING_OWNER_D5_READ",
+    "minimumRequiredUncommittedLinuxMinutes": 250,
+    "readMethod": "Owner personal GitHub billing UI read; no new token or scope expansion",
+    "dueBefore": "2026-09-16T10:00:00+05:30"
+  },
+  "authority": {
+    "spendAuthorized": false,
+    "rewriteAuthorized": false,
+    "rulesetChangeAuthorized": false
+  }
+}
