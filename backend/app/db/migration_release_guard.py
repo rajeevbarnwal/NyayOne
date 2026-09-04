@@ -40,13 +40,21 @@ NYAY5_SOURCE_PATH = (
     Path(__file__).resolve().parent
     / "migrations/versions/0021_nyay5_profile_boundary.py"
 )
-APPLICATION_HEAD_REVISION = "0022_nyay9_owner_profile_api"
-APPLICATION_HEAD_SOURCE_SHA256 = (
+NYAY9_REVISION = "0022_nyay9_owner_profile_api"
+NYAY9_SOURCE_SHA256 = (
     "e66fcfd7ac270569e05fde17c0563ec7d0245023d8ab9f1c87d941373eb1653a"
+)
+NYAY9_SOURCE_PATH = (
+    Path(__file__).resolve().parent
+    / "migrations/versions/0022_nyay9_owner_profile_api.py"
+)
+APPLICATION_HEAD_REVISION = "0023_nyay22_mentor_ceremony"
+APPLICATION_HEAD_SOURCE_SHA256 = (
+    "44f456edb0d6cbc70a40d2deebdd74e28cba018dacd1748a91ede0d8d82558ed"
 )
 APPLICATION_HEAD_SOURCE_PATH = (
     Path(__file__).resolve().parent
-    / "migrations/versions/0022_nyay9_owner_profile_api.py"
+    / "migrations/versions/0023_nyay22_mentor_ceremony.py"
 )
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 VERSIONS_PATH = TARGET_SOURCE_PATH.parent
@@ -114,6 +122,7 @@ ALL_MIGRATION_SOURCE_SHA256 = {
     **HISTORICAL_SOURCE_SHA256,
     TARGET_SOURCE_PATH.name: TARGET_SOURCE_SHA256,
     NYAY5_SOURCE_PATH.name: NYAY5_SOURCE_SHA256,
+    NYAY9_SOURCE_PATH.name: NYAY9_SOURCE_SHA256,
     APPLICATION_HEAD_SOURCE_PATH.name: APPLICATION_HEAD_SOURCE_SHA256,
 }
 IRREVERSIBLE_FREEZE_ACK = (
@@ -177,6 +186,7 @@ _ISOLATED_DATABASE_MARKERS = {
     "nyay16",
     "nyay17",
     "nyay19",
+    "nyay22",
     "qa",
     "scratch",
     "test",
@@ -419,7 +429,7 @@ def target_source_is_exact() -> bool:
 
 
 def source_authority_is_valid() -> bool:
-    """Verify exact 0001-0022 bytes, inventory, graph and baseline ledger."""
+    """Verify exact 0001-0023 bytes, inventory, graph and baseline ledger."""
 
     expected_names = set(ALL_MIGRATION_SOURCE_SHA256)
     try:
@@ -1392,6 +1402,23 @@ def _nyay5_module() -> Any:
 def _nyay9_module() -> Any:
     module = _load_authenticated_migration_module(
         "nyay9_authenticated_0022",
+        NYAY9_SOURCE_PATH,
+        NYAY9_SOURCE_SHA256,
+    )
+    module_path = getattr(module, "__file__", None)
+    if (
+        not isinstance(module_path, str)
+        or Path(module_path).resolve() != NYAY9_SOURCE_PATH
+        or getattr(module, "revision", None) != NYAY9_REVISION
+        or getattr(module, "down_revision", None) != NYAY5_REVISION
+    ):
+        raise RuntimeError("migration authority rejected")
+    return module
+
+
+def _nyay22_module() -> Any:
+    module = _load_authenticated_migration_module(
+        "nyay22_authenticated_0023",
         APPLICATION_HEAD_SOURCE_PATH,
         APPLICATION_HEAD_SOURCE_SHA256,
     )
@@ -1400,7 +1427,7 @@ def _nyay9_module() -> Any:
         not isinstance(module_path, str)
         or Path(module_path).resolve() != APPLICATION_HEAD_SOURCE_PATH
         or getattr(module, "revision", None) != APPLICATION_HEAD_REVISION
-        or getattr(module, "down_revision", None) != NYAY5_REVISION
+        or getattr(module, "down_revision", None) != NYAY9_REVISION
     ):
         raise RuntimeError("migration authority rejected")
     return module
@@ -1498,16 +1525,28 @@ def _validate_nyay9_at_head(connection: Connection) -> None:
     module = _nyay9_module()
     nyay5_module._lock(connection)
     module._lock(connection, include_ledger=True)
-    if _current_revision(connection) != APPLICATION_HEAD_REVISION:
+    if _current_revision(connection) != NYAY9_REVISION:
         raise RuntimeError("head revision changed")
     _validate_nyay5_inherited_authority(
         connection,
-        expected_revision=APPLICATION_HEAD_REVISION,
+        expected_revision=NYAY9_REVISION,
         head=False,
     )
     module._validate_postflight(connection, head=True)
     if not source_authority_is_valid():
         raise RuntimeError("NYAY-9 migration source changed")
+
+
+def _validate_application_at_head(connection: Connection) -> None:
+    """Bind the repository application head to the authenticated 0023 edge."""
+
+    module = _nyay22_module()
+    if (
+        _current_revision(connection) != APPLICATION_HEAD_REVISION
+        or module.down_revision != NYAY9_REVISION
+        or not source_authority_is_valid()
+    ):
+        raise RuntimeError("NYAY-22 migration source changed")
 
 
 def locked_parent_report(
@@ -1675,6 +1714,34 @@ def _nyay9_upgrade_intent_agrees(
 
     options = getattr(config, "cmd_opts", None)
     configured = getattr(options, "revision", None)
+    # An earlier NYAY-9 approval may authorize only its exact 0021 -> 0022
+    # edge.  Once 0023 exists, the moving alias ``head`` must not widen that
+    # authority to the mentor-ceremony migration.
+    expected_runtime = configured if configured == NYAY9_REVISION else None
+    return bool(
+        command is alembic_command.upgrade
+        and expected_runtime is not None
+        and getattr(options, "sql", None) is False
+        and getattr(options, "tag", None) is None
+        and type(intent) is RuntimeMigrationIntent
+        and intent.operation == "upgrade"
+        and intent.destination_revision == expected_runtime
+        and intent.as_sql is False
+        and intent.tag is None
+        and intent.dont_mutate is False
+        and _nyay9_module().down_revision == NYAY5_REVISION
+    )
+
+
+def _nyay22_upgrade_intent_agrees(
+    config: Any,
+    command: Any,
+    intent: RuntimeMigrationIntent | None,
+) -> bool:
+    """Recognise 0023 without granting its production mutation authority."""
+
+    options = getattr(config, "cmd_opts", None)
+    configured = getattr(options, "revision", None)
     expected_runtime = (
         configured
         if configured in {APPLICATION_HEAD_REVISION, "head"}
@@ -1691,7 +1758,7 @@ def _nyay9_upgrade_intent_agrees(
         and intent.as_sql is False
         and intent.tag is None
         and intent.dont_mutate is False
-        and _nyay9_module().down_revision == NYAY5_REVISION
+        and _nyay22_module().down_revision == NYAY9_REVISION
     )
 
 
@@ -1709,8 +1776,10 @@ def enforce_nyay19_migration_postflight(
             _validate_at_head(connection)
         elif expected_revision == NYAY5_REVISION:
             _validate_nyay5_at_head(connection)
-        elif expected_revision == APPLICATION_HEAD_REVISION:
+        elif expected_revision == NYAY9_REVISION:
             _validate_nyay9_at_head(connection)
+        elif expected_revision == APPLICATION_HEAD_REVISION:
+            _validate_application_at_head(connection)
         else:
             raise RuntimeError
     except Exception:
@@ -1755,7 +1824,12 @@ def enforce_nyay19_migration_release_guard(
         == "postgresql"
         and _nyay9_upgrade_intent_agrees(config, command, runtime_intent)
     )
-    if not (nyay19_upgrade or nyay5_upgrade or nyay9_upgrade):
+    nyay22_upgrade = bool(
+        getattr(getattr(connection, "dialect", None), "name", None)
+        == "postgresql"
+        and _nyay22_upgrade_intent_agrees(config, command, runtime_intent)
+    )
+    if not (nyay19_upgrade or nyay5_upgrade or nyay9_upgrade or nyay22_upgrade):
         raise MigrationApprovalError(
             "NYAY-19 migration command is not authorized; refusing to migrate"
         )
@@ -1778,8 +1852,31 @@ def enforce_nyay19_migration_release_guard(
         raise MigrationApprovalError(
             "NYAY-19 live target rejected; refusing to migrate"
         ) from None
-    if nyay9_upgrade:
+    if nyay22_upgrade:
         if revision == APPLICATION_HEAD_REVISION:
+            try:
+                _validate_application_at_head(connection)
+            except Exception:
+                raise MigrationApprovalError(
+                    "NYAY-22 head validation rejected; refusing to migrate"
+                ) from None
+            return True
+        if revision != NYAY9_REVISION:
+            raise MigrationApprovalError(
+                "NYAY-22 database revision rejected; refusing to migrate"
+            )
+        try:
+            _validate_nyay9_at_head(connection)
+        except Exception:
+            raise MigrationApprovalError(
+                "NYAY-22 parent validation rejected; refusing to migrate"
+            ) from None
+        raise MigrationApprovalError(
+            "NYAY-22 production approval unavailable; refusing to migrate"
+        )
+
+    if nyay9_upgrade:
+        if revision == NYAY9_REVISION:
             try:
                 _validate_nyay9_at_head(connection)
             except Exception:

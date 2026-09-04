@@ -96,12 +96,23 @@ def test_historical_lifecycle_and_application_head_are_exact():
             / gate.NYAY5_CHECKPOINT_FILENAME
         ).read_bytes()
     ).hexdigest()
-    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
+    assert gate.APPLICATION_HEAD == "0023_nyay22_mentor_ceremony"
+    assert gate.NYAY9_CHECKPOINT == "0022_nyay9_owner_profile_api"
+    assert gate.NYAY9_CHECKPOINT_SHA256 == hashlib.sha256(
+        (
+            gate.BACKEND
+            / "app/db/migrations/versions"
+            / gate.NYAY9_CHECKPOINT_FILENAME
+        ).read_bytes()
+    ).hexdigest()
     assert gate.APPLICATION_HEAD_SHA256 == hashlib.sha256(
         (gate.BACKEND / "app/db/migrations/versions" / gate.APPLICATION_HEAD_FILENAME).read_bytes()
     ).hexdigest()
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
+        gate.NYAY9_CHECKPOINT
+    )
+    assert scripts.get_revision(gate.NYAY9_CHECKPOINT).down_revision == (
         gate.NYAY5_CHECKPOINT
     )
     assert scripts.get_revision(gate.NYAY5_CHECKPOINT).down_revision == (
@@ -197,6 +208,7 @@ def test_immutable_migration_inventory_is_pinned_through_0019():
         "ledger_crosscheck_exact": True,
         "pinned_head_hash_exact": True,
         "nyay5_checkpoint_hash_exact": True,
+        "nyay9_checkpoint_hash_exact": True,
         "application_head_hash_exact": True,
         "forward_application_head_exact": True,
     }
@@ -221,6 +233,7 @@ def test_immutable_migration_oracle_rejects_changed_post_ledger_file(tmp_path):
     for filename in (
         gate.PINNED_HEAD_FILENAME,
         gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.NYAY9_CHECKPOINT_FILENAME,
         gate.APPLICATION_HEAD_FILENAME,
     ):
         source = source_root / "backend/app/db/migrations/versions" / filename
@@ -243,6 +256,7 @@ def test_immutable_migration_oracle_rejects_changed_application_head_body(tmp_pa
     for filename in (
         gate.PINNED_HEAD_FILENAME,
         gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.NYAY9_CHECKPOINT_FILENAME,
         gate.APPLICATION_HEAD_FILENAME,
     ):
         source = source_root / "backend/app/db/migrations/versions" / filename
@@ -271,6 +285,7 @@ def test_immutable_migration_oracle_rejects_missing_and_extra_historical_files(
     for filename in (
         gate.PINNED_HEAD_FILENAME,
         gate.NYAY5_CHECKPOINT_FILENAME,
+        gate.NYAY9_CHECKPOINT_FILENAME,
         gate.APPLICATION_HEAD_FILENAME,
     ):
         source = source_root / "backend/app/db/migrations/versions" / filename

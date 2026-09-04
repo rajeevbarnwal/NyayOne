@@ -61,6 +61,7 @@ from app.schemas.registration import (
 from app.schemas.student_profile import StudentProfileProjectionResponse
 from app.services import (
     login_service,
+    mentor_ceremony,
     otp_authority,
     otp_flow_service,
     otp_service,
@@ -934,6 +935,10 @@ def otp_verify(
     _: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    if request.cookies.get("nyayone_mentor_session") is not None:
+        mentor_ceremony._lock_authority_scope(
+            session, request, fallback="student-signup-issuance"
+        )
     now = _now()
     _otp_projection_headers(response)
     raw_token = _flow_cookie_value(request)
@@ -1036,6 +1041,9 @@ def otp_verify(
             registration,
             now,
             commit_on_success=False,
+            presented_mentor_session_token=request.cookies.get(
+                "nyayone_mentor_session"
+            ),
         )
     except login_service.LoginError as exc:
         raise HTTPException(
@@ -1503,6 +1511,10 @@ def login_otp_verify(
     _: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    if request.cookies.get("nyayone_mentor_session") is not None:
+        mentor_ceremony._lock_authority_scope(
+            session, request, fallback="student-login-issuance"
+        )
     now = _now()
     _otp_projection_headers(response)
     raw_flow_token = _flow_cookie_value(request)
@@ -1522,6 +1534,9 @@ def login_otp_verify(
             payload.code,
             now,
             commit_on_success=False,
+            presented_mentor_session_token=request.cookies.get(
+                "nyayone_mentor_session"
+            ),
         )
     except login_service.LoginError as exc:
         raise _flow_http_error(

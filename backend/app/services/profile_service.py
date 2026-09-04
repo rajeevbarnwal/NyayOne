@@ -595,6 +595,44 @@ def export_profile_for_actor(
     }
 
 
+def materialize_student_privacy_export(
+    session: Session,
+    actor_user_id: uuid.UUID | None,
+    *,
+    now: datetime,
+) -> dict:
+    """Compose the closed owner-profile and mentor-history export allowlists."""
+
+    owner_profile = export_profile_for_actor(
+        session,
+        actor_user_id,
+        now=now,
+    )
+    registration_id = session.scalar(
+        select(StudentRegistration.id).where(
+            StudentRegistration.user_id == actor_user_id,
+            StudentRegistration.deleted_at.is_(None),
+        )
+    )
+    if registration_id is None:
+        raise ProfileBoundaryError(404, "profile_not_found")
+    # Local import avoids creating a second identity system or a module cycle.
+    from app.services.mentor_ceremony import (
+        materialize_subject_mentor_privacy_export,
+    )
+
+    mentor = materialize_subject_mentor_privacy_export(
+        session,
+        registration_id,
+    )
+    return {
+        "schema_version": "student-data-export.v1",
+        "profile_version": owner_profile["profile_version"],
+        "profile": owner_profile["profile"],
+        "mentor_history": mentor["mentor_history"],
+    }
+
+
 def validate_profile_idempotency_key(value: str | None) -> str:
     """Require one opaque, bounded, non-PII profile mutation token."""
 

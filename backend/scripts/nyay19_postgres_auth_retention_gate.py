@@ -74,10 +74,15 @@ NYAY5_CHECKPOINT_FILENAME = "0021_nyay5_profile_boundary.py"
 NYAY5_CHECKPOINT_SHA256 = (
     "439de03dc431a73264db706f77ffb703541619db1f490760d6d685aa173c7c50"
 )
-APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
-APPLICATION_HEAD_FILENAME = "0022_nyay9_owner_profile_api.py"
-APPLICATION_HEAD_SHA256 = (
+NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
+NYAY9_CHECKPOINT_FILENAME = "0022_nyay9_owner_profile_api.py"
+NYAY9_CHECKPOINT_SHA256 = (
     "e66fcfd7ac270569e05fde17c0563ec7d0245023d8ab9f1c87d941373eb1653a"
+)
+APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
+APPLICATION_HEAD_FILENAME = "0023_nyay22_mentor_ceremony.py"
+APPLICATION_HEAD_SHA256 = (
+    "44f456edb0d6cbc70a40d2deebdd74e28cba018dacd1748a91ede0d8d82558ed"
 )
 OPT_IN_ENV = "NYAY19_POSTGRES_GATE_EXECUTE"
 
@@ -2350,6 +2355,7 @@ def _historical_migration_inventory(
         "ledger_crosscheck_exact": False,
         "pinned_head_hash_exact": False,
         "nyay5_checkpoint_hash_exact": False,
+        "nyay9_checkpoint_hash_exact": False,
         "application_head_hash_exact": False,
         "forward_application_head_exact": False,
     }
@@ -2365,6 +2371,7 @@ def _historical_migration_inventory(
             | {
                 PINNED_HEAD_FILENAME,
                 NYAY5_CHECKPOINT_FILENAME,
+                NYAY9_CHECKPOINT_FILENAME,
                 APPLICATION_HEAD_FILENAME,
             }
         )
@@ -2388,6 +2395,13 @@ def _historical_migration_inventory(
             ).hexdigest()
             == NYAY5_CHECKPOINT_SHA256
         )
+        result["nyay9_checkpoint_hash_exact"] = bool(
+            result["file_inventory_exact"]
+            and hashlib.sha256(
+                (versions / NYAY9_CHECKPOINT_FILENAME).read_bytes()
+            ).hexdigest()
+            == NYAY9_CHECKPOINT_SHA256
+        )
         result["application_head_hash_exact"] = bool(
             result["file_inventory_exact"]
             and hashlib.sha256(
@@ -2397,6 +2411,9 @@ def _historical_migration_inventory(
         )
         checkpoint_tree = ast.parse(
             (versions / NYAY5_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
+        )
+        nyay9_tree = ast.parse(
+            (versions / NYAY9_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
         )
         forward_tree = ast.parse(
             (versions / APPLICATION_HEAD_FILENAME).read_text(encoding="utf-8")
@@ -2417,15 +2434,19 @@ def _historical_migration_inventory(
             return assignments
 
         checkpoint_assignments = _revision_assignments(checkpoint_tree)
+        nyay9_assignments = _revision_assignments(nyay9_tree)
         application_assignments = _revision_assignments(forward_tree)
         result["forward_application_head_exact"] = bool(
             result["file_inventory_exact"]
             and result["nyay5_checkpoint_hash_exact"]
+            and result["nyay9_checkpoint_hash_exact"]
             and result["application_head_hash_exact"]
             and checkpoint_assignments
             == {"revision": NYAY5_CHECKPOINT, "down_revision": PINNED_HEAD}
+            and nyay9_assignments
+            == {"revision": NYAY9_CHECKPOINT, "down_revision": NYAY5_CHECKPOINT}
             and application_assignments
-            == {"revision": APPLICATION_HEAD, "down_revision": NYAY5_CHECKPOINT}
+            == {"revision": APPLICATION_HEAD, "down_revision": NYAY9_CHECKPOINT}
         )
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         migrations = ledger["migrations"]

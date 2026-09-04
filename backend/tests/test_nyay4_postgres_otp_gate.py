@@ -308,7 +308,8 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0018_registration_idempotency"
     assert gate.PINNED_HEAD == "0019_otp_security_authority"
     assert gate.NYAY5_CHECKPOINT == "0021_nyay5_profile_boundary"
-    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
+    assert gate.NYAY9_CHECKPOINT == "0022_nyay9_owner_profile_api"
+    assert gate.APPLICATION_HEAD == "0023_nyay22_mentor_ceremony"
 
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option(
@@ -317,10 +318,12 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     nyay5_checkpoint = scripts.get_revision(gate.NYAY5_CHECKPOINT)
+    nyay9_checkpoint = scripts.get_revision(gate.NYAY9_CHECKPOINT)
     retention = scripts.get_revision("0020_auth_retention_lifecycle")
     assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
-        nyay5_checkpoint.revision
+        nyay9_checkpoint.revision
     )
+    assert nyay9_checkpoint.down_revision == nyay5_checkpoint.revision
     assert nyay5_checkpoint.down_revision == retention.revision
     assert retention.down_revision == gate.PINNED_HEAD
 

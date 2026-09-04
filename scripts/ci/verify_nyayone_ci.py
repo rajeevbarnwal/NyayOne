@@ -27,6 +27,43 @@ NYAY4_BROWSER_CONTRACT = (
 NYAY4_BROWSER_CONTRACT_TEST = (
     ROOT / "frontend" / "scripts" / "lib" / "nyay4-otp-runner-contract.test.mjs"
 )
+NYAY22_BROWSER_GATE = (
+    ROOT / "frontend" / "scripts" / "nyay22-mentor-ceremony-browser.mjs"
+)
+NYAY22_BROWSER_CONTRACT = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay22-mentor-ceremony-browser-contract.mjs"
+)
+NYAY22_BROWSER_CONTRACT_TEST = (
+    ROOT
+    / "frontend"
+    / "scripts"
+    / "lib"
+    / "nyay22-mentor-ceremony-browser-contract.test.mjs"
+)
+NYAY22_BROWSER_HARNESS_ENTRY = (
+    ROOT / "frontend" / "scripts" / "lib" / "nyay22-browser-harness-entry.ts"
+)
+NYAY22_BROWSER_FIXTURE = (
+    ROOT / "frontend" / "scripts" / "fixtures" / "nyay22-browser-harness.html"
+)
+NYAY22_BROWSER_SEED = ROOT / "backend" / "scripts" / "seed_nyay22_browser_fixture.py"
+NYAY22_BROWSER_SEED_TEST = (
+    ROOT / "backend" / "tests" / "test_nyay22_browser_fixture_seed.py"
+)
+NYAY22_POSTGRES_GATE = (
+    ROOT / "backend" / "scripts" / "nyay22_postgres_mentor_gate.py"
+)
+NYAY22_POSTGRES_CONTRACT = (
+    ROOT / "scripts" / "ci" / "nyay22-mentor-postgres-contract.json"
+)
+NYAY22_NYAY19_ERASURE_TEST = (
+    ROOT / "backend" / "tests" / "test_nyay22_nyay19_erasure_integration.py"
+)
+NYAY22_REQUIRED_WORKFLOW = WORKFLOWS / "wave3-credential-trust-gate.yml"
 NYAY19_BROWSER_GATE = (
     ROOT / "frontend" / "scripts" / "nyay19-auth-lifecycle-browser.mjs"
 )
@@ -309,6 +346,7 @@ EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND = (
     "python scripts/ci/test_nyay21_path_to_go.py"
 )
 EXPECTED_NYAY33_POLICY_COMMAND = "python scripts/ci/test_nyay33_documentation_polish.py"
+EXPECTED_NYAY22_POLICY_COMMAND = "python scripts/ci/test_nyay22_ci_policy.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
 )
@@ -319,6 +357,61 @@ EXPECTED_NYAY4_BROWSER_CONTRACT_TEST_SHA256 = (
     "8b581591d17550821c99d3a2194f079aaec55bd569782b03d4effec3e70c2c87"
 )
 EXPECTED_NYAY4_PACKAGE_COMMAND = "node scripts/nyay4-otp-browser-negative.mjs"
+EXPECTED_NYAY22_BROWSER_GATE_SHA256 = (
+    "978830c0505f32fba394d706e63c3126ab95cc0856c1f2859bf9156799379f1a"
+)
+EXPECTED_NYAY22_BROWSER_CONTRACT_SHA256 = (
+    "74f8104513b9c20905c3fb9877d7552e174e42b4e0cc13bc7fb2a1a06e7a704e"
+)
+EXPECTED_NYAY22_BROWSER_CONTRACT_TEST_SHA256 = (
+    "59058d04a42047d782fafe2008980526872eee18c572fb105a5322dbe2a353ae"
+)
+EXPECTED_NYAY22_BROWSER_HARNESS_ENTRY_SHA256 = (
+    "44970893d886c3b506207bf995c387444e2925464fafeb0c8987e78b6c1ab339"
+)
+EXPECTED_NYAY22_BROWSER_FIXTURE_SHA256 = (
+    "8df6cfb852d53ace3f8216a3754aba018efcad235c6d9f34c13a5fb4f5fc1d99"
+)
+EXPECTED_NYAY22_BROWSER_SEED_SHA256 = (
+    "a1abaccc8c966792a1c7a174eede042b8a44ad35dfd0c8b4849c695a84ef0218"
+)
+EXPECTED_NYAY22_BROWSER_SEED_TEST_SHA256 = (
+    "c22822224fcad6576fdf3097bfcb22b4cadfa6890419f94afc659bdb4e0ce939"
+)
+EXPECTED_NYAY22_POSTGRES_GATE_SHA256 = (
+    "7ebd6234ef94ea3d2fe2bd36670ffae5370e8876d378896ca0e62f878c0168d3"
+)
+EXPECTED_NYAY22_POSTGRES_CONTRACT_SHA256 = (
+    "c9de111f70ef238d942b2492983137ea850f1b2f7d5fc3869b447b1d52d4e880"
+)
+EXPECTED_NYAY22_NYAY19_ERASURE_TEST_SHA256 = (
+    "aacc42fa03b652a203d878f893336e5f34595fa4c557754134e80ae66e05e14f"
+)
+EXPECTED_NYAY22_POSTGRES_SCHEMA = "nyay22-mentor-postgres/v1"
+EXPECTED_NYAY22_POSTGRES_ORACLES = (
+    "MIGRATION_0023_UP_DOWN_UP_CHECK",
+    "POSTGRES_BOUNDED_LOCKS_NO_DEADLOCK",
+    "INITIATE_SAME_KEY_EXACT_REPLAY",
+    "INITIATE_CHANGED_PAYLOAD_CONFLICT",
+    "PROVIDER_SUBJECT_UNIQUE_INSERT",
+    "EXCHANGE_K1_K2_ONE_AUTHORITY",
+    "OWNER_LOGIN_EXCHANGE_CLASS_EXCLUSION",
+    "ROTATE_REVOKE_LINEARIZED",
+    "ROTATE_LOGOUT_LINEARIZED",
+    "DELETION_VERIFY_REVOKE_BOTH_ORDERS",
+    "DELETION_EXCHANGE_REVOKE_BOTH_ORDERS",
+    "PROOF_REVOCATION_AUTHORITY_RACE",
+    "SUBJECT_CONSENT_REVOCATION_AUTHORITY_RACE",
+    "RETENTION_ADVISORY_NONOVERLAP",
+    "RETENTION_ATOMIC_GRAPH_SEVERANCE",
+    "RETENTION_OVERSIZE_FAIL_CLOSED",
+    "AUDIT_APPEND_ONLY_AND_CREDENTIAL_PRIVACY",
+)
+EXPECTED_NYAY22_POSTGRES_ORACLE_INVENTORY_SHA256 = (
+    "99ad80b085b29ff6f5eae3f04bfbbd3d2516af6c3c56333083d81ec5b3a0eab8"
+)
+EXPECTED_NYAY22_APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
+EXPECTED_NYAY22_PREVIOUS_REVISION = "0022_nyay9_owner_profile_api"
 EXPECTED_NYAY19_BROWSER_GATE_SHA256 = (
     "9becbdf0e47201eceed8fe36b1311be28a21831c7ffb14d81247b7fd137e89c4"
 )
@@ -363,10 +456,10 @@ EXPECTED_NYAY18_NAMESPACE_GATE_SHA256 = (
     "985eeaf3fdea31132d5889a2f0636af82d0378f2afd56937c89db315175da622"
 )
 EXPECTED_NYAY18_NAMESPACE_GATE_TEST_SHA256 = (
-    "bc1c3b86adbf91f0622674a9a9ad9d6ec3d21326d8b280b1f53c56559bb650aa"
+    "24b291e76ba641defc9e3ad77e646aee321adefe587a334a8d6e42476a94bdd9"
 )
 EXPECTED_NYAY18_NAMESPACE_CONTRACT_SHA256 = (
-    "bd91e364d3bcccea1f3e8b560d1a88c448478fb72109da855b10f563173e1b9f"
+    "3eed575dbf58024ce2a662193b0c7eddd0cbae311e9e04a1a57534343aa60c17"
 )
 EXPECTED_NYAY18_NAMESPACE_BOUNDARY_DOCUMENT_SHA256 = (
     "4ea549791f349857460e6f65ba274aee81caa0031ed49a426585ff7fdf6e919c"
@@ -620,6 +713,7 @@ EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
     "backend/scripts/nyay17_postgres_idempotency_gate.py",
     "backend/scripts/nyay19_migrate.py",
     "backend/scripts/nyay19_postgres_auth_retention_gate.py",
+    "backend/scripts/nyay22_postgres_mentor_gate.py",
     "backend/scripts/wave2_postgres_gate.py",
     "backend/scripts/wave4_postgres_gate.py",
     "backend/scripts/wave5_postgres_gate.py",
@@ -654,7 +748,7 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "1aa0d05a3747e681188a7be6aaeafb7274aac5a23ab0b1feaf7672f398a38080"
+EXPECTED_DB_GATE_SHA256 = "8d50ec128a2efa9c52ce8286e44d06aac54b3d116d928779ad804e0b256b34c1"
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -692,6 +786,60 @@ EXPECTED_NYAY19_DB_GATE_COMMAND = (
     "scripts/nyay19_postgres_auth_retention_gate.py "
     '--execute --database-url "$DATABASE_URL" '
     "--output test-results/nyay19-postgres/summary.json"
+)
+EXPECTED_NYAY22_DB_GATE_COMMAND = (
+    'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py '
+    '--database-url "$DATABASE_URL" '
+    "--output test-results/nyay22-postgres/summary.json"
+)
+EXPECTED_NYAY22_DB_GATE_STAGE = (
+    'echo "== NYAY-22 mentor ceremony concurrency/lifecycle gate '
+    '(PostgreSQL 16 + pgvector) =="\n'
+    "mkdir -p test-results/nyay22-postgres\n"
+    'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py \\\n'
+    '  --database-url "$DATABASE_URL" \\\n'
+    "  --output test-results/nyay22-postgres/summary.json\n"
+)
+EXPECTED_NYAY22_DB_GATE_EVIDENCE_PROMOTION = (
+    "mkdir -p \"$REPO_ROOT/test-results/nyay22-postgres\"\n"
+    "cp test-results/nyay22-postgres/summary.json \\\n"
+    '  "$REPO_ROOT/test-results/nyay22-postgres/summary.json"\n'
+)
+EXPECTED_NYAY22_BROWSER_PACKAGE_COMMAND = (
+    "node scripts/nyay22-mentor-ceremony-browser.mjs"
+)
+EXPECTED_NYAY22_LIVE_SEED_STEP = (
+    "      - name: Seed private server-owned NYAY-22 live browser fixture\n"
+    "        working-directory: backend\n"
+    "        env:\n"
+    "          APP_ENV: test\n"
+    '          NYAY22_BROWSER_FIXTURE_SEED: "1"\n'
+    "        run: >-\n"
+    "          python scripts/seed_nyay22_browser_fixture.py\n"
+    '          --output "$RUNNER_TEMP/nyay22-live-fixture.json"\n\n'
+)
+EXPECTED_NYAY22_BROWSER_STEP = (
+    "      - name: NYAY-22 production Chromium mentor-authority gate\n"
+    "        working-directory: frontend\n"
+    "        env:\n"
+    "          NYAY22_BROWSER_EVIDENCE_PATH: ${{ github.workspace }}/test-results/nyay22-browser/results.json\n"
+    "          NYAY22_BROWSER_FAILURE_PATH: ${{ github.workspace }}/test-results/nyay22-browser/failure.json\n"
+    '          NYAY22_BROWSER_PRODUCTION_BUILD: "true"\n'
+    '          NYAY22_BROWSER_WEB_PORT: "1190"\n'
+    "          NYAY22_LIVE_API_BASE_URL: http://127.0.0.1:1171\n"
+    "          NYAY22_LIVE_FIXTURE_PATH: ${{ runner.temp }}/nyay22-live-fixture.json\n"
+    "        run: npm run qa:nyay22:mentor-ceremony\n\n"
+)
+EXPECTED_NYAY22_FAILURE_UPLOAD_STEP = (
+    "      - name: Upload privacy-safe NYAY-22 Chromium failure diagnostic\n"
+    "        if: ${{ failure() && hashFiles('test-results/nyay22-browser/failure.json') != '' }}\n"
+    "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+    "        with:\n"
+    "          name: nyay22-mentor-browser-failure-diagnostic\n"
+    "          path: ${{ github.workspace }}/test-results/nyay22-browser/failure.json\n"
+    "          if-no-files-found: error\n"
+    "          retention-days: 14\n"
+    "          include-hidden-files: false\n\n"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 IMAGE_REF = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
@@ -938,6 +1086,43 @@ EXPECTED_EXACT_STEPS: dict[tuple[str, str, str], dict[str, object]] = {
     (
         "wave3-credential-trust-gate.yml",
         "credential-trust-postgres-browser",
+        "NYAY-22 production Chromium mentor-authority gate",
+    ): {
+        "name": "NYAY-22 production Chromium mentor-authority gate",
+        "working-directory": "frontend",
+        "env": {
+            "NYAY22_BROWSER_EVIDENCE_PATH": (
+                "${{ github.workspace }}/test-results/nyay22-browser/results.json"
+            ),
+            "NYAY22_BROWSER_FAILURE_PATH": (
+                "${{ github.workspace }}/test-results/nyay22-browser/failure.json"
+            ),
+            "NYAY22_BROWSER_PRODUCTION_BUILD": "true",
+            "NYAY22_BROWSER_WEB_PORT": "1190",
+            "NYAY22_LIVE_API_BASE_URL": "http://127.0.0.1:1171",
+            "NYAY22_LIVE_FIXTURE_PATH": "${{ runner.temp }}/nyay22-live-fixture.json",
+        },
+        "run": "npm run qa:nyay22:mentor-ceremony",
+    },
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
+        "Seed private server-owned NYAY-22 live browser fixture",
+    ): {
+        "name": "Seed private server-owned NYAY-22 live browser fixture",
+        "working-directory": "backend",
+        "env": {
+            "APP_ENV": "test",
+            "NYAY22_BROWSER_FIXTURE_SEED": "1",
+        },
+        "run": (
+            "python scripts/seed_nyay22_browser_fixture.py "
+            '--output "$RUNNER_TEMP/nyay22-live-fixture.json"'
+        ),
+    },
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
         "NYAY-4 OTP authority Chromium regression",
     ): {
         "name": "NYAY-4 OTP authority Chromium regression",
@@ -1089,6 +1274,10 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
     ("wave1-foundation-gate.yml", "backend-postgres16-gate"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_ci",
         "APP_ENV": "staging",
+        "MENTOR_TERMINAL_RETENTION_SECONDS": "2592000",
+        "MENTOR_AUDIT_LINK_RETENTION_SECONDS": "2592000",
+        "MENTOR_RETENTION_MODE": "bounded_crypto_erasure",
+        "CORS_ORIGINS": '["https://ci.nyayone.example"]',
         "CALENDAR_PUBLIC_BASE_URL": "https://calendar.example.test",
         "INTERNSHIP_REPORT_SCANNER_PROVIDER": "clamav",
         "REGISTRATION_SECRET": "ci-registration-secret-not-a-dev-default",
@@ -1110,6 +1299,9 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): {
         "DATABASE_URL": "postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:5432/nyayone_ci",
         "APP_ENV": "staging",
+        "MENTOR_TERMINAL_RETENTION_SECONDS": "2592000",
+        "MENTOR_AUDIT_LINK_RETENTION_SECONDS": "2592000",
+        "MENTOR_RETENTION_MODE": "bounded_crypto_erasure",
         "CALENDAR_PUBLIC_BASE_URL": "https://calendar.example.test",
         "INTERNSHIP_REPORT_SCANNER_PROVIDER": "clamav",
         "REGISTRATION_SECRET": "ci-registration-encryption-secret-not-a-default",
@@ -1117,7 +1309,7 @@ EXPECTED_JOB_ENVS: dict[tuple[str, str], dict[str, object]] = {
         "CREDENTIAL_TOKEN_SECRET": "ci-credential-token-secret-not-a-default",
         "CREDENTIAL_STORAGE_ROOT": "${{ github.workspace }}/test-results/credential-objects",
         "CREDENTIAL_PUBLIC_BASE_URL": "https://verify.example.test/verify",
-        "CORS_ORIGINS": '["http://127.0.0.1:1170","http://localhost:1170"]',
+        "CORS_ORIGINS": '["https://ci.nyayone.example"]',
         "OTP_DELIVERY_ENABLED": "true",
         "OTP_PROVIDER": "http",
         "OTP_PROVIDER_URL": "https://otp-provider.example.test/send",
@@ -1206,6 +1398,23 @@ NYAY4_FAILURE_DIAGNOSTIC_UPLOAD = {
         "include-hidden-files": "false",
     },
 }
+NYAY22_FAILURE_DIAGNOSTIC_UPLOAD = {
+    "name": "Upload privacy-safe NYAY-22 Chromium failure diagnostic",
+    "condition": (
+        "${{ failure() && "
+        "hashFiles('test-results/nyay22-browser/failure.json') != '' }}"
+    ),
+    "producer": "npm run qa:nyay22:mentor-ceremony",
+    "with": {
+        "name": "nyay22-mentor-browser-failure-diagnostic",
+        "path": (
+            "${{ github.workspace }}/test-results/nyay22-browser/failure.json"
+        ),
+        "if-no-files-found": "error",
+        "retention-days": "14",
+        "include-hidden-files": "false",
+    },
+}
 NYAY4_QUARANTINE_DIAGNOSTIC_UPLOAD = {
     "name": "Upload detailed quarantine diagnostic",
     "condition": "${{ always() }}",
@@ -1239,6 +1448,10 @@ FAILURE_DIAGNOSTIC_UPLOADS = {
         "wave1-foundation-gate.yml",
         "backend-postgres16-gate",
     ): NYAY4_FAILURE_DIAGNOSTIC_UPLOAD,
+    (
+        "wave3-credential-trust-gate.yml",
+        "credential-trust-postgres-browser",
+    ): NYAY22_FAILURE_DIAGNOSTIC_UPLOAD,
 }
 DIRECT_EVIDENCE_UPLOAD_PATHS: dict[tuple[str, str], str] = {
     (
@@ -1254,6 +1467,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
         EXPECTED_NYAY21_POLICY_COMMAND,
         EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND,
         EXPECTED_NYAY33_POLICY_COMMAND,
+        EXPECTED_NYAY22_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
         "python scripts/ci/test_nyay18_namespace_boundary_doc.py",
@@ -1316,16 +1530,16 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "34eb625f245bf96467fef33cd03bd619a8e6237e2600cfb18a76918d2c44cd58",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "5ac740c24bf251448ececdcdc72ff215d610830db07c54f6e1bcd41ef0310b6b",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
     ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "087d03fac8cc5b4105c10b187485581d934878b39185855132fd99d186dad652",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "153e02df5a01f3fecadc318a282b1145fbfb7faba905c24d3f75d202153d8911",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
     ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "449af3381247ff7d91c5b6c7a60ab220ecc63308af4553af6dd22a32bdaab758",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
-    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "a5c8c25d7f98d6536e8b8968747a4b3f09ca6e01b8d23e2568dca2964a12ce35",
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "f4e777be98ee755df10fa7e5613ad896fc67efd1d89572580c87ff29d599ed05",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
     ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "97d1faf91f019d316ca23bcf72a95b05bc25e146b491434c8c6219100b43eeaa",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
@@ -2001,7 +2215,8 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     The workflow's semantic digest protects the call *to* db_gate.sh.  This
     companion contract protects the executable reached through that call, so
     leaving the workflow untouched while deleting/bypassing NYAY-16, NYAY-3,
-    NYAY-2, NYAY-5, NYAY-17, NYAY-4, or NYAY-19 cannot produce a false green.
+    NYAY-2, NYAY-5, NYAY-17, NYAY-4, NYAY-19, or NYAY-22 cannot produce a
+    false green.
     """
 
     if not path.is_file() or path.is_symlink():
@@ -2029,6 +2244,14 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     nyay17 = _canonical_shell(EXPECTED_NYAY17_DB_GATE_COMMAND)
     nyay4 = _canonical_shell(EXPECTED_NYAY4_DB_GATE_COMMAND)
     nyay19 = _canonical_shell(EXPECTED_NYAY19_DB_GATE_COMMAND)
+    nyay22 = _canonical_shell(EXPECTED_NYAY22_DB_GATE_COMMAND)
+    nyay22_promotion = _canonical_shell(
+        re.sub(
+            r"\\\s*\n",
+            " ",
+            EXPECTED_NYAY22_DB_GATE_EVIDENCE_PROMOTION,
+        )
+    )
     if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
@@ -2060,6 +2283,14 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     if canonical.count(nyay19) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-19 PostgreSQL gate once"
+        )
+    if canonical.count(nyay22) != 1:
+        failures.append(
+            f"{path}: database gate must invoke the exact NYAY-22 PostgreSQL gate once"
+        )
+    if canonical.count(nyay22_promotion) != 1:
+        failures.append(
+            f"{path}: database gate must promote the validated NYAY-22 summary exactly once"
         )
     if (
         nyay5 in canonical
@@ -2126,21 +2357,698 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
         failures.append(
             f"{path}: NYAY-19 PostgreSQL gate must remain after the NYAY-4 stage"
         )
-
-    # NYAY-19 is the final mandatory nested stage. Requiring its exact command
-    # to be the last executable line also rejects wrappers such as ``if
-    # false``, ``|| true``, ``--help``, redirection, or a non-executing echo.
-    # With db_gate.sh's set -euo pipefail this keeps BLOCKED (78) and FAIL (1)
-    # fatal instead of allowing a later command to turn the job green.
-    logical_commands = [
-        _canonical_shell(line)
-        for line in re.sub(r"\\\s*\n", " ", executable).splitlines()
-        if line.strip()
-    ]
-    if not logical_commands or logical_commands[-1] != nyay19:
+    if (
+        nyay19 not in canonical
+        or nyay22 not in canonical
+        or canonical.index(nyay22) < canonical.index(nyay19)
+    ):
         failures.append(
-            f"{path}: exact NYAY-19 PostgreSQL gate must be the final unconditional command"
+            f"{path}: NYAY-22 PostgreSQL gate must remain after the inherited NYAY-19 stage"
         )
+
+    # NYAY-22 is the final mandatory nested stage. Its only successors are the
+    # exact mkdir/copy pair that promotes the producer's already validated,
+    # closed-world summary into the uploadable Wave-3 evidence root. Requiring
+    # this exact tail rejects wrappers such as ``if false``, ``|| true``,
+    # ``--help``, redirection, or any later command that could mask a failure.
+    if not canonical.endswith(f"{nyay22} {nyay22_promotion}"):
+        failures.append(
+            f"{path}: exact NYAY-22 PostgreSQL gate and evidence promotion must be the final unconditional stage"
+        )
+    return failures
+
+
+def check_nyay22_browser_gate_contract(
+    browser_path: Path = NYAY22_BROWSER_GATE,
+    contract_path: Path = NYAY22_BROWSER_CONTRACT,
+    contract_test_path: Path = NYAY22_BROWSER_CONTRACT_TEST,
+    harness_entry_path: Path = NYAY22_BROWSER_HARNESS_ENTRY,
+    fixture_path: Path = NYAY22_BROWSER_FIXTURE,
+    seed_path: Path = NYAY22_BROWSER_SEED,
+    seed_test_path: Path = NYAY22_BROWSER_SEED_TEST,
+    package_path: Path = FRONTEND_PACKAGE,
+    workflow_path: Path = NYAY22_REQUIRED_WORKFLOW,
+) -> list[str]:
+    """Seal both NYAY-22 Chromium authority and required-CI reachability."""
+
+    failures: list[str] = []
+    pinned_files = (
+        (browser_path, EXPECTED_NYAY22_BROWSER_GATE_SHA256, "browser producer"),
+        (
+            contract_path,
+            EXPECTED_NYAY22_BROWSER_CONTRACT_SHA256,
+            "browser assertion contract",
+        ),
+        (
+            contract_test_path,
+            EXPECTED_NYAY22_BROWSER_CONTRACT_TEST_SHA256,
+            "browser assertion contract tests",
+        ),
+        (
+            harness_entry_path,
+            EXPECTED_NYAY22_BROWSER_HARNESS_ENTRY_SHA256,
+            "browser harness entry",
+        ),
+        (
+            fixture_path,
+            EXPECTED_NYAY22_BROWSER_FIXTURE_SHA256,
+            "browser fixture",
+        ),
+        (
+            seed_path,
+            EXPECTED_NYAY22_BROWSER_SEED_SHA256,
+            "private live-fixture seed",
+        ),
+        (
+            seed_test_path,
+            EXPECTED_NYAY22_BROWSER_SEED_TEST_SHA256,
+            "private live-fixture seed tests",
+        ),
+    )
+    for path, expected, label in pinned_files:
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: NYAY-22 {label} is missing or unsafe")
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            failures.append(f"{path}: NYAY-22 {label} is missing or unreadable")
+            continue
+        if hashlib.sha256(raw).hexdigest() != expected:
+            failures.append(
+                f"{path}: NYAY-22 {label} SHA-256 differs from the sealed contract"
+            )
+
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        failures.append(f"{package_path}: NYAY-22 package contract is unreadable")
+    else:
+        scripts = package.get("scripts") if isinstance(package, dict) else None
+        if (
+            not isinstance(scripts, dict)
+            or scripts.get("qa:nyay22:mentor-ceremony")
+            != EXPECTED_NYAY22_BROWSER_PACKAGE_COMMAND
+        ):
+            failures.append(
+                f"{package_path}: NYAY-22 browser package command is not exact"
+            )
+
+    try:
+        workflow = workflow_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        failures.append(f"{workflow_path}: NYAY-22 required workflow is unreadable")
+    else:
+        if workflow.count(EXPECTED_NYAY22_LIVE_SEED_STEP) != 1:
+            failures.append(
+                f"{workflow_path}: NYAY-22 private live-fixture seed must appear exactly once"
+            )
+        if workflow.count(EXPECTED_NYAY22_BROWSER_STEP) != 1:
+            failures.append(
+                f"{workflow_path}: NYAY-22 production browser producer must appear exactly once"
+            )
+        if workflow.count(EXPECTED_NYAY22_FAILURE_UPLOAD_STEP) != 1:
+            failures.append(
+                f"{workflow_path}: NYAY-22 privacy-safe failure upload must appear exactly once"
+            )
+        if (
+            EXPECTED_NYAY22_LIVE_SEED_STEP + EXPECTED_NYAY22_BROWSER_STEP
+            not in workflow
+        ):
+            failures.append(
+                f"{workflow_path}: NYAY-22 private live-fixture seed must immediately precede its producer"
+            )
+        if (
+            EXPECTED_NYAY22_BROWSER_STEP + EXPECTED_NYAY22_FAILURE_UPLOAD_STEP
+            not in workflow
+        ):
+            failures.append(
+                f"{workflow_path}: NYAY-22 failure upload must immediately follow its producer"
+            )
+
+    try:
+        browser_source = browser_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        browser_source = ""
+    for marker in (
+        "NYAY22_BROWSER_PRODUCTION_BUILD",
+        "NYAY22_LIVE_API_BASE_URL",
+        "NYAY22_LIVE_FIXTURE_PATH",
+        "NYAY22_BROWSER_FAILURE_PATH",
+        "buildVite",
+        "previewVite",
+        "live-backend-positive-lifecycle",
+        "canonicalNyay22BrowserFailureCode",
+    ):
+        if marker not in browser_source:
+            failures.append(
+                f"{browser_path}: NYAY-22 production/live/fail-safe marker missing: {marker}"
+            )
+    if "createViteServer" in browser_source:
+        failures.append(
+            f"{browser_path}: NYAY-22 required producer may not use the Vite development server"
+        )
+
+    try:
+        harness_source = harness_entry_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        harness_source = ""
+    if (
+        "HARNESS_FAILURE_CODES" not in harness_source
+        or "safeError" not in harness_source
+        or "verifyMentorIdentity" not in harness_source
+    ):
+        failures.append(
+            f"{harness_entry_path}: NYAY-22 browser harness canonical failure-code mapping is missing"
+        )
+    if "^[A-Za-z0-9_:-]" in harness_source:
+        failures.append(
+            f"{harness_entry_path}: NYAY-22 browser harness may not echo regex-safe arbitrary errors"
+        )
+    try:
+        seed_source = seed_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        seed_source = ""
+    for marker in (
+        'OPT_IN_ENV = "NYAY22_BROWSER_FIXTURE_SEED"',
+        'os.environ.get(OPT_IN_ENV) != "1"',
+        'os.environ.get("RUNNER_TEMP", "").strip()',
+        "os.O_EXCL",
+        "stat.S_IRUSR | stat.S_IWUSR",
+        "NYAY22_BROWSER_FIXTURE_DATABASE_NOT_ISOLATED",
+    ):
+        if marker not in seed_source:
+            failures.append(
+                f"{seed_path}: NYAY-22 private live-fixture safety marker missing"
+            )
+    for marker in (
+        "readPrivateLiveFixture",
+        "await rm(target, { force: true })",
+        "sameOriginProxy: true",
+        "liveLifecycle.required === true && liveLifecycle.bound === true",
+    ):
+        if marker not in browser_source:
+            failures.append(
+                f"{browser_path}: NYAY-22 live lifecycle fail-closed marker missing"
+            )
+    return failures
+
+
+def check_nyay22_postgres_gate_contract(
+    producer_path: Path = NYAY22_POSTGRES_GATE,
+    contract_path: Path = NYAY22_POSTGRES_CONTRACT,
+) -> list[str]:
+    """Seal the executable native NYAY-22 producer and its closed-world contract.
+
+    ``db_gate.sh`` reachability alone is not authority: an edited producer could
+    retain the same command while silently dropping a race or migration oracle.
+    This check binds both executable bytes and the independently versioned
+    inventory, then parses the producer constants so head/revision/count drift
+    receives an actionable fail-closed diagnostic in addition to the SHA seal.
+    """
+
+    failures: list[str] = []
+    raw_by_label: dict[str, bytes] = {}
+    for path, expected, label in (
+        (
+            producer_path,
+            EXPECTED_NYAY22_POSTGRES_GATE_SHA256,
+            "native PostgreSQL producer",
+        ),
+        (
+            contract_path,
+            EXPECTED_NYAY22_POSTGRES_CONTRACT_SHA256,
+            "native PostgreSQL contract",
+        ),
+    ):
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: NYAY-22 {label} is missing or unsafe")
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            failures.append(f"{path}: NYAY-22 {label} is unreadable")
+            continue
+        raw_by_label[label] = raw
+        if hashlib.sha256(raw).hexdigest() != expected:
+            failures.append(
+                f"{path}: NYAY-22 {label} SHA-256 differs from the sealed contract"
+            )
+
+    expected_contract = {
+        "schemaVersion": EXPECTED_NYAY22_POSTGRES_SCHEMA,
+        "producer": "backend/scripts/nyay22_postgres_mentor_gate.py",
+        "optInEnvironment": "NYAY22_POSTGRES_GATE",
+        "oracleInventory": list(EXPECTED_NYAY22_POSTGRES_ORACLES),
+        "oracleCount": len(EXPECTED_NYAY22_POSTGRES_ORACLES),
+        "applicationHead": EXPECTED_NYAY22_APPLICATION_HEAD,
+        "previousRevision": EXPECTED_NYAY22_PREVIOUS_REVISION,
+    }
+
+    contract: object = None
+    contract_raw = raw_by_label.get("native PostgreSQL contract")
+    if contract_raw is not None:
+        def reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            result: dict[str, object] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate JSON key")
+                result[key] = value
+            return result
+
+        try:
+            contract = json.loads(
+                contract_raw.decode("utf-8"),
+                object_pairs_hook=reject_duplicate_pairs,
+            )
+        except (UnicodeError, json.JSONDecodeError, ValueError):
+            failures.append(
+                f"{contract_path}: NYAY-22 native PostgreSQL contract is invalid"
+            )
+
+    if not isinstance(contract, dict):
+        if contract_raw is not None:
+            failures.append(
+                f"{contract_path}: NYAY-22 native PostgreSQL contract must be an object"
+            )
+    else:
+        if set(contract) != set(expected_contract):
+            failures.append(
+                f"{contract_path}: NYAY-22 native PostgreSQL contract violates the closed-world field inventory"
+            )
+        field_diagnostics = {
+            "schemaVersion": "schema version",
+            "producer": "producer path",
+            "optInEnvironment": "opt-in environment",
+            "oracleInventory": "oracle inventory",
+            "oracleCount": "oracle count",
+            "applicationHead": "application head",
+            "previousRevision": "previous revision",
+        }
+        for field, diagnostic in field_diagnostics.items():
+            if contract.get(field) != expected_contract[field]:
+                failures.append(
+                    f"{contract_path}: NYAY-22 native PostgreSQL {diagnostic} differs from the sealed contract"
+                )
+
+    producer_raw = raw_by_label.get("native PostgreSQL producer")
+    if producer_raw is not None:
+        try:
+            producer_source = producer_raw.decode("utf-8")
+            module = ast.parse(producer_source, filename=str(producer_path))
+        except (UnicodeError, SyntaxError):
+            failures.append(
+                f"{producer_path}: NYAY-22 native PostgreSQL producer is not valid Python"
+            )
+        else:
+            assignments: dict[str, object] = {}
+            for node in module.body:
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                ):
+                    try:
+                        assignments[node.targets[0].id] = ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        continue
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    try:
+                        assignments[node.target.id] = ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        continue
+
+            producer_expectations = {
+                "SCHEMA_VERSION": (
+                    EXPECTED_NYAY22_POSTGRES_SCHEMA,
+                    "schema version",
+                ),
+                "OPT_IN_ENV": ("NYAY22_POSTGRES_GATE", "opt-in environment"),
+                "ORACLE_IDS": (
+                    EXPECTED_NYAY22_POSTGRES_ORACLES,
+                    "oracle inventory",
+                ),
+                "APPLICATION_HEAD": (
+                    EXPECTED_NYAY22_APPLICATION_HEAD,
+                    "application head",
+                ),
+                "PREVIOUS_REVISION": (
+                    EXPECTED_NYAY22_PREVIOUS_REVISION,
+                    "previous revision",
+                ),
+            }
+            for name, (expected, diagnostic) in producer_expectations.items():
+                if assignments.get(name) != expected:
+                    failures.append(
+                        f"{producer_path}: NYAY-22 producer {diagnostic} differs from the sealed contract"
+                    )
+            for cli_marker in ("--database-url", "--output", "--contract-check"):
+                if producer_source.count(f'"{cli_marker}"') != 1:
+                    failures.append(
+                        f"{producer_path}: NYAY-22 producer CLI marker is not exact: {cli_marker}"
+                    )
+
+            functions = {
+                node.name: node
+                for node in module.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            required_functions = {
+                "_migration_downgrade_toctou_oracle",
+                "_migration_oracle",
+                "_postgres_bounds_oracle",
+                "_idempotency_oracles",
+                "_provider_subject_unique_race",
+                "_exchange_race",
+                "_recovery_active_set_snapshot_oracle",
+                "_expired_mentor_owner_login_race_oracle",
+                "_expired_owner_cookie_mentor_race_oracle",
+                "_owner_exclusion",
+                "_session_read_only_idle_boundary_oracle",
+                "_rotate_end_race",
+                "_deletion_historical_subject_actor_isolation_oracle",
+                "_deletion_race",
+                "_restriction_race",
+                "_retention_advisory_oracle",
+                "_retention_live_expiry_same_run_proof",
+                "_retention_held_node_atomicity_proof",
+                "_retention_orphan_erasure_proof",
+                "_nyay19_subject_erasure_authority_oracle",
+                "_retention_atomic_oracle",
+                "_retention_oversize_oracle",
+                "_privacy_oracle",
+                "_validate_report",
+                "run",
+            }
+            missing_functions = sorted(required_functions - set(functions))
+            if missing_functions:
+                failures.append(
+                    f"{producer_path}: NYAY-22 producer semantic oracle functions are missing"
+                )
+
+            def direct_calls(function_name: str) -> list[str]:
+                function = functions.get(function_name)
+                if function is None:
+                    return []
+                names: list[str] = []
+                for call in (
+                    node for node in ast.walk(function) if isinstance(node, ast.Call)
+                ):
+                    if isinstance(call.func, ast.Name):
+                        names.append(call.func.id)
+                    elif isinstance(call.func, ast.Attribute):
+                        names.append(call.func.attr)
+                return names
+
+            run_call_counts = {
+                "_migration_oracle": 1,
+                "_retention_advisory_oracle": 1,
+                "_retention_atomic_oracle": 1,
+                "_retention_oversize_oracle": 1,
+                "_postgres_bounds_oracle": 1,
+                "_idempotency_oracles": 1,
+                "_provider_subject_unique_race": 1,
+                "_exchange_race": 1,
+                "_owner_exclusion": 1,
+                "_rotate_end_race": 2,
+                "_deletion_race": 2,
+                "_restriction_race": 2,
+                "_privacy_oracle": 1,
+                "_validate_report": 1,
+            }
+            run_calls = direct_calls("run")
+            if any(
+                run_calls.count(name) != expected
+                for name, expected in run_call_counts.items()
+            ):
+                failures.append(
+                    f"{producer_path}: NYAY-22 producer run orchestration violates the sealed semantic inventory"
+                )
+
+            migration_calls = direct_calls("_migration_oracle")
+            if migration_calls.count("_migration_downgrade_toctou_oracle") != 1:
+                failures.append(
+                    f"{producer_path}: NYAY-22 migration subproof orchestration violates the sealed semantic inventory"
+                )
+
+            atomic_calls = direct_calls("_retention_atomic_oracle")
+            if (
+                atomic_calls.count("_retention_live_expiry_same_run_proof") != 1
+                or atomic_calls.count("_retention_held_node_atomicity_proof") != 1
+                or atomic_calls.count("_retention_orphan_erasure_proof") != 1
+                or atomic_calls.count(
+                    "_nyay19_subject_erasure_authority_oracle"
+                )
+                != 1
+            ):
+                failures.append(
+                    f"{producer_path}: NYAY-22 retention subproof orchestration violates the sealed semantic inventory"
+                )
+
+            deletion_calls = direct_calls("_deletion_race")
+            if (
+                deletion_calls.count(
+                    "_deletion_historical_subject_actor_isolation_oracle"
+                )
+                != 1
+            ):
+                failures.append(
+                    f"{producer_path}: NYAY-22 deletion actor-isolation subproof orchestration violates the sealed semantic inventory"
+                )
+
+            rotate_calls = direct_calls("_rotate_end_race")
+            if rotate_calls.count("_session_read_only_idle_boundary_oracle") != 1:
+                failures.append(
+                    f"{producer_path}: NYAY-22 session-read subproof orchestration violates the sealed semantic inventory"
+                )
+
+            owner_exclusion_calls = direct_calls("_owner_exclusion")
+            if (
+                owner_exclusion_calls.count(
+                    "_recovery_active_set_snapshot_oracle"
+                )
+                != 1
+                or owner_exclusion_calls.count(
+                    "_expired_mentor_owner_login_race_oracle"
+                )
+                != 1
+                or owner_exclusion_calls.count(
+                    "_expired_owner_cookie_mentor_race_oracle"
+                )
+                != 1
+            ):
+                failures.append(
+                    f"{producer_path}: NYAY-22 owner/class-exclusion subproof orchestration violates the sealed semantic inventory"
+                )
+
+            semantic_markers = {
+                "_migration_downgrade_toctou_oracle": (
+                    "ACCESS EXCLUSIVE",
+                    "pg_stat_activity",
+                    'wait_row[0] == "Lock"',
+                    "AccessExclusiveLock",
+                    "NOT l.granted",
+                    "downgrade accepted a concurrent durable row",
+                    "all mentor tables were not preserved",
+                    "fixture_count != 1",
+                ),
+                "_migration_oracle": (
+                    '"upgrade", PREVIOUS_REVISION',
+                    '"upgrade", APPLICATION_HEAD',
+                    '"downgrade", PREVIOUS_REVISION',
+                    '"mentor_retention_blocked_graphs"',
+                ),
+                "_postgres_bounds_oracle": (
+                    'text("SHOW lock_timeout")',
+                    'text("SHOW statement_timeout")',
+                    '"CONCURRENT_STATE_CHANGED"',
+                ),
+                "_idempotency_oracles": (
+                    "threading.Barrier(2)",
+                    '"IDEMPOTENCY_CONFLICT"',
+                    "after_ceremonies != 1",
+                ),
+                "_provider_subject_unique_race": (
+                    "threading.Barrier(2)",
+                    '"23505"',
+                    '"40P01"',
+                ),
+                "_deletion_race": (
+                    'for order in ("action_first", "revoke_first")',
+                    "threading.Barrier(2)",
+                    "_assert_deleted_race_terminal",
+                ),
+                "_deletion_historical_subject_actor_isolation_oracle": (
+                    "historical provider-subject actor-isolation",
+                    "snapshot_b() != before_b",
+                    "unrelated actor graph changed during authority deletion",
+                    "deleted actor retained live authority",
+                    'b_verified.status_code != 200',
+                ),
+                "_session_read_only_idle_boundary_oracle": (
+                    "session GET changed last_seen_at",
+                    "after_read.last_seen_at != original_last_seen",
+                    "original idle boundary did not expire authority",
+                    'expired_result != (410, "SESSION_EXPIRED")',
+                    "expired_last_seen != idle_boundary",
+                ),
+                "_recovery_active_set_snapshot_oracle": (
+                    '"mandatoryRevocationSessionIds"',
+                    'denied != (409, "CONCURRENT_STATE_CHANGED")',
+                    "after != before",
+                    "recovery active-set mismatch mutated authority",
+                    'purpose_code="legal_education"',
+                ),
+                "_expired_mentor_owner_login_race_oracle": (
+                    'for operation in ("rotate", "revoke", "logout")',
+                    'for order in ("owner_first", "mentor_first")',
+                    'text("SHOW lock_timeout")',
+                    'text("SHOW statement_timeout")',
+                    '"40P01"',
+                    '(410, "SESSION_EXPIRED")',
+                    '(410, "AUTHORITY_TERMINAL")',
+                    "owner/mentor race retained incompatible session classes",
+                    "expired-cookie race changed unrelated authority",
+                ),
+                "_expired_owner_cookie_mentor_race_oracle": (
+                    'for operation in ("read", "rotate")',
+                    'for order in ("owner_first", "mentor_first")',
+                    'text("SHOW lock_timeout")',
+                    'text("SHOW statement_timeout")',
+                    '"40P01"',
+                    "expired owner boundary was not materialized exactly",
+                    "owner-cookie race retained incompatible session classes",
+                    "owner-cookie race changed unrelated authority",
+                ),
+                "_restriction_race": (
+                    ".with_for_update()",
+                    '"AUTHORIZATION_DENIED"',
+                    "active != 1 or rows != 1",
+                ),
+                "_retention_atomic_oracle": (
+                    'calls == 7',
+                    "_retention_snapshot(factory, context) != before",
+                    'counts.get("severed_graphs") != 1',
+                    "context[\"old_digests\"] & set(new_digests)",
+                    "len(new_digests) != len(set(new_digests))",
+                ),
+                "_retention_live_expiry_same_run_proof": (
+                    'counts.get("materialized_expirations", 0) < 1',
+                    'counts.get("severed_graphs") != 1',
+                    "_retention_graph_is_fully_severed(factory, context)",
+                    '== "owner-create-mentor-prerequisites"',
+                    'owner_records[0].state != "erased"',
+                ),
+                "_retention_held_node_atomicity_proof": (
+                    "pg_stat_activity",
+                    'wait_event_type == "Lock"',
+                    '"40P01"',
+                    "_retention_snapshot(factory, context)",
+                    "_retention_graph_is_fully_severed(factory, context)",
+                    "after == before",
+                ),
+                "_retention_orphan_erasure_proof": (
+                    'counts.get("severed_graphs") != 2',
+                    'counts.get("bootstraps") != 2',
+                    "residual_joins != 0",
+                    "old_digests & new_digests",
+                    "unrelated_preserved",
+                ),
+                "_nyay19_subject_erasure_authority_oracle": (
+                    'for mode in ("anonymise", "delete")',
+                    'for operation in ("rotate", "read", "exchange")',
+                    "threading.Barrier(2)",
+                    'text("SET LOCAL lock_timeout = \'5s\'")',
+                    'text("SET LOCAL statement_timeout = \'15s\'")',
+                    '"40P01"',
+                    "NYAY-19 subject erasure left mentor authority",
+                    "unrelated subject changed during NYAY-19 erasure",
+                ),
+                "_retention_oversize_oracle": (
+                    "oversize_sessions=256",
+                    'first.get("materialized_expirations", 0) != 0',
+                    '"GRAPH_EXCEEDS_HARD_CAP"',
+                    "occurrence != 2",
+                    "_retention_snapshot(factory, context) != before",
+                ),
+                "_privacy_oracle": (
+                    "known_secrets",
+                    "audit_count",
+                    "link_count",
+                ),
+                "_validate_report": (
+                    "set(report) != expected_report_fields",
+                    'set(row) != {"id", "status", "assertions"}',
+                    'type(row.get("assertions")) is not int',
+                    'row.get("assertions", 0) <= 0',
+                ),
+            }
+            for function_name, markers in semantic_markers.items():
+                function = functions.get(function_name)
+                segment = (
+                    ast.get_source_segment(producer_source, function)
+                    if function is not None
+                    else ""
+                ) or ""
+                if any(marker not in segment for marker in markers):
+                    failures.append(
+                        f"{producer_path}: NYAY-22 producer {function_name} semantic contract differs from the seal"
+                    )
+    return failures
+
+
+def check_nyay22_nyay19_erasure_integration_contract(
+    test_path: Path = NYAY22_NYAY19_ERASURE_TEST,
+) -> list[str]:
+    """Seal the NYAY-19 registration/mentor erasure integration proofs."""
+
+    if not test_path.is_file() or test_path.is_symlink():
+        return [f"{test_path}: NYAY-22/NYAY-19 erasure integration is missing or unsafe"]
+    try:
+        raw = test_path.read_bytes()
+        source = raw.decode("utf-8")
+        module = ast.parse(source, filename=str(test_path))
+    except (OSError, UnicodeError, SyntaxError):
+        return [f"{test_path}: NYAY-22/NYAY-19 erasure integration is unreadable"]
+
+    failures: list[str] = []
+    if hashlib.sha256(raw).hexdigest() != EXPECTED_NYAY22_NYAY19_ERASURE_TEST_SHA256:
+        failures.append(
+            f"{test_path}: NYAY-22/NYAY-19 erasure integration SHA-256 differs from the sealed contract"
+        )
+    expected_tests = {
+        "test_privacy_delete_over_cap_does_not_consume_recovery_proof",
+        "test_terminal_beyond_cutoff_graph_severs_before_registration_anonymise",
+        "test_mid_severance_failure_rolls_back_graph_and_registration",
+        "test_live_or_young_graph_and_registration_are_both_deferred_bit_identically",
+        "test_global_multi_domain_oversize_blocks_without_partial_mutation",
+        "test_elapsed_live_oversize_retention_blocks_before_materialization",
+    }
+    discovered = {
+        node.name
+        for node in module.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+    }
+    if discovered != expected_tests:
+        failures.append(
+            f"{test_path}: NYAY-22/NYAY-19 erasure test inventory differs from the sealed contract"
+        )
+    for marker in (
+        "prepare_subject_mentor_registration_erasure",
+        "retention.anonymise_registration(db, registration)",
+        "retention.delete_registration",
+        "_retention_snapshot(factory, context) == graph_before",
+        'counts["materialized_expirations"] == 0',
+        'counts["blocked_graphs"] == 1',
+        '"GRAPH_EXCEEDS_HARD_CAP"',
+        '"nyay19_retention_review"',
+    ):
+        if marker not in source:
+            failures.append(
+                f"{test_path}: NYAY-22/NYAY-19 erasure semantic contract differs from the seal"
+            )
+            break
     return failures
 
 
@@ -3845,6 +4753,9 @@ def main() -> int:
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
+    failures.extend(check_nyay22_browser_gate_contract())
+    failures.extend(check_nyay22_postgres_gate_contract())
+    failures.extend(check_nyay22_nyay19_erasure_integration_contract())
     failures.extend(check_nyay19_browser_gate_contract())
     failures.extend(check_nyay5_gate_contract())
     failures.extend(check_nyay14_evidence_gate_contract())

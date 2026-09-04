@@ -77,7 +77,8 @@ PINNED_HEAD = "0018_registration_idempotency"
 # owner-scoped profile contracts added after 0018.  Keep 0021 named as a
 # checkpoint so advancing the repository head cannot erase its chain oracle.
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
-APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
+NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
+APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
 REGISTER_PATH = "/api/v1/auth/student/register"
 REGISTRATION_ACCEPTED_STATUS = 202
 RECENT_PROBE_HISTORY_AGE_DAYS = 2
