@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """NYAY-33 tests-first contracts for the NYAY-29 design-document follow-up.
 
-These tests intentionally describe the reconciled documentation state.  They
-must remain RED until the separately authorized GREEN phase edits the four
-NYAY-29 design artifacts.  No product implementation is in scope here.
+These tests permanently enforce the reconciled documentation state across the
+four NYAY-29 design artifacts. No product implementation is in scope here.
 """
 
 from __future__ import annotations
@@ -54,6 +53,21 @@ def _openapi_operation(document: dict[str, object], operation_id: str) -> dict[s
     raise AssertionError(f"NYAY33-OPERATION-MISSING:{operation_id}")
 
 
+def _required_operation_row(
+    lines: list[str], operation_marker: str, diagnostic_id: str
+) -> str:
+    """Return one required operation row or fail with a canonical diagnostic."""
+
+    if re.fullmatch(r"[A-Z][A-Z0-9-]*", diagnostic_id) is None:
+        raise AssertionError("NYAY33-DIAGNOSTIC-ID-INVALID")
+    matches = [row for row in lines if operation_marker in row]
+    if not matches:
+        raise AssertionError(f"NYAY33-REQUIRED-OPERATION-MISSING:{diagnostic_id}")
+    if len(matches) != 1:
+        raise AssertionError(f"NYAY33-REQUIRED-OPERATION-AMBIGUOUS:{diagnostic_id}")
+    return matches[0]
+
+
 class Nyay33DocumentationPolishContracts(unittest.TestCase):
     maxDiff = None
 
@@ -102,6 +116,32 @@ class Nyay33DocumentationPolishContracts(unittest.TestCase):
             "must be one exact closed inventory",
         )
 
+    def test_required_operation_lookup_fails_closed_with_canonical_diagnostic(self) -> None:
+        cases = (
+            (
+                ["sensitive-input-one"],
+                "| `verifyTutorIdentity` |",
+                "STRIDE-VERIFY",
+                "NYAY33-REQUIRED-OPERATION-MISSING:STRIDE-VERIFY",
+            ),
+            (
+                [
+                    "| `verifyTutorIdentity` | sensitive-input-one |",
+                    "| `verifyTutorIdentity` | sensitive-input-two |",
+                ],
+                "| `verifyTutorIdentity` |",
+                "STRIDE-VERIFY",
+                "NYAY33-REQUIRED-OPERATION-AMBIGUOUS:STRIDE-VERIFY",
+            ),
+        )
+        for lines, marker, diagnostic_id, expected in cases:
+            with self.subTest(expected=expected):
+                with self.assertRaises(AssertionError) as raised:
+                    _required_operation_row(lines, marker, diagnostic_id)
+                self.assertEqual(str(raised.exception), expected)
+                self.assertNotIn("sensitive-input-one", str(raised.exception))
+                self.assertNotIn("sensitive-input-two", str(raised.exception))
+
     def test_f02_exchange_and_rotation_cookie_header_refs_match_their_effects(self) -> None:
         exchange = _openapi_operation(self.openapi, "exchangeTutorCeremony")
         rotate = _openapi_operation(self.openapi, "rotateTutorSession")
@@ -119,11 +159,11 @@ class Nyay33DocumentationPolishContracts(unittest.TestCase):
         )
 
     def test_f03_recovery_revocation_has_one_authoritative_commit_point(self) -> None:
-        stride_verify_row = next(
-            row for row in self.stride.splitlines() if "`verifyTutorIdentity`" in row
+        stride_verify_row = _required_operation_row(
+            self.stride.splitlines(), "| `verifyTutorIdentity` |", "STRIDE-VERIFY"
         )
-        stride_exchange_row = next(
-            row for row in self.stride.splitlines() if "`exchangeTutorCeremony`" in row
+        stride_exchange_row = _required_operation_row(
+            self.stride.splitlines(), "| `exchangeTutorCeremony` |", "STRIDE-EXCHANGE"
         )
         stride_point = (
             "verify"

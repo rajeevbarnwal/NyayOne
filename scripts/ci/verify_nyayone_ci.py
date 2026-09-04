@@ -278,6 +278,7 @@ EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
 )
 EXPECTED_NYAY27_POLICY_COMMAND = "python scripts/ci/test_nyay27_contact_sheet_gate.py"
 EXPECTED_NYAY21_POLICY_COMMAND = "python scripts/ci/test_nyay21_history_purge.py"
+EXPECTED_NYAY33_POLICY_COMMAND = "python scripts/ci/test_nyay33_documentation_polish.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
 )
@@ -1221,6 +1222,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
         EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
         EXPECTED_NYAY27_POLICY_COMMAND,
         EXPECTED_NYAY21_POLICY_COMMAND,
+        EXPECTED_NYAY33_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
         "python scripts/ci/test_nyay18_namespace_boundary_doc.py",
@@ -1283,7 +1285,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "80f9e5757fbdc0b01bd7d85752cc35c0eb41e51e99048544e482cc862ff62d9f",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "e69953fd33bc98faa9cb547b4dd688c0dd5b0078eddf276770f0dbf27d089589",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
