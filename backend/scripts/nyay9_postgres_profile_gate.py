@@ -51,7 +51,7 @@ PINNED_MIGRATION = (
 )
 MIGRATION_AUTHORITY = BACKEND / "app/db/migration_release_guard.py"
 MIGRATION_AUTHORITY_REFERENCE = (
-    "backend/app/db/migration_release_guard.py#APPLICATION_HEAD_SOURCE_SHA256"
+    "backend/app/db/migration_release_guard.py#NYAY9_SOURCE_SHA256"
 )
 SCRATCH_PREFIX = "nyay9_profile_"
 FIXED_NOW = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
@@ -414,10 +414,10 @@ def _migration_source_authority_matches() -> bool:
         return False
     migration_digest = hashlib.sha256(PINNED_MIGRATION.read_bytes()).hexdigest()
     return bool(
-        migration_release_guard.APPLICATION_HEAD_REVISION == PINNED_HEAD
-        and migration_release_guard.APPLICATION_HEAD_SOURCE_PATH.resolve()
+        migration_release_guard.NYAY9_REVISION == PINNED_HEAD
+        and migration_release_guard.NYAY9_SOURCE_PATH.resolve()
         == PINNED_MIGRATION.resolve()
-        and migration_release_guard.APPLICATION_HEAD_SOURCE_SHA256
+        and migration_release_guard.NYAY9_SOURCE_SHA256
         == migration_digest
         and migration_release_guard.source_authority_is_valid()
     )

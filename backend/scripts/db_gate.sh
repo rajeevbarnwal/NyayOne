@@ -15,6 +15,7 @@
 #   * the NYAY-17 PostgreSQL 16 registration-idempotency release gate.
 #   * the NYAY-4 PostgreSQL 16 OTP-security authority release gate.
 #   * the NYAY-19 PostgreSQL 16 authentication-retention lifecycle release gate.
+#   * the NYAY-22 PostgreSQL 16 mentor-ceremony concurrency/lifecycle release gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -109,3 +110,14 @@ NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" scripts/nyay19_postgres_auth_retention_gate
   --execute \
   --database-url "$DATABASE_URL" \
   --output test-results/nyay19-postgres/summary.json
+echo "== NYAY-22 mentor ceremony concurrency/lifecycle gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay22-postgres
+NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay22-postgres/summary.json
+# The producer writes only after its exact closed-world report validation.
+# Promote that already-sanitized summary into the workflow evidence root; raw
+# database state and runtime credentials remain under the backend boundary.
+mkdir -p "$REPO_ROOT/test-results/nyay22-postgres"
+cp test-results/nyay22-postgres/summary.json \
+  "$REPO_ROOT/test-results/nyay22-postgres/summary.json"

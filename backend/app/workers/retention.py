@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from app.core.retention import purge_expired
 from app.db.session import get_sessionmaker
+from app.services.mentor_ceremony import run_mentor_retention
 
 
 def run_retention_once() -> dict[str, int]:
@@ -13,6 +14,13 @@ def run_retention_once() -> dict[str, int]:
     with get_sessionmaker()() as session:
         counts = purge_expired(session, now=datetime.now(timezone.utc))
         session.commit()
+        mentor_counts = run_mentor_retention(
+            session,
+            now=datetime.now(timezone.utc),
+        )
+        counts.update(
+            {f"mentor_{name}": count for name, count in mentor_counts.items()}
+        )
         return counts
 
 

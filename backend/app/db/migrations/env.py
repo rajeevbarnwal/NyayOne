@@ -13,6 +13,7 @@ from app.db.migration_release_guard import (
     APPLICATION_HEAD_REVISION,
     MigrationApprovalError,
     NYAY5_REVISION,
+    NYAY9_REVISION,
     enforce_nyay19_migration_postflight,
     enforce_nyay19_migration_release_guard,
     install_authenticated_migration_loader,
@@ -88,6 +89,8 @@ def run_migrations_online() -> None:
                         expected_revision = APPLICATION_HEAD_REVISION
                     elif requested_revision == NYAY5_REVISION:
                         expected_revision = NYAY5_REVISION
+                    elif requested_revision == NYAY9_REVISION:
+                        expected_revision = NYAY9_REVISION
                     else:
                         expected_revision = "0020_auth_retention_lifecycle"
                     if expected_revision == "0020_auth_retention_lifecycle":

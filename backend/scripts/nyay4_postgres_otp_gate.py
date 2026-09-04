@@ -54,7 +54,8 @@ PREVIOUS_REVISION = "0018_registration_idempotency"
 PINNED_HEAD = "0019_otp_security_authority"
 APPLICATION_PARENT = "0020_auth_retention_lifecycle"
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
-APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
+NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
+APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
@@ -3423,13 +3424,16 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
         nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay9_checkpoint is None
             or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != nyay5_checkpoint.revision
+            or application.down_revision != nyay9_checkpoint.revision
+            or nyay9_checkpoint.down_revision != nyay5_checkpoint.revision
             or nyay5_checkpoint.down_revision != retention.revision
             or retention.down_revision != PINNED_HEAD
         ):
@@ -7374,6 +7378,22 @@ def _run_maintenance_entrypoint_probe(
             "login_attempts_expired",
             "login_attempts",
             "auth_sessions",
+            "mentor_materialized_expirations",
+            "mentor_severed_graphs",
+            "mentor_blocked_graphs",
+            "mentor_bootstraps",
+            "mentor_invitations",
+            "mentor_ceremonies",
+            "mentor_provider_results",
+            "mentor_subject_consents",
+            "mentor_engagements",
+            "mentor_mentor_consents",
+            "mentor_sessions",
+            "mentor_step_ups",
+            "mentor_proofs",
+            "mentor_idempotency",
+            "mentor_audit_links",
+            "mentor_rate_buckets",
         }
         return {
             "entrypoint_executed": True,
