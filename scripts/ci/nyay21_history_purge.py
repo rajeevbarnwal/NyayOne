@@ -19,12 +19,36 @@ from typing import Any, Iterable, Mapping, Sequence
 
 SCHEMA_VERSION = "nyay21-history-purge/v1"
 REPOSITORY = "rajeevbarnwal/NyayOne"
-BASE_SHA = "422b3dbbeddb25c6735cd093003ccaef335cb60a"
+BASE_SHA = "454a40784ee2e084d9a756a713f287b627f1c4d4"
 SOURCE_COMMIT = "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374"
 DELETION_COMMIT = "d58d1fbac48db5a29158ca5b3b168b8951d526d1"
 FILTER_REPO_VERSION = "a40bce548d2c"
+AUTHORITATIVE_REF_INVENTORY_SHA256 = (
+    "292a8bbaeba262de21c700546790e3c2b0e6c55f0174b4f5e9098b125be7edc7"
+)
+AUTHORITATIVE_PLANNING_SEAL_SHA256 = (
+    "2c7f3e20e2b53a7c7b866e6d8b5cd4b87902d3f9eeaede9d56e3dbf3a72b1e71"
+)
+AUTHORITATIVE_REACHABLE_COMMIT_COUNT = 321
+AUTHORITATIVE_AFFECTED_COMMIT_COUNT = 267
+AUTHORITATIVE_CHANGED_COMMIT_COUNT = 266
+AUTHORITATIVE_PRUNED_COMMIT_COUNT = 1
+AUTHORITATIVE_SIGNED_COMMIT_COUNT = 40
+AUTHORITATIVE_CONCRETE_REF_COUNT = 42
+AUTHORITATIVE_TOTAL_REF_ROWS = 43
+RULESET_ID = 20888530
+AUTHORITATIVE_RULESET_GET_SHA256 = (
+    "8419caa7e36d80182a46550c1af82eaf3ece2b117a4e86e93758328e426e0955"
+)
+AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256 = (
+    "9230f337f15f57ddb28f17dc24076441a9649d0994e015584d80b514997bc3cc"
+)
+AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256 = (
+    "bf1f82decd5e5276475a84ef42b26f0be67c908186195b00669f21158a0c0711"
+)
 APPROVAL_REGISTRY_SCHEMA = "nyay21-approval-consumption/v1"
 OWNER_APPROVER = "Rajeev Barnwal"
+SECURITY_PRIVACY_APPROVER = "Claude Code"
 STRICT_REQUIRED_CHECKS = (
     "nyayone-registration-required",
     "nyayone-wave1-required",
@@ -127,7 +151,76 @@ def _inventory_seal_is_valid(inventory: object) -> bool:
         and inventory.get("visibility") == "PRIVATE"
         and inventory.get("defaultBranch") == "main"
         and inventory.get("sourceHead") == BASE_SHA
+        and inventory.get("refInventorySha256")
+        == AUTHORITATIVE_REF_INVENTORY_SHA256
+        and inventory.get("reachableCommitCount")
+        == AUTHORITATIVE_REACHABLE_COMMIT_COUNT
+        and inventory.get("affectedCommitCount")
+        == AUTHORITATIVE_AFFECTED_COMMIT_COUNT
+        and inventory.get("signedCommitCount")
+        == AUTHORITATIVE_SIGNED_COMMIT_COUNT
         and _inventory_content_seal_is_valid(inventory)
+    )
+
+
+def validate_authoritative_planning_seal(seal: object) -> dict[str, Any]:
+    """Accept only the exact R1 inventory sealed at the reviewed source head."""
+
+    row = seal if isinstance(seal, Mapping) else {}
+    refs = row.get("refs") if isinstance(row.get("refs"), list) else []
+    ref_counts = row.get("refCounts") if isinstance(row.get("refCounts"), Mapping) else {}
+    target_rows = _target_rows(row.get("targetManifest"))
+    codes: list[str] = []
+    try:
+        observed_seal_digest = _canonical_json_sha256(row)
+        observed_ref_digest = _canonical_json_sha256(refs)
+        observed_target_digest = _canonical_json_sha256(row.get("targetManifest"))
+    except (TypeError, ValueError):
+        observed_seal_digest = ""
+        observed_ref_digest = ""
+        observed_target_digest = ""
+
+    concrete_refs = [
+        ref
+        for ref in refs
+        if isinstance(ref, Mapping) and ref.get("kind") != "symbolic-head"
+    ]
+    symbolic_refs = [
+        ref
+        for ref in refs
+        if isinstance(ref, Mapping) and ref.get("kind") == "symbolic-head"
+    ]
+    if (
+        observed_seal_digest != AUTHORITATIVE_PLANNING_SEAL_SHA256
+        or row.get("repository") != REPOSITORY
+        or row.get("visibility") != "PRIVATE"
+        or row.get("sourceHead") != BASE_SHA
+        or row.get("reachableCommitCount") != AUTHORITATIVE_REACHABLE_COMMIT_COUNT
+        or row.get("expectedAffectedCommitCount")
+        != AUTHORITATIVE_AFFECTED_COMMIT_COUNT
+        or row.get("expectedChangedCommitCount")
+        != AUTHORITATIVE_CHANGED_COMMIT_COUNT
+        or row.get("expectedPrunedCommitCount")
+        != AUTHORITATIVE_PRUNED_COMMIT_COUNT
+        or row.get("signedCommitCount") != AUTHORITATIVE_SIGNED_COMMIT_COUNT
+        or ref_counts.get("concreteRefs") != AUTHORITATIVE_CONCRETE_REF_COUNT
+        or ref_counts.get("totalRowsIncludingSymbolicHead")
+        != AUTHORITATIVE_TOTAL_REF_ROWS
+        or len(concrete_refs) != AUTHORITATIVE_CONCRETE_REF_COUNT
+        or len(refs) != AUTHORITATIVE_TOTAL_REF_ROWS
+        or len(symbolic_refs) != 1
+        or target_rows != TARGETS
+        or row.get("refInventorySha256")
+        != AUTHORITATIVE_REF_INVENTORY_SHA256
+        or observed_ref_digest != AUTHORITATIVE_REF_INVENTORY_SHA256
+        or row.get("targetManifestSha256") != observed_target_digest
+    ):
+        codes.append("AUTHORITATIVE_PLANNING_SEAL_MISMATCH")
+    return _result(
+        codes,
+        sourceHead=row.get("sourceHead"),
+        refInventorySha256=row.get("refInventorySha256"),
+        concreteRefCount=len(concrete_refs),
     )
 
 
@@ -158,8 +251,7 @@ def _validate_approval_records(
         and owner.get("role") == "repository-owner"
         and owner.get("decision") == "APPROVE"
         and isinstance(security, Mapping)
-        and isinstance(security.get("name"), str)
-        and bool(security.get("name", "").strip())
+        and security.get("name") == SECURITY_PRIVACY_APPROVER
         and security.get("role") == "security-privacy"
         and security.get("decision") == "APPROVE"
     ):
@@ -821,10 +913,10 @@ def validate_retention_boundary(
         if prior.get(key) != current.get(key):
             codes.append("REWRITE_SCOPE_DRIFT")
     if (
-        prior.get("signedCommitCount") != 31
+        prior.get("signedCommitCount") != AUTHORITATIVE_SIGNED_COMMIT_COUNT
         or current.get("signedCommitCount") != 0
         or current.get("signatureDisposition")
-        != "git-filter-repo-stripped-31-gpg-signatures-with-sealed-old-object-map"
+        != "git-filter-repo-stripped-40-gpg-signatures-with-sealed-old-object-map"
         or current.get("unexpectedMetadataChanges") != []
     ):
         codes.append("SIGNATURE_DISPOSITION_MISMATCH")
@@ -1009,21 +1101,329 @@ def render_force_update_commands(
     return [" ".join(("git", "push", "--atomic", *leases, "origin", *refspecs))]
 
 
-def validate_ruleset_restoration(before: object, after: object) -> dict[str, Any]:
+def render_force_update_dry_run_commands(
+    mapping: object, approved_refs: object
+) -> list[str]:
+    """Render the exact transaction with ``--dry-run`` and never execute it."""
+
+    commands = render_force_update_commands(mapping, approved_refs)
+    prefix = "git push --atomic "
+    return [
+        command.replace(prefix, "git push --atomic --dry-run ", 1)
+        for command in commands
+    ]
+
+
+def validate_atomic_dry_run_lease_readback(
+    proof: object,
+    authoritative_seal: object,
+    mapping: object,
+    approved_refs: object,
+) -> dict[str, Any]:
+    """Bind an atomic dry-run to all 42 remote refs and exact old-SHA leases."""
+
+    row = proof if isinstance(proof, Mapping) else {}
+    seal = authoritative_seal if isinstance(authoritative_seal, Mapping) else {}
+    codes: list[str] = []
+    seal_result = validate_authoritative_planning_seal(seal)
+    if seal_result["verdict"] != "PASS":
+        codes.append("AUTHORITATIVE_PLANNING_SEAL_MISMATCH")
+
+    expected_readback = [
+        dict(ref)
+        for ref in seal.get("refs", [])
+        if isinstance(ref, Mapping) and ref.get("kind") != "symbolic-head"
+    ]
+    actual_readback = (
+        row.get("readBackRefs") if isinstance(row.get("readBackRefs"), list) else []
+    )
+    if (
+        len(expected_readback) != AUTHORITATIVE_CONCRETE_REF_COUNT
+        or actual_readback != expected_readback
+    ):
+        codes.append("REMOTE_REF_READBACK_NOT_CLOSED")
+
+    try:
+        expected_command = render_force_update_dry_run_commands(
+            mapping, approved_refs
+        )[0]
+    except (TypeError, ValueError, IndexError):
+        expected_command = ""
+        codes.append("DRY_RUN_PLAN_INVALID")
+    if (
+        not expected_command
+        or row.get("command") != expected_command
+        or row.get("commandSha256")
+        != hashlib.sha256(expected_command.encode("utf-8")).hexdigest()
+    ):
+        codes.append("DRY_RUN_PLAN_SEAL_MISMATCH")
+
+    mapping_rows = mapping if isinstance(mapping, Mapping) else {}
+    inventory_by_name = {
+        ref.get("name"): ref
+        for ref in expected_readback
+        if isinstance(ref, Mapping)
+    }
+    approved = (
+        list(approved_refs)
+        if isinstance(approved_refs, Sequence)
+        and not isinstance(approved_refs, (str, bytes))
+        else []
+    )
+    if not approved or set(mapping_rows) != set(approved):
+        codes.append("DRY_RUN_PLAN_INVALID")
+    else:
+        for name in approved:
+            mapping_row = mapping_rows.get(name)
+            inventory_row = inventory_by_name.get(name)
+            if (
+                not isinstance(mapping_row, Mapping)
+                or not isinstance(inventory_row, Mapping)
+                or mapping_row.get("old") != inventory_row.get("target")
+            ):
+                codes.append("LEASE_READBACK_MISMATCH")
+                break
+
+    if row.get("dryRunExitCode") != 0:
+        codes.append("DRY_RUN_FAILED")
+    if row.get("atomicAdvertised") is not True:
+        codes.append("ATOMIC_PUSH_NOT_PROVEN")
+    if row.get("remoteUpdated") is not False:
+        codes.append("DRY_RUN_MUTATED_REMOTE")
+    return _result(codes, remoteRefRows=len(actual_readback), remoteUpdated=False)
+
+
+def _ruleset_update_payload(readback: Mapping[str, object]) -> dict[str, object]:
+    required = ("name", "target", "enforcement", "bypass_actors", "conditions", "rules")
+    return {key: copy.deepcopy(readback.get(key)) for key in required}
+
+
+def _ruleset_oracles_are_intact(readback: Mapping[str, object]) -> bool:
+    rules = readback.get("rules")
+    if not isinstance(rules, list):
+        return False
+    by_type = {
+        rule.get("type"): rule
+        for rule in rules
+        if isinstance(rule, Mapping) and isinstance(rule.get("type"), str)
+    }
+    status_rule = by_type.get("required_status_checks")
+    pull_rule = by_type.get("pull_request")
+    status_parameters = (
+        status_rule.get("parameters") if isinstance(status_rule, Mapping) else None
+    )
+    pull_parameters = (
+        pull_rule.get("parameters") if isinstance(pull_rule, Mapping) else None
+    )
+    contexts = (
+        [
+            item.get("context")
+            for item in status_parameters.get("required_status_checks", [])
+            if isinstance(item, Mapping)
+        ]
+        if isinstance(status_parameters, Mapping)
+        else []
+    )
+    return (
+        readback.get("id") == RULESET_ID
+        and readback.get("name") == "NyayOne main baseline protection"
+        and readback.get("enforcement") == "active"
+        and readback.get("target") == "branch"
+        and readback.get("bypass_actors") == []
+        and readback.get("conditions")
+        == {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}}
+        and "deletion" in by_type
+        and "non_fast_forward" in by_type
+        and isinstance(pull_parameters, Mapping)
+        and pull_parameters.get("required_review_thread_resolution") is True
+        and isinstance(status_parameters, Mapping)
+        and status_parameters.get("strict_required_status_checks_policy") is True
+        and contexts == list(STRICT_REQUIRED_CHECKS)
+    )
+
+
+def render_ruleset_restoration_trap(payload_pair: object) -> str:
+    """Render, but never execute, the sealed ruleset restoration trap."""
+
+    pair = payload_pair if isinstance(payload_pair, Mapping) else {}
+    before_digest = pair.get("canonicalGetBeforeSha256")
+    restoration_digest = pair.get("restorationPayloadSha256")
+    if (
+        pair.get("rulesetId") != RULESET_ID
+        or not _is_hex(before_digest, 64)
+        or not _is_hex(restoration_digest, 64)
+        or before_digest != AUTHORITATIVE_RULESET_GET_SHA256
+        or pair.get("relaxationPayloadSha256")
+        != AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256
+        or restoration_digest != AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256
+        or _canonical_json_sha256(pair.get("canonicalGetBefore")) != before_digest
+        or _canonical_json_sha256(pair.get("restorationPayload"))
+        != restoration_digest
+    ):
+        raise ValueError("ruleset restoration pair is not sealed")
+    return f"""#!/usr/bin/env bash
+set -euo pipefail
+
+: "${{NYAY21_RESTORATION_PAYLOAD:?sealed restoration payload path required}}"
+: "${{NYAY21_RESTORED_GET:?independent GET output path required}}"
+
+restore_ruleset_from_sealed_payload() {{
+  local prior_status=$?
+  local payload_digest
+  local readback_digest
+  payload_digest="$(jq -cS . "$NYAY21_RESTORATION_PAYLOAD" | tr -d '\\n' | shasum -a 256 | awk '{{print $1}}')"
+  test "$payload_digest" = "{restoration_digest}"
+  gh api --method PUT repos/rajeevbarnwal/NyayOne/rulesets/{RULESET_ID} \\
+    --input "$NYAY21_RESTORATION_PAYLOAD"
+  gh api repos/rajeevbarnwal/NyayOne/rulesets/{RULESET_ID} \\
+    > "$NYAY21_RESTORED_GET"
+  readback_digest="$(jq -cS . "$NYAY21_RESTORED_GET" | tr -d '\\n' | shasum -a 256 | awk '{{print $1}}')"
+  test "$readback_digest" = "{before_digest}"
+  return "$prior_status"
+}}
+
+trap restore_ruleset_from_sealed_payload EXIT HUP INT TERM
+"""
+
+
+def validate_ruleset_restoration_trap_events(
+    events: object, sealed_before_sha256: object
+) -> dict[str, Any]:
+    """Require evidence that restoration ran on every defined exit path."""
+
+    rows = events if isinstance(events, list) else []
+    required_paths = {"success", "push-rejected", "signal", "operator-error"}
+    observed_paths = {
+        row.get("path") for row in rows if isinstance(row, Mapping)
+    }
+    codes: list[str] = []
+    if (
+        not _is_hex(sealed_before_sha256, 64)
+        or observed_paths != required_paths
+        or len(rows) != len(required_paths)
+    ):
+        codes.append("RESTORATION_EXIT_PATH_UNPROVEN")
+    for row in rows:
+        if not (
+            isinstance(row, Mapping)
+            and row.get("restoreAttempted") is True
+            and row.get("independentGetPerformed") is True
+            and row.get("canonicalGetSha256") == sealed_before_sha256
+        ):
+            codes.append("RESTORATION_EXIT_PATH_UNPROVEN")
+    return _result(codes, provenExitPaths=sorted(observed_paths - {None}))
+
+
+def validate_ruleset_restoration(
+    before: object,
+    after: object,
+    *,
+    sealed_before_sha256: str | None = None,
+    relaxation_payload: object = None,
+    sealed_relaxation_sha256: str | None = None,
+    restoration_payload: object = None,
+    sealed_restoration_sha256: str | None = None,
+    restoration_trap: object = None,
+) -> dict[str, Any]:
+    """Require the complete GitHub GET and a pre-sealed restoration ceremony."""
+
     prior = before if isinstance(before, Mapping) else {}
     current = after if isinstance(after, Mapping) else {}
     codes: list[str] = []
-    if prior != current:
+    required_full_get_keys = {
+        "_links",
+        "bypass_actors",
+        "conditions",
+        "created_at",
+        "current_user_can_bypass",
+        "enforcement",
+        "id",
+        "name",
+        "node_id",
+        "rules",
+        "source",
+        "source_type",
+        "target",
+        "updated_at",
+    }
+    full_get = required_full_get_keys.issubset(prior) and required_full_get_keys.issubset(
+        current
+    )
+    if not full_get:
+        codes.append("FULL_RULESET_READBACK_REQUIRED")
+
+    try:
+        before_digest = _canonical_json_sha256(prior)
+        after_digest = _canonical_json_sha256(current)
+    except (TypeError, ValueError):
+        before_digest = ""
+        after_digest = ""
+    if not _is_hex(sealed_before_sha256, 64) or before_digest != sealed_before_sha256:
+        codes.append("RULESET_GET_SEAL_MISMATCH")
+    if sealed_before_sha256 != AUTHORITATIVE_RULESET_GET_SHA256:
+        codes.append("RULESET_GET_AUTHORITY_MISMATCH")
+    if prior != current or before_digest != after_digest:
         codes.append("PROTECTION_NOT_RESTORED")
-    prior_checks = set(prior.get("requiredChecks", []))
-    current_checks = set(current.get("requiredChecks", []))
-    if (
-        current.get("requiredChecksStrict") is not True
-        or current_checks != prior_checks
-        or current.get("enforcement") != "active"
+    if not _ruleset_oracles_are_intact(prior) or not _ruleset_oracles_are_intact(
+        current
     ):
         codes.append("ORACLE_WEAKENED")
-    return _result(codes)
+
+    relaxation = relaxation_payload if isinstance(relaxation_payload, Mapping) else {}
+    restoration = (
+        restoration_payload if isinstance(restoration_payload, Mapping) else {}
+    )
+    try:
+        relaxation_digest = _canonical_json_sha256(relaxation)
+        restoration_digest = _canonical_json_sha256(restoration)
+    except (TypeError, ValueError):
+        relaxation_digest = ""
+        restoration_digest = ""
+    if (
+        not _is_hex(sealed_relaxation_sha256, 64)
+        or relaxation_digest != sealed_relaxation_sha256
+        or not _is_hex(sealed_restoration_sha256, 64)
+        or restoration_digest != sealed_restoration_sha256
+    ):
+        codes.append("RULESET_PAYLOAD_SEAL_MISMATCH")
+    if (
+        sealed_relaxation_sha256 != AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256
+        or sealed_restoration_sha256 != AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256
+    ):
+        codes.append("RULESET_PAYLOAD_AUTHORITY_MISMATCH")
+
+    expected_restoration = _ruleset_update_payload(prior)
+    expected_relaxation = copy.deepcopy(expected_restoration)
+    expected_relaxation["rules"] = [
+        rule
+        for rule in (expected_relaxation.get("rules") or [])
+        if isinstance(rule, Mapping) and rule.get("type") != "non_fast_forward"
+    ]
+    if restoration != expected_restoration or relaxation != expected_relaxation:
+        codes.append("RULESET_PAYLOAD_SCOPE_MISMATCH")
+
+    trap = restoration_trap if isinstance(restoration_trap, Mapping) else {}
+    if not (
+        trap.get("schemaVersion") == "nyay21-ruleset-restoration-trap/v1"
+        and trap.get("mechanism") == "shell-trap"
+        and trap.get("installedBeforeRelaxation") is True
+        and trap.get("trapSource")
+        == "trap restore_ruleset_from_sealed_payload EXIT HUP INT TERM"
+        and trap.get("signals") == ["EXIT", "HUP", "INT", "TERM"]
+        and set(trap.get("exitPaths", []))
+        == {"success", "push-rejected", "signal", "operator-error"}
+        and trap.get("canonicalGetBeforeSha256") == sealed_before_sha256
+        and trap.get("restorationPayloadSha256") == sealed_restoration_sha256
+        and trap.get("independentGetAfterRestore") is True
+        and trap.get("digestEqualityRequired") is True
+    ):
+        codes.append("RESTORATION_TRAP_INCOMPLETE")
+    return _result(
+        codes,
+        beforeSha256=before_digest,
+        afterSha256=after_digest,
+        restorationTrapArmed="RESTORATION_TRAP_INCOMPLETE" not in codes,
+    )
 
 
 def validate_collaborator_recovery(plan: object) -> dict[str, Any]:
@@ -1162,13 +1562,30 @@ __all__ = [
     "SOURCE_COMMIT",
     "DELETION_COMMIT",
     "FILTER_REPO_VERSION",
+        "AUTHORITATIVE_REF_INVENTORY_SHA256",
+    "AUTHORITATIVE_PLANNING_SEAL_SHA256",
+    "AUTHORITATIVE_REACHABLE_COMMIT_COUNT",
+    "AUTHORITATIVE_AFFECTED_COMMIT_COUNT",
+    "AUTHORITATIVE_CHANGED_COMMIT_COUNT",
+    "AUTHORITATIVE_PRUNED_COMMIT_COUNT",
+    "AUTHORITATIVE_SIGNED_COMMIT_COUNT",
+    "AUTHORITATIVE_CONCRETE_REF_COUNT",
+    "AUTHORITATIVE_TOTAL_REF_ROWS",
+    "AUTHORITATIVE_RULESET_GET_SHA256",
+    "AUTHORITATIVE_RELAXATION_PAYLOAD_SHA256",
+    "AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256",
     "APPROVAL_REGISTRY_SCHEMA",
     "OWNER_APPROVER",
+    "SECURITY_PRIVACY_APPROVER",
     "STRICT_REQUIRED_CHECKS",
     "TARGETS",
     "render_force_update_commands",
+    "render_force_update_dry_run_commands",
+    "render_ruleset_restoration_trap",
     "render_local_rewrite_argv",
     "validate_authorizations",
+    "validate_atomic_dry_run_lease_readback",
+    "validate_authoritative_planning_seal",
     "validate_backup",
     "validate_collaborator_recovery",
     "validate_commit_map",
@@ -1187,6 +1604,7 @@ __all__ = [
     "validate_rewrite_mirror",
     "validate_rewrite_refs",
     "validate_ruleset_restoration",
+    "validate_ruleset_restoration_trap_events",
     "validate_seeded_history_canary",
     "validate_target_manifest",
     "verify_purge_reachability",

@@ -4,7 +4,7 @@ Status: tooling-only plan; no real-origin rewrite authorized
 Contract: `nyay21-history-purge/v1`
 Repository: `rajeevbarnwal/NyayOne`
 Required visibility throughout: **PRIVATE**
-Sealed planning head: `422b3dbbeddb25c6735cd093003ccaef335cb60a`
+Sealed planning head: `454a40784ee2e084d9a756a713f287b627f1c4d4`
 
 ## Purpose and authority boundary
 
@@ -48,10 +48,10 @@ the separately signed request in `REWRITE_EXECUTION_REQUEST.md`.
 - The repository remains PRIVATE before, during, and after every phase.
 - Historical evidence is immutable. A mapping and fresh exact-head reruns are
   added; old evidence is never relabelled.
-- The sealed source contains **31 GPG-signed commits**. `git-filter-repo`
+- The sealed source contains **40 GPG-signed commits**. `git-filter-repo`
   cannot carry those embedded signatures onto rewritten commit objects, so the
-  closed-world mirror proof changes 243 of 297 commit identities and strips
-  those 31 signatures. The old signed objects remain verifiable only in the
+  closed-world mirror proof changes/prunes 267 of 321 commit identities (266
+  rewritten and one pruned-empty) and strips those 40 signatures. The old signed objects remain verifiable only in the
   restricted recovery backup; rewritten release/merge attestations must be
   freshly signed. No other metadata loss is permitted.
 
@@ -105,13 +105,15 @@ This is the only execution allowed during tooling development.
 9. Scan every clean ref, reflog, and internal retention ref for both target
    paths and both target blob IDs.
 10. Verify non-target objects, unrelated files, topology, and metadata against
-    the sealed retention boundary. Require exactly 31 disclosed signature
-    removals, a 297-row commit map, exactly 243 changed/pruned identities, and
+    the sealed retention boundary. Require exactly 40 disclosed signature
+    removals, a 321-row commit map, exactly 267 changed/pruned identities, and
     no other metadata difference.
 11. Prove that planted contamination on a side branch, annotated tag, and
     second-parent merge is detected by the preflight and absent after the
     mirror rewrite.
-12. Render, but do not execute, the exact force-with-lease plan.
+12. Read back all 42 concrete refs and render only the exact
+    `git push --atomic --dry-run` force-with-lease proof. No non-dry-run command
+    is executable under this prep packet.
 13. Recheck the protected-checkout seal and repository visibility.
 14. Seal raw logs, plans, mappings, validation results, and their SHA-256
     manifest. A PASS requires exact inventory equality and nonzero assertions.

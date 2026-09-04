@@ -4,8 +4,11 @@ Request status: **NOT APPROVED — HOLD**
 Requested action: rewrite and guarded force-update of approved NyayOne refs
 Repository: `rajeevbarnwal/NyayOne`
 Required visibility throughout: **PRIVATE**
-Planning head: `422b3dbbeddb25c6735cd093003ccaef335cb60a`
+Planning head: `454a40784ee2e084d9a756a713f287b627f1c4d4`
 Tool contract: `nyay21-history-purge/v1`
+Authoritative ref inventory: **42 concrete refs** (43 rows including symbolic
+`HEAD`), SHA-256
+`292a8bbaeba262de21c700546790e3c2b0e6c55f0174b4f5e9098b125be7edc7`
 
 ## Decision requested
 
@@ -34,10 +37,12 @@ distinct, single-use records; neither implies a visibility decision.
 |---|---|
 | Repository owner | Rajeev Barnwal |
 | Owner decision/signature/time | **UNSIGNED** |
-| Named Security/Privacy approver | **REQUIRED — not yet named** |
+| Named technical Security/Privacy approver | **Claude Code — per-execution, digest-bound; approval pending Round 2** |
+| Legally accountable signatory | **Rajeev Barnwal** |
+| Human countersign | **Required only if counsel requires; otherwise record N/A rationale** |
 | Security/Privacy decision/signature/time | **UNSIGNED** |
 | Rewrite approval ID | **REQUIRED, unique and single-use** |
-| Bound source head | `422b3dbbeddb25c6735cd093003ccaef335cb60a`, or a newly sealed head if `HEAD_CHANGED` |
+| Bound source head | `454a40784ee2e084d9a756a713f287b627f1c4d4`, or a newly sealed head if `HEAD_CHANGED` |
 | Bound ref-inventory SHA-256 | **REQUIRED** |
 | Bound target-manifest SHA-256 | **REQUIRED** |
 | Approved action | `rewrite-local-mirror` |
@@ -50,7 +55,9 @@ Gate F is signed only after Gate R completes and all mirror checks pass.
 |---|---|
 | Repository owner | Rajeev Barnwal |
 | Owner decision/signature/time | **UNSIGNED** |
-| Same named Security/Privacy approver | **REQUIRED — not yet named** |
+| Same named technical Security/Privacy approver | **Claude Code — per-execution, digest-bound; approval pending Round 2** |
+| Legally accountable signatory | **Rajeev Barnwal** |
+| Human countersign | **Required only if counsel requires; otherwise record N/A rationale** |
 | Security/Privacy decision/signature/time | **UNSIGNED** |
 | Force-update approval ID | **REQUIRED, unique, single-use, and different from Gate R** |
 | Bound commit-map SHA-256 | **REQUIRED after mirror proof** |
@@ -86,25 +93,33 @@ Every item must have a privacy-safe artifact ID and SHA-256 digest.
       remote during rewriting.
 - [ ] Pinned `git-filter-repo` build `a40bce548d2c` is independently verified.
 - [ ] The owner and Security/Privacy approver explicitly accept the disclosed
-      rewrite effect: 31 embedded GPG commit signatures are stripped by
-      `git-filter-repo`, causing 243 of 297 source commit identities to change.
+      rewrite effect: 40 embedded GPG commit signatures are stripped by
+      `git-filter-repo`, causing 267 of 321 source commit identities to change
+      (266 rewritten and one expected pruned-empty deletion commit).
       The old signed objects remain restricted in the recovery backup, and new
       release/merge attestations will be freshly signed.
 - [ ] The restricted encrypted backup is created before rewrite, has mode
       `0600` under a `0700` directory, includes every sealed ref, passes
       `git bundle verify`, and restores into a fresh repository that passes
       `git fsck --full`.
-- [ ] The backup owner, named Security/Privacy approver, access log, encryption
-      key custody, maximum 30-day retention, and absolute destruction time
-      **2026-09-30T18:29:59Z** are recorded.
+- [ ] The backup owner, named technical Security/Privacy approver, access log,
+      encryption key custody, and **force-push + 30 days** maximum destruction
+      deadline are recorded. Earlier jointly signed closure or a legal-erasure
+      override wins. The human countersign path is recorded if counsel requires.
 - [ ] The rollback authority and exact rollback triggers in
       `BACKUP_AND_ROLLBACK.md` are accepted.
 - [ ] The complete GitHub ruleset and branch-protection response is sealed,
       including all seven strict required checks.
 - [ ] A minimal ruleset-relaxation payload and byte-for-byte restoration
-      payload have been reviewed. Required checks are not deleted or weakened.
+      payload have been reviewed and sealed. The restoration trap is installed
+      as code before relaxation. Full canonical GitHub GET digest equality—not
+      an abstracted policy projection—is required after restoration. Required
+      checks are not deleted or weakened.
 - [ ] GitHub is confirmed to support an atomic update for the exact ref set. If
       not, stop; non-atomic fallback is not authorized.
+- [ ] `git push --atomic --dry-run` has completed with an exact old-SHA lease
+      for every publishable ref; a closed-world read-back covers all 42 concrete
+      refs; the dry run proves `remoteUpdated=false`.
 - [ ] The rendered push has one explicit old-SHA lease and one explicit new SHA
       per approved branch/tag; it contains no `--force`, wildcard, `--all`,
       `--mirror`, ref deletion, or `refs/pull/*`.
@@ -185,8 +200,8 @@ any orphaned-LFS report.
 
 ### 7. Prove mirror correctness
 
-Generate and validate a complete 297-row commit map (or the newly authoritative
-count), exactly 243 changed/pruned identities at the sealed baseline, complete
+Generate and validate a complete 321-row commit map, exactly 267 changed/pruned
+identities at the sealed baseline (266 rewritten plus one pruned-empty), complete
 approved-ref map, and explicit `pruned-empty` disposition for the deletion
 commit if applicable. Verify:
 
@@ -194,7 +209,7 @@ commit if applicable. Verify:
   reflog, and internal retention ref;
 - no approved ref was renamed or dropped;
 - non-target objects/files, topology, and metadata match the sealed boundary;
-- exactly the disclosed 31 GPG commit signatures are absent after rewrite,
+- exactly the disclosed 40 GPG commit signatures are absent after rewrite,
   their old objects are covered by the restricted backup, and no other
   metadata drift exists;
 - side-branch, annotated-tag, and second-parent merge canaries are clean;
@@ -203,13 +218,22 @@ commit if applicable. Verify:
 
 Any failure stops before Gate F.
 
-### 8. Render and approve the exact remote transaction
+### 8. Prove atomic dry-run, then render and approve the exact remote transaction
+
+First read back all 42 concrete refs and require exact equality with the sealed
+inventory. Render the exact lease-bound transaction with `--atomic --dry-run`.
+The dry run must succeed, advertise atomic support, and prove the remote did not
+change. A missing ref, mismatched old object, nonzero exit, or any remote change
+is `BLOCKED`; no executable non-dry-run path is rendered by this prep packet.
+
+Only the later, separately signed Gate F execution record may remove
+`--dry-run` from the already sealed transaction.
 
 Produce the closed list of `<ref, old SHA, new SHA>` entries. The generated
 transaction must have the semantic shape:
 
 ```text
-git push --atomic production \
+git push --atomic --dry-run production \
   --force-with-lease=<EXACT_REF_1>:<EXACT_OLD_SHA_1> \
   --force-with-lease=<EXACT_REF_2>:<EXACT_OLD_SHA_2> \
   <EXACT_NEW_SHA_1>:<EXACT_REF_1> \
@@ -265,7 +289,8 @@ Every required gate must execute nonzero assertions, pass without an oracle
 change, and be independently read back. A failed-job-only rerun is allowed once
 under the stated budget; another full run requires owner approval.
 
-Complete `EVIDENCE_REBINDING_MANIFEST.json`: retain each historical artifact at
+Complete the new immutable revision
+`EVIDENCE_REBINDING_MANIFEST_20260904.json`: retain each historical artifact at
 its truthful old SHA with invalidated-by-rewrite status, attach the old-to-new
 mapping layer, and add separate fresh evidence IDs and digests for the new head.
 
@@ -282,9 +307,10 @@ does not make one.
 Owner and Security/Privacy jointly decide closure versus a controlled rollback
 using the triggers below. After successful closure and the rollback window,
 cryptographically erase the backup key and delete the encrypted artifact and
-temporary mirrors no later than **2026-09-30T18:29:59Z**. Seal the destruction
+temporary mirrors no later than **force-push + 30 days**, or earlier upon
+jointly signed closure or a legal-erasure override. Seal the destruction
 certificate. Confirm the protected-checkout seal and PRIVATE visibility one
-final time.
+final time; record whether counsel required a human countersign.
 
 ## Rollback triggers and actions
 
