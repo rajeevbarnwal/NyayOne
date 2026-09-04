@@ -420,6 +420,56 @@ class PolicyOracleTests(unittest.TestCase):
             failures = policy.check_workflow(planted)
         self.assertTrue(any("canonical semantic contract" in item for item in failures), failures)
 
+    def test_policy_workflow_discovers_nyay33_contract_exactly_once(self) -> None:
+        policy = load("verify_nyayone_ci")
+        command = "python scripts/ci/test_nyay33_documentation_polish.py"
+        workflow = policy.ROOT / ".github/workflows/nyayone-policy-gate.yml"
+        original = workflow.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            getattr(policy, "EXPECTED_NYAY33_POLICY_COMMAND", None), command
+        )
+        self.assertIn(
+            command,
+            policy.REQUIRED_JOB_RUNS[("nyayone-policy-gate.yml", "policy-contracts")],
+        )
+        self.assertEqual(original.count(command), 1)
+        self.assertEqual(policy.check_workflow(workflow), [])
+
+        mutations = {
+            "missing": original.replace(
+                f"      - name: Validate NYAY-33 documentation reconciliation\n"
+                f"        run: {command}\n",
+                "",
+                1,
+            ),
+            "duplicate": original.replace(
+                f"      - name: Validate NYAY-33 documentation reconciliation\n"
+                f"        run: {command}\n",
+                f"      - name: Validate NYAY-33 documentation reconciliation\n"
+                f"        run: {command}\n"
+                f"      - name: Duplicate NYAY-33 contract\n"
+                f"        run: {command}\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for label, mutated in mutations.items():
+                with self.subTest(label=label):
+                    self.assertNotEqual(mutated, original)
+                    candidate = Path(directory) / "nyayone-policy-gate.yml"
+                    candidate.write_text(mutated, encoding="utf-8")
+                    failures = policy.check_workflow(candidate)
+                    self.assertTrue(
+                        any(
+                            "must contain the required gate command exactly once"
+                            in failure
+                            and command in failure
+                            for failure in failures
+                        ),
+                        failures,
+                    )
+
     def test_workflow_validator_rejects_partial_green_and_write_authority(self) -> None:
         policy = load("verify_nyayone_ci")
         with tempfile.TemporaryDirectory() as directory:

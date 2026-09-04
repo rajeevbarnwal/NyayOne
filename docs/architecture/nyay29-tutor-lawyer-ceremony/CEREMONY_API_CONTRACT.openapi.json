@@ -128,7 +128,7 @@
         ],
         "operationId": "verifyTutorIdentity",
         "summary": "Verify a server-held external identity result and TutorProfile ownership",
-        "description": "Consumes only the server-side identity-provider result already bound to the ceremony cookie and server-held correlation. The browser submits neither provider selection nor a raw assertion, provider code, challenge nonce, consent version, mobile, email, registration ID, or TutorProfile ID. The server derives the authenticated actor, requires it to equal TutorProfile.user_id, verifies positive provenance and currentness rather than trusting a status flag, requires an active TutorProfile, and treats lawyer verification alone as insufficient for tutor authority. For mentor_session intent, the server derives exactly one relation-consistent live invitation and its server-held purpose, consent receipt, disclosure classes, and acceptance-text version. For authority_deletion_step_up intent, it instead revalidates the existing live mentor session and current TutorProfile; it neither derives an owner invitation nor grants disclosure. Successful verification advances challenge_issued to proof_verified atomically and returns the intent-specific bounded acceptance projection. Replays return the exact sealed outcome for the same cookie-bound actor/ceremony, operation, purpose or deletion intent, key, and payload; a changed payload returns typed 409 with no mutation.",
+        "description": "Consumes only the server-side identity-provider result already bound to the ceremony cookie and server-held correlation. The browser submits neither provider selection nor a raw assertion, provider code, challenge nonce, consent version, mobile, email, registration ID, or TutorProfile ID. The server derives the authenticated actor, requires it to equal TutorProfile.user_id, verifies positive provenance and currentness rather than trusting a status flag, requires an active TutorProfile, and treats lawyer verification alone as insufficient for tutor authority. For mentor_session intent, the server derives exactly one relation-consistent live invitation and its server-held purpose, consent receipt, disclosure classes, and acceptance-text version. For a recovery, same-actor proof marks every prior actor/profile mentor generation for mandatory revocation, but verification performs no authority revocation; exchange must commit the marked revocation atomically before issuing a successor. For authority_deletion_step_up intent, it instead revalidates the existing live mentor session and current TutorProfile; it neither derives an owner invitation nor grants disclosure. Successful verification advances challenge_issued to proof_verified atomically and returns the intent-specific bounded acceptance projection. Replays return the exact sealed outcome for the same cookie-bound actor/ceremony, operation, purpose or deletion intent, key, and payload; a changed payload returns typed 409 with no mutation.",
         "security": [
           {
             "TrustedOrigin": [],
@@ -310,7 +310,7 @@
             "description": "An isolated mentor session was issued from server-derived role, purpose, scope, and minimum profile slices.",
             "headers": {
               "Set-Cookie": {
-                "$ref": "#/components/headers/MentorSessionCookieRotated"
+                "$ref": "#/components/headers/MentorSessionCookieIssued"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/NoStore"
@@ -447,7 +447,7 @@
             "description": "Rotation committed and the old secret was retired before response.",
             "headers": {
               "Set-Cookie": {
-                "$ref": "#/components/headers/MentorSessionCookieIssued"
+                "$ref": "#/components/headers/MentorSessionCookieRotated"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/NoStore"
@@ -2032,7 +2032,6 @@
                   "ORIGIN_REJECTED",
                   "AUTHENTICATION_REQUIRED",
                   "AUTHORIZATION_DENIED",
-                  "CONSENT_OR_POLICY_DENIED",
                   "RESOURCE_UNAVAILABLE",
                   "IDEMPOTENCY_CONFLICT",
                   "CONCURRENT_STATE_CHANGED",
@@ -2138,7 +2137,6 @@
                   "code": {
                     "enum": [
                       "AUTHORIZATION_DENIED",
-                      "CONSENT_OR_POLICY_DENIED",
                       "STEP_UP_REQUIRED"
                     ]
                   }
@@ -2333,7 +2331,6 @@
     ],
     "403": [
       "AUTHORIZATION_DENIED",
-      "CONSENT_OR_POLICY_DENIED",
       "STEP_UP_REQUIRED"
     ],
     "404": [
@@ -2403,7 +2400,7 @@
       "scope": "The existing exact shared/exclusive cross-tab protocol governs owner, mentor, bootstrap, ceremony, session, and step-up cookie operations. Unsupported coordination fails closed without a timer/storage fallback."
     },
     "verificationAuthority": "Positive TutorProfile authorization requires protected provenance, same-actor ownership, active profile, current non-revoked/non-expired verification, approved policy/assurance, and proof-to-profile binding. A bare positive status column, browser role, lawyer credential, or stale reviewer/provider result never suffices.",
-    "subjectSharingGate": "Before acceptance/exchange and every disclosure, the server derives the owner-subject relation and current NYAY-5 access state. A minor lacking current required guardian authority, guardian revocation, or access_mode=limited prohibits mentor sharing and profile-slice scope; the result is generic CONSENT_OR_POLICY_DENIED with zero disclosure.",
+    "subjectSharingGate": "Before acceptance/exchange and every disclosure, the server derives the owner-subject relation and current NYAY-5 access state. A minor lacking current required guardian authority, guardian revocation, or access_mode=limited prohibits mentor sharing and profile-slice scope; the result is generic AUTHORIZATION_DENIED with zero disclosure. More specific consent or policy diagnostics remain internal and are never returned as public codes.",
     "authorityDomainIsolation": "Isolation is derived from persisted owner-subject-invitation-engagement-TutorProfile relations and composite integrity checks. The wire contract contains no tenant, authority-domain, owner, subject, engagement, invitation, actor, or profile selector and does not require inventing a tenant table.",
     "audit": "Issuance, rotation, revocation, expiry, logout, recovery, consent, step-up, and deletion transitions append immutable PII-free event classes with protected non-public correlations and server time. Audit records never contain raw proof, cookie values, session secrets, external-provider assertions, idempotency keys, profile values, or direct owner/student/profile identifiers. Where an approved immutable record must survive erasure, linkable protected correlation is cryptographically erased by destruction of its dedicated key while the non-linkable event class, policy version, and bounded time bucket remain immutable.",
     "retention": "Ceremony, session, consent, engagement, audit, recovery, step-up, and deletion records require explicit NYAY-19-aligned retention classes and cryptographic-erasure behavior before NYAY-22 implementation. Terminal authority is revoked immediately; retained evidence is purpose-limited and pseudonymised.",

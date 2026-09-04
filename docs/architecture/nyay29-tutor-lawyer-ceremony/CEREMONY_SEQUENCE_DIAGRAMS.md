@@ -262,7 +262,7 @@ sequenceDiagram
         Browser->>AuthAPI: Verify/exchange after database-clock expiry
         AuthAPI->>CeremonyStore: Materialize expired terminal state once
         CeremonyStore->>Audit: Append expiry class
-        AuthAPI-->>Browser: 410 CEREMONY_EXPIRED; retire CeremonyCookie only
+        AuthAPI-->>Browser: 410 AUTHORITY_TERMINAL; retire CeremonyCookie only
     and actor/profile substitution
         Browser->>AuthAPI: Verify while backchannel subject and bound profile relation differ
         AuthAPI->>TutorProfile: Compare server subjects and authority domain
@@ -367,11 +367,12 @@ sequenceDiagram
     AuthAPI->>CeremonyStore: verifyTutorIdentity consumes only later server backchannel result
     CeremonyStore->>TutorProfile: Require same actor and current verified ownership
     TutorProfile-->>CeremonyStore: Verified actor/profile binding
-    CeremonyStore->>SessionAuthority: Revoke all prior actor/profile generations before exchange becomes eligible
-    SessionAuthority->>Audit: Append recovery-wide revocation class
+    CeremonyStore->>SessionAuthority: Mark all prior actor/profile generations for mandatory revocation
+    SessionAuthority-->>CeremonyStore: Revocation set marked; no authority mutation yet
     CeremonyStore-->>Browser: 200 proof_verified bounded projection
     Browser->>AuthAPI: POST exchange with recovery intent + acceptPurpose=true
-    AuthAPI->>SessionAuthority: Recheck zero prior live generations and all current predicates
+    AuthAPI->>SessionAuthority: Revoke all prior actor/profile generations and recheck current predicates atomically
+    SessionAuthority->>Audit: Append recovery-wide revocation class
     SessionAuthority-->>Browser: 201 one new isolated session; retire CeremonyCookie separately
 
     Note over Browser,Audit: Authority deletion requires a separately exchanged, single-purpose step-up
@@ -390,7 +391,7 @@ sequenceDiagram
 
     Browser->>AuthAPI: Probe mentor session after deletion
     AuthAPI->>SessionAuthority: Canonical authoritative probe
-    SessionAuthority-->>Browser: 410 AUTHORITY_DELETED; no private mentor route
+    SessionAuthority-->>Browser: 410 AUTHORITY_TERMINAL; no private mentor route
 
     Note over OwnerBrowser,SessionAuthority: Return is fresh NYAY-8 owner authentication, never restoration or promotion
     OwnerBrowser->>AuthAPI: Start server-authoritative passwordless owner login under global exclusive barrier
