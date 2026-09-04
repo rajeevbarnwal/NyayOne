@@ -1,0 +1,271 @@
+{
+  "authority": "SEALED PLANNING PAIR; NO RULESET CHANGE AUTHORIZED",
+  "canonicalGetBefore": {
+    "_links": {
+      "html": {
+        "href": "https://github.com/rajeevbarnwal/NyayOne/rules/20888530"
+      },
+      "self": {
+        "href": "https://api.github.com/repos/rajeevbarnwal/NyayOne/rulesets/20888530"
+      }
+    },
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/main"
+        ]
+      }
+    },
+    "created_at": "2026-08-15T19:09:53.915+05:30",
+    "current_user_can_bypass": "never",
+    "enforcement": "active",
+    "id": 20888530,
+    "name": "NyayOne main baseline protection",
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5PlA0JzgE-u9I",
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "parameters": {
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ],
+          "dismiss_stale_reviews_on_push": true,
+          "require_code_owner_review": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "require_last_push_approval": false,
+          "required_approving_review_count": 0,
+          "required_review_thread_resolution": true,
+          "required_reviewers": []
+        },
+        "type": "pull_request"
+      },
+      {
+        "parameters": {
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "nyayone-registration-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave1-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave2-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave3-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave4-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave5-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-policy-required",
+              "integration_id": 15368
+            }
+          ],
+          "strict_required_status_checks_policy": true
+        },
+        "type": "required_status_checks"
+      }
+    ],
+    "source": "rajeevbarnwal/NyayOne",
+    "source_type": "Repository",
+    "target": "branch",
+    "updated_at": "2026-08-28T23:22:47.637+05:30"
+  },
+  "canonicalGetBeforeSha256": "8419caa7e36d80182a46550c1af82eaf3ece2b117a4e86e93758328e426e0955",
+  "relaxationPayload": {
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/main"
+        ]
+      }
+    },
+    "enforcement": "active",
+    "name": "NyayOne main baseline protection",
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "parameters": {
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ],
+          "dismiss_stale_reviews_on_push": true,
+          "require_code_owner_review": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "require_last_push_approval": false,
+          "required_approving_review_count": 0,
+          "required_review_thread_resolution": true,
+          "required_reviewers": []
+        },
+        "type": "pull_request"
+      },
+      {
+        "parameters": {
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "nyayone-registration-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave1-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave2-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave3-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave4-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave5-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-policy-required",
+              "integration_id": 15368
+            }
+          ],
+          "strict_required_status_checks_policy": true
+        },
+        "type": "required_status_checks"
+      }
+    ],
+    "target": "branch"
+  },
+  "relaxationPayloadSha256": "9230f337f15f57ddb28f17dc24076441a9649d0994e015584d80b514997bc3cc",
+  "restorationPayload": {
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/main"
+        ]
+      }
+    },
+    "enforcement": "active",
+    "name": "NyayOne main baseline protection",
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "parameters": {
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ],
+          "dismiss_stale_reviews_on_push": true,
+          "require_code_owner_review": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "require_last_push_approval": false,
+          "required_approving_review_count": 0,
+          "required_review_thread_resolution": true,
+          "required_reviewers": []
+        },
+        "type": "pull_request"
+      },
+      {
+        "parameters": {
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "nyayone-registration-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave1-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave2-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave3-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave4-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-wave5-required",
+              "integration_id": 15368
+            },
+            {
+              "context": "nyayone-policy-required",
+              "integration_id": 15368
+            }
+          ],
+          "strict_required_status_checks_policy": true
+        },
+        "type": "required_status_checks"
+      }
+    ],
+    "target": "branch"
+  },
+  "restorationPayloadSha256": "bf1f82decd5e5276475a84ef42b26f0be67c908186195b00669f21158a0c0711",
+  "restorationTrap": {
+    "canonicalGetBeforeSha256": "8419caa7e36d80182a46550c1af82eaf3ece2b117a4e86e93758328e426e0955",
+    "digestEqualityRequired": true,
+    "exitPaths": [
+      "success",
+      "push-rejected",
+      "signal",
+      "operator-error"
+    ],
+    "independentGetAfterRestore": true,
+    "installedBeforeRelaxation": true,
+    "mechanism": "shell-trap",
+    "restorationPayloadSha256": "bf1f82decd5e5276475a84ef42b26f0be67c908186195b00669f21158a0c0711",
+    "schemaVersion": "nyay21-ruleset-restoration-trap/v1",
+    "signals": [
+      "EXIT",
+      "HUP",
+      "INT",
+      "TERM"
+    ],
+    "trapSource": "trap restore_ruleset_from_sealed_payload EXIT HUP INT TERM"
+  },
+  "rulesetId": 20888530,
+  "schemaVersion": "nyay21-ruleset-payload-pair/v1",
+  "sourceArtifactSha256": "fac8bc1bc86e963b507d05771aa31197274633b37dd64df08fca4c7d5d33d8fd"
+}

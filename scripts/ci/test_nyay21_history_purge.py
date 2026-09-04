@@ -24,10 +24,18 @@ from types import ModuleType
 HERE = Path(__file__).resolve().parent
 SUBJECT = HERE / "nyay21_history_purge.py"
 CONTRACT = HERE / "nyay21_history_purge_contract.json"
+REF_SEAL = (
+    HERE.parent.parent
+    / "docs"
+    / "operations"
+    / "nyay21-history-purge"
+    / "AUTHORITATIVE_REF_SEAL_20260904.json"
+)
+RULESET_PAIR = REF_SEAL.with_name("RULESET_PAYLOAD_PAIR_20260904.json")
 
 SCHEMA_VERSION = "nyay21-history-purge/v1"
 REPOSITORY = "rajeevbarnwal/NyayOne"
-BASE_SHA = "422b3dbbeddb25c6735cd093003ccaef335cb60a"
+BASE_SHA = "454a40784ee2e084d9a756a713f287b627f1c4d4"
 SOURCE_COMMIT = "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374"
 DELETION_COMMIT = "d58d1fbac48db5a29158ca5b3b168b8951d526d1"
 NULL_SHA = "0" * 40
@@ -61,7 +69,7 @@ STRICT_REQUIRED_CHECKS = (
 )
 APPROVAL_REGISTRY_SCHEMA = "nyay21-approval-consumption/v1"
 OWNER_APPROVER = "Rajeev Barnwal"
-SECURITY_PRIVACY_APPROVER = "Named Security/Privacy Approver"
+SECURITY_PRIVACY_APPROVER = "Claude Code"
 REWRITE_APPROVAL_ID = (
     "NYAY21-REWRITE-11111111-1111-4111-8111-111111111111"
 )
@@ -119,44 +127,9 @@ def canonical_approval_registry(
 
 
 def canonical_remote_refs() -> list[dict[str, object]]:
-    """Representative sealed authority: 12 heads, 11 pull refs, one tag + HEAD."""
-    rows: list[dict[str, object]] = [
-        {
-            "name": "HEAD",
-            "kind": "symbolic-head",
-            "target": BASE_SHA,
-            "symbolicTarget": "refs/heads/main",
-            "targetReachable": True,
-        }
-    ]
-    for index in range(12):
-        rows.append(
-            {
-                "name": "refs/heads/main" if index == 0 else f"refs/heads/sealed-{index}",
-                "kind": "protected-branch" if index == 0 else "branch",
-                "target": BASE_SHA if index == 0 else full_sha(100 + index),
-                "targetReachable": True,
-            }
-        )
-    rows.append(
-        {
-            "name": "refs/tags/nyayone-bootstrap-20260815",
-            "kind": "annotated-tag",
-            "target": full_sha(300),
-            "peeledTarget": full_sha(301),
-            "targetReachable": True,
-        }
-    )
-    for index in range(1, 12):
-        rows.append(
-            {
-                "name": f"refs/pull/{index}/head",
-                "kind": "server-managed-pull",
-                "target": full_sha(400 + index),
-                "targetReachable": True,
-            }
-        )
-    return rows
+    """The exact 43-row authority sealed by the read-only R1 inventory."""
+
+    return copy.deepcopy(json.loads(REF_SEAL.read_text(encoding="utf-8"))["refs"])
 
 
 def authoritative_inventory() -> dict[str, object]:
@@ -182,9 +155,9 @@ def authoritative_inventory() -> dict[str, object]:
         "targetManifestSha256": target_digest,
         "sourceCommit": SOURCE_COMMIT,
         "deletionCommit": DELETION_COMMIT,
-        "reachableCommitCount": 297,
-        "affectedCommitCount": 243,
-        "signedCommitCount": 31,
+        "reachableCommitCount": 321,
+        "affectedCommitCount": 267,
+        "signedCommitCount": 40,
     }
 
 
@@ -278,22 +251,9 @@ def operation_context(
 
 
 def canonical_ruleset() -> dict[str, object]:
-    return {
-        "id": 20888530,
-        "name": "NyayOne main baseline protection",
-        "enforcement": "active",
-        "target": "refs/heads/main",
-        "bypassActors": [],
-        "deletion": False,
-        "nonFastForward": False,
-        "requiredChecksStrict": True,
-        "requiredChecks": list(STRICT_REQUIRED_CHECKS),
-        "pullRequest": {
-            "requiredApprovals": 0,
-            "dismissStaleReviews": True,
-            "requireConversationResolution": True,
-        },
-    }
+    return copy.deepcopy(
+        json.loads(RULESET_PAIR.read_text(encoding="utf-8"))["canonicalGetBefore"]
+    )
 
 
 class Nyay21HistoryPurgeRedTests(unittest.TestCase):
@@ -305,14 +265,17 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         self.assertEqual(contract["schemaVersion"], SCHEMA_VERSION)
         self.assertEqual(tuple(contract["targets"]), TARGETS)
-        self.assertEqual(contract["reachableCommitCount"], 297)
-        self.assertEqual(contract["expectedAffectedCommitCount"], 243)
-        self.assertEqual(contract["signedCommitCount"], 31)
+        self.assertEqual(contract["reachableCommitCount"], 321)
+        self.assertEqual(contract["expectedAffectedCommitCount"], 267)
+        self.assertEqual(contract["expectedChangedCommitCount"], 266)
+        self.assertEqual(contract["expectedPrunedCommitCount"], 1)
+        self.assertEqual(contract["signedCommitCount"], 40)
         self.assertEqual(
             contract["approvalPolicy"],
             {
                 "registrySchemaVersion": APPROVAL_REGISTRY_SCHEMA,
                 "ownerApprover": OWNER_APPROVER,
+                "technicalSecurityPrivacyApprover": SECURITY_PRIVACY_APPROVER,
                 "requiredRoles": ["repository-owner", "security-privacy"],
                 "sameSecurityPrivacyApproverAcrossGates": True,
                 "approvalIdFormat": "NYAY21-(REWRITE|FORCE)-UUIDv4",
@@ -326,7 +289,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         self.assertEqual(contract["requiredGateIds"], list(STRICT_REQUIRED_CHECKS))
         self.assertEqual(
             contract["signatureDisposition"],
-            "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads",
+            "git-filter-repo-strips-40-gpg-signatures; preserve old signed objects only in the restricted backup under force-push-plus-30-days governance, document the historical attestation break, and sign forward from the rewritten head",
         )
         self.assertEqual(gate.REPOSITORY, REPOSITORY)
         self.assertEqual(gate.BASE_SHA, BASE_SHA)
@@ -434,9 +397,9 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         inventory = authoritative_inventory()
         result = gate.validate_ref_inventory(inventory, inventory["refs"])
         self.assertEqual(result["verdict"], "PASS")
-        self.assertEqual(result["counts"]["heads"], 12)
+        self.assertEqual(result["counts"]["heads"], 21)
         self.assertEqual(result["counts"]["annotatedTags"], 1)
-        self.assertEqual(result["counts"]["serverManagedPulls"], 11)
+        self.assertEqual(result["counts"]["serverManagedPulls"], 20)
         candidate = copy.deepcopy(inventory)
         candidate["refs"].append(
             {"name": "refs/unknown/retained", "kind": "unknown", "target": full_sha(999)}
@@ -606,14 +569,14 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
             },
             "topologyDigest": "e" * 64,
             "nonSignatureMetadataDigest": "f" * 64,
-            "signedCommitCount": 31,
+            "signedCommitCount": 40,
             "signatureManifestSha256": "4" * 64,
         }
         after = copy.deepcopy(before)
         after["targetBlobs"] = []
         after["signedCommitCount"] = 0
         after["signatureDisposition"] = (
-            "git-filter-repo-stripped-31-gpg-signatures-with-sealed-old-object-map"
+            "git-filter-repo-stripped-40-gpg-signatures-with-sealed-old-object-map"
         )
         after["unexpectedMetadataChanges"] = []
         result = gate.validate_retention_boundary(before, after, allowedPruned=[DELETION_COMMIT])
@@ -622,7 +585,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         self.assertIn("REWRITE_SCOPE_DRIFT", finding_codes(gate.validate_retention_boundary(before, after, allowedPruned=[DELETION_COMMIT])))
         after = copy.deepcopy(before)
         after["targetBlobs"] = []
-        after["signedCommitCount"] = 30
+        after["signedCommitCount"] = 39
         after["signatureDisposition"] = "undocumented"
         after["unexpectedMetadataChanges"] = []
         self.assertIn(
@@ -638,7 +601,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
 
     def test_13_commit_map_is_complete_and_records_pruned_deletion_commit(self) -> None:
         gate = load_subject(self, "NYAY21-COMMIT-MAP")
-        affected = list(KNOWN_INVALIDATED_SHAS) + [full_sha(index) for index in range(1, 238)]
+        affected = list(KNOWN_INVALIDATED_SHAS) + [full_sha(index) for index in range(1, 262)]
         rows = [
             {"old": old, "new": full_sha(2000 + index), "disposition": "rewritten"}
             for index, old in enumerate(affected)
@@ -652,11 +615,11 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
             }
             for index in range(54)
         )
-        self.assertEqual(len(rows), 297)
+        self.assertEqual(len(rows), 321)
         result = gate.validate_commit_map(
             rows,
-            expectedReachableCount=297,
-            expectedAffectedCount=243,
+            expectedReachableCount=321,
+            expectedAffectedCount=267,
             requiredOldShas=KNOWN_INVALIDATED_SHAS + (DELETION_COMMIT,),
         )
         self.assertEqual(result["verdict"], "PASS")
@@ -717,7 +680,7 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         gate = load_subject(self, "NYAY21-UNRESOLVED-RETENTION")
         retention = {
             "backup": {"restricted": True, "outsidePublishableRefs": True},
-            "serverManagedPullRefs": {"count": 11, "targetReachable": True, "remediated": False},
+            "serverManagedPullRefs": {"count": 20, "targetReachable": True, "remediated": False},
             "githubCaches": {"confirmation": "pending"},
         }
         result = gate.validate_residual_retention(retention)
@@ -748,12 +711,29 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
 
     def test_19_ruleset_and_all_strict_required_checks_restore_exactly(self) -> None:
         gate = load_subject(self, "NYAY21-PROTECTION-RESTORATION")
-        before = canonical_ruleset()
+        pair = json.loads(RULESET_PAIR.read_text(encoding="utf-8"))
+        before = pair["canonicalGetBefore"]
         after = copy.deepcopy(before)
-        self.assertEqual(gate.validate_ruleset_restoration(before, after)["verdict"], "PASS")
-        after["requiredChecks"].pop()
-        after["requiredChecksStrict"] = False
-        result = gate.validate_ruleset_restoration(before, after)
+        kwargs = {
+            "sealed_before_sha256": pair["canonicalGetBeforeSha256"],
+            "relaxation_payload": pair["relaxationPayload"],
+            "sealed_relaxation_sha256": pair["relaxationPayloadSha256"],
+            "restoration_payload": pair["restorationPayload"],
+            "sealed_restoration_sha256": pair["restorationPayloadSha256"],
+            "restoration_trap": pair["restorationTrap"],
+        }
+        self.assertEqual(
+            gate.validate_ruleset_restoration(before, after, **kwargs)["verdict"],
+            "PASS",
+        )
+        status = next(
+            rule
+            for rule in after["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["required_status_checks"].pop()
+        status["parameters"]["strict_required_status_checks_policy"] = False
+        result = gate.validate_ruleset_restoration(before, after, **kwargs)
         self.assertIn("PROTECTION_NOT_RESTORED", finding_codes(result))
         self.assertIn("ORACLE_WEAKENED", finding_codes(result))
 

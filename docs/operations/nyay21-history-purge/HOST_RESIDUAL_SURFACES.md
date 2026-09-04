@@ -28,7 +28,7 @@ No undocumented automatic-expiry assumption may be used as evidence.
 | Webhooks, mirrors, integrations, and deployment clones | External systems may have fetched old refs and retain them indefinitely. | Inventory hooks, bots, deployment hosts, backup services, search indexes, and mirrors. Require cleanup acknowledgement and exact new head read-back. |
 | Collaborator clones, worktrees, stashes, and local bundles | These are outside GitHub's control and have no automatic expiry. | Follow `COLLABORATOR_REALIGNMENT.md`; prefer re-clone and obtain acknowledgements. Never merge, rebase, or cherry-pick old history. |
 | Quarantined QA/evidence packages and Jira attachments | A sealed historical package may contain logs, screenshots, source archives, or Git metadata independent of the origin. | Inventory by attachment/artifact ID and SHA-256. Historical reports may remain immutable if content-scanned clean; packages containing target blobs/data are restricted or destroyed under their own approved retention. Never silently relabel old evidence. |
-| Restricted recovery backup | Deliberately retains the contaminated history for disaster recovery. | Apply `BACKUP_AND_ROLLBACK.md`: named custodians, encryption, access log, maximum 30-day window, and destruction no later than `2026-09-30T18:29:59Z`. |
+| Restricted recovery backup | Deliberately retains the contaminated history for disaster recovery. | Apply `BACKUP_AND_ROLLBACK.md`: named custodians, encryption, access log, and destruction by force-push + 30 days or an earlier jointly signed/legal-erasure boundary. |
 | Local tooling mirror and temporary restore | The mirror contains old objects before rewriting; a restore test necessarily does too. | Keep outside publishable refs, restrict permissions, destroy temporary restore immediately after evidence capture, and destroy the mirror after completion/rollback decision. |
 
 ## GitHub behavior references
@@ -68,3 +68,32 @@ Each row receives exactly one of:
 Only the first four are closable, and a restricted retention item still needs
 Security/Privacy acceptance. An unaccounted surface or `BLOCKED` row prevents
 the pre-public handoff. No row grants public-visibility authority.
+
+## Per-surface execution disposition record
+
+The operator must create one immutable row for every surface above at execution
+time. The planning default is `BLOCKED`; a blank cell is invalid. This packet
+does not pre-claim any host-side purge or expiry.
+
+| Surface key | Planning disposition | Execution artifact ID | Read-back SHA-256 | Reviewed by |
+|---|---|---|---|---|
+| publishable-refs | `BLOCKED` | pending | pending | pending |
+| github-object-store | `BLOCKED` | pending | pending | pending |
+| pull-refs-and-pr-cache | `BLOCKED` | pending | pending | pending |
+| forks | `BLOCKED` | pending | pending | pending |
+| actions-logs | `BLOCKED` | pending | pending | pending |
+| actions-artifacts | `BLOCKED` | pending | pending | pending |
+| actions-caches | `BLOCKED` | pending | pending | pending |
+| checks-deployments-metadata | `BLOCKED` | pending | pending | pending |
+| releases-and-assets | `BLOCKED` | pending | pending | pending |
+| packages-and-images | `BLOCKED` | pending | pending | pending |
+| codespaces-and-runners | `BLOCKED` | pending | pending | pending |
+| integrations-and-mirrors | `BLOCKED` | pending | pending | pending |
+| collaborator-clones | `BLOCKED` | pending | pending | pending |
+| qa-and-jira-evidence | `BLOCKED` | pending | pending | pending |
+| restricted-backup | `BLOCKED` | pending | pending | pending |
+| local-mirror-and-restore | `BLOCKED` | pending | pending | pending |
+
+Closing evidence must replace each planning row with exactly one allowed closure
+status, an artifact ID, a full digest, and a named reviewer. Any other value
+keeps NYAY-21 at `NO-GO`.

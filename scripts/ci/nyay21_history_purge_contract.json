@@ -1,16 +1,38 @@
 {
   "schemaVersion": "nyay21-history-purge/v1",
   "repository": "rajeevbarnwal/NyayOne",
-  "sourceHead": "422b3dbbeddb25c6735cd093003ccaef335cb60a",
+  "sourceHead": "454a40784ee2e084d9a756a713f287b627f1c4d4",
   "sourceCommit": "9d6d56cc84b4f3fe9e2b223631f8a5e96c815374",
   "deletionCommit": "d58d1fbac48db5a29158ca5b3b168b8951d526d1",
   "defaultMode": "plan-only",
   "visibilityInvariant": "PRIVATE",
   "filterRepoVersion": "a40bce548d2c",
-  "reachableCommitCount": 297,
-  "expectedAffectedCommitCount": 243,
-  "signedCommitCount": 31,
-  "signatureDisposition": "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads",
+  "reachableCommitCount": 321,
+  "expectedAffectedCommitCount": 267,
+  "expectedChangedCommitCount": 266,
+  "expectedPrunedCommitCount": 1,
+  "expectedPostRewriteCommitCount": 320,
+  "signedCommitCount": 40,
+  "signatureDisposition": "git-filter-repo-strips-40-gpg-signatures; preserve old signed objects only in the restricted backup under force-push-plus-30-days governance, document the historical attestation break, and sign forward from the rewritten head",
+  "authoritativeRefSeal": {
+    "artifact": "docs/operations/nyay21-history-purge/AUTHORITATIVE_REF_SEAL_20260904.json",
+    "artifactCanonicalSha256": "2c7f3e20e2b53a7c7b866e6d8b5cd4b87902d3f9eeaede9d56e3dbf3a72b1e71",
+    "refInventorySha256": "292a8bbaeba262de21c700546790e3c2b0e6c55f0174b4f5e9098b125be7edc7",
+    "concreteRefCount": 42,
+    "rowsIncludingSymbolicHead": 43
+  },
+  "rulesetRestoration": {
+    "rulesetId": 20888530,
+    "payloadPairArtifact": "docs/operations/nyay21-history-purge/RULESET_PAYLOAD_PAIR_20260904.json",
+    "fullCanonicalGetDigestRequired": true,
+    "restorationTrapRequired": true
+  },
+  "atomicDryRun": {
+    "required": true,
+    "closedWorldReadBackRefCount": 42,
+    "exactLeasePerPublishableRef": true,
+    "remoteMutationPermitted": false
+  },
   "filterRepoArguments": [
     "--sensitive-data-removal",
     "--invert-paths",
@@ -33,6 +55,7 @@
   "approvalPolicy": {
     "registrySchemaVersion": "nyay21-approval-consumption/v1",
     "ownerApprover": "Rajeev Barnwal",
+    "technicalSecurityPrivacyApprover": "Claude Code",
     "requiredRoles": [
       "repository-owner",
       "security-privacy"

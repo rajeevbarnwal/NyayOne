@@ -221,6 +221,7 @@ EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
 NYAY21_HISTORY_PURGE_FILES: dict[str, Path] = {
     "gate": ROOT / "scripts" / "ci" / "nyay21_history_purge.py",
     "tests": ROOT / "scripts" / "ci" / "test_nyay21_history_purge.py",
+    "path_to_go_tests": ROOT / "scripts" / "ci" / "test_nyay21_path_to_go.py",
     "contract": ROOT / "scripts" / "ci" / "nyay21_history_purge_contract.json",
     "execution_plan": (
         ROOT / "docs" / "operations" / "nyay21-history-purge" / "EXECUTION_PLAN.md"
@@ -260,17 +261,43 @@ NYAY21_HISTORY_PURGE_FILES: dict[str, Path] = {
         / "nyay21-history-purge"
         / "REWRITE_EXECUTION_REQUEST.md"
     ),
+    "authoritative_ref_seal": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge"
+        / "AUTHORITATIVE_REF_SEAL_20260904.json"
+    ),
+    "ruleset_payload_pair": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge"
+        / "RULESET_PAYLOAD_PAIR_20260904.json"
+    ),
+    "evidence_rebinding_manifest_r2": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge"
+        / "EVIDENCE_REBINDING_MANIFEST_20260904.json"
+    ),
+    "ci_budget_memo": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge"
+        / "CI_BUDGET_MEMO_20260904.json"
+    ),
+    "gpg_signature_disposition": (
+        ROOT / "docs" / "operations" / "nyay21-history-purge"
+        / "GPG_SIGNATURE_DISPOSITION.md"
+    ),
 }
 EXPECTED_NYAY21_HISTORY_PURGE_SHA256: dict[str, str] = {
-    "gate": "3eee00f99111d86fe94e9c30716a81c4034649bf84d71ce0507fd140bdff35f0",
-    "tests": "c3b8bb5eb2d74792fa02c97c2a68235d7993a6f1f0d6cf0166ae5d1af5b18cc4",
-    "contract": "df47524b6ec372bfeef8ad4fed927aaae1cb85a9a4be28435a2d5ac34448cfcb",
-    "execution_plan": "7e8f648dc84be8100ff77781ffa2b7a86182fd89ac5b17f41134619dbeed2672",
-    "backup_and_rollback": "991f7fe9734e078f4ab5a316158a2f3fb3d5e51cdd48ed9bc7fad798cbad9ee8",
+    "gate": "8602051e2c89ee9dec05285bd0e0df912b45e41ca00028d574b84d151d3a26f0",
+    "tests": "8a636cc714197203f3541b1d667bda7dde9785ec25012b3da1567d7618a7dfc0",
+    "path_to_go_tests": "3aa103aa8dd0b2e95c30168d932a744e30bcbd178c1277fcff0a6d05222cf94f",
+    "contract": "3f0e4fd5d8f1525f3a64c3c583f405816e27d4c728e1c21a2addadd1480dd0e1",
+    "execution_plan": "fdd3a11587bc040d04460b3aa3038b170243cff86d7d3f3cf295433703cf7b00",
+    "backup_and_rollback": "3e05560b32a9ba7d1549fec008ce89ac5f8539d416408f16399aa8e86043bcd5",
     "collaborator_realignment": "85303ca8884966389e89379d2f197f9135d46adf4125c944ef2a0fca53256279",
-    "host_residual_surfaces": "93c02759f8a60a675e248c8af6ff7ae368f8a7f6407a0a300cce046c466290ab",
+    "host_residual_surfaces": "39c54141c6499fc9db1ed4befd6ab517edada2cfc62fc8b0a0a5836293d59ae1",
     "evidence_rebinding_manifest": "583ccaa028ff21170faa878c503130d56a159b975491be4a4f79acc8b07638c5",
-    "rewrite_execution_request": "889ca584f5d13b5562e89ccdf128b089f438820aaecb4b4122283e3aab774ac5",
+    "rewrite_execution_request": "c4991f36526730ef891f33a08e5170f7caafb63a71dc269f67f3b4163ec9967c",
+    "authoritative_ref_seal": "87c09f04ef4db49333616f5bef2e66c4ee22f6314790e4364003d7600cd20b72",
+    "ruleset_payload_pair": "9aaba28b2ea5aa2aeb2081f9aa724fcd97e73d5b8d7cca786bf6c7d92792cfcd",
+    "evidence_rebinding_manifest_r2": "bbc25dc90eb0760cd473d5f2f447055a42b89a25bd28f557ce24b47a09e82fbb",
+    "ci_budget_memo": "f4fa07b25bbb3797be2e43e87023a4ed68ecfc674c505b622647d3ecd6df3729",
+    "gpg_signature_disposition": "2bf48fbf01930bbc0ee23654c950cd7d43846f5ba6aa9687862fe51230c8652c",
 }
 EXPECTED_NYAY14_POLICY_COMMAND = "python scripts/ci/test_nyay14_evidence_gate.py"
 EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
@@ -278,6 +305,9 @@ EXPECTED_NYAY14_SECURITY_POLICY_COMMAND = (
 )
 EXPECTED_NYAY27_POLICY_COMMAND = "python scripts/ci/test_nyay27_contact_sheet_gate.py"
 EXPECTED_NYAY21_POLICY_COMMAND = "python scripts/ci/test_nyay21_history_purge.py"
+EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND = (
+    "python scripts/ci/test_nyay21_path_to_go.py"
+)
 EXPECTED_NYAY33_POLICY_COMMAND = "python scripts/ci/test_nyay33_documentation_polish.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
@@ -1222,6 +1252,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
         EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
         EXPECTED_NYAY27_POLICY_COMMAND,
         EXPECTED_NYAY21_POLICY_COMMAND,
+        EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND,
         EXPECTED_NYAY33_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
@@ -1285,7 +1316,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "e69953fd33bc98faa9cb547b4dd688c0dd5b0078eddf276770f0dbf27d089589",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "34eb625f245bf96467fef33cd03bd619a8e6237e2600cfb18a76918d2c44cd58",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -2639,6 +2670,7 @@ def check_nyay21_history_purge_contract(
         expected_approval_policy = {
             "registrySchemaVersion": "nyay21-approval-consumption/v1",
             "ownerApprover": "Rajeev Barnwal",
+            "technicalSecurityPrivacyApprover": "Claude Code",
             "requiredRoles": ["repository-owner", "security-privacy"],
             "sameSecurityPrivacyApproverAcrossGates": True,
             "approvalIdFormat": "NYAY21-(REWRITE|FORCE)-UUIDv4",
@@ -2664,11 +2696,38 @@ def check_nyay21_history_purge_contract(
             or contract.get("defaultMode") != "plan-only"
             or contract.get("visibilityInvariant") != "PRIVATE"
             or contract.get("filterRepoVersion") != "a40bce548d2c"
-            or contract.get("reachableCommitCount") != 297
-            or contract.get("expectedAffectedCommitCount") != 243
-            or contract.get("signedCommitCount") != 31
+            or contract.get("sourceHead")
+            != "454a40784ee2e084d9a756a713f287b627f1c4d4"
+            or contract.get("reachableCommitCount") != 321
+            or contract.get("expectedAffectedCommitCount") != 267
+            or contract.get("expectedChangedCommitCount") != 266
+            or contract.get("expectedPrunedCommitCount") != 1
+            or contract.get("expectedPostRewriteCommitCount") != 320
+            or contract.get("signedCommitCount") != 40
             or contract.get("signatureDisposition")
-            != "git-filter-repo-strips-31-gpg-signatures; preserve old signed objects only in the restricted backup and re-sign release attestations on rewritten heads"
+            != "git-filter-repo-strips-40-gpg-signatures; preserve old signed objects only in the restricted backup under force-push-plus-30-days governance, document the historical attestation break, and sign forward from the rewritten head"
+            or contract.get("authoritativeRefSeal")
+            != {
+                "artifact": "docs/operations/nyay21-history-purge/AUTHORITATIVE_REF_SEAL_20260904.json",
+                "artifactCanonicalSha256": "2c7f3e20e2b53a7c7b866e6d8b5cd4b87902d3f9eeaede9d56e3dbf3a72b1e71",
+                "refInventorySha256": "292a8bbaeba262de21c700546790e3c2b0e6c55f0174b4f5e9098b125be7edc7",
+                "concreteRefCount": 42,
+                "rowsIncludingSymbolicHead": 43,
+            }
+            or contract.get("rulesetRestoration")
+            != {
+                "rulesetId": 20888530,
+                "payloadPairArtifact": "docs/operations/nyay21-history-purge/RULESET_PAYLOAD_PAIR_20260904.json",
+                "fullCanonicalGetDigestRequired": True,
+                "restorationTrapRequired": True,
+            }
+            or contract.get("atomicDryRun")
+            != {
+                "required": True,
+                "closedWorldReadBackRefCount": 42,
+                "exactLeasePerPublishableRef": True,
+                "remoteMutationPermitted": False,
+            }
             or contract.get("filterRepoArguments") != expected_arguments
             or contract.get("approvalGates")
             != ["rewrite-local-mirror", "atomic-force-with-lease"]
