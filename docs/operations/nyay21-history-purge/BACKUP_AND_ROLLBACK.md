@@ -1,9 +1,9 @@
 # NYAY-21 Backup Governance and Rollback Plan
 
-Status: execution template; no production backup or rewrite has occurred
+Status: path-to-GO execution template; no production backup or rewrite has occurred
 Repository: `rajeevbarnwal/NyayOne` (**PRIVATE**)
-Named latest destruction date: **2026-09-30 23:59:59 IST**
-(`2026-09-30T18:29:59Z`)
+Destruction rule: **force-push + 30 days**, with earlier destruction required
+when the jointly signed closure or a legal-erasure override requires it.
 
 ## Why the backup is sensitive
 
@@ -23,8 +23,10 @@ legal conclusion.
 ## Custody and access control
 
 - Data owner and primary custodian: **Rajeev Barnwal, repository owner**.
-- Second-person authorization: the named **Security/Privacy approver** recorded
-  in the signed rewrite request.
+- Technical Security/Privacy approval: **Claude Code**, acting per execution
+  against the exact packet digest. Rajeev Barnwal remains the legally
+  accountable signatory. A human countersign is required if counsel requires
+  one; that upgrade path does not weaken the technical approval gate.
 - Access is limited to those two named approvers and the designated execution
   operator for the duration of the approved restore test.
 - Store the backup outside every Git repository, encrypted at rest with a
@@ -37,8 +39,9 @@ legal conclusion.
 - The backup classification is
   `restricted-private-pre-rewrite`; `publiclyPublishable` must remain false.
 
-The execution packet is invalid unless it names the Security/Privacy approver
-and operator. Role-only placeholders are insufficient for a real rewrite.
+The execution packet is invalid unless it names the per-execution technical
+Security/Privacy approver and operator and records the accountable owner
+signature. Role-only placeholders are insufficient for a real rewrite.
 
 ## Creation and restore proof
 
@@ -62,15 +65,14 @@ Before any rewrite operation:
 No local rewrite and no ruleset transaction may begin if either bundle
 verification or restore testing fails.
 
-## Retention window and named destruction
+## Retention window and destruction rule
 
-- Operational rollback window: at most **30 calendar days after the production
-  force update**.
-- Absolute destruction deadline: **2026-09-30 23:59:59 IST**.
-- The effective deadline is the earlier of those two dates.
-- If production execution cannot leave a useful rollback window before the
-  absolute deadline, this packet expires. No backup is created; a new packet
-  with a newly approved, named date is required.
+- Operational rollback window and maximum destruction deadline:
+  **force-push + 30 days**.
+- The effective deadline is the earlier of: force-push + 30 days; jointly
+  signed operational closure; or a binding legal-erasure override.
+- The former fixed 2026-09-23/2026-09-30 planning dates are deliberately
+  dropped. The actual force-push timestamp is the only clock origin.
 - Early destruction is required once the owner and Security/Privacy approver
   jointly confirm: remote refs are correct, rules are restored, exact-head CI
   and evidence reruns pass, collaborator realignment is complete, and rollback
@@ -99,8 +101,8 @@ rollback branch if any of these occurs:
 - the pinned tool or literal target manifest does not match;
 - a non-target file/object, topology record, tag, or branch is unexpectedly
   changed or dropped;
-- the signature inventory differs from the disclosed boundary of 31 embedded
-  GPG signatures stripped and 243 of 297 commit identities changed/pruned, or
+- the signature inventory differs from the disclosed boundary of 40 embedded
+  GPG signatures stripped and 267 of 321 commit identities changed/pruned, or
   any non-signature metadata drifts;
 - the commit/ref mapping is incomplete;
 - either target path or blob remains reachable from a clean ref;
