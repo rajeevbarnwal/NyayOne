@@ -40,6 +40,8 @@ REPOSITORY = BACKEND.parent
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION  # noqa: E402
+
 CONTRACT_PATH = REPOSITORY / "scripts/ci/nyay9-profile-api-contract.json"
 BLOCKED_EXIT = 78
 OPT_IN_ENV = "NYAY9_POSTGRES_GATE"
@@ -491,6 +493,10 @@ def _migration_probe(scratch_url: str) -> dict[str, bool]:
         second_head = _current_revision(engine)
         second_digest = _schema_digest(engine)
         schema_exact_after = _idempotency_schema_exact(engine)
+        application_upgrade = _run_alembic(
+            scratch_url, "upgrade", APPLICATION_HEAD_REVISION
+        )
+        application_head = _current_revision(engine)
         check_passed = _run_alembic(scratch_url, "check") == 0
     finally:
         engine.dispose()
@@ -507,7 +513,15 @@ def _migration_probe(scratch_url: str) -> dict[str, bool]:
             and schema_exact_after
             and second_digest == first_digest
         ),
-        "alembic_check": check_passed,
+        "application_head_exact": (
+            application_upgrade == 0
+            and application_head == APPLICATION_HEAD_REVISION
+        ),
+        "alembic_check": (
+            application_upgrade == 0
+            and application_head == APPLICATION_HEAD_REVISION
+            and check_passed
+        ),
         "source_authority_exact": _migration_source_authority_matches(),
     }
 

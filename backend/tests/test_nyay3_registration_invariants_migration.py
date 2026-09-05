@@ -6,6 +6,7 @@ concurrency claims exercised by the opt-in NYAY-3 characterization gate.
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import sqlite3
 import subprocess
@@ -54,6 +55,57 @@ def _module():
     config = Config(str(BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND / "app/db/migrations"))
     return ScriptDirectory.from_config(config).get_revision(HEAD).module
+
+
+def _characterization_gate():
+    path = BACKEND / "scripts" / "nyay3_postgres_characterization.py"
+    spec = importlib.util.spec_from_file_location(
+        "nyay3_characterization_lock_probe_contract", path
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_session_conflict_probe_suppresses_for_update_only_around_two_races() -> None:
+    """The stale-fixture seam cannot escape its conflict and mutant windows."""
+
+    source = (
+        BACKEND / "scripts" / "nyay3_postgres_characterization.py"
+    ).read_text(encoding="utf-8")
+    scope = "with _without_select_for_update_for_session_probe():"
+    assert source.count(scope) == 2
+    assert "session_conflict_read_barrier.wait(timeout=30)" in source
+    assert "unsafe_user_barrier.wait(timeout=30)" in source
+    assert "unsafe_read_barrier.wait(timeout=30)" in source
+    assert "DROP INDEX" in source and "TARGET_INDEXES[1]" in source
+
+
+def test_session_conflict_probe_for_update_patch_restores_and_fails_closed() -> None:
+    """Cleanup restores the SQLAlchemy method on errors and detects tampering."""
+
+    from sqlalchemy import select
+    from sqlalchemy.sql.selectable import Select
+
+    gate = _characterization_gate()
+    original = Select.with_for_update
+
+    class ProbeFailure(RuntimeError):
+        pass
+
+    with pytest.raises(ProbeFailure):
+        with gate._without_select_for_update_for_session_probe():
+            assert Select.with_for_update is not original
+            statement = select(1).with_for_update()
+            assert statement._for_update_arg is None
+            raise ProbeFailure("probe failed")
+    assert Select.with_for_update is original
+
+    with pytest.raises(RuntimeError, match="patch integrity"):
+        with gate._without_select_for_update_for_session_probe():
+            Select.with_for_update = original
+    assert Select.with_for_update is original
 
 
 def test_postgresql_reflected_partial_predicate_casts_are_canonicalized():

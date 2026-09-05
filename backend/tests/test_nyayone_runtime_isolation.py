@@ -90,4 +90,13 @@ def test_deterministic_provider_namespaces_are_nyayone_owned() -> None:
 def test_database_gate_isolates_the_unit_suite_from_staging_defaults() -> None:
     gate = Path(__file__).resolve().parents[1] / "scripts" / "db_gate.sh"
     text = gate.read_text(encoding="utf-8")
-    assert 'env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q' in text
+    expected = (
+        "env \\\n"
+        "  -u DATABASE_URL \\\n"
+        "  -u CORS_ORIGINS \\\n"
+        "  -u MENTOR_TERMINAL_RETENTION_SECONDS \\\n"
+        "  -u MENTOR_AUDIT_LINK_RETENTION_SECONDS \\\n"
+        "  -u MENTOR_RETENTION_MODE \\\n"
+        '  APP_ENV=testing "$PY" -m pytest -q'
+    )
+    assert text.count(expected) == 1

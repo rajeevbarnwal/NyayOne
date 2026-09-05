@@ -1230,7 +1230,7 @@ def _harness() -> dict[str, object]:
     }
 
 
-def test_db_gate_wiring_requires_exact_nyay4_then_nyay19_terminal_sequence():
+def test_db_gate_wiring_requires_exact_extended_native_sequence_and_safe_promotion():
     nyay17 = (
         '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
         '--report test-results/nyay17-postgres/summary.json'
@@ -1246,19 +1246,54 @@ def test_db_gate_wiring_requires_exact_nyay4_then_nyay19_terminal_sequence():
         '--execute --database-url "$DATABASE_URL" '
         '--output test-results/nyay19-postgres/summary.json'
     )
-    exact = "\n".join(("set -euo pipefail", nyay17, nyay4, nyay19))
+    nyay22 = (
+        'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py '
+        '--database-url "$DATABASE_URL" '
+        '--output test-results/nyay22-postgres/summary.json'
+    )
+    promote_nyay22 = (
+        'cp test-results/nyay22-postgres/summary.json '
+        '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"'
+    )
+    exact = "\n".join(
+        ("set -euo pipefail", nyay17, nyay4, nyay19, nyay22, promote_nyay22)
+    )
 
     assert _db_gate_wiring_is_exact(exact)
     assert not _db_gate_wiring_is_exact(
-        "\n".join(("set -euo pipefail", nyay17, nyay19, nyay4))
+        "\n".join(
+            ("set -euo pipefail", nyay17, nyay4, nyay22, nyay19, promote_nyay22)
+        )
     )
-    assert not _db_gate_wiring_is_exact("\n".join(("set -euo pipefail", nyay17, nyay4)))
+    for missing in (nyay17, nyay4, nyay19, nyay22, promote_nyay22):
+        assert not _db_gate_wiring_is_exact(
+            "\n".join(command for command in exact.splitlines() if command != missing)
+        )
     assert not _db_gate_wiring_is_exact(f"{exact}\necho stale-trailing-stage")
     assert not _db_gate_wiring_is_exact(
         exact.replace(nyay17, 'echo scripts/nyay17_postgres_idempotency_gate.py')
     )
     assert not _db_gate_wiring_is_exact(
-        "\n".join((nyay17, "set -euo pipefail", nyay4, nyay19))
+        exact.replace(nyay22, 'echo scripts/nyay22_postgres_mentor_gate.py')
+    )
+    assert not _db_gate_wiring_is_exact(
+        exact.replace(
+            promote_nyay22,
+            'cp test-results/nyay22-postgres/raw.json '
+            '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"',
+        )
+    )
+    assert not _db_gate_wiring_is_exact(
+        "\n".join(
+            (
+                nyay17,
+                "set -euo pipefail",
+                nyay4,
+                nyay19,
+                nyay22,
+                promote_nyay22,
+            )
+        )
     )
 
 

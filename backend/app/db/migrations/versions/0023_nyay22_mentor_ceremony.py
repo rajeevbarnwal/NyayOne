@@ -271,6 +271,8 @@ def upgrade() -> None:
     op.create_index(op.f("ix_mentor_ceremonies_bootstrap_attempt_id"), "mentor_ceremonies", ["bootstrap_attempt_id"])
     op.create_index(op.f("ix_mentor_ceremonies_actor_user_id"), "mentor_ceremonies", ["actor_user_id"])
     op.create_index(op.f("ix_mentor_ceremonies_tutor_profile_id"), "mentor_ceremonies", ["tutor_profile_id"])
+    op.create_index(op.f("ix_mentor_ceremonies_ownership_proof_id"), "mentor_ceremonies", ["ownership_proof_id"])
+    op.create_index(op.f("ix_mentor_ceremonies_invitation_id"), "mentor_ceremonies", ["invitation_id"])
 
     op.create_table(
         "mentor_provider_results",
@@ -438,6 +440,11 @@ def upgrade() -> None:
         "mentor_subject_consents",
         ["granted_by_user_id"],
     )
+    op.create_index(
+        op.f("ix_mentor_subject_consents_guardian_consent_id"),
+        "mentor_subject_consents",
+        ["guardian_consent_id"],
+    )
 
     op.create_table(
         "mentor_engagements",
@@ -565,6 +572,10 @@ def upgrade() -> None:
     op.create_index(op.f("ix_mentor_sessions_engagement_id"), "mentor_sessions", ["engagement_id"])
     op.create_index(op.f("ix_mentor_sessions_actor_user_id"), "mentor_sessions", ["actor_user_id"])
     op.create_index(op.f("ix_mentor_sessions_tutor_profile_id"), "mentor_sessions", ["tutor_profile_id"])
+    op.create_index(op.f("ix_mentor_sessions_ownership_proof_id"), "mentor_sessions", ["ownership_proof_id"])
+    op.create_index(op.f("ix_mentor_sessions_consent_id"), "mentor_sessions", ["consent_id"])
+    op.create_index(op.f("ix_mentor_sessions_subject_consent_id"), "mentor_sessions", ["subject_consent_id"])
+    op.create_index(op.f("ix_mentor_sessions_successor_id"), "mentor_sessions", ["successor_id"])
     op.create_index(
         "uq_mentor_sessions_one_active_per_actor_purpose", "mentor_sessions",
         ["actor_user_id", "purpose_code"], unique=True,

@@ -7563,7 +7563,7 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
 
 
 def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
-    """Require NYAY-4 followed by the terminal NYAY-19 native gate."""
+    """Require the exact native-gate chain and sanitized NYAY-22 promotion."""
 
     expected_nyay17 = (
         '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
@@ -7579,6 +7579,15 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
         'scripts/nyay19_postgres_auth_retention_gate.py '
         '--execute --database-url "$DATABASE_URL" '
         '--output test-results/nyay19-postgres/summary.json'
+    )
+    expected_nyay22 = (
+        'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py '
+        '--database-url "$DATABASE_URL" '
+        '--output test-results/nyay22-postgres/summary.json'
+    )
+    expected_nyay22_promotion = (
+        'cp test-results/nyay22-postgres/summary.json '
+        '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"'
     )
     executable = re.sub(r"\\\s*\n", " ", db_gate_source)
     commands = [
@@ -7602,6 +7611,18 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
             for index, command in enumerate(commands)
             if "scripts/nyay19_postgres_auth_retention_gate.py" in command
         ]
+        nyay22_positions = [
+            index
+            for index, command in enumerate(commands)
+            if "scripts/nyay22_postgres_mentor_gate.py" in command
+        ]
+        nyay22_promotion_positions = [
+            index
+            for index, command in enumerate(commands)
+            if command.startswith("cp ")
+            and '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"'
+            in command
+        ]
         fail_fast_positions = [
             index
             for index, command in enumerate(commands)
@@ -7611,13 +7632,22 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
             len(nyay17_positions) == 1
             and len(nyay4_positions) == 1
             and len(nyay19_positions) == 1
+            and len(nyay22_positions) == 1
+            and len(nyay22_promotion_positions) == 1
             and len(fail_fast_positions) == 1
             and fail_fast_positions[0] < nyay17_positions[0]
-            and nyay17_positions[0] < nyay4_positions[0] < nyay19_positions[0]
+            and nyay17_positions[0]
+            < nyay4_positions[0]
+            < nyay19_positions[0]
+            < nyay22_positions[0]
+            < nyay22_promotion_positions[0]
             and commands[nyay17_positions[0]] == expected_nyay17
             and commands[nyay4_positions[0]] == expected_nyay4
             and commands[nyay19_positions[0]] == expected_nyay19
-            and commands[-1] == expected_nyay19
+            and commands[nyay22_positions[0]] == expected_nyay22
+            and commands[nyay22_promotion_positions[0]]
+            == expected_nyay22_promotion
+            and commands[-1] == expected_nyay22_promotion
         )
     except IndexError:
         return False

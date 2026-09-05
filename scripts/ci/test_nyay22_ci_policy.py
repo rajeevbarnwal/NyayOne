@@ -26,6 +26,46 @@ def load(name: str) -> ModuleType:
 
 
 class Nyay22CiPolicyTests(unittest.TestCase):
+    def test_shared_db_gate_unit_pytest_clears_deployment_only_environment(self) -> None:
+        """Wave 1/3 unit tests must not inherit their staging browser policy."""
+
+        policy = load("verify_nyayone_ci")
+        source = policy.DB_GATE.read_text(encoding="utf-8")
+        executable = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        canonical = policy._canonical_shell(executable.replace("\\\n", " "))
+        isolated = policy._canonical_shell(
+            'env -u DATABASE_URL -u CORS_ORIGINS '
+            '-u MENTOR_TERMINAL_RETENTION_SECONDS '
+            '-u MENTOR_AUDIT_LINK_RETENTION_SECONDS '
+            '-u MENTOR_RETENTION_MODE APP_ENV=testing "$PY" -m pytest -q'
+        )
+        self.assertEqual(canonical.count(isolated), 1)
+
+    def test_wave4_native_backend_pytest_clears_deployment_only_environment(self) -> None:
+        """Wave 4 unit tests must not inherit browser-only CORS or mentor policy."""
+
+        policy = load("verify_nyayone_ci")
+        document = policy.yaml.load(
+            (policy.WORKFLOWS / "wave4-private-reporting-gate.yml").read_text(
+                encoding="utf-8"
+            ),
+            Loader=policy._NoDuplicateBaseLoader,
+        )
+        steps = document["jobs"]["private-reporting-postgres-browser"]["steps"]
+        native = next(
+            step for step in steps if step.get("name") == "Native regression gates"
+        )
+        canonical = policy._canonical_shell(native["run"].replace("\\\n", " "))
+        isolated = policy._canonical_shell(
+            '(cd backend && env -u DATABASE_URL -u CORS_ORIGINS '
+            '-u MENTOR_TERMINAL_RETENTION_SECONDS '
+            '-u MENTOR_AUDIT_LINK_RETENTION_SECONDS '
+            '-u MENTOR_RETENTION_MODE APP_ENV=testing python -m pytest -q)'
+        )
+        self.assertIn(isolated, canonical)
+
     def test_browser_sources_package_and_required_workflow_are_sealed(self) -> None:
         policy = load("verify_nyayone_ci")
         self.assertEqual(policy.check_nyay22_browser_gate_contract(), [])
@@ -346,6 +386,63 @@ class Nyay22CiPolicyTests(unittest.TestCase):
     def test_native_postgres_source_and_contract_are_exactly_sealed(self) -> None:
         policy = load("verify_nyayone_ci")
         self.assertEqual(policy.check_nyay22_postgres_gate_contract(), [])
+
+    def test_nyay22_schema_artifacts_are_exactly_sealed(self) -> None:
+        """The migration, ORM schema, and their closed-world test are one seal."""
+
+        policy = load("verify_nyayone_ci")
+        self.assertEqual(policy.check_nyay22_schema_artifact_contract(), [])
+
+    def test_nyay22_schema_artifact_absence_or_drift_fails_closed(self) -> None:
+        """No member of the schema-index oracle may disappear or drift alone."""
+
+        policy = load("verify_nyayone_ci")
+        artifacts = (
+            (
+                "migration_path",
+                policy.NYAY22_SCHEMA_MIGRATION,
+                "mentor ceremony migration",
+            ),
+            (
+                "model_path",
+                policy.NYAY22_MENTOR_AUTH_MODEL,
+                "mentor auth model",
+            ),
+            (
+                "dispatch_test_path",
+                policy.NYAY22_MIGRATION_DISPATCH_TEST,
+                "migration dispatch contract test",
+            ),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for argument, source, diagnostic in artifacts:
+                with self.subTest(artifact=argument, mutation="missing"):
+                    missing = root / f"missing-{source.name}"
+                    failures = policy.check_nyay22_schema_artifact_contract(
+                        **{argument: missing}
+                    )
+                    self.assertTrue(
+                        any(
+                            diagnostic in row and "missing or unsafe" in row
+                            for row in failures
+                        ),
+                        failures,
+                    )
+
+                with self.subTest(artifact=argument, mutation="drift"):
+                    drifted = root / source.name
+                    drifted.write_bytes(source.read_bytes() + b"\n")
+                    failures = policy.check_nyay22_schema_artifact_contract(
+                        **{argument: drifted}
+                    )
+                    self.assertTrue(
+                        any(
+                            diagnostic in row and "SHA-256" in row
+                            for row in failures
+                        ),
+                        failures,
+                    )
 
     def test_nyay19_subject_erasure_integration_is_exactly_sealed(self) -> None:
         policy = load("verify_nyayone_ci")
@@ -880,6 +977,7 @@ class Nyay22CiPolicyTests(unittest.TestCase):
         main_source = policy_source[policy_source.index("def main()") :]
         self.assertIn("check_nyay22_browser_gate_contract()", main_source)
         self.assertIn("check_nyay22_postgres_gate_contract()", main_source)
+        self.assertIn("check_nyay22_schema_artifact_contract()", main_source)
         self.assertIn(
             "check_nyay22_nyay19_erasure_integration_contract()", main_source
         )

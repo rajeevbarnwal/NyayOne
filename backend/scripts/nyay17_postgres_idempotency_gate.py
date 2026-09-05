@@ -3807,6 +3807,32 @@ def _run_activation_probe(engine: Engine) -> dict[str, Any]:
     }
 
 
+def _retry_subject_erasure_boundary_once(
+    operation: Callable[[], bool],
+) -> tuple[bool, int]:
+    """Retry one erasure after NYAY-22 rejects a stale mentor prelock.
+
+    OTP activation is allowed to win after the retention worker has discovered
+    the subject but before it acquires the legacy registration lock.  The
+    mentor boundary then correctly rejects the stale snapshot.  A scheduler
+    would retry the retention item in a fresh transaction; this harness does
+    the same exactly once and propagates every other exception unchanged.
+    """
+
+    from app.services.mentor_ceremony import MentorCeremonyError
+
+    try:
+        return operation(), 0
+    except MentorCeremonyError as exc:
+        if not (
+            exc.status_code == 409
+            and exc.code == "CONCURRENT_STATE_CHANGED"
+            and exc.retryable is True
+        ):
+            raise
+    return operation(), 1
+
+
 def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
     from app.core import retention
     from app.models.registration import (
@@ -3831,15 +3857,31 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
     def activate() -> Any:
         return _post_signup_verify(app, registered, wire_key, delivered_code)
 
+    retention_retries = 0
+
     def retain() -> bool:
-        with factory() as session:
-            tracker.record(int(session.scalar(text("SELECT pg_backend_pid()"))))
-            registration = session.get(StudentRegistration, registration_id)
-            if registration is None:
-                return False
-            retention.anonymise_registration(session, registration)
-            session.commit()
-            return True
+        nonlocal retention_retries
+        attempt = 0
+
+        def operation() -> bool:
+            nonlocal attempt
+            with factory() as session:
+                if attempt == 0:
+                    tracker.record(
+                        int(session.scalar(text("SELECT pg_backend_pid()")))
+                    )
+                attempt += 1
+                registration = session.get(StudentRegistration, registration_id)
+                if registration is None:
+                    return False
+                retention.anonymise_registration(session, registration)
+                session.commit()
+                return True
+
+        completed, retention_retries = _retry_subject_erasure_boundary_once(
+            operation
+        )
+        return completed
 
     control = factory()
     activation_waited = False
@@ -3899,20 +3941,37 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
     handle_two = _response_handle(registered_two)
     delivered_code_two = sender_two.sent[-1][1] if sender_two.sent else None
     retention_wins = False
+    retention_retries_two = 0
     if handle_two is not None and delivered_code_two is not None:
         registration_id_two = uuid.UUID(handle_two)
         tracker_two = _PgBackendTracker()
         app_two, _ = _build_app_context(engine, sender_two, backend_tracker=tracker_two)
 
         def retain_two() -> bool:
-            with factory_two() as session:
-                tracker_two.record(int(session.scalar(text("SELECT pg_backend_pid()"))))
-                registration = session.get(StudentRegistration, registration_id_two)
-                if registration is None:
-                    return False
-                retention.anonymise_registration(session, registration)
-                session.commit()
-                return True
+            nonlocal retention_retries_two
+            attempt = 0
+
+            def operation() -> bool:
+                nonlocal attempt
+                with factory_two() as session:
+                    if attempt == 0:
+                        tracker_two.record(
+                            int(session.scalar(text("SELECT pg_backend_pid()")))
+                        )
+                    attempt += 1
+                    registration = session.get(
+                        StudentRegistration, registration_id_two
+                    )
+                    if registration is None:
+                        return False
+                    retention.anonymise_registration(session, registration)
+                    session.commit()
+                    return True
+
+            completed, retention_retries_two = (
+                _retry_subject_erasure_boundary_once(operation)
+            )
+            return completed
 
         def activate_two() -> Any:
             return _post_signup_verify(
@@ -4047,11 +4106,13 @@ def _run_activation_retention_race(engine: Engine) -> dict[str, Any]:
         "activation_body_exact": activation_body_exact,
         "activation_private": activation_private,
         "retention_completed": retention_completed,
+        "retention_boundary_retries": retention_retries,
         "retired_preserved": retired_preserved,
         "row_erased": row_erased,
         "terminal_passed": terminal_passed,
         "sender_exact": sender_exact,
         "retention_wins": retention_wins,
+        "retention_wins_boundary_retries": retention_retries_two,
     }
 
 

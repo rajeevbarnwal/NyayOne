@@ -116,7 +116,7 @@ function loadContract() {
     || migration?.revision !== PINNED_HEAD
     || migration?.downRevision !== '0021_nyay5_profile_boundary'
     || migration?.path !== 'backend/app/db/migrations/versions/0022_nyay9_owner_profile_api.py'
-    || migration?.sha256Authority !== 'backend/app/db/migration_release_guard.py#APPLICATION_HEAD_SOURCE_SHA256'
+    || migration?.sha256Authority !== 'backend/app/db/migration_release_guard.py#NYAY9_SOURCE_SHA256'
     || evidence?.aggregateOnly !== true
     || evidence?.exactOracleInventoryRequired !== true
     || evidence?.zeroExecutedCannotPass !== true
