@@ -43,6 +43,21 @@ from app.services import login_service, otp_authority, otp_outbox, registration_
 ANONYMISED = "[erased]"
 
 
+def _prelock_subject_mentor_erasure(
+    session: Session,
+    registration_id,
+    *,
+    now: datetime | None = None,
+):
+    """Acquire NYAY-22 advisory scopes before any legacy erasure row lock."""
+
+    from app.services import mentor_ceremony
+
+    return mentor_ceremony.lock_subject_mentor_erasure_boundary(
+        session, registration_id, now=now
+    )
+
+
 @dataclass(frozen=True)
 class RetentionPolicy:
     """Immutable snapshot of the configured retention windows (in days)."""
@@ -622,6 +637,13 @@ def purge_otp_security_state(
         if discovery is None:
             continue
         record_id, registration_id, authority_id = discovery
+        mentor_boundary = (
+            _prelock_subject_mentor_erasure(
+                session, registration_id, now=now
+            )
+            if registration_id is not None
+            else None
+        )
         record = None
         if record_id is not None:
             record = session.scalar(
@@ -690,6 +712,18 @@ def purge_otp_security_state(
             and registration.status == "otp_pending"
             and registration.deleted_at is None
         ):
+            erased = (
+                _delete_locked(
+                    session, registration, record, mentor_boundary
+                )
+                if mode == "delete"
+                else
+                _anonymise_locked(
+                    session, registration, record, mentor_boundary
+                )
+            )
+            if not erased:
+                continue
             session.add(
                 AuditEvent(
                     actor_role="system",
@@ -699,10 +733,6 @@ def purge_otp_security_state(
                     after_state={"mode": mode},
                 )
             )
-            if mode == "delete":
-                _delete_locked(session, registration, record)
-            else:
-                _anonymise_locked(session, registration, record)
             expired_registrations += 1
             continue
         if (
@@ -843,7 +873,21 @@ def _anonymise_locked(
     session: Session,
     reg: StudentRegistration,
     idempotency_record: RegistrationIdempotencyRecord | None,
-) -> None:
+    mentor_boundary,
+) -> bool:
+    from app.services import mentor_ceremony
+
+    mentor_ceremony.validate_subject_mentor_erasure_boundary(
+        session, mentor_boundary, reg.id
+    )
+    approval = mentor_ceremony.prepare_subject_mentor_registration_erasure(
+        session, mentor_boundary, reg
+    )
+    if approval == "DEFER":
+        return False
+    mentor_ceremony.consume_subject_mentor_erasure_approval(
+        session, approval, reg.id
+    )
     registration_service.terminalize_registration_idempotency(
         session,
         reg,
@@ -948,24 +992,45 @@ def _anonymise_locked(
             after_state={"status": "deleted"},
         )
     )
+    return True
 
 
-def anonymise_registration(session: Session, reg: StudentRegistration) -> None:
-    """Scrub one subject unconditionally under ledger -> registration locks."""
+def anonymise_registration(session: Session, reg: StudentRegistration) -> bool:
+    """Scrub one subject under ledger -> registration locks.
 
+    Return ``True`` only after anonymisation completes. Return ``False`` when
+    the registration no longer exists or the mentor authority graph defers
+    erasure.
+    """
+
+    mentor_boundary = _prelock_subject_mentor_erasure(session, reg.id)
     locked, idempotency_record = (
         registration_service.lock_registration_with_idempotency(session, reg.id)
     )
     if locked is None:
-        return
-    _anonymise_locked(session, locked, idempotency_record)
+        return False
+    return _anonymise_locked(session, locked, idempotency_record, mentor_boundary)
 
 
 def _delete_locked(
     session: Session,
     reg: StudentRegistration,
     idempotency_record: RegistrationIdempotencyRecord | None,
-) -> None:
+    mentor_boundary,
+) -> bool:
+    from app.services import mentor_ceremony
+
+    mentor_ceremony.validate_subject_mentor_erasure_boundary(
+        session, mentor_boundary, reg.id
+    )
+    approval = mentor_ceremony.prepare_subject_mentor_registration_erasure(
+        session, mentor_boundary, reg
+    )
+    if approval == "DEFER":
+        return False
+    mentor_ceremony.consume_subject_mentor_erasure_approval(
+        session, approval, reg.id
+    )
     registration_service.terminalize_registration_idempotency(
         session,
         reg,
@@ -1036,17 +1101,24 @@ def _delete_locked(
             after_state={"status": "deleted"},
         )
     )
+    return True
 
 
-def delete_registration(session: Session, reg: StudentRegistration) -> None:
-    """Hard-delete one subject under ledger -> registration locks."""
+def delete_registration(session: Session, reg: StudentRegistration) -> bool:
+    """Hard-delete one subject under ledger -> registration locks.
 
+    Return ``True`` only after deletion completes. Return ``False`` when the
+    registration no longer exists or the mentor authority graph defers
+    erasure.
+    """
+
+    mentor_boundary = _prelock_subject_mentor_erasure(session, reg.id)
     locked, idempotency_record = (
         registration_service.lock_registration_with_idempotency(session, reg.id)
     )
     if locked is None:
-        return
-    _delete_locked(session, locked, idempotency_record)
+        return False
+    return _delete_locked(session, locked, idempotency_record, mentor_boundary)
 
 
 def _purge_expired_challenge(
@@ -1054,6 +1126,8 @@ def _purge_expired_challenge(
     challenge_id,
     cutoff: datetime,
     mode: str,
+    *,
+    now: datetime | None = None,
 ) -> tuple[int, int]:
     """Purge one old challenge without bypassing a NYAY-17 ledger claim.
 
@@ -1069,6 +1143,9 @@ def _purge_expired_challenge(
     )
     if registration_id is None:
         return 0, 0
+    mentor_boundary = _prelock_subject_mentor_erasure(
+        session, registration_id, now=now
+    )
     linked_outboxes = select(OtpOutbox.id).where(
         OtpOutbox.challenge_id == challenge_id
     )
@@ -1169,6 +1246,18 @@ def _purge_expired_challenge(
                     )
                 )
             )
+            erased = (
+                _delete_locked(
+                    session, registration, record, mentor_boundary
+                )
+                if mode == "delete"
+                else
+                _anonymise_locked(
+                    session, registration, record, mentor_boundary
+                )
+            )
+            if not erased:
+                return 0, 0
             session.add(
                 AuditEvent(
                     actor_role="system",
@@ -1178,10 +1267,6 @@ def _purge_expired_challenge(
                     after_state={"mode": mode},
                 )
             )
-            if mode == "delete":
-                _delete_locked(session, registration, record)
-            else:
-                _anonymise_locked(session, registration, record)
             return deleted_count, 1
         if (
             record.state == "pending"
@@ -1231,6 +1316,9 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
         cutoff: datetime,
         timestamp_field: str,
     ) -> None:
+        mentor_boundary = _prelock_subject_mentor_erasure(
+            session, registration_id, now=now
+        )
         reg, idempotency_record = (
             registration_service.lock_registration_with_idempotency(
                 session, registration_id
@@ -1249,11 +1337,18 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
             # Re-check after waiting for the lifecycle lock. A concurrent OTP
             # activation can make the stale candidate ineligible.
             return
-        if policy.mode == "delete":
-            _delete_locked(session, reg, idempotency_record)
-        else:
-            _anonymise_locked(session, reg, idempotency_record)
-        counts["registrations"] += 1
+        erased = (
+            _delete_locked(
+                session, reg, idempotency_record, mentor_boundary
+            )
+            if policy.mode == "delete"
+            else
+            _anonymise_locked(
+                session, reg, idempotency_record, mentor_boundary
+            )
+        )
+        if erased:
+            counts["registrations"] += 1
 
     pending_cut = _cutoff(now, policy.registration_pending_days)
     if pending_cut is not None:
@@ -1304,7 +1399,7 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
         )
         for challenge_id in challenge_ids:
             challenge_count, registration_count = _purge_expired_challenge(
-                session, challenge_id, otp_cut, policy.mode
+                session, challenge_id, otp_cut, policy.mode, now=now
             )
             counts["otp_challenges"] += challenge_count
             counts["registrations"] += registration_count

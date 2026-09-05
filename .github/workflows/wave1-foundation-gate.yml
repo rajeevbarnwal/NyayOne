@@ -135,6 +135,12 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://nyayone_ci:nyayone_ci_ephemeral@127.0.0.1:1032/nyayone_ci
       APP_ENV: staging
+      # NYAY-22 retention policy is deployment-bound in every non-local
+      # runtime. Keep the CI value explicit rather than inheriting defaults.
+      MENTOR_TERMINAL_RETENTION_SECONDS: "2592000"
+      MENTOR_AUDIT_LINK_RETENTION_SECONDS: "2592000"
+      MENTOR_RETENTION_MODE: bounded_crypto_erasure
+      CORS_ORIGINS: '["https://ci.nyayone.example"]'
       # Wave 5 fail-closed contract: outside local/test environments the
       # subscriber-facing calendar origin must be a real non-loopback HTTPS
       # origin, so this staging job must state one explicitly instead of

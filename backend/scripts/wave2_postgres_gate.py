@@ -79,7 +79,7 @@ if str(BACKEND) not in sys.path:
 #: EX_CONFIG. Distinct from 0 (pass) and 1 (assertion failure).
 BLOCKED_EXIT = 78
 BLOCKED_PREFIX = "BLOCKED: prerequisite runtime absent"
-HEAD = "0022_nyay9_owner_profile_api"
+HEAD = "0023_nyay22_mentor_ceremony"
 
 #: The 17 Wave 2 tables. Pinned here, cross-checked against the ORM at runtime,
 #: so a rename fails the gate rather than silently shrinking its coverage.

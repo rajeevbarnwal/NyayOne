@@ -47,6 +47,12 @@ NONLOCAL_OTP_CONFIG = {
     "otp_provider_token": "wave4-private-report-config-token",
     "otp_provider_supports_idempotency": True,
 }
+NONLOCAL_MENTOR_CONFIG = {
+    "mentor_terminal_retention_seconds": 2_592_000,
+    "mentor_audit_link_retention_seconds": 2_592_000,
+    "mentor_retention_mode": "bounded_crypto_erasure",
+}
+CI_CANONICAL_CORS_ORIGIN = "https://ci.nyayone.example"
 
 
 def _claims(user_id: uuid.UUID, *roles: str) -> dict[str, str]:
@@ -414,7 +420,9 @@ def test_production_requires_real_clamav_scanner():
             registration_secret="production-registration-encryption-secret",
             registration_lookup_secret="production-registration-lookup-secret",
             internship_report_scanner_provider="deterministic",
+            cors_origins=[CI_CANONICAL_CORS_ORIGIN],
             **NONLOCAL_OTP_CONFIG,
+            **NONLOCAL_MENTOR_CONFIG,
         )
     assert "must be clamav" in str(refused.value)
 

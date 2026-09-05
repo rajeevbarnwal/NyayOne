@@ -119,6 +119,19 @@ def _build(**overrides) -> Settings:
             SecretStr("wave2-config-only-token"),
         )
         overrides.setdefault("otp_provider_supports_idempotency", True)
+        overrides.setdefault(
+            "cors_origins", ["https://ci.nyayone.example"]
+        )
+        # The mentor provider key is an independent deployment boundary.  Use
+        # a valid, non-default public test key so this Wave-2 fixture reaches
+        # the video-specific mutant it is designed to exercise.
+        overrides.setdefault(
+            "mentor_identity_provider_public_key_b64",
+            "F8t5+ytBIPKx7GXkGY1uCLKOgT/rAeSkAIObheGAgM4=",
+        )
+        overrides.setdefault("mentor_terminal_retention_seconds", 2_592_000)
+        overrides.setdefault("mentor_audit_link_retention_seconds", 2_592_000)
+        overrides.setdefault("mentor_retention_mode", "bounded_crypto_erasure")
     return Settings(_env_file=None, **overrides)
 
 

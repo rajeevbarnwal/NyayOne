@@ -74,6 +74,8 @@ PROFILE_SPECS: dict[str, tuple[tuple[str, str, str], ...]] = {
         ("credential-browser", "credentials/credential-e2e-report.json", "credential-report"),
         ("registration-browser", "registration/registration_e2e_report.json", "boolean-results"),
         ("auth-browser", "v34-s01-s10/results.json", "boolean-rows"),
+        ("nyay22-browser", "nyay22-browser/results.json", "nyay22-browser"),
+        ("nyay22-postgres", "nyay22-postgres/summary.json", "nyay22-postgres"),
     ),
     "wave4": (
         ("wave4-postgres", "wave4-postgres/summary.json", "postgres-results"),
@@ -129,6 +131,14 @@ INVENTORY_CONTRACTS: dict[str, tuple[str, str, int, str]] = {
     "auth-browser": (
         "rows", "area", 137,
         "7f226c639f922f8cbaba363effb81e87bb189428eddc27bec809056c290fe60f",
+    ),
+    "nyay22-browser": (
+        "rows", "name", 14,
+        "d9febbb9662d7f6e436e214936fc5111e4202e0c8d463b31275be13353315257",
+    ),
+    "nyay22-postgres": (
+        "oracles", "id", 17,
+        "99ad80b085b29ff6f5eae3f04bfbbd3d2516af6c3c56333083d81ec5b3a0eab8",
     ),
     "wave4-postgres": (
         "results", "id", 34,
@@ -404,6 +414,64 @@ def _safe_result(
             != (counts[0], counts[0] - counts[1], counts[1])
         ):
             return None, "declared browser counts do not match assertion rows"
+    elif kind == "nyay22-browser":
+        counts = _boolean_rows(value, "rows")
+        if (
+            counts is None
+            or not isinstance(value, dict)
+            or set(value) != {"schemaVersion", "rows", "summary", "authorityModel"}
+            or value.get("schemaVersion") != "nyay22-browser-evidence.v1"
+            or value.get("authorityModel") != "withServerProvenMentorSession"
+        ):
+            return None, "NYAY-22 browser report shape is invalid"
+        summary = value.get("summary")
+        if (
+            not isinstance(summary, dict)
+            or set(summary) != {"total", "passed", "failed"}
+            or (
+                summary.get("total"),
+                summary.get("passed"),
+                summary.get("failed"),
+            ) != (counts[0], counts[0] - counts[1], counts[1])
+        ):
+            return None, "NYAY-22 browser summary does not match assertion rows"
+    elif kind == "nyay22-postgres":
+        counts = _status_rows(value, "oracles")
+        if (
+            counts is None
+            or not isinstance(value, dict)
+            or set(value)
+            != {
+                "schema_version",
+                "status",
+                "classification",
+                "postgres_major",
+                "pgvector_present",
+                "oracles",
+                "summary",
+            }
+            or value.get("schema_version") != "nyay22-mentor-postgres/v1"
+            or value.get("status") != "PASS"
+            or value.get("classification") != "EXECUTED"
+            or value.get("postgres_major") != 16
+            or value.get("pgvector_present") is not True
+            or any(
+                not isinstance(row, dict)
+                or set(row) != {"id", "status", "assertions"}
+                or row.get("status") != "PASS"
+                or _nonnegative_integer(row.get("assertions")) in {None, 0}
+                for row in value.get("oracles", [])
+            )
+        ):
+            return None, "NYAY-22 PostgreSQL report shape is invalid"
+        summary = value.get("summary")
+        if (
+            not isinstance(summary, dict)
+            or set(summary) != {"passed", "total"}
+            or (summary.get("passed"), summary.get("total"))
+            != (counts[0] - counts[1], counts[0])
+        ):
+            return None, "NYAY-22 PostgreSQL summary does not match oracle rows"
     elif kind == "boolean-results":
         counts = _boolean_rows(value, "results")
         if counts and (

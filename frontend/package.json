@@ -20,6 +20,8 @@
     "qa:nyay19:auth-lifecycle": "node scripts/nyay19-auth-lifecycle-browser.mjs",
     "qa:nyay5:profile-boundary": "node scripts/nyay5-profile-browser.mjs",
     "qa:nyay5:acceptance": "node scripts/nyay5-acceptance-aggregate.mjs",
+    "qa:nyay22:mentor-ceremony": "node scripts/nyay22-mentor-ceremony-browser.mjs",
+    "test:nyay22:mentor-contract": "vitest --run src/features/mentor/lib/mentorCeremonyApi.contract.test.ts src/features/mentor/lib/mentorCeremonyApi.test.ts scripts/lib/nyay22-mentor-ceremony-browser-contract.test.mjs",
     "qa:nyay18:browser-namespace": "node scripts/nyay18-browser-namespace.mjs",
     "qa:nyay7:ui-foundation": "node scripts/nyay7-ui-foundation.mjs",
     "test:nyay7:ui-contract": "vitest --run scripts/lib/nyay7-ui-contract.test.mjs",

@@ -35,7 +35,12 @@ from app.schemas.student_profile import (
     PromptDismissRequest,
     StudentProfileProjectionResponse,
 )
-from app.services import login_service, otp_flow_service, registration_service
+from app.services import (
+    login_service,
+    mentor_ceremony,
+    otp_flow_service,
+    registration_service,
+)
 from app.services import profile_service
 from app.models.wave1 import (
     PRIVACY_KINDS, THEMES,
@@ -412,12 +417,42 @@ def privacy_delete(payload: DeleteRequestIn, request: Request, response: Respons
     # recovery flow belongs to this authenticated registration and consumes it
     # in the same transaction as the deletion request.
     discovered = _registration_for(session, actor)
+    try:
+        mentor_boundary = mentor_ceremony.lock_subject_mentor_erasure_boundary(
+            session, discovered.id
+        )
+    except mentor_ceremony.MentorCeremonyError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409, detail={"code": "concurrent_state_changed"}
+        ) from None
     reg, _ = registration_service.lock_registration_with_idempotency(
         session, discovered.id
     )
     if reg is None:
         raise HTTPException(status_code=404, detail={"code": "profile_not_found"})
     now = _now()
+    try:
+        mentor_graph_within_cap = (
+            mentor_ceremony.preflight_subject_mentor_authority_for_privacy_request(
+                session,
+                mentor_boundary,
+                reg,
+                now=now,
+            )
+        )
+    except mentor_ceremony.MentorCeremonyError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409, detail={"code": "concurrent_state_changed"}
+        ) from None
+    if not mentor_graph_within_cap:
+        # Commit only the digest-bound NYAY-19 blocked-graph alert.  The
+        # one-shot recovery proof and every authority/subject row are intact.
+        session.commit()
+        raise HTTPException(
+            status_code=409, detail={"code": "concurrent_state_changed"}
+        )
     try:
         otp_flow_service.consume_recovery_proof(
             session,
@@ -427,6 +462,26 @@ def privacy_delete(payload: DeleteRequestIn, request: Request, response: Respons
         )
     except ValueError:
         raise HTTPException(status_code=401, detail={"code": "reauth_required"})
+    try:
+        retired_mentor_graphs = (
+            mentor_ceremony.retire_subject_mentor_authority_for_privacy_request(
+                session,
+                mentor_boundary,
+                now=now,
+            )
+        )
+    except mentor_ceremony.MentorCeremonyError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409, detail={"code": "concurrent_state_changed"}
+        ) from None
+    if retired_mentor_graphs < 0:
+        # Persist only the digest-bound NYAY-19 blocked-graph alert.  No DSR,
+        # account, registration or mentor-graph state is changed in this path.
+        session.commit()
+        raise HTTPException(
+            status_code=409, detail={"code": "concurrent_state_changed"}
+        )
     dsr = _create_dsr(session, actor, "delete", idempotency_key)
     created_job = (
         session.scalar(
