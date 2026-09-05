@@ -74,7 +74,7 @@ def test_nonisolated_guard_denies_0020_to_nyay5_without_new_exact_approval(
 
 
 @pytest.mark.parametrize(
-    "requested", [guard.NYAY5_REVISION, guard.APPLICATION_HEAD_REVISION, "head"]
+    "requested", [guard.NYAY5_REVISION, guard.NYAY22_REVISION, guard.APPLICATION_HEAD_REVISION, "head"]
 )
 def test_forward_head_cannot_skip_the_digest_approved_0019_to_0020_transition(
     monkeypatch, requested
@@ -84,7 +84,16 @@ def test_forward_head_cannot_skip_the_digest_approved_0019_to_0020_transition(
     monkeypatch.setattr(
         guard, "_current_revision", lambda _: "0019_otp_security_authority"
     )
-    with pytest.raises(guard.MigrationApprovalError, match="database revision rejected"):
+    expected = (
+        "NYAY-11 production approval unavailable; refusing to migrate"
+        if requested in {guard.APPLICATION_HEAD_REVISION, "head"}
+        else (
+            "NYAY-22 database revision rejected; refusing to migrate"
+            if requested == guard.NYAY22_REVISION
+            else "NYAY-5 database revision rejected; refusing to migrate"
+        )
+    )
+    with pytest.raises(guard.MigrationApprovalError) as rejected:
         guard.enforce_nyay19_migration_release_guard(
             _config(requested),
             _connection(),
@@ -92,6 +101,7 @@ def test_forward_head_cannot_skip_the_digest_approved_0019_to_0020_transition(
             environ={guard.FORCE_APPROVAL_ENV: "1"},
             runtime_intent=_intent(requested),
         )
+    assert str(rejected.value) == expected
 
 
 def test_postflight_dispatch_can_validate_exact_nyay5_head(monkeypatch):

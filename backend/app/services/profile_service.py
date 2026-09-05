@@ -320,9 +320,17 @@ def _active_auth_session(
 def _verification_status(
     session: Session,
     authority: ProfileAuthority,
+    *, now: datetime | None = None,
 ) -> str:
     if authority.profile.institutional_email_ct is None:
         return "not_provided"
+    from app.models.student_authority import AuthorityState
+    from app.services.student_authority import institutional_is_current
+    state = session.get(AuthorityState, authority.registration.id)
+    if state is not None:
+        if state.institutional_state == "VERIFIED":
+            return "verified" if institutional_is_current(session, authority.registration.id, now=now or datetime.now(timezone.utc)) else "revoked"
+        return {"UNVERIFIED": "pending", "PENDING": "pending", "REJECTED": "rejected", "EXPIRED": "expired", "REVOKED": "revoked"}[state.institutional_state]
     row = authority.verification if authority.rows_locked else session.scalar(
         select(StudentVerification).where(
             StudentVerification.registration_id == authority.registration.id
@@ -333,7 +341,7 @@ def _verification_status(
     if row.status == "verified":
         return (
             "verified"
-            if verification_has_current_reviewer_provenance(session, authority)
+            if verification_has_current_reviewer_provenance(session, authority, now=now)
             else "revoked"
         )
     if row.status in {"rejected", "expired", "revoked"}:
@@ -344,6 +352,7 @@ def _verification_status(
 def verification_has_current_reviewer_provenance(
     session: Session,
     authority: ProfileAuthority,
+    *, now: datetime | None = None,
 ) -> bool:
     """Compatibility name for the shared persisted email-proof authority."""
 
@@ -355,12 +364,25 @@ def verification_has_current_reviewer_provenance(
             )
         )
     return has_authoritative_institutional_email_proof(
-        verification, authority.profile
+        verification, authority.profile, now=now
     )
 
 
-def _guardian_projection(session: Session, authority: ProfileAuthority) -> dict:
+def _guardian_projection(session: Session, authority: ProfileAuthority, *, now: datetime | None = None) -> dict:
     registration = authority.registration
+    from app.models.student_authority import AuthorityState
+    from app.services.student_authority import guardian_is_current, is_minor
+    state = session.get(AuthorityState, registration.id)
+    if state is not None:
+        request_now = now or datetime.now(timezone.utc)
+        minor = is_minor(date.fromisoformat(decrypt(registration.dob_ct)), request_now.date())
+        if not minor:
+            return {"required": False, "status": "not_required"}
+        if state.guardian_state == "VERIFIED":
+            status = "verified" if guardian_is_current(session, registration.id, now=request_now) else "required_pending"
+        else:
+            status = {"NOT_REQUIRED": "required_pending", "REQUIRED_PENDING": "required_pending", "REJECTED": "rejected", "REVOKED": "revoked"}[state.guardian_state]
+        return {"required": True, "status": status}
     if not registration.is_minor:
         return {"required": False, "status": "not_required"}
     row = authority.guardian if authority.rows_locked else session.scalar(
@@ -483,7 +505,7 @@ def project(
         auth_session
         and session.scalar(prompt_statement)
     )
-    guardian = _guardian_projection(session, authority)
+    guardian = _guardian_projection(session, authority, now=now)
     limited = guardian["required"] and guardian["status"] != "verified"
     return {
         "profile_version": profile.profile_version,
@@ -493,7 +515,7 @@ def project(
             interests=interests,
             goals=goals,
         ),
-        "institutional_email_status": _verification_status(session, authority),
+        "institutional_email_status": _verification_status(session, authority, now=now),
         "guardian": guardian,
         "access_mode": "limited" if limited else "full",
         "disabled_capabilities": list(DISABLED_MINOR_CAPABILITIES) if limited else [],
@@ -625,12 +647,17 @@ def materialize_student_privacy_export(
         session,
         registration_id,
     )
-    return {
+    result = {
         "schema_version": "student-data-export.v1",
         "profile_version": owner_profile["profile_version"],
         "profile": owner_profile["profile"],
         "mentor_history": mentor["mentor_history"],
     }
+    from app.services.student_authority import export_owner_authority
+    authority_history = export_owner_authority(session, actor_user_id)
+    if authority_history:
+        result["authority_history"] = authority_history
+    return result
 
 
 def validate_profile_idempotency_key(value: str | None) -> str:
@@ -991,8 +1018,13 @@ def update_personal(
     current_dob = date.fromisoformat(decrypt(registration.dob_ct))
     dob_changed = current_dob != date_of_birth
     if dob_changed:
+        from app.services.student_authority import AuthorityError, identity_changed
+        try:
+            identity_changed(session, registration, "date_of_birth", now)
+        except AuthorityError as exc:
+            raise ProfileBoundaryError(exc.status_code, exc.code) from exc
         verification = authority.verification
-        if verification_has_current_reviewer_provenance(session, authority):
+        if verification_has_current_reviewer_provenance(session, authority, now=now):
             # No approved student step-up ceremony exists yet. Fail closed and
             # leave the verified identity boundary untouched.
             raise ProfileBoundaryError(403, "dob_step_up_required", field="date_of_birth")
@@ -1021,6 +1053,11 @@ def update_personal(
         registration.dob_ct = encrypt(date_of_birth.isoformat())
         registration.key_version = active_key_version()
     registration.is_minor = new_minor
+    from app.models.student_authority import AuthorityState
+    from app.services.student_authority import settle_state
+    state = session.get(AuthorityState, registration.id)
+    if state is not None:
+        settle_state(session, registration, state, now)
     if new_minor and not previous_minor:
         guardian = authority.guardian
         if guardian is None:
@@ -1152,6 +1189,11 @@ def update_academic(
     profile.key_version = active_key_version()
     authority.registration.institution_ref = normalized_college
     if old_email_hash != profile.institutional_email_hash:
+        from app.services.student_authority import AuthorityError, identity_changed
+        try:
+            identity_changed(session, authority.registration, "institutional_email", now)
+        except AuthorityError as exc:
+            raise ProfileBoundaryError(exc.status_code, exc.code) from exc
         verification = authority.verification
         if verification is None:
             session.add(
@@ -1212,8 +1254,15 @@ def request_institutional_email_verification(
         raise ProfileBoundaryError(404, "verification_not_found")
 
     already_authoritative = verification_has_current_reviewer_provenance(
-        session, authority
+        session, authority, now=now
     )
+    from app.models.student_authority import AuthorityState
+    from app.services.student_authority import apply_transition
+    state = session.get(AuthorityState, authority.registration.id)
+    if state is not None and not already_authoritative and state.institutional_state in {"UNVERIFIED", "REJECTED", "EXPIRED", "REVOKED"}:
+        apply_transition(session, state, machine="institutional", target="PENDING", trigger="student_review_request", authority="student", now=now)
+        from datetime import timedelta
+        state.review_due_at = now + timedelta(days=7)
     if not already_authoritative and verification.status != "in_review":
         verification.status = "in_review"
         verification.verified_email_hash = None

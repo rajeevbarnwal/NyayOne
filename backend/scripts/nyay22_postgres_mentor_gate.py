@@ -4,7 +4,8 @@ The ordinary HTTP suite uses SQLite and cannot prove PostgreSQL row locks,
 partial indexes, advisory-lock exclusion, or migration lifecycle symmetry.
 This opt-in producer accepts only a query-free literal-loopback control URL,
 creates one marker-named disposable database, runs the 0022 -> 0023 -> 0022 ->
-0023 lifecycle plus ``alembic check``, then executes privacy-safe aggregate
+0023 historical lifecycle, upgrades to the application head for ``alembic
+check``, then executes privacy-safe aggregate
 concurrency oracles.  It never prints or records a URL, cookie, UUID, digest,
 profile value, proof value, request payload, or idempotency key.
 
@@ -44,11 +45,14 @@ REPOSITORY = BACKEND.parent
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION  # noqa: E402
+
 CONTRACT_PATH = REPOSITORY / "scripts/ci/nyay22-mentor-postgres-contract.json"
 OPT_IN_ENV = "NYAY22_POSTGRES_GATE"
 BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0022_nyay9_owner_profile_api"
 APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
+BEHAVIOR_HEAD = APPLICATION_HEAD_REVISION
 SCRATCH_PREFIX = "nyay22_mentor_"
 SCHEMA_VERSION = "nyay22-mentor-postgres/v1"
 ORACLE_IDS = (
@@ -290,7 +294,7 @@ def _migration_downgrade_toctou_oracle(database_url: str) -> int:
                 )
                 or 0
             )
-            if revision != APPLICATION_HEAD or not mentor_tables <= tables:
+            if revision != BEHAVIOR_HEAD or not mentor_tables <= tables:
                 raise GateFailure("all mentor tables were not preserved")
             if fixture_count != 1:
                 raise GateFailure("concurrent durable row was not preserved")
@@ -312,9 +316,11 @@ def _migration_downgrade_toctou_oracle(database_url: str) -> int:
 def _migration_oracle(database_url: str) -> dict[str, Any]:
     _run_alembic(database_url, "upgrade", PREVIOUS_REVISION)
     _run_alembic(database_url, "upgrade", APPLICATION_HEAD)
+    _run_alembic(database_url, "upgrade", BEHAVIOR_HEAD)
     _run_alembic(database_url, "check")
     _run_alembic(database_url, "downgrade", PREVIOUS_REVISION)
     _run_alembic(database_url, "upgrade", APPLICATION_HEAD)
+    _run_alembic(database_url, "upgrade", BEHAVIOR_HEAD)
     _run_alembic(database_url, "check")
     engine = create_engine(database_url, poolclass=NullPool)
     try:
@@ -341,7 +347,7 @@ def _migration_oracle(database_url: str) -> dict[str, Any]:
             "mentor_retention_blocked_graphs",
         }
         tables = set(inspect(engine).get_table_names())
-        passed = revision == APPLICATION_HEAD and major == 16 and vector == 1 and expected_tables <= tables
+        passed = revision == BEHAVIOR_HEAD and major == 16 and vector == 1 and expected_tables <= tables
     finally:
         engine.dispose()
     if not passed:
