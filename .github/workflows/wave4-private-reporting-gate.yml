@@ -133,7 +133,13 @@ jobs:
           PY
       - name: Native regression gates
         run: |
-          (cd backend && env -u DATABASE_URL python -m pytest -q)
+          (cd backend && env \
+            -u DATABASE_URL \
+            -u CORS_ORIGINS \
+            -u MENTOR_TERMINAL_RETENTION_SECONDS \
+            -u MENTOR_AUDIT_LINK_RETENTION_SECONDS \
+            -u MENTOR_RETENTION_MODE \
+            APP_ENV=testing python -m pytest -q)
           (cd frontend && npm run typecheck && npm run lint && npm run test:run && npm run build)
       - name: PostgreSQL 16 + pgvector Wave 4 gate
         working-directory: backend

@@ -54,7 +54,8 @@ PREVIOUS_REVISION = "0018_registration_idempotency"
 PINNED_HEAD = "0019_otp_security_authority"
 APPLICATION_PARENT = "0020_auth_retention_lifecycle"
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
-APPLICATION_HEAD = "0022_nyay9_owner_profile_api"
+NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
+APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
@@ -3423,13 +3424,16 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
         nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay9_checkpoint is None
             or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != nyay5_checkpoint.revision
+            or application.down_revision != nyay9_checkpoint.revision
+            or nyay9_checkpoint.down_revision != nyay5_checkpoint.revision
             or nyay5_checkpoint.down_revision != retention.revision
             or retention.down_revision != PINNED_HEAD
         ):
@@ -7374,6 +7378,22 @@ def _run_maintenance_entrypoint_probe(
             "login_attempts_expired",
             "login_attempts",
             "auth_sessions",
+            "mentor_materialized_expirations",
+            "mentor_severed_graphs",
+            "mentor_blocked_graphs",
+            "mentor_bootstraps",
+            "mentor_invitations",
+            "mentor_ceremonies",
+            "mentor_provider_results",
+            "mentor_subject_consents",
+            "mentor_engagements",
+            "mentor_mentor_consents",
+            "mentor_sessions",
+            "mentor_step_ups",
+            "mentor_proofs",
+            "mentor_idempotency",
+            "mentor_audit_links",
+            "mentor_rate_buckets",
         }
         return {
             "entrypoint_executed": True,
@@ -7543,7 +7563,7 @@ def _run_behavior_probe(scratch_url: str) -> dict[str, Mapping[str, Any]]:
 
 
 def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
-    """Require NYAY-4 followed by the terminal NYAY-19 native gate."""
+    """Require the exact native-gate chain and sanitized NYAY-22 promotion."""
 
     expected_nyay17 = (
         '"$PY" scripts/nyay17_postgres_idempotency_gate.py '
@@ -7559,6 +7579,15 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
         'scripts/nyay19_postgres_auth_retention_gate.py '
         '--execute --database-url "$DATABASE_URL" '
         '--output test-results/nyay19-postgres/summary.json'
+    )
+    expected_nyay22 = (
+        'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py '
+        '--database-url "$DATABASE_URL" '
+        '--output test-results/nyay22-postgres/summary.json'
+    )
+    expected_nyay22_promotion = (
+        'cp test-results/nyay22-postgres/summary.json '
+        '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"'
     )
     executable = re.sub(r"\\\s*\n", " ", db_gate_source)
     commands = [
@@ -7582,6 +7611,18 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
             for index, command in enumerate(commands)
             if "scripts/nyay19_postgres_auth_retention_gate.py" in command
         ]
+        nyay22_positions = [
+            index
+            for index, command in enumerate(commands)
+            if "scripts/nyay22_postgres_mentor_gate.py" in command
+        ]
+        nyay22_promotion_positions = [
+            index
+            for index, command in enumerate(commands)
+            if command.startswith("cp ")
+            and '"$REPO_ROOT/test-results/nyay22-postgres/summary.json"'
+            in command
+        ]
         fail_fast_positions = [
             index
             for index, command in enumerate(commands)
@@ -7591,13 +7632,22 @@ def _db_gate_wiring_is_exact(db_gate_source: str) -> bool:
             len(nyay17_positions) == 1
             and len(nyay4_positions) == 1
             and len(nyay19_positions) == 1
+            and len(nyay22_positions) == 1
+            and len(nyay22_promotion_positions) == 1
             and len(fail_fast_positions) == 1
             and fail_fast_positions[0] < nyay17_positions[0]
-            and nyay17_positions[0] < nyay4_positions[0] < nyay19_positions[0]
+            and nyay17_positions[0]
+            < nyay4_positions[0]
+            < nyay19_positions[0]
+            < nyay22_positions[0]
+            < nyay22_promotion_positions[0]
             and commands[nyay17_positions[0]] == expected_nyay17
             and commands[nyay4_positions[0]] == expected_nyay4
             and commands[nyay19_positions[0]] == expected_nyay19
-            and commands[-1] == expected_nyay19
+            and commands[nyay22_positions[0]] == expected_nyay22
+            and commands[nyay22_promotion_positions[0]]
+            == expected_nyay22_promotion
+            and commands[-1] == expected_nyay22_promotion
         )
     except IndexError:
         return False

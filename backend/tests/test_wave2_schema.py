@@ -69,10 +69,11 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: registration cardinality invariants, 0018 adds request-bound registration
 #: idempotency, 0019 adds durable OTP security authority, 0020 adds the
 #: explicit login-attempt/auth-session retention lifecycle, and 0022 adds the
-#: owner-scoped profile mutation ledger.
+#: owner-scoped profile mutation ledger, and 0023 installs the isolated mentor
+#: ceremony/session authority graph.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0022_nyay9_owner_profile_api"
+HEAD_REVISION = "0023_nyay22_mentor_ceremony"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",
@@ -118,6 +119,20 @@ POST_WAVE2_TABLES = {
     "student_profile_goals",
     "auth_session_profile_prompts",
     "profile_mutation_idempotency_records",
+    "mentor_bootstrap_attempts",
+    "mentor_invitations",
+    "tutor_profile_ownership_proofs",
+    "mentor_ceremonies",
+    "mentor_provider_results",
+    "mentor_subject_consents",
+    "mentor_engagements",
+    "mentor_consents",
+    "mentor_sessions",
+    "mentor_authority_step_ups",
+    "mentor_idempotency_records",
+    "mentor_rate_buckets",
+    "mentor_audit_links",
+    "mentor_retention_blocked_graphs",
 }
 
 

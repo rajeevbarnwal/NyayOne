@@ -992,6 +992,12 @@ class UploadableEvidenceTests(unittest.TestCase):
             "auth-browser": self._contract(
                 exporter, "rows", "area", ["auth-area"]
             ),
+            "nyay22-browser": self._contract(
+                exporter, "rows", "name", ["runtime-chromium"]
+            ),
+            "nyay22-postgres": self._contract(
+                exporter, "oracles", "id", ["NYAY22-PG-01"]
+            ),
             "wave4-postgres": self._contract(
                 exporter, "results", "id", ["W4-PG-01"]
             ),
@@ -1074,6 +1080,23 @@ class UploadableEvidenceTests(unittest.TestCase):
                     "passed": 1,
                     "failed": 0,
                     "rows": [{"area": "auth-area", "pass": True}],
+                },
+                "nyay22-browser/results.json": {
+                    "schemaVersion": "nyay22-browser-evidence.v1",
+                    "rows": [{"name": "runtime-chromium", "pass": True}],
+                    "summary": {"total": 1, "passed": 1, "failed": 0},
+                    "authorityModel": "withServerProvenMentorSession",
+                },
+                "nyay22-postgres/summary.json": {
+                    "schema_version": "nyay22-mentor-postgres/v1",
+                    "status": "PASS",
+                    "classification": "EXECUTED",
+                    "postgres_major": 16,
+                    "pgvector_present": True,
+                    "oracles": [
+                        {"id": "NYAY22-PG-01", "status": "PASS", "assertions": 1}
+                    ],
+                    "summary": {"passed": 1, "total": 1},
                 },
             },
             "wave4": {

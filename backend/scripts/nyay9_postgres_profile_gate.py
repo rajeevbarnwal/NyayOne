@@ -40,6 +40,8 @@ REPOSITORY = BACKEND.parent
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.db.migration_release_guard import APPLICATION_HEAD_REVISION  # noqa: E402
+
 CONTRACT_PATH = REPOSITORY / "scripts/ci/nyay9-profile-api-contract.json"
 BLOCKED_EXIT = 78
 OPT_IN_ENV = "NYAY9_POSTGRES_GATE"
@@ -51,7 +53,7 @@ PINNED_MIGRATION = (
 )
 MIGRATION_AUTHORITY = BACKEND / "app/db/migration_release_guard.py"
 MIGRATION_AUTHORITY_REFERENCE = (
-    "backend/app/db/migration_release_guard.py#APPLICATION_HEAD_SOURCE_SHA256"
+    "backend/app/db/migration_release_guard.py#NYAY9_SOURCE_SHA256"
 )
 SCRATCH_PREFIX = "nyay9_profile_"
 FIXED_NOW = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
@@ -414,10 +416,10 @@ def _migration_source_authority_matches() -> bool:
         return False
     migration_digest = hashlib.sha256(PINNED_MIGRATION.read_bytes()).hexdigest()
     return bool(
-        migration_release_guard.APPLICATION_HEAD_REVISION == PINNED_HEAD
-        and migration_release_guard.APPLICATION_HEAD_SOURCE_PATH.resolve()
+        migration_release_guard.NYAY9_REVISION == PINNED_HEAD
+        and migration_release_guard.NYAY9_SOURCE_PATH.resolve()
         == PINNED_MIGRATION.resolve()
-        and migration_release_guard.APPLICATION_HEAD_SOURCE_SHA256
+        and migration_release_guard.NYAY9_SOURCE_SHA256
         == migration_digest
         and migration_release_guard.source_authority_is_valid()
     )
@@ -491,6 +493,10 @@ def _migration_probe(scratch_url: str) -> dict[str, bool]:
         second_head = _current_revision(engine)
         second_digest = _schema_digest(engine)
         schema_exact_after = _idempotency_schema_exact(engine)
+        application_upgrade = _run_alembic(
+            scratch_url, "upgrade", APPLICATION_HEAD_REVISION
+        )
+        application_head = _current_revision(engine)
         check_passed = _run_alembic(scratch_url, "check") == 0
     finally:
         engine.dispose()
@@ -507,7 +513,15 @@ def _migration_probe(scratch_url: str) -> dict[str, bool]:
             and schema_exact_after
             and second_digest == first_digest
         ),
-        "alembic_check": check_passed,
+        "application_head_exact": (
+            application_upgrade == 0
+            and application_head == APPLICATION_HEAD_REVISION
+        ),
+        "alembic_check": (
+            application_upgrade == 0
+            and application_head == APPLICATION_HEAD_REVISION
+            and check_passed
+        ),
         "source_authority_exact": _migration_source_authority_matches(),
     }
 

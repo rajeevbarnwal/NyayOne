@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_inventory_sha256": "3583c39dcf357b9fe71f090681fddc983ff646b815c49788382ab31a9be3beeb",
+  "source_inventory_sha256": "8face6ec17f864fbacea45184daba90fbdafea561a128cf2b111bdd5a132feb6",
   "metadata": {
     "package_name": "nyayone-frontend",
     "capacitor_app_id": "com.nyayone.app",

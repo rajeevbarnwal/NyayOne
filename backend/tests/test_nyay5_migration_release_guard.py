@@ -155,7 +155,7 @@ def test_authenticated_alembic_loader_rejects_uninventoried_extra_source(tmp_pat
         restore()
 
 
-@pytest.mark.parametrize("requested", [guard.APPLICATION_HEAD_REVISION, "head"])
+@pytest.mark.parametrize("requested", [guard.NYAY9_REVISION])
 def test_nonisolated_guard_denies_0021_to_nyay9_without_new_exact_approval(
     monkeypatch,
     requested,
@@ -193,12 +193,12 @@ def test_nonisolated_guard_denies_0021_to_nyay9_without_new_exact_approval(
     assert observed == ["0021"]
 
 
-def test_exact_nyay9_head_noop_revalidates_authenticated_head(monkeypatch):
+def test_exact_application_head_noop_revalidates_authenticated_head(monkeypatch):
     monkeypatch.setattr(guard, "source_authority_is_valid", lambda: True)
     monkeypatch.setattr(
         guard,
-        "_nyay9_module",
-        lambda: SimpleNamespace(down_revision=guard.NYAY5_REVISION),
+        "_nyay22_module",
+        lambda: SimpleNamespace(down_revision=guard.NYAY9_REVISION),
     )
     monkeypatch.setattr(guard, "_prepare_authoritative_transaction", lambda _: None)
     monkeypatch.setattr(
@@ -209,8 +209,8 @@ def test_exact_nyay9_head_noop_revalidates_authenticated_head(monkeypatch):
     observed = []
     monkeypatch.setattr(
         guard,
-        "_validate_nyay9_at_head",
-        lambda _: observed.append("0022"),
+        "_validate_application_at_head",
+        lambda _: observed.append("0023"),
     )
 
     authenticated = guard.enforce_nyay19_migration_release_guard(
@@ -221,7 +221,7 @@ def test_exact_nyay9_head_noop_revalidates_authenticated_head(monkeypatch):
         runtime_intent=_intent("head"),
     )
     assert authenticated is True
-    assert observed == ["0022"]
+    assert observed == ["0023"]
 
 
 def test_postflight_dispatch_validates_exact_nyay9_head(monkeypatch):
@@ -234,27 +234,27 @@ def test_postflight_dispatch_validates_exact_nyay9_head(monkeypatch):
     connection = SimpleNamespace(in_transaction=lambda: True)
     guard.enforce_nyay19_migration_postflight(
         connection,
-        expected_revision=guard.APPLICATION_HEAD_REVISION,
+        expected_revision=guard.NYAY9_REVISION,
     )
     assert observed == [connection]
 
 
 def test_authenticated_nyay9_loader_executes_exact_source_bytes():
     module = guard._nyay9_module()
-    assert Path(module.__file__).resolve() == guard.APPLICATION_HEAD_SOURCE_PATH
-    assert module.revision == guard.APPLICATION_HEAD_REVISION
+    assert Path(module.__file__).resolve() == guard.NYAY9_SOURCE_PATH
+    assert module.revision == guard.NYAY9_REVISION
     assert module.down_revision == guard.NYAY5_REVISION
     assert callable(module._validate_postflight)
 
 
 def test_authenticated_nyay9_loader_rejects_swapped_source(tmp_path):
-    swapped = tmp_path / guard.APPLICATION_HEAD_SOURCE_PATH.name
-    swapped.write_bytes(guard.APPLICATION_HEAD_SOURCE_PATH.read_bytes() + b"\n")
+    swapped = tmp_path / guard.NYAY9_SOURCE_PATH.name
+    swapped.write_bytes(guard.NYAY9_SOURCE_PATH.read_bytes() + b"\n")
     with pytest.raises(guard.MigrationApprovalError):
         guard._load_authenticated_migration_module(
             "nyay9_swapped",
             swapped,
-            guard.APPLICATION_HEAD_SOURCE_SHA256,
+            guard.NYAY9_SOURCE_SHA256,
         )
 
 
@@ -276,7 +276,7 @@ def test_nyay9_head_validation_inherits_nyay5_authority(monkeypatch):
     monkeypatch.setattr(
         guard,
         "_current_revision",
-        lambda _: guard.APPLICATION_HEAD_REVISION,
+        lambda _: guard.NYAY9_REVISION,
     )
     monkeypatch.setattr(
         guard,
@@ -292,6 +292,6 @@ def test_nyay9_head_validation_inherits_nyay5_authority(monkeypatch):
     assert observed == [
         ("nyay5_lock", True),
         ("lock", True),
-        ("nyay5", guard.APPLICATION_HEAD_REVISION, False),
+        ("nyay5", guard.NYAY9_REVISION, False),
         ("nyay9", True),
     ]

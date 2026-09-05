@@ -62,17 +62,20 @@ def test_historical_lifecycle_and_current_application_heads_are_separate():
     assert gate.PREVIOUS_REVISION == "0017_registration_invariants"
     assert gate.PINNED_HEAD == "0018_registration_idempotency"
     assert gate.NYAY5_CHECKPOINT == "0021_nyay5_profile_boundary"
-    assert gate.APPLICATION_HEAD == "0022_nyay9_owner_profile_api"
+    assert gate.NYAY9_CHECKPOINT == "0022_nyay9_owner_profile_api"
+    assert gate.APPLICATION_HEAD == "0023_nyay22_mentor_ceremony"
     config = Config(str(gate.BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(gate.BACKEND / "app/db/migrations"))
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     otp_security_head = scripts.get_revision("0019_otp_security_authority")
     retention_head = scripts.get_revision("0020_auth_retention_lifecycle")
+    nyay9_checkpoint = scripts.get_revision(gate.NYAY9_CHECKPOINT)
     nyay5_checkpoint = scripts.get_revision(gate.NYAY5_CHECKPOINT)
     assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
-        nyay5_checkpoint.revision
+        nyay9_checkpoint.revision
     )
+    assert nyay9_checkpoint.down_revision == nyay5_checkpoint.revision
     assert nyay5_checkpoint.down_revision == retention_head.revision
     assert retention_head.down_revision == otp_security_head.revision
     assert otp_security_head.down_revision == gate.PINNED_HEAD
@@ -1929,6 +1932,65 @@ def test_signup_activation_requires_exact_server_owned_onboarding_projection():
     assert "_signup_authenticated_projection_is_exact(" in activation_source
     assert "_signup_authenticated_projection_is_exact(" in race_source
     assert 'activation["verification_body_exact"]' in assembly_source
+
+
+def test_activation_retention_race_retries_only_the_canonical_mentor_boundary_conflict():
+    """A newly fenced erasure retries once after activation changes its prelock."""
+
+    from app.services.mentor_ceremony import MentorCeremonyError
+
+    calls = 0
+
+    def retryable_operation():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise MentorCeremonyError(
+                409, "CONCURRENT_STATE_CHANGED", retryable=True
+            )
+        return True
+
+    assert gate._retry_subject_erasure_boundary_once(retryable_operation) == (
+        True,
+        1,
+    )
+    assert calls == 2
+
+    for rejected in (
+        MentorCeremonyError(409, "CONCURRENT_STATE_CHANGED", retryable=False),
+        MentorCeremonyError(400, "CONCURRENT_STATE_CHANGED", retryable=True),
+        MentorCeremonyError(409, "OTHER_FAILURE", retryable=True),
+        RuntimeError("CONCURRENT_STATE_CHANGED"),
+    ):
+        rejected_calls = 0
+
+        def rejected_operation():
+            nonlocal rejected_calls
+            rejected_calls += 1
+            raise rejected
+
+        with pytest.raises(type(rejected)) as caught:
+            gate._retry_subject_erasure_boundary_once(rejected_operation)
+        assert caught.value is rejected
+        assert rejected_calls == 1
+
+    exhausted_calls = 0
+    exhausted = MentorCeremonyError(
+        409, "CONCURRENT_STATE_CHANGED", retryable=True
+    )
+
+    def exhausted_operation():
+        nonlocal exhausted_calls
+        exhausted_calls += 1
+        raise exhausted
+
+    with pytest.raises(MentorCeremonyError) as exhausted_caught:
+        gate._retry_subject_erasure_boundary_once(exhausted_operation)
+    assert exhausted_caught.value is exhausted
+    assert exhausted_calls == 2
+
+    race_source = pyinspect.getsource(gate._run_activation_retention_race)
+    assert race_source.count("_retry_subject_erasure_boundary_once(") == 2
 
 
 def test_unicode_whitespace_case_default_and_omission_equivalents_normalize_exactly():

@@ -33,6 +33,7 @@ from app.models.registration import (
     StudentVerification,
     User,
 )
+from app.models.mentor_auth import MentorSession
 from app.services import (
     integrity_errors,
     otp_authority,
@@ -252,6 +253,7 @@ def verify_flow(
     now: datetime,
     *,
     commit_on_success: bool = True,
+    presented_mentor_session_token: str | None = None,
 ) -> tuple[str, AuthSession, OtpFlow]:
     """Verify a cookie flow, consuming the same decoy budget on every miss."""
 
@@ -306,6 +308,7 @@ def verify_flow(
         registration,  # type: ignore[arg-type]
         now,
         commit_on_success=commit_on_success,
+        presented_mentor_session_token=presented_mentor_session_token,
     )
     return raw_session, auth_session, flow
 
@@ -446,6 +449,7 @@ def rotate_authenticated_session(
     now: datetime,
     *,
     commit_on_success: bool = True,
+    presented_mentor_session_token: str | None = None,
 ) -> tuple[str, AuthSession]:
     """Serialize and atomically replace the active session for one user.
 
@@ -456,7 +460,53 @@ def rotate_authenticated_session(
     """
 
     now = _as_utc(now)
-    user = lock_user_for_session_rotation(session, registration.user_id)
+    # Resolve a browser-presented mentor capability without taking a child
+    # lock, then lock stable actor rows in UUID order before either session
+    # class. This handles mentor actor A -> student actor B context switches.
+    presented_mentor_id = None
+    presented_mentor_actor_id = None
+    if presented_mentor_session_token:
+        from app.services.mentor_ceremony import _token_hash as mentor_token_hash
+
+        discovered_mentor = session.execute(
+            select(MentorSession.id, MentorSession.actor_user_id).where(
+                MentorSession.token_hash
+                == mentor_token_hash(presented_mentor_session_token)
+            )
+        ).one_or_none()
+        if discovered_mentor is None:
+            session.rollback()
+            raise LoginError(409, "login_conflict")
+        presented_mentor_id, presented_mentor_actor_id = discovered_mentor
+    actor_ids = {registration.user_id}
+    if presented_mentor_actor_id is not None:
+        actor_ids.add(presented_mentor_actor_id)
+    # Serialize both authority classes before taking any row lock.  Mentor
+    # reads/rotations use these same actor-scoped advisory locks, so a browser
+    # switching from mentor actor A to owner actor B cannot create the cycle
+    # ``owner User(B) -> mentor User(A)`` / ``mentor User(A) -> subject User(B)``.
+    # Discovery above is non-authorizing; every binding is still reread under
+    # the canonical row locks below.
+    if presented_mentor_actor_id is not None:
+        from app.services.mentor_ceremony import _lock_authority_scope
+
+        for actor_id in sorted(actor_ids, key=str):
+            _lock_authority_scope(
+                session,
+                actor_hint=actor_id,
+                fallback=f"actor:{actor_id}",
+            )
+    locked_users = {
+        row.id: row
+        for row in session.scalars(
+            select(User)
+            .where(User.id.in_(sorted(actor_ids, key=str)))
+            .order_by(User.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
+    user = locked_users.get(registration.user_id)
     if (
         user is None
         or user.role != "student"
@@ -468,6 +518,48 @@ def rotate_authenticated_session(
         raise LoginError()
 
     prior_sessions = active_sessions_for_rotation(session, user.id)
+    # NYAY-22: both authority classes use one stable lock order
+    # (User -> AuthSession -> MentorSession).  Student issuance cannot coexist
+    # with any live/ambiguous mentor generation for the same actor.
+    mentor_sessions = list(
+        session.scalars(
+            select(MentorSession)
+            .where(MentorSession.actor_user_id.in_(sorted(actor_ids, key=str)))
+            .order_by(MentorSession.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    presented_mentor = next(
+        (
+            row
+            for row in mentor_sessions
+            if row.id == presented_mentor_id
+        ),
+        None,
+    )
+    if presented_mentor_session_token and presented_mentor is None:
+        session.rollback()
+        raise LoginError(409, "login_conflict")
+    if (
+        presented_mentor is not None
+        and presented_mentor.state == "active"
+        and (
+            _as_utc(presented_mentor.expires_at) <= now
+            or _as_utc(presented_mentor.last_seen_at)
+            + timedelta(seconds=settings.mentor_session_idle_ttl_seconds)
+            <= now
+        )
+    ):
+        presented_mentor.state = "expired"
+        presented_mentor.terminal_at = min(
+            _as_utc(presented_mentor.expires_at),
+            _as_utc(presented_mentor.last_seen_at)
+            + timedelta(seconds=settings.mentor_session_idle_ttl_seconds),
+        )
+    if any(row.state == "active" for row in mentor_sessions):
+        session.rollback()
+        raise LoginError(409, "login_conflict")
     clear_profile_prompts(session, [prior.id for prior in prior_sessions])
     for prior in prior_sessions:
         prior.status = "revoked"

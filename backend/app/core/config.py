@@ -1,3 +1,5 @@
+import base64
+import binascii
 from ipaddress import ip_address
 import math
 from pathlib import Path
@@ -62,6 +64,21 @@ _OTP_STRICT_INTEGER_FIELDS = (
     "otp_outbox_legacy_destination_retention_seconds",
     "otp_flow_ttl_seconds",
     "otp_recovery_proof_ttl_seconds",
+)
+_MENTOR_STRICT_INTEGER_FIELDS = (
+    "mentor_bootstrap_ttl_seconds",
+    "mentor_ceremony_ttl_seconds",
+    "mentor_session_absolute_ttl_seconds",
+    "mentor_session_idle_ttl_seconds",
+    "mentor_authority_step_up_ttl_seconds",
+    "mentor_provider_deadline_seconds",
+    "mentor_provider_circuit_breaker_failures",
+    "mentor_rate_window_seconds",
+    "mentor_rate_max_requests",
+    "mentor_session_max_generation",
+    "mentor_terminal_retention_seconds",
+    "mentor_audit_link_retention_seconds",
+    "mentor_retention_batch_size",
 )
 #: Wave 2 provider bindings that the code can actually honour.
 PAYMENT_PROVIDER_CHOICES = ("deterministic", "razorpay", "none")
@@ -409,6 +426,43 @@ class Settings(BaseSettings):
     auth_session_ttl_seconds: int = 7 * 24 * 60 * 60
     login_attempt_ttl_seconds: int = 10 * 60
 
+    # --- NYAY-22 isolated mentor ceremony/session --------------------------
+    # Deployments may shorten these design ceilings but can never lengthen
+    # them.  The mentor authority remains a distinct session class.
+    mentor_bootstrap_ttl_seconds: int = 15 * 60
+    mentor_ceremony_ttl_seconds: int = 15 * 60
+    mentor_session_absolute_ttl_seconds: int = 8 * 60 * 60
+    mentor_session_idle_ttl_seconds: int = 30 * 60
+    mentor_authority_step_up_ttl_seconds: int = 5 * 60
+    mentor_identity_provider_class: str = "nyayone_reviewed_identity"
+    mentor_identity_provider_assurance: str = "high"
+    mentor_identity_provider_policy_version: str = "mentor-proof.v1"
+    mentor_identity_provider_issuer: str = "nyayone-identity-boundary.v1"
+    mentor_identity_provider_audience: str = "nyayone-mentor-ceremony.v1"
+    mentor_identity_provider_algorithm: str = "EdDSA"
+    # Deterministic development verifier. Production/staging must override it.
+    mentor_identity_provider_public_key_b64: str = (
+        "oJql9HpnWYAv+VX43C0qFKXJnSO+l/hkEn/5ODRVpPA="
+    )
+    # Non-public, server-to-server start/result exchange.  A deployment may
+    # leave this absent only when the relay is not run; the relay builder then
+    # fails closed before claiming any transaction.  Browser routes never read
+    # or expose this value.
+    mentor_identity_provider_start_url: str | None = None
+    mentor_identity_provider_allowed_hosts: list[str] = []
+    mentor_provider_deadline_seconds: int = 30
+    mentor_provider_circuit_breaker_failures: int = 3
+    mentor_rate_window_seconds: int = 60
+    mentor_rate_max_requests: int = 20
+    mentor_session_max_generation: int = 64
+    mentor_privacy_notice_version: str = "mentor-privacy.v1"
+    mentor_authority_step_up_notice_version: str = "mentor-authority-deletion.v1"
+    mentor_retention_notice_version: str = "mentor-retention.v1"
+    mentor_terminal_retention_seconds: int = 30 * 24 * 60 * 60
+    mentor_audit_link_retention_seconds: int = 30 * 24 * 60 * 60
+    mentor_retention_batch_size: int = 128
+    mentor_retention_mode: str = "bounded_crypto_erasure"
+
     # --- DPDP retention / deletion (SAATHI-366 C5) -------------------------
     # Config-driven retention windows per data category, in days. NO statutory
     # duration is hard-coded: unset (None) means "retain until explicit erasure"
@@ -500,6 +554,42 @@ class Settings(BaseSettings):
                     "OTP configuration is invalid; refusing to start: "
                     "otp_provider_timeout_s must be numeric, not boolean"
                 )
+            ceilings = {
+                "mentor_bootstrap_ttl_seconds": 900,
+                "mentor_ceremony_ttl_seconds": 900,
+                "mentor_session_absolute_ttl_seconds": 28_800,
+                "mentor_session_idle_ttl_seconds": 1_800,
+                "mentor_authority_step_up_ttl_seconds": 300,
+                "mentor_provider_deadline_seconds": 120,
+                "mentor_provider_circuit_breaker_failures": 20,
+                # Buckets live for two windows.  This ceiling guarantees that
+                # every exact retry-after value remains within the sealed
+                # MentorFailure maximum of 900 seconds.
+                "mentor_rate_window_seconds": 450,
+                "mentor_rate_max_requests": 1_000,
+                "mentor_session_max_generation": 256,
+                "mentor_terminal_retention_seconds": 31_536_000,
+                "mentor_audit_link_retention_seconds": 31_536_000,
+                "mentor_retention_batch_size": 256,
+            }
+            for name in _MENTOR_STRICT_INTEGER_FIELDS:
+                value = values.get(name)
+                if value is None:
+                    continue
+                invalid_string = isinstance(value, str) and re.fullmatch(
+                    r"[1-9][0-9]*", value
+                ) is None
+                invalid_literal = value is not None and not isinstance(value, (int, str))
+                if (
+                    isinstance(value, bool)
+                    or invalid_string
+                    or invalid_literal
+                    or int(value) < 1
+                    or int(value) > ceilings[name]
+                ):
+                    raise ValueError(
+                        f"{name} must be a positive integer no greater than its security ceiling"
+                    )
         return values
 
     @model_validator(mode="after")
@@ -515,6 +605,77 @@ class Settings(BaseSettings):
             problems.append("app_name must use the NyayOne application identity")
 
         environment = (self.app_env or "").strip().casefold()
+        if environment in {"production", "prod", "staging", "stage"}:
+            canonical_origins: list[str] = []
+            for raw_origin in self.cors_origins:
+                try:
+                    parsed_origin = urlsplit(raw_origin)
+                    origin_port = parsed_origin.port
+                    origin_host = (parsed_origin.hostname or "").casefold()
+                except (TypeError, ValueError):
+                    parsed_origin = None
+                    origin_port = -1
+                    origin_host = ""
+                if parsed_origin is None:
+                    canonical_origin = ""
+                    valid_host = False
+                else:
+                    try:
+                        origin_address = ip_address(origin_host)
+                    except ValueError:
+                        canonical_host = origin_host
+                        valid_host = bool(
+                            "*" not in origin_host
+                            and re.fullmatch(
+                                r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+                                r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?",
+                                origin_host,
+                            )
+                        )
+                    else:
+                        canonical_host = (
+                            f"[{origin_address.compressed}]"
+                            if origin_address.version == 6
+                            else origin_address.compressed
+                        )
+                        valid_host = not (
+                            origin_address.is_loopback
+                            or origin_address.is_unspecified
+                        )
+                    authority = (
+                        canonical_host
+                        if origin_port in {None, 443}
+                        else f"{canonical_host}:{origin_port}"
+                    )
+                    canonical_origin = f"https://{authority}"
+                if (
+                    parsed_origin is None
+                    or parsed_origin.scheme != "https"
+                    or not valid_host
+                    or origin_port == -1
+                    or (
+                        origin_port is not None
+                        and not 1 <= origin_port <= 65_535
+                    )
+                    or parsed_origin.username is not None
+                    or parsed_origin.password is not None
+                    or parsed_origin.path
+                    or parsed_origin.query
+                    or parsed_origin.fragment
+                    or raw_origin != canonical_origin
+                ):
+                    problems.append(
+                        "cors_origins must contain only exact canonical HTTPS origins in production"
+                    )
+                    break
+                canonical_origins.append(canonical_origin)
+            if (
+                not self.cors_origins
+                or len(canonical_origins) != len(set(canonical_origins))
+            ):
+                problems.append(
+                    "cors_origins must be non-empty and unique in production"
+                )
         for setting_name in ("database_url", "test_database_url"):
             raw_url = getattr(self, setting_name)
             if not raw_url:
@@ -542,6 +703,137 @@ class Settings(BaseSettings):
             problems.append("auth_session_cookie_name must use the NyayOne cookie identity")
         if (self.otp_flow_cookie_name or "") != "nyayone_otp_flow":
             problems.append("otp_flow_cookie_name must use the NyayOne cookie identity")
+        if self.mentor_identity_provider_class not in {
+            "nyayone_reviewed_identity",
+            "approved_federated_attestation",
+        }:
+            problems.append("mentor identity provider class is not approved")
+        if self.mentor_identity_provider_assurance != "high":
+            problems.append("mentor identity provider assurance is not approved")
+        if self.mentor_identity_provider_policy_version != "mentor-proof.v1":
+            problems.append("mentor identity provider policy is not approved")
+        if self.mentor_identity_provider_algorithm != "EdDSA":
+            problems.append("mentor identity provider algorithm is not approved")
+        try:
+            mentor_provider_public_key = base64.b64decode(
+                self.mentor_identity_provider_public_key_b64,
+                validate=True,
+            )
+        except (binascii.Error, ValueError):
+            mentor_provider_public_key = b""
+        if len(mentor_provider_public_key) != 32:
+            problems.append(
+                "mentor identity provider public key must be a canonical "
+                "Ed25519 public key"
+            )
+        if not self.mentor_identity_provider_issuer.strip():
+            problems.append("mentor identity provider issuer is required")
+        if not self.mentor_identity_provider_audience.strip():
+            problems.append("mentor identity provider audience is required")
+        provider_endpoint = (self.mentor_identity_provider_start_url or "").strip()
+        provider_hosts = [
+            item.strip().casefold()
+            for item in self.mentor_identity_provider_allowed_hosts
+            if isinstance(item, str) and item.strip()
+        ]
+        if bool(provider_endpoint) != bool(provider_hosts):
+            problems.append(
+                "mentor identity provider endpoint and host allowlist must be configured together"
+            )
+        elif provider_endpoint:
+            try:
+                parsed_provider = urlsplit(provider_endpoint)
+                provider_port = parsed_provider.port
+                provider_host = (parsed_provider.hostname or "").casefold()
+            except (TypeError, ValueError):
+                parsed_provider = None
+                provider_port = -1
+                provider_host = ""
+                provider_is_ip = True
+            else:
+                try:
+                    ip_address(provider_host)
+                except ValueError:
+                    provider_is_ip = False
+                else:
+                    provider_is_ip = True
+            valid_host = bool(
+                provider_host
+                and not provider_is_ip
+                and provider_host != "localhost"
+                and "." in provider_host
+                and re.fullmatch(
+                    r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+                    r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?",
+                    provider_host,
+                )
+            )
+            valid_allowlist = bool(
+                provider_hosts
+                and len(provider_hosts) == len(self.mentor_identity_provider_allowed_hosts)
+                and len(provider_hosts) == len(set(provider_hosts))
+                and provider_host in provider_hosts
+                and all(
+                    "*" not in item
+                    and item != "localhost"
+                    and "." in item
+                    and re.fullmatch(
+                        r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+                        r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?",
+                        item,
+                    )
+                    is not None
+                    for item in provider_hosts
+                )
+            )
+            if (
+                parsed_provider is None
+                or parsed_provider.scheme != "https"
+                or not valid_host
+                or provider_port not in {None, 443}
+                or parsed_provider.username is not None
+                or parsed_provider.password is not None
+                or parsed_provider.query
+                or parsed_provider.fragment
+                or parsed_provider.path in {"", "/"}
+                or not valid_allowlist
+            ):
+                problems.append(
+                    "mentor identity provider endpoint or host allowlist is invalid"
+                )
+        if (
+            environment not in {"development", "dev", "local", "test", "testing"}
+            and not {
+                "mentor_terminal_retention_seconds",
+                "mentor_audit_link_retention_seconds",
+                "mentor_retention_mode",
+            }.issubset(self.model_fields_set)
+        ):
+            problems.append(
+                "mentor retention policy must be deployment-explicit outside local/test"
+            )
+        if self.mentor_retention_mode != "bounded_crypto_erasure":
+            problems.append("mentor retention mode must be bounded_crypto_erasure")
+        if self.mentor_audit_link_retention_seconds > self.mentor_terminal_retention_seconds:
+            problems.append(
+                "mentor audit-link retention cannot exceed terminal authority retention"
+            )
+        for name in (
+            "mentor_privacy_notice_version",
+            "mentor_authority_step_up_notice_version",
+            "mentor_retention_notice_version",
+        ):
+            if re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", getattr(self, name)) is None:
+                problems.append(f"{name} must be a canonical contract version")
+        if (
+            environment not in {"development", "dev", "local", "test", "testing"}
+            and provider_endpoint
+            and (
+            self.mentor_identity_provider_public_key_b64
+            == "oJql9HpnWYAv+VX43C0qFKXJnSO+l/hkEn/5ODRVpPA="
+            )
+        ):
+            problems.append("mentor identity provider key must be deployment-bound")
         if (self.github_repository or "").strip().casefold() != "rajeevbarnwal/nyayone":
             problems.append("github_repository must identify the NyayOne repository")
         github_url = urlsplit(self.github_repo_url or "")

@@ -77,6 +77,12 @@ NONLOCAL_OTP_CONFIG = {
     "otp_provider_token": SecretStr("wave4-public-risk-config-token"),
     "otp_provider_supports_idempotency": True,
 }
+NONLOCAL_MENTOR_CONFIG = {
+    "mentor_terminal_retention_seconds": 2_592_000,
+    "mentor_audit_link_retention_seconds": 2_592_000,
+    "mentor_retention_mode": "bounded_crypto_erasure",
+}
+CI_CANONICAL_CORS_ORIGIN = "https://ci.nyayone.example"
 
 
 def test_ci_runs_moderation_before_seeding_risk_label_cluster() -> None:
@@ -312,7 +318,9 @@ def test_deterministic_response_notification_provider_is_local_test_only(environ
         "database_url": NON_DEV_DATABASE_URL,
         "internship_report_scanner_provider": "clamav",
         "calendar_public_base_url": "https://calendar.nyayone.example",
+        "cors_origins": [CI_CANONICAL_CORS_ORIGIN],
         **NONLOCAL_OTP_CONFIG,
+        **NONLOCAL_MENTOR_CONFIG,
     }
     with pytest.raises(ConfigurationError, match="notification_provider must be none"):
         Settings(

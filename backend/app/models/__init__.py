@@ -80,6 +80,27 @@ from app.models.internships import (  # noqa: F401
     InternshipListing,
     SavedInternship,
 )
+from app.models.mentor_auth import (  # noqa: F401
+    MENTOR_CEREMONY_STATES,
+    MENTOR_CEREMONY_TERMINAL_STATES,
+    MENTOR_SESSION_STATES,
+    MENTOR_SESSION_TERMINAL_STATES,
+    MENTOR_SESSION_TRANSITIONS,
+    MentorAuthorityStepUp,
+    MentorAuditLink,
+    MentorBootstrapAttempt,
+    MentorCeremony,
+    MentorConsent,
+    MentorEngagement,
+    MentorIdempotencyRecord,
+    MentorInvitation,
+    MentorProviderResult,
+    MentorRateBucket,
+    MentorRetentionBlockedGraph,
+    MentorSubjectConsent,
+    MentorSession,
+    TutorProfileOwnershipProof,
+)
 
 __all__ = [
     "User",
@@ -170,4 +191,24 @@ __all__ = [
     # SAATHI-60 internship discovery and owner-scoped saves
     "InternshipListing",
     "SavedInternship",
+    # NYAY-22 server-issued mentor ceremony and isolated session authority.
+    "MentorBootstrapAttempt",
+    "MentorInvitation",
+    "TutorProfileOwnershipProof",
+    "MentorCeremony",
+    "MentorProviderResult",
+    "MentorSubjectConsent",
+    "MentorEngagement",
+    "MentorConsent",
+    "MentorSession",
+    "MentorAuthorityStepUp",
+    "MentorAuditLink",
+    "MentorIdempotencyRecord",
+    "MentorRateBucket",
+    "MentorRetentionBlockedGraph",
+    "MENTOR_CEREMONY_STATES",
+    "MENTOR_CEREMONY_TERMINAL_STATES",
+    "MENTOR_SESSION_STATES",
+    "MENTOR_SESSION_TERMINAL_STATES",
+    "MENTOR_SESSION_TRANSITIONS",
 ]
