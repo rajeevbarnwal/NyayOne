@@ -60,6 +60,19 @@ NYAY22_POSTGRES_GATE = (
 NYAY22_POSTGRES_CONTRACT = (
     ROOT / "scripts" / "ci" / "nyay22-mentor-postgres-contract.json"
 )
+NYAY22_SCHEMA_MIGRATION = (
+    ROOT
+    / "backend"
+    / "app"
+    / "db"
+    / "migrations"
+    / "versions"
+    / "0023_nyay22_mentor_ceremony.py"
+)
+NYAY22_MENTOR_AUTH_MODEL = ROOT / "backend" / "app" / "models" / "mentor_auth.py"
+NYAY22_MIGRATION_DISPATCH_TEST = (
+    ROOT / "backend" / "tests" / "test_nyay22_migration_dispatch_contract.py"
+)
 NYAY22_NYAY19_ERASURE_TEST = (
     ROOT / "backend" / "tests" / "test_nyay22_nyay19_erasure_integration.py"
 )
@@ -379,10 +392,19 @@ EXPECTED_NYAY22_BROWSER_SEED_TEST_SHA256 = (
     "c22822224fcad6576fdf3097bfcb22b4cadfa6890419f94afc659bdb4e0ce939"
 )
 EXPECTED_NYAY22_POSTGRES_GATE_SHA256 = (
-    "7ebd6234ef94ea3d2fe2bd36670ffae5370e8876d378896ca0e62f878c0168d3"
+    "f568912e64e886bd73e6afe39c8ece361e5b04832c4ef77305b76f1d88a1b374"
 )
 EXPECTED_NYAY22_POSTGRES_CONTRACT_SHA256 = (
     "c9de111f70ef238d942b2492983137ea850f1b2f7d5fc3869b447b1d52d4e880"
+)
+EXPECTED_NYAY22_SCHEMA_MIGRATION_SHA256 = (
+    "d2a221b00ff785c2748cd7394a57da4cfd34596806078ccc815244626dcb7ce1"
+)
+EXPECTED_NYAY22_MENTOR_AUTH_MODEL_SHA256 = (
+    "fee41f13b14cbf66fe74d5f643eed5706defa95e872042dd0eedbf1b52490e6d"
+)
+EXPECTED_NYAY22_MIGRATION_DISPATCH_TEST_SHA256 = (
+    "a72a615282419faedd2f9930955b96a4c81616105f3eb8363229beee91394094"
 )
 EXPECTED_NYAY22_NYAY19_ERASURE_TEST_SHA256 = (
     "aacc42fa03b652a203d878f893336e5f34595fa4c557754134e80ae66e05e14f"
@@ -748,7 +770,13 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "8d50ec128a2efa9c52ce8286e44d06aac54b3d116d928779ad804e0b256b34c1"
+EXPECTED_DB_GATE_SHA256 = "e98daba62026eea5a6bfc5529b6d1a1c1563728bdd8e672edddb7e22115f6b11"
+EXPECTED_ISOLATED_BACKEND_PYTEST_COMMAND = (
+    "env -u DATABASE_URL -u CORS_ORIGINS "
+    "-u MENTOR_TERMINAL_RETENTION_SECONDS "
+    "-u MENTOR_AUDIT_LINK_RETENTION_SECONDS "
+    '-u MENTOR_RETENTION_MODE APP_ENV=testing "$PY" -m pytest -q'
+)
 EXPECTED_NYAY16_DB_GATE_COMMAND = (
     'NYAY16_GATE_ALLOW_DATABASES=true "$PY" scripts/nyay16_postgres_gate.py '
     "--output test-results/nyay16-postgres/summary.json"
@@ -1541,7 +1569,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
     ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "f4e777be98ee755df10fa7e5613ad896fc67efd1d89572580c87ff29d599ed05",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
-    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "97d1faf91f019d316ca23bcf72a95b05bc25e146b491434c8c6219100b43eeaa",
+    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "4364a064d6289dc2335601bdef539720e52999165b0051ec2c509dd6ebfdc412",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
     ("wave5-calendar-gate.yml", "calendar-postgres"): "3e53e60acd87ec409045c0e7fc1dd0bcc474c4c8a13275545d72e0dfd4de7a27",
     ("wave5-calendar-gate.yml", "calendar-real-browser"): "538128276a071cafcc082999f0b912756b4cd71500552432b49659eedd74f6d4",
@@ -2236,6 +2264,7 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
     )
     executable = re.sub(r"\\\s*\n", " ", executable)
     canonical = _canonical_shell(executable)
+    isolated_pytest = _canonical_shell(EXPECTED_ISOLATED_BACKEND_PYTEST_COMMAND)
     nyay16 = _canonical_shell(EXPECTED_NYAY16_DB_GATE_COMMAND)
     nyay3 = _canonical_shell(EXPECTED_NYAY3_DB_GATE_COMMAND)
     nyay2 = _canonical_shell(EXPECTED_NYAY2_DB_GATE_COMMAND)
@@ -2252,6 +2281,11 @@ def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
             EXPECTED_NYAY22_DB_GATE_EVIDENCE_PROMOTION,
         )
     )
+    if canonical.count(isolated_pytest) != 1:
+        failures.append(
+            f"{path}: backend pytest must clear deployment-only CORS and mentor "
+            "retention environment exactly once"
+        )
     if canonical.count(nyay16) != 1:
         failures.append(
             f"{path}: database gate must invoke the exact NYAY-16 PostgreSQL gate once"
@@ -2994,6 +3028,52 @@ def check_nyay22_postgres_gate_contract(
                     failures.append(
                         f"{producer_path}: NYAY-22 producer {function_name} semantic contract differs from the seal"
                     )
+    return failures
+
+
+def check_nyay22_schema_artifact_contract(
+    migration_path: Path = NYAY22_SCHEMA_MIGRATION,
+    model_path: Path = NYAY22_MENTOR_AUTH_MODEL,
+    dispatch_test_path: Path = NYAY22_MIGRATION_DISPATCH_TEST,
+) -> list[str]:
+    """Bind the NYAY-22 DDL, ORM metadata, and closed-world index oracle.
+
+    The three artifacts form one security contract.  Sealing only the runtime
+    producer would allow a coordinated migration/model/test edit to weaken the
+    foreign-key index inventory while leaving the native command reachable.
+    """
+
+    failures: list[str] = []
+    artifacts = (
+        (
+            migration_path,
+            EXPECTED_NYAY22_SCHEMA_MIGRATION_SHA256,
+            "mentor ceremony migration",
+        ),
+        (
+            model_path,
+            EXPECTED_NYAY22_MENTOR_AUTH_MODEL_SHA256,
+            "mentor auth model",
+        ),
+        (
+            dispatch_test_path,
+            EXPECTED_NYAY22_MIGRATION_DISPATCH_TEST_SHA256,
+            "migration dispatch contract test",
+        ),
+    )
+    for path, expected, label in artifacts:
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"{path}: NYAY-22 {label} is missing or unsafe")
+            continue
+        try:
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            failures.append(f"{path}: NYAY-22 {label} is unreadable")
+            continue
+        if actual != expected:
+            failures.append(
+                f"{path}: NYAY-22 {label} SHA-256 differs from the sealed contract"
+            )
     return failures
 
 
@@ -4755,6 +4835,7 @@ def main() -> int:
     failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(check_nyay22_browser_gate_contract())
     failures.extend(check_nyay22_postgres_gate_contract())
+    failures.extend(check_nyay22_schema_artifact_contract())
     failures.extend(check_nyay22_nyay19_erasure_integration_contract())
     failures.extend(check_nyay19_browser_gate_contract())
     failures.extend(check_nyay5_gate_contract())

@@ -249,10 +249,16 @@ class MentorCeremony(TimestampedBase):
         Uuid(as_uuid=True), ForeignKey("tutor_profiles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     ownership_proof_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("tutor_profile_ownership_proofs.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("tutor_profile_ownership_proofs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     invitation_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("mentor_invitations.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("mentor_invitations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     recovery: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verification_policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -437,6 +443,7 @@ class MentorSubjectConsent(TimestampedBase):
         Uuid(as_uuid=True),
         ForeignKey("guardian_consents.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     purpose_code: Mapped[str] = mapped_column(String(32), nullable=False)
     version: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -544,15 +551,22 @@ class MentorSession(TimestampedBase):
         Uuid(as_uuid=True), ForeignKey("tutor_profiles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     ownership_proof_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("tutor_profile_ownership_proofs.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("tutor_profile_ownership_proofs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     consent_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("mentor_consents.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("mentor_consents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     subject_consent_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("mentor_subject_consents.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     authority_domain_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -569,7 +583,10 @@ class MentorSession(TimestampedBase):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     successor_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("mentor_sessions.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("mentor_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retention_class: Mapped[str] = mapped_column(
         String(48), default="mentor_session_security", nullable=False

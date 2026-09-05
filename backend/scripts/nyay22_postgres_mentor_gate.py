@@ -50,7 +50,6 @@ BLOCKED_EXIT = 78
 PREVIOUS_REVISION = "0022_nyay9_owner_profile_api"
 APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
 SCRATCH_PREFIX = "nyay22_mentor_"
-TRUSTED_ORIGIN = "http://127.0.0.1:1130"
 SCHEMA_VERSION = "nyay22-mentor-postgres/v1"
 ORACLE_IDS = (
     "MIGRATION_0023_UP_DOWN_UP_CHECK",
@@ -490,8 +489,29 @@ def _seed(factory: sessionmaker[Session], marker: str) -> dict[str, Any]:
         }
 
 
+def _configured_trusted_origin() -> str:
+    """Select only an origin accepted by the live server policy.
+
+    The native producer deliberately inherits the deployment environment used
+    by the PostgreSQL release gate.  Its synthetic HTTP client must therefore
+    use that environment's configured authority rather than a development-only
+    literal.  No configured value is included in diagnostics.
+    """
+
+    from app.api.v1 import auth_mentor
+
+    for origin in getattr(auth_mentor.settings, "cors_origins", ()):
+        if isinstance(origin, str) and auth_mentor._mentor_origin_is_trusted(origin):
+            return origin
+    raise GateFailure("trusted origin unavailable")
+
+
 def _client(app: FastAPI) -> TestClient:
-    return TestClient(app, headers={"Origin": TRUSTED_ORIGIN})
+    return TestClient(
+        app,
+        base_url="https://testserver.local",
+        headers={"Origin": _configured_trusted_origin()},
+    )
 
 
 def _copy_cookie(

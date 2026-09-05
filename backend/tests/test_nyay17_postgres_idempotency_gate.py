@@ -1934,6 +1934,65 @@ def test_signup_activation_requires_exact_server_owned_onboarding_projection():
     assert 'activation["verification_body_exact"]' in assembly_source
 
 
+def test_activation_retention_race_retries_only_the_canonical_mentor_boundary_conflict():
+    """A newly fenced erasure retries once after activation changes its prelock."""
+
+    from app.services.mentor_ceremony import MentorCeremonyError
+
+    calls = 0
+
+    def retryable_operation():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise MentorCeremonyError(
+                409, "CONCURRENT_STATE_CHANGED", retryable=True
+            )
+        return True
+
+    assert gate._retry_subject_erasure_boundary_once(retryable_operation) == (
+        True,
+        1,
+    )
+    assert calls == 2
+
+    for rejected in (
+        MentorCeremonyError(409, "CONCURRENT_STATE_CHANGED", retryable=False),
+        MentorCeremonyError(400, "CONCURRENT_STATE_CHANGED", retryable=True),
+        MentorCeremonyError(409, "OTHER_FAILURE", retryable=True),
+        RuntimeError("CONCURRENT_STATE_CHANGED"),
+    ):
+        rejected_calls = 0
+
+        def rejected_operation():
+            nonlocal rejected_calls
+            rejected_calls += 1
+            raise rejected
+
+        with pytest.raises(type(rejected)) as caught:
+            gate._retry_subject_erasure_boundary_once(rejected_operation)
+        assert caught.value is rejected
+        assert rejected_calls == 1
+
+    exhausted_calls = 0
+    exhausted = MentorCeremonyError(
+        409, "CONCURRENT_STATE_CHANGED", retryable=True
+    )
+
+    def exhausted_operation():
+        nonlocal exhausted_calls
+        exhausted_calls += 1
+        raise exhausted
+
+    with pytest.raises(MentorCeremonyError) as exhausted_caught:
+        gate._retry_subject_erasure_boundary_once(exhausted_operation)
+    assert exhausted_caught.value is exhausted
+    assert exhausted_calls == 2
+
+    race_source = pyinspect.getsource(gate._run_activation_retention_race)
+    assert race_source.count("_retry_subject_erasure_boundary_once(") == 2
+
+
 def test_unicode_whitespace_case_default_and_omission_equivalents_normalize_exactly():
     from app.schemas.registration import StudentRegisterRequest
 

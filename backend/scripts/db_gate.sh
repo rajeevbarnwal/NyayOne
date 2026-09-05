@@ -35,11 +35,17 @@ export NYAY19_ISOLATED_MIGRATION_EXECUTE=1
 echo "== backend pytest =="
 # The unit/HTTP-contract suite intentionally runs without the target database
 # URL.  Give that subprocess an explicit test environment as well; otherwise a
-# staging shell would combine the non-local policy with the local-development
-# default URL during module import and fail before the tests can install their
-# explicit test fixtures.  PostgreSQL stages below retain the caller's staging
-# environment and DATABASE_URL.
-env -u DATABASE_URL APP_ENV=testing "$PY" -m pytest -q
+# staging shell would combine deployment-only CORS/retention policy with unit
+# fixtures during module import and fail before those fixtures can establish
+# their own test boundary. PostgreSQL and browser stages below retain the
+# caller's staging environment and DATABASE_URL.
+env \
+  -u DATABASE_URL \
+  -u CORS_ORIGINS \
+  -u MENTOR_TERMINAL_RETENTION_SECONDS \
+  -u MENTOR_AUDIT_LINK_RETENTION_SECONDS \
+  -u MENTOR_RETENTION_MODE \
+  APP_ENV=testing "$PY" -m pytest -q
 echo "== NYAY-19 durable reconstruction-auditor unit tests =="
 (
   cd "$REPO_ROOT"

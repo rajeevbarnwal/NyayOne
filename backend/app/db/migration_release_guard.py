@@ -50,7 +50,7 @@ NYAY9_SOURCE_PATH = (
 )
 APPLICATION_HEAD_REVISION = "0023_nyay22_mentor_ceremony"
 APPLICATION_HEAD_SOURCE_SHA256 = (
-    "44f456edb0d6cbc70a40d2deebdd74e28cba018dacd1748a91ede0d8d82558ed"
+    "d2a221b00ff785c2748cd7394a57da4cfd34596806078ccc815244626dcb7ce1"
 )
 APPLICATION_HEAD_SOURCE_PATH = (
     Path(__file__).resolve().parent

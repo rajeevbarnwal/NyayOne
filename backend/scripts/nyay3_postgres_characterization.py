@@ -22,6 +22,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import ipaddress
 import json
 import os
@@ -40,6 +41,7 @@ from sqlalchemy.engine import URL, Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
+from sqlalchemy.sql.selectable import Select
 
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -142,6 +144,40 @@ CURRENT_GUARDIAN_STATE_SQL = (
     "(status = 'verified' AND verified = true) OR "
     "(status IN ('pending', 'sent', 'rejected', 'revoked') AND verified = false)"
 )
+
+_SESSION_PROBE_FOR_UPDATE_PATCH_GUARD = threading.Lock()
+
+
+@contextmanager
+def _without_select_for_update_for_session_probe():
+    """Disable row locks only inside the deterministic NYAY-3 conflict probes.
+
+    The production session implementation now acquires its user row directly
+    through ``Select.with_for_update``.  These two negative-control probes must
+    bypass that application lock so their barriers can force the database
+    unique-index collision they are designed to characterize.  A non-blocking
+    process guard prevents overlapping global patches, and the original method
+    is restored before any integrity failure is raised.
+    """
+
+    if not _SESSION_PROBE_FOR_UPDATE_PATCH_GUARD.acquire(blocking=False):
+        raise RuntimeError("session probe SELECT FOR UPDATE patch is already active")
+    original = Select.with_for_update
+
+    def without_for_update(statement: Select, *_args: Any, **_kwargs: Any) -> Select:
+        return statement
+
+    try:
+        Select.with_for_update = without_for_update
+        yield
+    finally:
+        installed = Select.with_for_update
+        Select.with_for_update = original
+        _SESSION_PROBE_FOR_UPDATE_PATCH_GUARD.release()
+        if installed is not without_for_update:
+            raise RuntimeError("session probe SELECT FOR UPDATE patch integrity failed")
+
+
 TARGET_CONSTRAINT_DEFINITIONS = {
     "uq_guardian_consents_registration_id": {
         "type": "u",
@@ -2100,11 +2136,12 @@ def _service_probes(
     login_service.lock_user_for_session_rotation = conflict_user_load
     login_service.active_sessions_for_rotation = conflict_active_session_read
     try:
-        session_conflict_results = _run_service_race(
-            scratch_url,
-            CONFLICT_WORKERS,
-            session_conflict_operation,
-        )
+        with _without_select_for_update_for_session_probe():
+            session_conflict_results = _run_service_race(
+                scratch_url,
+                CONFLICT_WORKERS,
+                session_conflict_operation,
+            )
     finally:
         login_service.lock_user_for_session_rotation = original_conflict_user_lock
         login_service.active_sessions_for_rotation = original_conflict_session_read
@@ -2242,16 +2279,17 @@ def _service_probes(
     login_service.lock_user_for_session_rotation = unsafe_user_load
     login_service.active_sessions_for_rotation = unsafe_active_read
     try:
-        session_mutant_results = _run_service_race(
-            scratch_url,
-            WORKERS,
-            lambda session, index: rotation_operation_for(
-                session,
-                owners["session_mutant"][1],
-                login_service,
-                now,
-            ),
-        )
+        with _without_select_for_update_for_session_probe():
+            session_mutant_results = _run_service_race(
+                scratch_url,
+                WORKERS,
+                lambda session, index: rotation_operation_for(
+                    session,
+                    owners["session_mutant"][1],
+                    login_service,
+                    now,
+                ),
+            )
     finally:
         login_service.lock_user_for_session_rotation = original_user_lock
         login_service.active_sessions_for_rotation = original_active_read

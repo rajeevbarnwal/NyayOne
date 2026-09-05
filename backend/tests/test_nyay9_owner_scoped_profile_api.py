@@ -586,6 +586,57 @@ def test_native_postgres_gate_seals_idempotent_concurrency_and_storage_contracts
     assert "idempotency_key" not in model.__table__.columns
 
 
+def test_native_postgres_gate_binds_the_immutable_nyay9_checkpoint_authority():
+    """Advancing app head must not retarget the historical NYAY-9 proof."""
+
+    authority = (
+        "backend/app/db/migration_release_guard.py#NYAY9_SOURCE_SHA256"
+    )
+    contract_path = REPO / "scripts/ci/nyay9-profile-api-contract.json"
+    orchestrator_path = REPO / "scripts/ci/nyay9-profile-api-postgres.mjs"
+    producer_path = BACKEND / "scripts/nyay9_postgres_profile_gate.py"
+
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    orchestrator = orchestrator_path.read_text(encoding="utf-8")
+    producer = producer_path.read_text(encoding="utf-8")
+
+    assert contract["migration"]["sha256Authority"] == authority
+    assert orchestrator.count(
+        f"migration?.sha256Authority !== '{authority}'"
+    ) == 1
+    assert producer.count(f'MIGRATION_AUTHORITY_REFERENCE = (\n    "{authority}"\n)') == 1
+    assert "#APPLICATION_HEAD_SOURCE_SHA256" not in contract_path.read_text(
+        encoding="utf-8"
+    )
+    assert "#APPLICATION_HEAD_SOURCE_SHA256" not in orchestrator
+
+
+def test_native_postgres_gate_checks_drift_only_after_current_application_head():
+    """Historical 0022 round trips stay pinned; drift is checked at live head."""
+
+    source = (
+        BACKEND / "scripts/nyay9_postgres_profile_gate.py"
+    ).read_text(encoding="utf-8")
+    probe = source[
+        source.index("def _migration_probe(") : source.index(
+            "\ndef _body_code(", source.index("def _migration_probe(")
+        )
+    ]
+    compact_probe = "".join(probe.split())
+
+    pinned_reupgrade = compact_probe.rindex(
+        '_run_alembic(scratch_url,"upgrade",PINNED_HEAD)'
+    )
+    current_upgrade = compact_probe.index(
+        '_run_alembic(scratch_url,"upgrade",APPLICATION_HEAD_REVISION)',
+        pinned_reupgrade,
+    )
+    drift_check = compact_probe.index('_run_alembic(scratch_url,"check")')
+
+    assert pinned_reupgrade < current_upgrade < drift_check
+    assert "application_head_exact" in probe
+
+
 def test_native_postgres_gate_cookie_fixtures_are_run_relative():
     gate = BACKEND / "scripts/nyay9_postgres_profile_gate.py"
     source = gate.read_text(encoding="utf-8")

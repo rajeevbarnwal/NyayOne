@@ -5,9 +5,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI, Request, Response
 
 from app.api.v1 import auth_mentor
 from app.core.config import ConfigurationError, Settings
+from scripts import nyay22_postgres_mentor_gate as native_gate
 
 
 @pytest.mark.parametrize(
@@ -36,6 +38,73 @@ def test_mentor_origin_policy_is_exact_and_ipv6_canonical(
         SimpleNamespace(cors_origins=configured, app_env=environment),
     )
     assert auth_mentor._mentor_origin_is_trusted(origin) is expected
+
+
+def test_native_gate_uses_a_server_configured_trusted_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_mentor,
+        "settings",
+        SimpleNamespace(
+            cors_origins=["https://ci.nyayone.example"],
+            app_env="staging",
+        ),
+    )
+
+    assert native_gate._configured_trusted_origin() == "https://ci.nyayone.example"
+
+
+def test_native_gate_fails_closed_without_a_server_trusted_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_mentor,
+        "settings",
+        SimpleNamespace(
+            cors_origins=["http://127.0.0.1:1130"],
+            app_env="staging",
+        ),
+    )
+
+    with pytest.raises(native_gate.GateFailure, match="trusted origin unavailable"):
+        native_gate._configured_trusted_origin()
+
+
+def test_native_gate_https_transport_retains_secure_server_cookie(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_mentor,
+        "settings",
+        SimpleNamespace(
+            cors_origins=["https://ci.nyayone.example"],
+            app_env="staging",
+        ),
+    )
+    app = FastAPI()
+
+    @app.get("/fixture/set")
+    def set_cookie(response: Response) -> dict[str, bool]:
+        response.set_cookie(
+            "fixture_authority",
+            "opaque-fixture",
+            secure=True,
+            httponly=True,
+            path="/",
+        )
+        return {"set": True}
+
+    @app.get("/fixture/read")
+    def read_cookie(request: Request) -> dict[str, bool]:
+        return {
+            "received": request.cookies.get("fixture_authority")
+            == "opaque-fixture"
+        }
+
+    with native_gate._client(app) as client:
+        assert client.get("/fixture/set").status_code == 200
+        assert client.get("/fixture/read").json() == {"received": True}
 
 
 def _nonlocal_settings_with_cors(cors_origins, *, app_env: str = "production") -> Settings:
