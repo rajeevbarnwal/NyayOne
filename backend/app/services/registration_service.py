@@ -954,7 +954,8 @@ def compensate_delete(
     if ch_ids:
         for o in session.scalars(select(_O).where(_O.challenge_id.in_(ch_ids))):
             session.delete(o)
-    for model in (_Ch, _C, _P, _V, _G):
+    from app.models.student_authority import AuthorityState
+    for model in (_Ch, _C, _P, _V, _G, AuthorityState):
         for row in session.scalars(select(model).where(model.registration_id == registration_id)):
             session.delete(row)
     for authority in session.scalars(
@@ -1491,6 +1492,8 @@ def register_student(
         )
     )
     session.add(StudentVerification(registration_id=reg.id, method="institutional_email", status="pending"))
+    from app.services.student_authority import get_or_create_state
+    get_or_create_state(session, reg, now)
 
     # Redacted, non-PII audit snapshot on the shared audit_events table.
     session.add(

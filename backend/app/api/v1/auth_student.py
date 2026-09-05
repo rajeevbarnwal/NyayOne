@@ -43,7 +43,6 @@ from app.core.auth_cookies import (
 )
 from app.core.config import settings
 from app.core.crypto import decrypt, keyed_hash
-from app.db.models.audit import AuditEvent
 from app.db.session import get_session
 from app.db.session import get_sessionmaker
 from app.models.registration import (
@@ -1618,8 +1617,8 @@ def guardian_consent_complete(
     reg = _owned_registration(session, actor)
     if not reg.is_minor:
         raise HTTPException(status_code=409, detail={"code": "guardian_consent_not_required"})
-    # No guardian authentication/proof ceremony exists yet. Student authority
-    # must never be promoted into guardian authority.
+    # This legacy student-only endpoint cannot grant guardian authority.
+    # NYAY-11's separate consent command requires the guardian's OTP session.
     raise HTTPException(
         status_code=403,
         detail={"code": "guardian_self_approval_forbidden"},
@@ -1732,87 +1731,36 @@ def verification_transition(
     _: None = Depends(require_trusted_cookie_origin),
     actor: ActorContext = Depends(_require_verification_reviewer),
     session: Session = Depends(get_session),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, object]:
+    """Compatibility namespace, with the same NYAY-11 scoped authority."""
+    from app.services import student_authority
     try:
-        authority = profile_service.lock_authority_for_review(
-            session, payload.registration_id
+        profile_service.lock_authority_for_review(session, payload.registration_id)
+        now = _now()
+        student_authority._presented(
+            session, actor.user_id, request.cookies.get(settings.auth_session_cookie_name),
+            now, roles=frozenset({"admin", "legal_reviewer"}),
         )
+        if payload.status not in {"verified", "rejected"}:
+            raise student_authority.AuthorityError()
+        result = student_authority.review(
+            session, actor.user_id,
+            request.cookies.get(settings.auth_session_cookie_name),
+            registration_id=payload.registration_id,
+            approve=payload.status == "verified",
+            key=idempotency_key,
+            now=now,
+            expected_profile_version=payload.expected_profile_version,
+        )
+        session.commit()
+        return result
     except profile_service.ProfileBoundaryError as exc:
         session.rollback()
-        raise HTTPException(
-            status_code=404, detail={"code": "verification_not_found"}
-        ) from exc
-    ver = authority.verification
-    assert ver is not None
-    raw_session_token = request.cookies.get(
-        settings.auth_session_cookie_name
-    )
-    if raw_session_token is not None:
-        locked_session = login_service.lock_presented_session_for_effect(
-            session,
-            raw_session_token,
-            expected_user_id=actor.user_id,
-            now=_now(),
-            allowed_roles=frozenset({"admin", "legal_reviewer"}),
-        )
-        if locked_session is None:
-            session.rollback()
-            raise HTTPException(
-                status_code=401,
-                detail={"code": "authentication_required"},
-            )
-    if authority.profile.profile_version != payload.expected_profile_version:
+        raise HTTPException(404, detail={"code": "verification_not_found"}) from exc
+    except student_authority.AuthorityError as exc:
         session.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "profile_version_conflict",
-                "current_profile_version": authority.profile.profile_version,
-            },
-        )
-    allowed = _VERIFICATION_TRANSITIONS.get(ver.status, set())
-    if payload.status != ver.status and payload.status not in allowed:
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "invalid_transition", "from": ver.status, "to": payload.status},
-        )
-    before = ver.status
-    ver.status = payload.status
-    if payload.status == "verified":
-        if authority.profile.institutional_email_hash is None:
-            raise HTTPException(
-                status_code=422,
-                detail={"code": "institutional_email_required"},
-            )
-        ver.verified_email_hash = authority.profile.institutional_email_hash
-    else:
-        ver.verified_email_hash = None
-    reviewer_role = (
-        "legal_reviewer"
-        if actor.has_role(Role.LEGAL_REVIEWER)
-        else "admin"
-    )
-    session.add(
-        AuditEvent(
-            actor_user_id=actor.user_id,
-            actor_role=reviewer_role,
-            action="student.verification.status_changed",
-            resource_type="student_verification",
-            resource_id=ver.id,
-            before_state={"status": before},
-            after_state={
-                "status": ver.status,
-                "profile_version": authority.profile.profile_version,
-            },
-        )
-    )
-    session.commit()
-    # This staff operation is deliberately outside the owner-session profile
-    # API: a reviewer cannot truthfully construct the student's session-scoped
-    # prompt projection. Return an explicit invalidation contract so the owner
-    # refetches the canonical projection through their own HttpOnly session.
-    return {
-        "status": ver.status,
-        "profile_version": authority.profile.profile_version,
-        "owner_projection_invalidated": True,
-    }
+        detail = {"code": exc.code}
+        if exc.code == "profile_version_conflict":
+            detail["current_profile_version"] = exc.current_profile_version
+        raise HTTPException(exc.status_code, detail=detail, headers=_otp_error_headers()) from exc

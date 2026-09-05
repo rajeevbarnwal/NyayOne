@@ -482,6 +482,9 @@ class Settings(BaseSettings):
     jira_base_url: str = "https://legalsaathi.atlassian.net"
     jira_project_key: str = "NYAY"
     jira_board_id: int = 68
+    # Explicit deployment binding; an arbitrary administrator is not the owner.
+    authority_platform_owner_id: str | None = None
+    authority_institution_domains: dict[str, list[str]] = {}
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
 

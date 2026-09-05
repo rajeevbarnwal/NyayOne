@@ -1,5 +1,10 @@
 """ORM models. Importing this package registers all tables on Base.metadata."""
 from app.db.models.audit import AuditEvent  # noqa: F401  (shared audit_events table)
+from app.models.student_authority import (  # noqa: F401
+    AuthorityState, GuardianInvitation, InstitutionalEmailProof,
+    InstitutionalReviewerAssignment, AuthorityMutationRecord,
+    AuthorityAuditEvent, AuthorityNotification,
+)
 from app.models.wave1 import (  # noqa: F401
     ComparisonItem, ComparisonSet, DataSubjectRequest, DeletionJob, ExportJob,
     LawSchool, LawSchoolFact, LawSchoolFollow, LawSchoolProgramme, LawSchoolSource,

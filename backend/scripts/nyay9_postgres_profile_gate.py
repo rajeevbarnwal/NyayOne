@@ -536,7 +536,7 @@ def _body_code(response: Any) -> str | None:
 
 
 def _behavior_probe(scratch_url: str) -> dict[str, bool]:
-    if _run_alembic(scratch_url, "upgrade", PINNED_HEAD) != 0:
+    if _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD_REVISION) != 0:
         raise ProductGateFailure("behavior migration failed")
     engine = create_engine(scratch_url, poolclass=NullPool)
     prior: dict[str, object] = {}

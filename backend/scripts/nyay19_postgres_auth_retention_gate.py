@@ -79,11 +79,20 @@ NYAY9_CHECKPOINT_FILENAME = "0022_nyay9_owner_profile_api.py"
 NYAY9_CHECKPOINT_SHA256 = (
     "e66fcfd7ac270569e05fde17c0563ec7d0245023d8ab9f1c87d941373eb1653a"
 )
-APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
-APPLICATION_HEAD_FILENAME = "0023_nyay22_mentor_ceremony.py"
-APPLICATION_HEAD_SHA256 = (
+NYAY22_CHECKPOINT = "0023_nyay22_mentor_ceremony"
+NYAY22_CHECKPOINT_FILENAME = "0023_nyay22_mentor_ceremony.py"
+NYAY22_CHECKPOINT_SHA256 = (
     "d2a221b00ff785c2748cd7394a57da4cfd34596806078ccc815244626dcb7ce1"
 )
+from app.db.migration_release_guard import (  # noqa: E402
+    APPLICATION_HEAD_REVISION,
+    APPLICATION_HEAD_SOURCE_PATH,
+    APPLICATION_HEAD_SOURCE_SHA256,
+)
+
+APPLICATION_HEAD = APPLICATION_HEAD_REVISION
+APPLICATION_HEAD_FILENAME = APPLICATION_HEAD_SOURCE_PATH.name
+APPLICATION_HEAD_SHA256 = APPLICATION_HEAD_SOURCE_SHA256
 OPT_IN_ENV = "NYAY19_POSTGRES_GATE_EXECUTE"
 
 POST_LEDGER_HISTORICAL_SHA256 = {
@@ -99,6 +108,7 @@ POST_LEDGER_HISTORICAL_SHA256 = {
     "0019_otp_security_authority.py": (
         "3513d5400295fb424a6b84e3325286a45c8c57192d5ef91f98ce884d691062d4"
     ),
+    NYAY22_CHECKPOINT_FILENAME: NYAY22_CHECKPOINT_SHA256,
 }
 
 # Static filename+digest authority for every historical revision.  The JSON
@@ -2415,6 +2425,9 @@ def _historical_migration_inventory(
         nyay9_tree = ast.parse(
             (versions / NYAY9_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
         )
+        nyay22_tree = ast.parse(
+            (versions / NYAY22_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
+        )
         forward_tree = ast.parse(
             (versions / APPLICATION_HEAD_FILENAME).read_text(encoding="utf-8")
         )
@@ -2435,6 +2448,7 @@ def _historical_migration_inventory(
 
         checkpoint_assignments = _revision_assignments(checkpoint_tree)
         nyay9_assignments = _revision_assignments(nyay9_tree)
+        nyay22_assignments = _revision_assignments(nyay22_tree)
         application_assignments = _revision_assignments(forward_tree)
         result["forward_application_head_exact"] = bool(
             result["file_inventory_exact"]
@@ -2445,8 +2459,10 @@ def _historical_migration_inventory(
             == {"revision": NYAY5_CHECKPOINT, "down_revision": PINNED_HEAD}
             and nyay9_assignments
             == {"revision": NYAY9_CHECKPOINT, "down_revision": NYAY5_CHECKPOINT}
+            and nyay22_assignments
+            == {"revision": NYAY22_CHECKPOINT, "down_revision": NYAY9_CHECKPOINT}
             and application_assignments
-            == {"revision": APPLICATION_HEAD, "down_revision": NYAY9_CHECKPOINT}
+            == {"revision": APPLICATION_HEAD, "down_revision": NYAY22_CHECKPOINT}
         )
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         migrations = ledger["migrations"]

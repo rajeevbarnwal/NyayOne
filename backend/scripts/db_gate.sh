@@ -16,6 +16,7 @@
 #   * the NYAY-4 PostgreSQL 16 OTP-security authority release gate.
 #   * the NYAY-19 PostgreSQL 16 authentication-retention lifecycle release gate.
 #   * the NYAY-22 PostgreSQL 16 mentor-ceremony concurrency/lifecycle release gate.
+#   * the NYAY-11 PostgreSQL 16 guardian/institutional authority release gate.
 #
 # Wave 2 is deliberately a STAGE of this gate rather than a parallel mechanism:
 # one DATABASE_URL, one entry point, one place to look when it goes red.
@@ -116,6 +117,11 @@ NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" scripts/nyay19_postgres_auth_retention_gate
   --execute \
   --database-url "$DATABASE_URL" \
   --output test-results/nyay19-postgres/summary.json
+echo "== NYAY-11 guardian/institutional authority gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay11-postgres
+NYAY11_POSTGRES_GATE=1 "$PY" scripts/nyay11_postgres_authority_gate.py \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay11-postgres/summary.json
 echo "== NYAY-22 mentor ceremony concurrency/lifecycle gate (PostgreSQL 16 + pgvector) =="
 mkdir -p test-results/nyay22-postgres
 NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py \

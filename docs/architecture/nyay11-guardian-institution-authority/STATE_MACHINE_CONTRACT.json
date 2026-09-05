@@ -1,0 +1,1040 @@
+{
+  "ticket": "NYAY-11",
+  "policyProvenance": {
+    "policyVersion": "NYAY-11-v1",
+    "jiraCommentId": "14714",
+    "commentSha256": "6b0aafc07ed2897c88efd455428136c6dbd67465b13fd2fd9b8ee01d5bd85ca0",
+    "owner": "Rajeev Barnwal"
+  },
+  "stateVocabularies": {
+    "guardian": [
+      "NOT_REQUIRED",
+      "REQUIRED_PENDING",
+      "VERIFIED",
+      "REJECTED",
+      "REVOKED"
+    ],
+    "institutionalVerification": [
+      "UNVERIFIED",
+      "PENDING",
+      "VERIFIED",
+      "REJECTED",
+      "EXPIRED",
+      "REVOKED"
+    ]
+  },
+  "stateOutcomeMatrix": [
+    {
+      "machine": "guardian",
+      "from": "NOT_REQUIRED",
+      "to": "NOT_REQUIRED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "NOT_REQUIRED",
+      "to": "REQUIRED_PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "adult_to_minor"
+      ],
+      "authorities": [
+        "server_age_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "NOT_REQUIRED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "NOT_REQUIRED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "NOT_REQUIRED",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REQUIRED_PENDING",
+      "to": "NOT_REQUIRED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "minor_to_adult"
+      ],
+      "authorities": [
+        "server_age_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REQUIRED_PENDING",
+      "to": "REQUIRED_PENDING",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REQUIRED_PENDING",
+      "to": "VERIFIED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "guardian_proof_completed"
+      ],
+      "authorities": [
+        "server_attested_guardian"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REQUIRED_PENDING",
+      "to": "REJECTED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "guardian_declined"
+      ],
+      "authorities": [
+        "server_attested_guardian"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REQUIRED_PENDING",
+      "to": "REVOKED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "guardian_or_owner_revocation"
+      ],
+      "authorities": [
+        "guardian",
+        "owner"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "VERIFIED",
+      "to": "NOT_REQUIRED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "minor_to_adult"
+      ],
+      "authorities": [
+        "server_age_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "VERIFIED",
+      "to": "REQUIRED_PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "proof_expired",
+        "dependent_identity_changed"
+      ],
+      "authorities": [
+        "server_clock",
+        "server_profile_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "VERIFIED",
+      "to": "VERIFIED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "VERIFIED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "VERIFIED",
+      "to": "REVOKED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "guardian_or_owner_revocation"
+      ],
+      "authorities": [
+        "guardian",
+        "owner"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REJECTED",
+      "to": "NOT_REQUIRED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "minor_to_adult"
+      ],
+      "authorities": [
+        "server_age_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REJECTED",
+      "to": "REQUIRED_PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "new_guardian_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REJECTED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REJECTED",
+      "to": "REJECTED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REJECTED",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REVOKED",
+      "to": "NOT_REQUIRED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "minor_to_adult"
+      ],
+      "authorities": [
+        "server_age_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REVOKED",
+      "to": "REQUIRED_PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "new_guardian_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REVOKED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REVOKED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "guardian",
+      "from": "REVOKED",
+      "to": "REVOKED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "UNVERIFIED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "student_review_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "EXPIRED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "UNVERIFIED",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "UNVERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "PENDING",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay",
+        "reviewer_timeout_return_to_queue"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "aggregate_timeout_event_or_no_duplicate_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "VERIFIED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "assigned_review_approved"
+      ],
+      "authorities": [
+        "assigned_institutional_reviewer"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "REJECTED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "assigned_review_rejected"
+      ],
+      "authorities": [
+        "assigned_institutional_reviewer"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "EXPIRED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "PENDING",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "UNVERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "dependent_identity_changed"
+      ],
+      "authorities": [
+        "server_profile_policy"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "VERIFIED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "EXPIRED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "verification_expired"
+      ],
+      "authorities": [
+        "server_clock"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "VERIFIED",
+      "to": "REVOKED",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "owner_break_glass"
+      ],
+      "authorities": [
+        "platform_owner"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "UNVERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "student_review_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "REJECTED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "EXPIRED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REJECTED",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "UNVERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "student_review_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "EXPIRED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "EXPIRED",
+      "to": "REVOKED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "UNVERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "PENDING",
+      "disposition": "ALLOWED",
+      "triggers": [
+        "student_review_request"
+      ],
+      "authorities": [
+        "student"
+      ],
+      "effect": "atomic_state_transition",
+      "auditSemantics": "append_aggregate_transition_event",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "VERIFIED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "REJECTED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "EXPIRED",
+      "disposition": "DENIED",
+      "triggers": [],
+      "authorities": [],
+      "effect": "zero_state_write",
+      "auditSemantics": "aggregate_denial_event_without_pii",
+      "policySource": "jira-comment-14714"
+    },
+    {
+      "machine": "institutional",
+      "from": "REVOKED",
+      "to": "REVOKED",
+      "disposition": "STATE_STABLE",
+      "triggers": [
+        "exact_idempotent_replay"
+      ],
+      "authorities": [
+        "server"
+      ],
+      "effect": "no_state_change",
+      "auditSemantics": "no_duplicate_event_for_exact_replay",
+      "policySource": "jira-comment-14714"
+    }
+  ],
+  "guardianProof": {
+    "sources": [
+      "server_attested_otp_consent",
+      "relationship_declaration"
+    ],
+    "externalIdentityProvider": false,
+    "purposeBound": true,
+    "singleUse": true,
+    "serverClocked": true,
+    "binds": [
+      "relationship",
+      "policy_version",
+      "consent_version",
+      "timestamp"
+    ],
+    "untilProven": {
+      "accessMode": "limited",
+      "failClosed": true
+    }
+  },
+  "guardianAuthorityLifecycle": {
+    "ttl": "P12M",
+    "clockAuthority": "server",
+    "revocationActors": [
+      "guardian",
+      "owner"
+    ],
+    "revocationEffect": "immediate",
+    "revocationWinsRaces": true,
+    "expiredState": "REQUIRED_PENDING"
+  },
+  "institutionalReviewerAuthority": {
+    "requiredProofs": [
+      "verified_institutional_email",
+      "admin_assignment"
+    ],
+    "scopeKeys": [
+      "institution",
+      "operation"
+    ],
+    "crossInstitutionAllowed": false,
+    "studentCanSelfVerify": false,
+    "breakGlass": {
+      "actor": "platform_owner",
+      "audited": true,
+      "studentAccessible": false
+    }
+  },
+  "reviewerTimeout": {
+    "fromState": "PENDING",
+    "toState": "PENDING",
+    "action": "return_to_queue",
+    "notificationRequired": true,
+    "autoReject": false,
+    "auditRequired": true
+  },
+  "legacyStateMapping": {
+    "guardian": {
+      "pending": "REQUIRED_PENDING",
+      "sent": "REQUIRED_PENDING",
+      "verified": "VERIFIED",
+      "rejected": "REJECTED",
+      "revoked": "REVOKED"
+    },
+    "institutionalVerification": {
+      "pending": "UNVERIFIED",
+      "in_review": "PENDING",
+      "verified": "VERIFIED",
+      "rejected": "REJECTED",
+      "expired": "EXPIRED",
+      "revoked": "REVOKED"
+    },
+    "mappingCardinality": {
+      "guardianLegacyInputs": 5,
+      "institutionalLegacyInputs": 6,
+      "mappedInputs": 11
+    },
+    "auditEveryMapping": true,
+    "silentDropsAllowed": false,
+    "unknownLegacyState": "BLOCK_MIGRATION",
+    "missingGuardianRow": {
+      "adult": "NOT_REQUIRED",
+      "minor": "REQUIRED_PENDING"
+    }
+  },
+  "identityReverification": {
+    "knownDependencyMap": {
+      "date_of_birth": [
+        "guardian_authority"
+      ],
+      "institutional_email": [
+        "institutional_verification"
+      ]
+    },
+    "dependencyDirected": true,
+    "unknownDependencyDisposition": "BLOCK_MUTATION",
+    "mutationWhileReproofPending": "BLOCKED",
+    "dependentProofDisposition": "REVERIFICATION_REQUIRED",
+    "auditProjection": "aggregate_only_per_NYAY_19",
+    "rawIdentityValuesInAudit": false
+  },
+  "authorityBoundary": {
+    "deniedCases": [
+      "anonymous",
+      "student_self_approval",
+      "cross_student_guardian",
+      "cross_institution_reviewer"
+    ],
+    "failClosed": true,
+    "clientClaimsConferAuthority": false,
+    "zeroWriteOnDenial": true
+  },
+  "studentCapabilities": {
+    "allowed": [
+      "request_own_guardian_status",
+      "request_own_institutional_status",
+      "read_own_guardian_status",
+      "read_own_institutional_status",
+      "revoke_own_guardian_link"
+    ],
+    "forbiddenStateAuthorship": [
+      "guardian:VERIFIED",
+      "guardian:REJECTED",
+      "institutional:VERIFIED",
+      "institutional:REJECTED"
+    ]
+  },
+  "serverInvariants": {
+    "serverOwnedAuthority": true,
+    "databaseCardinalityEnforced": true,
+    "databaseConsistencyEnforced": true,
+    "clientAuthorityAccepted": false,
+    "oneCurrentGuardianAuthorityPerOwner": true,
+    "oneCurrentInstitutionalReviewPerOwner": true,
+    "idempotentDuplicateHandling": true,
+    "revocationFailClosed": true,
+    "expiryFailClosed": true,
+    "concurrencyProtected": true,
+    "contradictoryRecordsPossible": false,
+    "authorityLossWinsConcurrentCompletion": true
+  },
+  "ageTransitions": {
+    "clock": "single_injected_request_clock",
+    "dateBasis": "request_civil_date",
+    "exactBirthdayCovered": true,
+    "leapDayCovered": true,
+    "concurrentDobEditCovered": true,
+    "adultToMinor": {
+      "atomic": true,
+      "guardianState": "REQUIRED_PENDING",
+      "accessMode": "limited",
+      "restrictedImmediately": true
+    },
+    "minorToAdult": {
+      "atomic": true,
+      "guardianState": "NOT_REQUIRED",
+      "preserveHistory": true,
+      "fabricateVerified": false
+    }
+  },
+  "postgresqlCoverage": {
+    "guardianRows": 25,
+    "institutionalRows": 36,
+    "totalRows": 61,
+    "validAndInvalidEdges": true,
+    "committedNativePostgresTests": true,
+    "zeroExecutedCannotPass": true,
+    "exactInventoryRequired": true
+  },
+  "uiBoundary": {
+    "authoritySource": "canonical_server_projection",
+    "localStorageAuthority": false,
+    "sessionStorageAuthority": false,
+    "clientClaimAuthority": false,
+    "limitedModePrivateRouteMount": "DENIED",
+    "canonical401Disposition": "UNMOUNT_PRIVATE_CONTENT"
+  },
+  "auditEvidence": {
+    "required": [
+      "actor_class",
+      "authority_class",
+      "purpose_code",
+      "transition_code",
+      "policy_version",
+      "occurred_at"
+    ],
+    "appendOnly": true,
+    "aggregateOnly": true,
+    "containsSecrets": false,
+    "containsRawPii": false,
+    "containsFreeText": false
+  },
+  "publicErrors": {
+    "typed": true,
+    "crossAuthorityReasonsCollapsed": true,
+    "revealsRelationship": false,
+    "revealsInstitution": false,
+    "revealsActorIdentifier": false,
+    "revealsProofMaterial": false
+  },
+  "completionBoundary": {
+    "missingGuardianCeremony": "DENIED_FAIL_CLOSED",
+    "expiredGuardianProof": "DENIED_FAIL_CLOSED",
+    "missingReviewerAssignment": "DENIED_FAIL_CLOSED",
+    "staleInstitutionalEmailProof": "DENIED_FAIL_CLOSED",
+    "authorityDerivedServerSide": true,
+    "zeroWriteOnDenial": true
+  }
+}

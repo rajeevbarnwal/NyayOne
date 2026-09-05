@@ -917,7 +917,7 @@ def session_claims(
         "student_verification": (
             "verified"
             if has_authoritative_institutional_email_proof(
-                verification, profile
+                verification, profile, now=now
             )
             else "draft"
         ),

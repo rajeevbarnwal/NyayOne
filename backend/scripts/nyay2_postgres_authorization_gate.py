@@ -2747,7 +2747,21 @@ def _run_api_probes(
         )
 
         # Student denial then trusted reviewer success; the append-only audit
-        # row must bind the actual authenticated reviewer identity and role.
+        # is now the NYAY-11 P6 aggregate-only event. Authority is bound by the
+        # authenticated reviewer proof/assignment; raw actor links are forbidden.
+        from app.models.student_authority import AuthorityAuditEvent
+        from scripts.nyay11_authority_gate_fixtures import prepare_institutional_review
+
+        prepare_institutional_review(factory, registration_id=owner_a["registration_id"], reviewer_id=reviewer["user_id"], now=datetime.now(timezone.utc))
+        authority_audit_allowlist = {"id", "actor_class", "authority_class", "purpose_code", "transition_code", "policy_version", "occurred_at"}
+        audit_query = select(AuthorityAuditEvent).where(
+            AuthorityAuditEvent.purpose_code == "institutional",
+            AuthorityAuditEvent.transition_code == "PENDING_TO_VERIFIED",
+            AuthorityAuditEvent.authority_class == "assigned_institutional_reviewer",
+            AuthorityAuditEvent.actor_class == "reviewer",
+        )
+        with factory() as session:
+            review_audit_before = len(session.scalars(audit_query).all())
         transition_payload = _verification_transition_payload(
             owner_a["registration_id"],
             status="verified",
@@ -2811,19 +2825,13 @@ def _run_api_probes(
         )
         reviewer_transition = reviewer_client.post(
             STATUS_PATH,
-            headers={"Origin": TRUSTED_ORIGIN},
+            headers={"Origin": TRUSTED_ORIGIN, "Idempotency-Key": "nyay11-review-owner-a"},
             json=transition_payload,
         )
         with factory() as session:
             verification = session.get(StudentVerification, owner_a["verification_id"])
-            audit = session.scalar(
-                select(AuditEvent)
-                .where(
-                    AuditEvent.action == "student.verification.status_changed",
-                    AuditEvent.resource_id == owner_a["verification_id"],
-                )
-                .order_by(AuditEvent.created_at.desc())
-            )
+            audit_rows = session.scalars(audit_query.order_by(AuthorityAuditEvent.occurred_at.desc())).all()
+            audit = audit_rows[0] if audit_rows else None
             reviewer_passed = bool(
                 student_transition.status_code == 403
                 and student_unchanged
@@ -2832,8 +2840,11 @@ def _run_api_probes(
                 and verification is not None
                 and verification.status == "verified"
                 and audit is not None
-                and audit.actor_user_id == reviewer["user_id"]
-                and audit.actor_role == "legal_reviewer"
+                and len(audit_rows) == review_audit_before + 1
+                and set(AuthorityAuditEvent.__table__.columns.keys()) == authority_audit_allowlist
+                and not AuthorityAuditEvent.__table__.foreign_keys
+                and audit.actor_class == "reviewer"
+                and audit.authority_class == "assigned_institutional_reviewer"
             )
         assertions.append(
             _assertion(
@@ -2845,10 +2856,11 @@ def _run_api_probes(
                 invalid_target_cases=len(invalid_reviewer_targets),
                 invalid_targets_uniform_no_delta=invalid_reviewer_targets_passed,
                 audit_actor_bound=bool(
-                    audit is not None and audit.actor_user_id == reviewer["user_id"]
+                    audit is not None and audit.actor_class == "reviewer"
+                    and set(AuthorityAuditEvent.__table__.columns.keys()) == authority_audit_allowlist
                 ),
                 audit_role_bound=bool(
-                    audit is not None and audit.actor_role == "legal_reviewer"
+                    audit is not None and audit.authority_class == "assigned_institutional_reviewer"
                 ),
             )
         )
@@ -2992,15 +3004,14 @@ def _run_api_probes(
             )
         )
 
-        # Reset the verification to pending, then bypass both current reviewer
-        # checks: route role resolution and commit-time locked-session role
-        # revalidation. The composite must reproduce the unsafe outcome while
-        # retaining the live exact-session/user lock and every other check.
-        with factory() as session:
-            row = session.get(StudentVerification, owner_b["verification_id"])
-            assert row is not None
-            row.status = "pending"
-            session.commit()
+        # Isolate the compatibility endpoint's staff-role boundary using a
+        # different, server-assigned student reviewer. NYAY-11's self-review,
+        # email-proof and institution-assignment checks remain active. Preserve
+        # the original locked-session wrapper, including its exact user/token
+        # lock; no synthetic session or client-authored proof is substituted.
+        mutant_reviewer = _seed_actor(factory, label="scoped-student-reviewer")
+        prepare_institutional_review(factory, registration_id=owner_b["registration_id"], reviewer_id=mutant_reviewer["user_id"], now=datetime.now(timezone.utc))
+        mutant_reviewer_client = _client(app, cookie_name, mutant_reviewer["token"])
         original_reviewer_dependency = endpoint._require_verification_reviewer
         original_reviewer_session_lock = (
             login_service.lock_presented_session_for_effect
@@ -3026,15 +3037,15 @@ def _run_api_probes(
             )
 
         app.dependency_overrides[original_reviewer_dependency] = lambda: ActorContext(
-            user_id=owner_b["user_id"], roles=frozenset({Role.STUDENT})
+            user_id=mutant_reviewer["user_id"], roles=frozenset({Role.STUDENT})
         )
         login_service.lock_presented_session_for_effect = (
             unsafe_reviewer_session_lock
         )
         try:
-            role_mutant_response = owner_b_client.post(
+            role_mutant_response = mutant_reviewer_client.post(
                 STATUS_PATH,
-                headers={"Origin": TRUSTED_ORIGIN},
+                headers={"Origin": TRUSTED_ORIGIN, "Idempotency-Key": "nyay11-review-role-mutant"},
                 json=_verification_transition_payload(
                     owner_b["registration_id"],
                     status="verified",

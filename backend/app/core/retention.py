@@ -896,6 +896,8 @@ def _anonymise_locked(
     )
     session.flush()
     original_mobile_hash = reg.mobile_hash
+    from app.services.student_authority import erase_owner_authority
+    erase_owner_authority(session, reg.user_id, now=datetime.now(timezone.utc))
     _erase_registration_otp_security_graph(
         session,
         reg,
@@ -1040,6 +1042,8 @@ def _delete_locked(
     # Materialise the tombstone and clear its FK links before deleting any
     # linked registration graph rows. This ordering is required on PostgreSQL
     # and must not depend on ORM unit-of-work sorting.
+    from app.services.student_authority import erase_owner_authority
+    erase_owner_authority(session, reg.user_id, now=datetime.now(timezone.utc))
     session.flush()
     _erase_registration_otp_security_graph(
         session,
