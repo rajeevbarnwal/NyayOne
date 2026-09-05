@@ -995,16 +995,21 @@ def _anonymise_locked(
     return True
 
 
-def anonymise_registration(session: Session, reg: StudentRegistration) -> None:
-    """Scrub one subject unconditionally under ledger -> registration locks."""
+def anonymise_registration(session: Session, reg: StudentRegistration) -> bool:
+    """Scrub one subject under ledger -> registration locks.
+
+    Return ``True`` only after anonymisation completes. Return ``False`` when
+    the registration no longer exists or the mentor authority graph defers
+    erasure.
+    """
 
     mentor_boundary = _prelock_subject_mentor_erasure(session, reg.id)
     locked, idempotency_record = (
         registration_service.lock_registration_with_idempotency(session, reg.id)
     )
     if locked is None:
-        return
-    _anonymise_locked(session, locked, idempotency_record, mentor_boundary)
+        return False
+    return _anonymise_locked(session, locked, idempotency_record, mentor_boundary)
 
 
 def _delete_locked(
@@ -1099,16 +1104,21 @@ def _delete_locked(
     return True
 
 
-def delete_registration(session: Session, reg: StudentRegistration) -> None:
-    """Hard-delete one subject under ledger -> registration locks."""
+def delete_registration(session: Session, reg: StudentRegistration) -> bool:
+    """Hard-delete one subject under ledger -> registration locks.
+
+    Return ``True`` only after deletion completes. Return ``False`` when the
+    registration no longer exists or the mentor authority graph defers
+    erasure.
+    """
 
     mentor_boundary = _prelock_subject_mentor_erasure(session, reg.id)
     locked, idempotency_record = (
         registration_service.lock_registration_with_idempotency(session, reg.id)
     )
     if locked is None:
-        return
-    _delete_locked(session, locked, idempotency_record, mentor_boundary)
+        return False
+    return _delete_locked(session, locked, idempotency_record, mentor_boundary)
 
 
 def _purge_expired_challenge(

@@ -12,11 +12,11 @@ def run_retention_once() -> dict[str, int]:
     """Apply configured retention in one transaction and return only counts."""
 
     with get_sessionmaker()() as session:
-        counts = purge_expired(session, now=datetime.now(timezone.utc))
-        session.commit()
+        current = datetime.now(timezone.utc)
+        counts = purge_expired(session, now=current)
         mentor_counts = run_mentor_retention(
             session,
-            now=datetime.now(timezone.utc),
+            now=current,
         )
         counts.update(
             {f"mentor_{name}": count for name, count in mentor_counts.items()}
