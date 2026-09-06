@@ -368,6 +368,18 @@ def _path_findings(label: str, path_name: str) -> list[str]:
     if exceeded:
         findings.append(f"{label} path: percent encoding exceeds the scan limit")
     for data in variants:
+        try:
+            decoded_path = data.decode('utf-8', 'strict')
+        except UnicodeDecodeError:
+            finding = f"{label} path: invalid UTF-8 encoding is forbidden"
+            if finding not in findings:
+                findings.append(finding)
+            decoded_path = ''
+        if any(ord(char) < 32 or 127 <= ord(char) <= 159
+               for char in decoded_path):
+            finding = f"{label} path: control characters are forbidden"
+            if finding not in findings:
+                findings.append(finding)
         for finding in _findings(f"{label} path", data):
             if finding not in findings:
                 findings.append(finding)
@@ -433,6 +445,7 @@ def _discover(root: Path) -> tuple[list[Path], list[str]]:
             candidate = current_path / name
             relative = _relative(candidate, root)
             label = _opaque_label("directory", relative)
+            errors.extend(_path_findings(label, relative))
             if name.startswith("."):
                 errors.append(f"{label}: hidden evidence path is not allowed")
                 continue
@@ -628,6 +641,100 @@ def _decode_base64(label: str, encoded: bytes) -> tuple[bytes | None, list[str]]
     return decoded, []
 
 
+def _nested_query_findings(label: str, value: bytes) -> list[str]:
+    """Re-parse already-decoded values; bounded independently of decoding."""
+    findings = []
+    pending = [(value, 0)]
+    seen = set()
+    while pending:
+        body, level = pending.pop()
+        if body in seen:
+            continue
+        seen.add(body)
+        findings.extend(_findings(label, body))
+        for match in QUERY_FIELD.finditer(body):
+            if level >= MAX_PERCENT_DECODE_PASSES:
+                findings.append(f"{label}: nested URL/form fields exceed the scan limit")
+                continue
+            key = match.group('key').decode('utf-8', 'replace')
+            child = match.group('value')
+            findings.extend(_field_finding(label, key, child))
+            if child and child != body:
+                pending.append((child, level + 1))
+    return findings
+
+
+WAVE2_AGGREGATE_SCHEMA = 'nyayone-wave2-aggregate/v1'
+
+
+def _strict_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('DUPLICATE_JSON_KEY')
+        result[key] = value
+    return result
+
+
+def _wave2_projection_valid(value: object) -> bool:
+    """Exact numeric projection only, never an exception for raw Wave-2 data."""
+    if not isinstance(value, dict) or value.get('schemaVersion') != WAVE2_AGGREGATE_SCHEMA:
+        return False
+    try:
+        contract = json.loads(Path(__file__).with_name(
+            'wave2_aggregate_privacy_contract.json').read_text(),
+            object_pairs_hook=_strict_object)
+        producer = Path(__file__).resolve().parents[2] / 'backend/scripts/wave2_postgres_gate.py'
+        digest = hashlib.sha256(producer.read_bytes()).hexdigest()
+        inventory = ['schemaVersion', 'sourceRow', 'producerSha256',
+                     'sourceArtifactSha256', 'reviews_for_session']
+        return (
+            contract == {
+                'schemaVersion': WAVE2_AGGREGATE_SCHEMA, 'sourceRow': 'A6.4',
+                'field': 'reviews_for_session', 'valueType': 'strict-integer',
+                'producerSha256': digest, 'exactInventory': inventory,
+            }
+            and isinstance(value, dict) and set(value) == set(inventory)
+            and value['schemaVersion'] == WAVE2_AGGREGATE_SCHEMA
+            and value['sourceRow'] == 'A6.4' and value['producerSha256'] == digest
+            and isinstance(value['sourceArtifactSha256'], str)
+            and re.fullmatch(r'[0-9a-f]{64}', value['sourceArtifactSha256']) is not None
+            and type(value['reviews_for_session']) is int
+            and 0 <= value['reviews_for_session'] <= 2**63 - 1
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def project_wave2_aggregate(raw: bytes) -> dict[str, object]:
+    """Materialize A6.4's numeric observation; raw runtime evidence stays private.
+
+    The source digest binds to the original artifact. This is a privacy-safe
+    projection, not a claim that the complete producer or its gates passed.
+    """
+    try:
+        if not raw or len(raw) > MAX_FILE_BYTES:
+            raise ValueError
+        source = json.loads(raw, object_pairs_hook=_strict_object)
+        if source['gate'] != 'wave2_postgres' or not isinstance(source['assertions'], list):
+            raise ValueError
+        rows = [r for r in source['assertions'] if isinstance(r, dict) and r.get('id') == 'A6.4']
+        if len(rows) != 1:
+            raise ValueError
+        result = {
+            'schemaVersion': WAVE2_AGGREGATE_SCHEMA, 'sourceRow': 'A6.4',
+            'producerSha256': hashlib.sha256((Path(__file__).resolve().parents[2] /
+                'backend/scripts/wave2_postgres_gate.py').read_bytes()).hexdigest(),
+            'sourceArtifactSha256': hashlib.sha256(raw).hexdigest(),
+            'reviews_for_session': rows[0]['detail']['reviews_for_session'],
+        }
+        if not _wave2_projection_valid(result):
+            raise ValueError
+        return result
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        raise ValueError('WAVE2_AGGREGATE_INVALID') from None
+
+
 def _text_semantics(
     label: str,
     data: bytes,
@@ -638,6 +745,18 @@ def _text_semantics(
     findings = _findings(label, data)
     errors: list[str] = []
     scanned = 0
+
+    # Recognition is root-only, duplicate-key rejecting and closed-world.
+    # No free-text field or arbitrary numeric key is exempted. An invalid
+    # declaration is denied even if generic pattern scanning finds nothing.
+    try:
+        aggregate = json.loads(data.decode('utf-8'), object_pairs_hook=_strict_object)
+    except (UnicodeDecodeError, ValueError):
+        aggregate = None
+    if _wave2_projection_valid(aggregate):
+        return 0, findings, errors
+    if WAVE2_AGGREGATE_SCHEMA.encode() in data:
+        errors.append(f"{label}: invalid contract-bound Wave-2 aggregate projection")
 
     for match in URL_TOKEN.finditer(data):
         variants, exceeded = _percent_decode_variants(match.group(0))
@@ -663,6 +782,8 @@ def _text_semantics(
             errors.append(f"{label}: URL/form field cannot be decoded")
             continue
         findings.extend(_field_finding(label, key, value))
+        for variant in value_variants:
+            findings.extend(_nested_query_findings(label, variant))
 
     for match in LINE_FIELD.finditer(data):
         key = match.group("key").decode("ascii", "ignore")
