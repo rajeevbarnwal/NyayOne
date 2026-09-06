@@ -91,3 +91,24 @@ def test_orchestrator_attests_exact_private_service_log_inventory_before_deletio
     assert 'NYAY5_SUMMARY_SERVICE_LOGS="$SERVICE_LOGS_CAPTURED"' in source
     assert 'boolean("NYAY5_SUMMARY_SERVICE_LOGS")' in source
     assert '"$SERVICE_LOGS_CAPTURED" == true' in source
+
+
+def test_real_chromium_census_regression_is_mandatory_before_product_producer() -> None:
+    source = ORCHESTRATOR.read_text(encoding="utf-8")
+    command = (
+        '(\n  cd "$ROOT/frontend"\n'
+        '  node --test scripts/lib/nyay5-visual-census-race.browser-contract.mjs\n'
+        ') >"$OUTPUT_DIR/census-contract-results.tap" 2>&1\n'
+    )
+    assert source.count(command) == 1
+    assert source.index(command) < source.index("npm run qa:nyay5:profile-boundary")
+    assert source.index(command) < source.index("set +e\n(\n  cd")
+    test_source = (
+        ROOT / "frontend/scripts/lib/nyay5-visual-census-race.browser-contract.mjs"
+    ).read_text(encoding="utf-8")
+    assert "ts.createSourceFile" in test_source
+    assert "chromium.launch({ headless: true })" in test_source
+    assert "recordVisualContract" in test_source
+    assert "getClientRects().length" in test_source
+    assert "it.skip" not in test_source
+    assert "test.skip" not in test_source

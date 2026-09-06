@@ -316,7 +316,23 @@ async function recordVisualContract(page, screenId) {
   await screen.waitFor({ state: 'visible' });
   await screen.locator('h1:visible,h2:visible').first().waitFor({ state: 'visible' });
   await page.evaluate(() => document.fonts.ready);
-  const observation = await screen.evaluate((node, contract) => {
+  // A Locator.evaluate resolves its ElementHandle in an earlier browser
+  // command. React may replace that root before its callback runs, producing
+  // a false zero-heading census on a detached node. Select the current root,
+  // establish structural readiness and sample in one synchronous callback.
+  // Never poll for correct typography/icons: a ready but incorrect product
+  // state returns its failed observation immediately and remains a failure.
+  const snapshot = await page.waitForFunction((contract) => {
+    const node = document.querySelector(`[data-screen="${contract.screenId}"]`);
+    const visible = (element) => element.getClientRects().length > 0
+      && getComputedStyle(element).visibility !== 'hidden';
+    if (!(node instanceof Element) || !node.isConnected || !visible(node)
+      || document.documentElement.getAttribute('data-theme') !== 'light'
+      || document.fonts.status !== 'loaded') return false;
+    const headings = [...node.querySelectorAll('h1,h2')]
+      .filter((element) => element.getClientRects().length > 0);
+    if (!headings.some(visible)) return false;
+    if (contract.revisionLExpected && !node.querySelector('.v321-lockup')) return false;
     const normalizedFamily = (element) => getComputedStyle(element).fontFamily
       .replace(/["']/gu, '')
       .split(',')
@@ -324,8 +340,6 @@ async function recordVisualContract(page, screenId) {
     const expected = contract.revisionLExpected
       ? contract.revisionLHeadingStack
       : contract.legacyCarlitoHeadingStack;
-    const headings = [...node.querySelectorAll('h1,h2')]
-      .filter((element) => element.getClientRects().length > 0);
     const icons = [...node.querySelectorAll('svg')]
       .filter((element) => element.getClientRects().length > 0);
     const exactRevisionLLockup = (icon) => (
@@ -355,10 +369,17 @@ async function recordVisualContract(page, screenId) {
       legacyBrandVisible: /\blegalsaathi\b/iu.test(node.textContent ?? ''),
     };
   }, {
+    screenId,
     revisionLExpected: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId),
     revisionLHeadingStack: REVISION_L_HEADING_STACK,
     legacyCarlitoHeadingStack: LEGACY_CARLITO_HEADING_STACK,
   });
+  let observation;
+  try {
+    observation = await snapshot.jsonValue();
+  } finally {
+    await snapshot.dispose();
+  }
   const previous = visualScreens.get(screenId);
   visualScreens.set(screenId, {
     headingCount: Math.max(previous?.headingCount ?? 0, observation.headingCount),

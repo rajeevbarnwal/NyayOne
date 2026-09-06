@@ -26,6 +26,29 @@ def test_inherited_review_fixtures_establish_scoped_server_proofs_before_request
         assert "nyay11-review-" in producer
 
 
+def test_wave3_review_race_never_mutates_fixture_authority_inside_worker():
+    import ast
+    source = (BACKEND / "scripts/nyay5_postgres_profile_gate.py").read_text()
+    tree = ast.parse(source)
+    worker = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "review_registration")
+    assert "prepare_institutional_review" not in ast.get_source_segment(source, worker)
+    for target in ("dob_actor", "owner", "dob_review_actor"):
+        expected = f'prepare_institutional_review(factory, registration_id={target}["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])'
+        assert expected in source
+    for target, first_worker in (("owner", "email_change_future"), ("dob_review_actor", "dob_change_future")):
+        preparation = f'prepare_institutional_review(factory, registration_id={target}["registration_id"]'
+        worker_offset = source.index(first_worker + " = executor.submit")
+        pool_offset = source.rfind("with ThreadPoolExecutor(max_workers=2)", 0, worker_offset)
+        assert source.index(preparation) < pool_offset < worker_offset
+
+
+def test_wave3_review_scenarios_use_distinct_actor_operation_idempotency_keys():
+    source = (BACKEND / "scripts/nyay5_postgres_profile_gate.py").read_text()
+    assert 'headers={"Idempotency-Key": key}' in source
+    for label in ("nyay11-review-dob-authority", "nyay11-review-email-race", "nyay11-review-dob-race"):
+        assert source.count('"' + label + '"') == 1
+
+
 def test_inherited_review_audit_is_exact_aggregate_not_actor_linked():
     for filename in ("nyay2_postgres_authorization_gate.py", "nyay5_postgres_profile_gate.py"):
         producer = (BACKEND / "scripts" / filename).read_text()
@@ -39,6 +62,17 @@ def test_native_concurrency_covers_real_projection_cross_review_and_erasure():
     source = (BACKEND / "scripts/nyay11_postgres_authority_gate.py").read_text()
     for required in ("PROJECTION_TAKES_NO_PROOF_LOCK", "CROSS_REVIEW_COMPLETES_WITHOUT_DEADLOCK", "ERASURE_PREVENTS_AUTHORITY_RESURRECTION", "delete_registration", "before_cursor_execute", "pg_blocking_pids"):
         assert required in source
+
+
+@pytest.mark.parametrize("schedule", ["REVIEWER_ERASURE_REVIEW_FIRST_ATOMIC", "REVIEWER_ERASURE_ERASE_FIRST_ATOMIC"])
+def test_native_reviewer_erasure_has_independent_closed_world_schedule_rows(schedule):
+    import inspect
+    gate = _gate()
+    assert gate.ORACLE_IDS.count(schedule) == 1
+    source = inspect.getsource(gate._reviewer_erasure_oracle)
+    for required in ("service.identity_changed", "service.review", "delete_registration", "pg_blocking_pids", "40P01", "REVIEWER_ERASURE_PARTIAL_REGISTRATION", "REVIEWER_ERASURE_PARTIAL_PROOF", "REVIEWER_ERASURE_PARTIAL_ASSIGNMENT", "REVIEWER_ERASURE_LEGACY_AUTHORITY_SURVIVED"):
+        assert required in source
+    assert "retry" not in source.lower().split('"""', 2)[-1]
 
 
 def test_populated_migration_refusal_preserves_current_authority_and_audit():
