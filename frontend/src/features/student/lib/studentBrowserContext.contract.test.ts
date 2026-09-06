@@ -386,11 +386,14 @@ describe('NYAY-19 browser-context source contract', () => {
 
   it('redacts raw path, query and error material from generic runtime diagnostics', () => {
     const gate = source(V34_BROWSER_GATE_PATH);
+    expect(gate).toContain("import { createRuntimeEvidence, attachRuntimeEvidence, runtimeEvent } from './lib/wave1-runtime-diagnostics.mjs'");
+    const collector = source('scripts/lib/wave1-runtime-diagnostics.mjs');
+    const contract = JSON.parse(source('scripts/lib/wave1-runtime-diagnostics.json'));
     const attach = runInNewContext(
-      `(${extractWave1GateFunction(gate, 'attachRuntimeEvidence')})`,
-      { URL },
+      `${extractWave1GateFunction(collector, 'canonicalRuntimeRoute')}\n${extractWave1GateFunction(collector, 'runtimeEvent')}\n(${extractWave1GateFunction(collector, 'attachRuntimeEvidence')})`,
+      { URL, contract, templates: new Set(contract.routeTemplates) },
     ) as (
-      page: { on(event: string, listener: (value: unknown) => void): void },
+      page: { on(event: string, listener: (value: unknown) => void): void; url(): string },
       runtime: Record<string, unknown[]>,
     ) => void;
     const listeners = new Map<string, (value: unknown) => void>();
@@ -403,12 +406,14 @@ describe('NYAY-19 browser-context source contract', () => {
     };
     attach({
       on: (event, listener) => { listeners.set(event, listener); },
+      url: () => 'http://localhost:4177/s-18?actor=private',
     }, runtime);
 
     const planted = 'actor-private-cookie-private-otp-123456-token-private';
     listeners.get('console')?.({
       type: () => 'error',
       text: () => planted,
+      location: () => ({ url: `http://localhost:4177/assets/${planted}.js?token=${planted}` }),
     });
     listeners.get('pageerror')?.(new Error(planted));
     listeners.get('requestfailed')?.({
@@ -423,10 +428,10 @@ describe('NYAY-19 browser-context source contract', () => {
     });
 
     expect(runtime).toEqual({
-      consoleErrors: [{ stage: 'console-error' }],
-      failedRequests: [{ stage: 'request-failed', method: 'GET' }],
-      httpErrors: [{ stage: 'http-error', status: 503, method: 'POST' }],
-      pageErrors: [{ stage: 'page-error' }],
+      consoleErrors: [{ stage: 'console-error', routeTemplate: '/assets/{asset}', method: 'NONE', status: 0, reason: 'NONE' }],
+      failedRequests: [{ stage: 'request-failed', method: 'GET', routeTemplate: 'unclassified-route', status: 0, reason: 'OTHER' }],
+      httpErrors: [{ stage: 'http-error', status: 503, method: 'POST', routeTemplate: 'unclassified-route', reason: 'NONE' }],
+      pageErrors: [{ stage: 'page-error', routeTemplate: '/s-{screen}', method: 'NONE', status: 0, reason: 'NONE' }],
       unmatchedApi: [],
     });
     const serialized = JSON.stringify(runtime).toLowerCase();
@@ -445,10 +450,8 @@ describe('NYAY-19 browser-context source contract', () => {
 
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
-    expect(diagnostic).toContain("stage: 'unmatched-api'");
-    expect(diagnostic).toContain('method: request.method()');
+    expect(diagnostic.trim()).toBe("runtime.unmatchedApi.push(runtimeEvent('unmatched-api', request.url(), request.method()));");
     expect(diagnostic).not.toContain('path:');
-    expect(diagnostic).not.toContain('request.url()');
     expect(diagnostic).not.toContain('url.pathname');
     expect(diagnostic).not.toContain('url.search');
   });
