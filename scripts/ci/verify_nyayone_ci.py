@@ -1498,6 +1498,7 @@ DIRECT_EVIDENCE_UPLOAD_PATHS: dict[tuple[str, str], str] = {
 }
 REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): {
+        "python scripts/ci/test_nyay40_failure_digests.py",
         "python scripts/ci/test_sprint4_hardening_red.py",
         "python scripts/ci/test_sprint4_hardening_adversarial.py",
         EXPECTED_NYAY14_POLICY_COMMAND,
@@ -1570,7 +1571,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "6b87b79d8b4ec9e3ae5dee6b38a4dd268fdc61f76d6ef4a171c087c56d547c00",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "a71b647eca26aaba7923a029979a1bbe57b7ff24ff720e7615dbea1d2b0c4da5",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
