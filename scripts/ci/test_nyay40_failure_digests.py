@@ -2,6 +2,7 @@
 import hashlib
 import json
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -100,6 +101,70 @@ class FailureDigestContracts(unittest.TestCase):
         self.assertIn("--profile wave1", text)
         self.assertIn("evidence_privacy.outcome == 'success'", text)
         self.assertIn("evidence_integrity.outcome == 'success'", text)
+
+    def runtime_fixture(self):
+        root = Path(__file__).resolve().parents[2]
+        script = r"""
+import {createRuntimeEvidence, attachRuntimeEvidence, runtimeEvent} from './frontend/scripts/lib/wave1-runtime-diagnostics.mjs';
+const handlers = {};
+const page = {on:(event, handler)=>{handlers[event]=handler;}, url:()=> 'http://localhost:4177/s-18?person=private@example.test'};
+const runtime = createRuntimeEvidence();
+attachRuntimeEvidence(page, runtime);
+const request = {url:()=> 'http://localhost:1131/api/v1/student/privacy/requests/private-identifier?secret=private', method:()=> 'GET', failure:()=>({errorText:'net::ERR_ABORTED'})};
+handlers.console({type:()=> 'error', location:()=>({url:'http://localhost:4177/assets/private-build.js?token=private'}), text:()=>{throw Error('must not read message');}});
+handlers.pageerror(new Error('private message body'));
+handlers.requestfailed(request);
+handlers.response({status:()=>404, request:()=>request, url:request.url});
+runtime.unmatchedApi.push(runtimeEvent('unmatched-api', request.url(), request.method()));
+console.log(JSON.stringify(runtime));
+"""
+        result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=root,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_seeded_runtime_categories_are_collected_without_private_content(self):
+        runtime = self.runtime_fixture()
+        self.assertEqual(set(runtime), {"consoleErrors", "pageErrors", "failedRequests", "httpErrors", "unmatchedApi"})
+        self.assertTrue(all(len(items) == 1 for items in runtime.values()))
+        self.assertEqual(runtime["httpErrors"][0]["routeTemplate"], "/api/v1/student/privacy/requests/{request_id}")
+        self.assertEqual(runtime["consoleErrors"][0]["routeTemplate"], "/assets/{asset}")
+        self.assertEqual(runtime["failedRequests"][0]["reason"], "net::ERR_ABORTED")
+        self.assertNotIn("private", json.dumps(runtime))
+        self.assertNotIn("?", json.dumps(runtime))
+
+    def test_failed_runtime_export_contains_strict_counted_hmac_bound_categories(self):
+        self.ids = ["functional_runtime"]
+        rows = [{"area": "functional_runtime", "expected": "zero runtime errors", "actual": self.runtime_fixture(), "pass": False}]
+        result, target = self.export(rows)
+        self.assertEqual(result[2], [])
+        item = json.loads((target / self.exporter.EXPORT_NAME).read_text())["failureDigests"]["rows"][0]
+        self.assertEqual({r["category"] for r in item["runtimeCategories"]}, {"console", "page", "request-failed", "HTTP", "unmatched-API"})
+        self.assertTrue(all(r["count"] == 1 for r in item["runtimeCategories"]))
+        self.assertRegex(item["runtimeHash"], r"^[0-9a-f]{64}$")
+        self.assertEqual(load("scan_evidence").scan(target), [])
+        self.assertTrue(self.exporter._runtime_categories_valid(item["runtimeCategories"]))
+        for invalid in (True, -1, "1"):
+            with self.subTest(count=invalid):
+                mutated = json.loads(json.dumps(item["runtimeCategories"]))
+                mutated[0]["count"] = invalid
+                self.assertFalse(self.exporter._runtime_categories_valid(mutated))
+        mutated = json.loads(json.dumps(item["runtimeCategories"]))
+        mutated[0]["routes"][0]["routeTemplate"] = "/assets/private.js?credential=private"
+        self.assertFalse(self.exporter._runtime_categories_valid(mutated))
+        _, second = self.export(rows)
+        other = json.loads((second / self.exporter.EXPORT_NAME).read_text())["failureDigests"]["rows"][0]
+        self.assertNotEqual(item["runtimeHash"], other["runtimeHash"])
+
+    def test_untrusted_runtime_metadata_cannot_enter_diagnostic_export(self):
+        self.ids = ["functional_runtime"]
+        for invalid in ({"routeTemplate": "/s-18?private@example.test"}, {"count": True}, {"body": "private"}):
+            with self.subTest(invalid=invalid):
+                runtime = self.runtime_fixture()
+                runtime["httpErrors"][0].update(invalid)
+                result, target = self.export([{"area": "functional_runtime", "expected": 0, "actual": runtime, "pass": False}])
+                self.assertTrue(result[2])
+                self.assertFalse(target.exists())
 
 
 if __name__ == "__main__":

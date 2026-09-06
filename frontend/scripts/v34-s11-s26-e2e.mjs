@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import axe from 'axe-core';
 import { chromium } from 'playwright';
+import { createRuntimeEvidence, attachRuntimeEvidence, runtimeEvent } from './lib/wave1-runtime-diagnostics.mjs';
 import {
   armCanonicalReadiness,
   settleCanonicalReadiness,
@@ -170,38 +171,6 @@ const internshipListings = [
   },
 ];
 
-function createRuntimeEvidence() {
-  return {
-    consoleErrors: [],
-    pageErrors: [],
-    failedRequests: [],
-    httpErrors: [],
-    unmatchedApi: [],
-  };
-}
-
-function attachRuntimeEvidence(page, runtime) {
-  page.on('console', (message) => {
-    if (message.type() === 'error') runtime.consoleErrors.push({ stage: 'console-error' });
-  });
-  page.on('pageerror', () => runtime.pageErrors.push({ stage: 'page-error' }));
-  page.on('requestfailed', (request) => {
-    runtime.failedRequests.push({
-      stage: 'request-failed',
-      method: request.method(),
-    });
-  });
-  page.on('response', (response) => {
-    if (response.status() >= 400) {
-      runtime.httpErrors.push({
-        stage: 'http-error',
-        status: response.status(),
-        method: response.request().method(),
-      });
-    }
-  });
-}
-
 async function installApiContract(page, runtime, savedListingIds = new Set(['cam'])) {
   let otpFlow = {
     status: 'unavailable', purpose: null, destination_masked: null,
@@ -302,10 +271,7 @@ async function installApiContract(page, runtime, savedListingIds = new Set(['cam
         ? json(200, listing)
         : json(404, { detail: { code: 'internship_not_found', message: 'This internship listing is unavailable.' } });
     }
-    runtime.unmatchedApi.push({
-      stage: 'unmatched-api',
-      method: request.method(),
-    });
+    runtime.unmatchedApi.push(runtimeEvent('unmatched-api', request.url(), request.method()));
     return json(501, { detail: { code: 'qa_route_not_stubbed' } });
   });
 }

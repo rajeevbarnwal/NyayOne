@@ -1,0 +1,6 @@
+{
+  "routeTemplates": ["unclassified-route", "/", "/s-{screen}", "/assets/{asset}", "/fonts/{font}", "/favicon.ico", "/favicon.svg", "/api/v1/student/profile", "/api/v1/student/settings", "/api/v1/auth/student/session", "/api/v1/auth/student/verification/email/request", "/api/v1/auth/student/otp/state", "/api/v1/auth/student/recovery/start", "/api/v1/auth/student/recovery/verify", "/api/v1/student/privacy/export", "/api/v1/student/privacy/delete", "/api/v1/student/privacy/requests/{request_id}", "/api/v1/calendar/view-preferences", "/api/v1/calendar/events", "/api/v1/internships", "/api/v1/internships/{listing_id}", "/api/v1/student/internships/saved", "/api/v1/student/internships/{listing_id}/saved"],
+  "methods": ["NONE", "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "OTHER"],
+  "reasons": ["NONE", "net::ERR_ABORTED", "net::ERR_CONNECTION_REFUSED", "net::ERR_CONNECTION_RESET", "net::ERR_FAILED", "net::ERR_TIMED_OUT", "net::ERR_NAME_NOT_RESOLVED", "OTHER"],
+  "categories": {"consoleErrors": ["console", "console-error"], "pageErrors": ["page", "page-error"], "failedRequests": ["request-failed", "request-failed"], "httpErrors": ["HTTP", "http-error"], "unmatchedApi": ["unmatched-API", "unmatched-api"]}
+}
