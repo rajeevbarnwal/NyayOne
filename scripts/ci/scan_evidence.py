@@ -368,8 +368,15 @@ def _path_findings(label: str, path_name: str) -> list[str]:
     if exceeded:
         findings.append(f"{label} path: percent encoding exceeds the scan limit")
     for data in variants:
+        try:
+            decoded_path = data.decode('utf-8', 'strict')
+        except UnicodeDecodeError:
+            finding = f"{label} path: invalid UTF-8 encoding is forbidden"
+            if finding not in findings:
+                findings.append(finding)
+            decoded_path = ''
         if any(ord(char) < 32 or 127 <= ord(char) <= 159
-               for char in data.decode('utf-8', 'surrogateescape')):
+               for char in decoded_path):
             finding = f"{label} path: control characters are forbidden"
             if finding not in findings:
                 findings.append(finding)

@@ -1,5 +1,6 @@
 """Adversarial boundaries for the Sprint 4 evidence hardening batch."""
 import hashlib
+from contextlib import nullcontext
 import importlib.util
 import json
 from pathlib import Path
@@ -109,11 +110,50 @@ class HardeningAdversarial(unittest.TestCase):
         for code in [*range(32), *range(127,160)]:
             char = chr(code)
             encoded = ''.join('%%%02X' % b for b in char.encode())
-            for name in ['clean'+char+'row', 'clean'+encoded+'row']:
-                with self.subTest(code=code, encoded=name==encoded):
+            for is_encoded, name in [(False, 'clean'+char+'row'), (True, 'clean'+encoded+'row')]:
+                with self.subTest(code=code, encoded=is_encoded):
                     findings = scan._path_findings('opaque', name)
                     self.assertTrue(findings)
                     self.assertNotIn(name, '\n'.join(findings))
+
+    def test_invalid_utf8_percent_path_variants_fail_closed(self):
+        for name in ('clean%85row', 'clean%2585row', 'clean%FFrow',
+                     'clean%C0%AFrow', 'clean%ED%A0%80row', 'clean%E2%82row'):
+            with self.subTest(case=name):
+                findings = scan._path_findings('opaque', name)
+                self.assertTrue(findings, 'INVALID_UTF8_PATH_ACCEPTED')
+                self.assertTrue(any('path:' in item for item in findings))
+                self.assertNotIn(name, '\n'.join(findings))
+
+    def test_invalid_utf8_paths_rejected_in_filesystem_and_zip(self):
+        for name in ('clean%85row', 'clean%2585row'):
+            for surface in ('filesystem', 'zip'):
+                with self.subTest(surface=surface, case=name), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    if surface == 'filesystem':
+                        (root/name).write_text('PASS')
+                    else:
+                        with zipfile.ZipFile(root/'bundle.zip', 'w') as archive:
+                            archive.writestr(name, 'PASS')
+                    findings = scan.scan(root)
+                    self.assertTrue(findings, 'INVALID_UTF8_SURFACE_ACCEPTED')
+                    self.assertNotIn(name, '\n'.join(findings))
+
+    def test_control_path_subtest_labels_distinguish_encoded_cases(self):
+        labels = []
+        def record(**kwargs):
+            labels.append(kwargs)
+            return nullcontext()
+        with mock.patch.object(self, 'subTest', side_effect=record):
+            self.test_all_c0_c1_paths_and_encoded_variants()
+        self.assertEqual(labels, [dict(code=code, encoded=encoded)
+            for code in [*range(32), *range(127,160)] for encoded in (False, True)])
+
+    def test_valid_utf8_path_variants_remain_accepted(self):
+        for name in ('clean-row.txt', 'caf\u00e9.txt', 'caf%C3%A9.txt',
+                     'caf%25C3%25A9.txt', 'clean%E2%82%ACrow', 'clean%20row'):
+            with self.subTest(case=name):
+                self.assertEqual(scan._path_findings('opaque', name), [])
 
     def test_directory_and_zip_directory_controls_denied(self):
         with tempfile.TemporaryDirectory() as directory:
