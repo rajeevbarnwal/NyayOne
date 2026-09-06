@@ -249,13 +249,13 @@ NYAY14_EVIDENCE_FILES: dict[str, Path] = {
     ),
 }
 EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
-    "gate": "00311af5cf3a3a7d1bdf840e468ca3259e27f712d0c73d35935a8248a88208ff",
+    "gate": "50975750724f0e80e6fb5f9e642df14d004f0ce750c2b7f1989169409097b218",
     "tests": "a0a8dd8a05fcaac010c4c627ccdc166c50dc8c002cf48f09fb90602dd96db208",
-    "security_tests": "6a1a61f45013bfe98518ad246d67079f1d4be49b57916a7329acfbda8befe5f3",
+    "security_tests": "ff5453339d848797b75c2a575807ca56d6c06b7b3c0bcc6e88507324ff2b9ca5",
     "contact_sheet_tests": "36c70a1ee17e037f52ab3bcf9382ac5b6252fad76cefdebdb5cf009977a03b9c",
     "contract": "2790051d8364ea3bbfde5d4dd101d7926b30873dafc0eb68dfa6d89ee487c9a9",
     "contact_sheet_contract": "393bb8cf153567b1b0fa50a899de5c34ff6343ee229b708dba91f5dd010b3773",
-    "privacy_scanner": "4798a1357a386deb4b6b3ef9c08b85e1b3a4598de35b0d0789e4c318817bea92",
+    "privacy_scanner": "4af6f5924601e86e56ca2a3f5c03ec37d697bbfaba3f57c2445d48151e84fdd4",
     "seeded_fixture": "2e2bff9a8369e244ced90dc7bdc491714e7febfa72e891cf18c6bc877767a3f3",
     "readme": "d984818da6f4639d1085a012c04d065ffe6243f7d2247188cfdc745287a694f8",
     "provenance_template": "1e2e42cfbe21db9b057f0b231f8c1836e3dca843f22e7f9e9a347288389e9b68",
@@ -1498,6 +1498,8 @@ DIRECT_EVIDENCE_UPLOAD_PATHS: dict[tuple[str, str], str] = {
 }
 REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
     ("nyayone-policy-gate.yml", "policy-contracts"): {
+        "python scripts/ci/test_sprint4_hardening_red.py",
+        "python scripts/ci/test_sprint4_hardening_adversarial.py",
         EXPECTED_NYAY14_POLICY_COMMAND,
         EXPECTED_NYAY14_SECURITY_POLICY_COMMAND,
         EXPECTED_NYAY27_POLICY_COMMAND,
@@ -1568,7 +1570,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "096febd2f1fc8ae43aa5688dc01c29d4f1c1049c3ef6ec2905d19e899463366e",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "6b87b79d8b4ec9e3ae5dee6b38a4dd268fdc61f76d6ef4a171c087c56d547c00",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",

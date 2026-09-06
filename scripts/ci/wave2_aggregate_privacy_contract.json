@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "nyayone-wave2-aggregate/v1",
+  "sourceRow": "A6.4",
+  "field": "reviews_for_session",
+  "valueType": "strict-integer",
+  "producerSha256": "141543e8ab8422a10ee0e22f017874ffa4bb00d8cfdebfd4d06ab6a5ea64cb70",
+  "exactInventory": ["schemaVersion", "sourceRow", "producerSha256", "sourceArtifactSha256", "reviews_for_session"]
+}
