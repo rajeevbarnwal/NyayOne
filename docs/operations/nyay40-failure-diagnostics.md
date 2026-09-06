@@ -79,3 +79,20 @@ The corresponding semantic seal changes from
 `6b87b79d8b4ec9e3ae5dee6b38a4dd268fdc61f76d6ef4a171c087c56d547c00` to
 `a71b647eca26aaba7923a029979a1bbe57b7ff24ff720e7615dbea1d2b0c4da5`.
 No scanner seal, threshold, required check, or quarantine posture changes.
+# Font-lifecycle diagnostic disposition
+
+The owner-triggered second Linux observation at `9f82c7e` failed the strict
+`functional_runtime` row with one `GET /fonts/{font}` / `net::ERR_ABORTED` event
+and zero events in the other four categories. A controlled Chromium experiment
+reproduced that signature when hard navigation interrupted a font introduced
+after the earlier readiness sample. The same schedule, with the document
+departure barrier, completed the font request before navigation without abort.
+
+The Wave-1 functional journey now flushes current layout and awaits the live
+FontFaceSet (including post-frame settlement) before hard navigation or page
+replacement. The barrier does not catch, delete, or allowlist runtime events;
+settlement failure prevents departure and emits a canonical privacy-safe error.
+No product code, sample inventory, runtime predicate, timeout or quarantine rule
+changes. This supports the harness classification for the enriched recurrence;
+the older uninstrumented main failure cannot retrospectively be assigned an
+identical cause with certainty.

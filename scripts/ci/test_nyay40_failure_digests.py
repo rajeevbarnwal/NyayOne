@@ -11,6 +11,44 @@ from test_evidence_policy import load
 
 
 class FailureDigestContracts(unittest.TestCase):
+    def test_document_departure_waits_for_font_settlement_and_fails_closed(self):
+        root = Path(__file__).resolve().parents[2]
+        script = r"""
+import assert from 'node:assert/strict';
+import {leaveSettledDocument} from './frontend/scripts/lib/wave1-document-settlement.mjs';
+let release;
+const font = new Promise(r=>{release=r;});
+const events=[];
+const page={evaluate:async callback=>{
+  globalThis.document={body:{getBoundingClientRect:()=>events.push('layout')},fonts:{ready:font}};
+  globalThis.requestAnimationFrame=callback=>queueMicrotask(callback);
+  return callback();
+}};
+const leaving=leaveSettledDocument(page,async()=>events.push('depart'));
+await new Promise(r=>setImmediate(r));
+assert.equal(events.includes('depart'),false);
+release(); await leaving;
+assert.equal(events.at(-1),'depart');
+let departed=false;
+await assert.rejects(leaveSettledDocument({evaluate:async()=>{throw Error('private-url');}},()=>{departed=true;}),
+  e=>e.message==='WAVE1_DOCUMENT_SETTLEMENT_FAILED' && !JSON.stringify(e).includes('private-url'));
+assert.equal(departed,false);
+console.log('settlement-order-and-fail-closed PASS');
+"""
+        result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=root,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_functional_departures_are_guarded_without_ignoring_runtime_errors(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "frontend/scripts/v34-s11-s26-e2e.mjs").read_text()
+        functional = source[source.index("  const functionalRuntime = createRuntimeEvidence();"):]
+        departures = [line.strip() for line in functional.splitlines()
+                      if "page.goto(" in line or "page.close()" in line]
+        self.assertEqual(len(departures), 11)
+        self.assertTrue(all(line.startswith("await leaveSettledDocument(page,") for line in departures))
+        self.assertIn("functionalRuntime.failedRequests.length === 0", functional)
+
     def setUp(self):
         self.exporter = load("prepare_uploadable_evidence")
         self.directory = tempfile.TemporaryDirectory()

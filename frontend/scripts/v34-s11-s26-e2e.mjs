@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import axe from 'axe-core';
 import { chromium } from 'playwright';
 import { createRuntimeEvidence, attachRuntimeEvidence, runtimeEvent } from './lib/wave1-runtime-diagnostics.mjs';
+import { leaveSettledDocument } from './lib/wave1-document-settlement.mjs';
 import {
   armCanonicalReadiness,
   settleCanonicalReadiness,
@@ -573,7 +574,7 @@ try {
   const functionalSavedIds = new Set(['cam']);
   await installApiContract(page, functionalRuntime, functionalSavedIds);
 
-  await page.goto(`${base}/s-13`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-13`));
   await waitForDocumentReady(page);
   const resume = page.getByRole('button', { name: 'Continue profile', exact: true });
   await resume.waitFor({ state: 'visible' });
@@ -592,12 +593,12 @@ try {
   // Open a fresh document before the remaining complete-profile journeys so
   // the client query cache cannot retain that one scenario's projection.
   profileProjection = completeProfileProjection;
-  await page.close();
+  await leaveSettledDocument(page, () => page.close());
   page = await context.newPage();
   attachRuntimeEvidence(page, functionalRuntime);
   await installApiContract(page, functionalRuntime, functionalSavedIds);
 
-  await page.goto(`${base}/s-15`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-15`));
   await waitForDocumentReady(page);
   const requestReview = page.getByRole('button', { name: 'Request verification review', exact: true });
   await requestReview.waitFor({ state: 'visible' });
@@ -636,7 +637,7 @@ try {
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
   ];
-  await page.goto(`${base}/s-20`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-20`));
   const completedBrowseResponses = await waitForInternshipStateReady(page, browseResponses);
   await waitForDocumentReady(page);
   record('S-20_api_ready', 'catalogue and saved-list GETs finish with HTTP 200 before interaction', completedBrowseResponses,
@@ -651,7 +652,7 @@ try {
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/menon')),
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
   ];
-  await page.goto(`${base}/s-21?listing=menon`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-21?listing=menon`));
   const completedMenonResponses = await waitForInternshipStateReady(page, menonResponses);
   await waitForDocumentReady(page);
   const menonRoute = new URL(page.url());
@@ -671,7 +672,7 @@ try {
     completedSaveMenon.status === 200 && completedSaveMenon.finishedError === null && functionalSavedIds.has('menon'));
 
   const savedMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved'));
-  await page.goto(`${base}/s-25`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-25`));
   const completedSavedMenon = await waitForInternshipStateReady(page, [savedMenonResponse]);
   await waitForDocumentReady(page);
   const menonSavedRow = page.getByRole('listitem').filter({ hasText: 'Judicial research assistant' });
@@ -688,7 +689,7 @@ try {
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/vidhi')),
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
   ];
-  await page.goto(`${base}/s-21?listing=vidhi`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-21?listing=vidhi`));
   const completedVidhiResponses = await waitForInternshipStateReady(page, vidhiResponses);
   await waitForDocumentReady(page);
   record('S-21_vidhi_deep_link', 'direct vidhi identity renders Research fellowship, policy after exact GET', completedVidhiResponses,
@@ -696,7 +697,7 @@ try {
       && completedVidhiResponses.every((item) => item.status === 200 && item.finishedError === null));
 
   const bareDetailSavedResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved'));
-  await page.goto(`${base}/s-21`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-21`));
   await finishResponse(await bareDetailSavedResponse);
   await waitForDocumentReady(page);
   const missingDetailAlert = page.getByRole('alert').filter({ hasText: 'Listing unavailable' });
@@ -704,7 +705,7 @@ try {
     await missingDetailAlert.isVisible()
       && await page.getByRole('heading', { name: 'Summer Associate, disputes' }).count() === 0);
 
-  await page.goto(`${base}/s-22`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-22`));
   await waitForDocumentReady(page);
   const missingApplyAlert = page.getByRole('alert').filter({ hasText: 'Listing unavailable' });
   record('S-22_missing_identity', 'truthful unavailable state with no CAM fallback', await page.getByRole('alert').allTextContents(),
@@ -712,7 +713,7 @@ try {
       && await page.getByText('Cyril Amarchand Mangaldas · Summer Associate, disputes').count() === 0);
 
   const applyDetailResponse = page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam'));
-  await page.goto(`${base}/s-22?listing=cam`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-22?listing=cam`));
   const completedApplyDetail = await waitForInternshipStateReady(page, [applyDetailResponse]);
   await waitForDocumentReady(page);
   record('S-22_cam_identity_ready', 'exact CAM detail GET finishes with HTTP 200 before application testing', completedApplyDetail,
@@ -740,7 +741,7 @@ try {
   record('S-22_upload_5mb_boundary', '5 MB accepted and 5 MB + 1 rejected', await page.getByRole('alert').allTextContents(),
     !(await page.getByText('Resume must be 5 MB or smaller.').isVisible()) && await page.getByText('Transcript must be 5 MB or smaller.').isVisible());
 
-  await page.goto(`${base}/s-19`);
+  await leaveSettledDocument(page, () => page.goto(`${base}/s-19`));
   await waitForDocumentReady(page);
   await page.locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' }).locator('summary').click();
   const deleteToggle = page.getByRole('button', { name: 'Delete…' });
