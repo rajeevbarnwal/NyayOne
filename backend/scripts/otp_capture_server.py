@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LATEST: dict[str, str] = {}
 DELIVERIES: dict[str, tuple[str, str, str]] = {}
 STATE_LOCK = threading.Lock()
+DELIVERY_CHANGED = threading.Condition(STATE_LOCK)
 TOKEN = re.compile(r"^[0-9a-f]{64}$")
 MESSAGE_PREFIX = "Your NyayOne verification code is "
 
@@ -80,7 +81,16 @@ def accept_delivery(
             DELIVERIES[header_token] = (destination, code, receipt)
         LATEST.clear()
         LATEST.update({"to": destination, "code": code})
+        DELIVERY_CHANGED.notify_all()
     return 202, {"status": "accepted"}, receipt
+
+
+def await_delivery(*, timeout: float = 8) -> dict[str, str] | None:
+    """Observe provider acceptance once; the deadline denies, never grants readiness."""
+    with DELIVERY_CHANGED:
+        if not DELIVERY_CHANGED.wait_for(lambda: bool(LATEST), timeout=timeout):
+            return None
+        return dict(LATEST)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -130,6 +140,11 @@ class Handler(BaseHTTPRequestHandler):
         self._write(status, body, receipt=receipt)
 
     def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/await-delivery":
+            snapshot = await_delivery()
+            self._write(200 if snapshot is not None else 408,
+                        snapshot if snapshot is not None else {"error": "delivery_unobserved"})
+            return
         if self.path == "/latest":
             with STATE_LOCK:
                 snapshot = dict(LATEST)
