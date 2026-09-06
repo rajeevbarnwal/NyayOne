@@ -5542,12 +5542,69 @@ def _cookie_start_sample(
     return response, elapsed
 
 
+def _cookie_settled_response(response: Any) -> dict[str, Any]:
+    """Project a fully consumed test transport response in memory only."""
+    from scripts.nyay23_cookie_readiness import CanonicalReadinessError
+    try:
+        body = response.json()
+        return dict(url=str(response.url), method=response.request.method,
+                    status_code=response.status_code, body=body,
+                    body_settled=response.is_stream_consumed,
+                    redirected=bool(response.history))
+    except Exception:
+        raise CanonicalReadinessError("CANONICAL_RESPONSE_INVALID") from None
+
+
+def _cookie_committed_readiness(factory, client, mobile, kind, provider, now):
+    """Read fresh committed authority; decoy delivery is proven absent, not sent."""
+    from app.core.config import settings
+    from app.models.registration import OtpChallenge, OtpOutbox
+    from app.services import otp_authority, otp_flow_service
+    from app.services.otp_authority import as_utc
+    from app.services.login_service import keyed_hash
+    expected_subject = (
+        otp_authority.authority_subject_for_mobile(mobile) if kind == "known"
+        else otp_authority.authority_subject_from_mobile_hash(
+            keyed_hash(f"nyayone:otp-login-decoy:v1:{mobile}"))
+    )
+    token = client.cookies.get(settings.otp_flow_cookie_name)
+    with factory() as session:
+        graph = otp_flow_service.resolve_flow(session, token)
+        if graph is None:
+            return dict(commit=False, delivery=False, cookie=False)
+        authority, flow = graph
+        committed = bool(authority.subject_hash == expected_subject
+                         and authority.purpose == flow.purpose == "login"
+                         and flow.state in {"pending", "code_sent"}
+                         and flow.consumed_at is None and as_utc(flow.expires_at) > now)
+        challenges = list(session.scalars(select(OtpChallenge).where(
+            OtpChallenge.authority_id == authority.id)))
+        if kind == "decoy":
+            delivered = bool(authority.registration_id is None
+                             and flow.registration_id is None and not challenges)
+        else:
+            rows = list(session.scalars(select(OtpOutbox).join(
+                OtpChallenge, OtpChallenge.id == OtpOutbox.challenge_id).where(
+                    OtpChallenge.authority_id == authority.id)))
+            delivered = bool(authority.registration_id is not None and len(rows) == 1
+                             and rows[0].status == "sent"
+                             and rows[0].provider_receipt_hash is not None
+                             and rows[0].provider_idempotency_key in provider._accepted)
+        jar = list(client.cookies.jar)
+        cookie = any(c.name == settings.otp_flow_cookie_name and c.value == token
+                     and c.secure and not c.domain_specified for c in jar)
+        return dict(commit=committed, delivery=delivered, cookie=cookie)
+
+
 def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
     """Compare repeated known/decoy starts, cookies, reload, and Origin."""
 
     from app.api.v1 import auth_student as endpoint
     from app.core.config import settings
     from app.models.registration import OtpFlow
+    from scripts.nyay23_cookie_readiness import (
+        CookieReadiness, run_seeded_cookie_readiness_variance,
+    )
 
     original_now = endpoint._now
     original_env = settings.app_env
@@ -5576,29 +5633,43 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
         known_durations: list[int] = []
         decoy_durations: list[int] = []
         exact_pairs: list[bool] = []
-        with (
-            TestClient(
-                app,
-                base_url="https://testserver",
-                raise_server_exceptions=False,
-            ) as known_client,
-            TestClient(
-                app,
-                base_url="https://testserver",
-                raise_server_exceptions=False,
-            ) as decoy_client,
-        ):
+        variance = run_seeded_cookie_readiness_variance(attempts=1)
+        if variance != {"schedules": 120, "attempts": 1}:
+            raise ProductGateFailure("cookie readiness variance proof failed")
+        # One AnyIO portal removes the cross-TestClient scheduling confound.
+        # Separate, server-issued jars retain per-class cookie isolation.
+        with TestClient(app, base_url="https://testserver",
+                        raise_server_exceptions=False) as timing_client:
+            observers = {kind: CookieReadiness.arm(
+                origin="https://testserver", flow_class=kind,
+                client_scope="cookie-timing-client",
+            ) for kind in ("known", "decoy")}
             first_known, _ = _cookie_start_sample(
-                known_client, known_mobile, origin
+                timing_client, known_mobile, origin
             )
+            known_jar = type(timing_client.cookies)(timing_client.cookies)
+            timing_client.cookies.clear()
             first_decoy, _ = _cookie_start_sample(
-                decoy_client, decoy_mobile, origin
+                timing_client, decoy_mobile, origin
             )
+            decoy_jar = type(timing_client.cookies)(timing_client.cookies)
+            jars = {"known": known_jar, "decoy": decoy_jar}
             cookie_header = first_known.headers.get("set-cookie", "")
-            for client in (known_client, decoy_client):
-                token = client.cookies.get(settings.otp_flow_cookie_name)
-                if token:
-                    raw_tokens.append(token)
+            for kind, first, mobile in (("known", first_known, known_mobile),
+                                        ("decoy", first_decoy, decoy_mobile)):
+                timing_client.cookies = type(timing_client.cookies)(jars[kind])
+                observer = observers[kind]
+                observer.observe_response("start", _cookie_settled_response(first))
+                proof = _cookie_committed_readiness(factory, timing_client, mobile,
+                                                   kind, sender_holder["sender"], fixed)
+                for event, proven in proof.items():
+                    observer.observe_authority(event, proven=proven,
+                                               client_scope="cookie-timing-client")
+                observer.observe_response("state", _cookie_settled_response(
+                    timing_client.get("/api/v1/auth/student/otp/state")))
+                observer.require_ready()
+                token = timing_client.cookies.get(settings.otp_flow_cookie_name)
+                raw_tokens.append(token)
             if first_known.status_code != 202 or first_decoy.status_code != 202:
                 raise ProductGateFailure("cookie projection setup failed")
             exact_pairs.append(first_known.content == first_decoy.content)
@@ -5612,14 +5683,12 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
                 # five percent while retaining the strict 2x boundary.
                 samples: dict[str, tuple[Any, int]] = {}
                 for class_name in (first_class, second_class):
-                    client, mobile = (
-                        (known_client, known_mobile)
-                        if class_name == "known"
-                        else (decoy_client, decoy_mobile)
-                    )
+                    timing_client.cookies = type(timing_client.cookies)(jars[class_name])
+                    mobile = known_mobile if class_name == "known" else decoy_mobile
                     samples[class_name] = _cookie_start_sample(
-                        client, mobile, origin
+                        timing_client, mobile, origin
                     )
+                    jars[class_name] = type(timing_client.cookies)(timing_client.cookies)
                 known, known_ns = samples["known"]
                 decoy, decoy_ns = samples["decoy"]
                 known_durations.append(known_ns)
@@ -5629,17 +5698,19 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
                     and decoy.status_code == 202
                     and known.content == decoy.content
                 )
-                for client in (known_client, decoy_client):
-                    token = client.cookies.get(settings.otp_flow_cookie_name)
+                for jar in jars.values():
+                    token = jar.get(settings.otp_flow_cookie_name)
                     if token:
                         raw_tokens.append(token)
 
-            state_one = known_client.get("/api/v1/auth/student/otp/state")
-            state_two = known_client.get("/api/v1/auth/student/otp/state")
-            missing_origin = known_client.post(
+            timing_client.cookies = type(timing_client.cookies)(jars["known"])
+            observers["known"].require_ready()
+            state_one = timing_client.get("/api/v1/auth/student/otp/state")
+            state_two = timing_client.get("/api/v1/auth/student/otp/state")
+            missing_origin = timing_client.post(
                 "/api/v1/auth/student/otp/resend", json={}
             )
-            bad_origin = known_client.post(
+            bad_origin = timing_client.post(
                 "/api/v1/auth/student/otp/resend",
                 headers={"Origin": "https://untrusted.example.invalid"},
                 json={},
@@ -5647,7 +5718,7 @@ def _run_cookie_projection_probe(engine: Engine) -> dict[str, Any]:
             clock["now"] = fixed + timedelta(
                 seconds=settings.otp_resend_cooldown_seconds + 1
             )
-            good_origin = known_client.post(
+            good_origin = timing_client.post(
                 "/api/v1/auth/student/otp/resend",
                 headers={"Origin": origin},
                 json={},
