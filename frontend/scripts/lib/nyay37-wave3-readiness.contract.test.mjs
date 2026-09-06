@@ -1,4 +1,4 @@
-/** NYAY-37 RED-only rollout contracts. No producer implementation is authorized yet. */
+/** NYAY-37 enforced readiness contracts, retained from the accepted tests-first baseline. */
 import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';

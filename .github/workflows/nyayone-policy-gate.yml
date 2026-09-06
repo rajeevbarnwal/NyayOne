@@ -59,6 +59,10 @@ jobs:
         run: python scripts/ci/test_nyay21_path_to_go.py
       - name: Validate NYAY-33 documentation reconciliation
         run: python scripts/ci/test_nyay33_documentation_polish.py
+      - name: Enforce Sprint 4 evidence hardening contracts
+        run: python scripts/ci/test_sprint4_hardening_red.py
+      - name: Prove Sprint 4 evidence hardening adversarial boundaries
+        run: python scripts/ci/test_sprint4_hardening_adversarial.py
       - name: Validate NyayOne runtime and Compose isolation
         run: |
           cp .env.example .env

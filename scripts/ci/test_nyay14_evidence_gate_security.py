@@ -1098,7 +1098,7 @@ class Nyay14EvidenceGateSecurityTests(unittest.TestCase):
                 self.assertFalse(result["mergeAuthorized"])
                 self.assertIn("SCHEMA_DOWNGRADE", result["codes"])
                 self.assertFalse((run / "report.json").exists())
-                self.assertFalse((run / "evidence.tar.gz").exists())
+                self.assertFalse((run / "archive.tar.gz").exists())
                 self.assertFalse((root / self.gate.MANIFEST_NAME).exists())
                 self.assertFalse((root / self.gate.PACKAGE_RECORD_NAME).exists())
 

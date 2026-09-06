@@ -2563,7 +2563,8 @@ def _exit_for_verdict(verdict: object) -> int:
 
 def _classified_failure(*codes: str) -> dict[str, object]:
     return {
-        "schemaVersion": SCHEMA_VERSION,
+        "schemaVersion": FUTURE_SCHEMA_VERSION,
+        "declaredSchemaVersion": None,
         "verdict": "FAIL",
         "codes": _dedupe(codes),
         "mergeAuthorized": False,
