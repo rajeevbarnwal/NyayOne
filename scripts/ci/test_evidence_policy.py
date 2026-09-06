@@ -925,7 +925,7 @@ class UploadableEvidenceTests(unittest.TestCase):
 
             (source / "results.json").write_text(
                 '{"total":1,"passed":0,"failed":1,'
-                '"rows":[{"area":"failed-area","pass":false}]}\n',
+                '"rows":[{"area":"failed-area","pass":false,"expected":true,"actual":false}]}\n',
                 encoding="utf-8",
             )
             included, _, failures = exporter.prepare(source, root / "failed", "wave1")
