@@ -44,7 +44,33 @@ that frontend, backend, and the Wave-1 producer/workflow are byte-identical to
 that baseline. No blind rerun is authorized. A green observation supports only
 `single-occurrence / variance-consistent`, not proof of the unknown original
 assertion. A failing observation requires classification and separate authority
-before correction.
+before correction. That first observation failed `functional_runtime` and did
+not establish historical variance. The owner subsequently authorized the
+following enrichment and bounded classification tree.
+
+## Runtime enrichment
+
+The Wave-1 collector retains no message body, exception message, query string,
+raw asset name, request identifier or host. It projects events immediately to a
+closed diagnostic vocabulary: console, page, request-failed, HTTP, unmatched-API;
+canonical route templates; bounded HTTP status/method; and a fixed network-error
+code vocabulary with an `OTHER` fallback. This vocabulary does **not** exempt any
+error: every event remains in the original array and the original zero-error
+assertion is byte-for-byte unchanged. Unknown routes become `unclassified-route`.
+
+On `functional_runtime` failure, export all five categories with counts and
+grouped template rows. Strict type/schema checks reject extra fields, raw routes,
+boolean counts and inconsistent totals. A separate ephemeral HMAC binds the
+projection, using the same discarded per-export key as expected/actual hashes.
+Historical v2 rows without enrichment remain readable; this is not retroactive
+evidence enrichment. The producer collector is now intentionally changed, while
+product code remains historical-main content.
+
+The first enriched Linux run determines next steps: harness/fixture/preview
+defects permit a narrow tests-first correction; product defects require a stop
+and separate authorization; no recurrence requires exactly one additional run
+at the settled head and remains an environment-conditional open risk if silent.
+No runtime error allowlisting, blind retry, or quarantine change is permitted.
 
 ## Policy seal
 
