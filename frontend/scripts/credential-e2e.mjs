@@ -8,6 +8,11 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium, request as playwrightRequest } from 'playwright';
+import {
+  armCanonicalReadiness, settleCanonicalReadiness, waitForRouteDomSettled,
+  waitForVisualCensusSettled, READINESS_DIAGNOSTIC_FIELDS,
+} from './lib/browser-response-readiness.mjs';
+import { runSeededWave3ReadinessVariance } from './lib/nyay37-wave3-readiness-variance-fixture.mjs';
 
 const WEB = (process.env.E2E_WEB_URL ?? 'http://127.0.0.1:1170').replace(/\/$/, '');
 const API = (process.env.E2E_API_URL ?? 'http://127.0.0.1:1171').replace(/\/$/, '');
@@ -40,7 +45,45 @@ const report = {
   geometry: [],
   privacy: {},
   failures: [],
+  readinessDiagnostics: [],
 };
+
+async function rememberReadiness(pending, { student = true } = {}) {
+  const settled = await pending;
+  if (student) {
+    const body = await settled.get('session').response.json();
+    if (body.authenticated !== true || !body.actor?.roles?.includes('student')) {
+      throw new Error('WAVE3_STUDENT_AUTHORITY_UNPROVEN');
+    }
+  }
+  report.readinessDiagnostics.push(...settled.diagnostics.map(row =>
+    Object.fromEntries(READINESS_DIAGNOSTIC_FIELDS.map(key => [key, row[key]]))));
+  return settled;
+}
+
+function tokenResponseMatches(response, credentialId) {
+  const url = new URL(response.url());
+  return url.origin === API
+    && url.pathname === `/api/v1/credentials/${credentialId}/verification-tokens`
+    && url.search === '' && url.hash === ''
+    && response.request().method() === 'POST';
+}
+
+async function waitForCredentialDom(page, route, settledReadiness) {
+  const target = new URL(route, WEB);
+  const publicPage = target.pathname.startsWith('/verify/');
+  const screen = target.pathname.slice(1).toUpperCase();
+  await waitForRouteDomSettled(page, target.pathname, {
+    settledReadiness, expectedSearch: target.search,
+    selector: publicPage ? '.cw-public-page' : `[data-screen="${screen}"]`,
+  });
+  // Wait for query-owned content, not merely the shell or a loading skeleton.
+  const selector = publicPage ? '.cw-public-page h1' : {
+    '/s-82': '.cw-card, .cw-empty', '/s-83': '#credential-title',
+    '/s-84': '.cw-status', '/s-85': 'button:has-text("Create QR & secure link")',
+  }[target.pathname];
+  await page.locator(selector).first().waitFor({ state: 'visible' });
+}
 
 function diagnosticSummary(value) {
   return {
@@ -108,17 +151,25 @@ async function authenticateStudent(context) {
   );
   if (started.status() !== 202) throw new Error('credential login start failed');
 
-  let code = null;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const response = await fetch(`${OTP}/latest`);
-    const payload = response.ok ? await response.json() : null;
-    if (payload?.to === STUDENT_MOBILE && /^\d{6}$/u.test(payload?.code ?? '')) {
-      code = payload.code;
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  // Capture is loopback-only and memory-only. Its event deadline can only deny.
+  const delivery = await fetch(`${OTP}/await-delivery`);
+  const payload = delivery.ok ? await delivery.json() : null;
+  if (payload?.to !== STUDENT_MOBILE || !/^\d{6}$/u.test(payload?.code ?? '')) {
+    throw new Error('WAVE3_OTP_DELIVERY_UNOBSERVED');
   }
-  if (!code) throw new Error('credential login OTP unavailable');
+  const code = payload.code;
+  const authorityPage = await context.newPage();
+  const otpReadiness = armCanonicalReadiness(authorityPage, {
+    apiOrigin: API, requirements: [{ kind: 'otpState' }], stage: 'wave3_login',
+  });
+  await authorityPage.goto(`${WEB}/s-05`, { waitUntil: 'domcontentloaded' });
+  const otpSettled = await rememberReadiness(settleCanonicalReadiness(otpReadiness), { student: false });
+  const state = await otpSettled.get('otpState').response.json();
+  if (state.status !== 'pending' || state.purpose !== 'login') throw new Error('WAVE3_PENDING_FLOW_UNPROVEN');
+  await waitForRouteDomSettled(authorityPage, '/s-05', {
+    settledReadiness: otpSettled, selector: 'input[aria-label="Six digit code"]',
+  });
+  await authorityPage.close();
   const verified = await context.request.post(
     `${API}/api/v1/auth/student/login/otp/verify`,
     { headers: { Origin: WEB }, data: { code } },
@@ -234,8 +285,7 @@ async function positiveJourney(browser) {
       const responseUrl = new URL(response.url());
       badResponses.push({
         status: response.status(),
-        pathname: responseUrl.pathname,
-        queryKeys: [...responseUrl.searchParams.keys()].sort(),
+        routeClass: responseUrl.pathname.includes('not-a-token') ? 'negative-public' : 'unexpected',
       });
     }
   });
@@ -246,11 +296,17 @@ async function positiveJourney(browser) {
   // authenticated page journey through a real server-issued HttpOnly session.
   await authenticateStudent(context);
 
-  await page.goto(`${WEB}/s-82`, { waitUntil: 'networkidle' });
+  const readiness = armCanonicalReadiness(page, {
+    apiOrigin: API, requirements: [{ kind: 'session' }], stage: 'wave3_wallet',
+  });
+  await page.goto(`${WEB}/s-82`, { waitUntil: 'domcontentloaded' });
+  const settledReadiness = await rememberReadiness(settleCanonicalReadiness(readiness));
+  await waitForRouteDomSettled(page, '/s-82', { settledReadiness, selector: '.cw-empty' });
   await page.getByRole('heading', { name: 'Build a credible portfolio' }).waitFor();
   record('functional', 'S-82 empty wallet', 'empty state visible', 'visible', true);
 
   await page.getByRole('link', { name: 'Add first credential' }).click();
+  await waitForCredentialDom(page, '/s-83', settledReadiness);
   await page.getByRole('heading', { name: 'Add a credential' }).waitFor();
   await page.getByRole('button', { name: 'Save credential' }).click();
   await page.getByRole('alert').filter({ hasText: 'Title must contain 2–160 characters.' }).waitFor();
@@ -321,18 +377,28 @@ async function positiveJourney(browser) {
     'student issuer controls absent; isolated issuer HTTP 200',
     `${studentIssuerMutationControls} student controls; HTTP ${issuerVerification.status()}`,
   );
-  await page.reload({ waitUntil: 'networkidle' });
+  const reloadReadiness = armCanonicalReadiness(page, {
+    apiOrigin: API, requirements: [{ kind: 'session' }], stage: 'wave3_status',
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const statusReadiness = await rememberReadiness(settleCanonicalReadiness(reloadReadiness));
+  await waitForCredentialDom(page, `/s-84?credential=${credentialId}`, statusReadiness);
   await page.getByText('verified', { exact: true }).waitFor();
 
+  const profileReadiness = armCanonicalReadiness(page, {
+    apiOrigin: API, requirements: [{ kind: 'profile' }], stage: 'wave3_share',
+  });
   await page.getByRole('link', { name: 'Create share link' }).click();
+  await waitForCredentialDom(page, `/s-85?credential=${credentialId}`,
+    rememberReadiness(settleCanonicalReadiness(profileReadiness), { student: false }));
   await page.waitForURL(/\/s-85\?credential=/);
   await page.getByLabel('Include my name (explicit consent)').check();
   const tokenResponsePromise = page.waitForResponse(
-    (response) => response.url().includes('/verification-tokens')
-      && response.request().method() === 'POST',
+    (response) => tokenResponseMatches(response, credentialId),
   );
   await page.getByRole('button', { name: 'Create QR & secure link' }).click();
   const tokenResponse = await tokenResponsePromise;
+  if (await tokenResponse.finished() !== null) throw new Error('WAVE3_TOKEN_RESPONSE_UNFINISHED');
   const tokenBody = await tokenResponse.json();
   await page.getByRole('img', { name: /QR code for https:/ }).waitFor();
   check(
@@ -344,7 +410,8 @@ async function positiveJourney(browser) {
   );
 
   const publicPath = new URL(tokenBody.verification_url).pathname;
-  await page.goto(`${WEB}${publicPath}`, { waitUntil: 'networkidle' });
+  await page.goto(`${WEB}${publicPath}`, { waitUntil: 'domcontentloaded' });
+  await waitForCredentialDom(page, publicPath, settledReadiness);
   await page.getByRole('heading', { name: 'Advanced Moot Court Certificate' }).waitFor();
   check(
     'functional',
@@ -392,7 +459,7 @@ async function positiveJourney(browser) {
     `${consoleErrors.length} console, ${pageErrors.length} page`,
     { consoleErrors, pageErrors },
   );
-  const unexpected = badResponses.filter(({ pathname }) => !pathname.includes('not-a-token'));
+  const unexpected = badResponses.filter(({ routeClass }) => routeClass !== 'negative-public');
   // Negative API calls use APIRequestContext and therefore do not enter page events.
   check(
     'functional',
@@ -442,21 +509,37 @@ async function geometryMatrix(browser, credentialId, storageState) {
         ['s84', `/s-84?credential=${credentialId}`],
       ];
       for (const [name, route] of routes) {
-        await page.goto(`${WEB}${route}`, { waitUntil: 'networkidle' });
+        const readiness = armCanonicalReadiness(page, {
+          apiOrigin: API, requirements: [{ kind: 'session' }], stage: `wave3_${name}`,
+        });
+        await page.goto(`${WEB}${route}`, { waitUntil: 'domcontentloaded' });
+        const settledReadiness = await rememberReadiness(settleCanonicalReadiness(readiness));
+        await waitForRouteDomSettled(page, new URL(route, WEB).pathname, {
+          settledReadiness, expectedSearch: new URL(route, WEB).search,
+          selector: `[data-screen="${name.replace('s', 'S-')}"]`,
+        });
+        await waitForCredentialDom(page, route, settledReadiness);
         await assertGeometry(page, name, width, height, theme, consoleErrors, pageErrors);
       }
-      await page.goto(`${WEB}/s-85?credential=${credentialId}`, { waitUntil: 'networkidle' });
+      const shareReadiness = armCanonicalReadiness(page, {
+        apiOrigin: API, requirements: [{ kind: 'session' }, { kind: 'profile' }], stage: 'wave3_geometry_share',
+      });
+      await page.goto(`${WEB}/s-85?credential=${credentialId}`, { waitUntil: 'domcontentloaded' });
+      const settledShare = await rememberReadiness(settleCanonicalReadiness(shareReadiness));
+      await waitForCredentialDom(page, `/s-85?credential=${credentialId}`, settledShare);
       const tokenResponsePromise = page.waitForResponse(
-        (response) => response.url().includes('/verification-tokens')
-          && response.request().method() === 'POST',
+        (response) => tokenResponseMatches(response, credentialId),
       );
       await page.getByRole('button', { name: 'Create QR & secure link' }).click();
-      const tokenBody = await (await tokenResponsePromise).json();
+      const tokenResponse = await tokenResponsePromise;
+      if (await tokenResponse.finished() !== null) throw new Error('WAVE3_TOKEN_RESPONSE_UNFINISHED');
+      const tokenBody = await tokenResponse.json();
       await page.getByRole('img', { name: /QR code for https:/ }).waitFor();
       await assertGeometry(page, 's85-issued', width, height, theme, consoleErrors, pageErrors);
       await page.goto(`${WEB}${new URL(tokenBody.verification_url).pathname}`, {
-        waitUntil: 'networkidle',
+        waitUntil: 'domcontentloaded',
       });
+      await waitForCredentialDom(page, new URL(tokenBody.verification_url).pathname, settledShare);
       await assertGeometry(page, 'public-verify', width, height, theme, consoleErrors, pageErrors, {
         publicVerificationRequestCount,
         publicVerificationRequestMethods,
@@ -476,6 +559,10 @@ async function assertGeometry(
   pageErrors,
   diagnostics = {},
 ) {
+  await waitForVisualCensusSettled(page, {
+    assertion: 'browser:redesigned_heading_stack', expectedTheme: theme,
+    requireRevisionLLockup: false, readinessAttempts: 1,
+  });
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
     const badTargets = [];
@@ -549,7 +636,12 @@ async function freshContextPersistence(browser, credentialId, storageState) {
     storageState,
   });
   const page = await context.newPage();
-  await page.goto(`${WEB}/s-82`, { waitUntil: 'networkidle' });
+  const readiness = armCanonicalReadiness(page, {
+    apiOrigin: API, requirements: [{ kind: 'session' }], stage: 'wave3_fresh_context',
+  });
+  await page.goto(`${WEB}/s-82`, { waitUntil: 'domcontentloaded' });
+  const settledReadiness = await rememberReadiness(settleCanonicalReadiness(readiness));
+  await waitForRouteDomSettled(page, '/s-82', { settledReadiness, selector: '.cw-card' });
   await page.getByRole('heading', { name: 'Advanced Moot Court Certificate' }).waitFor();
   const href = await page.getByRole('link', { name: 'View status' }).getAttribute('href');
   check(
@@ -566,10 +658,17 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   try {
+    const seededVariance = await runSeededWave3ReadinessVariance({ attempts: 1 });
+    if (!(seededVariance.legacyOutcome === 'FAIL_EARLY_SAMPLE'
+      && seededVariance.settledOutcome === 'PASS')) throw new Error('WAVE3_SEEDED_VARIANCE_INVALID');
+    report.seededVariance = seededVariance;
     const { credentialId, storageState } = await positiveJourney(browser);
     await freshContextPersistence(browser, credentialId, storageState);
     await geometryMatrix(browser, credentialId, storageState);
   } catch (error) {
+    if (error?.diagnostic) report.readinessDiagnostics.push(Object.fromEntries(
+      READINESS_DIAGNOSTIC_FIELDS.map(key => [key, error.diagnostic[key]]),
+    ));
     report.failures.push({ category: 'qa-error', diagnostic: diagnosticSummary(error) });
   } finally {
     await browser.close();
