@@ -255,7 +255,7 @@ EXPECTED_NYAY14_EVIDENCE_SHA256: dict[str, str] = {
     "contact_sheet_tests": "36c70a1ee17e037f52ab3bcf9382ac5b6252fad76cefdebdb5cf009977a03b9c",
     "contract": "2790051d8364ea3bbfde5d4dd101d7926b30873dafc0eb68dfa6d89ee487c9a9",
     "contact_sheet_contract": "393bb8cf153567b1b0fa50a899de5c34ff6343ee229b708dba91f5dd010b3773",
-    "privacy_scanner": "4af6f5924601e86e56ca2a3f5c03ec37d697bbfaba3f57c2445d48151e84fdd4",
+    "privacy_scanner": "c06a9a819b9aecd77e2742a17d690e6a0657c7fe6435dc315d78a887ae34cd96",
     "seeded_fixture": "2e2bff9a8369e244ced90dc7bdc491714e7febfa72e891cf18c6bc877767a3f3",
     "readme": "d984818da6f4639d1085a012c04d065ffe6243f7d2247188cfdc745287a694f8",
     "provenance_template": "1e2e42cfbe21db9b057f0b231f8c1836e3dca843f22e7f9e9a347288389e9b68",
