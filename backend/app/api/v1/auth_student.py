@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import (
     ActorContext,
     Role,
@@ -1196,7 +1197,7 @@ def otp_cancel(
 # --------------------------------------------------------------------------- #
 # Academic profile (S-10)                                                     #
 # --------------------------------------------------------------------------- #
-@router.patch("/profile", response_model=StudentProfileProjectionResponse)
+@router.patch("/profile", response_model=StudentProfileProjectionResponse, openapi_extra=required_idempotency_header())
 def update_academic_profile(
     payload: StudentAcademicProfileRequest,
     request: Request,
@@ -1724,14 +1725,14 @@ def verification_status(
     return {"status": ver.status, "method": ver.method}
 
 
-@router.post("/verification/status")
+@router.post("/verification/status", openapi_extra=required_idempotency_header())
 def verification_transition(
     payload: VerificationTransitionRequest,
     request: Request,
     _: None = Depends(require_trusted_cookie_origin),
     actor: ActorContext = Depends(_require_verification_reviewer),
     session: Session = Depends(get_session),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
 ) -> dict[str, object]:
     """Compatibility namespace, with the same NYAY-11 scoped authority."""
     from app.services import student_authority
