@@ -5,14 +5,16 @@ Raster, PDF, archive, raw service log and other opaque diagnostic artifacts are
 deliberately quarantined: the dependency-free privacy scanner cannot prove that
 their rendered or free-form content excludes private narrative. The snapshot
 never copies source payloads. It records only controlled aggregate metadata for
-valid JSON candidates and quarantined inputs, never names, content hashes,
-exact lengths or bytes.
+valid JSON candidates and quarantined inputs, never source filenames, raw
+content hashes, exact lengths or bytes. Complete failed Wave-1 inventories also
+export repository-owned assertion IDs and non-linkable keyed comparison hashes.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -57,6 +59,11 @@ QUARANTINE_MEDIA_CLASSES = {
 LIMITATION = (
     "Phase 1 uploads an aggregate attestation only; raw test evidence "
     "remains runner-local and is not independently reviewable from this artifact."
+)
+FAILURE_LIMITATION = (
+    "Controlled failure IDs and non-linkable keyed comparison digests only; "
+    "raw comparison values and screen content remain runner-local. "
+    "The ephemeral HMAC key is discarded and raw values cannot be reconstructed."
 )
 
 
@@ -902,6 +909,67 @@ def _safe_result(
     }, None
 
 
+def _failure_digests(value: dict) -> dict:
+    """Export only sealed-inventory IDs and per-export keyed comparisons.
+
+    The random HMAC key is never persisted. This permits within-export equality
+    comparison without exposing low-entropy private values to dictionary attacks
+    or linking values across runs. It is NOT a raw-content SHA attestation.
+    """
+    if not _inventory_matches("wave1-browser", value):
+        raise ValueError("failed diagnostic inventory is not exact")
+    key = os.urandom(32)
+    rows = []
+    for row in value["rows"]:
+        if row["pass"] is not False:
+            continue
+        identity = row["area"]
+        if (not isinstance(identity, str) or len(identity) > 256
+                or re.fullmatch(r"[A-Za-z0-9_ .:/()\[\]|=-]+", identity) is None
+                or not {"expected", "actual"} <= set(row)):
+            raise ValueError("failed diagnostic row is not canonical")
+        screens = set(re.findall(r"(?<![A-Z0-9])S-\d{2}(?!\d)", identity))
+        if len(screens) > 1:
+            raise ValueError("failed diagnostic screen is ambiguous")
+        item = {"assertionId": identity,
+                "screenId": next(iter(screens)) if screens else "not-screen-specific"}
+        for field in ("expected", "actual"):
+            canonical = json.dumps(row[field], sort_keys=True, ensure_ascii=True,
+                                   allow_nan=False, separators=(",", ":")).encode()
+            item[field + "Hash"] = hmac.new(key, canonical, hashlib.sha256).hexdigest()
+        rows.append(item)
+    return {"contract": "nyay40-failure-digests-v1",
+            "hashScheme": "hmac-sha256-ephemeral-key-discarded", "rows": rows}
+
+
+def _failure_digest_valid(value: object, expected_count: int) -> bool:
+    if (type(expected_count) is not int
+            or not isinstance(value, dict) or set(value) != {"contract", "hashScheme", "rows"}
+            or value["contract"] != "nyay40-failure-digests-v1"
+            or value["hashScheme"] != "hmac-sha256-ephemeral-key-discarded"
+            or not isinstance(value["rows"], list)
+            or len(value["rows"]) != expected_count or expected_count <= 0):
+        return False
+    identities = set()
+    for row in value["rows"]:
+        if (not isinstance(row, dict)
+                or set(row) != {"assertionId", "screenId", "expectedHash", "actualHash"}):
+            return False
+        identity = row["assertionId"]
+        if (not isinstance(identity, str) or len(identity) > 256
+                or re.fullmatch(r"[A-Za-z0-9_ .:/()\[\]|=-]+", identity) is None
+                or identity in identities):
+            return False
+        identities.add(identity)
+        screens = set(re.findall(r"(?<![A-Z0-9])S-\d{2}(?!\d)", identity))
+        if len(screens) > 1 or row["screenId"] != (next(iter(screens)) if screens else "not-screen-specific"):
+            return False
+        if any(not isinstance(row[k], str) or re.fullmatch(r"[0-9a-f]{64}", row[k]) is None
+               for k in ("expectedHash", "actualHash")):
+            return False
+    return True
+
+
 def prepare(source: Path, destination: Path, profile: str) -> tuple[int, int, list[str]]:
     failures: list[str] = []
     source = source.expanduser()
@@ -924,6 +992,7 @@ def prepare(source: Path, destination: Path, profile: str) -> tuple[int, int, li
         return 0, 0, ["unknown evidence producer profile"]
     expected = {relative: (artifact_id, kind) for artifact_id, relative, kind in specs}
     candidates: dict[str, dict[str, object]] = {}
+    failure_digests = None
     quarantined: list[dict[str, object]] = []
     files_seen = 0
     total_bytes = 0
@@ -1039,6 +1108,12 @@ def prepare(source: Path, destination: Path, profile: str) -> tuple[int, int, li
             if error or result is None:
                 failures.append(error or "required evidence producer output is invalid")
                 continue
+            if artifact_id == "wave1-browser" and result["producerState"] == "fail":
+                try:
+                    failure_digests = _failure_digests(parsed)
+                except (TypeError, ValueError):
+                    failures.append("failed diagnostic projection is invalid")
+                    continue
             candidates[relative] = {
                 "artifactId": artifact_id,
                 "sizeClass": _size_class(len(data)),
@@ -1071,6 +1146,10 @@ def prepare(source: Path, destination: Path, profile: str) -> tuple[int, int, li
         ],
         "limitation": LIMITATION,
     }
+    if failure_digests is not None:
+        export["contract"] = "nyayone-evidence-attestation-v2"
+        export["failureDigests"] = failure_digests
+        export["limitation"] = FAILURE_LIMITATION
     (destination / EXPORT_NAME).write_text(
         json.dumps(export, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -1131,20 +1210,31 @@ def _validate_attestation(
         "producerProfile", "quarantined", "quarantinedCount", "rawEvidenceUploaded",
         "structuredCandidateCount", "structuredCandidates",
     }
+    diagnostic_version = payload.get("contract") == "nyayone-evidence-attestation-v2"
+    if diagnostic_version:
+        exact_keys.add("failureDigests")
     if set(payload) != exact_keys:
         return ["evidence attestation top-level schema is not exact"]
     profile = payload.get("producerProfile")
     specs = PROFILE_SPECS.get(profile) if isinstance(profile, str) else None
-    if payload.get("contract") != "nyayone-evidence-attestation-v1" or specs is None:
+    if (payload.get("contract") not in {"nyayone-evidence-attestation-v1", "nyayone-evidence-attestation-v2"}
+            or specs is None or (diagnostic_version and profile != "wave1")):
         return ["evidence attestation contract is invalid"]
     if (
         payload.get("rawEvidenceUploaded") is not False
         or payload.get("assertionContentUploaded") is not False
         or payload.get("pixelPrivacyVerified") is not False
-        or payload.get("limitation") != LIMITATION
+        or payload.get("limitation") != (FAILURE_LIMITATION if diagnostic_version else LIMITATION)
     ):
         return ["evidence attestation privacy classification is invalid"]
     candidates = payload.get("structuredCandidates")
+    if diagnostic_version:
+        if (not isinstance(candidates, list) or len(candidates) != 1
+                or not isinstance(candidates[0], dict)
+                or candidates[0].get("inventoryComplete") is not True
+                or not _failure_digest_valid(payload["failureDigests"],
+                    candidates[0].get("failedAssertionCount", 0))):
+            return ["failed diagnostic schema is invalid"]
     structured_candidate_count = _nonnegative_integer(
         payload.get("structuredCandidateCount")
     )
