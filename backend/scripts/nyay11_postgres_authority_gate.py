@@ -63,6 +63,8 @@ SUPPORT_ORACLE_IDS = (
     "EXACT_DUPLICATE_IDEMPOTENCY",
     "DOB_BIRTHDAY_LEAP_AND_ATOMIC_REPROOF",
     "AUDIT_APPEND_ONLY_AGGREGATE_PRIVACY",
+    "REVIEWER_ERASURE_REVIEW_FIRST_ATOMIC",
+    "REVIEWER_ERASURE_ERASE_FIRST_ATOMIC",
 )
 ORACLE_IDS = (*STATE_ORACLE_IDS, *SUPPORT_ORACLE_IDS)
 
@@ -706,6 +708,133 @@ def _dob_oracle(factory):
     return _row("DOB_BIRTHDAY_LEAP_AND_ATOMIC_REPROOF", 7)
 
 
+def _reviewer_erasure_oracle(factory, first):
+    """Two real operations, both observed schedules; no retries or sleeps as proof.
+
+    The reproof state deliberately retains the earlier reviewer edge through
+    the production identity-change service. That reachable edge is needed to
+    exercise erasure's dependent-authority lock, not merely reviewer self-state.
+    """
+    from app.core.crypto import keyed_hash
+    from app.core.retention import delete_registration
+    from app.models.registration import StudentProfile, StudentRegistration, StudentVerification
+    from app.models.student_authority import AuthorityState, AuthorityAuditEvent, InstitutionalEmailProof, InstitutionalReviewerAssignment
+    from app.services import student_authority as service
+
+    _require(first in {"review", "erase"}, "REVIEWER_ERASURE_SCHEDULE_INVALID")
+    with factory.begin() as session:
+        owner, reviewer, admin = _seed_actor(session), _seed_actor(session), _seed_actor(session, role="admin")
+        institution = "native-reviewer-erasure-" + uuid.uuid4().hex
+        for actor in (owner, reviewer, admin):
+            session.add(StudentVerification(registration_id=actor["registration_id"], method="institutional_email", status="pending"))
+        for actor in (owner, reviewer):
+            _email_proof(session, actor, institution)
+    now = owner["now"]
+    with factory.begin() as session:
+        service.request_review(session, owner["actor_id"], owner["token"], key="native-erasure-review-request-0001", now=now)
+        service.assign_reviewer(session, admin["actor_id"], admin["token"], reviewer_id=reviewer["actor_id"], institution=institution, expires_at=now + timedelta(days=30), key="native-erasure-review-assign-0001", now=now)
+    with factory.begin() as session:
+        result = service.review(session, reviewer["actor_id"], reviewer["token"], registration_id=owner["registration_id"], approve=True, key="native-erasure-first-review-0001", now=now)
+        _require(result["institutional_state"] == "VERIFIED", "REVIEWER_ERASURE_INITIAL_REVIEW_FAILED")
+    with factory.begin() as session:
+        reg = session.scalar(select(StudentRegistration).where(StudentRegistration.id == owner["registration_id"]).with_for_update())
+        service.identity_changed(session, reg, "institutional_email", now)
+        profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == reg.id))
+        proof = session.get(InstitutionalEmailProof, owner["actor_id"])
+        profile.institutional_email_hash = keyed_hash("native-erasure-new-email-" + str(reg.id))
+        proof.email_hash = profile.institutional_email_hash
+        proof.provider_receipt_hash = keyed_hash("native-erasure-new-receipt-" + str(reg.id))
+        state = session.get(AuthorityState, reg.id)
+        _require(state.institutional_state == "PENDING" and state.reviewer_user_id == reviewer["actor_id"], "REVIEWER_ERASURE_REPROOF_EDGE_NOT_REACHABLE")
+
+    audit_query = select(func.count()).select_from(AuthorityAuditEvent).where(
+        AuthorityAuditEvent.actor_class == "server",
+        AuthorityAuditEvent.authority_class == "server_profile_policy",
+        AuthorityAuditEvent.purpose_code == "institutional",
+        AuthorityAuditEvent.transition_code == "PROOF_REVOKED",
+    )
+    with factory() as session:
+        audit_before = session.scalar(audit_query)
+
+    held, release, started = threading.Event(), threading.Event(), threading.Event()
+    engine = factory.kw["bind"]
+    pids = {}
+    second = "erase" if first == "review" else "review"
+
+    def observe(connection, _cursor, statement, _parameters, _context, _many):
+        if connection.info.get("reviewer_erasure_role") != first or held.is_set():
+            return
+        sql = statement.lower()
+        table = "institutional_authority_email_proofs" if first == "review" else "student_authority_states"
+        if "from " + table in sql and "for update" in sql:
+            held.set()
+            _require(release.wait(15), "REVIEWER_ERASURE_RELEASE_NOT_OBSERVED")
+
+    def operation(which):
+        with factory() as session:
+            connection = session.connection()
+            connection.info["reviewer_erasure_role"] = which
+            session.execute(text("SET LOCAL statement_timeout='12000ms'"))
+            pids[which] = session.scalar(text("SELECT pg_backend_pid()"))
+            if which == second:
+                started.set()
+            try:
+                if which == "erase":
+                    reg = session.get(StudentRegistration, reviewer["registration_id"])
+                    result = "ERASED" if delete_registration(session, reg) is True else "DEFERRED"
+                else:
+                    result = service.review(session, reviewer["actor_id"], reviewer["token"], registration_id=owner["registration_id"], approve=True, key="native-erasure-racing-review-0001", now=now)["institutional_state"]
+                session.commit()
+                return {"result": result, "sqlstate": None}
+            except service.AuthorityError as exc:
+                session.rollback()
+                _require(which == "review" and first == "erase" and exc.code == "authentication_required" and exc.status_code == 401, "REVIEWER_ERASURE_DENIAL_NOT_CANONICAL")
+                return {"result": "DENIED", "sqlstate": None}
+            except DBAPIError as exc:
+                session.rollback()
+                return {"result": "DB_ERROR", "sqlstate": getattr(exc.orig, "sqlstate", None)}
+
+    event.listen(engine, "after_cursor_execute", observe)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            leader = executor.submit(operation, first)
+            try:
+                _require(held.wait(10), "REVIEWER_ERASURE_HELD_LOCK_NOT_OBSERVED")
+                follower = executor.submit(operation, second)
+                _require(started.wait(10), "REVIEWER_ERASURE_WORKER_NOT_STARTED")
+                deadline, lock_observed = time.monotonic() + 10, False
+                while time.monotonic() < deadline:
+                    with factory() as observer:
+                        blockers = observer.scalar(text("SELECT pg_blocking_pids(:pid)"), {"pid": pids[second]})
+                    if pids[first] in blockers:
+                        lock_observed = True
+                        break
+                    if follower.done():
+                        break
+                _require(lock_observed, "REVIEWER_ERASURE_BLOCKING_EDGE_NOT_OBSERVED")
+            finally:
+                release.set()
+            results = {first: leader.result(timeout=20), second: follower.result(timeout=20)}
+    finally:
+        release.set()
+        event.remove(engine, "after_cursor_execute", observe)
+    _require(all(value["sqlstate"] != "40P01" for value in results.values()), "REVIEWER_ERASURE_DEADLOCK")
+    _require(all(value["sqlstate"] is None for value in results.values()), "REVIEWER_ERASURE_DATABASE_FAILURE")
+    _require(results["erase"]["result"] == "ERASED", "REVIEWER_ERASURE_NOT_COMMITTED")
+    _require(results["review"]["result"] == ("VERIFIED" if first == "review" else "DENIED"), "REVIEWER_ERASURE_SERIAL_RESULT_INVALID")
+    with factory() as session:
+        state = session.get(AuthorityState, owner["registration_id"])
+        expected_state = "REVOKED" if first == "review" else "PENDING"
+        _require(state.reviewer_user_id is None and state.institutional_state == expected_state and state.reproof_institutional is True, "REVIEWER_ERASURE_RETAINED_AUTHORITY")
+        _require(session.get(StudentRegistration, reviewer["registration_id"]) is None, "REVIEWER_ERASURE_PARTIAL_REGISTRATION")
+        _require(session.get(InstitutionalEmailProof, reviewer["actor_id"]) is None, "REVIEWER_ERASURE_PARTIAL_PROOF")
+        _require(session.scalar(select(func.count()).select_from(InstitutionalReviewerAssignment).where(InstitutionalReviewerAssignment.user_id == reviewer["actor_id"])) == 0, "REVIEWER_ERASURE_PARTIAL_ASSIGNMENT")
+        _require(not service.institutional_is_current(session, owner["registration_id"], now=now), "REVIEWER_ERASURE_LEGACY_AUTHORITY_SURVIVED")
+        _require(session.scalar(audit_query) == audit_before + (1 if first == "review" else 0), "REVIEWER_ERASURE_AUDIT_NOT_AGGREGATE_SERVER_CAUSE")
+    identifier = "REVIEWER_ERASURE_REVIEW_FIRST_ATOMIC" if first == "review" else "REVIEWER_ERASURE_ERASE_FIRST_ATOMIC"
+    return _row(identifier, 14)
+
+
 def _audit_oracle(factory):
     from app.models.student_authority import AuthorityAuditEvent
 
@@ -735,6 +864,8 @@ def _support_oracles(factory: sessionmaker[Session]) -> list[dict[str, Any]]:
         _constraint_oracle(factory), _guardian_proof_oracle(factory),
         _reviewer_proof_oracle(factory), _revocation_race_oracle(factory),
         _duplicate_oracle(factory), _dob_oracle(factory), _audit_oracle(factory),
+        _reviewer_erasure_oracle(factory, "review"),
+        _reviewer_erasure_oracle(factory, "erase"),
     ]
 
 

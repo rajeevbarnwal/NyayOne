@@ -2330,11 +2330,12 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
             "verification-reviewer", user_role="legal_reviewer"
         )
 
-        def review_registration(registration_id: object, version: int):
-            prepare_institutional_review(factory, registration_id=registration_id, reviewer_id=reviewer["user_id"], now=request_clock["now"])
+        def review_registration(registration_id: object, version: int, key: str):
+            # A race worker only exercises the public mutation. Fixture proof
+            # writes must finish before either competing product call starts.
             return client_for(reviewer).post(
                 "/api/v1/auth/student/verification/status",
-                headers={"Idempotency-Key": "nyay11-review-dob-authority"},
+                headers={"Idempotency-Key": key},
                 json={
                     "registration_id": str(registration_id),
                     "status": "verified",
@@ -2388,7 +2389,8 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         dob_review_request = dob_client.post(
             "/api/v1/auth/student/verification/email/request", json={}
         )
-        dob_reviewed = review_registration(dob_actor["registration_id"], 5)
+        prepare_institutional_review(factory, registration_id=dob_actor["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
+        dob_reviewed = review_registration(dob_actor["registration_id"], 5, "nyay11-review-dob-authority")
         before_verified_change = dob_client.get("/api/v1/student/profile").json()
         verified_change = dob_client.patch(
             "/api/v1/student/profile/personal",
@@ -2895,10 +2897,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 },
             )
 
+        prepare_institutional_review(factory, registration_id=owner["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
         with ThreadPoolExecutor(max_workers=2) as executor:
             email_change_future = executor.submit(change_owner_email)
             email_review_future = executor.submit(
-                review_registration, owner["registration_id"], 4
+                review_registration, owner["registration_id"], 4, "nyay11-review-email-race"
             )
             email_change_response = email_change_future.result()
             email_review_response = email_review_future.result()
@@ -2947,10 +2950,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 json=personal(4, dob="2001-01-01"),
             )
 
+        prepare_institutional_review(factory, registration_id=dob_review_actor["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
         with ThreadPoolExecutor(max_workers=2) as executor:
             dob_change_future = executor.submit(change_reviewed_dob)
             dob_review_future = executor.submit(
-                review_registration, dob_review_actor["registration_id"], 4
+                review_registration, dob_review_actor["registration_id"], 4, "nyay11-review-dob-race"
             )
             dob_change_response = dob_change_future.result()
             dob_review_response = dob_review_future.result()
