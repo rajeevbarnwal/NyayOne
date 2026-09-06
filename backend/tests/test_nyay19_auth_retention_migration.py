@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, inspect, text
 BACKEND = Path(__file__).resolve().parents[1]
 PARENT = "0019_otp_security_authority"
 HEAD = "0020_auth_retention_lifecycle"
-CURRENT_HEAD = "0023_nyay22_mentor_ceremony"
+CURRENT_HEAD = "0024_nyay11_authority_state"
 
 
 def _alembic(database: Path, *args: str) -> subprocess.CompletedProcess[str]:

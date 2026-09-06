@@ -15,7 +15,7 @@ from app.models.wave4 import OrganisationResponseRequest
 
 BACKEND = Path(__file__).resolve().parents[1]
 WAVE4_REVISION = "0012_wave4_moderation"
-HEAD_REVISION = "0023_nyay22_mentor_ceremony"
+HEAD_REVISION = "0024_nyay11_authority_state"
 PARENT = "0010_student_login_session"
 TABLES = {
     "internship_reports",

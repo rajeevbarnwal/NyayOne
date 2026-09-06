@@ -360,6 +360,7 @@ EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND = (
 )
 EXPECTED_NYAY33_POLICY_COMMAND = "python scripts/ci/test_nyay33_documentation_polish.py"
 EXPECTED_NYAY22_POLICY_COMMAND = "python scripts/ci/test_nyay22_ci_policy.py"
+EXPECTED_NYAY11_POLICY_COMMAND = "python scripts/ci/test_nyay11_ci_policy.py"
 EXPECTED_NYAY4_BROWSER_GATE_SHA256 = (
     "2792f134f7ae64c4d83a2653d2c31fe07bf1b1fb0822a7b8373c1d72827e3d27"
 )
@@ -392,7 +393,7 @@ EXPECTED_NYAY22_BROWSER_SEED_TEST_SHA256 = (
     "c22822224fcad6576fdf3097bfcb22b4cadfa6890419f94afc659bdb4e0ce939"
 )
 EXPECTED_NYAY22_POSTGRES_GATE_SHA256 = (
-    "f568912e64e886bd73e6afe39c8ece361e5b04832c4ef77305b76f1d88a1b374"
+    "b4074d921ccb16a78c68d68b1d3633355171ec7599b667e41e5f1f182de560ce"
 )
 EXPECTED_NYAY22_POSTGRES_CONTRACT_SHA256 = (
     "c9de111f70ef238d942b2492983137ea850f1b2f7d5fc3869b447b1d52d4e880"
@@ -445,10 +446,10 @@ EXPECTED_NYAY19_BROWSER_CONTRACT_TEST_SHA256 = (
 )
 EXPECTED_NYAY19_PACKAGE_COMMAND = "node scripts/nyay19-auth-lifecycle-browser.mjs"
 EXPECTED_NYAY5_BROWSER_ORCHESTRATOR_SHA256 = (
-    "066cb849ec74668544a3489044fac0b7ce5eb54274567f66de3c11ede89a4afc"
+    "284c881c90d9ce9617d6d907b1b959b4aed26f6a64c72b94baab0eb42e9f43cc"
 )
 EXPECTED_NYAY5_BROWSER_GATE_SHA256 = (
-    "278204dd1e0cee2dabe81f462026bbec5782a973c6a873894dd8f9f823a59019"
+    "5ce8b7100bd49603ff0ae97bc2f1ee4e1ab7a851a252be70854d32afb7a1fe82"
 )
 EXPECTED_NYAY5_BROWSER_CONTRACT_SHA256 = (
     "b1dbbfefc9f85ac6d96d5849bff6e7491b8826d15e6514f6695b9c7af865160e"
@@ -460,7 +461,7 @@ EXPECTED_NYAY5_BROWSER_CONTROL_SHA256 = (
     "8cd17662b5d9c2973089a3733cea17eb1eb84a079d39547f13523952148c8274"
 )
 EXPECTED_NYAY5_POSTGRES_GATE_SHA256 = (
-    "fccb114991eb5b2cb4fc02168c2fba315b800d8874508a597eaa0e880149f85b"
+    "951acff76919333e8446aed279309d887e350bcfed19c194f2991fe892ddd1c5"
 )
 EXPECTED_NYAY5_ACCEPTANCE_AGGREGATE_SHA256 = (
     "319a7aace482b04ee97af4fe6ce9ae9234bbf428f64b4d8fd8ada2b4f6923181"
@@ -731,6 +732,7 @@ EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
     "backend/scripts/nyay4_postgres_otp_gate.py",
     "backend/scripts/nyay5_postgres_profile_gate.py",
     "backend/scripts/nyay9_postgres_profile_gate.py",
+    "backend/scripts/nyay11_postgres_authority_gate.py",
     "backend/scripts/nyay16_postgres_gate.py",
     "backend/scripts/nyay17_postgres_idempotency_gate.py",
     "backend/scripts/nyay19_migrate.py",
@@ -770,7 +772,7 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "e98daba62026eea5a6bfc5529b6d1a1c1563728bdd8e672edddb7e22115f6b11"
+EXPECTED_DB_GATE_SHA256 = "b2085000e7294e051ce91c64d96a59d340fd6b85ec8da4422691d99dd64e34dd"
 EXPECTED_ISOLATED_BACKEND_PYTEST_COMMAND = (
     "env -u DATABASE_URL -u CORS_ORIGINS "
     "-u MENTOR_TERMINAL_RETENTION_SECONDS "
@@ -819,6 +821,13 @@ EXPECTED_NYAY22_DB_GATE_COMMAND = (
     'NYAY22_POSTGRES_GATE=1 "$PY" scripts/nyay22_postgres_mentor_gate.py '
     '--database-url "$DATABASE_URL" '
     "--output test-results/nyay22-postgres/summary.json"
+)
+EXPECTED_NYAY11_DB_GATE_BLOCK = (
+    'echo "== NYAY-11 guardian/institutional authority gate (PostgreSQL 16 + pgvector) =="\n'
+    "mkdir -p test-results/nyay11-postgres\n"
+    'NYAY11_POSTGRES_GATE=1 "$PY" scripts/nyay11_postgres_authority_gate.py \\\n'
+    '  --database-url "$DATABASE_URL" \\\n'
+    "  --output test-results/nyay11-postgres/summary.json\n"
 )
 EXPECTED_NYAY22_DB_GATE_STAGE = (
     'echo "== NYAY-22 mentor ceremony concurrency/lifecycle gate '
@@ -1496,6 +1505,7 @@ REQUIRED_JOB_RUNS: dict[tuple[str, str], set[str]] = {
         EXPECTED_NYAY21_PATH_TO_GO_POLICY_COMMAND,
         EXPECTED_NYAY33_POLICY_COMMAND,
         EXPECTED_NYAY22_POLICY_COMMAND,
+        EXPECTED_NYAY11_POLICY_COMMAND,
     },
     ("nyay18-frontend-namespace-gate.yml", "namespace-static-policy"): {
         "python scripts/ci/test_nyay18_namespace_boundary_doc.py",
@@ -1558,7 +1568,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
         "nyay5-profile-boundary-gate.yml",
         "required",
     ): "b54939ff87a54c12aa787cd364ef2700d6062a496fbcb08baf99730f5859e5ef",
-    ("nyayone-policy-gate.yml", "policy-contracts"): "5ac740c24bf251448ececdcdc72ff215d610830db07c54f6e1bcd41ef0310b6b",
+    ("nyayone-policy-gate.yml", "policy-contracts"): "096febd2f1fc8ae43aa5688dc01c29d4f1c1049c3ef6ec2905d19e899463366e",
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
@@ -2235,6 +2245,34 @@ def _canonical_shell(command: str) -> str:
     )
     normalized = normalized.replace('"', "").replace("'", "")
     return " ".join(normalized.split())
+
+
+def check_nyay11_db_gate_contract(path: Path = DB_GATE) -> list[str]:
+    """Require the authority stage unconditionally between the retained gates.
+
+    The complete db_gate digest additionally seals the surrounding shell. This
+    local adjacency contract rejects conditional wrappers and ignored failures
+    independently of that digest, while preserving NYAY-22's exact final tail.
+    """
+    if not path.is_file() or path.is_symlink():
+        return ["NYAY11_DB_GATE_UNAVAILABLE"]
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ["NYAY11_DB_GATE_UNREADABLE"]
+    bounded = (
+        "  --output test-results/nyay19-postgres/summary.json\n"
+        + EXPECTED_NYAY11_DB_GATE_BLOCK
+        + EXPECTED_NYAY22_DB_GATE_STAGE
+    )
+    if (
+        source.count(EXPECTED_NYAY11_DB_GATE_BLOCK) != 1
+        or source.count("scripts/nyay11_postgres_authority_gate.py") != 1
+        or source.count(bounded) != 1
+        or "set -euo pipefail\n" not in source
+    ):
+        return ["NYAY11_DB_GATE_NOT_EXACT_UNCONDITIONAL_STAGE"]
+    return []
 
 
 def check_db_gate_contract(path: Path = DB_GATE) -> list[str]:
@@ -4832,6 +4870,7 @@ def main() -> int:
             "single quarantined evidence workflow"
         )
     failures.extend(check_db_gate_contract())
+    failures.extend(check_nyay11_db_gate_contract())
     failures.extend(check_nyay4_browser_gate_contract())
     failures.extend(check_nyay22_browser_gate_contract())
     failures.extend(check_nyay22_postgres_gate_contract())

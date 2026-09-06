@@ -55,7 +55,8 @@ PINNED_HEAD = "0019_otp_security_authority"
 APPLICATION_PARENT = "0020_auth_retention_lifecycle"
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
 NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
-APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
+NYAY22_CHECKPOINT = "0023_nyay22_mentor_ceremony"
+APPLICATION_HEAD = "0024_nyay11_authority_state"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
@@ -3019,10 +3020,19 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
         )
         raw_ip_columns = len(owned_columns & {"ip", "ip_address", "raw_ip"})
 
-        # Runtime is always exercised against the current application head.
-        # The exact 0019 inventory above remains the ticket-specific migration
-        # oracle; 0020/0021 are then installed only for the current endpoint
-        # contract and removed again before testing 0019's fail-closed downgrade.
+        # Observe the historical refusal while the live revision is exactly
+        # 0019. Current authority migrations append durable aggregate records;
+        # their correct refusal to erase those records must not be bypassed to
+        # return this populated fixture to an older schema.
+        before_schema = _schema_digest(engine, tables)
+        before_rows = _tables_projection_digest(engine, tables)
+        refused = _run_alembic(scratch_url, "downgrade", PREVIOUS_REVISION)
+        historical_revision_unchanged = _current_revision(engine) == PINNED_HEAD
+        historical_schema_unchanged = _schema_digest(engine, tables) == before_schema
+        historical_rows_unchanged = _tables_projection_digest(engine, tables) == before_rows
+
+        # Runtime remains exercised on the actual application head. Preserve
+        # the legacy observations above and finish this branch forward-only.
         application_upgrade = _run_alembic(
             scratch_url, "upgrade", APPLICATION_HEAD
         )
@@ -3031,16 +3041,6 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
                 "populated probe could not install current application head"
             )
         restart = _run_populated_restart_probe(engine, populated_seed)
-        application_downgrade = _run_alembic(
-            scratch_url, "downgrade", PINNED_HEAD
-        )
-        if (
-            application_downgrade["returncode"] != 0
-            or _current_revision(engine) != PINNED_HEAD
-        ):
-            raise ProductGateFailure(
-                "populated probe could not restore the exact NYAY-4 head"
-            )
 
         with engine.connect() as connection:
             registration_value = connection.scalar(
@@ -3091,9 +3091,6 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
             except SQLAlchemyError:
                 legacy_destination_writer_rejected = True
 
-        before_schema = _schema_digest(engine, tables)
-        before_rows = _tables_projection_digest(engine, tables)
-        refused = _run_alembic(scratch_url, "downgrade", PREVIOUS_REVISION)
         return {
             "legacy_rows": legacy_rows,
             "authority_rows": authority_rows,
@@ -3123,12 +3120,48 @@ def _run_populated_migration_probe(scratch_url: str) -> dict[str, Any]:
                 "terminal_replays_zero_delta"
             ],
             "downgrade_rejected": refused["returncode"] != 0,
-            "revision_unchanged": _current_revision(engine) == PINNED_HEAD,
-            "schema_unchanged": _schema_digest(engine, tables) == before_schema,
-            "rows_unchanged": _tables_projection_digest(engine, tables) == before_rows,
+            "revision_unchanged": historical_revision_unchanged,
+            "schema_unchanged": historical_schema_unchanged,
+            "rows_unchanged": historical_rows_unchanged,
         }
     finally:
         engine.dispose()
+
+
+def _empty_application_roundtrip(scratch_url: str) -> bool:
+    """Keep current-head rollback proof on an independently owned empty DB."""
+    from tempfile import TemporaryDirectory
+
+    def prove(empty_url: str) -> bool:
+        revisions = []
+        checks = []
+        empty_engine = create_engine(empty_url, poolclass=NullPool)
+        try:
+            for verb, revision in (
+                ("upgrade", APPLICATION_HEAD), ("downgrade", PINNED_HEAD),
+                ("upgrade", APPLICATION_HEAD),
+            ):
+                result = _run_alembic(empty_url, verb, revision)
+                if result["returncode"] != 0:
+                    return False
+                revisions.append(_current_revision(empty_engine))
+                if revision == APPLICATION_HEAD:
+                    checks.append(_run_alembic(empty_url, "check")["returncode"] == 0)
+            return revisions == [APPLICATION_HEAD, PINNED_HEAD, APPLICATION_HEAD] and checks == [True, True]
+        finally:
+            empty_engine.dispose()
+
+    parsed = make_url(scratch_url)
+    if parsed.get_backend_name() == "sqlite":
+        with TemporaryDirectory(prefix="nyay4-empty-roundtrip-") as temporary:
+            return prove(f"sqlite+pysqlite:///{Path(temporary) / 'empty.db'}")
+    base = _safe_local_postgres_url(scratch_url)
+    name = f"{SCRATCH_PREFIX}empty_{uuid.uuid4().hex[:12]}"
+    empty_url = _create_scratch(base, name)
+    try:
+        return prove(empty_url)
+    finally:
+        _drop_scratch(base, name)
 
 
 def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
@@ -3195,42 +3228,6 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
             )
             == parent_rows
         )
-        # The sealed NYAY-4 lifecycle remains exactly 0018 -> 0019, but drift
-        # must be measured against the current ORM at the repository head.
-        # Prove that 0020 is installable and drift-free, then return to a
-        # byte-equivalent 0019 before exercising the historical downgrade.
-        application_upgrade = _run_alembic(
-            scratch_url, "upgrade", APPLICATION_HEAD
-        )
-        application_check = (
-            _run_alembic(scratch_url, "check")
-            if application_upgrade["returncode"] == 0
-            else {"returncode": -1}
-        )
-        application_downgrade = (
-            _run_alembic(scratch_url, "downgrade", PINNED_HEAD)
-            if application_upgrade["returncode"] == 0
-            else {"returncode": -1}
-        )
-        application_head_compatible = bool(
-            application_upgrade["returncode"] == 0
-            and application_check["returncode"] == 0
-            and application_downgrade["returncode"] == 0
-            and _current_revision(engine) == PINNED_HEAD
-            and _schema_digest(engine, changed_tables) == head_schema
-            and _row_projection_digest(
-                engine, "student_registrations", registration_columns
-            )
-            == parent_rows
-        )
-        if (
-            application_upgrade["returncode"] == 0
-            and application_downgrade["returncode"] != 0
-        ):
-            raise ProductGateFailure(
-                "current application head could not return to exact 0019"
-            )
-
         import importlib
 
         historical_parent = importlib.import_module(
@@ -3351,6 +3348,25 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
             == parent_rows
         )
 
+        # All historical assertions above observe their exact live revision.
+        # An empty independent DB retains the current-head up/down/up proof;
+        # the populated branch then proves a forward upgrade plus ORM drift
+        # without trying to delete NYAY-11's durable mapping audit.
+        historical_head_revision = _current_revision(engine)
+        empty_roundtrip = _empty_application_roundtrip(scratch_url)
+        application_upgrade = _run_alembic(scratch_url, "upgrade", APPLICATION_HEAD)
+        application_check = (
+            _run_alembic(scratch_url, "check")
+            if application_upgrade["returncode"] == 0 else {"returncode": -1}
+        )
+        application_head_compatible = bool(
+            empty_roundtrip
+            and application_upgrade["returncode"] == 0
+            and application_check["returncode"] == 0
+            and _current_revision(engine) == APPLICATION_HEAD
+            and _row_projection_digest(engine, "student_registrations", registration_columns) == parent_rows
+        )
+
         from alembic.config import Config
         from alembic.script import ScriptDirectory
 
@@ -3359,7 +3375,7 @@ def _run_migration_lifecycle_probe(scratch_url: str) -> dict[str, Any]:
         heads = ScriptDirectory.from_config(config).get_heads()
         return {
             "start_revision": PREVIOUS_REVISION,
-            "head_revision": _current_revision(engine),
+            "head_revision": historical_head_revision,
             "single_head": heads == [APPLICATION_HEAD],
             "upgrade": bool(upgrade["returncode"] == 0 and upgrade_rows_preserved),
             "downgrade": downgrade_exact,
@@ -3424,15 +3440,18 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay22_checkpoint = scripts.get_revision(NYAY22_CHECKPOINT)
         nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
         nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay22_checkpoint is None
             or nyay9_checkpoint is None
             or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != nyay9_checkpoint.revision
+            or application.down_revision != nyay22_checkpoint.revision
+            or nyay22_checkpoint.down_revision != nyay9_checkpoint.revision
             or nyay9_checkpoint.down_revision != nyay5_checkpoint.revision
             or nyay5_checkpoint.down_revision != retention.revision
             or retention.down_revision != PINNED_HEAD

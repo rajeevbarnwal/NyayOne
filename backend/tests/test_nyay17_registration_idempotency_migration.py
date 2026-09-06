@@ -24,7 +24,7 @@ HEAD = "0018_registration_idempotency"
 OTP_HEAD = "0019_otp_security_authority"
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
 NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
-CURRENT_HEAD = "0023_nyay22_mentor_ceremony"
+CURRENT_HEAD = "0024_nyay11_authority_state"
 LEDGER = "registration_idempotency_records"
 TEST_ENV = {
     "APP_ENV": "testing",
@@ -233,9 +233,12 @@ def test_revision_chain_is_single_forward_head():
     nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
     assert nyay9_checkpoint is not None
     assert nyay9_checkpoint.down_revision == nyay5_checkpoint.revision
+    nyay22_checkpoint = scripts.get_revision("0023_nyay22_mentor_ceremony")
+    assert nyay22_checkpoint is not None
+    assert nyay22_checkpoint.down_revision == nyay9_checkpoint.revision
     current = scripts.get_revision(CURRENT_HEAD)
     assert current is not None
-    assert current.down_revision == nyay9_checkpoint.revision
+    assert current.down_revision == nyay22_checkpoint.revision
     assert scripts.get_heads() == [CURRENT_HEAD]
 
 

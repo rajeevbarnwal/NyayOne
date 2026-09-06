@@ -27,6 +27,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import ActorContext, Role, get_actor_context
 from app.core.config import settings
 from app.core.crypto import (
@@ -554,11 +555,11 @@ def list_credential_issuers(
     }
 
 
-@router.post("/credentials", status_code=status.HTTP_201_CREATED)
+@router.post("/credentials", status_code=status.HTTP_201_CREATED, openapi_extra=required_idempotency_header())
 def create_credential(
     payload: CredentialCreate,
     request: Request,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", include_in_schema=False)] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -952,12 +953,12 @@ async def add_evidence(
     }
 
 
-@router.post("/credentials/{credential_id}/share-projections")
+@router.post("/credentials/{credential_id}/share-projections", openapi_extra=required_idempotency_header())
 def create_share_projection(
     credential_id: uuid.UUID,
     payload: ShareProjectionCreate,
     request: Request,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", include_in_schema=False)] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -1088,12 +1089,12 @@ def _issuer_grant(
     return grant
 
 
-@router.post("/issuer/credentials/{credential_id}/verify")
+@router.post("/issuer/credentials/{credential_id}/verify", openapi_extra=required_idempotency_header())
 def verify_credential(
     credential_id: uuid.UUID,
     payload: VerifyCommand,
     request: Request,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", include_in_schema=False)] = None,
     actor: ActorContext = Depends(_require_authenticated),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -1205,12 +1206,12 @@ def _raw_token(projection_id: uuid.UUID, owner_id: uuid.UUID, idem: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-@router.post("/credentials/{credential_id}/verification-tokens")
+@router.post("/credentials/{credential_id}/verification-tokens", openapi_extra=required_idempotency_header())
 def create_verification_token(
     credential_id: uuid.UUID,
     payload: VerificationTokenCreate,
     request: Request,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", include_in_schema=False)] = None,
     actor: ActorContext = Depends(_require_student),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -1534,12 +1535,12 @@ def public_verification(
     }
 
 
-@router.post("/issuer/credentials/{credential_id}/revoke")
+@router.post("/issuer/credentials/{credential_id}/revoke", openapi_extra=required_idempotency_header())
 def revoke_credential(
     credential_id: uuid.UUID,
     payload: RevokeCommand,
     request: Request,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", include_in_schema=False)] = None,
     actor: ActorContext = Depends(_require_authenticated),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:

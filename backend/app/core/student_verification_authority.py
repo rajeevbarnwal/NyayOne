@@ -17,8 +17,23 @@ class _ProfileRow(Protocol):
 def has_authoritative_institutional_email_proof(
     verification: _VerificationRow | None,
     profile: _ProfileRow | None,
+    *, now=None,
 ) -> bool:
     """Accept only a positive proof bound to the currently persisted email."""
+
+    # New authority rows have a stricter provider+assignment boundary; old
+    # mutable flags cannot bypass its expiry, revocation, or identity checks.
+    if verification is not None:
+        from datetime import datetime, timezone
+        from sqlalchemy import inspect
+        from sqlalchemy.orm import object_session
+        from app.models.student_authority import AuthorityState
+        from app.services.student_authority import institutional_is_current
+        if inspect(verification, raiseerr=False) is not None:
+            session = object_session(verification)
+            registration_id = getattr(verification, "registration_id", None)
+            if session is not None and registration_id is not None and session.get(AuthorityState, registration_id) is not None:
+                return institutional_is_current(session, registration_id, now=now or datetime.now(timezone.utc))
 
     if (
         verification is None

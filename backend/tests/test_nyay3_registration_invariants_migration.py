@@ -504,7 +504,7 @@ def test_historical_revision_is_not_repository_head():
         "script_location", str(BACKEND / "app/db/migrations")
     )
     script = ScriptDirectory.from_config(config)
-    assert script.get_current_head() == "0023_nyay22_mentor_ceremony"
+    assert script.get_current_head() == "0024_nyay11_authority_state"
     assert HEAD != script.get_current_head()
     assert script.get_revision(HEAD).down_revision == PARENT
 

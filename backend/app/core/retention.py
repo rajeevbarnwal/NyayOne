@@ -902,6 +902,14 @@ def _anonymise_locked(
         original_mobile_hash=original_mobile_hash,
         mode="anonymise",
     )
+    # Keep OTP/LoginAttempt -> User -> AuthSession before NYAY-11 dependent
+    # authority rows. Review holds the same reviewer User/session boundary
+    # before its email proofs and target state; reversing that order deadlocks
+    # reviewer erasure against an in-flight institutional review. This helper
+    # has not deleted User/registration, so their proof links remain available
+    # for explicit revocation and aggregate audit in this same transaction.
+    from app.services.student_authority import erase_owner_authority
+    erase_owner_authority(session, reg.user_id, now=datetime.now(timezone.utc))
     reg.mobile_hash = f"{ANONYMISED}:{reg.id}"  # keep uniqueness, drop linkability
     reg.mobile_ct = ANONYMISED
     reg.dob_hash = f"{ANONYMISED}:{reg.id}"
@@ -1047,6 +1055,12 @@ def _delete_locked(
         original_mobile_hash=reg.mobile_hash,
         mode="delete",
     )
+    # The security graph acquires the existing OTP/LoginAttempt -> User ->
+    # AuthSession order without deleting User/registration. Retire dependent
+    # authority only after that reviewer serialization boundary, and before
+    # User deletion can SET NULL the links needed for revocation/audit.
+    from app.services.student_authority import erase_owner_authority
+    erase_owner_authority(session, reg.user_id, now=datetime.now(timezone.utc))
 
     from app.models.registration import (
         Consent,
