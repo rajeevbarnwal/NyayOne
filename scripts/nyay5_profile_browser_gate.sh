@@ -145,6 +145,13 @@ for command_name in "$PYTHON" node npm curl; do
   }
 done
 
+# Mandatory real-Chromium regression of the extracted census function. This
+# precedes the production producer and cannot turn a failed seed into a pass.
+(
+  cd "$ROOT/frontend"
+  node --test scripts/lib/nyay5-visual-census-race.browser-contract.mjs
+) >"$OUTPUT_DIR/census-contract-results.tap" 2>&1
+
 read -r API_PORT WEB_PORT OTP_PORT < <("$PYTHON" - <<'PY'
 import socket
 

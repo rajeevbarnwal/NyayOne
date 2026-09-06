@@ -16,6 +16,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import ActorContext, Role, get_actor_context
 from app.core.config import settings
 from app.core.crypto import encrypt, key_version, keyed_hash
@@ -274,10 +275,10 @@ def _validate_submission(session: Session, row: InternshipReport) -> list[tuple[
     return errors
 
 
-@router.post("", response_model=InternshipReportOut, status_code=201)
+@router.post("", response_model=InternshipReportOut, status_code=201, openapi_extra=required_idempotency_header())
 def create_report(
     payload: ReportDraftCreate,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(_require_student),
 ) -> InternshipReportOut:

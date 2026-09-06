@@ -78,7 +78,8 @@ PINNED_HEAD = "0018_registration_idempotency"
 # checkpoint so advancing the repository head cannot erase its chain oracle.
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
 NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
-APPLICATION_HEAD = "0023_nyay22_mentor_ceremony"
+NYAY22_CHECKPOINT = "0023_nyay22_mentor_ceremony"
+APPLICATION_HEAD = "0024_nyay11_authority_state"
 REGISTER_PATH = "/api/v1/auth/student/register"
 REGISTRATION_ACCEPTED_STATUS = 202
 RECENT_PROBE_HISTORY_AGE_DAYS = 2

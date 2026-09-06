@@ -35,6 +35,8 @@ EXPECTED_TABLES = {
 # would weaken the one-row-per-registration contract without adding safety.
 PRIMARY_KEY_COLUMNS = {
     "registration_dob_reconciliations": ("registration_id",),
+    "student_authority_states": ("registration_id",),
+    "institutional_authority_email_proofs": ("user_id",),
 }
 
 

@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import ActorContext, get_actor_context
 from app.db.session import get_session
 from app.schemas.moderation import (
@@ -70,11 +71,11 @@ def moderation_case(
         _raise(error)
 
 
-@router.post("/internship-reports/{report_id}/actions", response_model=ModerationActionOut)
+@router.post("/internship-reports/{report_id}/actions", response_model=ModerationActionOut, openapi_extra=required_idempotency_header())
 def moderation_action(
     report_id: uuid.UUID,
     payload: ModerationActionIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> ModerationActionOut:
@@ -84,10 +85,10 @@ def moderation_action(
         _raise(error)
 
 
-@router.post("/risk-clusters", response_model=RiskClusterOut, status_code=201)
+@router.post("/risk-clusters", response_model=RiskClusterOut, status_code=201, openapi_extra=required_idempotency_header())
 def risk_cluster_create(
     payload: RiskClusterCreate,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> RiskClusterOut:
@@ -126,11 +127,12 @@ def risk_cluster_approval(
     "/internship-reports/{report_id}/identity-access-requests",
     response_model=IdentityAccessRequestOut,
     status_code=201,
+    openapi_extra=required_idempotency_header(),
 )
 def identity_access_request_create(
     report_id: uuid.UUID,
     payload: IdentityAccessRequestIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> IdentityAccessRequestOut:
@@ -143,11 +145,12 @@ def identity_access_request_create(
 @router.post(
     "/identity-access-requests/{request_id}/approvals",
     response_model=IdentityAccessRequestOut,
+    openapi_extra=required_idempotency_header(),
 )
 def identity_access_request_approval(
     request_id: uuid.UUID,
     payload: IdentityAccessApprovalIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> IdentityAccessRequestOut:

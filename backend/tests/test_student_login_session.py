@@ -1421,7 +1421,11 @@ def test_all_cookie_mutations_require_origin_and_safe_read_does_not(ctx):
     assert logged_out.status_code == 200
 
 
-def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
+def test_reviewer_authority_is_recorded_in_append_only_aggregate_audit(ctx):
+    # Locked P6 supersedes owner-linked review audit rows: preserve exact event
+    # counts/transition provenance, but never retain actor/registration IDs.
+    from app.models.student_authority import AuthorityAuditEvent
+    from scripts.nyay11_authority_gate_fixtures import prepare_institutional_review
     client, _, factory, sender = ctx
     registration_id, student_token = _signup_session(
         client, sender, mobile="9876543210"
@@ -1472,8 +1476,9 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
         )
         session.commit()
 
+    prepare_institutional_review(factory, registration_id=uuid.UUID(registration_id), reviewer_id=reviewer_id, now=now)
     _use_session_cookie(client, reviewer_token)
-    for target in ("in_review", "verified"):
+    for target in ("verified",):
         changed = client.post(
             "/api/v1/auth/student/verification/status",
             json={
@@ -1481,7 +1486,7 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
                 "status": target,
                 "expected_profile_version": reviewed_version,
             },
-            headers={"Origin": trusted},
+            headers={"Origin": trusted, "Idempotency-Key": "scoped-review-success-0001"},
         )
         assert changed.status_code == 200
         assert changed.json() == {
@@ -1493,25 +1498,24 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
     with factory() as session:
         events = list(
             session.scalars(
-                select(AuditEvent)
+                select(AuthorityAuditEvent)
                 .where(
-                    AuditEvent.action
-                    == "student.verification.status_changed"
+                    AuthorityAuditEvent.authority_class
+                    == "assigned_institutional_reviewer"
                 )
-                .order_by(AuditEvent.created_at, AuditEvent.id)
+                .order_by(AuthorityAuditEvent.occurred_at, AuthorityAuditEvent.id)
             )
         )
-        assert len(events) == 2
-        assert all(event.actor_user_id == reviewer_id for event in events)
-        assert all(event.actor_role == "legal_reviewer" for event in events)
-        assert [event.before_state for event in events] == [
-            {"status": "pending"},
-            {"status": "in_review"},
-        ]
-        assert [event.after_state for event in events] == [
-            {"status": "in_review", "profile_version": 3},
-            {"status": "verified", "profile_version": 3},
-        ]
+        assert len(events) == 1
+        assert events[0].transition_code == "PENDING_TO_VERIFIED"
+        assert set(AuthorityAuditEvent.__table__.columns.keys()) == {
+            "id", "actor_class", "authority_class", "purpose_code",
+            "transition_code", "policy_version", "occurred_at",
+        }
+        with pytest.raises(ValueError, match="authority_audit_append_only"):
+            events[0].purpose_code = "guardian"
+            session.flush()
+        session.rollback()
         verification = session.scalar(
             select(StudentVerification).where(
                 StudentVerification.registration_id
@@ -1530,6 +1534,8 @@ def test_reviewer_authority_and_identity_are_recorded_in_append_only_audit(ctx):
 def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
     ctx, mutated_section
 ):
+    from app.models.student_authority import AuthorityAuditEvent
+    from scripts.nyay11_authority_gate_fixtures import prepare_institutional_review
     client, _, factory, sender = ctx
     registration_id, student_token = _signup_session(
         client, sender, mobile="9876543210"
@@ -1565,6 +1571,7 @@ def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
         reviewer = User(role="legal_reviewer", status="active")
         session.add(reviewer)
         session.flush()
+        reviewer_id = reviewer.id
         reviewer_token = f"stale-reviewer-{mutated_section}"
         session.add(
             AuthSession(
@@ -1575,8 +1582,22 @@ def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
                 last_seen_at=now,
             )
         )
+        registration = session.get(StudentRegistration, uuid.UUID(registration_id))
+        profile = session.scalar(select(StudentProfile).where(StudentProfile.registration_id == registration.id))
+        registration.institution_ref = registration.institution_ref or profile.college or "example"
+        if profile.institutional_email_hash is None:
+            # Metadata conflict is observable only to a genuinely scoped
+            # reviewer; provider ceremony itself is tested by NYAY-11.
+            from app.core.crypto import encrypt
+            profile.institutional_email_hash = keyed_hash("student@example.edu")
+            profile.institutional_email_ct = encrypt("student@example.edu")
         session.commit()
 
+    prepare_institutional_review(factory, registration_id=uuid.UUID(registration_id), reviewer_id=reviewer_id, now=now)
+    with factory() as session:
+        audit_count_before = session.scalar(select(func.count()).select_from(AuthorityAuditEvent))
+        status_before = session.scalar(select(StudentVerification.status).where(StudentVerification.registration_id == uuid.UUID(registration_id)))
+        assert status_before == "in_review"
     _use_session_cookie(client, reviewer_token)
     stale = client.post(
         "/api/v1/auth/student/verification/status",
@@ -1585,7 +1606,7 @@ def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
             "status": "verified",
             "expected_profile_version": stale_version,
         },
-        headers={"Origin": trusted},
+        headers={"Origin": trusted, "Idempotency-Key": "stale-scoped-review-0001"},
     )
     assert stale.status_code == 409
     assert stale.json()["detail"] == {
@@ -1600,7 +1621,8 @@ def test_stale_reviewer_cannot_verify_after_identity_or_email_mutation(
                 == uuid.UUID(registration_id)
             )
         )
-        assert verification is not None and verification.status == "pending"
+        assert verification is not None and verification.status == status_before
+        assert session.scalar(select(func.count()).select_from(AuthorityAuditEvent)) == audit_count_before
         assert session.scalar(
             select(func.count()).select_from(AuditEvent).where(
                 AuditEvent.action == "student.verification.status_changed"

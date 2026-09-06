@@ -73,7 +73,7 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: ceremony/session authority graph.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0023_nyay22_mentor_ceremony"
+HEAD_REVISION = "0024_nyay11_authority_state"
 POST_WAVE2_TABLES = {
     "login_attempts",
     "auth_sessions",
@@ -133,6 +133,13 @@ POST_WAVE2_TABLES = {
     "mentor_rate_buckets",
     "mentor_audit_links",
     "mentor_retention_blocked_graphs",
+    "student_authority_states",
+    "guardian_authority_invitations",
+    "institutional_authority_email_proofs",
+    "institutional_reviewer_assignments",
+    "student_authority_mutations",
+    "student_authority_audit_events",
+    "student_authority_notifications",
 }
 
 
@@ -140,7 +147,9 @@ def test_native_wave2_gate_tracks_authenticated_application_head():
     source = (BACKEND / "scripts/wave2_postgres_gate.py").read_text(
         encoding="utf-8"
     )
-    assert f'HEAD = "{HEAD_REVISION}"' in source
+    from scripts.wave2_postgres_gate import HEAD
+    assert HEAD == HEAD_REVISION
+    assert "HEAD = APPLICATION_HEAD_REVISION" in source
 
 # Pinned on purpose: renaming a Wave 2 table must break this list, not silently
 # pass because the assertion was derived from the same source as the code.

@@ -96,7 +96,7 @@ def test_historical_lifecycle_and_application_head_are_exact():
             / gate.NYAY5_CHECKPOINT_FILENAME
         ).read_bytes()
     ).hexdigest()
-    assert gate.APPLICATION_HEAD == "0023_nyay22_mentor_ceremony"
+    assert gate.APPLICATION_HEAD == "0024_nyay11_authority_state"
     assert gate.NYAY9_CHECKPOINT == "0022_nyay9_owner_profile_api"
     assert gate.NYAY9_CHECKPOINT_SHA256 == hashlib.sha256(
         (
@@ -110,6 +110,9 @@ def test_historical_lifecycle_and_application_head_are_exact():
     ).hexdigest()
     assert scripts.get_heads() == [gate.APPLICATION_HEAD]
     assert scripts.get_revision(gate.APPLICATION_HEAD).down_revision == (
+        gate.NYAY22_CHECKPOINT
+    )
+    assert scripts.get_revision(gate.NYAY22_CHECKPOINT).down_revision == (
         gate.NYAY9_CHECKPOINT
     )
     assert scripts.get_revision(gate.NYAY9_CHECKPOINT).down_revision == (
@@ -189,17 +192,18 @@ def test_frozen_lifecycle_validates_exact_release_not_current_metadata_drift():
         assert authority in release
 
 
-def test_immutable_migration_inventory_is_pinned_through_0019():
-    assert len(gate.HISTORICAL_MIGRATION_SHA256) == 19
+def test_immutable_migration_inventory_preserves_historical_and_mentor_bytes():
+    assert len(gate.HISTORICAL_MIGRATION_SHA256) == 20
     assert tuple(gate.HISTORICAL_MIGRATION_SHA256)[0] == "0001_initial_pgvector.py"
     assert tuple(gate.HISTORICAL_MIGRATION_SHA256)[-1] == (
-        "0019_otp_security_authority.py"
+        "0023_nyay22_mentor_ceremony.py"
     )
     assert tuple(gate.POST_LEDGER_HISTORICAL_SHA256) == (
         "0016_dob_hash_reconcile.py",
         "0017_registration_invariants.py",
         "0018_registration_idempotency.py",
         "0019_otp_security_authority.py",
+        "0023_nyay22_mentor_ceremony.py",
     )
     assert _historical_migration_bytes_unchanged()
     assert _historical_migration_inventory() == {

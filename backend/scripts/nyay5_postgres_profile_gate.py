@@ -1483,6 +1483,8 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         from app.services import login_service, profile_service
         from app.services.tutoring import attendance as attendance_service
         from app.services.otp_sender import CapturingSender
+        from app.models.student_authority import AuthorityAuditEvent
+        from scripts.nyay11_authority_gate_fixtures import prepare_institutional_review
 
         factory = sessionmaker(
             bind=engine,
@@ -2328,9 +2330,12 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
             "verification-reviewer", user_role="legal_reviewer"
         )
 
-        def review_registration(registration_id: object, version: int):
+        def review_registration(registration_id: object, version: int, key: str):
+            # A race worker only exercises the public mutation. Fixture proof
+            # writes must finish before either competing product call starts.
             return client_for(reviewer).post(
                 "/api/v1/auth/student/verification/status",
+                headers={"Idempotency-Key": key},
                 json={
                     "registration_id": str(registration_id),
                     "status": "verified",
@@ -2384,7 +2389,8 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         dob_review_request = dob_client.post(
             "/api/v1/auth/student/verification/email/request", json={}
         )
-        dob_reviewed = review_registration(dob_actor["registration_id"], 5)
+        prepare_institutional_review(factory, registration_id=dob_actor["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
+        dob_reviewed = review_registration(dob_actor["registration_id"], 5, "nyay11-review-dob-authority")
         before_verified_change = dob_client.get("/api/v1/student/profile").json()
         verified_change = dob_client.patch(
             "/api/v1/student/profile/personal",
@@ -2891,10 +2897,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 },
             )
 
+        prepare_institutional_review(factory, registration_id=owner["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
         with ThreadPoolExecutor(max_workers=2) as executor:
             email_change_future = executor.submit(change_owner_email)
             email_review_future = executor.submit(
-                review_registration, owner["registration_id"], 4
+                review_registration, owner["registration_id"], 4, "nyay11-review-email-race"
             )
             email_change_response = email_change_future.result()
             email_review_response = email_review_future.result()
@@ -2943,10 +2950,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 json=personal(4, dob="2001-01-01"),
             )
 
+        prepare_institutional_review(factory, registration_id=dob_review_actor["registration_id"], reviewer_id=reviewer["user_id"], now=request_clock["now"])
         with ThreadPoolExecutor(max_workers=2) as executor:
             dob_change_future = executor.submit(change_reviewed_dob)
             dob_review_future = executor.submit(
-                review_registration, dob_review_actor["registration_id"], 4
+                review_registration, dob_review_actor["registration_id"], 4, "nyay11-review-dob-race"
             )
             dob_change_response = dob_change_future.result()
             dob_review_response = dob_review_future.result()
@@ -3805,6 +3813,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
             target: Mapping[str, object], reviewer_actor: Mapping[str, object]
         ) -> tuple[object, ...]:
             with factory() as session:
+                # NYAY-11 P6 supersedes actor-linked review audits with an
+                # exact immutable aggregate inventory, retaining the +1/0 race.
+                authority_audit_allowlist = {"id", "actor_class", "authority_class", "purpose_code", "transition_code", "policy_version", "occurred_at"}
+                if set(AuthorityAuditEvent.__table__.columns.keys()) != authority_audit_allowlist or AuthorityAuditEvent.__table__.foreign_keys:
+                    raise ProductGateFailure("review authority aggregate audit shape failed")
                 verification = session.scalar(
                     select(StudentVerification).where(
                         StudentVerification.registration_id
@@ -3813,10 +3826,11 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 )
                 audit_count = int(
                     session.scalar(
-                        select(func.count(AuditEvent.id)).where(
-                            AuditEvent.actor_user_id == reviewer_actor["user_id"],
-                            AuditEvent.action
-                            == "student.verification.status_changed",
+                        select(func.count(AuthorityAuditEvent.id)).where(
+                            AuthorityAuditEvent.purpose_code == "institutional",
+                            AuthorityAuditEvent.transition_code == "PENDING_TO_VERIFIED",
+                            AuthorityAuditEvent.authority_class == "assigned_institutional_reviewer",
+                            AuthorityAuditEvent.actor_class == "reviewer",
                         )
                     )
                     or 0
@@ -3842,12 +3856,15 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         reviewer_mutation_target = seed_reviewer_target(
             "reviewer-mutation-target"
         )
+        for reviewer_actor, target in ((reviewer_lifecycle_actor, reviewer_lifecycle_target), (reviewer_mutation_actor, reviewer_mutation_target)):
+            prepare_institutional_review(factory, registration_id=target["registration_id"], reviewer_id=reviewer_actor["user_id"], now=request_clock["now"])
 
         def reviewer_effect(
             reviewer_actor: Mapping[str, object], target: Mapping[str, object]
         ):
             return client_for(reviewer_actor).post(
                 "/api/v1/auth/student/verification/status",
+                headers={"Idempotency-Key": "nyay11-review-" + str(target["registration_id"])},
                 json={
                     "registration_id": str(target["registration_id"]),
                     "status": "verified",
@@ -4619,6 +4636,25 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         engine.dispose()
 
 
+def _reviewer_authority_source_exact(value: object) -> bool:
+    """Bind compatibility admission to its exact scoped, cached response owner."""
+    if not isinstance(value, tuple) or len(value) != 2:
+        return False
+    wrapper, service = value
+    return bool(
+        isinstance(wrapper, str)
+        and isinstance(service, str)
+        and "Depends(_require_verification_reviewer)" in wrapper
+        and "lock_authority_for_review" in wrapper
+        and "result = student_authority.review(" in wrapper
+        and "expected_profile_version=payload.expected_profile_version" in wrapper
+        and "return result" in wrapper
+        and "if expected_profile_version is not None:" in service
+        and "return _finish(session, record, {" in service
+        and '"owner_projection_invalidated": True' in service
+    )
+
+
 def _seeded_mutant_results() -> dict[str, bool]:
     """Kill each named mutant through an actual input, fixture, or source seam.
 
@@ -5034,23 +5070,21 @@ def _seeded_mutant_results() -> dict[str, bool]:
         },
     )
 
-    reviewer_source = pyinspect.getsource(auth_student.verification_transition)
+    from app.services import student_authority
 
-    def reviewer_authority_exact(value: object) -> bool:
-        return bool(
-            isinstance(value, str)
-            and "Depends(_require_verification_reviewer)" in value
-            and "lock_authority_for_review" in value
-            and "owner_projection_invalidated" in value
-        )
+    reviewer_source = pyinspect.getsource(auth_student.verification_transition)
+    reviewer_service_source = pyinspect.getsource(student_authority.review)
 
     results["ALLOW-STUDENT-SELF-VERIFICATION"] = actual_fixture_mutation(
-        reviewer_authority_exact,
-        reviewer_source,
-        source_mutant(
-            reviewer_source,
-            "Depends(_require_verification_reviewer)",
-            "Depends(_require_student)",
+        _reviewer_authority_source_exact,
+        (reviewer_source, reviewer_service_source),
+        (
+            source_mutant(
+                reviewer_source,
+                "Depends(_require_verification_reviewer)",
+                "Depends(_require_student)",
+            ),
+            reviewer_service_source,
         ),
     )
 

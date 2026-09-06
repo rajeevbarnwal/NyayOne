@@ -25,7 +25,7 @@ from app.services.internship_service import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEAD = "0023_nyay22_mentor_ceremony"
+HEAD = "0024_nyay11_authority_state"
 PARENT = "0013_wave5_calendar_interop"
 
 
