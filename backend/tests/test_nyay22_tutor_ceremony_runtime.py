@@ -759,6 +759,99 @@ def test_live_session_rejects_cross_linked_or_stale_authority_graph(
         assert db.get(MentorSession, session_id).last_seen_at == previous_touch
 
 
+def _pin_rotation_rate_clock(monkeypatch: pytest.MonkeyPatch) -> list[datetime]:
+    """Control rate-budget time only; keep the real limiter and authority checks."""
+    clock = [datetime.now(timezone.utc)]
+    consume = mentor_ceremony._consume_rate_budget
+
+    def consume_at_fixture_time(db, **kwargs):
+        if kwargs["operation"] == "rotate":
+            kwargs["now"] = clock[0]
+        return consume(db, **kwargs)
+
+    monkeypatch.setattr(mentor_ceremony, "_consume_rate_budget", consume_at_fixture_time)
+    return clock
+
+
+def test_same_window_rotation_fixture_survives_wall_clock_rollover(
+    ceremony_ctx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The existing assertion must not depend on an implicit wall-clock bucket."""
+    monkeypatch.setattr(settings, "mentor_rate_window_seconds", 60)
+    epoch = int(datetime.now(timezone.utc).timestamp()) // 60 * 60
+    before = datetime.fromtimestamp(epoch + 59, tz=timezone.utc)
+    consume = mentor_ceremony._consume_rate_budget
+    calls = []
+
+    def consume_with_wall_rollover(db, **kwargs):
+        if kwargs["operation"] == "rotate":
+            calls.append(kwargs.get("now"))
+            # Model the CI schedule only if the fixture leaves time implicit.
+            if kwargs.get("now") is None:
+                kwargs["now"] = before + timedelta(seconds=int(len(calls) >= 3))
+        return consume(db, **kwargs)
+
+    monkeypatch.setattr(mentor_ceremony, "_consume_rate_budget", consume_with_wall_rollover)
+    test_rotation_has_stable_budget_and_finite_generation_ceiling(ceremony_ctx, monkeypatch)
+    assert len(calls) >= 4
+    assert all(value is not None and value == calls[0] for value in calls)
+
+
+def test_rotation_rollover_refreshes_only_the_new_window_budget(
+    ceremony_ctx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new bucket grants two rotations, not unlimited or reset authority."""
+    pin_clock = globals().get("_pin_rotation_rate_clock")
+    assert callable(pin_clock), "ROTATION_RATE_CLOCK_FIXTURE_MISSING"
+    client, factory = ceremony_ctx
+    ids = _seed_graph(factory)
+    assert _initiate(client, ids["bootstrap"]).status_code == 202
+    assert _verify_and_exchange(client, factory, ids).status_code == 201
+    monkeypatch.setattr(settings, "mentor_rate_window_seconds", 60)
+    monkeypatch.setattr(settings, "mentor_rate_max_requests", 2)
+    clock = pin_clock(monkeypatch)
+    epoch = int(clock[0].timestamp()) // 60 * 60
+    clock[0] = datetime.fromtimestamp(epoch + 59, tz=timezone.utc)
+
+    def rotate(key):
+        return client.post(
+            "/api/v1/auth/mentor/session/rotate",
+            headers={"Idempotency-Key": key},
+            json={"expectedSessionState": "active", "purposeCode": "student_guidance",
+                  "reasonCode": "routine_rotation"},
+        )
+
+    for index in range(2):
+        assert rotate(f"rollover-before-key-{index:08d}").status_code == 200
+    with factory() as db:
+        bucket = db.scalar(select(MentorRateBucket).where(MentorRateBucket.operation == "rotate"))
+        assert bucket is not None and bucket.count == 2
+        scope = bucket.scope_hash
+    denied = rotate("rollover-before-denied-key-000001")
+    assert denied.status_code == 429
+    assert denied.json()["detail"]["code"] == "RATE_LIMITED"
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(MentorSession)) == 3
+
+    clock[0] += timedelta(seconds=1)
+    for index in range(2):
+        assert rotate(f"rollover-after-key-{index:08d}").status_code == 200
+    denied = rotate("rollover-after-denied-key-0000001")
+    assert denied.status_code == 429
+    assert denied.json()["detail"]["code"] == "RATE_LIMITED"
+    with factory() as db:
+        buckets = list(db.scalars(select(MentorRateBucket).where(
+            MentorRateBucket.operation == "rotate", MentorRateBucket.scope_hash == scope
+        ).order_by(MentorRateBucket.window_started_at)))
+        assert len(buckets) == 2
+        assert [row.count for row in buckets] == [2, 2]
+        assert (buckets[1].window_started_at - buckets[0].window_started_at).total_seconds() == 60
+        sessions = list(db.scalars(select(MentorSession)))
+        assert len(sessions) == 5
+        assert sum(row.state == "active" for row in sessions) == 1
+        assert sum(row.state == "rotated_out" for row in sessions) == 4
+
+
 def test_rotation_has_stable_budget_and_finite_generation_ceiling(
     ceremony_ctx, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -767,6 +860,7 @@ def test_rotation_has_stable_budget_and_finite_generation_ceiling(
     assert _initiate(client, ids["bootstrap"]).status_code == 202
     assert _verify_and_exchange(client, factory, ids).status_code == 201
     monkeypatch.setattr(settings, "mentor_rate_max_requests", 2)
+    _pin_rotation_rate_clock(monkeypatch)
     for index in range(2):
         rotated = client.post(
             "/api/v1/auth/mentor/session/rotate",
