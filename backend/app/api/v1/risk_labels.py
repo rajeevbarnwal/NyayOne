@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import ActorContext, get_actor_context
 from app.db.session import get_session
 from app.core.rate_limit import (
@@ -65,11 +66,12 @@ def moderation_risk_labels(
 @router.post(
     "/moderation/risk-labels/{cluster_id}/publish",
     response_model=PublishedRiskLabelOut,
+    openapi_extra=required_idempotency_header(),
 )
 def publish_risk_label(
     cluster_id: uuid.UUID,
     payload: RiskLabelPublishIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> PublishedRiskLabelOut:
@@ -86,10 +88,11 @@ def publish_risk_label(
     "/organisation-response-requests",
     response_model=OrganisationResponseRequestOut,
     status_code=201,
+    openapi_extra=required_idempotency_header(),
 )
 def create_organisation_response_request(
     payload: OrganisationResponseRequestIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> OrganisationResponseRequestOut:
@@ -104,12 +107,13 @@ def create_organisation_response_request(
     "/organisation-responses",
     response_model=OrganisationResponseOut,
     status_code=201,
+    openapi_extra=required_idempotency_header(),
 )
 def create_organisation_response(
     payload: OrganisationResponseIn,
     request: Request,
     response_token: str | None = Header(default=None, alias="X-Organisation-Response-Token"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
 ) -> OrganisationResponseOut:
     try:
@@ -141,11 +145,12 @@ def create_organisation_response(
 @router.post(
     "/moderation/organisation-responses/{response_id}/decide",
     response_model=OrganisationResponseOut,
+    openapi_extra=required_idempotency_header(),
 )
 def decide_organisation_response(
     response_id: uuid.UUID,
     payload: OrganisationResponseDecisionIn,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> OrganisationResponseOut:

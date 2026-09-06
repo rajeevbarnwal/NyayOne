@@ -1,7 +1,11 @@
 """Server-owned guardian/institutional state machines (NYAY-11 policy 14714).
 
 Public handlers accept commands, never states or authority labels. Registration
-locks precede proof/session locks, and callers commit the whole command once.
+locks precede proof/session locks. Ordinary commands are caller-owned
+transactions. Email-proof delivery intentionally commits its pending state
+before external delivery and its receipt afterward; denied email-proof
+verification commits attempt accounting and audit before raising. These
+explicit exceptions preserve fail-closed delivery and retry accounting.
 """
 from __future__ import annotations
 

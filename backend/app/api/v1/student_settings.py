@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import (
     ActorContext,
     Role,
@@ -166,7 +167,7 @@ def get_profile(
         _raise_profile_error(error)
 
 
-@router.patch("/profile/personal", response_model=StudentProfileProjectionResponse)
+@router.patch("/profile/personal", response_model=StudentProfileProjectionResponse, openapi_extra=required_idempotency_header())
 def patch_personal_profile(
     payload: PersonalProfileMutation,
     request: Request,
@@ -193,7 +194,7 @@ def patch_personal_profile(
         _raise_profile_error(error)
 
 
-@router.patch("/profile/academic", response_model=StudentProfileProjectionResponse)
+@router.patch("/profile/academic", response_model=StudentProfileProjectionResponse, openapi_extra=required_idempotency_header())
 def patch_academic_profile(
     payload: AcademicProfileMutation,
     request: Request,
@@ -220,7 +221,7 @@ def patch_academic_profile(
         _raise_profile_error(error)
 
 
-@router.patch("/profile/interests", response_model=StudentProfileProjectionResponse)
+@router.patch("/profile/interests", response_model=StudentProfileProjectionResponse, openapi_extra=required_idempotency_header())
 def patch_interests_profile(
     payload: InterestsProfileMutation,
     request: Request,

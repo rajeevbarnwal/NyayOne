@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.openapi_headers import required_idempotency_header
 from app.core.auth import ActorContext, get_actor_context
 from app.db.session import get_session
 from app.schemas.calendar import (
@@ -69,10 +70,10 @@ def calendar_events(
         _raise(error)
 
 
-@router.post("/calendar/events", response_model=EventOut, status_code=201)
+@router.post("/calendar/events", response_model=EventOut, status_code=201, openapi_extra=required_idempotency_header())
 def calendar_event_create(
     payload: EventCreate,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> EventOut:
@@ -226,10 +227,10 @@ def calendar_exports_list(
         _raise(error)
 
 
-@router.post("/calendar/exports", response_model=CalendarExportOut, status_code=201)
+@router.post("/calendar/exports", response_model=CalendarExportOut, status_code=201, openapi_extra=required_idempotency_header())
 def calendar_export_create(
     payload: ExportCreate,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", include_in_schema=False),
     session: Session = Depends(get_session),
     actor: ActorContext = Depends(get_actor_context),
 ) -> CalendarExportOut:
