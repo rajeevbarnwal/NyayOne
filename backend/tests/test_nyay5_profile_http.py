@@ -121,7 +121,7 @@ def profile_ctx(_mounted, db_session, monkeypatch):
             headers = dict(kwargs.get("headers") or {})
             if not any(name.casefold() == "idempotency-key" for name in headers):
                 headers["Idempotency-Key"] = (
-                    f"nyay5-fixture-profile-mutation-{next(mutation_sequence):08d}"
+                    f"profile-{next(mutation_sequence):048x}"
                 )
             kwargs["headers"] = headers
         return original_patch(url, *args, **kwargs)

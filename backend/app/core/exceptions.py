@@ -11,6 +11,17 @@ from app.core.logging import get_logger, request_id_ctx
 
 logger = get_logger("nyayone.error")
 
+# Closed owner-profile surface: framework errors happen before route handlers
+# can attach their private projection headers. Do not expand this by prefix.
+_OWNER_PROFILE_VALIDATION_PATHS = frozenset({
+    "/api/v1/student/profile",
+    "/api/v1/student/profile/personal",
+    "/api/v1/student/profile/academic",
+    "/api/v1/student/profile/interests",
+    "/api/v1/student/profile/prompt-dismiss",
+    "/api/v1/auth/student/profile",
+})
+
 
 def _detail_body(detail: Mapping[str, object]) -> dict[str, object]:
     """Return the single error envelope consumed by browser/API clients."""
@@ -72,6 +83,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=422,
             content=_detail_body(detail),
+            headers=(
+                {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+                if request.url.path in _OWNER_PROFILE_VALIDATION_PATHS
+                else None
+            ),
         )
 
     @app.exception_handler(Exception)

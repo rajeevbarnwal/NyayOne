@@ -58,7 +58,14 @@ PROFILE_REQUIREMENTS = (
     "interests.interests",
     "interests.goals",
 )
-_PROFILE_IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9._~-]{16,200}")
+# v1 is the exact union of the two shipped secure generators: lowercase UUID
+# and "profile-" plus lowercase hex. Keep the established length bounds; this
+# alphabet rule does not claim to measure entropy of client-supplied strings.
+PROFILE_IDEMPOTENCY_GRAMMAR_VERSION = "profile-key-alphabet.v1"
+PROFILE_IDEMPOTENCY_ALPHABET = "-0123456789abcdefilopr"
+_PROFILE_IDEMPOTENCY_KEY = re.compile(
+    "[" + re.escape(PROFILE_IDEMPOTENCY_ALPHABET) + "]{16,200}"
+)
 _PROFILE_FINGERPRINT_VERSION = "v1"
 
 
