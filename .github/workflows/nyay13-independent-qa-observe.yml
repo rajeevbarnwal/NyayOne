@@ -1,0 +1,33 @@
+name: NYAY-13 independent QA observation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Non-required observation. No required aggregator depends on this job.
+# Failures remain visible; promotion requires separate owner approval.
+jobs:
+  independent-qa-observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Observe NYAY-13 policy contracts
+        run: python scripts/ci/test_nyay13_independent_qa_gate.py
+      - name: Observe independent signature and publication boundaries
+        run: python scripts/ci/test_nyay13_trust_boundary.py

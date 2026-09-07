@@ -916,7 +916,8 @@ NYAY4_QUARANTINE_WORKFLOW_FILE = (
     "ci-flaky-nyay4-cookie-reload-symmetry.yml"
 )
 CANONICAL_WORKFLOW_FILES = REQUIRED_WORKFLOW_FILES | {
-    NYAY4_QUARANTINE_WORKFLOW_FILE
+    NYAY4_QUARANTINE_WORKFLOW_FILE,
+    "nyay13-independent-qa-observe.yml",
 }
 NYAY4_QUARANTINED_ASSERTION_ID = (
     "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"
@@ -4100,6 +4101,13 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 
 
 def check_workflow(path: Path) -> list[str]:
+    if path.name == "nyay13-independent-qa-observe.yml":
+        # Additive, non-required rollout surface; existing fail-closed workflow
+        # rules and seven ruleset contexts are not relaxed. Seal all bytes.
+        expected = "969926b59df5a2e20ea5590e4b1c87f30f590108700b7612d3a3319a0ef68a3e"
+        return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
+            f"{path}: NYAY-13 observation workflow differs from its exact sealed contract"
+        ]
     text = path.read_text(encoding="utf-8")
     failures: list[str] = []
     if path.name not in CANONICAL_WORKFLOW_FILES:
@@ -4870,7 +4878,7 @@ def main() -> int:
     if {path.name for path in workflow_paths} != CANONICAL_WORKFLOW_FILES:
         failures.append(
             "workflow filename inventory differs from nine required gates plus the "
-            "single quarantined evidence workflow"
+            "single quarantined evidence workflow and NYAY-13 observation"
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay11_db_gate_contract())
@@ -4897,7 +4905,7 @@ def main() -> int:
     )
     required_names: list[tuple[Path, str]] = []
     for path in workflow_paths:
-        if path.name == NYAY4_QUARANTINE_WORKFLOW_FILE:
+        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml"}:
             continue
         text = path.read_text(encoding="utf-8")
         match = re.search(r"^  required:\n    name:\s*([^\s#]+)", text, re.MULTILINE)
