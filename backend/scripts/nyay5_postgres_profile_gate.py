@@ -1616,7 +1616,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 kwargs["headers"] = _profile_mutation_headers(
                     path,
                     kwargs.get("headers"),
-                    f"nyay5-gate-profile-{uuid.uuid4().hex}",
+                    f"profile-{uuid.uuid4().hex}",
                 )
                 return original_patch(url, *args, **kwargs)
 

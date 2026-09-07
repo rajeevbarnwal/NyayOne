@@ -1250,7 +1250,7 @@ def _profile_mutation_headers(
 
     if re.fullmatch(r"[A-Za-z0-9._~-]+", label) is None:
         raise ValueError("profile probe label must be opaque")
-    key = f"nyay2-profile-{label}-0001"
+    key = "profile-" + hashlib.sha256(label.encode("ascii")).hexdigest()
     if headers is None:
         return {**_trusted_mutation_headers(), "Idempotency-Key": key}
     if isinstance(headers, list):
