@@ -124,9 +124,14 @@ try {
 
   const pageA = await contextA.newPage();
   await pageA.goto(`${WEB}/s-17`);
+  const disclosure = pageA.getByTestId('profile-email-identity-disclosure');
+  await disclosure.waitFor({ state: 'visible', timeout: 20_000 });
+  const collapsedFirst = (await disclosure.getAttribute('aria-expanded')) === 'false' && (await pageA.getByTestId('profile-email-identities').count()) === 0;
+  await disclosure.click();
   const panel = pageA.getByTestId('profile-email-identities');
   await panel.waitFor({ state: 'visible', timeout: 20_000 });
-  record('S17_panel_visible', 'visible', 'visible', true);
+  await pageA.getByLabel('Add a sign-in email').waitFor({ state: 'visible', timeout: 20_000 });
+  record('S17_panel_visible', 'collapsed disclosure then expanded', collapsedFirst ? 'collapsed disclosure then expanded' : 'expanded on load', collapsedFirst);
   await pageA.screenshot({ path: path.join(OUT, 'S-17-panel-empty-390.png'), fullPage: true });
   const axeEmpty = await observeAxe(pageA);
   record('S17_axe_serious_critical_empty', 0, axeEmpty.length, axeEmpty.length === 0);
