@@ -918,6 +918,7 @@ NYAY4_QUARANTINE_WORKFLOW_FILE = (
 CANONICAL_WORKFLOW_FILES = REQUIRED_WORKFLOW_FILES | {
     NYAY4_QUARANTINE_WORKFLOW_FILE,
     "nyay13-independent-qa-observe.yml",
+    "nyay42-optimization-observe.yml",
 }
 NYAY4_QUARANTINED_ASSERTION_ID = (
     "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"
@@ -4101,6 +4102,13 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 
 
 def check_workflow(path: Path) -> list[str]:
+    if path.name == "nyay42-optimization-observe.yml":
+        # Exact additive non-required observer; existing producers, semantic
+        # seals and seven required contexts are unchanged by this rollout.
+        expected = "334e5a722bd40c3a107d92654afe88fe3a041dfbf2b7bd47df56c07e63859725"
+        return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
+            f"{path}: NYAY-42 observation workflow differs from its exact sealed contract"
+        ]
     if path.name == "nyay13-independent-qa-observe.yml":
         # Additive, non-required rollout surface; existing fail-closed workflow
         # rules and seven ruleset contexts are not relaxed. Seal all bytes.
@@ -4878,7 +4886,7 @@ def main() -> int:
     if {path.name for path in workflow_paths} != CANONICAL_WORKFLOW_FILES:
         failures.append(
             "workflow filename inventory differs from nine required gates plus the "
-            "single quarantined evidence workflow and NYAY-13 observation"
+            "single quarantined evidence workflow and NYAY-13/42 observations"
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay11_db_gate_contract())
@@ -4905,7 +4913,7 @@ def main() -> int:
     )
     required_names: list[tuple[Path, str]] = []
     for path in workflow_paths:
-        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml"}:
+        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml", "nyay42-optimization-observe.yml"}:
             continue
         text = path.read_text(encoding="utf-8")
         match = re.search(r"^  required:\n    name:\s*([^\s#]+)", text, re.MULTILINE)
