@@ -107,6 +107,75 @@ class HttpOtpSender:
             raise OtpSendError(f"otp provider send failed: {type(exc).__name__}") from exc
 
 
+class HttpEmailOtpSender(HttpOtpSender):
+    """Email-channel adapter (NYAY-12): same idempotent contract, email transport.
+
+    The provider request keeps the exact ``{to, message, idempotency_key}``
+    body so the loopback capture double and real providers share one contract;
+    the channel is declared in a header. The raw code is never logged.
+    """
+
+    CHANNEL_HEADER = "X-NyayOne-Channel"
+
+    def send_idempotent(
+        self,
+        destination: str,
+        code: str,
+        *,
+        idempotency_token: str,
+    ) -> str | None:
+        import httpx
+
+        headers = {
+            "Idempotency-Key": idempotency_token,
+            self.CHANNEL_HEADER: "email",
+            **(
+                {"Authorization": f"Bearer {self._token}"}
+                if self._token
+                else {}
+            ),
+        }
+        try:
+            resp = httpx.post(
+                self._url,
+                json={
+                    "to": destination,
+                    "message": f"Your NyayOne verification code is {code}",
+                    "idempotency_key": idempotency_token,
+                },
+                headers=headers,
+                timeout=self._timeout_s,
+            )
+            resp.raise_for_status()
+            return resp.headers.get("X-Provider-Receipt")
+        except Exception as exc:  # normalise everything; never leak the code
+            raise OtpSendError(f"email otp provider send failed: {type(exc).__name__}") from exc
+
+
+def build_email_otp_sender() -> IdempotentOtpSender | None:
+    """Resolve the NYAY-12 email OTP provider or None (API fails closed, 503)."""
+
+    provider = (getattr(settings, "email_otp_provider", "none") or "none").lower()
+    if provider == "capturing":
+        if (settings.app_env or "").strip().casefold() not in {"test", "testing"}:
+            return None
+        return CapturingSender()
+    if provider == "http":
+        if not settings.email_otp_provider_url:
+            return None
+        if not getattr(settings, "email_otp_provider_supports_idempotency", False):
+            return None
+        token = (
+            settings.email_otp_provider_token.get_secret_value()
+            if settings.email_otp_provider_token
+            else None
+        )
+        return HttpEmailOtpSender(
+            settings.email_otp_provider_url, token, settings.email_otp_provider_timeout_s
+        )
+    return None
+
+
 def build_otp_sender() -> IdempotentOtpSender | None:
     """Resolve the configured provider, or None when delivery is not configured.
 

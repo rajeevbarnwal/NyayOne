@@ -5,9 +5,11 @@ import { AuthCard, DpdpFootnote, SelectField, StudentScreen, TextField } from '.
 import { ErrorState, LoadingState } from '../../../components/ui/primitives';
 import {
   ProfileApiError,
+  emailIdentityErrorMessage,
   profileErrorMessage,
   profileSectionRoute,
   validateLegalName,
+  type EmailIdentity,
   type ProfileSection,
   type StudentProfileProjection,
 } from '../lib/profileApi';
@@ -20,6 +22,12 @@ import {
   useSavePersonalProfile,
   useStudentProfileProjection,
   STUDENT_PROFILE_QUERY_KEY,
+  useAddEmailIdentity,
+  useEmailIdentities,
+  useRemoveEmailIdentity,
+  useResendEmailIdentity,
+  useSetPrimaryEmailIdentity,
+  useVerifyEmailIdentity,
 } from './profileHooks';
 import {
   preserveProfileConflictDraft,
@@ -326,10 +334,142 @@ export function ProfileDone() {
   return <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re ready, ${firstName}.`}><p className="st-card__sub">Your student workspace is organised. Verification remains a separate server-controlled process.</p><span className="st-badge">{verification}</span><div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/s-14')}>Go to dashboard</button></div></AuthCard>;
 }
 
+/* -------------------------------------------------------------------------- */
+/* NYAY-12 — S-17 sign-in email identities (server-authoritative)              */
+/* -------------------------------------------------------------------------- */
+export interface EmailIdentityPanelViewProps {
+  channelEnabled: boolean;
+  maxIdentities: number;
+  identities: EmailIdentity[];
+  draftEmail: string;
+  draftCodes: Record<string, string>;
+  error: string | null;
+  errorTarget: 'add' | string | null;
+  busy: boolean;
+  errorRef?: (node: HTMLElement | null) => void;
+  onDraftEmail: (value: string) => void;
+  onAdd: () => void;
+  onDraftCode: (identityId: string, value: string) => void;
+  onVerify: (identityId: string) => void;
+  onResend: (identityId: string) => void;
+  onRemove: (identityId: string) => void;
+  onPrimary: (identityId: string) => void;
+}
+
+function verificationCopy(identity: EmailIdentity): string {
+  const verification = identity.verification;
+  if (identity.state === 'verified') return identity.isPrimary ? 'Verified · primary sign-in email' : 'Verified';
+  if (verification.status === 'active') return `Code sent · expires in ${verification.expiresInSeconds ?? 0}s · ${verification.attemptsLeft ?? 0} tries left`;
+  if (verification.status === 'expired') return 'Code expired · request a new code';
+  if (verification.status === 'failed') return 'Delivery failed · request a new code';
+  if (verification.status === 'pending_delivery') return 'Sending code…';
+  return 'Not verified';
+}
+
+export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
+  const { channelEnabled, maxIdentities, identities, draftEmail, draftCodes, error, errorTarget, busy, errorRef } = props;
+  const full = identities.length >= maxIdentities;
+  const addError = errorTarget === 'add' ? error : null;
+  return (
+    <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities">
+      <div className="st-panel__head"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2><span className="st-setrow__sub">{identities.length}/{maxIdentities}</span></div>
+      <p className="st-card__sub" role="status" data-testid="profile-email-identity-channel-status">{channelEnabled
+        ? 'A verified address can sign you in with a one-time code. Verification always comes from the server.'
+        : 'Email sign-in is not enabled yet. Addresses you verify now will be ready when it is.'}</p>
+      <ul className="st-stack" aria-label="Sign-in emails">
+        {identities.map((identity) => {
+          const codeId = `profile-email-identity-code-${identity.id}`;
+          const rowError = errorTarget === identity.id ? error : null;
+          const pending = identity.state === 'pending';
+          return (
+            <li key={identity.id} className="st-setrow" data-testid="profile-email-identity-row">
+              <div>
+                <div className="st-setrow__label"><span className="st-mono">{identity.emailMasked}</span>{identity.isPrimary && <span className="st-badge" data-testid="profile-email-identity-primary-badge">Primary</span>}</div>
+                <div className="st-setrow__sub">{verificationCopy(identity)}</div>
+                {pending && (
+                  <div className="st-field">
+                    <label className="st-field__label" htmlFor={codeId}>Six digit code for {identity.emailMasked}</label>
+                    <input id={codeId} className="st-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={draftCodes[identity.id] ?? ''} disabled={busy} aria-invalid={rowError ? true : undefined} aria-describedby={rowError ? `${codeId}-error` : undefined} onChange={(event) => props.onDraftCode(identity.id, event.target.value.replace(/\D/gu, '').slice(0, 6))} />
+                    {rowError && <span id={`${codeId}-error`} className="ui-validation" role="alert" tabIndex={-1} ref={errorRef}>{rowError}</span>}
+                  </div>
+                )}
+              </div>
+              <div className="st-actions">
+                {pending && <button type="button" className="btn btn--primary tap" aria-label={`Verify email ${identity.emailMasked}`} disabled={busy || (draftCodes[identity.id] ?? '').length !== 6} onClick={() => props.onVerify(identity.id)}>Verify</button>}
+                {pending && <button type="button" className="btn tap" aria-label={`Resend code to ${identity.emailMasked}`} disabled={busy || (identity.verification.resendInSeconds ?? 0) > 0} onClick={() => props.onResend(identity.id)}>Resend code</button>}
+                {identity.state === 'verified' && !identity.isPrimary && <button type="button" className="btn tap" aria-label={`Make ${identity.emailMasked} the primary sign-in email`} disabled={busy} onClick={() => props.onPrimary(identity.id)}>Make primary</button>}
+                <button type="button" className="btn tap" aria-label={`Remove email ${identity.emailMasked}`} disabled={busy} onClick={() => props.onRemove(identity.id)}>Remove</button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="st-field">
+        <label className="st-field__label" htmlFor="profile-email-identity-input">Add a sign-in email</label>
+        <input id="profile-email-identity-input" className="st-input" type="email" inputMode="email" autoComplete="email" maxLength={254} value={draftEmail} disabled={busy || full} aria-invalid={addError ? true : undefined} aria-describedby={addError ? 'profile-email-identity-input-error' : undefined} onChange={(event) => props.onDraftEmail(event.target.value)} />
+        {addError && <span id="profile-email-identity-input-error" className="ui-validation" role="alert" tabIndex={-1} ref={errorRef}>{addError}</span>}
+        <p className="st-setrow__sub">We send a six digit code to confirm you own the address. The address never becomes a sign-in identity until that code is verified here.</p>
+      </div>
+      <div className="st-actions"><button type="button" className="btn btn--primary tap" aria-label="Add sign-in email" disabled={busy || full} onClick={props.onAdd}>Add email</button></div>
+    </section>
+  );
+}
+
+const LOGIN_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
+
+export function EmailIdentityPanel() {
+  const listing = useEmailIdentities();
+  const add = useAddEmailIdentity();
+  const verify = useVerifyEmailIdentity();
+  const resend = useResendEmailIdentity();
+  const remove = useRemoveEmailIdentity();
+  const primary = useSetPrimaryEmailIdentity();
+  const [draftEmail, setDraftEmail] = useState('');
+  const [draftCodes, setDraftCodes] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [errorTarget, setErrorTarget] = useState<'add' | string | null>(null);
+  const errorNode = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (error) errorNode.current?.focus(); }, [error, errorTarget]);
+  const busy = add.isPending || verify.isPending || resend.isPending || remove.isPending || primary.isPending;
+  if (!listing.data) {
+    return <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2>{listing.isPending ? <LoadingState label="Loading sign-in emails…" /> : <ErrorState title="Could not load sign-in emails" detail={emailIdentityErrorMessage(listing.error)} onRetry={() => { void listing.refetch(); }} />}</section>;
+  }
+  function fail(target: 'add' | string, caught: unknown) { setErrorTarget(target); setError(emailIdentityErrorMessage(caught)); }
+  function clear() { setError(null); setErrorTarget(null); }
+  return (
+    <EmailIdentityPanelView
+      channelEnabled={listing.data.loginChannelEnabled}
+      maxIdentities={listing.data.maxIdentities}
+      identities={listing.data.identities}
+      draftEmail={draftEmail}
+      draftCodes={draftCodes}
+      error={error}
+      errorTarget={errorTarget}
+      busy={busy}
+      errorRef={(node) => { errorNode.current = node; }}
+      onDraftEmail={setDraftEmail}
+      onDraftCode={(identityId, value) => setDraftCodes((previous) => ({ ...previous, [identityId]: value }))}
+      onAdd={() => {
+        const candidate = draftEmail.trim();
+        if (!LOGIN_EMAIL_RE.test(candidate) || [...candidate].length > 254) { fail('add', new ProfileApiError(422, 'validation_error', 'email')); return; }
+        add.mutate(candidate, { onSuccess: () => { setDraftEmail(''); clear(); }, onError: (caught) => fail('add', caught) });
+      }}
+      onVerify={(identityId) => {
+        const code = draftCodes[identityId] ?? '';
+        if (code.length !== 6) { fail(identityId, new ProfileApiError(422, 'validation_error', 'code')); return; }
+        verify.mutate({ identityId, code }, { onSuccess: () => { setDraftCodes((previous) => { const next = { ...previous }; delete next[identityId]; return next; }); clear(); }, onError: (caught) => fail(identityId, caught) });
+      }}
+      onResend={(identityId) => resend.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onRemove={(identityId) => remove.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onPrimary={(identityId) => primary.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+    />
+  );
+}
+
 export function ProfileView() {
   const nav = useNavigate(); const query = useStudentProfileProjection();
   if (!query.data) return <ProfileLoadState screenId="S-17" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   const projection = query.data; const personal = projection.profile.personal; const academic = projection.profile.academic;
   const rows: Array<[string, string]> = [['Full name', [personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' ')], ['Preferred language', personal.preferredLanguage ?? 'Not provided'], ['City', personal.city ?? 'Not provided'], ['College', labelFor(COLLEGE_OPTIONS, toCanonicalCollege(academic.college)) || 'Not provided'], ['Year of study', labelFor(YEAR_OPTIONS, toCanonicalYear(academic.yearOfStudy)) || 'Not provided'], ['Institutional email status', projection.institutionalEmailStatus.replace(/_/gu, ' ')], ['Guardian status', projection.guardian.status.replace(/_/gu, ' ')], ['Access', projection.accessMode]];
-  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div></div>)}</div><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
+  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div></div>)}</div><EmailIdentityPanel /><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
 }

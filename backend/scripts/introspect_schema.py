@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "saved_law_schools", "law_school_follows", "comparison_sets", "comparison_items",
     # SAATHI-60 internship discovery and saved listings
     "internship_listings", "saved_internships",
+    # NYAY-12 verified-email login identities
+    "user_email_identities", "email_identity_mutations", "email_identity_reconciliations",
 }
 
 # This immutable one-to-one audit table is deliberately keyed by the parent

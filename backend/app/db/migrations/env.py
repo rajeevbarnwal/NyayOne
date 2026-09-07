@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.migration_release_guard import (
     APPLICATION_HEAD_REVISION,
+    NYAY11_REVISION,
     NYAY22_REVISION,
     MigrationApprovalError,
     NYAY5_REVISION,
@@ -94,6 +95,8 @@ def run_migrations_online() -> None:
                         expected_revision = NYAY9_REVISION
                     elif requested_revision == NYAY22_REVISION:
                         expected_revision = NYAY22_REVISION
+                    elif requested_revision == NYAY11_REVISION:
+                        expected_revision = NYAY11_REVISION
                     else:
                         expected_revision = "0020_auth_retention_lifecycle"
                     if expected_revision == "0020_auth_retention_lifecycle":

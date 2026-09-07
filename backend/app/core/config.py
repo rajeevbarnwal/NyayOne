@@ -419,6 +419,17 @@ class Settings(BaseSettings):
     otp_flow_ttl_seconds: int = 10 * 60
     otp_recovery_proof_ttl_seconds: int = 5 * 60
 
+    # --- NYAY-12 verified-email login identity ------------------------------
+    # Server-owned, fail-closed feature flag: the S-04 email channel exists only
+    # when this is true AND the caller owns an independently verified identity.
+    email_login_enabled: bool = False
+    email_otp_provider: str = "none"
+    email_otp_provider_url: str | None = None
+    email_otp_provider_token: SecretStr | None = None
+    email_otp_provider_timeout_s: float = 10.0
+    email_otp_provider_supports_idempotency: bool = False
+    email_identity_max_per_user: int = 3
+
     # --- Student OTP login + cookie session --------------------------------
     # Login challenges remain separate from signup/recovery challenges. The
     # browser receives only an HttpOnly cookie; the database stores its hash.
@@ -706,6 +717,21 @@ class Settings(BaseSettings):
             problems.append("auth_session_cookie_name must use the NyayOne cookie identity")
         if (self.otp_flow_cookie_name or "") != "nyayone_otp_flow":
             problems.append("otp_flow_cookie_name must use the NyayOne cookie identity")
+        if self.email_login_enabled and environment not in {
+            "development", "dev", "local", "test", "testing"
+        }:
+            email_provider = (self.email_otp_provider or "none").strip().casefold()
+            if (
+                email_provider != "http"
+                or not (self.email_otp_provider_url or "").startswith("https://")
+                or not self.email_otp_provider_supports_idempotency
+                or _is_placeholder_secret(self.email_otp_provider_token)
+            ):
+                problems.append(
+                    "email login requires an HTTPS, idempotent, authenticated email OTP provider"
+                )
+        if not 1 <= int(self.email_identity_max_per_user) <= 10:
+            problems.append("email_identity_max_per_user must be between 1 and 10")
         if self.mentor_identity_provider_class not in {
             "nyayone_reviewed_identity",
             "approved_federated_attestation",
