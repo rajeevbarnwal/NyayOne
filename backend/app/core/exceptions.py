@@ -56,11 +56,20 @@ def register_exception_handlers(app: FastAPI) -> None:
             detail.setdefault("message", "Request failed")
         else:
             detail = {"code": "http_error", "message": str(exc.detail)}
-        return JSONResponse(
+        response = JSONResponse(
             status_code=exc.status_code,
             content=_detail_body(detail),
             headers=exc.headers,
         )
+        if exc.status_code == 422 and request.url.path in _OWNER_PROFILE_VALIDATION_PATHS:
+            # Exception responses replace the route's Response object, including
+            # its headers. Retain unrelated exception headers and Vary tokens.
+            response.headers["Cache-Control"] = "private, no-store"
+            vary = ", ".join(response.headers.getlist("vary"))
+            if "cookie" not in {token.strip().lower() for token in vary.split(",")}:
+                vary = f"{vary}, Cookie" if vary else "Cookie"
+            response.headers["Vary"] = vary
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
