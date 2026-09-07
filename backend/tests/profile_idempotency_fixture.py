@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import count
+from hashlib import sha256
 from typing import Any
 
 
@@ -36,7 +37,11 @@ def install_profile_mutation_idempotency(client: Any, *, prefix: str) -> None:
                 headers = list(supplied)
                 names = [name for name, _ in headers]
             if not any(name.casefold() == "idempotency-key" for name in names):
-                key = f"{prefix}-{next(sequence):08d}"
+                # Deterministic test-only counterpart of the shipped profile-hex
+                # generator; no production entropy claim is made for fixtures.
+                key = "profile-" + sha256(
+                    f"{prefix}-{next(sequence):08d}".encode()
+                ).hexdigest()[:48]
                 if isinstance(headers, list):
                     headers.append(("Idempotency-Key", key))
                 else:

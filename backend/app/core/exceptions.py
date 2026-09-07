@@ -11,6 +11,17 @@ from app.core.logging import get_logger, request_id_ctx
 
 logger = get_logger("nyayone.error")
 
+# Closed owner-profile surface: framework errors happen before route handlers
+# can attach their private projection headers. Do not expand this by prefix.
+_OWNER_PROFILE_VALIDATION_PATHS = frozenset({
+    "/api/v1/student/profile",
+    "/api/v1/student/profile/personal",
+    "/api/v1/student/profile/academic",
+    "/api/v1/student/profile/interests",
+    "/api/v1/student/profile/prompt-dismiss",
+    "/api/v1/auth/student/profile",
+})
+
 
 def _detail_body(detail: Mapping[str, object]) -> dict[str, object]:
     """Return the single error envelope consumed by browser/API clients."""
@@ -45,11 +56,20 @@ def register_exception_handlers(app: FastAPI) -> None:
             detail.setdefault("message", "Request failed")
         else:
             detail = {"code": "http_error", "message": str(exc.detail)}
-        return JSONResponse(
+        response = JSONResponse(
             status_code=exc.status_code,
             content=_detail_body(detail),
             headers=exc.headers,
         )
+        if exc.status_code == 422 and request.url.path in _OWNER_PROFILE_VALIDATION_PATHS:
+            # Exception responses replace the route's Response object, including
+            # its headers. Retain unrelated exception headers and Vary tokens.
+            response.headers["Cache-Control"] = "private, no-store"
+            vary = ", ".join(response.headers.getlist("vary"))
+            if "cookie" not in {token.strip().lower() for token in vary.split(",")}:
+                vary = f"{vary}, Cookie" if vary else "Cookie"
+            response.headers["Vary"] = vary
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -72,6 +92,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=422,
             content=_detail_body(detail),
+            headers=(
+                {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+                if request.url.path in _OWNER_PROFILE_VALIDATION_PATHS
+                else None
+            ),
         )
 
     @app.exception_handler(Exception)

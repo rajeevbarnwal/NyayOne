@@ -202,7 +202,7 @@ def test_missing_requirements_shrink_server_side_after_each_owner_write(nyay9_ct
 
     skipped = client.patch(
         "/api/v1/student/profile/academic",
-        headers=_headers(idempotency_key="nyay9-direct-step-skip"),
+        headers=_headers(idempotency_key="profile-57ed4dba4e2afa21944d69b325c1f7b504ba83fa0670ff78"),
         json=_academic(1),
     )
     assert skipped.status_code == 409
@@ -215,17 +215,17 @@ def test_missing_requirements_shrink_server_side_after_each_owner_write(nyay9_ct
 
     personal = client.patch(
         "/api/v1/student/profile/personal",
-        headers=_headers(idempotency_key="nyay9-personal-step"),
+        headers=_headers(idempotency_key="profile-8faf932be99ad6fc4c96a5b606fb73072f87e5650d818ac1"),
         json=_personal(1),
     )
     academic = client.patch(
         "/api/v1/student/profile/academic",
-        headers=_headers(idempotency_key="nyay9-academic-step"),
+        headers=_headers(idempotency_key="profile-9559a8707eb5c98c03749c283e7ae9af36a95dd4471d247f"),
         json=_academic(2),
     )
     interests = client.patch(
         "/api/v1/student/profile/interests",
-        headers=_headers(idempotency_key="nyay9-interests-step"),
+        headers=_headers(idempotency_key="profile-4d959e6ebd67d7d415c2c1cc9d4e8338e517af611b6210b6"),
         json=_interests(3),
     )
 
@@ -272,7 +272,7 @@ def test_owner_is_derived_from_session_and_projection_cannot_be_client_selected(
     )
     selected_by_body = client.patch(
         "/api/v1/student/profile/personal",
-        headers=_headers(idempotency_key="nyay9-owner", forged_actor=other),
+        headers=_headers(idempotency_key="profile-5b0d11b8cfbc6684fbc95d97522bd70fca3a2e89aa628327", forged_actor=other),
         json={
             **_personal(1),
             "registration_id": str(nyay9_ctx["other_registration"].id),
@@ -419,8 +419,8 @@ def test_mutation_requires_a_single_valid_opaque_idempotency_key(nyay9_ctx):
 
     duplicate_headers = [
         ("Origin", settings.cors_origins[0]),
-        ("Idempotency-Key", "nyay9-duplicate-key-000000000001"),
-        ("Idempotency-Key", "nyay9-duplicate-key-000000000002"),
+        ("Idempotency-Key", "profile-39c426f86e0bd2a194b7e63acd195804"),
+        ("Idempotency-Key", "profile-39c426f86e0bd2a194b7e63acd195805"),
     ]
     duplicate = client.patch(
         "/api/v1/student/profile/personal",
@@ -442,7 +442,7 @@ def test_mutation_requires_a_single_valid_opaque_idempotency_key(nyay9_ctx):
 def test_same_idempotency_key_and_payload_replays_exact_first_outcome(nyay9_ctx):
     _activate_cookie(nyay9_ctx, nyay9_ctx["owner"], token_suffix="f")
     client = nyay9_ctx["client"]
-    headers = _headers(idempotency_key="profile-personal-replay-key-0001")
+    headers = _headers(idempotency_key="profile-92341b20df70114d130f642f05b13c2eac70517edde4c564")
 
     first = client.patch(
         "/api/v1/student/profile/personal", headers=headers, json=_personal(1)
@@ -457,7 +457,7 @@ def test_same_idempotency_key_and_payload_replays_exact_first_outcome(nyay9_ctx)
     assert replay.json()["profile_version"] == 2
 
     legacy_headers = _headers(
-        idempotency_key="profile-legacy-academic-replay-key-0001"
+        idempotency_key="profile-959273b409b747e724e6bbd050f8f5d8bb747fda4cba2141"
     )
     legacy_payload = {
         **_academic(2),
@@ -494,7 +494,7 @@ def test_idempotency_conflict_is_typed_pii_safe_and_scoped_by_actor_and_section(
     nyay9_ctx,
 ):
     client = nyay9_ctx["client"]
-    shared_key = "profile-scope-key-0000000000000001"
+    shared_key = "profile-851e0dd04802ed6bf207af41d2ef66724fb87922b2bc235f"
     _activate_cookie(nyay9_ctx, nyay9_ctx["owner"], token_suffix="g")
 
     owner_personal = client.patch(
@@ -657,17 +657,17 @@ def test_privacy_export_materializes_every_owner_profile_field_without_internals
     client = nyay9_ctx["client"]
     personal = client.patch(
         "/api/v1/student/profile/personal",
-        headers=_headers(idempotency_key="privacy-export-ledger-key-000001"),
+        headers=_headers(idempotency_key="profile-0fb23d02afeeee2cc8ea44586c70faded868fcf05aacd0f4"),
         json=_personal(1),
     )
     academic = client.patch(
         "/api/v1/student/profile/academic",
-        headers=_headers(idempotency_key="privacy-export-ledger-key-000002"),
+        headers=_headers(idempotency_key="profile-11ecfa29f3b10ea2da6cd0fa1533233a4a51acc92d072d7c"),
         json=_academic(2),
     )
     interests = client.patch(
         "/api/v1/student/profile/interests",
-        headers=_headers(idempotency_key="privacy-export-ledger-key-000003"),
+        headers=_headers(idempotency_key="profile-02b29f2b4c814d8d985348eae99940712c8aeaf6fb09be49"),
         json=_interests(3),
     )
     assert [personal.status_code, academic.status_code, interests.status_code] == [

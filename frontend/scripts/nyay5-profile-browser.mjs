@@ -1480,7 +1480,7 @@ function personalMutation(projection, expectedProfileVersion, overrides = {}) {
 }
 
 function profileFixtureIdempotencyKey() {
-  const key = `nyay5-profile-${randomBytes(24).toString('hex')}`;
+  const key = `profile-${randomBytes(24).toString('hex')}`;
   rememberPrivate(key);
   return key;
 }
