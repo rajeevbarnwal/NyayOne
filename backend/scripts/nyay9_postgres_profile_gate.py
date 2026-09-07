@@ -689,7 +689,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         )
         body_selected = owner_client.patch(
             "/api/v1/student/profile/personal",
-            headers={"Idempotency-Key": "owner-boundary-key-0001"},
+            headers={"Idempotency-Key": "profile-abcdef00000000000000000000000001"},
             json={
                 **personal(version=1, label="Owner", city="OwnerCity"),
                 "registration_id": str(other["registration"]),
@@ -712,7 +712,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
 
         cross_a = seed("cross-a")
         cross_b = seed("cross-b")
-        shared_key = "cross-owner-shared-key-0001"
+        shared_key = "profile-abcdef00000000000000000000000002"
         cross_a_response = client_for(cross_a).patch(
             "/api/v1/student/profile/personal",
             headers={"Idempotency-Key": shared_key},
@@ -750,7 +750,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         )
 
         replay_actor = seed("same-key")
-        replay_key = "same-key-concurrency-00000001"
+        replay_key = "profile-abcdef00000000000000000000000003"
         replay_payload = personal(version=1, label="Replay", city="ReplayCity")
 
         def same_key_request(_index: int):
@@ -877,8 +877,8 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
                 executor.map(
                     conflicting_request,
                     [
-                        ("different-key-a-000000000001", "FirstCity"),
-                        ("different-key-b-000000000001", "SecondCity"),
+                        ("profile-abcdef00000000000000000000000004", "FirstCity"),
+                        ("profile-abcdef00000000000000000000000005", "SecondCity"),
                     ],
                 )
             )
@@ -909,7 +909,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         dob_client = client_for(dob_actor)
         minor = dob_client.patch(
             "/api/v1/student/profile/personal",
-            headers={"Idempotency-Key": "dob-minor-transition-000000001"},
+            headers={"Idempotency-Key": "profile-abcdef00000000000000000000000006"},
             json=personal(
                 version=1,
                 label="Minor",
@@ -919,7 +919,7 @@ def _behavior_probe(scratch_url: str) -> dict[str, bool]:
         )
         rejected = dob_client.patch(
             "/api/v1/student/profile/personal",
-            headers={"Idempotency-Key": "dob-stale-transition-000000001"},
+            headers={"Idempotency-Key": "profile-abcdef00000000000000000000000007"},
             json=personal(
                 version=1,
                 label="Adult",

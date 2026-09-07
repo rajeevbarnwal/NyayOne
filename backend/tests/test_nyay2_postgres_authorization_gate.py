@@ -1463,7 +1463,7 @@ def test_profile_probe_headers_add_one_key_without_collapsing_origin_duplicates(
     assert callable(helper)
     assert helper("owner-a") == {
         "Origin": gate.TRUSTED_ORIGIN,
-        "Idempotency-Key": "nyay2-profile-owner-a-0001",
+        "Idempotency-Key": "profile-95256875151043abdcafdd26fd390c650d6311e1d7185df477ce50736b6a5d0b",
     }
     duplicate_origins = [
         ("Origin", gate.TRUSTED_ORIGIN),
@@ -1471,7 +1471,7 @@ def test_profile_probe_headers_add_one_key_without_collapsing_origin_duplicates(
     ]
     assert helper("origin-duplicate", headers=duplicate_origins) == [
         *duplicate_origins,
-        ("Idempotency-Key", "nyay2-profile-origin-duplicate-0001"),
+        ("Idempotency-Key", "profile-c10f10b59412a4c380ddc50a1ca06a4b57644409dfcf5620a06b03ea5904c45b"),
     ]
 
 
