@@ -103,7 +103,15 @@ describe('NYAY-12 S-17 sign-in email panel', () => {
     const source = readFileSync(SOURCE_PATH, 'utf8');
     const profileView = source.slice(source.indexOf('export function ProfileView'), source.length);
     expect(profileView).toContain('<EmailIdentityPanel');
-    expect(source).toContain('useEmailIdentities');
+    expect(source).toContain('useEmailIdentities(expanded)');
+    const container = source.slice(source.indexOf('export function EmailIdentityPanel('), source.indexOf('export function ProfileView'));
+    // Collapsed by default: S-17 issues no identity read until the owner opens the section,
+    // and the entry point lives inside an existing row so S-17 gains no vertical height.
+    expect(container).toContain('if (!expanded) return null;');
+    expect(profileView).toContain('aria-expanded={emailIdentitiesOpen}');
+    expect(profileView).toContain('data-testid="profile-email-identity-disclosure"');
+    expect(profileView).toContain('aria-label="Manage sign-in emails"');
+    expect(profileView).toContain('<EmailIdentityPanel expanded={emailIdentitiesOpen} />');
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/u);
     expect(source).not.toMatch(/state:\s*['"]verified['"]/u);
   });

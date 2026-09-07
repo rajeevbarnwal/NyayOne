@@ -371,7 +371,7 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
   const full = identities.length >= maxIdentities;
   const addError = errorTarget === 'add' ? error : null;
   return (
-    <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities">
+    <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities" id="profile-email-identity-section">
       <div className="st-panel__head"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2><span className="st-setrow__sub">{identities.length}/{maxIdentities}</span></div>
       <p className="st-card__sub" role="status" data-testid="profile-email-identity-channel-status">{channelEnabled
         ? 'A verified address can sign you in with a one-time code. Verification always comes from the server.'
@@ -417,8 +417,8 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
 
 const LOGIN_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
 
-export function EmailIdentityPanel() {
-  const listing = useEmailIdentities();
+export function EmailIdentityPanel({ expanded }: { expanded: boolean }) {
+  const listing = useEmailIdentities(expanded);
   const add = useAddEmailIdentity();
   const verify = useVerifyEmailIdentity();
   const resend = useResendEmailIdentity();
@@ -431,8 +431,10 @@ export function EmailIdentityPanel() {
   const errorNode = useRef<HTMLElement | null>(null);
   useEffect(() => { if (error) errorNode.current?.focus(); }, [error, errorTarget]);
   const busy = add.isPending || verify.isPending || resend.isPending || remove.isPending || primary.isPending;
+  // Collapsed by default (zero S-17 height): no identity read happens until the owner opens it.
+  if (!expanded) return null;
   if (!listing.data) {
-    return <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2>{listing.isPending ? <LoadingState label="Loading sign-in emails…" /> : <ErrorState title="Could not load sign-in emails" detail={emailIdentityErrorMessage(listing.error)} onRetry={() => { void listing.refetch(); }} />}</section>;
+    return <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities" id="profile-email-identity-section"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2>{listing.isPending ? <LoadingState label="Loading sign-in emails…" /> : <ErrorState title="Could not load sign-in emails" detail={emailIdentityErrorMessage(listing.error)} onRetry={() => { void listing.refetch(); }} />}</section>;
   }
   function fail(target: 'add' | string, caught: unknown) { setErrorTarget(target); setError(emailIdentityErrorMessage(caught)); }
   function clear() { setError(null); setErrorTarget(null); }
@@ -468,8 +470,9 @@ export function EmailIdentityPanel() {
 
 export function ProfileView() {
   const nav = useNavigate(); const query = useStudentProfileProjection();
+  const [emailIdentitiesOpen, setEmailIdentitiesOpen] = useState(false);
   if (!query.data) return <ProfileLoadState screenId="S-17" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   const projection = query.data; const personal = projection.profile.personal; const academic = projection.profile.academic;
   const rows: Array<[string, string]> = [['Full name', [personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' ')], ['Preferred language', personal.preferredLanguage ?? 'Not provided'], ['City', personal.city ?? 'Not provided'], ['College', labelFor(COLLEGE_OPTIONS, toCanonicalCollege(academic.college)) || 'Not provided'], ['Year of study', labelFor(YEAR_OPTIONS, toCanonicalYear(academic.yearOfStudy)) || 'Not provided'], ['Institutional email status', projection.institutionalEmailStatus.replace(/_/gu, ' ')], ['Guardian status', projection.guardian.status.replace(/_/gu, ' ')], ['Access', projection.accessMode]];
-  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div></div>)}</div><EmailIdentityPanel /><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
+  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div>{label === 'Institutional email status' && <button type="button" className="btn tap" aria-label="Manage sign-in emails" aria-expanded={emailIdentitiesOpen} aria-controls="profile-email-identity-section" data-testid="profile-email-identity-disclosure" onClick={() => setEmailIdentitiesOpen((open) => !open)}>{emailIdentitiesOpen ? 'Hide' : 'Manage'}</button>}</div>)}</div><EmailIdentityPanel expanded={emailIdentitiesOpen} /><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
 }

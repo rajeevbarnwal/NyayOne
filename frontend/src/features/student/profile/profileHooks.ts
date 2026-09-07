@@ -151,11 +151,14 @@ export function resolveProfileStepRoute(
 /* -------------------------------------------------------------------------- */
 export const STUDENT_EMAIL_IDENTITIES_QUERY_KEY = ['student-email-identities'] as const;
 
-export function useEmailIdentities() {
+export function useEmailIdentities(enabled = true) {
+  // The listing is read only once the owner opens the sign-in email section;
+  // S-17 itself never issues the request on load.
   return useQuery({
     queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY,
     queryFn: (_context: QueryFunctionContext) => listEmailIdentities(),
     retry: false,
+    enabled,
   });
 }
 
