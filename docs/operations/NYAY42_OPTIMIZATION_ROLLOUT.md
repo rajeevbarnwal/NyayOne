@@ -32,7 +32,7 @@ unchanged. The policy verifier seals the new workflow independently.
   Self-hosted-only merged campaigns remain in the denominator. The calculator
   never certifies inventory completeness, billed usage, or program completion.
 
-## Remaining work before this optimization PR is merge-ready
+## Follow-on activation and optimization PRs after this groundwork merges
 
 1. Collect observation records from complete hosted campaigns. Independently
    compare every proposed affected-surface closure against the executed assertion

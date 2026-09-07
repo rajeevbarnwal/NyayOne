@@ -168,13 +168,32 @@ class OptimizationTests(unittest.TestCase):
         for path in workflows.glob("*.yml"):
             source=path.read_text()
             self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", source)
-            group=re.search(r"^  group: (.+)$", source, re.MULTILINE).group(1)
+            match=re.search(r"^  group: (.+)$", source, re.MULTILINE)
+            self.assertIsNotNone(match, f"NYAY42_CONCURRENCY_GROUP_MISSING: {path.name}")
+            group=match.group(1)
             self.assertIn("${{ github.event.pull_request.number || github.ref }}", group)
             # A unique literal workflow prefix is as isolated as github.workflow.
             if "${{ github.workflow }}" not in group:
                 self.assertNotIn(group, literal_groups)
                 literal_groups.add(group)
                 self.assertTrue(group.startswith("nyayone-ci-flaky-nyay4-"))
+
+    def test_missing_concurrency_group_has_canonical_refusal(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+
+        for declaration in ("", "  group: \n", " group: wrong-indent\n"):
+            with self.subTest(declaration=declaration), TemporaryDirectory() as directory:
+                path = Path(directory) / "synthetic.yml"
+                path.write_text("concurrency:\n" + declaration +
+                                "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n")
+                with patch.object(Path, "glob", return_value=[path]):
+                    with self.assertRaisesRegex(
+                        AssertionError, r"NYAY42_CONCURRENCY_GROUP_MISSING: synthetic\.yml$"
+                    ) as refusal:
+                        self.test_main_evidence_is_never_cancelled_by_pr()
+                self.assertNotIn(directory, str(refusal.exception))
 
 
 if __name__ == "__main__":
