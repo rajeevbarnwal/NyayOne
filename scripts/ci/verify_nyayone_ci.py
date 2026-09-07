@@ -727,6 +727,7 @@ EXPECTED_NYAY19_ALEMBIC_WORKFLOW_JOBS: dict[
     ),
 }
 EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS = {
+    "backend/tests/nyay12_native_gate.py",
     "backend/scripts/nyay2_postgres_authorization_gate.py",
     "backend/scripts/nyay3_postgres_characterization.py",
     "backend/scripts/nyay4_postgres_otp_gate.py",
@@ -772,7 +773,7 @@ NYAY19_ISOLATED_APP_ENVS = {
     "stage",
     "staging",
 }
-EXPECTED_DB_GATE_SHA256 = "b2085000e7294e051ce91c64d96a59d340fd6b85ec8da4422691d99dd64e34dd"
+EXPECTED_DB_GATE_SHA256 = "b1e2358ebe6230721fb8106cac4eb4cb7f4f613ad1c3df10b2002760f8694076"
 EXPECTED_ISOLATED_BACKEND_PYTEST_COMMAND = (
     "env -u DATABASE_URL -u CORS_ORIGINS "
     "-u MENTOR_TERMINAL_RETENTION_SECONDS "
@@ -4721,8 +4722,12 @@ def check_alembic_execution_contracts(root: Path = ROOT) -> list[str]:
     root = Path(root)
     python_callers: set[str] = set()
     python_root = root / "backend" / "scripts"
-    if python_root.is_dir():
-        for path in sorted(python_root.rglob("*.py")):
+    # The owner-approved native producer is intentionally relocated under tests;
+    # audit it explicitly without classifying unit-test Alembic mocks as callers.
+    python_paths = set(python_root.rglob("*.py")) if python_root.is_dir() else set()
+    python_paths.add(root / "backend/tests/nyay12_native_gate.py")
+    if python_paths:
+        for path in sorted(python_paths):
             if path.is_symlink():
                 failures.append(f"{path}: Alembic script inventory may not contain symlinks")
                 continue
