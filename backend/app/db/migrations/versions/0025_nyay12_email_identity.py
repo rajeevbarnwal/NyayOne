@@ -110,6 +110,8 @@ def upgrade():
         sa.PrimaryKeyConstraint("id", name="pk_email_identity_reconciliations"),
     )
     op.create_index("ix_email_identity_reconciliations_email_hash", "email_identity_reconciliations", ["email_hash"], unique=False)
+    op.create_index("ix_email_identity_reconciliations_holder_user_id", "email_identity_reconciliations", ["holder_user_id"], unique=False)
+    op.create_index("ix_email_identity_reconciliations_claimant_user_id", "email_identity_reconciliations", ["claimant_user_id"], unique=False)
     _reconcile_legacy_duplicates()
 
 
@@ -152,6 +154,8 @@ def downgrade():
     for table in _TABLES:
         if bind.execute(sa.text(f"SELECT 1 FROM {table} LIMIT 1")).first() is not None:
             raise RuntimeError("email_identity_downgrade_requires_empty_graph")
+    op.drop_index("ix_email_identity_reconciliations_claimant_user_id", table_name="email_identity_reconciliations")
+    op.drop_index("ix_email_identity_reconciliations_holder_user_id", table_name="email_identity_reconciliations")
     op.drop_index("ix_email_identity_reconciliations_email_hash", table_name="email_identity_reconciliations")
     op.drop_table("email_identity_reconciliations")
     op.drop_index("ix_email_identity_mutations_user_id", table_name="email_identity_mutations")
