@@ -66,7 +66,7 @@ NYAY11_SOURCE_PATH = (
 )
 APPLICATION_HEAD_REVISION = "0025_nyay12_email_identity"
 APPLICATION_HEAD_SOURCE_SHA256 = (
-    "711ae36e55b66d7050d4acf9781f56fb6de09c918f02e4eacddcedc7ef7d6154"
+    "f0f31c3ac02a765d1f49cb5537c50bbf88d4914e8b1afd8776b4a01baa9ed775"
 )
 APPLICATION_HEAD_SOURCE_PATH = (
     Path(__file__).resolve().parent

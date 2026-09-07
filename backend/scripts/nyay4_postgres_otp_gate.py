@@ -3441,17 +3441,20 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay11_checkpoint = scripts.get_revision(NYAY11_CHECKPOINT)
         nyay22_checkpoint = scripts.get_revision(NYAY22_CHECKPOINT)
         nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
         nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay11_checkpoint is None
             or nyay22_checkpoint is None
             or nyay9_checkpoint is None
             or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != nyay22_checkpoint.revision
+            or application.down_revision != nyay11_checkpoint.revision
+            or nyay11_checkpoint.down_revision != nyay22_checkpoint.revision
             or nyay22_checkpoint.down_revision != nyay9_checkpoint.revision
             or nyay9_checkpoint.down_revision != nyay5_checkpoint.revision
             or nyay5_checkpoint.down_revision != retention.revision

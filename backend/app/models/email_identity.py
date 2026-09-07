@@ -144,10 +144,10 @@ class EmailIdentityReconciliation(TimestampedBase):
     __tablename__ = "email_identity_reconciliations"
     email_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     holder_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     claimant_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     reason: Mapped[str] = mapped_column(String(24), nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
