@@ -24,7 +24,7 @@ BASE_URL = make_url(
     [gate, wave4_postgres_gate, wave5_postgres_gate],
 )
 def test_wave_database_gates_target_current_application_head(migration_gate):
-    assert APPLICATION_HEAD_REVISION == "0024_nyay11_authority_state"
+    assert APPLICATION_HEAD_REVISION == "0025_nyay12_email_identity"
     assert migration_gate.HEAD == APPLICATION_HEAD_REVISION
 
 

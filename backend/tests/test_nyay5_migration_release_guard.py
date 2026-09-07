@@ -85,7 +85,7 @@ def test_forward_head_cannot_skip_the_digest_approved_0019_to_0020_transition(
         guard, "_current_revision", lambda _: "0019_otp_security_authority"
     )
     expected = (
-        "NYAY-11 production approval unavailable; refusing to migrate"
+        "NYAY-12 production approval unavailable; refusing to migrate"
         if requested in {guard.APPLICATION_HEAD_REVISION, "head"}
         else (
             "NYAY-22 database revision rejected; refusing to migrate"

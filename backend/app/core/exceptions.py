@@ -20,6 +20,7 @@ _OWNER_PROFILE_VALIDATION_PATHS = frozenset({
     "/api/v1/student/profile/interests",
     "/api/v1/student/profile/prompt-dismiss",
     "/api/v1/auth/student/profile",
+    "/api/v1/auth/student/email-identities",
 })
 
 

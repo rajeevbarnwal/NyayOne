@@ -246,6 +246,148 @@ def start_flow(
     return raw_token, flow, intent
 
 
+def start_email_flow(
+    session: Session,
+    email: str,
+    now: datetime,
+) -> tuple[str, OtpFlow, otp_outbox.DeliveryIntent | None]:
+    """Create one cookie-owned real or decoy *email* login flow (NYAY-12).
+
+    Unknown, unverified, removed, suspended and verified addresses receive the
+    same 202 shape. Only an independently verified identity owned by an active
+    student registration ever issues a real challenge, and only while the
+    server-owned ``email_login_enabled`` flag is on. The registration's login
+    authority (attempts, lockout, resend budget) is shared with mobile login so
+    switching channels cannot multiply budgets.
+    """
+
+    from app.core.email_identity import email_identity_hash, normalize_login_email
+    from app.models.email_identity import UserEmailIdentity
+
+    now = _as_utc(now)
+    normalized = normalize_login_email(email)
+    lookup = email_identity_hash(normalized)
+    identity = None
+    registration = None
+    user = None
+    if settings.email_login_enabled:
+        identity = session.scalar(
+            select(UserEmailIdentity).where(
+                UserEmailIdentity.email_hash == lookup,
+                UserEmailIdentity.state == "verified",
+            )
+        )
+    if identity is not None:
+        registration = session.scalar(
+            select(StudentRegistration).where(
+                StudentRegistration.user_id == identity.user_id,
+                *otp_service.registration_authority_filters(),
+            )
+        )
+        if registration is not None:
+            registration = otp_service.lock_registration_for_update(
+                session, registration.id
+            )
+        user = session.get(User, identity.user_id)
+    eligible = bool(
+        identity is not None
+        and registration is not None
+        and otp_service.registration_is_authorizable(registration)
+        and registration.status in {"otp_verified", "active"}
+        and user is not None
+        and user.role == "student"
+        and user.status not in {"suspended", "deleted"}
+    )
+    if eligible:
+        authority = otp_service.authority_for_registration(
+            session, registration, "login", now  # type: ignore[arg-type]
+        )
+    else:
+        # Stable decoy domain keyed by the normalized address; it never
+        # rediscovers a registration-bound authority.
+        subject = otp_authority.authority_subject_from_mobile_hash(
+            keyed_hash(f"nyayone:otp-email-login-decoy:v1:{normalized}")
+        )
+        authority = otp_authority.lock_or_create_authority(
+            session,
+            subject_hash=subject,
+            purpose="login",
+            registration_id=None,
+            now=now,
+        )
+    cooldown = bool(
+        authority.cooldown_until is not None
+        and _as_utc(authority.cooldown_until) > now
+    )
+    locked = otp_authority.locked_for_seconds(authority, now) > 0
+    intent: otp_outbox.DeliveryIntent | None = None
+    candidate = None
+    active = session.scalar(
+        select(OtpChallenge).where(
+            OtpChallenge.authority_id == authority.id,
+            OtpChallenge.delivery_state == "active",
+        )
+    )
+    repeated_issue = authority.last_issued_at is not None
+    if eligible and not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+            session.flush()
+        generation = authority.generation
+        candidate, intent = otp_service.issue_challenge(
+            session,
+            registration.id,  # type: ignore[union-attr]
+            now,
+            purpose="login",
+            destination=normalized,
+        )
+        if authority.generation == generation:
+            otp_service.note_decoy_issue(authority, now=now)
+    elif not cooldown and not locked:
+        if repeated_issue:
+            otp_service.consume_resend_window(authority, now)
+        otp_service.note_decoy_issue(authority, now=now)
+    raw_token, flow = otp_flow_service.create_flow(
+        session,
+        authority,
+        now=now,
+        destination=normalized,
+        challenge=active or candidate,
+        registration_id=(registration.id if eligible and registration else None),
+    )
+    metadata: dict[str, object] = {otp_flow_service.EMAIL_CHANNEL_METADATA_KEY: "email"}
+    if eligible and identity is not None:
+        metadata["email_identity_id"] = str(identity.id)
+    flow.metadata_json = metadata
+    session.flush()
+    return raw_token, flow, intent
+
+
+def email_flow_destination(session: Session, flow: OtpFlow) -> str | None:
+    """Resolve the still-verified, still-owned address behind an email flow."""
+
+    from app.models.email_identity import UserEmailIdentity
+
+    metadata = flow.metadata_json or {}
+    raw_identity_id = metadata.get("email_identity_id")
+    if flow.registration_id is None or not isinstance(raw_identity_id, str):
+        return None
+    try:
+        identity_id = uuid.UUID(raw_identity_id)
+    except ValueError:
+        return None
+    registration = session.get(StudentRegistration, flow.registration_id)
+    identity = session.get(UserEmailIdentity, identity_id)
+    if (
+        registration is None
+        or identity is None
+        or identity.state != "verified"
+        or identity.user_id != registration.user_id
+    ):
+        return None
+    return decrypt(identity.email_ct)
+
+
 def verify_flow(
     session: Session,
     raw_flow_token: str | None,

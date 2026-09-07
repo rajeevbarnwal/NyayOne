@@ -1,5 +1,6 @@
 import {
   type QueryFunctionContext,
+  useMutation,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -12,8 +13,16 @@ import {
   type StudentContextFence,
 } from '../lib/studentBrowserContext';
 import {
+  addEmailIdentity,
   dismissProfilePrompt,
   getStudentProfileProjection,
+  listEmailIdentities,
+  removeEmailIdentity,
+  resendEmailIdentity,
+  setPrimaryEmailIdentity,
+  verifyEmailIdentity,
+  type EmailIdentityListing,
+  type EmailIdentityMutationResult,
   ProfileApiError,
   profileSectionRoute,
   requestInstitutionalEmailVerification,
@@ -135,3 +144,53 @@ export function resolveProfileStepRoute(
   }
   return { redirect: profileSectionRoute(projection.nextIncompleteSection) };
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* NYAY-12 verified-email identities                                           */
+/* -------------------------------------------------------------------------- */
+export const STUDENT_EMAIL_IDENTITIES_QUERY_KEY = ['student-email-identities'] as const;
+
+export function useEmailIdentities() {
+  return useQuery({
+    queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY,
+    queryFn: (_context: QueryFunctionContext) => listEmailIdentities(),
+    retry: false,
+  });
+}
+
+function useEmailIdentityMutation<TInput>(
+  mutationFn: (input: TInput) => Promise<EmailIdentityMutationResult>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation<EmailIdentityMutationResult, ProfileApiError, TInput>({
+    mutationFn,
+    onSettled: async () => {
+      // Every outcome (including typed failures) refreshes the authoritative
+      // listing; the client never reasons about identity state locally.
+      await queryClient.invalidateQueries({ queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY });
+    },
+  });
+}
+
+export function useAddEmailIdentity() {
+  return useEmailIdentityMutation<string>((email) => addEmailIdentity(email));
+}
+
+export function useVerifyEmailIdentity() {
+  return useEmailIdentityMutation<{ identityId: string; code: string }>(({ identityId, code }) => verifyEmailIdentity(identityId, code));
+}
+
+export function useResendEmailIdentity() {
+  return useEmailIdentityMutation<string>((identityId) => resendEmailIdentity(identityId));
+}
+
+export function useRemoveEmailIdentity() {
+  return useEmailIdentityMutation<string>((identityId) => removeEmailIdentity(identityId));
+}
+
+export function useSetPrimaryEmailIdentity() {
+  return useEmailIdentityMutation<string>((identityId) => setPrimaryEmailIdentity(identityId));
+}
+
+export type { EmailIdentityListing };

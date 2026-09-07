@@ -43,6 +43,7 @@ from app.core.auth_cookies import (
     cookie_secure,
 )
 from app.core.config import settings
+from app.core.email_identity import email_identity_hash, normalize_login_email
 from app.core.crypto import decrypt, keyed_hash
 from app.db.session import get_session
 from app.db.session import get_sessionmaker
@@ -70,7 +71,11 @@ from app.services import (
     registration_service,
 )
 from app.services.integrity_errors import constraint_name
-from app.services.otp_sender import IdempotentOtpSender, build_otp_sender
+from app.services.otp_sender import (
+    IdempotentOtpSender,
+    build_email_otp_sender,
+    build_otp_sender,
+)
 from app.services.registration_service import RegistrationError, register_student
 from app.workers.otp_outbox_relay import (
     deliver_after_response,
@@ -105,6 +110,11 @@ def _now() -> datetime:
 def get_otp_sender() -> IdempotentOtpSender | None:
     """Resolve the configured OTP provider. FastAPI dependency (override in tests)."""
     return build_otp_sender()
+
+
+def get_email_otp_sender() -> IdempotentOtpSender | None:
+    """Resolve the NYAY-12 email OTP provider. FastAPI dependency (override in tests)."""
+    return build_email_otp_sender()
 
 
 def get_outbox_session_factory() -> Callable[[], Session]:
@@ -1072,6 +1082,7 @@ def otp_resend(
     origin: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
     sender: IdempotentOtpSender | None = Depends(get_otp_sender),
+    email_sender: IdempotentOtpSender | None = Depends(get_email_otp_sender),
     outbox_session_factory: Callable[[], Session] = Depends(
         get_outbox_session_factory
     ),
@@ -1080,7 +1091,8 @@ def otp_resend(
     now = _now()
     _otp_projection_headers(response)
     raw_token = _flow_cookie_value(request)
-    provider = _require_sender(sender)
+    channel = otp_flow_service.channel_for_token(session, raw_token)
+    provider = _require_sender(email_sender if channel == "email" else sender)
     subject = _flow_subject_for_rate(session, raw_token)
     _rate_limit(
         session,
@@ -1120,12 +1132,20 @@ def otp_resend(
             registration = session.get(StudentRegistration, flow.registration_id)
             if not otp_service.registration_is_authorizable(registration):
                 raise otp_service.OtpError(404, "no_active_challenge")
+            if channel == "email":
+                # NYAY-12: the address must still be a verified identity owned
+                # by this registration; otherwise the flow has no delivery target.
+                destination = login_service.email_flow_destination(session, flow)
+                if destination is None:
+                    raise otp_service.OtpError(404, "no_active_challenge")
+            else:
+                destination = decrypt(registration.mobile_ct)
             candidate, intent = otp_service.resend(
                 session,
                 flow.registration_id,
                 now,
                 purpose=flow.purpose,
-                destination=decrypt(registration.mobile_ct),
+                destination=destination,
             )
             if flow.challenge_id is None:
                 flow.challenge_id = candidate.id
@@ -1500,6 +1520,107 @@ def login_otp_start(
             outbox_session_factory,
         )
     # Same 202 + shape for a known, unknown, suspended or cooldown account.
+    return state
+
+
+@router.get("/login/channels")
+def login_channels(
+    request: Request,
+    response: Response,
+) -> dict[str, object]:
+    """Server-owned S-04 channel projection (NYAY-12); never user-specific."""
+
+    _otp_projection_headers(response)
+    if request.query_params:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "field": "query"},
+            headers=_otp_error_headers(),
+        )
+    return {
+        "channels": [
+            {"channel": "mobile", "enabled": True},
+            {"channel": "email", "enabled": bool(settings.email_login_enabled)},
+        ]
+    }
+
+
+@router.post("/login/email/start", status_code=202)
+def login_email_start(
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    payload: object = Body(default=None),
+    _: None = Depends(require_trusted_mutation_origin),
+    session: Session = Depends(get_session),
+    sender: IdempotentOtpSender | None = Depends(get_email_otp_sender),
+    outbox_session_factory: Callable[[], Session] = Depends(get_outbox_session_factory),
+) -> otp_flow_service.OtpFlowState:
+    """Non-enumerating verified-email login start (NYAY-12).
+
+    The fail-closed server flag is checked before any input is interpreted so a
+    disabled channel is externally identical for every payload. With the flag
+    on, unknown, pending, verified and suspended addresses all receive the same
+    202 cookie-flow projection; only a verified, active owner is delivered to.
+    """
+
+    now = _now()
+    _otp_projection_headers(response)
+    if not settings.email_login_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "email_login_disabled"},
+            headers=_otp_error_headers(),
+        )
+    provider = _require_sender(sender)
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"email"}
+        or not isinstance(payload.get("email"), str)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "field": "email"},
+            headers=_otp_error_headers(),
+        )
+    try:
+        normalized = normalize_login_email(payload["email"])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "field": "email"},
+            headers=_otp_error_headers(),
+        ) from exc
+    subject = otp_authority.authority_subject_from_mobile_hash(
+        keyed_hash(f"nyayone:otp-email-login-rate:v1:{email_identity_hash(normalized)}")
+    )
+    _rate_limit(
+        session,
+        request,
+        subject_hash=subject,
+        action="issue",
+        purpose="login",
+        now=now,
+    )
+    try:
+        raw_token, flow, intent = login_service.start_email_flow(
+            session, normalized, now
+        )
+    except otp_service.OtpError as exc:
+        raise _otp_http_error(
+            session, _flow_cookie_value(request), exc, now=now
+        ) from exc
+    authority = session.get(OtpPurposeAuthority, flow.authority_id)
+    session.commit()
+    _set_flow_cookie(response, raw_token)
+    state = otp_flow_service.project(authority, flow, now=now)
+    if intent is not None:
+        background_tasks.add_task(
+            deliver_after_response,
+            intent.outbox_id,
+            provider,
+            outbox_session_factory,
+        )
     return state
 
 
