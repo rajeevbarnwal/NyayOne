@@ -40,6 +40,10 @@ REQUIRED_HEADERS = (
     ('patch', '/api/v1/student/profile/academic'),
     ('patch', '/api/v1/student/profile/interests'),
     ('patch', '/api/v1/auth/student/profile'),
+    *(('post', '/api/v1/auth/student/email-identities' + path) for path in (
+        '', '/{identity_id}/verify', '/{identity_id}/resend', '/{identity_id}/primary',
+    )),
+    ('delete', '/api/v1/auth/student/email-identities/{identity_id}'),
 )
 OPTIONAL_HEADERS = (
     ('post', '/api/v1/auth/student/register'),
@@ -95,10 +99,10 @@ def admits_null(document, schema):
 
 
 def test_audited_inventory_is_closed_and_nonempty():
-    assert len(REQUIRED_HEADERS) == len(set(REQUIRED_HEADERS)) == 38
+    assert len(REQUIRED_HEADERS) == len(set(REQUIRED_HEADERS)) == 43
     assert len(OPTIONAL_HEADERS) == len(set(OPTIONAL_HEADERS)) == 3
     assert len(BODY_ONLY) == len(set(BODY_ONLY)) == 2
-    assert len(set(REQUIRED_HEADERS + OPTIONAL_HEADERS + BODY_ONLY)) == 43
+    assert len(set(REQUIRED_HEADERS + OPTIONAL_HEADERS + BODY_ONLY)) == 48
 
 
 @pytest.mark.parametrize(('method', 'path'), REQUIRED_HEADERS)

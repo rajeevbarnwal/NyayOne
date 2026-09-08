@@ -155,6 +155,7 @@ export class ProfileApiError extends Error {
     readonly currentProfileVersion?: number,
     readonly currentProjection?: StudentProfileProjection,
     readonly latestProjection?: StudentProfileProjection,
+    readonly retryAfterSeconds?: number,
   ) {
     super(code);
     this.name = 'ProfileApiError';
@@ -740,4 +741,201 @@ export function profileErrorMessage(error: unknown): string {
   if (error.status === 422) return 'Review the highlighted fields and try again.';
   if (error.status === 403) return 'This account is not permitted to change that profile section.';
   return 'Your profile could not be saved. Check your connection and try again.';
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* NYAY-12 verified-email identities (owner-scoped, server-authoritative)      */
+/* -------------------------------------------------------------------------- */
+const EMAIL_IDENTITY_ROOT = '/api/v1/auth/student/email-identities';
+const EMAIL_IDENTITY_KEY_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~-';
+const EMAIL_MASK_RE = /^[^\s@•]•{5}@[^\s@]+\.[^\s@]+$/u;
+const IDENTITY_STATES = ['pending', 'verified', 'removed'] as const;
+const VERIFICATION_STATUSES = ['none', 'pending_delivery', 'active', 'failed', 'expired'] as const;
+
+export type EmailIdentityState = (typeof IDENTITY_STATES)[number];
+export type EmailIdentityVerificationStatus = (typeof VERIFICATION_STATUSES)[number];
+
+export interface EmailIdentity {
+  id: string;
+  emailMasked: string;
+  state: EmailIdentityState;
+  isPrimary: boolean;
+  verification: {
+    status: EmailIdentityVerificationStatus;
+    expiresInSeconds: number | null;
+    resendInSeconds: number | null;
+    attemptsLeft: number | null;
+  };
+}
+
+export interface EmailIdentityListing {
+  loginChannelEnabled: boolean;
+  maxIdentities: number;
+  identities: EmailIdentity[];
+}
+
+export interface EmailIdentityMutationResult {
+  status: 'accepted' | 'verified' | 'removed' | 'primary';
+  identity: EmailIdentity;
+}
+
+interface EmailIdentityWire {
+  id: string;
+  email_masked: string;
+  state: EmailIdentityState;
+  is_primary: boolean;
+  verification: {
+    status: EmailIdentityVerificationStatus;
+    expires_in_seconds: number | null;
+    resend_in_seconds: number | null;
+    attempts_left: number | null;
+  };
+}
+
+function relativeOrNull(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && Number(value) >= 0);
+}
+
+function isEmailIdentityWire(value: unknown): value is EmailIdentityWire {
+  if (!isRecord(value) || !hasExactKeys(value, ['email_masked', 'id', 'is_primary', 'state', 'verification'])) return false;
+  if (typeof value.id !== 'string' || !/^[0-9a-f-]{36}$/u.test(value.id)) return false;
+  if (typeof value.email_masked !== 'string' || !EMAIL_MASK_RE.test(value.email_masked)) return false;
+  if (!IDENTITY_STATES.includes(value.state as EmailIdentityState)) return false;
+  if (typeof value.is_primary !== 'boolean') return false;
+  if (value.is_primary && value.state !== 'verified') return false;
+  const verification = value.verification;
+  if (!isRecord(verification) || !hasExactKeys(verification, ['attempts_left', 'expires_in_seconds', 'resend_in_seconds', 'status'])) return false;
+  return VERIFICATION_STATUSES.includes(verification.status as EmailIdentityVerificationStatus)
+    && relativeOrNull(verification.expires_in_seconds)
+    && relativeOrNull(verification.resend_in_seconds)
+    && relativeOrNull(verification.attempts_left);
+}
+
+function mapEmailIdentity(wire: EmailIdentityWire): EmailIdentity {
+  return {
+    id: wire.id,
+    emailMasked: wire.email_masked,
+    state: wire.state,
+    isPrimary: wire.is_primary,
+    verification: {
+      status: wire.verification.status,
+      expiresInSeconds: wire.verification.expires_in_seconds,
+      resendInSeconds: wire.verification.resend_in_seconds,
+      attemptsLeft: wire.verification.attempts_left,
+    },
+  };
+}
+
+function invalidIdentityProjection(): ProfileApiError {
+  return new ProfileApiError(502, 'invalid_email_identity_projection');
+}
+
+export function newEmailIdentityIdempotencyKey(): string {
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  return `ei-${Array.from(bytes, (byte) => EMAIL_IDENTITY_KEY_ALPHABET[byte % EMAIL_IDENTITY_KEY_ALPHABET.length]).join('')}`;
+}
+
+export interface EmailIdentityRequestOptions {
+  /** Reuse across retries of the *same* operation; generated once when absent. */
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
+const EMAIL_IDENTITY_KEY_RE = /^[A-Za-z0-9._~-]{16,200}$/u;
+
+function resolvedIdempotencyKey(supplied: string | undefined): string {
+  if (supplied === undefined) return newEmailIdentityIdempotencyKey();
+  if (!EMAIL_IDENTITY_KEY_RE.test(supplied)) {
+    throw new ProfileApiError(422, 'invalid_idempotency_key', 'Idempotency-Key');
+  }
+  return supplied;
+}
+
+async function identityRequest(
+  path: string,
+  init: RequestInit,
+  idempotent: boolean,
+  options: EmailIdentityRequestOptions = {},
+): Promise<unknown> {
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  // A caller-supplied key is preserved verbatim so the same operation can be
+  // retried safely; a key is generated only when none is present.
+  if (idempotent && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', resolvedIdempotencyKey(options.idempotencyKey));
+  }
+  const response = await studentApiFetch(path, { ...init, headers, signal: options.signal ?? init.signal });
+  const body = await readJson(response);
+  if (response.ok) return body;
+  const detail = isRecord(body) && isRecord(body.detail) ? body.detail : undefined;
+  const code = typeof detail?.code === 'string' ? detail.code : `http_${response.status}`;
+  const field = typeof detail?.field === 'string' ? detail.field : undefined;
+  const retryAfter = response.headers.get('Retry-After');
+  const retryAfterSeconds = retryAfter !== null && /^\d+$/u.test(retryAfter.trim()) ? Number(retryAfter.trim()) : undefined;
+  throw new ProfileApiError(response.status, code, field, undefined, undefined, undefined, retryAfterSeconds);
+}
+
+function listingFromUnknown(value: unknown): EmailIdentityListing {
+  if (!isRecord(value) || !hasExactKeys(value, ['identities', 'login_channel_enabled', 'max_identities'])) throw invalidIdentityProjection();
+  if (typeof value.login_channel_enabled !== 'boolean' || !Number.isSafeInteger(value.max_identities) || Number(value.max_identities) < 1) throw invalidIdentityProjection();
+  if (!Array.isArray(value.identities) || !value.identities.every(isEmailIdentityWire)) throw invalidIdentityProjection();
+  return {
+    loginChannelEnabled: value.login_channel_enabled,
+    maxIdentities: Number(value.max_identities),
+    identities: (value.identities as EmailIdentityWire[]).map(mapEmailIdentity),
+  };
+}
+
+function mutationFromUnknown(value: unknown, expected: EmailIdentityMutationResult['status']): EmailIdentityMutationResult {
+  if (!isRecord(value) || !hasExactKeys(value, ['identity', 'status']) || value.status !== expected || !isEmailIdentityWire(value.identity)) {
+    throw invalidIdentityProjection();
+  }
+  return { status: expected, identity: mapEmailIdentity(value.identity) };
+}
+
+export async function listEmailIdentities(signal?: AbortSignal): Promise<EmailIdentityListing> {
+  return listingFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'GET', signal }, false, { signal }));
+}
+
+export async function addEmailIdentity(email: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'POST', body: JSON.stringify({ email }) }, true, options), 'accepted');
+}
+
+export async function verifyEmailIdentity(identityId: string, code: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/verify`, { method: 'POST', body: JSON.stringify({ code }) }, true, options), 'verified');
+}
+
+export async function resendEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/resend`, { method: 'POST', body: JSON.stringify({}) }, true, options), 'accepted');
+}
+
+export async function removeEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}`, { method: 'DELETE' }, true, options), 'removed');
+}
+
+export async function setPrimaryEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/primary`, { method: 'POST', body: JSON.stringify({}) }, true, options), 'primary');
+}
+
+export function emailIdentityErrorMessage(error: unknown): string {
+  if (!(error instanceof ProfileApiError)) {
+    return 'That change could not be saved. Check your connection and try again.';
+  }
+  switch (error.code) {
+    case 'authentication_required': return 'Your session ended. Sign in again before changing sign-in emails.';
+    case 'email_identity_capability_disabled': return 'Sign-in emails are unavailable until your account prerequisites are complete.';
+    case 'email_identity_conflict': return 'This address cannot be used for sign-in on this account. It is already the verified sign-in email of another account; support review has been recorded.';
+    case 'email_identity_verification_failed': return 'That code was not accepted. Check the latest code or request a new one.';
+    case 'email_identity_rate_limited': return error.retryAfterSeconds
+      ? `Please wait ${error.retryAfterSeconds} seconds before trying again.`
+      : 'Please wait before trying again.';
+    case 'email_delivery_unavailable': return 'The code could not be delivered right now. Try resending in a moment.';
+    case 'email_identity_limit_reached': return 'You have reached the maximum number of sign-in emails. Remove one to add another.';
+    case 'email_identity_state_conflict': return 'That action is not available for this address right now. Refresh and try again.';
+    case 'email_identity_not_found': return 'That sign-in email is no longer on your account.';
+    case 'validation_error': return error.field === 'code' ? 'Enter all six digits.' : 'Enter a valid email address.';
+    default: return 'That change could not be saved. Please retry.';
+  }
 }

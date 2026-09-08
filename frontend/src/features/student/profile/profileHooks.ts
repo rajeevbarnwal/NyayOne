@@ -1,5 +1,6 @@
 import {
   type QueryFunctionContext,
+  useMutation,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -12,8 +13,16 @@ import {
   type StudentContextFence,
 } from '../lib/studentBrowserContext';
 import {
+  addEmailIdentity,
   dismissProfilePrompt,
   getStudentProfileProjection,
+  listEmailIdentities,
+  removeEmailIdentity,
+  resendEmailIdentity,
+  setPrimaryEmailIdentity,
+  verifyEmailIdentity,
+  type EmailIdentityListing,
+  type EmailIdentityMutationResult,
   ProfileApiError,
   profileSectionRoute,
   requestInstitutionalEmailVerification,
@@ -135,3 +144,62 @@ export function resolveProfileStepRoute(
   }
   return { redirect: profileSectionRoute(projection.nextIncompleteSection) };
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* NYAY-12 verified-email identities                                           */
+/* -------------------------------------------------------------------------- */
+export const STUDENT_EMAIL_IDENTITIES_QUERY_KEY = ['student-email-identities'] as const;
+
+export function useEmailIdentities(enabled = true) {
+  // The listing is read only once the owner opens the sign-in email section;
+  // S-17 itself never issues the request on load.
+  return useQuery({
+    queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY,
+    // Forward the query lifecycle signal so closing the panel or navigating
+    // away cancels the in-flight listing instead of updating after unmount.
+    queryFn: ({ signal }: QueryFunctionContext) => listEmailIdentities(signal),
+    retry: false,
+    enabled,
+  });
+}
+
+function useEmailIdentityMutation<TInput>(
+  mutationFn: (input: TInput) => Promise<EmailIdentityMutationResult>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation<EmailIdentityMutationResult, ProfileApiError, TInput>({
+    mutationFn,
+    onSettled: async () => {
+      // Every outcome (including typed failures) refreshes the authoritative
+      // listing; the client never reasons about identity state locally.
+      await queryClient.invalidateQueries({ queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY });
+    },
+  });
+}
+
+// The idempotency key is part of the mutation variables: it is minted once per
+// owner action, so a retry of the same mutation replays the same server outcome.
+export interface EmailIdentityActionVariables { identityId: string; idempotencyKey: string }
+
+export function useAddEmailIdentity() {
+  return useEmailIdentityMutation<{ email: string; idempotencyKey: string }>(({ email, idempotencyKey }) => addEmailIdentity(email, { idempotencyKey }));
+}
+
+export function useVerifyEmailIdentity() {
+  return useEmailIdentityMutation<{ identityId: string; code: string; idempotencyKey: string }>(({ identityId, code, idempotencyKey }) => verifyEmailIdentity(identityId, code, { idempotencyKey }));
+}
+
+export function useResendEmailIdentity() {
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => resendEmailIdentity(identityId, { idempotencyKey }));
+}
+
+export function useRemoveEmailIdentity() {
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => removeEmailIdentity(identityId, { idempotencyKey }));
+}
+
+export function useSetPrimaryEmailIdentity() {
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => setPrimaryEmailIdentity(identityId, { idempotencyKey }));
+}
+
+export type { EmailIdentityListing };

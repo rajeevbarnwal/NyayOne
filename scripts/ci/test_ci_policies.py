@@ -27,6 +27,23 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
+    def test_nyay12_native_gate_is_wired_and_sealed(self) -> None:
+        policy = load("verify_nyayone_ci")
+        source = (policy.ROOT / "backend/scripts/db_gate.sh").read_text()
+        self.assertIn('NYAY12_POSTGRES_GATE=1 "$PY" tests/nyay12_native_gate.py', source)
+        self.assertIn("backend/tests/nyay12_native_gate.py", policy.EXPECTED_NYAY19_ALEMBIC_PYTHON_CALLERS)
+        self.assertEqual(policy.check_db_gate_contract(policy.ROOT / "backend/scripts/db_gate.sh"), [])
+
+    def test_nyay12_relocated_alembic_caller_is_audited(self) -> None:
+        policy = load("verify_nyayone_ci")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "backend/tests/nyay12_native_gate.py"
+            path.parent.mkdir(parents=True)
+            path.write_text("import subprocess\nsubprocess.run(['python', '-m', 'alembic', 'upgrade', 'head'], env={})\n")
+            failures = policy.check_alembic_execution_contracts(root)
+            self.assertTrue(any("nyay12_native_gate.py" in item and "missing exact isolated" in item for item in failures), failures)
+
     def test_nyay19_alembic_callers_require_exact_isolated_authority(self) -> None:
         policy = load("verify_nyayone_ci")
 

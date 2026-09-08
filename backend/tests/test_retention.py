@@ -45,6 +45,9 @@ def test_no_window_is_noop(db_session: Session):
         "login_attempts_expired": 0,
         "login_attempts": 0,
         "auth_sessions": 0,
+            "email_identity_tombstones": 0,
+        "email_identity_mutations": 0,
+        "email_identity_reconciliations": 0,
     }
     assert db_session.scalar(select(StudentRegistration)) is not None
 

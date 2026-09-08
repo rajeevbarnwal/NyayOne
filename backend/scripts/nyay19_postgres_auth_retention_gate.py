@@ -84,6 +84,11 @@ NYAY22_CHECKPOINT_FILENAME = "0023_nyay22_mentor_ceremony.py"
 NYAY22_CHECKPOINT_SHA256 = (
     "d2a221b00ff785c2748cd7394a57da4cfd34596806078ccc815244626dcb7ce1"
 )
+NYAY11_CHECKPOINT = "0024_nyay11_authority_state"
+NYAY11_CHECKPOINT_FILENAME = "0024_nyay11_authority_state.py"
+NYAY11_CHECKPOINT_SHA256 = (
+    "9e654c22ea584029685746d64ef547b7734b0a9dc5926c23afadba49bf07bf4c"
+)
 from app.db.migration_release_guard import (  # noqa: E402
     APPLICATION_HEAD_REVISION,
     APPLICATION_HEAD_SOURCE_PATH,
@@ -109,6 +114,7 @@ POST_LEDGER_HISTORICAL_SHA256 = {
         "3513d5400295fb424a6b84e3325286a45c8c57192d5ef91f98ce884d691062d4"
     ),
     NYAY22_CHECKPOINT_FILENAME: NYAY22_CHECKPOINT_SHA256,
+    NYAY11_CHECKPOINT_FILENAME: NYAY11_CHECKPOINT_SHA256,
 }
 
 # Static filename+digest authority for every historical revision.  The JSON
@@ -2428,6 +2434,9 @@ def _historical_migration_inventory(
         nyay22_tree = ast.parse(
             (versions / NYAY22_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
         )
+        nyay11_tree = ast.parse(
+            (versions / NYAY11_CHECKPOINT_FILENAME).read_text(encoding="utf-8")
+        )
         forward_tree = ast.parse(
             (versions / APPLICATION_HEAD_FILENAME).read_text(encoding="utf-8")
         )
@@ -2449,6 +2458,7 @@ def _historical_migration_inventory(
         checkpoint_assignments = _revision_assignments(checkpoint_tree)
         nyay9_assignments = _revision_assignments(nyay9_tree)
         nyay22_assignments = _revision_assignments(nyay22_tree)
+        nyay11_assignments = _revision_assignments(nyay11_tree)
         application_assignments = _revision_assignments(forward_tree)
         result["forward_application_head_exact"] = bool(
             result["file_inventory_exact"]
@@ -2461,8 +2471,10 @@ def _historical_migration_inventory(
             == {"revision": NYAY9_CHECKPOINT, "down_revision": NYAY5_CHECKPOINT}
             and nyay22_assignments
             == {"revision": NYAY22_CHECKPOINT, "down_revision": NYAY9_CHECKPOINT}
+            and nyay11_assignments
+            == {"revision": NYAY11_CHECKPOINT, "down_revision": NYAY22_CHECKPOINT}
             and application_assignments
-            == {"revision": APPLICATION_HEAD, "down_revision": NYAY22_CHECKPOINT}
+            == {"revision": APPLICATION_HEAD, "down_revision": NYAY11_CHECKPOINT}
         )
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         migrations = ledger["migrations"]

@@ -5,6 +5,9 @@ from app.models.student_authority import (  # noqa: F401
     InstitutionalReviewerAssignment, AuthorityMutationRecord,
     AuthorityAuditEvent, AuthorityNotification,
 )
+from app.models.email_identity import (  # noqa: F401
+    EmailIdentityMutation, EmailIdentityReconciliation, UserEmailIdentity,
+)
 from app.models.wave1 import (  # noqa: F401
     ComparisonItem, ComparisonSet, DataSubjectRequest, DeletionJob, ExportJob,
     LawSchool, LawSchoolFact, LawSchoolFollow, LawSchoolProgramme, LawSchoolSource,

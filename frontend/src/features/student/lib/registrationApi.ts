@@ -174,7 +174,7 @@ function isOtpFlowStateWire(value: unknown): value is OtpFlowStateWire {
     if (
       !['signup', 'login', 'recovery'].includes(String(state.purpose))
       || typeof state.destination_masked !== 'string'
-      || !/^••••••\d{4}$/u.test(state.destination_masked)
+      || !isMaskedDestination(state.destination_masked)
       || !allRelative
     ) return false;
     return !state.resend_allowed || (
@@ -190,6 +190,23 @@ function isOtpFlowStateWire(value: unknown): value is OtpFlowStateWire {
     return state.purpose === 'signup' || state.purpose === 'login';
   }
   return state.status === 'unavailable' && state.purpose === null;
+}
+
+// NYAY-12: the server masks either a mobile (••••••3210) or an email
+// (s•••••@example.edu) destination. The client never receives a raw identity.
+const MOBILE_MASK_RE = /^••••••\d{4}$/u;
+const EMAIL_MASK_RE = /^[^\s@•]•{5}@[^\s@]+\.[^\s@]+$/u;
+
+export function isMaskedDestination(value: string): boolean {
+  return MOBILE_MASK_RE.test(value) || EMAIL_MASK_RE.test(value);
+}
+
+export function isMaskedEmailDestination(value: string | null | undefined): boolean {
+  return typeof value === 'string' && EMAIL_MASK_RE.test(value);
+}
+
+export function isMaskedMobileDestination(value: string | null | undefined): boolean {
+  return typeof value === 'string' && MOBILE_MASK_RE.test(value);
 }
 
 function mapOtpFlowState(value: OtpFlowStateWire): OtpFlowState {
@@ -461,6 +478,52 @@ export async function startLoginOtp(mobile: string): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/login/otp/start',
     { method: 'POST', body: JSON.stringify({ mobile }) },
+  );
+  return requireOtpFlowState(result);
+}
+
+// NYAY-12: server-owned S-04 channel projection. The email channel exists only
+// when the server says so; the client never decides availability.
+export interface LoginChannels {
+  mobile: boolean;
+  email: boolean;
+}
+
+function isLoginChannelsWire(value: unknown): value is { channels: Array<{ channel: 'mobile' | 'email'; enabled: boolean }> } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).join(',') !== 'channels' || !Array.isArray(record.channels)) return false;
+  const rows = record.channels as unknown[];
+  if (rows.length !== 2) return false;
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+    const entry = row as Record<string, unknown>;
+    if (Object.keys(entry).sort().join(',') !== 'channel,enabled') return false;
+    if ((entry.channel !== 'mobile' && entry.channel !== 'email') || typeof entry.enabled !== 'boolean') return false;
+    seen.add(String(entry.channel));
+  }
+  return seen.has('mobile') && seen.has('email');
+}
+
+export async function getLoginChannels(): Promise<LoginChannels> {
+  const result = await jsonRequest<unknown>(
+    '/api/v1/auth/student/login/channels',
+    { method: 'GET' },
+    { notifyAuthChanged: false },
+  );
+  if (!isLoginChannelsWire(result)) {
+    throw new RegistrationApiError(502, 'invalid_login_channels');
+  }
+  const channels: LoginChannels = { mobile: false, email: false };
+  for (const row of result.channels) channels[row.channel] = row.enabled;
+  return channels;
+}
+
+export async function startEmailLoginOtp(email: string): Promise<OtpFlowState> {
+  const result = await jsonRequest<unknown>(
+    '/api/v1/auth/student/login/email/start',
+    { method: 'POST', body: JSON.stringify({ email }) },
   );
   return requireOtpFlowState(result);
 }

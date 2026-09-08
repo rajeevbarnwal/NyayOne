@@ -111,6 +111,15 @@ NYAY4_POSTGRES_GATE=1 "$PY" scripts/nyay4_postgres_otp_gate.py \
   --execute \
   --database-url "$DATABASE_URL" \
   --output test-results/nyay4-postgres/summary.json
+echo "== NYAY-12 verified-email identity gate (PostgreSQL 16 + pgvector) =="
+mkdir -p test-results/nyay12-postgres
+NYAY12_POSTGRES_GATE=1 "$PY" tests/nyay12_native_gate.py \
+  --database-url "$DATABASE_URL" \
+  --output test-results/nyay12-postgres/summary.json
+# Only the producer's closed-world, privacy-safe summary enters CI evidence.
+mkdir -p "$REPO_ROOT/test-results/nyay12-postgres"
+cp test-results/nyay12-postgres/summary.json \
+  "$REPO_ROOT/test-results/nyay12-postgres/summary.json"
 echo "== NYAY-19 authentication-retention lifecycle gate (PostgreSQL 16 + pgvector) =="
 mkdir -p test-results/nyay19-postgres
 NYAY19_POSTGRES_GATE_EXECUTE=1 "$PY" scripts/nyay19_postgres_auth_retention_gate.py \

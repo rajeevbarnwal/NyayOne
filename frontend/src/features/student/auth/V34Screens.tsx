@@ -18,8 +18,13 @@ import {
   cancelStudentOtp,
   registerStudent,
   resendStudentOtp,
+  getLoginChannels,
+  isMaskedEmailDestination,
+  isMaskedMobileDestination,
+  startEmailLoginOtp,
   startLoginOtp,
   startRecovery,
+  type LoginChannels,
   verifyLoginOtp,
   verifyRecovery,
   completeRecovery,
@@ -389,33 +394,82 @@ export function V34AuthGate(props: ScreenProps) {
   );
 }
 
+const LOGIN_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
+const LOGIN_EMAIL_ERROR = 'Enter a valid email address.';
+
+function isValidLoginEmail(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && [...trimmed].length <= 254 && LOGIN_EMAIL_RE.test(trimmed);
+}
+
 export function V34Login(props: ScreenProps) {
+  // NYAY-12: channel availability is a server projection (fail-closed). Until
+  // the projection arrives, or if the server disables email, S-04 renders the
+  // sealed mobile-only presentation.
+  const [channels, setChannels] = useState<LoginChannels | null>(null);
+  const session = useStudentSession();
+  useEffect(() => {
+    // The shared request lease refuses reads while the session bootstrap
+    // transition is active; re-read the projection once the phase settles.
+    if (session.phase === 'pending') return undefined;
+    let active = true;
+    getLoginChannels()
+      .then((projection) => { if (active) setChannels(projection); })
+      .catch(() => { if (active) setChannels(null); });
+    return () => { active = false; };
+  }, [session.phase]);
+  return <V34LoginForm {...props} channels={channels}/>;
+}
+
+export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | null; initialChannel?: 'mobile' | 'email' }) {
+  const { channels, initialChannel, ...topbarProps } = props;
   const nav = useNavigate();
+  const emailEnabled = channels?.email === true;
+  const [channel, setChannel] = useState<'mobile' | 'email'>(emailEnabled && initialChannel === 'email' ? 'email' : 'mobile');
   const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const activeChannel = emailEnabled ? channel : 'mobile';
+  function chooseChannel(next: 'mobile' | 'email') {
+    if (next === 'email' && !emailEnabled) return;
+    setChannel(next);
+    setErrors({});
+  }
   async function submit() {
     const next: Record<string, string> = {};
-    if (!isValidMobile(mobile)) next.mobile = MOBILE_ERROR;
+    if (activeChannel === 'email') {
+      if (!isValidLoginEmail(email)) next.email = LOGIN_EMAIL_ERROR;
+    } else if (!isValidMobile(mobile)) {
+      next.mobile = MOBILE_ERROR;
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
     setBusy(true);
     try {
-      await startLoginOtp(mobile);
+      if (activeChannel === 'email') {
+        await startEmailLoginOtp(email.trim());
+      } else {
+        await startLoginOtp(mobile);
+      }
       nav('/s-05');
-    } catch {
-      setErrors({ submit: 'A one time code could not be requested. Please retry.' });
+    } catch (caught) {
+      if (caught instanceof RegistrationApiError && caught.code === 'email_login_disabled') {
+        setErrors({ submit: 'Email sign-in is not available right now. Use your mobile number.' });
+      } else {
+        setErrors({ submit: 'A one time code could not be requested. Please retry.' });
+      }
     } finally {
       setBusy(false);
     }
   }
   return (
     <Screen id="S-04" aside={<RevLBrandPanel/>}>
-      <RevLTopbar {...props}/>
+      <RevLTopbar {...topbarProps}/>
       <Pane><main id="main-content" aria-labelledby="S-04-title" className="v34-main v321-form v321-form--login">
         <CreateAccountContext
           disabled={busy}
-          onChangeStart={() => { setBusy(true); setMobile(''); setErrors({}); }}
+          onChangeStart={() => { setBusy(true); setMobile(''); setEmail(''); setErrors({}); }}
           onChangeError={() => {
             setBusy(false);
             setErrors({ submit: 'Your sign-in context could not be safely cleared. Please retry.' });
@@ -424,13 +478,19 @@ export function V34Login(props: ScreenProps) {
         <span className="v321-eyebrow">Sign in</span>
         <h1 id="S-04-title" className="v34-title">How do you want to sign in?</h1>
         <div className="v321-segment" role="group" aria-label="Sign-in identity">
-          <button type="button" aria-pressed="true"><span className="v321-icon--indigo"><NyayOneRevLIcon name="sim"/></span><span>Mobile Number</span></button>
-          <button type="button" aria-pressed="false" aria-disabled="true" disabled><span className="v321-icon--gold"><NyayOneRevLIcon name="badge"/></span><span>Verified Email</span></button>
+          <button type="button" aria-pressed={activeChannel === 'mobile'} onClick={() => chooseChannel('mobile')} disabled={busy || undefined}><span className="v321-icon--indigo"><NyayOneRevLIcon name="sim"/></span><span>Mobile Number</span></button>
+          <button type="button" aria-pressed={activeChannel === 'email'} aria-disabled={emailEnabled ? undefined : true} disabled={!emailEnabled || busy} onClick={() => chooseChannel('email')}><span className="v321-icon--gold"><NyayOneRevLIcon name="badge"/></span><span>Verified Email</span></button>
         </div>
         <div className="v34-fieldset">
-          <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>
+          {activeChannel === 'email'
+            ? <Field id="v34-login-email" label="EMAIL ADDRESS" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" error={errors.email} maxLength={254} revisionLIcon="badge"/>
+            : <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>}
         </div>
-        <p className="v321-help">We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release.</p>
+        <p className="v321-help">{activeChannel === 'email'
+          ? 'We sign you in with a one-time code by email to your verified address. Only an email you have already verified from your profile can sign you in.'
+          : emailEnabled
+            ? 'We sign you in with a one-time code by SMS. A verified email from your profile can also sign you in.'
+            : 'We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release.'}</p>
         {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
         <PrivacyNote/>
         <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send one time code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
@@ -784,15 +844,23 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     return <Navigate to="/s-03" replace state={{ nyay7Focus: 'persona' }}/>;
   }
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? '');
-  const destination = flow?.destinationMasked?.match(/^••••••\d{4}$/u)
-    ? `+91 ••••• ••${flow.destinationMasked.slice(-3)}`
-    : (flow?.destinationMasked ?? 'your mobile');
+  // NYAY-12 destination continuity: only a server-masked mobile or email
+  // destination is ever rendered; anything else falls back to neutral copy.
+  const emailDestination = isMaskedEmailDestination(flow?.destinationMasked);
+  const destination = isMaskedMobileDestination(flow?.destinationMasked)
+    ? `+91 ••••• ••${String(flow?.destinationMasked).slice(-3)}`
+    : emailDestination
+      ? String(flow?.destinationMasked)
+      : (purpose === 'signup' ? 'your mobile' : 'your sign-in identity');
+  const changeLabel = emailDestination && purpose !== 'signup'
+    ? 'Change email address'
+    : (purpose === 'signup' ? 'Change registration details' : 'Change mobile number');
   return (
     <Screen id={screenId} aside={<RevLBrandPanel verification/>}>
       <RevLTopbar {...topbarProps}/>
       <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
         {studentContext}
-        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={purpose === 'signup' ? 'Change registration details' : 'Change mobile number'} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
+        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
         <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={busy} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
         <p className="v321-otp-help">Paste or platform autofill works. The field accepts the full code at once.</p>
         {status && <div className="v34-banner" role="alert">{status}</div>}
