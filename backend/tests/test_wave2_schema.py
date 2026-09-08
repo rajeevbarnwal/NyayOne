@@ -73,8 +73,11 @@ PARENT_REVISION = "0007_wave3_credentials"
 #: ceremony/session authority graph.
 #: Therefore the revision an upgrade lands on differs from the revision that
 #: created the 17 Wave 2 tables.
-HEAD_REVISION = "0024_nyay11_authority_state"
+HEAD_REVISION = "0025_nyay12_email_identity"
 POST_WAVE2_TABLES = {
+    "user_email_identities",
+    "email_identity_mutations",
+    "email_identity_reconciliations",
     "login_attempts",
     "auth_sessions",
     "internship_reports",

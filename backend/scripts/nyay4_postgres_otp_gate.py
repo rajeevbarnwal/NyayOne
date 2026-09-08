@@ -56,7 +56,8 @@ APPLICATION_PARENT = "0020_auth_retention_lifecycle"
 NYAY5_CHECKPOINT = "0021_nyay5_profile_boundary"
 NYAY9_CHECKPOINT = "0022_nyay9_owner_profile_api"
 NYAY22_CHECKPOINT = "0023_nyay22_mentor_ceremony"
-APPLICATION_HEAD = "0024_nyay11_authority_state"
+NYAY11_CHECKPOINT = "0024_nyay11_authority_state"
+APPLICATION_HEAD = "0025_nyay12_email_identity"
 OPT_IN_ENV = "NYAY4_POSTGRES_GATE"
 SCRATCH_PREFIX = "nyay4_otp_"
 COOKIE_HANDLER_TIMING_HEADER = "x-nyay4-gate-handler-elapsed-ns"
@@ -3440,17 +3441,20 @@ def _require_core_contract() -> None:
                 "NYAY-4 current application Alembic head is unavailable"
             )
         application = scripts.get_revision(APPLICATION_HEAD)
+        nyay11_checkpoint = scripts.get_revision(NYAY11_CHECKPOINT)
         nyay22_checkpoint = scripts.get_revision(NYAY22_CHECKPOINT)
         nyay9_checkpoint = scripts.get_revision(NYAY9_CHECKPOINT)
         nyay5_checkpoint = scripts.get_revision(NYAY5_CHECKPOINT)
         retention = scripts.get_revision(APPLICATION_PARENT)
         if (
             application is None
+            or nyay11_checkpoint is None
             or nyay22_checkpoint is None
             or nyay9_checkpoint is None
             or nyay5_checkpoint is None
             or retention is None
-            or application.down_revision != nyay22_checkpoint.revision
+            or application.down_revision != nyay11_checkpoint.revision
+            or nyay11_checkpoint.down_revision != nyay22_checkpoint.revision
             or nyay22_checkpoint.down_revision != nyay9_checkpoint.revision
             or nyay9_checkpoint.down_revision != nyay5_checkpoint.revision
             or nyay5_checkpoint.down_revision != retention.revision
@@ -7484,6 +7488,10 @@ def _run_maintenance_entrypoint_probe(
             "mentor_idempotency",
             "mentor_audit_links",
             "mentor_rate_buckets",
+            # NYAY-12 bounded terminal retention categories (aggregate counts only).
+            "email_identity_tombstones",
+            "email_identity_mutations",
+            "email_identity_reconciliations",
         }
         return {
             "entrypoint_executed": True,

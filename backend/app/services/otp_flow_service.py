@@ -143,8 +143,37 @@ def random_flow_token() -> str:
 
 
 def mask_destination(destination: str) -> str:
+    if "@" in destination:
+        # NYAY-12 email channel: first local character, fixed fill, full domain.
+        from app.core.email_identity import mask_login_email
+
+        return mask_login_email(destination)
     digits = "".join(character for character in destination if character.isdigit())
     return f"••••••{digits[-4:]}"
+
+
+EMAIL_CHANNEL_METADATA_KEY = "channel"
+
+
+def flow_channel(flow: OtpFlow | None) -> str:
+    """Return the server-recorded delivery channel of a flow (mobile default)."""
+
+    metadata = (flow.metadata_json or {}) if flow is not None else {}
+    return "email" if metadata.get(EMAIL_CHANNEL_METADATA_KEY) == "email" else "mobile"
+
+
+def channel_for_token(session: Session, raw_token: str | None) -> str:
+    """Read the delivery channel of an opaque flow token without domain locks."""
+
+    if raw_token:
+        metadata = session.scalar(
+            select(OtpFlow.metadata_json).where(
+                OtpFlow.token_hash == flow_token_hash(raw_token)
+            )
+        )
+        if isinstance(metadata, dict) and metadata.get(EMAIL_CHANNEL_METADATA_KEY) == "email":
+            return "email"
+    return "mobile"
 
 
 def create_flow(

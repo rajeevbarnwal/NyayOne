@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 from app.api.v1.auth_student import router as auth_student_router
 from app.api.v1.student_authority import router as student_authority_router
+from app.api.v1.email_identity import router as email_identity_router
 from app.api.v1.auth_mentor import router as auth_mentor_router
 from app.api.v1.credentials import router as credentials_router
 from app.api.v1.law_schools import router as law_schools_router
@@ -23,6 +24,7 @@ api_router.include_router(health_router)
 api_router.include_router(integrations_router)
 api_router.include_router(auth_student_router)
 api_router.include_router(student_authority_router)
+api_router.include_router(email_identity_router)
 api_router.include_router(auth_mentor_router)
 api_router.include_router(credentials_router)
 api_router.include_router(student_settings_router)
