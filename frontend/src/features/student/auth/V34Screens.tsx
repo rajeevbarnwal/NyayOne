@@ -585,6 +585,8 @@ export function V34VerifiedHome(props: ScreenProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const dismissInFlight = useRef(false);
   const [dismissError, setDismissError] = useState<string | null>(null);
+  const dismissErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (dismissError) dismissErrorRef.current?.focus(); }, [dismissError]);
   const showDialog = Boolean(profile.data && !profile.data.isComplete && profile.data.profilePrompt.shouldShow);
 
   useEffect(() => {
@@ -654,11 +656,11 @@ export function V34VerifiedHome(props: ScreenProps) {
           <button type="button" className="v34-hit v34-dialog__close" aria-label="Close profile prompt" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><V34Icon name="close" size={20}/></button>
           <h2 ref={headingRef} tabIndex={-1} id="profile-completion-dialog-title">Complete your profile</h2>
           <p id="profile-completion-dialog-description">Your profile is {projection.completionPercent}% complete. Finish the next section to tailor your student workspace.</p>
-          {dismissError && <div role="alert" data-testid="profile-save-error">{dismissError}</div>}
+          {dismissError && <div ref={dismissErrorRef} tabIndex={-1} role="alert" data-testid="profile-save-error">{dismissError}</div>}
           <div className="v34-actions">
             <button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button>
             <button type="button" className="v34-hit" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}>Maybe Later</button>
-            <button type="button" className="v34-hit" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))}>Complete Profile</button>
+            <button type="button" className="v34-hit" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}>Complete Profile</button>
           </div>
         </div>
       </div>

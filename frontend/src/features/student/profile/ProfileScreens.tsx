@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthCard, DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
 import { ErrorState, LoadingState } from '../../../components/ui/primitives';
@@ -100,7 +100,9 @@ function ErrorSummary({ errors, ids }: { errors: FieldErrors; ids: Record<string
 }
 
 function SaveError({ value }: { value: string | null }) {
-  return value ? <div role="alert" className="ui-validation" data-testid="profile-save-error">{value}</div> : null;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (value) ref.current?.focus(); }, [value]);
+  return value ? <div ref={ref} tabIndex={-1} role="alert" className="ui-validation" data-testid="profile-save-error">{value}</div> : null;
 }
 
 function profileSectionSummary(projection: StudentProfileProjection, section: ProfileSection): string {
@@ -317,7 +319,7 @@ export function ProfileStep3() {
 
 export function CompletionCard({ projection }: { projection: StudentProfileProjection }) {
   if (projection.isComplete) return null;
-  return <section className="st-panel" data-testid="profile-completion-card" aria-label="Profile completion"><div className="st-panel__head"><h2 className="st-panel__title">Complete your profile</h2><strong data-testid="profile-completion-percent">{projection.completionPercent}%</strong></div><p>Finish the remaining details to tailor your student workspace.</p></section>;
+  return <section className="st-panel" data-testid="profile-completion-card" aria-label="Profile completion"><div className="st-panel__head"><h2 className="st-panel__title">Complete your profile</h2><strong data-testid="profile-completion-percent">{projection.completionPercent}%</strong></div><p>Finish the remaining details to tailor your student workspace.</p><Link className="btn btn--primary tap" to={profileResumeDestination(projection)}>Continue profile</Link></section>;
 }
 
 export function ProfileResume() {
