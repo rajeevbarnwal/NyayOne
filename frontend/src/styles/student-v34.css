@@ -133,12 +133,19 @@
 .v34-banner b { font: 700 12px var(--v34-display); letter-spacing: .06em; }
 .v34-card { border: 1px solid var(--v34-line); border-radius: 10px; padding: 15px 16px; background: var(--v34-surface); }
 .v34-dialog-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, #111 58%, transparent); }
-.v34-dialog { position: relative; width: min(520px, 100%); max-height: calc(100dvh - 40px); overflow: auto; padding: 28px; box-shadow: 0 24px 80px rgb(0 0 0 / 32%); }
+/* The prompt is a sibling of the inert screen, so it owns its theme tokens. */
+.v34-dialog { --v34-surface: var(--nyayone-color-card); --v34-line: var(--nyayone-color-line); --v34-body: var(--nyayone-color-ink-secondary); --v34-accent: var(--nyayone-color-indigo); --v34-on-icon: #fff; --v34-display: var(--nyayone-font-heading); color: var(--nyayone-color-ink); position: relative; width: min(520px, 100%); max-height: calc(100dvh - 40px); overflow: auto; padding: 28px; box-shadow: 0 24px 80px rgb(0 0 0 / 32%); }
+[data-theme='dark'] .v34-dialog { --v34-surface: #20243b; --v34-line: #3b4265; --v34-body: #d7d9e8; color: #f5f4fb; }
+.v34-dialog :where(button, a):focus-visible { outline: 2px solid var(--nyayone-color-focus); outline-offset: 3px; }
 .v34-dialog h2 { margin: 0 48px 12px 0; font: 700 clamp(26px, 5vw, 38px) var(--v34-display); }
 .v34-dialog p { line-height: 1.55; }
 .v34-dialog__close { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; font-size: 24px; }
 .v34-dialog .v34-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .v34-dialog .v34-actions button:last-child { background: var(--v34-accent); color: var(--v34-on-icon); }
+@media (max-width: 600px) {
+  .v34-dialog-backdrop { align-items: end; padding: 0; }
+  .v34-dialog { width: 100%; max-height: calc(100dvh - 16px); border-radius: 24px 24px 0 0; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); }
+}
 
 .v34-splash__hero { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; overflow: hidden; background: radial-gradient(120% 90% at 50% 12%, rgba(200,129,28,.34), transparent 58%), radial-gradient(90% 70% at 82% 100%, rgba(21,127,82,.26), transparent 60%), var(--v34-mark); }
 .v34-jaali { position: absolute; width: 220px; height: 220px; opacity: .28; background: repeating-linear-gradient(45deg, #c8811c 0 1px, transparent 1px 11px), repeating-linear-gradient(-45deg, #c8811c 0 1px, transparent 1px 11px); }
