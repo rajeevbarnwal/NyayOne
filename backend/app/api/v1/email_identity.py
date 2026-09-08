@@ -1,19 +1,19 @@
 """NYAY-12 owner-scoped verified-email identity API (add/verify/resend/remove/primary).
 
-All errors are typed and PII-free; every response is ``private, no-store``.
-Mutations require the exact allowlisted Origin, the presented student session and
-one ``Idempotency-Key`` (16–200 chars of ``A-Z a-z 0-9 . _ ~ -``). Request bodies
-are validated by closed strict models inside the handler so framework 422s never
-bypass the private cache headers.
+The published OpenAPI document is the enforced contract: every request body is
+a required closed model (``additionalProperties: false``) and every response
+carries closed enums. Auth precedence is preserved because FastAPI resolves the
+session/origin dependencies before body validation, and framework 422s on the
+closed route set keep the ``private, no-store`` headers (see core.exceptions).
 """
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.openapi_headers import required_idempotency_header
@@ -27,46 +27,64 @@ from app.services.otp_sender import IdempotentOtpSender
 router = APIRouter(prefix="/auth/student/email-identities", tags=["auth"])
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 
+IdentityState = Literal["pending", "verified", "removed"]
+VerificationStatus = Literal["none", "pending_delivery", "active", "failed", "expired"]
 
-class _StrictBody(BaseModel):
+
+class _Closed(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class EmailBody(_StrictBody):
+class EmailBody(_Closed):
     email: str = Field(min_length=3, max_length=254)
 
 
-class CodeBody(_StrictBody):
+class CodeBody(_Closed):
     code: str = Field(pattern=r"^[0-9]{6}$")
 
 
-class EmptyBody(_StrictBody):
+class EmptyBody(_Closed):
     pass
 
 
-class VerificationProjection(_StrictBody):
-    status: str
-    expires_in_seconds: int | None
-    resend_in_seconds: int | None
-    attempts_left: int | None
+class VerificationProjection(_Closed):
+    status: VerificationStatus
+    expires_in_seconds: int | None = Field(ge=0)
+    resend_in_seconds: int | None = Field(ge=0)
+    attempts_left: int | None = Field(ge=0)
 
 
-class IdentityProjection(_StrictBody):
+class IdentityProjection(_Closed):
     id: str
     email_masked: str
-    state: str
+    state: IdentityState
     is_primary: bool
     verification: VerificationProjection
 
 
-class IdentityListResponse(_StrictBody):
+class IdentityListResponse(_Closed):
     login_channel_enabled: bool
-    max_identities: int
+    max_identities: int = Field(ge=1)
     identities: list[IdentityProjection]
 
 
-class IdentityMutationResponse(_StrictBody):
-    status: str
+class AcceptedIdentityResponse(_Closed):
+    status: Literal["accepted"]
+    identity: IdentityProjection
+
+
+class VerifiedIdentityResponse(_Closed):
+    status: Literal["verified"]
+    identity: IdentityProjection
+
+
+class RemovedIdentityResponse(_Closed):
+    status: Literal["removed"]
+    identity: IdentityProjection
+
+
+class PrimaryIdentityResponse(_Closed):
+    status: Literal["primary"]
     identity: IdentityProjection
 
 
@@ -104,13 +122,6 @@ def _idempotency_key(request: Request) -> str:
         raise _error(exc.status_code, exc.code, field=exc.field) from exc
 
 
-def _parse(model: type[_StrictBody], payload: object, field: str) -> _StrictBody:
-    try:
-        return model.model_validate(payload)
-    except ValidationError as exc:
-        raise _error(422, "validation_error", field=field) from exc
-
-
 def _run(session: Session, response: Response, function, *args, **kwargs) -> dict[str, Any]:
     try:
         status_code, body, replayed = function(session, *args, **kwargs)
@@ -122,6 +133,8 @@ def _run(session: Session, response: Response, function, *args, **kwargs) -> dic
     return body
 
 
+# Dependency order matters: the session/origin authority resolves before FastAPI
+# validates the closed body, so an anonymous malformed request is 401, not 422.
 MUTATION = [Depends(require_trusted_cookie_origin)]
 
 
@@ -131,62 +144,60 @@ def list_email_identities(context=Depends(_context), session: Session = Depends(
     return service.list_identities(session, actor_user_id, now=_now())
 
 
-@router.post("", response_model=IdentityMutationResponse, status_code=202, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
+@router.post("", response_model=AcceptedIdentityResponse, status_code=202, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
 def add_email_identity(
+    payload: EmailBody,
     request: Request,
     response: Response,
-    payload: Any = Body(default=None),
     context=Depends(_context),
     session: Session = Depends(get_session),
     sender: IdempotentOtpSender | None = Depends(get_email_otp_sender),
 ) -> dict[str, Any]:
     actor_user_id, raw_token = context
     key = _idempotency_key(request)
-    body = _parse(EmailBody, payload, "email")
     return _run(
         session, response, service.add_identity, actor_user_id, raw_token,
-        email=body.email, sender=sender, key=key, client_ip=_client_ip(request), now=_now(),
+        email=payload.email, sender=sender, key=key, client_ip=_client_ip(request), now=_now(),
     )
 
 
-@router.post("/{identity_id}/verify", response_model=IdentityMutationResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
+@router.post("/{identity_id}/verify", response_model=VerifiedIdentityResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
 def verify_email_identity(
     identity_id: str,
+    payload: CodeBody,
     request: Request,
     response: Response,
-    payload: Any = Body(default=None),
     context=Depends(_context),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     actor_user_id, raw_token = context
     key = _idempotency_key(request)
-    body = _parse(CodeBody, payload, "code")
     return _run(
         session, response, service.verify_identity, actor_user_id, raw_token,
-        identity_id=identity_id, code=body.code, key=key, now=_now(),
+        identity_id=identity_id, code=payload.code, key=key, now=_now(),
     )
 
 
-@router.post("/{identity_id}/resend", response_model=IdentityMutationResponse, status_code=202, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
+@router.post("/{identity_id}/resend", response_model=AcceptedIdentityResponse, status_code=202, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
 def resend_email_identity(
     identity_id: str,
+    payload: EmptyBody,
     request: Request,
     response: Response,
-    payload: Any = Body(default=None),
     context=Depends(_context),
     session: Session = Depends(get_session),
     sender: IdempotentOtpSender | None = Depends(get_email_otp_sender),
 ) -> dict[str, Any]:
+    del payload
     actor_user_id, raw_token = context
     key = _idempotency_key(request)
-    _parse(EmptyBody, payload if payload is not None else {}, "request")
     return _run(
         session, response, service.resend_identity, actor_user_id, raw_token,
         identity_id=identity_id, sender=sender, key=key, client_ip=_client_ip(request), now=_now(),
     )
 
 
-@router.delete("/{identity_id}", response_model=IdentityMutationResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
+@router.delete("/{identity_id}", response_model=RemovedIdentityResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
 def remove_email_identity(
     identity_id: str,
     request: Request,
@@ -202,18 +213,18 @@ def remove_email_identity(
     )
 
 
-@router.post("/{identity_id}/primary", response_model=IdentityMutationResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
+@router.post("/{identity_id}/primary", response_model=PrimaryIdentityResponse, openapi_extra=required_idempotency_header(), dependencies=MUTATION)
 def set_primary_email_identity(
     identity_id: str,
+    payload: EmptyBody,
     request: Request,
     response: Response,
-    payload: Any = Body(default=None),
     context=Depends(_context),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    del payload
     actor_user_id, raw_token = context
     key = _idempotency_key(request)
-    _parse(EmptyBody, payload if payload is not None else {}, "request")
     return _run(
         session, response, service.set_primary, actor_user_id, raw_token,
         identity_id=identity_id, key=key, now=_now(),

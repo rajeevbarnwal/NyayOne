@@ -7488,6 +7488,10 @@ def _run_maintenance_entrypoint_probe(
             "mentor_idempotency",
             "mentor_audit_links",
             "mentor_rate_buckets",
+            # NYAY-12 bounded terminal retention categories (aggregate counts only).
+            "email_identity_tombstones",
+            "email_identity_mutations",
+            "email_identity_reconciliations",
         }
         return {
             "entrypoint_executed": True,

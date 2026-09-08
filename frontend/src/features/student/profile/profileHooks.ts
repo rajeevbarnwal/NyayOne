@@ -156,7 +156,9 @@ export function useEmailIdentities(enabled = true) {
   // S-17 itself never issues the request on load.
   return useQuery({
     queryKey: STUDENT_EMAIL_IDENTITIES_QUERY_KEY,
-    queryFn: (_context: QueryFunctionContext) => listEmailIdentities(),
+    // Forward the query lifecycle signal so closing the panel or navigating
+    // away cancels the in-flight listing instead of updating after unmount.
+    queryFn: ({ signal }: QueryFunctionContext) => listEmailIdentities(signal),
     retry: false,
     enabled,
   });
@@ -176,24 +178,28 @@ function useEmailIdentityMutation<TInput>(
   });
 }
 
+// The idempotency key is part of the mutation variables: it is minted once per
+// owner action, so a retry of the same mutation replays the same server outcome.
+export interface EmailIdentityActionVariables { identityId: string; idempotencyKey: string }
+
 export function useAddEmailIdentity() {
-  return useEmailIdentityMutation<string>((email) => addEmailIdentity(email));
+  return useEmailIdentityMutation<{ email: string; idempotencyKey: string }>(({ email, idempotencyKey }) => addEmailIdentity(email, { idempotencyKey }));
 }
 
 export function useVerifyEmailIdentity() {
-  return useEmailIdentityMutation<{ identityId: string; code: string }>(({ identityId, code }) => verifyEmailIdentity(identityId, code));
+  return useEmailIdentityMutation<{ identityId: string; code: string; idempotencyKey: string }>(({ identityId, code, idempotencyKey }) => verifyEmailIdentity(identityId, code, { idempotencyKey }));
 }
 
 export function useResendEmailIdentity() {
-  return useEmailIdentityMutation<string>((identityId) => resendEmailIdentity(identityId));
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => resendEmailIdentity(identityId, { idempotencyKey }));
 }
 
 export function useRemoveEmailIdentity() {
-  return useEmailIdentityMutation<string>((identityId) => removeEmailIdentity(identityId));
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => removeEmailIdentity(identityId, { idempotencyKey }));
 }
 
 export function useSetPrimaryEmailIdentity() {
-  return useEmailIdentityMutation<string>((identityId) => setPrimaryEmailIdentity(identityId));
+  return useEmailIdentityMutation<EmailIdentityActionVariables>(({ identityId, idempotencyKey }) => setPrimaryEmailIdentity(identityId, { idempotencyKey }));
 }
 
 export type { EmailIdentityListing };

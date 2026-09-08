@@ -50,7 +50,18 @@ Prerequisites: identity add, verify and set-primary require `access_mode = full`
 * Verify, resend, state and cancel reuse `/api/v1/auth/student/otp/*`. The channel is recorded server-side on the flow; the client never supplies it. Resend on an email flow re-checks that the identity is still verified and owned.
 * Provider: `EMAIL_OTP_PROVIDER=http` with `EMAIL_OTP_PROVIDER_URL` (HTTPS, idempotent, authenticated) is required outside local/test environments when the flag is on; `capturing` is test-only.
 
-## 5. Evidence and scope notes
+## 5. Erasure, retention and lifecycle disposition (review S1)
+
+* **Anonymise / delete (NYAY-19):** inside the same transaction as the registration scrub, after the OTP → User → AuthSession and NYAY-11 authority boundaries and before the aggregate audit row, the subject's complete email-identity graph is disposed: every identity becomes an unlinkable tombstone (`state=removed`, never primary, no challenge, `email_ct` decrypts only to the retention marker, `email_hash` replaced by a per-row erased digest), sealed idempotency ledger rows are deleted, and reconciliation records lose the erased party's link (a record with no remaining party is resolved with an unlinkable hash). Hard deletion applies the same disposition before the User row is removed, so nothing depends on CASCADE. A mentor DEFER or any later failure leaves the graph untouched (no partial erasure).
+* **Owner removal:** `DELETE …/{id}` produces the same tombstone immediately; a removed identity never retains a decryptable address and never reserves the address.
+* **Terminal retention:** `RETENTION_DAYS_EMAIL_IDENTITY_TERMINAL` (default 30, bounded 1–36500) purges tombstones (by `removed_at`), ledger rows (by `created_at`) and resolved reconciliation records (by `resolved_at`) through `purge_expired`, reported as aggregate counts `email_identity_tombstones`, `email_identity_mutations`, `email_identity_reconciliations`.
+* **Lock order:** the identity service locks the subject registration before the User/session rows (`registration → User → AuthSession → identity rows`), matching retention and NYAY-11, so a concurrent erasure and verification serialize without deadlock; the native gate exercises the barrier-released schedule in both orders.
+
+## 6. Published OpenAPI contract (review S2)
+
+Every lifecycle request body is a required closed model (`EmailBody {email}`, `CodeBody {code ^[0-9]{6}$}`, `EmptyBody {}` for resend/primary, no body for DELETE) and every response is a closed model with published enums: identity `state ∈ {pending, verified, removed}`, `verification.status ∈ {none, pending_delivery, active, failed, expired}`, per-route `status` literals (`accepted`, `verified`, `removed`, `primary`), `channels[].channel ∈ {mobile, email}`, and the documented `EmailLoginStartRequest`. Session/origin dependencies resolve before body validation (auth precedence), and framework 422s on the closed lifecycle route-template set keep `Cache-Control: private, no-store` / `Vary: Cookie`.
+
+## 7. Evidence and scope notes
 
 * Native PostgreSQL 16 + pgvector gate: `backend/tests/nyay12_native_gate.py (executed via tests/test_nyay12_postgres_native.py)` (opt-in `NYAY12_POSTGRES_GATE=1`, exit 78 = BLOCKED). Wiring into `backend/scripts/db_gate.sh` requires a governance change (the gate shell is digest-sealed) and is requested from the owner.
 * The default S-04 rendering is unchanged, so the sealed Revision L / NYAY-8 baselines stay authoritative; the enabled email state is proven by NYAY-12 Chromium evidence.

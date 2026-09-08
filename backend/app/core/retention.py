@@ -70,6 +70,7 @@ class RetentionPolicy:
     mode: str  # "anonymise" | "delete"
     login_attempt_days: int | None = None
     auth_session_days: int | None = None
+    email_identity_terminal_days: int | None = None
 
     @classmethod
     def from_settings(cls) -> "RetentionPolicy":
@@ -82,6 +83,7 @@ class RetentionPolicy:
             mode=settings.retention_mode or "anonymise",
             login_attempt_days=settings.retention_days_login_attempt,
             auth_session_days=settings.retention_days_auth_session,
+            email_identity_terminal_days=settings.retention_days_email_identity_terminal,
         )
 
 
@@ -104,6 +106,7 @@ def _validated_policy(policy: RetentionPolicy) -> RetentionPolicy:
         policy.audit_events_days,
         policy.login_attempt_days,
         policy.auth_session_days,
+        policy.email_identity_terminal_days,
     ):
         if value is not None and (
             isinstance(value, bool)
@@ -869,6 +872,147 @@ def purge_otp_security_state(
     }
 
 
+def _dispose_email_identity_graph(session: Session, user_id, *, now: datetime, mode: str) -> None:
+    """NYAY-12: dispose the subject's complete email-identity graph in this transaction.
+
+    Runs after the OTP/LoginAttempt -> User -> AuthSession and NYAY-11 authority
+    boundaries and before the aggregate audit row, so the caller's mentor
+    DEFER decision and lock order are preserved. Identities become unlinkable
+    tombstones (no decryptable address, per-row erased hash, no primary, no
+    challenge), sealed ledger outcomes are deleted, and reconciliation records
+    lose this party's link; a record with no remaining party is resolved with an
+    unlinkable hash. ``mode="delete"`` performs the same disposition before the
+    User row (and its CASCADE) is removed so no partial state can survive.
+    """
+
+    from app.models.email_identity import (
+        EmailIdentityMutation,
+        EmailIdentityReconciliation,
+        UserEmailIdentity,
+    )
+    from app.services.email_identity_service import tombstone_identity
+
+    identities = list(
+        session.scalars(
+            select(UserEmailIdentity)
+            .where(UserEmailIdentity.user_id == user_id)
+            .order_by(UserEmailIdentity.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in identities:
+        tombstone_identity(row, now=now)
+    session.execute(
+        delete(EmailIdentityMutation).where(EmailIdentityMutation.user_id == user_id)
+    )
+    reconciliations = list(
+        session.scalars(
+            select(EmailIdentityReconciliation)
+            .where(
+                (EmailIdentityReconciliation.holder_user_id == user_id)
+                | (EmailIdentityReconciliation.claimant_user_id == user_id)
+            )
+            .order_by(EmailIdentityReconciliation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for record in reconciliations:
+        if record.holder_user_id == user_id:
+            record.holder_user_id = None
+        if record.claimant_user_id == user_id:
+            record.claimant_user_id = None
+        if record.holder_user_id is None and record.claimant_user_id is None:
+            record.email_hash = keyed_hash(
+                f"nyay12:email-reconciliation-erased:v1:{record.id}"
+            )
+            record.state = "resolved"
+            record.resolved_at = now
+            record.metadata_json = {"resolution": "subjects_erased"}
+        record.updated_at = now
+    if mode == "delete":
+        # Hard deletion: the tombstones and ledger rows must not depend on the
+        # User CASCADE (absent on the SQLite oracle) to disappear.
+        session.execute(
+            delete(UserEmailIdentity).where(UserEmailIdentity.user_id == user_id)
+        )
+    session.flush()
+
+
+def _purge_email_identity_terminal_state(
+    session: Session, *, now: datetime, days: int | None
+) -> dict[str, int]:
+    """Bounded terminal retention for NYAY-12 tombstones, ledgers and resolved records."""
+
+    from app.models.email_identity import (
+        EmailIdentityMutation,
+        EmailIdentityReconciliation,
+        UserEmailIdentity,
+    )
+
+    counts = {
+        "email_identity_tombstones": 0,
+        "email_identity_mutations": 0,
+        "email_identity_reconciliations": 0,
+    }
+    cutoff = _cutoff(now, days)
+    if cutoff is None:
+        return counts
+    tombstones = list(
+        session.scalars(
+            select(UserEmailIdentity)
+            .where(
+                UserEmailIdentity.state == "removed",
+                UserEmailIdentity.removed_at.is_not(None),
+                UserEmailIdentity.removed_at < cutoff,
+            )
+            .order_by(UserEmailIdentity.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in tombstones:
+        if _as_retention_utc(row.removed_at) >= cutoff:
+            continue
+        session.delete(row)
+        counts["email_identity_tombstones"] += 1
+    ledgers = list(
+        session.scalars(
+            select(EmailIdentityMutation)
+            .where(EmailIdentityMutation.created_at < cutoff)
+            .order_by(EmailIdentityMutation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in ledgers:
+        if _as_retention_utc(row.created_at) >= cutoff:
+            continue
+        session.delete(row)
+        counts["email_identity_mutations"] += 1
+    resolved = list(
+        session.scalars(
+            select(EmailIdentityReconciliation)
+            .where(
+                EmailIdentityReconciliation.state == "resolved",
+                EmailIdentityReconciliation.resolved_at.is_not(None),
+                EmailIdentityReconciliation.resolved_at < cutoff,
+            )
+            .order_by(EmailIdentityReconciliation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in resolved:
+        if _as_retention_utc(row.resolved_at) >= cutoff:
+            continue
+        session.delete(row)
+        counts["email_identity_reconciliations"] += 1
+    session.flush()
+    return counts
+
+
 def _anonymise_locked(
     session: Session,
     reg: StudentRegistration,
@@ -991,6 +1135,11 @@ def _anonymise_locked(
         ledger.key_version = None
         ledger.profile_version = None
         ledger.updated_at = erased_at
+    # NYAY-12: the email-identity graph is disposed after the NYAY-11 authority
+    # boundary and the profile ledgers, inside this same transaction.
+    _dispose_email_identity_graph(
+        session, reg.user_id, now=erased_at, mode="anonymise"
+    )
     session.add(
         AuditEvent(
             actor_role="system",
@@ -1061,6 +1210,12 @@ def _delete_locked(
     # User deletion can SET NULL the links needed for revocation/audit.
     from app.services.student_authority import erase_owner_authority
     erase_owner_authority(session, reg.user_id, now=datetime.now(timezone.utc))
+    # NYAY-12: explicit disposition before User deletion so reconciliation links
+    # are severed deterministically rather than by SET NULL, and no ledger or
+    # decryptable identity can outlive a failed CASCADE.
+    _dispose_email_identity_graph(
+        session, reg.user_id, now=datetime.now(timezone.utc), mode="delete"
+    )
 
     from app.models.registration import (
         Consent,
@@ -1448,6 +1603,11 @@ def purge_expired(session: Session, now: datetime | None = None, policy: Retenti
 
     counts.update(
         _purge_auth_security_history(session, now=now, policy=policy)
+    )
+    counts.update(
+        _purge_email_identity_terminal_state(
+            session, now=now, days=policy.email_identity_terminal_days
+        )
     )
     session.flush()
     return counts

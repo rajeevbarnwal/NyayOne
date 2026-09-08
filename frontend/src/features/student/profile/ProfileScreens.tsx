@@ -6,6 +6,7 @@ import { ErrorState, LoadingState } from '../../../components/ui/primitives';
 import {
   ProfileApiError,
   emailIdentityErrorMessage,
+  newEmailIdentityIdempotencyKey,
   profileErrorMessage,
   profileSectionRoute,
   validateLegalName,
@@ -454,16 +455,16 @@ export function EmailIdentityPanel({ expanded }: { expanded: boolean }) {
       onAdd={() => {
         const candidate = draftEmail.trim();
         if (!LOGIN_EMAIL_RE.test(candidate) || [...candidate].length > 254) { fail('add', new ProfileApiError(422, 'validation_error', 'email')); return; }
-        add.mutate(candidate, { onSuccess: () => { setDraftEmail(''); clear(); }, onError: (caught) => fail('add', caught) });
+        add.mutate({ email: candidate, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: () => { setDraftEmail(''); clear(); }, onError: (caught) => fail('add', caught) });
       }}
       onVerify={(identityId) => {
         const code = draftCodes[identityId] ?? '';
         if (code.length !== 6) { fail(identityId, new ProfileApiError(422, 'validation_error', 'code')); return; }
-        verify.mutate({ identityId, code }, { onSuccess: () => { setDraftCodes((previous) => { const next = { ...previous }; delete next[identityId]; return next; }); clear(); }, onError: (caught) => fail(identityId, caught) });
+        verify.mutate({ identityId, code, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: () => { setDraftCodes((previous) => { const next = { ...previous }; delete next[identityId]; return next; }); clear(); }, onError: (caught) => fail(identityId, caught) });
       }}
-      onResend={(identityId) => resend.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
-      onRemove={(identityId) => remove.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
-      onPrimary={(identityId) => primary.mutate(identityId, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onResend={(identityId) => resend.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onRemove={(identityId) => remove.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onPrimary={(identityId) => primary.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
     />
   );
 }

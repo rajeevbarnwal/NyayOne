@@ -18,6 +18,9 @@ EXPECTED_ORACLES = (
     "REMOVE_REPLAY_NO_REBIND",
     "CROSS_OWNER_DENIAL",
     "EMAIL_LOGIN_NON_ENUMERATING_AND_UNVERIFIED_DENIED",
+    "ERASURE_ANONYMISE_DISPOSES_EMAIL_GRAPH",
+    "ERASURE_RACE_VERIFY_VS_ANONYMISE_SERIALIZED",
+    "TERMINAL_RETENTION_PURGE_BOUNDED",
     "POPULATED_DOWNGRADE_REFUSED",
 )
 
@@ -90,7 +93,7 @@ def test_native_schedules_use_real_threads_and_locks():
     gate = _gate()
     source = Path(gate.__file__).read_text(encoding="utf-8")
     assert "ThreadPoolExecutor" in source and "threading.Barrier" in source
-    for schedule in ("CONCURRENT_PRIMARY_EXACTLY_ONE", "VERIFY_RACE_SINGLE_OWNER", "REMOVE_REPLAY_NO_REBIND"):
+    for schedule in ("CONCURRENT_PRIMARY_EXACTLY_ONE", "VERIFY_RACE_SINGLE_OWNER", "REMOVE_REPLAY_NO_REBIND", "ERASURE_RACE_VERIFY_VS_ANONYMISE_SERIALIZED"):
         assert source.count(f'"{schedule}"') >= 1
     assert "email_identity_downgrade_requires_empty_graph" in source
     assert "NYAY19_ISOLATED_MIGRATION_EXECUTE" in source

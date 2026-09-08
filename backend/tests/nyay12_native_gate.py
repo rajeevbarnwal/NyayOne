@@ -51,6 +51,9 @@ ORACLE_IDS = (
     "REMOVE_REPLAY_NO_REBIND",
     "CROSS_OWNER_DENIAL",
     "EMAIL_LOGIN_NON_ENUMERATING_AND_UNVERIFIED_DENIED",
+    "ERASURE_ANONYMISE_DISPOSES_EMAIL_GRAPH",
+    "ERASURE_RACE_VERIFY_VS_ANONYMISE_SERIALIZED",
+    "TERMINAL_RETENTION_PURGE_BOUNDED",
     "POPULATED_DOWNGRADE_REFUSED",
 )
 
@@ -471,6 +474,136 @@ def _email_login_oracle(factory, sender: CapturingSender) -> dict[str, Any]:
     return _row("EMAIL_LOGIN_NON_ENUMERATING_AND_UNVERIFIED_DENIED", 4)
 
 
+def _erasure_oracle(factory, sender: CapturingSender) -> dict[str, Any]:
+    """Anonymisation disposes identities, ledgers and reconciliation links in one commit."""
+    from app.core.crypto import decrypt, keyed_hash
+    from app.core.retention import ANONYMISED, anonymise_registration
+    from app.models.email_identity import EmailIdentityMutation, EmailIdentityReconciliation, UserEmailIdentity
+    from app.models.registration import StudentRegistration, User
+    from app.services import email_identity_service as service
+
+    with factory.begin() as session:
+        a, b = _seed_actor(session), _seed_actor(session)
+    shared = f"native-erasure-shared-{uuid.uuid4().hex[:8]}@example.test"
+    _add_verified(factory, sender, a, f"native-erasure-a-{uuid.uuid4().hex[:8]}@example.test")
+    _add_verified(factory, sender, b, shared)
+    with factory() as session:
+        _, body, _ = service.add_identity(session, a["actor_id"], a["token"], email=shared, sender=sender, key=f"native-add-{uuid.uuid4().hex[:20]}", client_ip="127.0.0.1", now=a["now"])
+    claim = uuid.UUID(body["identity"]["id"])
+    with factory() as session:
+        try:
+            service.verify_identity(session, a["actor_id"], a["token"], identity_id=claim, code=sender.code_for(shared), key=f"native-verify-{uuid.uuid4().hex[:20]}", now=a["now"])
+            raise GateFailure("ERASURE_FIXTURE_COLLISION_NOT_RAISED")
+        except service.EmailIdentityError as exc:
+            session.rollback()
+            _require(exc.code == "email_identity_conflict", "ERASURE_FIXTURE_COLLISION_CODE")
+    with factory() as session:
+        registration = session.get(StudentRegistration, a["registration_id"])
+        _require(anonymise_registration(session, registration) is True, "ERASURE_ANONYMISE_NOT_COMPLETED")
+        session.commit()
+    with factory() as session:
+        rows = session.scalars(select(UserEmailIdentity).where(UserEmailIdentity.user_id == a["actor_id"])).all()
+        _require(len(rows) == 2 and all(r.state == "removed" and not r.is_primary and decrypt(r.email_ct) == ANONYMISED and r.email_hash == keyed_hash(f"nyay12:email-identity-erased:v1:{r.id}") and r.code_hash is None for r in rows), "ERASURE_IDENTITY_NOT_TOMBSTONED")
+        _require(session.scalar(select(func.count()).select_from(EmailIdentityMutation).where(EmailIdentityMutation.user_id == a["actor_id"])) == 0, "ERASURE_LEDGER_RETAINED")
+        # Select this fixture's record by its holder: the scratch database also holds
+        # the verified-collision record produced by the earlier race oracle.
+        record = session.scalar(select(EmailIdentityReconciliation).where(EmailIdentityReconciliation.holder_user_id == b["actor_id"]))
+        _require(record is not None and record.claimant_user_id is None and record.state == "open", "ERASURE_RECONCILIATION_LINK_RETAINED")
+        _require(session.scalar(select(func.count()).select_from(EmailIdentityReconciliation).where(EmailIdentityReconciliation.claimant_user_id == a["actor_id"])) == 0, "ERASURE_RECONCILIATION_LINK_RETAINED")
+        b_rows = session.scalars(select(UserEmailIdentity).where(UserEmailIdentity.user_id == b["actor_id"])).all()
+        _require(len(b_rows) == 1 and b_rows[0].state == "verified", "ERASURE_OVERREACHED_OTHER_OWNER")
+        _require(session.get(User, a["actor_id"]).status == "deleted", "ERASURE_USER_STATUS")
+    return _row("ERASURE_ANONYMISE_DISPOSES_EMAIL_GRAPH", 6)
+
+
+def _erasure_race_oracle(factory, sender: CapturingSender) -> dict[str, Any]:
+    """Barrier-released verify vs anonymise: either order leaves no authority and no decryptable address."""
+    from app.core.crypto import decrypt
+    from app.core.retention import ANONYMISED, anonymise_registration
+    from app.models.email_identity import UserEmailIdentity
+    from app.models.registration import StudentRegistration
+    from app.services import email_identity_service as service
+
+    outcomes = []
+    for _round in range(2):
+        with factory.begin() as session:
+            actor = _seed_actor(session)
+        email = f"native-race-erase-{uuid.uuid4().hex[:8]}@example.test"
+        with factory() as session:
+            _, body, _ = service.add_identity(session, actor["actor_id"], actor["token"], email=email, sender=sender, key=f"native-add-{uuid.uuid4().hex[:20]}", client_ip="127.0.0.1", now=actor["now"])
+        identity_id, code = uuid.UUID(body["identity"]["id"]), sender.code_for(email)
+        barrier = threading.Barrier(2, timeout=30)
+
+        def verify() -> str:
+            with factory() as session:
+                barrier.wait()
+                try:
+                    service.verify_identity(session, actor["actor_id"], actor["token"], identity_id=identity_id, code=code, key=f"native-verify-{uuid.uuid4().hex[:20]}", now=actor["now"])
+                    return "verified"
+                except service.EmailIdentityError as exc:
+                    session.rollback()
+                    return exc.code
+                except Exception:
+                    session.rollback()
+                    return "deadlock"
+
+        def erase() -> str:
+            with factory() as session:
+                barrier.wait()
+                registration = session.get(StudentRegistration, actor["registration_id"])
+                try:
+                    result = anonymise_registration(session, registration)
+                    session.commit()
+                    return "erased" if result else "deferred"
+                except Exception:
+                    session.rollback()
+                    return "deadlock"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            verify_future, erase_future = pool.submit(verify), pool.submit(erase)
+            outcome = (verify_future.result(), erase_future.result())
+        _require("deadlock" not in outcome, "ERASURE_RACE_DEADLOCK")
+        _require(outcome[1] == "erased" and outcome[0] in {"verified", "authentication_required", "email_identity_not_found", "email_identity_verification_failed"}, "ERASURE_RACE_UNTYPED_OUTCOME")
+        with factory() as session:
+            row = session.get(UserEmailIdentity, identity_id)
+            _require(row.state == "removed" and decrypt(row.email_ct) == ANONYMISED and not row.is_primary, "ERASURE_RACE_AUTHORITY_SURVIVED")
+        outcomes.append(outcome[0])
+    return _row("ERASURE_RACE_VERIFY_VS_ANONYMISE_SERIALIZED", 6)
+
+
+def _terminal_retention_oracle(factory, sender: CapturingSender) -> dict[str, Any]:
+    from datetime import timedelta as _td
+    from app.core.retention import RetentionPolicy, anonymise_registration, purge_expired
+    from app.models.email_identity import EmailIdentityReconciliation, UserEmailIdentity
+    from app.models.registration import StudentRegistration
+    from app.services import email_identity_service as service
+
+    with factory.begin() as session:
+        actor = _seed_actor(session)
+    keep = _add_verified(factory, sender, actor, f"native-keep-{uuid.uuid4().hex[:8]}@example.test")
+    with factory() as session:
+        service.remove_identity(session, actor["actor_id"], actor["token"], identity_id=keep, key=f"native-remove-{uuid.uuid4().hex[:20]}", now=actor["now"])
+    with factory() as session:
+        registration = session.get(StudentRegistration, actor["registration_id"])
+        _require(anonymise_registration(session, registration) is True, "TERMINAL_FIXTURE_ERASURE")
+        session.commit()
+    old = datetime.now(timezone.utc) - _td(days=400)
+    with factory() as session:
+        stale = session.get(UserEmailIdentity, keep)
+        stale.removed_at = old
+        session.commit()
+    policy = RetentionPolicy(registration_pending_days=None, registration_inactive_days=None, otp_challenge_days=None, recovery_session_days=None, audit_events_days=None, mode="anonymise", email_identity_terminal_days=30)
+    with factory() as session:
+        counts = purge_expired(session, policy=policy)
+        session.commit()
+    _require(counts["email_identity_tombstones"] == 1, "TERMINAL_PURGE_COUNT")
+    with factory() as session:
+        _require(session.get(UserEmailIdentity, keep) is None, "TERMINAL_STALE_TOMBSTONE_RETAINED")
+        _require(session.scalar(select(func.count()).select_from(UserEmailIdentity).where(UserEmailIdentity.user_id == actor["actor_id"])) == 0, "TERMINAL_ROW_INVENTORY")
+        _require(session.scalar(select(func.count()).select_from(EmailIdentityReconciliation)) >= 0, "TERMINAL_RECONCILIATION_INVENTORY")
+    return _row("TERMINAL_RETENTION_PURGE_BOUNDED", 4)
+
+
 def _populated_downgrade_oracle(database_url: str, factory) -> dict[str, Any]:
     from app.models.email_identity import UserEmailIdentity
 
@@ -510,6 +643,9 @@ def run(control_raw: str, output: Path) -> dict[str, Any]:
         rows.append(_remove_replay_oracle(factory, sender))
         rows.append(_cross_owner_oracle(factory, sender))
         rows.append(_email_login_oracle(factory, sender))
+        rows.append(_erasure_oracle(factory, sender))
+        rows.append(_erasure_race_oracle(factory, sender))
+        rows.append(_terminal_retention_oracle(factory, sender))
         rows.append(_populated_downgrade_oracle(database_url, factory))
     finally:
         if engine is not None:
