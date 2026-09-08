@@ -486,6 +486,9 @@ class Settings(BaseSettings):
     retention_days_login_attempt: int | None = None
     retention_days_auth_session: int | None = None
     retention_days_audit_events: int | None = None
+    # NYAY-12: bounded terminal retention for removed/erased email-identity tombstones,
+    # sealed idempotency ledger rows and resolved reconciliation records (days).
+    retention_days_email_identity_terminal: int | None = 30
     # Whether the purge job anonymises (keep row, scrub PII/ciphertext) or hard
     # deletes when a window elapses. "anonymise" is the DPDP-safe default.
     retention_mode: str = "anonymise"
@@ -502,6 +505,7 @@ class Settings(BaseSettings):
     @field_validator(
         "retention_days_registration_pending",
         "retention_days_registration_inactive",
+        "retention_days_email_identity_terminal",
         "retention_days_otp_challenge",
         "retention_days_recovery_session",
         "retention_days_login_attempt",

@@ -837,11 +837,36 @@ export function newEmailIdentityIdempotencyKey(): string {
   return `ei-${Array.from(bytes, (byte) => EMAIL_IDENTITY_KEY_ALPHABET[byte % EMAIL_IDENTITY_KEY_ALPHABET.length]).join('')}`;
 }
 
-async function identityRequest(path: string, init: RequestInit, idempotent: boolean): Promise<unknown> {
+export interface EmailIdentityRequestOptions {
+  /** Reuse across retries of the *same* operation; generated once when absent. */
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
+const EMAIL_IDENTITY_KEY_RE = /^[A-Za-z0-9._~-]{16,200}$/u;
+
+function resolvedIdempotencyKey(supplied: string | undefined): string {
+  if (supplied === undefined) return newEmailIdentityIdempotencyKey();
+  if (!EMAIL_IDENTITY_KEY_RE.test(supplied)) {
+    throw new ProfileApiError(422, 'invalid_idempotency_key', 'Idempotency-Key');
+  }
+  return supplied;
+}
+
+async function identityRequest(
+  path: string,
+  init: RequestInit,
+  idempotent: boolean,
+  options: EmailIdentityRequestOptions = {},
+): Promise<unknown> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  if (idempotent) headers.set('Idempotency-Key', newEmailIdentityIdempotencyKey());
-  const response = await studentApiFetch(path, { ...init, headers });
+  // A caller-supplied key is preserved verbatim so the same operation can be
+  // retried safely; a key is generated only when none is present.
+  if (idempotent && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', resolvedIdempotencyKey(options.idempotencyKey));
+  }
+  const response = await studentApiFetch(path, { ...init, headers, signal: options.signal ?? init.signal });
   const body = await readJson(response);
   if (response.ok) return body;
   const detail = isRecord(body) && isRecord(body.detail) ? body.detail : undefined;
@@ -871,27 +896,27 @@ function mutationFromUnknown(value: unknown, expected: EmailIdentityMutationResu
 }
 
 export async function listEmailIdentities(signal?: AbortSignal): Promise<EmailIdentityListing> {
-  return listingFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'GET', signal }, false));
+  return listingFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'GET', signal }, false, { signal }));
 }
 
-export async function addEmailIdentity(email: string): Promise<EmailIdentityMutationResult> {
-  return mutationFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'POST', body: JSON.stringify({ email }) }, true), 'accepted');
+export async function addEmailIdentity(email: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(EMAIL_IDENTITY_ROOT, { method: 'POST', body: JSON.stringify({ email }) }, true, options), 'accepted');
 }
 
-export async function verifyEmailIdentity(identityId: string, code: string): Promise<EmailIdentityMutationResult> {
-  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/verify`, { method: 'POST', body: JSON.stringify({ code }) }, true), 'verified');
+export async function verifyEmailIdentity(identityId: string, code: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/verify`, { method: 'POST', body: JSON.stringify({ code }) }, true, options), 'verified');
 }
 
-export async function resendEmailIdentity(identityId: string): Promise<EmailIdentityMutationResult> {
-  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/resend`, { method: 'POST', body: JSON.stringify({}) }, true), 'accepted');
+export async function resendEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/resend`, { method: 'POST', body: JSON.stringify({}) }, true, options), 'accepted');
 }
 
-export async function removeEmailIdentity(identityId: string): Promise<EmailIdentityMutationResult> {
-  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}`, { method: 'DELETE' }, true), 'removed');
+export async function removeEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}`, { method: 'DELETE' }, true, options), 'removed');
 }
 
-export async function setPrimaryEmailIdentity(identityId: string): Promise<EmailIdentityMutationResult> {
-  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/primary`, { method: 'POST', body: JSON.stringify({}) }, true), 'primary');
+export async function setPrimaryEmailIdentity(identityId: string, options: EmailIdentityRequestOptions = {}): Promise<EmailIdentityMutationResult> {
+  return mutationFromUnknown(await identityRequest(`${EMAIL_IDENTITY_ROOT}/${identityId}/primary`, { method: 'POST', body: JSON.stringify({}) }, true, options), 'primary');
 }
 
 export function emailIdentityErrorMessage(error: unknown): string {

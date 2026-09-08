@@ -1,6 +1,7 @@
 """Privacy-safe exception handling with stable, typed API error contracts."""
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,6 +23,30 @@ _OWNER_PROFILE_VALIDATION_PATHS = frozenset({
     "/api/v1/auth/student/profile",
     "/api/v1/auth/student/email-identities",
 })
+# Closed set of *route templates* (exact match on the matched route's path
+# template, never a prefix) for NYAY-12 lifecycle routes whose path carries an
+# identity id. Framework 422s on these keep the private projection headers.
+_OWNER_PROFILE_VALIDATION_ROUTES = frozenset({
+    "/api/v1/auth/student/email-identities/{identity_id}/verify",
+    "/api/v1/auth/student/email-identities/{identity_id}/resend",
+    "/api/v1/auth/student/email-identities/{identity_id}/primary",
+    "/api/v1/auth/student/email-identities/{identity_id}",
+})
+
+
+_OWNER_PROFILE_VALIDATION_ROUTE_PATTERNS = tuple(
+    re.compile("^" + re.escape(template).replace(r"\{identity_id\}", "[^/]+") + "$")
+    for template in sorted(_OWNER_PROFILE_VALIDATION_ROUTES)
+)
+
+
+def _owner_validation_surface(request: Request) -> bool:
+    """Exact path or full match on one closed route template; never a prefix."""
+
+    path = request.url.path
+    if path in _OWNER_PROFILE_VALIDATION_PATHS:
+        return True
+    return any(pattern.fullmatch(path) for pattern in _OWNER_PROFILE_VALIDATION_ROUTE_PATTERNS)
 
 
 def _detail_body(detail: Mapping[str, object]) -> dict[str, object]:
@@ -62,7 +87,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=_detail_body(detail),
             headers=exc.headers,
         )
-        if exc.status_code == 422 and request.url.path in _OWNER_PROFILE_VALIDATION_PATHS:
+        if exc.status_code == 422 and _owner_validation_surface(request):
             # Exception responses replace the route's Response object, including
             # its headers. Retain unrelated exception headers and Vary tokens.
             response.headers["Cache-Control"] = "private, no-store"
@@ -95,7 +120,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=_detail_body(detail),
             headers=(
                 {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-                if request.url.path in _OWNER_PROFILE_VALIDATION_PATHS
+                if _owner_validation_surface(request)
                 else None
             ),
         )

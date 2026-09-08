@@ -115,9 +115,16 @@ def project_identity(row: UserEmailIdentity, *, now: datetime) -> dict[str, Any]
         attempts_left = max(0, settings.otp_max_attempts - row.attempts)
     elif row.state != "pending":
         status = "none"
+    from app.core.retention import ANONYMISED
+
+    plaintext = decrypt(row.email_ct)
     return {
         "id": str(row.id),
-        "email_masked": mask_login_email(decrypt(row.email_ct)),
+        "email_masked": (
+            "•" + "•••••" + "@" + "erased.invalid"
+            if plaintext == ANONYMISED
+            else mask_login_email(plaintext)
+        ),
         "state": row.state,
         "is_primary": bool(row.is_primary),
         "verification": {
@@ -228,6 +235,56 @@ def _owned_identity(
     return row
 
 
+def tombstone_identity(row: UserEmailIdentity, *, now: datetime) -> None:
+    """Make an identity row an unlinkable tombstone (no decryptable address, per-row hash).
+
+    Shared by owner removal and NYAY-19 erasure so every removed row has one
+    shape: state ``removed``, never primary, no challenge, ``email_ct`` replaced
+    by the retention marker and ``email_hash`` by a per-row erased digest.
+    """
+
+    from app.core.retention import ANONYMISED
+
+    row.state = "removed"
+    row.is_primary = False
+    row.removed_at = row.removed_at or now
+    row.deleted_at = now
+    row.email_ct = encrypt(ANONYMISED)  # decrypts only to the retention marker, never an address
+    row.email_hash = keyed_hash(f"nyay12:email-identity-erased:v1:{row.id}")
+    row.code_hash = None
+    row.provider_receipt_hash = None
+    row.verification_state = "none"
+    row.attempts = 0
+    row.challenge_issued_at = None
+    row.challenge_expires_at = None
+    row.metadata_json = None
+    row.updated_at = now
+
+
+def _lock_registration(session: Session, actor_user_id: uuid.UUID):
+    """Lock the subject's registration first: NYAY-19 erasure and NYAY-11 take
+    registration -> User, so the identity service must never take User first."""
+
+    from app.models.registration import StudentRegistration
+    from app.services import otp_service
+
+    rows = list(
+        session.scalars(
+            select(StudentRegistration)
+            .where(
+                StudentRegistration.user_id == actor_user_id,
+                *otp_service.registration_authority_filters(),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+            .limit(2)
+        )
+    )
+    if len(rows) != 1 or rows[0].status not in {"otp_verified", "active"}:
+        raise EmailIdentityError("authentication_required", 401)
+    return rows[0]
+
+
 def _lock_user(session: Session, actor_user_id: uuid.UUID) -> User:
     user = login_service.lock_user_for_session_rotation(session, actor_user_id)
     if user is None or user.status != "active" or user.role != "student":
@@ -327,6 +384,7 @@ def add_identity(
         raise EmailIdentityError("email_delivery_unavailable", 503)
     consume_budget(session, actor_user_id, action="issue", client_ip=client_ip, now=now)
     lookup = email_identity_hash(normalized)
+    _lock_registration(session, actor_user_id)
     _presented(session, actor_user_id, raw_token, now)
     record, replay = _replay(session, actor_user_id, "add", key, {"email_hash": lookup})
     if replay is not None:
@@ -482,6 +540,7 @@ def verify_identity(
     validate_idempotency_key(key)
     if not isinstance(code, str) or re.fullmatch(_CODE_PATTERN, code) is None:
         raise EmailIdentityError("validation_error", 422, field="code")
+    _lock_registration(session, actor_user_id)
     _presented(session, actor_user_id, raw_token, now)
     row = _owned_identity(session, actor_user_id, identity_id)
     presented_hash = keyed_hash(f"nyay12:email-code:v1:{row.id}:{code}")
@@ -540,6 +599,7 @@ def verify_identity(
     except IntegrityError:
         # A concurrent owner won the verified index: fail closed, audit, no transfer.
         session.rollback()
+        _lock_registration(session, actor_user_id)
         _presented(session, actor_user_id, raw_token, now)
         fresh = _owned_identity(session, actor_user_id, identity_id)
         fresh.code_hash, fresh.verification_state = None, "none"
@@ -578,14 +638,10 @@ def remove_identity(
     record, replay = _replay(session, actor_user_id, "remove", key, {"identity_id": str(row.id)})
     if replay is not None:
         return replay[0], replay[1], True
-    row.state = "removed"
-    row.removed_at = now
-    row.is_primary = False
-    row.code_hash, row.provider_receipt_hash = None, None
-    row.verification_state = "none"
-    row.challenge_issued_at = row.challenge_expires_at = None
+    masked = mask_login_email(decrypt(row.email_ct))
+    tombstone_identity(row, now=now)
     session.flush()
-    body = {"status": "removed", "identity": project_identity(row, now=now)}
+    body = {"status": "removed", "identity": {**project_identity(row, now=now), "email_masked": masked}}
     _seal(session, record, 200, body)
     session.commit()
     return 200, body, False
@@ -601,6 +657,7 @@ def set_primary(
     now: datetime,
 ) -> tuple[int, dict[str, Any], bool]:
     validate_idempotency_key(key)
+    _lock_registration(session, actor_user_id)
     _presented(session, actor_user_id, raw_token, now)
     _lock_user(session, actor_user_id)
     row = _owned_identity(session, actor_user_id, identity_id)

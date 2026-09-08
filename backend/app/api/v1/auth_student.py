@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Literal, Callable
 
 from fastapi import (
     APIRouter,
@@ -1523,7 +1523,26 @@ def login_otp_start(
     return state
 
 
-@router.get("/login/channels")
+class EmailLoginStartRequest(BaseModel):
+    """Published request contract for verified-email login start (validated in-handler
+    after the server-owned flag check so a disabled channel is uniform for any body)."""
+
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=254)
+
+
+class LoginChannelProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    channel: Literal["mobile", "email"]
+    enabled: bool
+
+
+class LoginChannelsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    channels: list[LoginChannelProjection]
+
+
+@router.get("/login/channels", response_model=LoginChannelsResponse)
 def login_channels(
     request: Request,
     response: Response,
@@ -1545,7 +1564,16 @@ def login_channels(
     }
 
 
-@router.post("/login/email/start", status_code=202)
+@router.post(
+    "/login/email/start",
+    status_code=202,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": EmailLoginStartRequest.model_json_schema()}},
+        }
+    },
+)
 def login_email_start(
     request: Request,
     response: Response,
