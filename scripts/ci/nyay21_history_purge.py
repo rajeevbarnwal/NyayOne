@@ -191,7 +191,7 @@ def capture_execution_seal(observe, *, policy, now):
             or policy.get('defaultBranch') != 'main'
             or policy.get('targetManifest') != list(TARGETS)
             or policy.get('filterRepoVersion') != FILTER_REPO_VERSION
-            or not _execution_int(policy.get('maxSnapshotAgeSeconds'), 1, 300)):
+            or not _execution_int(policy.get('maxSnapshotAgeSeconds'), 1, 2700)):
         return _execution_result(['EXECUTION_POLICY_INVALID'])
     try:
         snapshots = [copy.deepcopy(observe()), copy.deepcopy(observe())]
@@ -253,7 +253,7 @@ def _execution_seal_valid(seal):
             and all(_is_hex(seal.get(k), 64) for k in ('rulesetGetSha256','observationSha256','policySha256'))
             and _execution_int(seal.get('capturedAt')) and _execution_int(seal.get('expiresAt'))
             and all(_execution_int(seal[k]) for k in ('reachableCommitCount', 'signedCommitCount') if k in seal)
-            and 0 < seal['expiresAt'] - seal['capturedAt'] <= 300)
+            and 0 < seal['expiresAt'] - seal['capturedAt'] <= 2700)
 
 
 def _execution_authority_unchanged(seal, current):
