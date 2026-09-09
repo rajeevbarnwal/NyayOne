@@ -2,7 +2,9 @@
 
 Status: tooling for independent review, **HOLD / NO-GO**. This recipe does not
 authorize a backup, freeze, ruleset change, rewrite, push, or dispatch. Historical
-R2–R5 records are immutable. Owner decisions 15044, 15047 and 15050 govern this revision.
+R2–R5 records are immutable. Owner decisions 15044, 15047, 15050, 15086 and
+15120 govern this revision. This revision supersedes the pre-captured scope
+receipt binding; it does not authorize execution.
 
 ## Authority and isolation
 
@@ -47,9 +49,60 @@ receipt obtains Date from an authenticated TLS GET to the fixed GitHub repositor
 The request identifier is hashed. Request duration and local monotonic-derived
 clock drift must each remain within five seconds. Caller timestamp parameters
 are absent from the live runtime API. The historical pure validator's injected
-`now` remains a planning/test input, not execution authority. Scope read-back's
-separate five-minute freshness bound remains enforced. Expiry refuses, including
-resume; restoration safety handling must still run after expiry.
+`now` remains a planning/test input, not execution authority. There is no
+five-minute staging/ceremony window. Scope is read just in time at step 8 using
+the signed challenge contract below. Expiry refuses, including resume;
+restoration safety handling must still run after expiry.
+
+## Just-in-time scope contract — nyay21-step8-scope/v1
+
+The independently approved permit binds `executionIdentity`, `sourceHead` and
+`scopePolicy` (the exact object returned by the reviewed `scope_policy()`). It
+does not bind a pre-captured `scopeReceiptSha256`. The policy includes the five
+approved repository-only permissions, `reviewed-ruleset-restoration/v1`, the
+signature domain `nyay21-step8-scope-v1`, and a maximum receipt age of 120 seconds.
+An obsolete `scope-readback.json` is not an authority input.
+
+After rewrite and before any ruleset relaxation, step 8 emits an immutable
+`scope-challenge-<nonce>.json` and a digest-bound custody event. The owner or
+Claude reads the token's actual repository scope through its authenticated
+session, checks that it is the exact credential bound in the permit, and signs
+the following exact payload using an existing approved `registrySigners` key.
+The executor never provisions that key or a Jira credential.
+
+| Field | Required binding |
+| --- | --- |
+| `schemaVersion`, `authority` | `nyay21-step8-scope/v1`, `step8-scope` |
+| `repository`, `sealSha256`, `sourceHead`, `executionId` | Exact sealed repository, seal digest, head and registered identity |
+| `challengeNonce`, `challengeSha256` | Exact emitted nonce and canonical challenge digest |
+| `scopePolicySha256`, `credentialSha256` | Exact permit policy and credential digests |
+| `permissions`, `restorationWorkflow` | Exact reviewed permission map and restoration workflow |
+| `readAt`, `expiresAt`, `tokenExpiresAt`, `exitCode` | Authenticated epoch integers (not booleans), receipt TTL 1–120s, exit 0; token remaining validity 600–172800s |
+| `signer`, `accountId`, `commentId` | Approved owner/Claude identity, bound account and positive decimal evidence comment ID |
+
+Sign canonical JSON (sorted keys, compact separators, UTF-8, no newline) with
+SSH namespace **`nyay21-step8-scope-v1`**. An execution-registry or continuation
+signature cannot verify in this namespace. Import only the envelope
+`{"payload": <exact payload>, "signature": <SSH signature>}` as
+`scope-receipt-<nonce>.json` in custody. No raw credential belongs in the receipt.
+The runtime waits for this receipt while maintaining watchdog liveness; it
+refuses at seal expiry. Receipt timestamps are not trusted without the approved
+signature and are cross-checked against authenticated GitHub time before and
+after signature verification. Future, expired, mismatched or unsigned rows
+refuse before relaxation/push.
+
+The same signed receipt is revalidated at push planning, watchdog verification,
+and immediately before the live atomic push. Watchdog arming must be inside the
+original seal window, not within an obsolete 300-second ceremony interval. The
+independent **30-second heartbeat/liveness safeguard is unchanged**.
+
+Before attempting the live push, the nonce is consumed in an immutable custody
+marker. Even a failed lease consumes that scope challenge: recovery needs a new
+challenge and independently signed scope read-back, never a blind retry. F
+approval consumption remains after verified push and restoration. After a
+successful push, continuation receipts cannot renew scope/rewrite/push authority;
+restoration never depends on freshness. Resume cannot cross the original seal
+expiry to obtain new execution authority.
 
 ## Signed snapshot format — nyay21-registry-snapshot/v2
 
@@ -208,3 +261,29 @@ Steps 11–15 remain owner-PROCEED gated. Step 12 prepares dispatch parameters o
 owner performs dispatch with separate authority. The execution credential remains
 repository-scoped Contents:write, Workflows:write, Administration:write,
 Actions:read, Metadata:read. This document does not grant fresh execution GO.
+
+## Corrected disclosure of historical expectation deltas
+
+The prior 6480c2d7 packet's statement of five changed replay expectations was
+incomplete: the independent audit counted **11 changed expectation rows**
+(three renamed and eight re-expected). This correction does not rewrite that
+immutable packet. The complete inventory is the two 301-to-2701 ceiling rows,
+the two adapter concurrent-edit rows, adapter mode-conflict refusal precedence,
+empty GitIO credential rejection, E2E seal expiry, fresh-root/same-root restart,
+F remaining unconsumed on rejected live lease, watchdog concurrent-edit custody
+escalation, and post-push execution-phase replay refusal. Coverage intent remains
+fail-closed; none of the original 486 rows is deleted.
+
+The F-07 replay separately discloses its three constructor-fixture changes
+(pre-captured scope digest to policy binding, insufficient permissions and
+Actions:write), the three JIT scope-flow expectations, and the two capture-CLI
+code expectations. The reviewed CLI now preserves distinct canonical validator
+codes rather than replacing them with a generic capture refusal. Diagnostics
+contain canonical codes only, never raw upstream messages.
+
+`origin_refs_equal_rewrite` previously used reversed tuple order and was inert
+in the audit harness. The new, separately sealed replay uses OID/ref-name order,
+requires the value to be true for synthetic and real-history success, and tests
+that a false value cannot satisfy the attestation. Historical observations are
+preserved, not relabeled as passing. Finite tests establish observed outcomes,
+not a universal mathematical proof or execution authorization.

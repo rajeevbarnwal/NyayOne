@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import signal
 import subprocess
 import sys
@@ -39,6 +40,93 @@ REPO_URL='https://github.com/'+gate.REPOSITORY+'.git'
 PROTECTED=Path('/Users/rajeevbarnwal/Desktop/Codes/NyayOne')
 PERMISSIONS={'contents':'write','workflows':'write','metadata':'read',
              'administration':'write','actions':'read'}
+
+
+def scope_policy():
+    return {'permissions':dict(PERMISSIONS),'repository':gate.REPOSITORY,
+            'restorationWorkflow':'reviewed-ruleset-restoration/v1',
+            'signatureDomain':'nyay21-step8-scope-v1','maxReceiptAgeSeconds':120}
+
+
+class Step8Scope:
+    """Independent signed JIT read-back, not executor-asserted permissions.
+
+    One challenge admits one attempted live push. The same authenticated receipt
+    may be checked before/after dry-run, but cannot be consumed twice. No signer
+    private keys or Jira credentials are managed by this class.
+    """
+    def __init__(self,root,permit,seal,identity,now):
+        self.root=private_root(root);self.permit=permit;self.seal=seal
+        self.identity=identity;self.now=now;self.pending=None;self.accepted=None
+        require(permit.get('scopePolicy')==scope_policy() and permit.get('sourceHead')==seal['sourceHead'],
+                'SCOPE_POLICY_BINDING_MISMATCH')
+
+    def challenge(self):
+        now=self.now()
+        require(type(now) is int and self.seal['capturedAt']<=now<self.seal['expiresAt'],'SEAL_EXPIRED')
+        if self.pending is None:
+            self.pending={'nonce':secrets.token_hex(32),'executionId':self.identity['executionId'],
+                'sealSha256':digest(self.seal),'sourceHead':self.seal['sourceHead'],
+                'scopePolicySha256':digest(scope_policy()),'issuedAt':now}
+            immutable_json(self.root,'scope-challenge-'+self.pending['nonce']+'.json',self.pending)
+            Custody(self.root).append('SCOPE_CHALLENGE_CREATED',{'digest':digest(self.pending)})
+        return self.pending
+
+    def verify(self,envelope):
+        try:return self._verify(envelope)
+        except Refusal:raise
+        except (KeyError,TypeError,ValueError,AttributeError,OSError,UnicodeError,subprocess.TimeoutExpired):
+            raise Refusal('SCOPE_RECEIPT_INVALID') from None
+
+    def _verify(self,envelope):
+        challenge=self.challenge();now=self.now();nonce=challenge['nonce']
+        require(not (self.root/('scope-used-'+nonce+'.json')).exists(),'SCOPE_CHALLENGE_CONSUMED')
+        require(isinstance(envelope,dict) and set(envelope)=={'payload','signature'},'SCOPE_RECEIPT_INVALID')
+        row=envelope['payload'];signature=envelope['signature']
+        fields={'schemaVersion','authority','repository','sealSha256','sourceHead','executionId',
+                'challengeNonce','challengeSha256','scopePolicySha256','credentialSha256','permissions',
+                'restorationWorkflow','readAt','expiresAt','tokenExpiresAt','exitCode','signer','accountId','commentId'}
+        require(isinstance(row,dict) and set(row)==fields and row['schemaVersion']=='nyay21-step8-scope/v1'
+                and row['authority']=='step8-scope','SCOPE_RECEIPT_INVALID')
+        require(row['repository']==gate.REPOSITORY and row['sealSha256']==digest(self.seal)
+                and row['sourceHead']==self.seal['sourceHead'] and row['executionId']==self.identity['executionId']
+                and row['challengeNonce']==nonce and row['challengeSha256']==digest(challenge)
+                and row['scopePolicySha256']==digest(scope_policy())
+                and row['credentialSha256']==self.permit['credentialSha256']
+                and row['permissions']==PERMISSIONS and row['restorationWorkflow']=='reviewed-ruleset-restoration/v1',
+                'SCOPE_RECEIPT_BINDING_MISMATCH')
+        require(all(type(row[k]) is int for k in ['readAt','expiresAt','tokenExpiresAt','exitCode'])
+                and row['exitCode']==0 and challenge['issuedAt']<=row['readAt']<=now<row['expiresAt']
+                and 0<row['expiresAt']-row['readAt']<=120
+                and 600<=row['tokenExpiresAt']-now<=172800,'SCOPE_RECEIPT_STALE_OR_INVALID')
+        require(row['signer'] in {'owner','claude'} and isinstance(row['commentId'],str)
+                and re.fullmatch(r'[1-9][0-9]*',row['commentId']) is not None,'SCOPE_SIGNER_INVALID')
+        signer=self.permit.get('registrySigners',{}).get(row['signer'])
+        require(isinstance(signer,dict) and signer.get('accountId')==row['accountId']
+                and isinstance(signer.get('publicKey'),str)
+                and re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/]+={0,2}',signer['publicKey']) is not None,
+                'SCOPE_SIGNER_INVALID')
+        require(isinstance(signature,str) and len(signature)<=8192,'SCOPE_SIGNATURE_INVALID')
+        with tempfile.TemporaryDirectory(dir=self.root) as tmp:
+            allowed=Path(tmp)/'allowed';sig=Path(tmp)/'receipt.sig'
+            allowed.write_text('scope-reader '+signer['publicKey']+'\n');sig.write_text(signature)
+            result=subprocess.run(['ssh-keygen','-Y','verify','-f',str(allowed),'-I','scope-reader',
+                '-n','nyay21-step8-scope-v1','-s',str(sig)],
+                input=json.dumps(row,sort_keys=True,separators=(',',':')).encode(),capture_output=True,timeout=10)
+        require(result.returncode==0,'SCOPE_SIGNATURE_INVALID')
+        finished=self.now()
+        require(row['readAt']<=finished<min(row['expiresAt'],self.seal['expiresAt']),
+                'SCOPE_RECEIPT_STALE_OR_INVALID')
+        if self.accepted is not None:require(self.accepted==envelope,'SCOPE_RECEIPT_CHANGED')
+        self.accepted=envelope
+        return row
+
+    def consume(self):
+        require(self.accepted is not None,'SCOPE_RECEIPT_REQUIRED')
+        row=self.verify(self.accepted)
+        immutable_json(self.root,'scope-used-'+self.pending['nonce']+'.json',{
+            'receiptSha256':digest(row),'executionId':self.identity['executionId'],'serverTimestamp':self.now()})
+        Custody(self.root).append('SCOPE_CHALLENGE_CONSUMED',{'digest':digest(row)})
 
 
 def validate_credential(credential):
@@ -491,11 +579,10 @@ class Runtime:
         validate_protected_binding(self.permit,configured_protected_roots()[0])
         require(self.permit.get('credentialSha256')==hashlib.sha256(credential.encode()).hexdigest(),'SCOPE_CREDENTIAL_BINDING_MISMATCH')
         self.seal=read_json(self.root/'seal.json');self.approvals=read_json(self.root/'approvals.json')
-        self.scope=read_json(self.root/'scope-readback.json')
         require(gate._execution_seal_valid(self.seal) and digest(self.seal)==self.permit.get('sealSha256')
-                and digest(self.approvals)==self.permit.get('approvalsSha256')
-                and digest(self.scope)==self.permit.get('scopeReceiptSha256'),'PERMIT_INPUT_BINDING_MISMATCH')
-        require(self.scope.get('permissions')==PERMISSIONS,'RESTORATION_SCOPE_INVALID')
+                and digest(self.approvals)==self.permit.get('approvalsSha256'),'PERMIT_INPUT_BINDING_MISMATCH')
+        require(self.permit.get('scopePolicy')==scope_policy()
+                and self.permit.get('sourceHead')==self.seal['sourceHead'],'SCOPE_POLICY_BINDING_MISMATCH')
         self.identity=validate_execution_identity(self.permit.get('executionIdentity'),self.root,digest(self.seal),self.approvals['rewrite']['id'])
         sources={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in
                  [Path(__file__),Path(__file__).with_name('nyay21_executor_adapters.py'),Path(gate.__file__)]}
@@ -503,6 +590,7 @@ class Runtime:
         self.api=GitHub(credential);self.git=GitIO(self.root,credential)
         self.clock=AuthenticatedClock(self.api)
         self.registry=ExecutionRegistry(self.root,self.permit,self.seal,self.now)
+        self.step8_scope=Step8Scope(self.root,self.permit,self.seal,self.identity,self.now)
         self.watchdog=None;self.stop_heartbeat=threading.Event()
 
     def now(self):return int(self.clock())
@@ -624,12 +712,18 @@ class Runtime:
         while not (self.root/'watchdog-armed.json').exists():
             require(self.watchdog.poll() is None and time.monotonic()<deadline,'WATCHDOG_ARM_FAILED');time.sleep(.05)
 
-    def verify_watchdog(self,pair):
+    def verify_watchdog(self,pair,scope_receipt=None):
         row=read_json(self.root/'watchdog-armed.json')
         require(row.get('pairSha256')==digest(pair) and type(row.get('pid')) is int,'WATCHDOG_BINDING_MISMATCH')
         try:os.kill(row['pid'],0)
         except OSError:raise Refusal('WATCHDOG_NOT_LIVE') from None
-        require(type(row.get('armedAt')) is int and 0<=self.now()-row['armedAt']<=300,'WATCHDOG_STALE')
+        now=self.now()
+        seal=getattr(self,'seal',{})
+        require(type(row.get('armedAt')) is int and type(seal.get('capturedAt')) is int
+                and type(seal.get('expiresAt')) is int and seal['capturedAt']<=row['armedAt']<=now<seal['expiresAt'],
+                'WATCHDOG_STALE')
+        if scope_receipt is not None:
+            require(self.step8_scope.verify(self.step8_scope.accepted)==scope_receipt,'SCOPE_RECEIPT_CHANGED')
         return row
 
     def verify_filter_version(self,expected):
@@ -690,6 +784,8 @@ class Runtime:
     def consume_force_approval(self):self.consume('forceUpdate')
 
     def command(self,argv):
+        if argv[:3]==['git','push','--atomic'] and '--dry-run' not in argv:
+            self.step8_scope.consume()
         output=self.git.run(argv)
         return {'exitCode':0,'stdoutSha256':hashlib.sha256(output).hexdigest()}
 
@@ -731,12 +827,36 @@ class Runtime:
         require(rewrite.get('targetsUnreachable') is True and self.git.local_refs()==rewrite['refs'],'REWRITE_OUTPUT_CHANGED')
         new={r['name']:r['oid'] for r in rewrite['refs']}
         rows=[{'ref':r['name'],'expectedOldOid':r['oid'],'newOid':new[r['name']]} for r in self.seal['refs']]
+        scope_receipt=self.read_scope_at_push()
+        # The independent signature was just verified against the GO-bound keys,
+        # identity/head/policy and this one-use nonce. Pure planning still checks
+        # the exact permission/expiry shape; its digest is not an authority source.
+        scope={'repository':scope_receipt['repository'],'sourceHead':scope_receipt['sourceHead'],
+            'sealSha256':scope_receipt['sealSha256'],'permissions':scope_receipt['permissions'],
+            'readAt':scope_receipt['readAt'],'expiresAt':scope_receipt['tokenExpiresAt'],
+            'exitCode':scope_receipt['exitCode'],'ownerDecisionCommentId':scope_receipt['commentId'],
+            'receiptKind':'independent-scope-readback/v1','restorationWorkflow':scope_receipt['restorationWorkflow']}
         value=gate.prepare_execution_push(rows,seal=self.seal,current=self.seal,now=self.now(),approvals=self.approvals,
-            scope_readback=self.scope,scope_receipt_sha256=self.permit['scopeReceiptSha256'])
+            scope_readback=scope,scope_receipt_sha256=digest(scope))
         require(value['verdict']=='PASS','PUSH_SCOPE_OR_APPROVAL_INVALID')
-        self.verify_watchdog(read_json(self.root/'ruleset-pair.json'))
+        self.verify_watchdog(read_json(self.root/'ruleset-pair.json'),scope_receipt)
         # filter-repo removes origin. Explicit URL overrides no inherited remote.
         return [REPO_URL if a=='origin' else a for a in value['dryRunArgv']]
+
+    def read_scope_at_push(self):
+        """Wait before relaxation for an independent signer, bounded by the seal.
+
+        Heartbeat runs while the operator imports the challenge-bound envelope.
+        The same <=120s receipt is reverified after dry-run; no old permit receipt
+        is read or freshly timestamped as a substitute for authenticated evidence.
+        """
+        challenge=self.step8_scope.challenge()
+        path=self.root/('scope-receipt-'+challenge['nonce']+'.json')
+        while not path.exists():
+            require(self.now()<self.seal['expiresAt'],'SEAL_EXPIRED')
+            self.verify_watchdog(read_json(self.root/'ruleset-pair.json'))
+            time.sleep(.25)
+        return self.step8_scope.verify(read_json(path))
 
     def relax_ruleset(self):
         pair=read_json(self.root/'ruleset-pair.json');self.verify_watchdog(pair)
@@ -922,7 +1042,13 @@ def capture_seal(root,credential):
             'visibility':'PRIVATE','defaultBranch':'main','targetManifest':list(gate.TARGETS),
             'filterRepoVersion':gate.FILTER_REPO_VERSION,'maxSnapshotAgeSeconds':2700}
     result=gate.capture_execution_seal(lambda:collect_observation(git,api),policy=policy,now=started)
-    require(result['verdict']=='PASS','SEAL_CAPTURE_REFUSED')
+    if result['verdict']!='PASS':
+        codes=result.get('codes')
+        require(isinstance(codes,list) and bool(codes) and all(
+            isinstance(code,str) and re.fullmatch(r'[A-Z][A-Z0-9_]{1,80}',code)
+            for code in codes),'SEAL_CAPTURE_REFUSED')
+        for code in codes:Custody(root).append(code,{})
+        raise Refusal(','.join(codes))
     finished=clock();require(finished<result['seal']['expiresAt'],'SEAL_EXPIRED')
     immutable_json(root,'seal-policy.json',policy);immutable_json(root,'seal.json',result['seal'])
     receipt={'sealSha256':result['sealSha256'],'serverTimestamp':finished,'timeReceipt':clock.last,
