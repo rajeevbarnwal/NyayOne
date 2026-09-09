@@ -3,6 +3,7 @@ import copy
 import base64
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,11 @@ from test_nyay21_execution_time_seal import sealed_fixture
 
 
 class RuntimeContracts(unittest.TestCase):
+    def setUp(self):
+        # Portable, explicit fixture configuration; all original assertions retained.
+        fixture=patch.dict(os.environ,{'NYAY21_PROTECTED_ROOT':str(Path(runtime.__file__).resolve().parents[2])})
+        fixture.start();self.addCleanup(fixture.stop)
+
     def test_git_http_credentials_are_basic_and_never_command_arguments(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp).resolve();root.chmod(0o700);(root/'mirror.git').mkdir()
@@ -131,6 +137,12 @@ class RuntimeContracts(unittest.TestCase):
             self.assertEqual({r['name'] for r in io.local_refs()},{'refs/heads/main','refs/tags/canary-tag'})
             live=io.run(['git','rev-list','--objects','--all']).decode()
             self.assertNotIn(gate.TARGETS[0]['path'],live)
+
+
+def load_tests(loader,tests,pattern):
+    # Existing required runtime job also discovers the additive corrective oracle.
+    tests.addTests(loader.loadTestsFromName('nyay21_corrective_contracts'))
+    return tests
 
 
 if __name__=='__main__':unittest.main()

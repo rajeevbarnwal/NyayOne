@@ -74,26 +74,37 @@ def restored(before,after):
     return digest(normalized)==digest(before)
 
 
+def restoration_state(api,accepted,emit):
+    """At most two GETs in total, including mixed transport/concurrent failures."""
+    emitted=set()
+    for attempt in range(2):
+        try:current=api.get()
+        except Exception:
+            code='RESTORATION_GET_FAILED'
+            if code not in emitted:emit(code);emitted.add(code)
+            if attempt:raise Refusal('RESTORATION_READBACK_UNAVAILABLE') from None
+            continue
+        if any(restored(expected,current) for expected in accepted):return current
+        code='RULESET_CONCURRENT_CHANGE'
+        if code not in emitted:emit(code);emitted.add(code)
+        if attempt:
+            emit('RESTORATION_OWNER_BREAK_GLASS')
+            raise Refusal('RULESET_CONCURRENT_CHANGE')
+
+
 def restore(api,pair,emit):
     """GET before each bounded PUT; never overwrite an unrelated concurrent edit."""
     require(pair==ruleset_pair(pair['before'],pair['fullGetSha256']),'RULESET_PAIR_MISMATCH')
     relaxed={**pair['before'],**pair['relaxation']}
     for attempt in range(3):
-        try:current=api.get()
-        except Exception:
-            emit('RESTORATION_GET_FAILED')
-            raise Refusal('RESTORATION_READBACK_UNAVAILABLE') from None
+        current=restoration_state(api,[pair['before'],relaxed],emit)
         if restored(pair['before'],current):
             return {'restored':True,'fullGetBeforeSha256':pair['fullGetSha256'],
                     'fullGetAfterSha256':digest(current),'canonicalGetSha256':digest(pair['before']),
                     'normalizedServerField':'updated_at','putAttempts':attempt}
-        require(restored(relaxed,current),'RULESET_CONCURRENT_CHANGE')
         try:api.put(copy.deepcopy(pair['restoration']))
         except Exception:emit('RESTORATION_PUT_FAILED')
-    try:current=api.get()
-    except Exception:
-        emit('RESTORATION_GET_FAILED')
-        raise Refusal('RESTORATION_READBACK_UNAVAILABLE') from None
+    current=restoration_state(api,[pair['before'],relaxed],emit)
     if restored(pair['before'],current):
         return {'restored':True,'fullGetBeforeSha256':pair['fullGetSha256'],
                 'fullGetAfterSha256':digest(current),'canonicalGetSha256':digest(pair['before']),
@@ -171,12 +182,16 @@ class Executor:
     def __init__(self,context):self.context=context
 
     def run(self,step):
-        require(type(step) is int and step in STEPS,'STEP_INVALID')
-        self.context.require_predecessor(step)
-        self.context.require_current_permit(step)
-        result=getattr(self,STEPS[step])()
-        self.context.record_step(step,result)
-        return result
+        try:
+            require(type(step) is int and step in STEPS,'STEP_INVALID')
+            self.context.require_predecessor(step)
+            self.context.require_current_permit(step)
+            result=getattr(self,STEPS[step])()
+            self.context.record_step(step,result)
+            return result
+        except Refusal as error:
+            self.context.emit(str(error))
+            raise
 
     def step6(self):
         pair=self.context.capture_ruleset_pair()
@@ -195,6 +210,7 @@ class Executor:
 
     def step8(self):
         # Restoration runs even on lease/read-back/dry-run/live-push failure.
+        restoration_complete=False
         try:
             argv=self.context.validated_push_plan()
             require(argv[:4]==['git','push','--atomic','--dry-run'] and
@@ -203,10 +219,14 @@ class Executor:
             self.context.command(argv)
             # Re-authenticate scope/head/approvals after dry-run, before live push.
             require(self.context.validated_push_plan()==argv,'HEAD_CHANGED')
-            self.context.consume_force_approval()
             result=self.context.command([a for a in argv if a!='--dry-run'])
+            self.context.restore()
+            restoration_complete=True
+            self.context.verify_pushed_refs()
+            self.context.consume_force_approval()
             return result
-        finally:self.context.restore()
+        finally:
+            if not restoration_complete:self.context.restore()
 
     def step9(self):return self.context.restoration_proof()
 
