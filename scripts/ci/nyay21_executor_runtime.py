@@ -238,6 +238,36 @@ class AuthenticatedClock:
         return row['timestamp']
 
 
+class ReceiptPollingBudget:
+    """Local wait budget only; never shared with restoration or heartbeat I/O."""
+    def __init__(self,remaining,*,monotonic=time.monotonic):
+        require(type(remaining) is int and remaining>0,'SCOPE_POLL_BUDGET_EXPIRED')
+        self.monotonic=monotonic;self.deadline=monotonic()+remaining;self.delay=.25
+
+    def next_delay(self):
+        remaining=self.deadline-self.monotonic()
+        require(remaining>0,'SCOPE_POLL_BUDGET_EXPIRED')
+        delay=min(self.delay,remaining);self.delay=min(2,self.delay*2)
+        return delay
+
+
+def watchdog_process_alive(pid):
+    """Reap our exited child; kill(pid, 0) alone incorrectly accepts zombies."""
+    require(type(pid) is int and pid>1,'WATCHDOG_NOT_LIVE')
+    try:
+        reaped,_=os.waitpid(pid,os.WNOHANG)
+        return reaped==0
+    except ChildProcessError:
+        # Resume may observe the previous process, no longer our child. Read-only
+        # process state is required; unavailable/unknown state is not liveness.
+        try:
+            result=subprocess.run(['ps','-p',str(pid),'-o','stat='],capture_output=True,timeout=5)
+            status=result.stdout.strip()
+            return result.returncode==0 and bool(status) and not status.startswith(b'Z')
+        except (OSError,subprocess.TimeoutExpired):return False
+    except OSError:return False
+
+
 class ConsumptionRegistry:
     """Owner/Claude signed snapshot import; no Jira token or network client.
 
@@ -694,8 +724,16 @@ class Runtime:
 
     def heartbeat(self):
         while not self.stop_heartbeat.wait(5):
-            path=self.root/'heartbeat';fd=os.open(path,os.O_CREAT|os.O_WRONLY|os.O_TRUNC|os.O_NOFOLLOW,0o600)
-            with os.fdopen(fd,'w') as stream:stream.write(str(self.now()));stream.flush();os.fsync(stream.fileno())
+            try:
+                stamp=self.now()
+                path=self.root/'heartbeat';fd=os.open(path,os.O_CREAT|os.O_WRONLY|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+                with os.fdopen(fd,'w') as stream:stream.write(str(stamp));stream.flush();os.fsync(stream.fileno())
+            except Exception:
+                # Do not keep a formerly fresh heartbeat authoritative after a
+                # clock/I/O failure. Marker is immutable and generation-scoped.
+                if not (self.root/'heartbeat-failed.json').exists():
+                    immutable_json(self.root,'heartbeat-failed.json',{'code':'WATCHDOG_NOT_LIVE'})
+                self.emit('WATCHDOG_NOT_LIVE');self.stop_heartbeat.set();return
 
     def arm_watchdog(self,pair):
         # Separate process survives executor SIGKILL. No production arming occurs
@@ -715,13 +753,17 @@ class Runtime:
     def verify_watchdog(self,pair,scope_receipt=None):
         row=read_json(self.root/'watchdog-armed.json')
         require(row.get('pairSha256')==digest(pair) and type(row.get('pid')) is int,'WATCHDOG_BINDING_MISMATCH')
-        try:os.kill(row['pid'],0)
-        except OSError:raise Refusal('WATCHDOG_NOT_LIVE') from None
-        now=self.now()
+        try:now=self.now()
+        except Exception:raise Refusal('WATCHDOG_NOT_LIVE') from None
         seal=getattr(self,'seal',{})
         require(type(row.get('armedAt')) is int and type(seal.get('capturedAt')) is int
                 and type(seal.get('expiresAt')) is int and seal['capturedAt']<=row['armedAt']<=now<seal['expiresAt'],
                 'WATCHDOG_STALE')
+        try:heartbeat=int((self.root/'heartbeat').read_text())
+        except (OSError,ValueError):raise Refusal('WATCHDOG_NOT_LIVE') from None
+        require(not (self.root/'heartbeat-failed.json').exists()
+                and not watchdog_due(alive=watchdog_process_alive(row['pid']),
+                    armed_at=row['armedAt'],heartbeat=heartbeat,now=now),'WATCHDOG_NOT_LIVE')
         if scope_receipt is not None:
             require(self.step8_scope.verify(self.step8_scope.accepted)==scope_receipt,'SCOPE_RECEIPT_CHANGED')
         return row
@@ -828,6 +870,7 @@ class Runtime:
         new={r['name']:r['oid'] for r in rewrite['refs']}
         rows=[{'ref':r['name'],'expectedOldOid':r['oid'],'newOid':new[r['name']]} for r in self.seal['refs']]
         scope_receipt=self.read_scope_at_push()
+        self.require_live_old_refs()
         # The independent signature was just verified against the GO-bound keys,
         # identity/head/policy and this one-use nonce. Pure planning still checks
         # the exact permission/expiry shape; its digest is not an authority source.
@@ -852,15 +895,16 @@ class Runtime:
         """
         challenge=self.step8_scope.challenge()
         path=self.root/('scope-receipt-'+challenge['nonce']+'.json')
+        budget=ReceiptPollingBudget(self.seal['expiresAt']-self.now())
         while not path.exists():
-            require(self.now()<self.seal['expiresAt'],'SEAL_EXPIRED')
             self.verify_watchdog(read_json(self.root/'ruleset-pair.json'))
-            time.sleep(.25)
+            time.sleep(budget.next_delay())
         return self.step8_scope.verify(read_json(path))
 
     def relax_ruleset(self):
         pair=read_json(self.root/'ruleset-pair.json');self.verify_watchdog(pair)
         restoration_state(self.api,[pair['before']],self.emit)
+        self.require_live_old_refs()
         self.api.put(pair['relaxation'])
         restoration_state(self.api,[{**pair['before'],**pair['relaxation']}],self.emit)
 
@@ -876,6 +920,43 @@ class Runtime:
         pair=read_json(self.root/'ruleset-pair.json')
         restoration_state(self.api,[pair['before']],self.emit)
         return read_json(self.root/'restoration-proof.json')
+
+    def record_pre_push_abort(self,code):
+        """Restored effects only; no fresh authority and no repeat-push permit."""
+        proof=self.restoration_proof()
+        resumable=(not list(self.root.glob('scope-used-*.json'))
+                   and self.git.remote_refs()==self.seal['refs'])
+        row={'code':code,'sealSha256':digest(self.seal),'executionId':self.identity['executionId'],
+             'restorationProofSha256':digest(proof),'resumable':resumable,
+             'authority':'none','expiresAt':self.seal['expiresAt']}
+        name='pre-push-abort-'+digest(row)+'.json'
+        if not (self.root/name).exists():immutable_json(self.root,name,row)
+        self.log.append('PRE_PUSH_CONTROLLED_ABORT',{'digest':digest(row)})
+        return row
+
+    def rearm_after_controlled_abort(self,pair,rows):
+        aborts=[r for r in rows if r['event']=='PRE_PUSH_CONTROLLED_ABORT']
+        require(bool(aborts),'RESUME_ABORT_RECEIPT_REQUIRED')
+        sha=aborts[-1]['values']['digest'];row=read_json(self.root/('pre-push-abort-'+sha+'.json'))
+        require(digest(row)==sha and row.get('resumable') is True
+                and row.get('sealSha256')==digest(self.seal)
+                and row.get('executionId')==self.identity['executionId']
+                and row.get('expiresAt')==self.seal['expiresAt']
+                and not list(self.root.glob('scope-used-*.json')),'RESUME_ABORT_BINDING_INVALID')
+        proof=self.restoration_proof()
+        require(digest(proof)==row['restorationProofSha256'],'RESUME_RESTORATION_MISMATCH')
+        self.require_live_old_refs()
+        old=read_json(self.root/'watchdog-armed.json')
+        require(not watchdog_process_alive(old['pid']),'RESUME_OLD_WATCHDOG_STILL_LIVE')
+        # Preserve each previous generation; never let its restoration marker
+        # terminate the replacement watchdog. No completed step is rewritten.
+        generation=secrets.token_hex(16)
+        for name in ['watchdog-armed.json','restoration-proof.json','heartbeat-failed.json']:
+            path=self.root/name
+            if path.exists():os.rename(path,self.root/(generation+'-'+name))
+        self.log.append('WATCHDOG_GENERATION_REBOUND',{'digest':digest(generation)})
+        self.stop_heartbeat=threading.Event()
+        self.arm_watchdog(pair);self.verify_watchdog(pair)
 
     def verify_pushed_refs(self):
         # Cross-service effects cannot be one distributed transaction. Publish
@@ -931,7 +1012,10 @@ class Runtime:
         self.require_live_old_refs()
         if not completed:
             require(not (self.root/'ruleset-pair.json').exists(),'RESUME_PARTIAL_CAPTURE_REQUIRES_OWNER')
-        if 6 in completed:self.verify_watchdog(read_json(self.root/'ruleset-pair.json'))
+        if 6 in completed:
+            pair=read_json(self.root/'ruleset-pair.json')
+            if (self.root/'restoration-proof.json').exists():self.rearm_after_controlled_abort(pair,rows)
+            else:self.verify_watchdog(pair)
         if 7 in completed:
             require(self.git.local_refs()==read_json(rewrite_path)['refs'],'RESUME_REWRITE_OUTPUT_CHANGED')
         else:

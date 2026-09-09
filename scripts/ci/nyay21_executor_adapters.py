@@ -211,6 +211,8 @@ class Executor:
     def step8(self):
         # Restoration runs even on lease/read-back/dry-run/live-push failure.
         restoration_complete=False
+        live_started=False
+        refusal=None
         try:
             argv=self.context.validated_push_plan()
             require(argv[:4]==['git','push','--atomic','--dry-run'] and
@@ -219,14 +221,19 @@ class Executor:
             self.context.command(argv)
             # Re-authenticate scope/head/approvals after dry-run, before live push.
             require(self.context.validated_push_plan()==argv,'HEAD_CHANGED')
+            live_started=True
             result=self.context.command([a for a in argv if a!='--dry-run'])
             self.context.restore()
             restoration_complete=True
             self.context.verify_pushed_refs()
             self.context.consume_force_approval()
             return result
+        except Refusal as error:
+            refusal=str(error)
+            raise
         finally:
             if not restoration_complete:self.context.restore()
+            if refusal is not None and not live_started:self.context.record_pre_push_abort(refusal)
 
     def step9(self):return self.context.restoration_proof()
 
