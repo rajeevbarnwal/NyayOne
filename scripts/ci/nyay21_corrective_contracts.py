@@ -5,6 +5,7 @@ import json
 import subprocess
 import hashlib
 import time
+import inspect
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,108 @@ import test_nyay21_executor_adapters as inherited
 
 def snapshot():
     return inherited.ExecutorAdapterContracts().ruleset()
+
+
+class JustInTimeScopeContracts(unittest.TestCase):
+    def scope_fixture(self,top):
+        root=top/'custody';root.mkdir(mode=0o700)
+        key=top/'external-test-key'
+        subprocess.run(['ssh-keygen','-q','-t','ed25519','-N','','-f',str(key)],check=True,capture_output=True)
+        public=' '.join(key.with_suffix('.pub').read_text().split()[:2])
+        seal=gate.capture_execution_seal(observation,policy={**POLICY,'maxSnapshotAgeSeconds':2700},now=1000)['seal']
+        identity={'executionId':'b'*64}
+        permit={'scopePolicy':runtime.scope_policy(),'sourceHead':seal['sourceHead'],
+                'credentialSha256':'c'*64,'registrySigners':{'owner':{'accountId':'test-owner','publicKey':public}}}
+        clock=Mock(return_value=1601)
+        scope=runtime.Step8Scope(root,permit,seal,identity,clock)
+        challenge=scope.challenge()
+        row={'schemaVersion':'nyay21-step8-scope/v1','authority':'step8-scope',
+             'repository':gate.REPOSITORY,'sealSha256':adapters.digest(seal),'sourceHead':seal['sourceHead'],
+             'executionId':identity['executionId'],'challengeNonce':challenge['nonce'],
+             'challengeSha256':adapters.digest(challenge),'scopePolicySha256':adapters.digest(runtime.scope_policy()),
+             'credentialSha256':'c'*64,'permissions':dict(runtime.PERMISSIONS),
+             'restorationWorkflow':'reviewed-ruleset-restoration/v1','readAt':1601,'expiresAt':1721,
+             'tokenExpiresAt':86400,'exitCode':0,'signer':'owner','accountId':'test-owner','commentId':'15120'}
+        def sign(value,namespace='nyay21-step8-scope-v1'):
+            result=subprocess.run(['ssh-keygen','-Y','sign','-f',str(key),'-n',namespace],
+                input=json.dumps(value,sort_keys=True,separators=(',',':')).encode(),capture_output=True,check=True)
+            return {'payload':value,'signature':result.stdout.decode()}
+        return scope,row,sign,clock
+
+    def test_signed_scope_positive_after_long_ceremony(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve())
+            self.assertEqual(scope.verify(sign(row)),row)
+            self.assertGreater(row['readAt']-scope.seal['capturedAt'],300)
+
+    def test_scope_domain_separation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve())
+            for namespace in ['nyay21-registry-execution-v2','nyay21-registry-continuation-v2']:
+                with self.subTest(namespace=namespace),self.assertRaises(adapters.Refusal):scope.verify(sign(row,namespace))
+
+    def test_scope_binding_adversarial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve())
+            for key in ['executionId','sourceHead','sealSha256','challengeNonce','challengeSha256','scopePolicySha256','credentialSha256','accountId']:
+                with self.subTest(key=key),self.assertRaises(adapters.Refusal):scope.verify(sign({**row,key:'e'*64}))
+
+    def test_scope_receipt_boundary_and_strict_types(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve())
+            for change in [{'expiresAt':1722},{'readAt':True},{'exitCode':False},{'tokenExpiresAt':True},
+                           {'readAt':1600},{'expiresAt':1601},{'permissions':{'contents':'write'}}]:
+                with self.subTest(change=change),self.assertRaises(adapters.Refusal):scope.verify(sign({**row,**change}))
+            clock.return_value=1720;self.assertEqual(scope.verify(sign(row)),row)
+            clock.return_value=1721
+            with self.assertRaises(adapters.Refusal):scope.verify(sign(row))
+
+    def test_scope_challenge_single_use_and_cross_context_refusal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve());envelope=sign(row)
+            scope.verify(envelope);scope.consume()
+            with self.assertRaisesRegex(adapters.Refusal,'SCOPE_CHALLENGE_CONSUMED'):scope.consume()
+            with self.assertRaisesRegex(adapters.Refusal,'SCOPE_CHALLENGE_CONSUMED'):scope.verify(envelope)
+            other=runtime.Step8Scope(scope.root,scope.permit,scope.seal,scope.identity,clock);other.challenge()
+            with self.assertRaises(adapters.Refusal):other.verify(envelope)
+
+    def test_scope_unsigned_or_tampered_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,row,sign,clock=self.scope_fixture(Path(tmp).resolve());envelope=sign(row)
+            for value in [row,{'payload':row,'signature':'invalid'},
+                          {**envelope,'payload':{**row,'commentId':'99999'}}]:
+                with self.subTest(),self.assertRaises(adapters.Refusal):scope.verify(value)
+
+    def test_permit_does_not_pin_a_precaptured_scope_receipt(self):
+        source=inspect.getsource(runtime.Runtime.__init__)
+        self.assertNotIn("scopeReceiptSha256",source,'F07_PRECAPTURED_SCOPE_BINDING')
+        self.assertIn("scopePolicy",source,'F07_SCOPE_POLICY_BINDING_REQUIRED')
+
+    def test_scope_is_read_at_each_push_validation(self):
+        source=inspect.getsource(runtime.Runtime.validated_push_plan)
+        self.assertIn('read_scope_at_push(',source,'F07_JIT_READBACK_REQUIRED')
+        self.assertNotIn('scope_readback=self.scope',source,'F07_CACHED_READBACK_FORBIDDEN')
+
+    def test_live_watchdog_has_no_separate_300_second_ceremony_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve();root.chmod(0o700)
+            pair={'synthetic':'pair'}
+            adapters.immutable_json(root,'watchdog-armed.json',{
+                'pairSha256':adapters.digest(pair),'pid':os.getpid(),'armedAt':1000})
+            ctx=object.__new__(runtime.Runtime);ctx.root=root
+            ctx.seal={'capturedAt':1000,'expiresAt':3700};ctx.now=lambda:1601
+            self.assertEqual(ctx.verify_watchdog(pair)['pid'],os.getpid())
+
+    def test_capture_preserves_distinct_privacy_safe_validator_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve();root.chmod(0o700)
+            with patch.object(runtime,'GitIO'),patch.object(runtime,'GitHub'),\
+                 patch.object(runtime,'AuthenticatedClock',return_value=lambda:1000):
+                for code in ['HEAD_CHANGED','TARGET_MANIFEST_MISMATCH']:
+                    with self.subTest(code=code),patch.object(gate,'capture_execution_seal',
+                            return_value={'verdict':'FAIL','codes':[code]}):
+                        with self.assertRaisesRegex(adapters.Refusal,'^'+code+'$'):
+                            runtime.capture_seal(root,'synthetic-only')
 
 
 class CorrectiveAuthorityContracts(unittest.TestCase):
@@ -405,7 +508,8 @@ class CorrectiveE2EContracts(unittest.TestCase):
                         'repository':gate.REPOSITORY,'credentialSha256':hashlib.sha256(credential.encode()).hexdigest(),
                         'protectedRootSha256':adapters.digest(str(protected)),
                         'sealSha256':adapters.digest(seal),'approvalsSha256':adapters.digest(approvals),
-                        'scopeReceiptSha256':adapters.digest(scope),'backupDrillReceiptSha256':adapters.digest(step5),
+                        'scopePolicy':runtime.scope_policy(),'sourceHead':seal['sourceHead'],
+                        'backupDrillReceiptSha256':adapters.digest(step5),
                         'reviewedCodeSha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in
                             [Path(runtime.__file__),Path(adapters.__file__),Path(gate.__file__)]},
                         'relaxationSha256':adapters.digest(pair['relaxation']),'restorationSha256':adapters.digest(pair['restoration']),
@@ -437,6 +541,23 @@ class CorrectiveE2EContracts(unittest.TestCase):
                           {'payload':payload,'signature':Path(str(message)+'.sig').read_text()})
                 publish()
                 ctx=runtime.Runtime(root,adapters.digest(permit),credential)
+                original_read=ctx.read_scope_at_push
+                def independent_scope_reader():
+                    challenge=ctx.step8_scope.challenge();stamp=int(time.time())
+                    value={'schemaVersion':'nyay21-step8-scope/v1','authority':'step8-scope',
+                        'repository':gate.REPOSITORY,'sealSha256':adapters.digest(seal),'sourceHead':seal['sourceHead'],
+                        'executionId':ctx.identity['executionId'],'challengeNonce':challenge['nonce'],
+                        'challengeSha256':adapters.digest(challenge),'scopePolicySha256':adapters.digest(runtime.scope_policy()),
+                        'credentialSha256':permit['credentialSha256'],'permissions':dict(runtime.PERMISSIONS),
+                        'restorationWorkflow':'reviewed-ruleset-restoration/v1','readAt':stamp,'expiresAt':stamp+120,
+                        'tokenExpiresAt':stamp+86400,'exitCode':0,'signer':'owner','accountId':'synthetic-owner','commentId':'15120'}
+                    path=root/('scope-receipt-'+challenge['nonce']+'.json')
+                    if not path.exists():
+                        signature=subprocess.run(['ssh-keygen','-Y','sign','-f',str(key),'-n','nyay21-step8-scope-v1'],
+                            input=json.dumps(value,sort_keys=True,separators=(',',':')).encode(),capture_output=True,check=True).stdout.decode()
+                        write(path.name,{'payload':value,'signature':signature})
+                    return original_read()
+                ctx.read_scope_at_push=independent_scope_reader
                 self.assertEqual(ctx.prepare_rewrite_claim()['authority'],'none')
                 self.assertFalse((root/'watchdog-armed.json').exists())
                 publish('rewrite',runtime.read_json(root/'rewrite-intent.json'))
