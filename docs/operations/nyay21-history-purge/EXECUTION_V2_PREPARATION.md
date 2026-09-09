@@ -234,6 +234,42 @@ remain required. Rewrite/push resume after the original seal expiry still refuse
 
 ## Resume and refusal handling
 
+### Third-delta liveness, polling, and controlled abort
+
+The watchdog check reaps exited children with `waitpid(..., WNOHANG)`.
+An existing PID is not proof of liveness: a zombie, stale/missing heartbeat,
+unavailable process-state read, or heartbeat clock failure refuses relaxation.
+The 30-second heartbeat bound remains unchanged. Clock failures write a
+generation-local failure marker and a canonical custody event; they do not
+silently leave a previously fresh heartbeat authoritative.
+
+Scope-receipt waiting backs off 0.25, 0.5, 1, then at most 2 seconds. Its local
+monotonic deadline derives from the remaining original seal window. This polling
+budget is not passed to, decremented by, or reused for restoration or heartbeat
+work. The loop makes one authenticated liveness/time check per iteration,
+instead of two. Receipt signature/freshness verification still uses authenticated
+time, not the polling deadline. No polling retry increases restoration retries.
+Live refs are checked again after the receipt wait and immediately before the
+relaxation PUT. An intervening HEAD/ref change refuses before relaxation.
+
+A step-8 refusal before the live-push call is a controlled abort: restoration
+runs first, then custody binds an immutable `pre-push-abort-<digest>.json` record.
+This record grants **no authority**. It is resumable only while original refs
+remain unchanged and no scope nonce has been consumed. The original seal,
+approval identities, completed rewrite receipts, registry and fresh signed
+step-8 challenge remain mandatory. Expiry cannot be renewed by an abort record.
+
+Within-window resume verifies restoration and the abort record, requires the
+old watchdog to have exited, and preserves its armed/restoration/failure files
+under a unique generation prefix before arming a replacement. A still-live old
+watchdog is a refusal, not permission to run two guardians. The new generation
+cannot exit because of a previous generation's restoration marker. A verified
+rewrite is not repeated. A consumed nonce or uncertain live-push attempt is not
+classified as a pre-push resumable abort; the existing verified-push continuation
+path is used only after exact remote verification. Unrecoverable/ambiguous state
+requires owner recovery. These are reviewed execution bindings, not authorization
+to execute before the independent verdict and fresh owner GO.
+
 Within the original window only:
 
 ```sh

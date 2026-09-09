@@ -22,6 +22,79 @@ def snapshot():
     return inherited.ExecutorAdapterContracts().ruleset()
 
 
+class ThirdDeltaContracts(unittest.TestCase):
+    def context(self, root, pid):
+        ctx=object.__new__(runtime.Runtime);ctx.root=root;ctx.clock=Mock(return_value=1600)
+        ctx.seal={'capturedAt':1000,'expiresAt':3700};ctx.emit=Mock()
+        pair={'synthetic':'pair'}
+        adapters.immutable_json(root,'watchdog-armed.json',{
+            'pairSha256':adapters.digest(pair),'pid':pid,'armedAt':1000})
+        (root/'heartbeat').write_text('1600')
+        return ctx,pair
+
+    def test_zombie_child_is_reaped_and_refuses_before_relaxation(self):
+        # Real local child only; ps observes exit without reaping on macOS/Linux.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve();root.chmod(0o700)
+            child=subprocess.Popen(['sh','-c','exit 0'])
+            try:
+                deadline=time.monotonic()+5
+                while True:
+                    status=subprocess.run(['ps','-p',str(child.pid),'-o','stat='],capture_output=True,check=True).stdout.strip()
+                    if status.startswith(b'Z'):break
+                    self.assertLess(time.monotonic(),deadline,'SYNTHETIC_CHILD_EXIT_NOT_OBSERVED')
+                ctx,pair=self.context(root,child.pid)
+                with self.assertRaisesRegex(adapters.Refusal,'WATCHDOG_NOT_LIVE'):
+                    ctx.verify_watchdog(pair)
+                with self.assertRaises(ChildProcessError):os.waitpid(child.pid,os.WNOHANG)
+            finally:child.wait()
+
+    def test_live_child_with_stale_heartbeat_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve();root.chmod(0o700)
+            child=subprocess.Popen(['sh','-c','read ignored'],stdin=subprocess.PIPE)
+            try:
+                ctx,pair=self.context(root,child.pid);(root/'heartbeat').write_text('1569')
+                with self.assertRaisesRegex(adapters.Refusal,'WATCHDOG_NOT_LIVE'):ctx.verify_watchdog(pair)
+            finally:child.communicate()
+
+    def test_heartbeat_clock_error_marks_watchdog_dead(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve();root.chmod(0o700)
+            ctx,pair=self.context(root,os.getpid())
+            ctx.clock.side_effect=adapters.Refusal('SERVER_TIME_UNAVAILABLE')
+            ctx.stop_heartbeat=Mock();ctx.stop_heartbeat.wait.side_effect=[False,True]
+            ctx.heartbeat()
+            self.assertTrue((root/'heartbeat-failed.json').is_file())
+            ctx.emit.assert_any_call('WATCHDOG_NOT_LIVE')
+
+    def test_receipt_polling_backoff_has_isolated_budget(self):
+        budget_type=getattr(runtime,'ReceiptPollingBudget',None)
+        self.assertTrue(callable(budget_type),'F08_ISOLATED_POLLING_BUDGET_REQUIRED')
+        clock=Mock(return_value=10.0);budget=budget_type(100,monotonic=clock)
+        self.assertEqual([budget.next_delay() for _ in range(6)],[.25,.5,1,2,2,2])
+        clock.return_value=110.0
+        with self.assertRaisesRegex(adapters.Refusal,'SCOPE_POLL_BUDGET_EXPIRED'):budget.next_delay()
+        self.assertNotIn('ReceiptPollingBudget',inspect.getsource(runtime.Runtime.restore))
+
+    def test_head_recheck_immediately_precedes_relaxation(self):
+        ctx=object.__new__(runtime.Runtime);ctx.root=Path('/synthetic');ctx.api=Mock();ctx.emit=Mock()
+        ctx.verify_watchdog=Mock();ctx.require_live_old_refs=Mock(side_effect=adapters.Refusal('HEAD_CHANGED'))
+        with patch.object(runtime,'read_json',return_value={'before':{},'relaxation':{}}),\
+             patch.object(runtime,'restoration_state'),self.assertRaisesRegex(adapters.Refusal,'HEAD_CHANGED'):
+            ctx.relax_ruleset()
+        ctx.api.put.assert_not_called()
+
+    def test_step8_controlled_abort_records_resumable_state_after_restoration(self):
+        ctx=Mock();events=[]
+        ctx.validated_push_plan.side_effect=adapters.Refusal('SCOPE_RECEIPT_STALE_OR_INVALID')
+        ctx.restore.side_effect=lambda:events.append('restored')
+        ctx.record_pre_push_abort.side_effect=lambda code:events.append(('abort',code))
+        with self.assertRaisesRegex(adapters.Refusal,'SCOPE_RECEIPT_STALE_OR_INVALID'):adapters.Executor(ctx).step8()
+        self.assertEqual(events,['restored',('abort','SCOPE_RECEIPT_STALE_OR_INVALID')])
+        ctx.command.assert_not_called()
+
+
 class JustInTimeScopeContracts(unittest.TestCase):
     def scope_fixture(self,top):
         root=top/'custody';root.mkdir(mode=0o700)
@@ -108,6 +181,7 @@ class JustInTimeScopeContracts(unittest.TestCase):
             pair={'synthetic':'pair'}
             adapters.immutable_json(root,'watchdog-armed.json',{
                 'pairSha256':adapters.digest(pair),'pid':os.getpid(),'armedAt':1000})
+            (root/'heartbeat').write_text('1601')
             ctx=object.__new__(runtime.Runtime);ctx.root=root
             ctx.seal={'capturedAt':1000,'expiresAt':3700};ctx.now=lambda:1601
             self.assertEqual(ctx.verify_watchdog(pair)['pid'],os.getpid())
@@ -563,6 +637,7 @@ class CorrectiveE2EContracts(unittest.TestCase):
                 publish('rewrite',runtime.read_json(root/'rewrite-intent.json'))
                 def arm(pair):
                     adapters.immutable_json(root,'watchdog-armed.json',{'pairSha256':adapters.digest(pair),'pid':os.getpid(),'armedAt':int(time.time())})
+                    (root/'heartbeat').write_text(str(int(time.time())))
                 with patch.object(ctx,'arm_watchdog',side_effect=arm):adapters.Executor(ctx).run(6)
                 adapters.Executor(ctx).run(7)
                 with self.assertRaisesRegex(adapters.Refusal,'REWRITE_APPROVAL_ALREADY_CONSUMED'):adapters.Executor(ctx).run(7)
