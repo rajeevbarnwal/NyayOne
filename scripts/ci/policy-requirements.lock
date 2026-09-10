@@ -3,3 +3,5 @@
 # application dependency file.
 PyYAML==6.0.3 \
     --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc
+git-filter-repo==2.47.0 \
+    --hash=sha256:2cd04929b9024e83e65db571cbe36aec65ead0cb5f9ec5abe42158654af5ad83
