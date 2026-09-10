@@ -49,6 +49,7 @@ AUTHORITATIVE_RESTORATION_PAYLOAD_SHA256 = (
 APPROVAL_REGISTRY_SCHEMA = "nyay21-approval-consumption/v1"
 OWNER_APPROVER = "Rajeev Barnwal"
 SECURITY_PRIVACY_APPROVER = "Claude Code"
+EXECUTION_SCHEMA_VERSION = "nyay21-execution/v2"
 STRICT_REQUIRED_CHECKS = (
     "nyayone-registration-required",
     "nyayone-wave1-required",
@@ -148,6 +149,366 @@ def _canonical_json_sha256(value: object) -> str:
         "utf-8"
     )
     return hashlib.sha256(payload).hexdigest()
+
+
+# Execution/v2 accepts fresh observations, never a replacement historical seal.
+# All results remain planning-only; caller-supplied claims are not live approvals.
+def _execution_result(codes=(), **values):
+    result = _result(codes, **values)
+    if 'HEAD_CHANGED' in result['codes']:
+        result['verdict'] = 'HEAD_CHANGED'
+    result['executionAuthorized'] = False
+    return result
+
+
+def _execution_int(value, minimum=0, maximum=2**63 - 1):
+    return type(value) is int and minimum <= value <= maximum
+
+
+def _execution_refs(rows):
+    if not isinstance(rows, list) or not rows:
+        return None
+    seen = set()
+    for row in rows:
+        if (not isinstance(row, dict) or set(row) != {'name', 'oid'}
+                or not _is_safe_publishable_ref_name(row['name'])
+                or not _is_nonzero_hex40(row['oid']) or row['name'] in seen):
+            return None
+        seen.add(row['name'])
+    return sorted(copy.deepcopy(rows), key=lambda row: row['name'])
+
+
+def capture_execution_seal(observe, *, policy, now):
+    """Seal two equal readbacks from an injected read-only collector; never execute.
+
+    A production collector must authenticate/verify raw Git observations. This
+    pure boundary does not turn a caller's `complete` claim into remote evidence.
+    """
+    if not callable(observe) or not isinstance(policy, dict) or not _execution_int(now):
+        return _execution_result(['OBSERVATION_INVALID'])
+    if (policy.get('schemaVersion') != EXECUTION_SCHEMA_VERSION
+            or policy.get('repository') != REPOSITORY or policy.get('visibility') != 'PRIVATE'
+            or policy.get('defaultBranch') != 'main'
+            or policy.get('targetManifest') != list(TARGETS)
+            or policy.get('filterRepoVersion') != FILTER_REPO_VERSION
+            or not _execution_int(policy.get('maxSnapshotAgeSeconds'), 1, 2700)):
+        return _execution_result(['EXECUTION_POLICY_INVALID'])
+    try:
+        snapshots = [copy.deepcopy(observe()), copy.deepcopy(observe())]
+    except Exception:
+        return _execution_result(['OBSERVATION_UNAVAILABLE'])
+    normalized = []
+    for raw in snapshots:
+        if not isinstance(raw, dict):
+            return _execution_result(['OBSERVATION_INVALID'])
+        if (raw.get('repository') != REPOSITORY or raw.get('visibility') != 'PRIVATE'
+                or raw.get('defaultBranch') != 'main'):
+            return _execution_result(['REPOSITORY_SCOPE_MISMATCH'])
+        targets = raw.get('targets')
+        if (not _execution_int(raw.get('exitCode')) or not isinstance(targets, list)
+                or any(not isinstance(t, dict) or not _execution_int(t.get('size'), 1) for t in targets)):
+            return _execution_result(['STRICT_INTEGER_REQUIRED'])
+        if targets != list(TARGETS):
+            return _execution_result(['TARGET_MANIFEST_MISMATCH'])
+        refs = _execution_refs(raw.get('refs'))
+        if raw.get('complete') is not True or raw['exitCode'] != 0 or refs is None:
+            return _execution_result(['REF_INVENTORY_INVALID'])
+        commits = raw.get('commits')
+        if (not isinstance(commits, list) or not commits
+                or any(not isinstance(c, dict) or set(c) != {'oid', 'signed'}
+                       or not _is_nonzero_hex40(c['oid']) or type(c['signed']) is not bool for c in commits)
+                or len({c['oid'] for c in commits}) != len(commits)
+                or not _is_hex(raw.get('rulesetGetSha256'), 64)
+                or not _is_nonzero_hex40(raw.get('head'))
+                or not any(r == {'name': 'refs/heads/main', 'oid': raw['head']} for r in refs)
+                or raw['head'] not in {c['oid'] for c in commits}):
+            return _execution_result(['OBSERVATION_INVALID'])
+        normalized.append({**raw, 'refs': refs, 'commits': sorted(commits, key=lambda c: c['oid'])})
+    if normalized[0] != normalized[1]:
+        return _execution_result(['HEAD_CHANGED'])
+    raw = normalized[0]
+    seal = {'schemaVersion': EXECUTION_SCHEMA_VERSION, 'repository': REPOSITORY,
+            'sourceHead': raw['head'], 'refs': raw['refs'],
+            'refInventorySha256': _canonical_json_sha256(raw['refs']),
+            'targetManifestSha256': _canonical_json_sha256(raw['targets']),
+            'rulesetGetSha256': raw['rulesetGetSha256'],
+            'observationSha256': _canonical_json_sha256(raw),
+            'capturedAt': now, 'expiresAt': now + policy['maxSnapshotAgeSeconds'],
+            'policySha256': _canonical_json_sha256(policy),
+            'reachableCommitCount': len(raw['commits']),
+            'signedCommitCount': sum(c['signed'] for c in raw['commits'])}
+    return _execution_result(seal=seal, sealSha256=_canonical_json_sha256(seal))
+
+
+def _execution_seal_valid(seal):
+    if not isinstance(seal, dict):
+        return False
+    refs = _execution_refs(seal.get('refs'))
+    return (seal.get('schemaVersion') == EXECUTION_SCHEMA_VERSION
+            and seal.get('repository') == REPOSITORY
+            and _is_nonzero_hex40(seal.get('sourceHead')) and refs is not None
+            and any(r == {'name': 'refs/heads/main', 'oid': seal['sourceHead']} for r in refs)
+            and seal.get('refInventorySha256') == _canonical_json_sha256(refs)
+            and seal.get('targetManifestSha256') == _canonical_json_sha256(list(TARGETS))
+            and all(_is_hex(seal.get(k), 64) for k in ('rulesetGetSha256','observationSha256','policySha256'))
+            and _execution_int(seal.get('capturedAt')) and _execution_int(seal.get('expiresAt'))
+            and all(_execution_int(seal[k]) for k in ('reachableCommitCount', 'signedCommitCount') if k in seal)
+            and 0 < seal['expiresAt'] - seal['capturedAt'] <= 2700)
+
+
+def _execution_authority_unchanged(seal, current):
+    if not _execution_seal_valid(current):
+        return False
+    # Re-observation time is not an authority change. The original signed seal
+    # and its expiry remain binding; only compare independently observed truth.
+    volatile = {'capturedAt', 'expiresAt'}
+    return ({k: v for k, v in seal.items() if k not in volatile}
+            == {k: v for k, v in current.items() if k not in volatile})
+
+
+def validate_execution_approvals(records, *, seal, current, now):
+    """Validate declared bindings only; execution still needs authenticated registry proof."""
+    if not _execution_seal_valid(seal) or not _execution_int(now):
+        return _execution_result(['EXECUTION_SEAL_INVALID'])
+    if not _execution_authority_unchanged(seal, current):
+        return _execution_result(['HEAD_CHANGED'])
+    if not isinstance(records, dict) or set(records) != {'rewrite', 'forceUpdate'}:
+        return _execution_result(['DISTINCT_FORCE_APPROVAL_REQUIRED'])
+    codes = []
+    ids = []
+    for kind, action in (('rewrite', 'rewrite'), ('forceUpdate', 'force-update')):
+        row = records[kind]
+        if not isinstance(row, dict):
+            return _execution_result(['APPROVAL_INVALID'])
+        if row.get('action') != action:
+            codes.append('DISTINCT_FORCE_APPROVAL_REQUIRED')
+        if row.get('approved') is not True:
+            codes.append('APPROVAL_BOOLEAN_REQUIRED')
+        approval_id = row.get('id')
+        if not isinstance(approval_id, str) or re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', approval_id) is None:
+            codes.append('APPROVAL_INVALID')
+        if isinstance(approval_id, str):
+            ids.append(approval_id)
+        if row.get('sealSha256') != _canonical_json_sha256(seal) or row.get('sourceHead') != seal['sourceHead']:
+            codes.append('APPROVAL_SEAL_MISMATCH')
+        if row.get('approvedRefs') != [r['name'] for r in seal['refs']]:
+            codes.append('APPROVAL_REF_SCOPE_MISMATCH')
+        if (row.get('consumed') is not False or not _execution_int(row.get('expiresAt'))
+                or not seal['capturedAt'] <= now < min(row['expiresAt'], seal['expiresAt'])):
+            codes.append('APPROVAL_NOT_CURRENT')
+        for role, identity, label in (('owner', OWNER_APPROVER, 'owner'),
+                                      ('security', SECURITY_PRIVACY_APPROVER, 'technical-approver')):
+            proof = row.get(role)
+            if (not isinstance(proof, dict) or proof.get('identity') != identity
+                    or proof.get('role') != label or proof.get('verified') is not True):
+                codes.append('APPROVAL_ROLE_MISMATCH')
+    if len(set(ids)) != 2:
+        codes.append('DISTINCT_FORCE_APPROVAL_REQUIRED')
+    return _execution_result(codes, rewriteApproved=not codes, forceUpdateApproved=not codes)
+
+
+def plan_execution_leases(rows, *, seal, current):
+    """Render a dry-run only; no force-update command or push authority is emitted."""
+    if not _execution_seal_valid(seal):
+        return _execution_result(['EXECUTION_SEAL_INVALID'])
+    if not _execution_authority_unchanged(seal, current):
+        return _execution_result(['HEAD_CHANGED'])
+    expected = {r['name']: r['oid'] for r in seal['refs']}
+    if (not isinstance(rows, list) or len(rows) != len(expected)
+            or any(not isinstance(r, dict) or set(r) != {'ref','expectedOldOid','newOid'}
+                   or not isinstance(r.get('ref'), str)
+                   or r.get('ref') not in expected or r.get('expectedOldOid') != expected.get(r.get('ref'))
+                   or not _is_nonzero_hex40(r.get('newOid')) for r in rows)
+            or len({r['ref'] for r in rows}) != len(expected)):
+        return _execution_result(['LEASE_INVENTORY_MISMATCH'])
+    rows = sorted(rows, key=lambda r: r['ref'])
+    argv = ['git', 'push', '--atomic', '--dry-run']
+    argv += ['--force-with-lease=' + r['ref'] + ':' + r['expectedOldOid'] for r in rows]
+    argv += ['origin'] + [r['newOid'] + ':' + r['ref'] for r in rows]
+    return _execution_result(dryRunArgv=argv, sealSha256=_canonical_json_sha256(seal))
+
+
+def validate_execution_watchdog(row, *, seal, restoration_payload_sha256, now):
+    if not _execution_seal_valid(seal) or not isinstance(row, dict):
+        return _execution_result(['EXECUTION_SEAL_INVALID'])
+    if (row.get('sourceHead') != seal['sourceHead'] or row.get('sealSha256') != _canonical_json_sha256(seal)
+            or row.get('rulesetGetSha256') != seal['rulesetGetSha256']
+            or not _is_hex(restoration_payload_sha256, 64)
+            or row.get('restorePayloadSha256') != restoration_payload_sha256):
+        return _execution_result(['WATCHDOG_BINDING_MISMATCH'])
+    if not all(_execution_int(v) for v in (now,row.get('getExitCode'),row.get('heartbeatAt'))):
+        return _execution_result(['STRICT_INTEGER_REQUIRED'])
+    if (row.get('armed') is not True or row.get('independentProcess') is not True
+            or row['getExitCode'] != 0 or not 0 <= now - row['heartbeatAt'] <= 30
+            or not _execution_int(row.get('boundedPutAttempts'), 1, 3)
+            or row.get('persistentFailureEscalation') != 'owner-break-glass'):
+        return _execution_result(['WATCHDOG_NOT_READY'])
+    return _execution_result()
+
+
+def validate_execution_operator(row, *, seal):
+    if not _execution_seal_valid(seal) or not isinstance(row, dict):
+        return _execution_result(['OPERATOR_ATTESTATION_REQUIRED'])
+    if (row.get('mode') != 'single-operator' or row.get('owner') != OWNER_APPROVER
+            or row.get('sealSha256') != _canonical_json_sha256(seal)
+            or any(row.get(k) is not True for k in ('riskAccepted','independentTechnicalApproval',
+                                                    'supportAndFreshClonePlan','powerNetworkChecked'))
+            or row.get('pausePoints') != ['backup-drill','rewrite-push','ci-dispatch']):
+        return _execution_result(['OPERATOR_ATTESTATION_REQUIRED'])
+    return _execution_result()
+
+
+def validate_execution_scope_decision(row, *, seal, now, rewritten_paths):
+    """Day-granular expiry model; declared scope must later match authenticated read-back."""
+    if not _execution_seal_valid(seal) or not isinstance(row, dict) or not _execution_int(now):
+        return _execution_result(['TOKEN_SCOPE_INVALID'])
+    if row.get('workflowsWriteDecision') is not True:
+        return _execution_result(['WORKFLOWS_SCOPE_DECISION_REQUIRED'])
+    permissions = row.get('permissions')
+    if not isinstance(permissions, dict):
+        return _execution_result(['TOKEN_SCOPE_INVALID'])
+    if set(permissions) - {'contents','workflows','metadata','administration','actions'}:
+        return _execution_result(['TOKEN_SCOPE_EXCESS'])
+    restoration_scope = {'contents':'write', 'workflows':'write', 'metadata':'read',
+                         'administration':'write', 'actions':'read'}
+    if (('administration' in permissions and
+         (permissions != restoration_scope or row.get('restorationWorkflow') != 'reviewed-ruleset-restoration/v1'))
+            or ('actions' in permissions and permissions['actions'] != 'read')):
+        return _execution_result(['RESTORATION_SCOPE_INVALID'])
+    if permissions.get('workflows') != 'write':
+        return _execution_result(['WORKFLOWS_WRITE_REQUIRED'])
+    if (row.get('repository') != REPOSITORY or permissions.get('contents') != 'write'
+            or ('metadata' in permissions and permissions['metadata'] != 'read')
+            or not _execution_int(row.get('expiresAt')) or not 600 <= row['expiresAt'] - now <= 172800
+            or not isinstance(rewritten_paths, list) or not rewritten_paths
+            or any(not isinstance(p, str) or p.startswith('/') or '..' in PurePosixPath(p).parts for p in rewritten_paths)):
+        return _execution_result(['TOKEN_SCOPE_INVALID'])
+    return _execution_result(scopeReadbackRequiredBeforePush=True, expiryGranularity='day',
+                             sealSha256=_canonical_json_sha256(seal))
+
+
+def validate_execution_scope_readback(row, *, seal, now, expected_receipt_sha256):
+    """Validate a separately authenticated receipt; never trust a decision flag.
+
+    The caller obtains the expected receipt digest from the independent approval
+    channel, not from the supplied row. This pure API neither provisions a token
+    nor establishes authenticity of arbitrary JSON. No token bytes are accepted.
+    """
+    if (not _execution_seal_valid(seal) or not isinstance(row, dict)
+            or not _execution_int(now) or not _is_hex(expected_receipt_sha256, 64)):
+        return _execution_result(['TOKEN_SCOPE_READBACK_REQUIRED'])
+    fields = {'repository', 'sealSha256', 'sourceHead', 'permissions', 'readAt',
+              'expiresAt', 'exitCode', 'ownerDecisionCommentId', 'receiptKind'}
+    if set(row) not in (fields, fields | {'restorationWorkflow'}):
+        return _execution_result(['TOKEN_SCOPE_READBACK_REQUIRED'])
+    permissions = row['permissions']
+    push_scope = {'contents':'write', 'workflows':'write', 'metadata':'read'}
+    restoration_scope = {**push_scope, 'administration':'write', 'actions':'read'}
+    if (permissions != push_scope and
+            (permissions != restoration_scope or row.get('restorationWorkflow') != 'reviewed-ruleset-restoration/v1')):
+        return _execution_result(['TOKEN_SCOPE_READBACK_MISMATCH'])
+    if not all(_execution_int(row[k]) for k in ('readAt', 'expiresAt', 'exitCode')):
+        return _execution_result(['STRICT_INTEGER_REQUIRED'])
+    if (row['repository'] != REPOSITORY or row['sourceHead'] != seal['sourceHead']
+            or row['sealSha256'] != _canonical_json_sha256(seal)
+            or row['receiptKind'] != 'independent-scope-readback/v1'
+            or not isinstance(row['ownerDecisionCommentId'], str)
+            or re.fullmatch(r'[1-9][0-9]*', row['ownerDecisionCommentId']) is None
+            or row['exitCode'] != 0 or not 0 <= now - row['readAt'] <= 300
+            or not seal['capturedAt'] <= now < seal['expiresAt']
+            or not 600 <= row['expiresAt'] - now <= 172800
+            or _canonical_json_sha256(row) != expected_receipt_sha256):
+        return _execution_result(['TOKEN_SCOPE_READBACK_MISMATCH'])
+    return _execution_result(scopeReadbackVerified=True)
+
+
+def prepare_execution_push(rows, *, seal, current, now, approvals,
+                           scope_readback, scope_receipt_sha256):
+    """Bind the push planner to current exact-seal approval AND scope receipts.
+
+    This is still a dry-run-only planning boundary. A production executor must
+    independently authenticate approval provenance, atomically consume Gate F,
+    and establish watchdog/restoration readiness before any remote mutation.
+    Neither the receipt hash nor arbitrary JSON grants execution authority here.
+    """
+    scope = validate_execution_scope_readback(scope_readback, seal=seal, now=now,
+                                             expected_receipt_sha256=scope_receipt_sha256)
+    if scope['verdict'] != 'PASS':
+        return scope
+    authorization = validate_execution_approvals(approvals, seal=seal, current=current, now=now)
+    if authorization['verdict'] != 'PASS':
+        return authorization
+    return plan_execution_leases(rows, seal=seal, current=current)
+
+
+EXECUTION_CI_WORKFLOWS = (
+    'ci-flaky-nyay4-cookie-reload-symmetry.yml',
+    'nyay13-independent-qa-observe.yml',
+    'nyay18-frontend-namespace-gate.yml',
+    'nyay42-optimization-observe.yml',
+    'nyay5-profile-boundary-gate.yml',
+    'nyayone-policy-gate.yml',
+    'registration-db-gate.yml',
+    'wave1-foundation-gate.yml',
+    'wave2-tutoring-db-gate.yml',
+    'wave3-credential-trust-gate.yml',
+    'wave4-private-reporting-gate.yml',
+    'wave5-calendar-gate.yml',
+)
+
+
+def prepare_owner_ci_dispatch(*, seal, post_push_head, observed_main_head, permissions):
+    """Step 12: print an owner-only dispatch plan; never invoke gh or credentials.
+
+    Actions:read remains the executor limit. The owner uses their own GitHub UI
+    session or separate CLI authentication. A mutable main ref is guarded before
+    EACH dispatch and every returned run must independently read back at the
+    exact post-push head. A dispatched campaign is not a passing campaign.
+    """
+    if not _execution_seal_valid(seal) or not _is_nonzero_hex40(post_push_head):
+        return _execution_result(['EXECUTION_SEAL_INVALID'])
+    if observed_main_head != post_push_head:
+        return _execution_result(['HEAD_CHANGED'])
+    if permissions != {'contents':'write', 'workflows':'write', 'metadata':'read',
+                       'administration':'write', 'actions':'read'}:
+        return _execution_result(['RESTORATION_SCOPE_INVALID'])
+    guard = (f'test "$(gh api repos/{REPOSITORY}/git/ref/heads/main '
+             f'--jq .object.sha)" = "{post_push_head}"')
+    commands = [f'{guard} && gh workflow run {name} --repo {REPOSITORY} --ref main'
+                for name in EXECUTION_CI_WORKFLOWS]
+    return _execution_result(step=12, operator='owner', dispatchExecuted=False,
+                             ownerCommands=commands, ownerHeadGuard=guard,
+                             uiUrl=f'https://github.com/{REPOSITORY}/actions',
+                             expectedHead=post_push_head,
+                             expectedWorkflows=list(EXECUTION_CI_WORKFLOWS),
+                             scopeReadbackRequiredBeforePush=True,
+                             nextPause='ci-dispatch')
+
+
+def validate_owner_ci_dispatch_readback(rows, *, expected_head, observed_main_head):
+    """Validate independent Actions GET rows; no owner declaration grants PASS.
+
+    This validates dispatch identity only. Completion, producer assertions and
+    exact-head evidence gates remain required before closure, including the
+    manually dispatched quarantine workflow without promoting it to blocking.
+    """
+    if not _is_nonzero_hex40(expected_head):
+        return _execution_result(['DISPATCH_HEAD_INVALID'])
+    if expected_head != observed_main_head:
+        return _execution_result(['HEAD_CHANGED'])
+    fields = {'workflow', 'runId', 'headSha', 'event', 'repository'}
+    if (not isinstance(rows, list) or len(rows) != len(EXECUTION_CI_WORKFLOWS)
+            or any(not isinstance(r, dict) or set(r) != fields
+                   or not isinstance(r['workflow'], str)
+                   or r['workflow'] not in EXECUTION_CI_WORKFLOWS
+                   or not _execution_int(r['runId'], 1)
+                   or r['headSha'] != expected_head or r['event'] != 'workflow_dispatch'
+                   or r['repository'] != REPOSITORY for r in rows)
+            or len({r['workflow'] for r in rows}) != len(EXECUTION_CI_WORKFLOWS)
+            or len({r['runId'] for r in rows}) != len(rows)):
+        return _execution_result(['DISPATCH_READBACK_MISMATCH'])
+    return _execution_result(dispatchReadbackVerified=True, campaignPassed=False,
+                             runIds=sorted(r['runId'] for r in rows), nextPause='ci-dispatch')
 
 
 def _inventory_content_seal_is_valid(inventory: object) -> bool:

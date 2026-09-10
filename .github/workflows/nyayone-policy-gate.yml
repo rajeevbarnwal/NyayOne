@@ -59,6 +59,14 @@ jobs:
         run: python scripts/ci/test_nyay21_history_purge.py
       - name: Validate NYAY-21 path-to-GO seal and restoration ceremony
         run: python scripts/ci/test_nyay21_path_to_go.py
+      - name: Validate NYAY-21 execution-time seal architecture
+        run: python scripts/ci/test_nyay21_execution_time_seal.py
+      - name: Reject malformed NYAY-21 execution-time receipts
+        run: python scripts/ci/test_nyay21_execution_adversarial.py
+      - name: Validate NYAY-21 concrete ordered execution adapters
+        run: python scripts/ci/test_nyay21_executor_adapters.py
+      - name: Validate NYAY-21 isolated runtime and synthetic mirror retention
+        run: python scripts/ci/test_nyay21_executor_runtime.py
       - name: Validate NYAY-33 documentation reconciliation
         run: python scripts/ci/test_nyay33_documentation_polish.py
       - name: Enforce Sprint 4 evidence hardening contracts
