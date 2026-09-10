@@ -3,3 +3,6 @@
 scripts/ci/*.py text eol=lf
 frontend/scripts/*.mjs text eol=lf
 docs/design/lawschool_reference/option_c_plus/* text eol=lf
+# NYAY-47 owner decision 15207: sealed design-source snapshot, not application source.
+# SHA-256: 338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252
+docs/design/nyayone-option-3.2.1/NYAYONE_OPTION3_2_1_REVL_SOURCE.html -text whitespace=-blank-at-eol
