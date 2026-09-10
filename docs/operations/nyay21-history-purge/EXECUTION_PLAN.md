@@ -125,7 +125,7 @@ ordered procedure in `REWRITE_EXECUTION_REQUEST.md`. The high-level phases are:
 
 1. change freeze and collaborator notice;
 2. authoritative read-back and `HEAD_CHANGED` guard;
-3. restricted, encrypted, restore-tested backup;
+3. owner-approved restricted plain, restore-tested backup (three-stage custody);
 4. fresh private mirror and local rewrite;
 5. exhaustive mirror verification and map sealing;
 6. exact ruleset-relaxation transaction;
@@ -145,7 +145,7 @@ resolved and independently audited.
 - signed input seal and canonical ref inventory;
 - plan-only output and operation classification;
 - tool provenance and pinned-tool verification;
-- backup plan, encrypted-backup digest, bundle verification, and restore-test
+- backup plan, plain-backup digest, bundle verification, and restore-test
   log (real execution only);
 - mirror rewrite stdout/stderr and exit status;
 - before/after object, path, ref, topology, and metadata reports;

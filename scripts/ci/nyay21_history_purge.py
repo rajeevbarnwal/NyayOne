@@ -13,6 +13,7 @@ import copy
 import hashlib
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -1172,6 +1173,62 @@ def validate_preflight(
     )
 
 
+PLAIN_CUSTODY_SCHEMA = "nyay21-plain-custody/v1"
+
+
+def _custody_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _custody_digest(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                    ensure_ascii=False).encode()).hexdigest()
+
+
+def _deletion_observation(row: object) -> bool:
+    """Validate observation shape, not perform deletion or authenticate its signer."""
+    return (isinstance(row, Mapping)
+            and row.get("deletion_verified") is True and row.get("pathAbsent") is True
+            and row.get("readable") is False and row.get("trashVerifiedEmpty") is True
+            and row.get("snapshotsVerifiedEmpty") is True
+            and _custody_time(row.get("verifiedAt")) is not None)
+
+
+def _plain_custody_valid(row: Mapping[str, Any]) -> bool:
+    custody = row.get("plainCustody")
+    if not isinstance(custody, Mapping):
+        return False
+    policy = custody.get("retentionPolicy")
+    drill = custody.get("restoreDrillDeletion")
+    if not (set(custody) == {"schemaVersion", "stage", "executionId", "ownerDecisionCommentId",
+                            "retentionPolicy", "restoreDrillDeletion"}
+            and custody.get("schemaVersion") == PLAIN_CUSTODY_SCHEMA
+            and custody.get("stage") == "pre-rewrite" and _is_hex(custody.get("executionId"), 64)
+            and isinstance(custody.get("ownerDecisionCommentId"), str)
+            and re.fullmatch(r"[1-9][0-9]*", custody["ownerDecisionCommentId"])
+            and isinstance(policy, Mapping) and set(policy) == {"origin", "days"}
+            and policy.get("origin") == "actual-execution-close"
+            and type(policy.get("days")) is int and policy["days"] == 7
+            and _deletion_observation(drill)
+            and not any(key in row for key in ("executionClose", "destructionAt", "deletion_verified"))):
+        return False
+    assert isinstance(drill, Mapping)
+    path = drill.get("path")
+    backup_path = row.get("path")
+    if not (set(drill) == {"path", "sha256", "deletion_verified", "pathAbsent", "readable",
+                          "trashVerifiedEmpty", "snapshotsVerifiedEmpty", "verifiedAt"}
+            and isinstance(path, str) and Path(path).is_absolute() and ".." not in Path(path).parts
+            and isinstance(backup_path, str) and Path(backup_path).is_absolute()
+            and ".." not in Path(backup_path).parts and _is_hex(drill.get("sha256"), 64)):
+        return False
+    return Path(path) != Path(backup_path) and Path(path) not in Path(backup_path).parents
+
+
 def validate_backup(backup: object, inventory: object) -> dict[str, Any]:
     row = backup if isinstance(backup, Mapping) else {}
     document = inventory if isinstance(inventory, Mapping) else {}
@@ -1194,6 +1251,8 @@ def validate_backup(backup: object, inventory: object) -> dict[str, Any]:
         or not _is_hex(row.get("sha256"), 64)
         or row.get("bundleVerifyExitCode") != 0
         or row.get("restoredFsckExitCode") != 0
+        or type(row.get("bundleVerifyExitCode")) is not int
+        or type(row.get("restoredFsckExitCode")) is not int
         or row.get("classification") != "restricted-private-pre-rewrite"
         or row.get("publiclyPublishable") is not False
         or row.get("createdBeforeRewrite") is not True
@@ -1203,16 +1262,70 @@ def validate_backup(backup: object, inventory: object) -> dict[str, Any]:
     if (
         row.get("directoryMode") != "0700"
         or row.get("fileMode") != "0600"
-        or row.get("encrypted") is not True
+        or not (row.get("encrypted") is True or
+                (row.get("encrypted") is False and _plain_custody_valid(row)))
         or row.get("accessLogEnabled") is not True
         or not isinstance(custodians, list)
         or len(custodians) < 2
         or len(set(custodians)) != len(custodians)
         or not all(isinstance(value, str) and value.strip() for value in custodians)
-        or not isinstance(row.get("destructionAt"), str)
+        or (row.get("encrypted") is True and not isinstance(row.get("destructionAt"), str))
     ):
         codes.append("BACKUP_GOVERNANCE_INCOMPLETE")
     return _result(codes)
+
+
+def validate_backup_close(receipt: object, backup: object, inventory: object, *,
+                          execution_close: object) -> dict[str, Any]:
+    """Bind a schedule to actual independently verified close; never attest deletion.
+
+    The operator supplies execution_close from signed closure evidence, not from
+    the candidate receipt. Existing approval/signature gates remain mandatory.
+    """
+    row = receipt if isinstance(receipt, Mapping) else {}
+    source = backup if isinstance(backup, Mapping) else {}
+    closed = _custody_time(execution_close)
+    deadline = _custody_time(row.get("destructionAt"))
+    valid_backup = validate_backup(source, inventory)["verdict"] == "PASS"
+    valid = (valid_backup and source.get("encrypted") is False and closed is not None
+             and set(row) == {"schemaVersion", "stage", "executionId", "backupReceiptSha256",
+                              "executionClose", "destructionAt", "verificationScheduled", "verificationScheduleId"}
+             and row.get("schemaVersion") == PLAIN_CUSTODY_SCHEMA and row.get("stage") == "execution-close"
+             and row.get("executionId") == source.get("plainCustody", {}).get("executionId")
+             and row.get("backupReceiptSha256") == _custody_digest(source)
+             and row.get("executionClose") == execution_close and deadline is not None
+             and deadline - closed == timedelta(days=7)
+             and row.get("verificationScheduled") is True
+             and isinstance(row.get("verificationScheduleId"), str)
+             and bool(row["verificationScheduleId"].strip()))
+    return _result([] if valid else ["BACKUP_GOVERNANCE_INCOMPLETE"])
+
+
+def validate_backup_destruction(receipt: object, close_receipt: object, backup: object,
+                                inventory: object, *, execution_close: object,
+                                observed_at: object) -> dict[str, Any]:
+    """Validate later deletion observations against the exact scheduled artifact.
+
+    observed_at is an independently obtained observation time. A PASS is a
+    receipt-validation result, not proof of physical SSD overwrite or authority
+    to rewrite/push. Never use this function to fabricate filesystem observations.
+    """
+    row = receipt if isinstance(receipt, Mapping) else {}
+    close = close_receipt if isinstance(close_receipt, Mapping) else {}
+    source = backup if isinstance(backup, Mapping) else {}
+    valid_close = validate_backup_close(close, source, inventory, execution_close=execution_close)["verdict"] == "PASS"
+    verified, observed, deadline = (_custody_time(row.get("verifiedAt")), _custody_time(observed_at),
+                                    _custody_time(close.get("destructionAt")))
+    valid = (valid_close and set(row) == {"schemaVersion", "stage", "executionId", "closeReceiptSha256",
+                                         "path", "sha256", "deletion_verified", "pathAbsent", "readable",
+                                         "trashVerifiedEmpty", "snapshotsVerifiedEmpty", "verifiedAt"}
+             and row.get("schemaVersion") == PLAIN_CUSTODY_SCHEMA and row.get("stage") == "destruction"
+             and row.get("executionId") == close.get("executionId")
+             and row.get("closeReceiptSha256") == _custody_digest(close)
+             and row.get("path") == source.get("path") and row.get("sha256") == source.get("sha256")
+             and _deletion_observation(row) and verified is not None and observed is not None
+             and deadline is not None and deadline <= verified <= observed)
+    return _result([] if valid else ["BACKUP_GOVERNANCE_INCOMPLETE"])
 
 
 def render_local_rewrite_argv(plan: object) -> list[str]:
@@ -1992,6 +2105,8 @@ __all__ = [
     "validate_atomic_dry_run_lease_readback",
     "validate_authoritative_planning_seal",
     "validate_backup",
+    "validate_backup_close",
+    "validate_backup_destruction",
     "validate_collaborator_recovery",
     "validate_commit_map",
     "validate_evidence_rebinding",

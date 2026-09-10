@@ -1203,5 +1203,132 @@ class Nyay21HistoryPurgeRedTests(unittest.TestCase):
         self.assertIn("GATE_READBACK_INVALID_HEAD", finding_codes(result))
 
 
+class PlainCustodyLifecycleTests(unittest.TestCase):
+    """Owner-approved three-stage receipts never pre-attest future deletion."""
+
+    def setUp(self):
+        self.gate = load_subject(self, "NYAY21-PLAIN-CUSTODY")
+        self.inventory = authoritative_inventory()
+        self.backup = {
+            "path": "/tmp/custody/recovery.bundle", "nodeType": "regular-file",
+            "locationOutsideRepositories": True, "directoryMode": "0700",
+            "fileMode": "0600", "encrypted": False,
+            "custodians": ["Rajeev Barnwal", "Claude Code"], "accessLogEnabled": True,
+            "sha256": "9" * 64, "bundleVerifyExitCode": 0, "restoredFsckExitCode": 0,
+            "containedRefs": [r["name"] for r in self.inventory["refs"]],
+            "classification": "restricted-private-pre-rewrite", "publiclyPublishable": False,
+            "createdBeforeRewrite": True,
+            "plainCustody": {
+                "schemaVersion": "nyay21-plain-custody/v1", "stage": "pre-rewrite",
+                "executionId": "a" * 64, "ownerDecisionCommentId": "15295",
+                "retentionPolicy": {"origin": "actual-execution-close", "days": 7},
+                "restoreDrillDeletion": {
+                    "path": "/tmp/drill/restore.git", "sha256": "b" * 64,
+                    "deletion_verified": True, "pathAbsent": True, "readable": False,
+                    "trashVerifiedEmpty": True, "snapshotsVerifiedEmpty": True,
+                    "verifiedAt": "2026-09-10T12:00:00Z",
+                },
+            },
+        }
+
+    @staticmethod
+    def digest(value):
+        return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                        ensure_ascii=False).encode()).hexdigest()
+
+    def close_receipt(self):
+        return {"schemaVersion": "nyay21-plain-custody/v1", "stage": "execution-close",
+                "executionId": "a" * 64, "backupReceiptSha256": self.digest(self.backup),
+                "executionClose": "2026-09-10T14:00:00Z", "destructionAt": "2026-09-17T14:00:00Z",
+                "verificationScheduled": True, "verificationScheduleId": "custody-check-1"}
+
+    def final_receipt(self, close):
+        return {"schemaVersion": "nyay21-plain-custody/v1", "stage": "destruction",
+                "executionId": "a" * 64, "closeReceiptSha256": self.digest(close),
+                "path": self.backup["path"], "sha256": self.backup["sha256"],
+                "deletion_verified": True, "pathAbsent": True, "readable": False,
+                "trashVerifiedEmpty": True, "snapshotsVerifiedEmpty": True,
+                "verifiedAt": "2026-09-17T14:00:00Z"}
+
+    def test_plain_pre_rewrite_receipt_accepts_drill_proof_not_future_proof(self):
+        self.assertEqual(self.gate.validate_backup(self.backup, self.inventory)["verdict"], "PASS")
+
+    def test_plain_missing_or_unverified_drill_refuses(self):
+        for key in self.backup["plainCustody"]["restoreDrillDeletion"]:
+            row = copy.deepcopy(self.backup)
+            del row["plainCustody"]["restoreDrillDeletion"][key]
+            with self.subTest(key=key):
+                self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE", finding_codes(self.gate.validate_backup(row, self.inventory)))
+
+    def test_plain_cannot_claim_actual_close_or_backup_deletion_early(self):
+        for key, value in (("destructionAt", "2026-09-17T14:00:00Z"), ("executionClose", "2026-09-10T14:00:00Z"), ("deletion_verified", True)):
+            row = copy.deepcopy(self.backup); row[key] = value
+            self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE", finding_codes(self.gate.validate_backup(row, self.inventory)))
+
+    def test_plain_strict_retention_policy(self):
+        for policy in ({}, {"origin": "created", "days": 7}, {"origin": "actual-execution-close", "days": True}, {"origin": "actual-execution-close", "days": 7.0}, {"origin": "actual-execution-close", "days": 8}):
+            row = copy.deepcopy(self.backup); row["plainCustody"]["retentionPolicy"] = policy
+            self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE", finding_codes(self.gate.validate_backup(row, self.inventory)))
+
+    def test_drill_proof_cannot_target_retained_backup_or_parent(self):
+        for path in (self.backup["path"], "/tmp/custody", "/tmp", "relative", "/tmp/drill/../custody"):
+            row = copy.deepcopy(self.backup); row["plainCustody"]["restoreDrillDeletion"]["path"] = path
+            self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE", finding_codes(self.gate.validate_backup(row, self.inventory)))
+
+    def test_close_binds_actual_close_and_seven_days(self):
+        self.assertEqual(self.gate.validate_backup_close(self.close_receipt(), self.backup, self.inventory,
+                         execution_close="2026-09-10T14:00:00Z")["verdict"], "PASS")
+
+    def test_close_missing_fields_or_tampered_binding_fail_closed(self):
+        for key in self.close_receipt():
+            row = self.close_receipt(); del row[key]
+            self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE", finding_codes(self.gate.validate_backup_close(
+                row, self.backup, self.inventory, execution_close="2026-09-10T14:00:00Z")))
+        for key, value in (("executionId", "c"*64), ("backupReceiptSha256", "c"*64), ("destructionAt", "2026-09-18T14:00:00Z"), ("verificationScheduled", 1)):
+            row=self.close_receipt(); row[key]=value
+            self.assertEqual(self.gate.validate_backup_close(row,self.backup,self.inventory,
+                             execution_close="2026-09-10T14:00:00Z")["verdict"], "FAIL")
+
+    def test_close_rejects_caller_receipt_time_mismatch_and_invalid_dates(self):
+        for timestamp in (None, True, "garbage", "2026-02-30T14:00:00Z", "2026-09-10T15:00:00Z"):
+            self.assertEqual(self.gate.validate_backup_close(self.close_receipt(),self.backup,self.inventory,
+                             execution_close=timestamp)["verdict"], "FAIL")
+
+    def test_destruction_complete_only_with_separate_bound_proof(self):
+        close=self.close_receipt()
+        self.assertEqual(self.gate.validate_backup_destruction(self.final_receipt(close),close,self.backup,self.inventory,
+                         execution_close="2026-09-10T14:00:00Z",observed_at="2026-09-17T14:01:00Z")["verdict"], "PASS")
+
+    def test_destruction_missing_each_field_refuses(self):
+        close=self.close_receipt()
+        for key in self.final_receipt(close):
+            row=self.final_receipt(close); del row[key]
+            self.assertIn("BACKUP_GOVERNANCE_INCOMPLETE",finding_codes(self.gate.validate_backup_destruction(
+                row,close,self.backup,self.inventory,execution_close="2026-09-10T14:00:00Z",observed_at="2026-09-17T14:01:00Z")))
+
+    def test_destruction_rejects_false_or_coerced_proof_and_wrong_artifact(self):
+        close=self.close_receipt()
+        for key,value in (("deletion_verified",False),("deletion_verified",1),("pathAbsent",False),
+                          ("readable",True),("trashVerifiedEmpty",False),("snapshotsVerifiedEmpty",False),
+                          ("path","/tmp/other"),("sha256","c"*64),("executionId","c"*64),("closeReceiptSha256","c"*64)):
+            row=self.final_receipt(close); row[key]=value
+            self.assertEqual(self.gate.validate_backup_destruction(row,close,self.backup,self.inventory,
+                execution_close="2026-09-10T14:00:00Z",observed_at="2026-09-17T14:01:00Z")["verdict"], "FAIL")
+
+    def test_destruction_future_or_premature_proof_refuses(self):
+        close=self.close_receipt()
+        for timestamp in ("2026-09-10T14:00:00Z", "2026-09-18T14:00:00Z", "invalid"):
+            row=self.final_receipt(close); row["verifiedAt"]=timestamp
+            self.assertEqual(self.gate.validate_backup_destruction(row,close,self.backup,self.inventory,
+                execution_close="2026-09-10T14:00:00Z",observed_at="2026-09-17T14:01:00Z")["verdict"], "FAIL")
+
+    def test_retained_recoverability_and_private_controls(self):
+        for key,value in (("containedRefs",[]),("bundleVerifyExitCode",True),("restoredFsckExitCode",False),
+                          ("fileMode","0644"),("directoryMode","0755"),("publiclyPublishable",True),
+                          ("accessLogEnabled",False),("custodians",[]),("encrypted",0)):
+            row=copy.deepcopy(self.backup); row[key]=value
+            self.assertEqual(self.gate.validate_backup(row,self.inventory)["verdict"], "FAIL")
+
+
 if __name__ == "__main__":
     unittest.main()
