@@ -98,14 +98,17 @@ Every item must have a privacy-safe artifact ID and SHA-256 digest.
       (266 rewritten and one expected pruned-empty deletion commit).
       The old signed objects remain restricted in the recovery backup, and new
       release/merge attestations will be freshly signed.
-- [ ] The restricted encrypted backup is created before rewrite, has mode
+- [ ] The owner-approved restricted plain backup is created before rewrite, has mode
       `0600` under a `0700` directory, includes every sealed ref, passes
       `git bundle verify`, and restores into a fresh repository that passes
       `git fsck --full`.
 - [ ] The backup owner, named technical Security/Privacy approver, access log,
-      encryption key custody, and **force-push + 30 days** maximum destruction
-      deadline are recorded. Earlier jointly signed closure or a legal-erasure
-      override wins. The human countersign path is recorded if counsel requires.
+      verified disposable-drill deletion, and **actual execution close + 7 days**
+      retention policy are recorded. Bind the actual deadline and verification
+      schedule at close; final retained-backup deletion proof is separate and
+      later. Use the three-stage schema in `BACKUP_AND_ROLLBACK.md`; no passphrase
+      or premature final-deletion claim. The human countersign path is recorded
+      if counsel requires; a binding legal-erasure override is not waived.
 - [ ] The rollback authority and exact rollback triggers in
       `BACKUP_AND_ROLLBACK.md` are accepted.
 - [ ] The complete GitHub ruleset and branch-protection response is sealed,
@@ -302,15 +305,16 @@ the device policy. Conduct an independent privacy/history audit of origin and
 the residual register. This audit hands off a future visibility decision; it
 does not make one.
 
-### 15. Close or roll back and destroy the backup
+### 15. Close or roll back and schedule verified backup deletion
 
 Owner and Security/Privacy jointly decide closure versus a controlled rollback
-using the triggers below. After successful closure and the rollback window,
-cryptographically erase the backup key and delete the encrypted artifact and
-temporary mirrors no later than **force-push + 30 days**, or earlier upon
-jointly signed closure or a legal-erasure override. Seal the destruction
-certificate. Confirm the protected-checkout seal and PRIVATE visibility one
-final time; record whether counsel required a human countersign.
+using the triggers below. At actual close, record the signed close receipt and
+schedule verification for **execution close + 7 days**. At that deadline, delete
+the exact plain backup and temporary copies and verify path absence/unreadability,
+artifact-scoped Trash and snapshots, then seal a separate destruction receipt.
+Do not delete unrelated Trash/shared snapshots or claim physical SSD erasure.
+Never pre-attest destruction at closure. Confirm the protected-checkout seal and
+PRIVATE visibility; record whether counsel required a human countersign.
 
 ## Rollback triggers and actions
 
@@ -335,7 +339,7 @@ The authoritative rollback procedure is `BACKUP_AND_ROLLBACK.md`. Summary:
 
 The origin rewrite reduces the active repository exposure surface; it does not
 delete other people's clones or prove immediate physical erasure from every
-GitHub cache. The restricted encrypted backup deliberately contains the old
+GitHub cache. The owner-approved restricted plain backup deliberately contains the old
 objects for disaster recovery and is governed as a separate surface with named
 custody and destruction. Historical QA records remain immutable because they
 truthfully record the old exact SHA, but no old record can be presented as
