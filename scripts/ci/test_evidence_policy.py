@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1827,6 +1828,62 @@ class UploadableEvidenceTests(unittest.TestCase):
             )
             self.assertIsNone(data)
             self.assertIn("changed before", error or "")
+
+
+class SealedDesignCheckoutTests(unittest.TestCase):
+    """The Revision L source is immutable data, including its line endings."""
+
+    target = "docs/design/nyayone-option-3.2.1/NYAYONE_OPTION3_2_1_REVL_SOURCE.html"
+    seal = "338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252"
+
+    def check_checkout(self, autocrlf: str) -> None:
+        source_root = HERE.parents[1]
+        source = (source_root / self.target).read_bytes()
+        self.assertEqual(hashlib.sha256(source).hexdigest(), self.seal)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Neither user Git configuration nor a parent repository may affect
+            # this offline checkout proof. No commits, hooks, or remotes needed.
+            env = {key: value for key, value in os.environ.items()
+                   if not key.startswith("GIT_")}
+            env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+
+            def git(*args: str) -> bytes:
+                return subprocess.run(
+                    ["git", "-C", str(root), *args], env=env,
+                    check=True, capture_output=True,
+                ).stdout
+
+            git("init", "--quiet")
+            (root / ".gitattributes").write_bytes(
+                (source_root / ".gitattributes").read_bytes()
+            )
+            target = root / self.target
+            target.parent.mkdir(parents=True)
+            target.write_bytes(source)
+            unrelated = target.parent / "unrelated.html"
+            unrelated.write_bytes(b"unrelated\n")
+            git("-c", "core.autocrlf=false", "add", ".")
+            # Re-materialize from the index under each caller's checkout mode.
+            target.unlink()
+            unrelated.unlink()
+            git("-c", f"core.autocrlf={autocrlf}", "checkout-index", "--all")
+            self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), self.seal)
+            self.assertEqual(target.read_bytes(), source)
+            self.assertEqual(
+                unrelated.read_bytes(),
+                b"unrelated\r\n" if autocrlf == "true" else b"unrelated\n",
+                "the exception must not alter unrelated HTML checkout behavior",
+            )
+
+    def test_sealed_checkout_autocrlf_true(self) -> None:
+        self.check_checkout("true")
+
+    def test_sealed_checkout_autocrlf_input(self) -> None:
+        self.check_checkout("input")
+
+    def test_sealed_checkout_autocrlf_false(self) -> None:
+        self.check_checkout("false")
 
 
 if __name__ == "__main__":
