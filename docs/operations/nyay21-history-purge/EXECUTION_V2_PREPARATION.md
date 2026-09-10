@@ -6,6 +6,17 @@ R2–R5 records are immutable. Owner decisions 15044, 15047, 15050, 15086 and
 15120 govern this revision. This revision supersedes the pre-captured scope
 receipt binding; it does not authorize execution.
 
+## Plain-custody amendment (owner decisions 15291/15295)
+
+For the approved plain backup, use the three-stage receipt schema and validator
+calls in `BACKUP_AND_ROLLBACK.md`: recoverability plus disposable drill deletion
+before rewrite; actual-close-bound seven-day schedule at close; separate final
+deletion proof at the deadline. Never pre-attest retained-backup deletion or
+invent a future close timestamp. No passphrase is requested for this mode.
+These pure validation calls do not replace signed approvals, the three PROCEED
+boundaries, or filesystem/scheduler read-backs. Backup creation remains an
+owner-gated operation, not an automatic effect of this recipe.
+
 ## Authority and isolation
 
 The operator provides `NYAY21_PROTECTED_ROOT`, an absolute, resolved existing Git

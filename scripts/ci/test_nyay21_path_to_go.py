@@ -282,7 +282,9 @@ class Nyay21PathToGoContracts(unittest.TestCase):
         backup = (DOCS / "BACKUP_AND_ROLLBACK.md").read_text(encoding="utf-8")
         request = (DOCS / "REWRITE_EXECUTION_REQUEST.md").read_text(encoding="utf-8")
         for text in (backup, request):
-            self.assertIn("force-push + 30 days", text)
+            # Owner15295 supersedes the clock origin and duration, not custody proof.
+            self.assertIn("execution close + 7 days", text.lower())
+            self.assertNotIn("force-push + 30 days", text.lower())
             self.assertNotIn("2026-09-30T18:29:59Z", text)
             self.assertIn("legal-erasure override", text.lower())
             self.assertIn("human countersign", text.lower())

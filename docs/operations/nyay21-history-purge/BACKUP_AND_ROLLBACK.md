@@ -2,8 +2,9 @@
 
 Status: path-to-GO execution template; no production backup or rewrite has occurred
 Repository: `rajeevbarnwal/NyayOne` (**PRIVATE**)
-Destruction rule: **force-push + 30 days**, with earlier destruction required
-when the jointly signed closure or a legal-erasure override requires it.
+Current owner policy (NYAY-21 15291/15295): **actual execution close + 7 days**.
+Historical encrypted receipts remain verifiable, but do not describe this
+owner-approved plain-backup execution. Never forecast a close timestamp as fact.
 
 ## Why the backup is sensitive
 
@@ -29,8 +30,10 @@ legal conclusion.
   one; that upgrade path does not weaken the technical approval gate.
 - Access is limited to those two named approvers and the designated execution
   operator for the duration of the approved restore test.
-- Store the backup outside every Git repository, encrypted at rest with a
-  unique per-execution key. Store the key separately from the encrypted backup.
+- Store a **plain backup, no passphrase**, outside every Git repository and cloud
+  sync scope under `/Users/rajeevbarnwal/Desktop/Backup/nyay21-exec-backup-<timestamp>/`.
+  Owner attests synthetic seeds/no live users, with owner-contact self-data
+  disclosed. This is an owner disposition, not an independent content scan.
 - Directory mode: `0700`; backup and manifest modes: `0600`.
 - Do not include credentials, tokens, decrypted database rows, or blob content
   in logs. Evidence records only path, size, object ID, digest, and exit status.
@@ -51,7 +54,7 @@ Before any rewrite operation:
    drift.
 2. Create an all-ref Git bundle or equivalent recoverable bare snapshot in the
    restricted backup directory.
-3. Seal its SHA-256 digest, byte size, creation timestamp, encryption metadata,
+3. Seal its SHA-256 digest, byte size, creation timestamp, plain-custody metadata,
    and exact contained-ref inventory.
 4. Run `git bundle verify` against the backup.
 5. Restore it into a second fresh, isolated directory.
@@ -60,29 +63,68 @@ Before any rewrite operation:
    content must not be emitted.
 7. Verify the restored repository has no writable production remote.
 8. Delete the restore-test directory after recording privacy-safe results. The
-   encrypted recovery backup remains under the retention controls below.
+   plain recovery backup remains present under the retention controls below.
+   Verify disposable drill-copy deletion separately: path absent/unreadable,
+   artifact-scoped Trash/snapshots empty. Do not claim the retained backup deleted.
 
 No local rewrite and no ruleset transaction may begin if either bundle
 verification or restore testing fails.
 
 ## Retention window and destruction rule
 
-- Operational rollback window and maximum destruction deadline:
-  **force-push + 30 days**.
-- The effective deadline is the earlier of: force-push + 30 days; jointly
-  signed operational closure; or a binding legal-erasure override.
-- The former fixed 2026-09-23/2026-09-30 planning dates are deliberately
-  dropped. The actual force-push timestamp is the only clock origin.
-- Early destruction is required once the owner and Security/Privacy approver
-  jointly confirm: remote refs are correct, rules are restored, exact-head CI
-  and evidence reruns pass, collaborator realignment is complete, and rollback
-  is no longer necessary.
+- Before rewrite, bind the close-relative seven-day policy, not future proof.
+- At actual execution close, bind the signed close timestamp and exact UTC
+  **destructionAt = executionClose + 7 days**. Register a verification check and
+  record its actual scheduling identifier; a promise is not a scheduled task.
+- At the deadline, delete the exact backup and residual restore copies; verify
+  paths absent/unreadable and artifact-scoped Trash/snapshots empty. Do not empty
+  unrelated Trash or remove shared snapshots without authorization. A shared
+  snapshot retaining the artifact requires owner disposition, not a false PASS.
+- Record time, actor, prior artifact digest and inspected residual-copy scope.
+  Disclose lateness. Failed/unknown deletion is not completion. On an abort,
+  record controlled-abort close only after recovery/restoration obligations are
+  satisfied, or retain HOLD and obtain a bounded owner disposition. Never invent
+  successful execution closure to start the clock.
 
-Destruction uses cryptographic erasure of the per-execution encryption key,
-followed by deletion of the encrypted backup and every temporary restore. This
-avoids making unsupported secure-overwrite claims for SSD storage. The operator
-then verifies that the paths are absent and records a destruction certificate
-containing the former artifact digest, destruction time, actor, and approver.
+Verified deletion means logical inaccessibility over inspected copies, **not
+guaranteed physical SSD/APFS erasure**. No encryption, key destruction or `shred`
+claim is made. A binding legal-erasure override remains separately actionable.
+
+## Three-stage receipt contract (`nyay21-plain-custody/v1`)
+
+These pure validators validate observations; they do not delete files, schedule
+tasks, authenticate signatures, or authorize rewrite/push. Existing signed
+approvals, registry, lease, ruleset and pause checks are unchanged. Acquire real
+observations and signed closure evidence through the approved operator paths.
+
+1. **Pre-rewrite:** `validate_backup(backup, inventory)` retains complete-ref,
+   bundle-verify/fsck, private-mode, access-log and custodian checks. Set
+   `encrypted: false`; add `plainCustody` containing exactly `schemaVersion`,
+   `stage: pre-rewrite`, sealed `executionId` (64-hex), positive Jira
+   `ownerDecisionCommentId`, `retentionPolicy: {origin: actual-execution-close,
+   days: 7}`, and `restoreDrillDeletion`. The drill object contains exactly
+   `path`, `sha256`, `verifiedAt` (UTC second precision), strict booleans
+   `deletion_verified`, `pathAbsent`, `trashVerifiedEmpty`, `snapshotsVerifiedEmpty`
+   all true, and `readable` false. It refers only to the disposable copy, never
+   the backup or its parent. No top-level `executionClose`, `destructionAt` or
+   final `deletion_verified` may be prefilled on the retained backup receipt.
+2. **Actual close:** `validate_backup_close(receipt, backup, inventory,
+   execution_close=<independently verified signed close>)` requires exactly
+   `schemaVersion`, `stage: execution-close`, same `executionId`,
+   `backupReceiptSha256`, `executionClose`, exact seven-day `destructionAt`,
+   `verificationScheduled: true`, and nonempty `verificationScheduleId`.
+3. **Final destruction:** `validate_backup_destruction(receipt, close_receipt,
+   backup, inventory, execution_close=<signed close>, observed_at=<independent
+   observation time>)` requires exactly `schemaVersion`, `stage: destruction`,
+   same `executionId`, `closeReceiptSha256`, original backup `path` and `sha256`,
+   plus the five deletion booleans and `verifiedAt` above. Verification time must
+   be on/after the deadline and not in the future. A scheduled check is not proof.
+
+Receipt hashes: SHA-256 of UTF-8 JSON, sorted keys, compact separators and
+`ensure_ascii=False`. Store receipts additively; changes invalidate downstream
+hash bindings. Missing dates/proofs, wrong types, stages, identities or hashes
+fail `BACKUP_GOVERNANCE_INCOMPLETE`. A historical encrypted receipt cannot be
+substituted into the new plain-custody close/destruction lifecycle.
 
 If no production rewrite is authorized, no contaminated recovery backup may be
 created under this packet.
