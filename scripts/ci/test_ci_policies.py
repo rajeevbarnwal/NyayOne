@@ -2463,7 +2463,17 @@ class RewrittenHistoryBaseTests(unittest.TestCase):
     def test_zero_base_and_root_commit_use_empty_tree(self) -> None:
         result = self.run_check('0' * 40)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('BASE_SHA=', (self.repo / 'ci-env').read_text())
+        empty_tree = subprocess.check_output(
+            ['git', 'hash-object', '-t', 'tree', '--stdin'],
+            input='', cwd=self.repo, text=True,
+        ).strip()
+        self.assertEqual((self.repo / 'ci-env').read_text(), f'BASE_SHA={empty_tree}\n')
+
+    def test_root_whitespace_is_not_hidden_by_comparing_head_to_itself(self) -> None:
+        (self.repo / 'sample.txt').write_text('bad root whitespace \n')
+        self.git('add', '.')
+        self.git('commit', '--amend', '--no-edit', '-q')
+        self.assertNotEqual(self.run_check('0' * 40).returncode, 0)
 
     def test_dispatch_without_base_uses_parent(self) -> None:
         self.next_commit()
