@@ -34,9 +34,16 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          if [ -z "$BASE_SHA" ] || ! printf '%s' "$BASE_SHA" | grep -Eq '[^0]'; then
-            BASE_SHA="$(git rev-parse "$GITHUB_SHA^")"
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "Pull-request comparison base is unavailable" >&2
+              exit 1
+            fi
+            # A history rewrite can remove github.event.before from the clone.
+            BASE_SHA="$(git rev-parse --verify "$GITHUB_SHA^" 2>/dev/null || git hash-object -w -t tree --stdin </dev/null)"
+            echo "Comparison base unavailable; using current parent or empty tree"
           fi
+          printf 'BASE_SHA=%s\n' "$BASE_SHA" >> "$GITHUB_ENV"
           git diff --check "$BASE_SHA" "$GITHUB_SHA"
       - name: Validate workflow supply-chain policy
         run: |
@@ -81,8 +88,6 @@ jobs:
           python scripts/ci/check_nyayone_runtime_identity.py \
             --compose-json "$RUNNER_TEMP/nyayone-compose.json"
       - name: Enforce forward-only migration history
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           python scripts/ci/verify_migration_ledger.py
           python scripts/ci/check_migration_immutability.py "$BASE_SHA" "$GITHUB_SHA"

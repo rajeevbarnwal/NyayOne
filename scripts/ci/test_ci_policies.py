@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -2418,6 +2420,79 @@ jobs:
         )
         self.assertEqual(migration_canary, [])
         self.assertTrue(active_canary)
+
+
+class RewrittenHistoryBaseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import yaml
+
+        workflow = yaml.safe_load((HERE.parent.parent / '.github/workflows/nyayone-policy-gate.yml').read_text())
+        self.steps = workflow['jobs']['policy-contracts']['steps']
+        self.script = next(step['run'] for step in self.steps if step.get('name') == 'Reject whitespace and patch corruption')
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'Synthetic CI')
+        self.git('config', 'user.email', 'synthetic@example.invalid')
+        self.git('config', 'commit.gpgsign', 'false')
+        (self.repo / 'sample.txt').write_text('first\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'root')
+        self.root = self.git('rev-parse', 'HEAD')
+
+    def git(self, *args: str) -> str:
+        return subprocess.check_output(['git', *args], cwd=self.repo, text=True).strip()
+
+    def run_check(self, base: str, event: str = 'push') -> subprocess.CompletedProcess:
+        env = {**os.environ, 'BASE_SHA': base, 'GITHUB_SHA': self.git('rev-parse', 'HEAD'),
+               'GITHUB_EVENT_NAME': event, 'GITHUB_ENV': str(self.repo / 'ci-env')}
+        return subprocess.run(['bash', '-e', '-c', self.script], cwd=self.repo, env=env, text=True, capture_output=True)
+
+    def next_commit(self, content: str = 'second\n') -> None:
+        (self.repo / 'sample.txt').write_text(content)
+        self.git('add', '.')
+        self.git('commit', '-qm', 'next')
+
+    def test_unavailable_push_base_uses_parent_and_exports_it(self) -> None:
+        self.next_commit()
+        result = self.run_check('f' * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('BASE_SHA=' + self.root, (self.repo / 'ci-env').read_text())
+
+    def test_zero_base_and_root_commit_use_empty_tree(self) -> None:
+        result = self.run_check('0' * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        empty_tree = subprocess.check_output(
+            ['git', 'hash-object', '-t', 'tree', '--stdin'],
+            input='', cwd=self.repo, text=True,
+        ).strip()
+        self.assertEqual((self.repo / 'ci-env').read_text(), f'BASE_SHA={empty_tree}\n')
+
+    def test_root_whitespace_is_not_hidden_by_comparing_head_to_itself(self) -> None:
+        (self.repo / 'sample.txt').write_text('bad root whitespace \n')
+        self.git('add', '.')
+        self.git('commit', '--amend', '--no-edit', '-q')
+        self.assertNotEqual(self.run_check('0' * 40).returncode, 0)
+
+    def test_dispatch_without_base_uses_parent(self) -> None:
+        self.next_commit()
+        result = self.run_check('', 'workflow_dispatch')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('BASE_SHA=' + self.root, (self.repo / 'ci-env').read_text())
+
+    def test_existing_base_retains_whitespace_rejection(self) -> None:
+        self.next_commit('bad trailing whitespace \n')
+        self.assertNotEqual(self.run_check(self.root).returncode, 0)
+
+    def test_missing_pr_base_does_not_silently_narrow_review(self) -> None:
+        self.next_commit()
+        self.assertNotEqual(self.run_check('f' * 40, 'pull_request').returncode, 0)
+
+    def test_migration_check_uses_same_resolved_base(self) -> None:
+        migration = next(step for step in self.steps if step.get('name') == 'Enforce forward-only migration history')
+        self.assertNotIn('BASE_SHA', migration.get('env', {}))
+        self.assertIn('"$BASE_SHA" "$GITHUB_SHA"', migration['run'])
 
 
 if __name__ == "__main__":
