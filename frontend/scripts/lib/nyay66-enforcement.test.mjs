@@ -1,9 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { inspectSurface } from './nyay66-dom.mjs';
 import { PNG } from 'pngjs';
 import { enforcePins, pixelMetrics, compareStructure, approveException, validateProgression } from './nyay66-enforcement.mjs';
 const surface = () => ({ text: 'Hello', controls: [{ role: 'button', name: 'Continue', disabled: false, box: {x:1,y:1,width:2,height:2} }], headings: [], masks: [], overflow: 0 });
 const pins = { chromium: '149.0.7827.55', platform: 'linux-x64', sourceSha256: 'a', fonts: {a:'b'}, playwright:'1.61.1' };
 describe('NYAY-66 activated enforcement', () => {
+  it('checks rendered heading text without hidden responsive alternatives', () => {
+    const rect={x:0,y:0,top:0,bottom:30,width:200,height:30};
+    const hidden={nodeType:1,css:{display:'none',visibility:'visible'},childNodes:[{nodeType:3,textContent:'Hidden desktop heading'}]};
+    const heading={childNodes:[hidden,{nodeType:3,textContent:'Visible heading'}],innerText:'Visible heading',textContent:'Hidden desktop headingVisible heading',getBoundingClientRect:()=>rect};
+    const root={innerText:'Visible heading',scrollWidth:200,clientWidth:200,getBoundingClientRect:()=>rect,querySelectorAll:selector=>selector.startsWith('h1')?[heading]:[]};
+    vi.stubGlobal('document',{body:root});
+    vi.stubGlobal('getComputedStyle',element=>element.css||({visibility:'visible',display:'block'}));
+    try{expect(inspectSurface().headings[0].text).toBe('Visible heading');}
+    finally{vi.unstubAllGlobals();}
+  });
   it('requires exact browser, platform, source and font pins', () => {
     expect(enforcePins(pins,pins)).toBe(true);
     for(const field of Object.keys(pins)) expect(()=>enforcePins(pins,{...pins,[field]:'changed'})).toThrow();
