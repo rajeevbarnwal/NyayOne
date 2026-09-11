@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "cache": "chromium-149.0.7827.55-revl",
+  "manifestSha256": "0cc054bf00bb22298cabfaa1a1cacf7f696ebedbb0531457b9dbd6c3d243f799",
+  "ownerToleranceApproval": "NYAY-66:15382",
+  "enforced": [],
+  "exceptions": []
+}

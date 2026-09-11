@@ -4125,11 +4125,11 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 
 def check_workflow(path: Path) -> list[str]:
     if path.name == "nyay66-conformance.yml":
-        # Ordinary reference-calibration job, not evidence of app conformance.
-        # No protected context is added; numeric rollout awaits owner approval.
-        expected = "f28290c114b79e636c74774a130d54a8dcd1f11bf5e965e904ecf600d60c4c87"
+        # Ordinary progressive conformance job; no protected context is added.
+        # Owner tolerance and QA workflow approval: NYAY-66 comment 15382.
+        expected = "d6c72e3bb5959e17dbfd0aec91d576024677e3942a2292f5ff7cd0096db0971e"
         return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
-            f"{path}: NYAY-66 calibration workflow differs from its current contract"
+            f"{path}: NYAY-66 conformance workflow differs from its current contract"
         ]
     if path.name == "nyay42-optimization-observe.yml":
         # Exact additive non-required observer; existing producers, semantic

@@ -1,4 +1,4 @@
-name: NYAY-66 visual conformance calibration
+name: NYAY-66 progressive visual conformance
 
 on:
   pull_request:
@@ -9,17 +9,22 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Calibration stage only. No app screen is represented as conformant here.
-# Activation follows owner approval of measured numeric tolerances.
+# References are checked-in, versioned cache artifacts, never generated on PRs.
+# Unfixed screens report NONCONFORMANT; enforced screens block regressions.
 jobs:
-  conformance-calibration:
+  conformance-live:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      NYAY66_BASE: ${{ github.event.pull_request.base.sha || '' }}
+      NYAY66_COMMENTS: ${{ runner.temp }}/nyay66-comments.json
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -38,16 +43,25 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Validate negative calibration and progressive-verdict contracts
         working-directory: frontend
-        run: npx vitest --run scripts/lib/nyay66-conformance.test.mjs
-      - name: Capture independent Revision L reference repetitions
+        run: npx vitest --run scripts/lib/nyay66-conformance.test.mjs scripts/lib/nyay66-enforcement.test.mjs
+      - name: Read owner PR-comment exception approvals
         working-directory: frontend
-        run: node scripts/nyay66-calibrate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/nyay66-read-approvals.mjs
+      - name: Build application and capture live screens against pinned references
+        working-directory: frontend
+        run: |
+          npm run build
+          node scripts/nyay66-live.mjs
       - name: Verify generated artifact hashes
-        working-directory: frontend/artifacts/nyay66-calibration
+        if: ${{ always() }}
+        working-directory: frontend/artifacts/nyay66-live
         run: sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() }}
         with:
-          name: nyay66-calibration-${{ github.event.pull_request.head.sha || github.sha }}
-          path: frontend/artifacts/nyay66-calibration/
+          name: nyay66-live-${{ github.event.pull_request.head.sha || github.sha }}
+          path: frontend/artifacts/nyay66-live/
           if-no-files-found: error
           retention-days: 14

@@ -36,7 +36,7 @@ class PolicyOracleTests(unittest.TestCase):
         self.assertEqual(policy.check_workflow(path), [])
         with tempfile.TemporaryDirectory() as directory:
             altered = Path(directory) / path.name
-            altered.write_text(path.read_text().replace("node scripts/nyay66-calibrate.mjs", "echo skipped"))
+            altered.write_text(path.read_text().replace("node scripts/nyay66-live.mjs", "echo skipped"))
             self.assertTrue(policy.check_workflow(altered))
 
     def test_nyay12_native_gate_is_wired_and_sealed(self) -> None:
