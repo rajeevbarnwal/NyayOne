@@ -1,0 +1,53 @@
+name: NYAY-66 visual conformance calibration
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Calibration stage only. No app screen is represented as conformant here.
+# Activation follows owner approval of measured numeric tolerances.
+jobs:
+  conformance-calibration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.21.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Validate negative calibration and progressive-verdict contracts
+        working-directory: frontend
+        run: npx vitest --run scripts/lib/nyay66-conformance.test.mjs
+      - name: Capture independent Revision L reference repetitions
+        working-directory: frontend
+        run: node scripts/nyay66-calibrate.mjs
+      - name: Verify generated artifact hashes
+        working-directory: frontend/artifacts/nyay66-calibration
+        run: sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nyay66-calibration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: frontend/artifacts/nyay66-calibration/
+          if-no-files-found: error
+          retention-days: 14

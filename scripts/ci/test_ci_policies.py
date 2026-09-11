@@ -29,6 +29,16 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
+    def test_nyay66_calibration_workflow_registered_and_mutation_rejected(self) -> None:
+        policy = load("verify_nyayone_ci")
+        path = policy.ROOT / ".github/workflows/nyay66-conformance.yml"
+        self.assertIn(path.name, policy.CANONICAL_WORKFLOW_FILES)
+        self.assertEqual(policy.check_workflow(path), [])
+        with tempfile.TemporaryDirectory() as directory:
+            altered = Path(directory) / path.name
+            altered.write_text(path.read_text().replace("node scripts/nyay66-calibrate.mjs", "echo skipped"))
+            self.assertTrue(policy.check_workflow(altered))
+
     def test_nyay12_native_gate_is_wired_and_sealed(self) -> None:
         policy = load("verify_nyayone_ci")
         source = (policy.ROOT / "backend/scripts/db_gate.sh").read_text()
