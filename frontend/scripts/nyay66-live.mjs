@@ -87,11 +87,11 @@ try{
           try{const m=pixelMetrics(crop(expected,control.box),crop(actual,control.box),[]);delete m.diff;regions.push({index:i,...m});}catch{regions.push({index:i,pass:false});}
         }
         await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
-        const accessibility=await page.evaluate(async()=>{const result=await axe.run(document);return result.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.length}));});
+        const accessibility=await page.evaluate(async()=>{const result=await window.axe.run(document);return result.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.length}));});
         const violations=[...structure,...(!metrics.pass||regions.some(x=>!x.pass)?['pixels']:[]),...(accessibility.some(v=>['serious','critical'].includes(v.impact))?['accessibility']:[])];
         const approved=config.exceptions.filter(e=>e.screen===item.screen&&e.viewport===vp.id&&e.theme==='light'&&e.referenceSha256===reference.sha256&&e.liveSha256===digest(bytes));
         const remaining=violations.filter(v=>!approved.some(e=>e.checks.includes(v)));
-        Object.assign(row,{executed:true,referenceSha256:reference.sha256,liveSha256:digest(bytes),metrics,regions,structure,accessibility,exceptionsApplied:approved,remaining});
+        Object.assign(row,{executed:true,referenceSha256:reference.sha256,liveSha256:digest(bytes),metrics,regions,structure,referenceSurface:reference.surface,liveSurface:surface,accessibility,exceptionsApplied:approved,remaining});
         row.verdict=errors.length?'CAPTURE-FAILED':remaining.length?'NONCONFORMANT':approved.length?'PARITY-WITH-DISCLOSED-DELTA':'PARITY';
       }catch(error){row.verdict='CAPTURE-FAILED';row.failure=error.message?.split('\n')[0].replace(/https?:\/\/\S+/g,'[origin]').slice(0,160);}
       finally{if(context)await context.close();}
