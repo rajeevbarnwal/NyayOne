@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 20
     env:
       NYAY66_BASE: ${{ github.event.pull_request.base.sha || '' }}
-      NYAY66_COMMENTS: ${{ runner.temp }}/nyay66-comments.json
+      NYAY66_COMMENTS: /tmp/nyay66-comments-${{ github.run_id }}.json
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

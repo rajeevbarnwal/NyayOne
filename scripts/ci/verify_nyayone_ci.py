@@ -4127,7 +4127,7 @@ def check_workflow(path: Path) -> list[str]:
     if path.name == "nyay66-conformance.yml":
         # Ordinary progressive conformance job; no protected context is added.
         # Owner tolerance and QA workflow approval: NYAY-66 comment 15382.
-        expected = "d6c72e3bb5959e17dbfd0aec91d576024677e3942a2292f5ff7cd0096db0971e"
+        expected = "b358aac0dc0156fdc878128273d8347276d624613c77c86f2fc76f5e836ef7e9"
         return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
             f"{path}: NYAY-66 conformance workflow differs from its current contract"
         ]

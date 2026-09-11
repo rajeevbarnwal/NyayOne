@@ -34,6 +34,7 @@ class PolicyOracleTests(unittest.TestCase):
         path = policy.ROOT / ".github/workflows/nyay66-conformance.yml"
         self.assertIn(path.name, policy.CANONICAL_WORKFLOW_FILES)
         self.assertEqual(policy.check_workflow(path), [])
+        self.assertNotIn("${{ runner.temp }}", path.read_text().split("    steps:")[0])
         with tempfile.TemporaryDirectory() as directory:
             altered = Path(directory) / path.name
             altered.write_text(path.read_text().replace("node scripts/nyay66-live.mjs", "echo skipped"))
