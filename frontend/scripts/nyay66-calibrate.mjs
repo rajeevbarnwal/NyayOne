@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { PNG } from 'pngjs';
 import { SOURCE_SHA256, VIEWS, VIEWPORTS, coverage, comparePixels, validateCalibration } from './lib/nyay66-conformance.mjs';
+import { inspectSurface } from './lib/nyay66-dom.mjs';
 
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -39,7 +40,7 @@ try {
   browser = await chromium.launch(); report.chromium = browser.version();
   for (const vp of VIEWPORTS) for (const view of VIEWS) {
     const hashes = [], samples = [];
-    let blockedRequests = 0, runtimeErrors = 0, fonts;
+    let blockedRequests = 0, runtimeErrors = 0, fonts, surface;
     for (let sample = 0; sample < 3; sample++) {
       // Independent contexts expose initialization variance, not only repeat screenshots.
       const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, locale: 'en-IN', timezoneId: 'Asia/Kolkata', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -64,12 +65,13 @@ try {
           return [...document.fonts].map(font => ({ family: font.family, status: font.status, style: font.style, weight: font.weight }));
         });
         const bytes = await page.locator('.vp').screenshot({ animations: 'disabled' });
+        if (sample === 0) surface = await page.evaluate(inspectSurface, { reference: true, clocks: ['s05', 's09'].includes(view) });
         hashes.push(sha(bytes)); samples.push(PNG.sync.read(bytes));
         await writeFile(resolve(out, `${view}-${vp.id}-${sample}.png`), bytes);
       } finally { await context.close(); }
     }
     const row = { view, viewport: vp.id, executed: true, sampleHashes: hashes,
-      dimensions: [samples[0].width, samples[0].height], fonts, blockedRequests, runtimeErrors,
+      dimensions: [samples[0].width, samples[0].height], fonts, surface, blockedRequests, runtimeErrors,
       deltas: samples.slice(1).map(actual => comparePixels(samples[0], actual)) };
     report.rows.push(row);
     console.log(JSON.stringify({ view, viewport: vp.id, deltas: row.deltas }));
