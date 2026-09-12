@@ -1,4 +1,4 @@
-# R2 light reference candidate — owner approval pending
+# R2 light reference import — approval lifecycle
 
 This is additive reference/loader work, not product implementation or a tolerance
 change. Revision L references and historical SHA labels are untouched. Dark
@@ -29,10 +29,13 @@ they never count as passing and block enforced-screen promotion. Reference
 capture is not evidence of live implementation parity. No screen is newly
 enforced by this PR; `enforced` and `exceptions` remain unchanged.
 
-The import command stages a candidate cache; it grants no approval. The policy
-approval field is deliberately empty until the owner posts a top-level
-`NYAY66-INTEGRITY <exact-bundle-hash>` comment on the reference PR. The existing
-trusted verifier must read back that comment before CI may use the new bundle.
+The import command stages a candidate cache; it grants no approval. The initial
+bundle was owner-approved in PR #39 comment `5648778039`, and that approval is
+recorded in `frontend/scripts/nyay66-policy.json`; it is not pending or empty.
+The archive-verification correction changes the bundle and requires a fresh
+top-level `NYAY66-INTEGRITY <exact-bundle-hash>` owner comment. The existing
+trusted verifier must read back a matching comment before CI may use any changed
+bundle; the earlier approval cannot authorize changed importer code.
 The new bundle covers loader/evaluator code, all PNGs, manifest, provenance and
 reference settings. No self-approval or approval inheritance from PR #37.
 
@@ -42,10 +45,18 @@ node frontend/scripts/nyay66-r2-import.mjs \
   frontend/test-baselines/nyay66/chromium-149.0.7827.55-r2 \
   643fb83b7f8316eeca01a020521b97f55856ba08 \
   34719114626 10305658341 \
-  cef91f7250239657671b06d5c2455e1f650cb74ee89c07e163ec7c894f0fc211
+  cef91f7250239657671b06d5c2455e1f650cb74ee89c07e163ec7c894f0fc211 \
+  /private/tmp/nyay50-r2-run-34719114626/artifact.zip
 ```
 
-The command refuses an existing output directory, non-regular input files,
+The expected archive digest is obtained from the authenticated GitHub artifact
+record. The importer recomputes the downloaded ZIP's SHA-256, compares it with
+that expected digest, and records the computed value, never the unchecked CLI
+argument. It refuses a missing, symlinked, non-regular or digest-mismatched ZIP
+before creating output. The extracted inventory is independently checked against
+its checksum manifest and the approved source/runtime/PNG contracts.
+
+The command also refuses an existing output directory, non-regular input files,
 checksum inventory substitution, source/runtime/font mismatches, capture
 variance, changed PNG bytes and wrong dimensions. All checks precede writes.
 At use, the loader rechecks source, manifest and every PNG, including unmeasured

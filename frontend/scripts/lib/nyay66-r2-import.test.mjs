@@ -1,7 +1,50 @@
-import {describe,it,expect} from 'vitest';
+import {describe,it,expect,beforeAll,afterAll} from 'vitest';
+import {mkdtemp,readFile,writeFile,mkdir,readdir,rm,symlink,stat} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
 import {PNG} from 'pngjs';
 import {digest} from './nyay66-enforcement.mjs';
 import * as r2 from './nyay66-r2.mjs';
+
+describe('R2 importer verifies ZIP bytes before staging',()=>{
+  const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+  const input=resolve(root,'frontend/test-baselines/nyay66/chromium-149.0.7827.55-r2');
+  let scratch,archive,hash;
+  beforeAll(async()=>{
+    scratch=await mkdtemp(resolve(tmpdir(),'nyay50-archive-test-'));
+    archive=resolve(scratch,'reference.zip');
+    const files=(await readdir(input)).filter(n=>n!=='provenance.json').sort();
+    const zipped=spawnSync('zip',['-q','-0',archive,...files],{cwd:input,encoding:'utf8'});
+    expect(zipped.status,zipped.stderr).toBe(0);hash=digest(await readFile(archive));
+  });
+  afterAll(async()=>{if(scratch)await rm(scratch,{recursive:true,force:true});});
+  const invoke=(output,expected=hash,path=archive)=>spawnSync(process.execPath,[
+    resolve(root,'frontend/scripts/nyay66-r2-import.mjs'),input,output,
+    '643fb83b7f8316eeca01a020521b97f55856ba08','34719114626','10305658341',expected,
+    ...(path===null?[]:[path]),
+  ],{cwd:root,encoding:'utf8'});
+  it('accepts an intact ZIP and records its computed digest',async()=>{
+    const output=resolve(scratch,'valid');const result=invoke(output);
+    expect(result.status,result.stderr).toBe(0);
+    expect(JSON.parse(await readFile(resolve(output,'provenance.json'))).archiveSha256).toBe(digest(await readFile(archive)));
+  });
+  for(const kind of ['tampered ZIP','unrelated expected digest','missing argument','missing archive','directory','symlink']){
+    it(`refuses ${kind} without creating output`,async()=>{
+      const output=resolve(scratch,kind.replaceAll(' ','-')+'-output');let path=archive,expected=hash;
+      if(kind==='tampered ZIP'){const bytes=Buffer.from(await readFile(archive));bytes[bytes.length-1]^=1;path=resolve(scratch,'tampered.zip');await writeFile(path,bytes);}
+      if(kind==='unrelated expected digest')expected='0'.repeat(64);
+      if(kind==='missing argument')path=null;
+      if(kind==='missing archive')path=resolve(scratch,'absent.zip');
+      if(kind==='directory'){path=resolve(scratch,'directory');await mkdir(path);}
+      if(kind==='symlink'){path=resolve(scratch,'link.zip');await symlink(archive,path);}
+      const result=invoke(output,expected,path);
+      expect(result.status,result.stderr).not.toBe(0);
+      await expect(stat(output)).rejects.toMatchObject({code:'ENOENT'});
+    });
+  }
+});
 
 function fixture(){
   const files=new Map(),fonts={'fixture.woff2':'a'.repeat(64)},head='b'.repeat(40);
