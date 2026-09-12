@@ -29,7 +29,23 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
-    def test_nyay66_calibration_workflow_registered_and_mutation_rejected(self) -> None:
+    def test_manual_calibration_registered_without_new_required_context(self) -> None:
+        policy = load("verify_nyayone_ci")
+        path = policy.ROOT / ".github/workflows/nyay66-calibration.yml"
+        self.assertIn(path.name, policy.CANONICAL_WORKFLOW_FILES)
+        self.assertNotIn(path.name, policy.REQUIRED_WORKFLOW_FILES)
+        self.assertEqual(policy.check_workflow(path), [])
+        contracts = load("test_nyay66_calibration_workflow")
+        result = unittest.TestResult()
+        unittest.defaultTestLoader.loadTestsFromModule(contracts).run(result)
+        self.assertTrue(result.wasSuccessful(), result.errors + result.failures)
+        with tempfile.TemporaryDirectory() as directory:
+            altered = Path(directory) / path.name
+            for before, after in [("workflow_dispatch:", "push:"), ("contents: read", "contents: write"), ("149.0.7827.55", "149.0.7827.56"), ("FONT_PIN_MISMATCH", "SKIP_FONT_CHECK")]:
+                altered.write_text(path.read_text().replace(before, after))
+                self.assertTrue(policy.check_workflow(altered))
+
+    def test_nyay66_conformance_workflow_registered_and_mutation_rejected(self) -> None:
         policy = load("verify_nyayone_ci")
         path = policy.ROOT / ".github/workflows/nyay66-conformance.yml"
         self.assertIn(path.name, policy.CANONICAL_WORKFLOW_FILES)

@@ -1,0 +1,110 @@
+name: NYAY-66 manual reference calibration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_head:
+        description: Exact reviewed 40-character commit to render (artifacts only)
+        required: true
+        type: string
+      reference:
+        description: Approved light reference source
+        required: true
+        default: r2
+        type: choice
+        options: [r2, revl]
+
+permissions: {}
+
+concurrency:
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.run_id }}
+  # Always false for this dispatch-only workflow; matches the repository policy.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  calibrate:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' && github.triggering_actor == 'rajeevbarnwal' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      SOURCE_HEAD: ${{ inputs.source_head }}
+      REFERENCE: ${{ inputs.reference }}
+    steps:
+      - name: Validate exact source selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_HEAD" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$REFERENCE" = r2 || "$REFERENCE" = revl ]]
+      - name: Read reviewed control pins from the dispatch workflow revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+      - name: Read exact reference candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_head }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.21.1"
+      - name: Install reviewed calibration dependencies
+        working-directory: control/frontend
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Verify exact checkout, pinned browser and font bytes
+        working-directory: control/frontend
+        run: |
+          test "$(git -C ../../candidate rev-parse HEAD)" = "$SOURCE_HEAD"
+          node --input-type=module <<'JS'
+          import {readFile,readdir,writeFile} from 'node:fs/promises';
+          import {createHash} from 'node:crypto';
+          import {chromium} from 'playwright';
+          import {createRequire} from 'node:module';
+          const require=createRequire(import.meta.url),sha=b=>createHash('sha256').update(b).digest('hex');
+          const policy=JSON.parse(await readFile('scripts/nyay66-policy.json'));
+          const bytes=await readFile(`test-baselines/nyay66/${policy.cache}/manifest.json`);
+          if(sha(bytes)!==policy.manifestSha256)throw Error('REFERENCE_MANIFEST_MISMATCH');
+          const pins=JSON.parse(bytes),fonts={};
+          for(const file of (await readdir('../../candidate/frontend/public/fonts')).filter(x=>x.endsWith('.woff2')).sort())fonts[file]=sha(await readFile(`../../candidate/frontend/public/fonts/${file}`));
+          const canonical=o=>JSON.stringify(Object.entries(o).sort(([a],[b])=>a.localeCompare(b)));
+          if(canonical(fonts)!==canonical(pins.fonts))throw Error('FONT_PIN_MISMATCH');
+          const browser=await chromium.launch();
+          try{
+            const actual={chromium:browser.version(),playwright:require('playwright/package.json').version,platform:`${process.platform}-${process.arch}`};
+            if(actual.chromium!=='149.0.7827.55'||actual.playwright!=='1.61.1'||actual.platform!=='linux-x64')throw Error('CALIBRATION_PIN_MISMATCH');
+            for(const key of Object.keys(actual))if(actual[key]!==pins[key])throw Error(`CALIBRATION_PIN_MISMATCH:${key}`);
+            const record={purpose:'REFERENCE_GENERATION_ONLY_NOT_IMPORT_APPROVAL',sourceHead:process.env.SOURCE_HEAD,reference:process.env.REFERENCE,...actual,node:process.version,fonts};
+            await writeFile(`${process.env.RUNNER_TEMP}/nyay66-calibration-pins.json`,JSON.stringify(record,null,2)+'\n');
+            console.log(JSON.stringify(record));
+          }finally{await browser.close();}
+          JS
+          test ! -e ../../candidate/frontend/node_modules
+          ln -s "$PWD/node_modules" ../../candidate/frontend/node_modules
+      - name: Generate reference artifacts only
+        working-directory: candidate/frontend
+        env:
+          NYAY66_OUTPUT: ${{ runner.temp }}/nyay66-calibration
+        run: |
+          if [ "$REFERENCE" = r2 ]; then
+            node scripts/nyay66-r2-calibrate.mjs "$NYAY66_OUTPUT"
+          else
+            node scripts/nyay66-calibrate.mjs
+          fi
+          cp "$RUNNER_TEMP/nyay66-calibration-pins.json" "$NYAY66_OUTPUT/runtime-pins.json"
+          cd "$NYAY66_OUTPUT"
+          sha256sum runtime-pins.json >> SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Publish unimported calibration evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nyay66-calibration-${{ inputs.reference }}-${{ inputs.source_head }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/nyay66-calibration/
+          if-no-files-found: error
+          retention-days: 14
