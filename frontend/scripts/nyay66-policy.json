@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "cache": "chromium-149.0.7827.55-revl",
+  "manifestSha256": "0cc054bf00bb22298cabfaa1a1cacf7f696ebedbb0531457b9dbd6c3d243f799",
+  "ownerToleranceApproval": "NYAY-66:15382",
+  "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
+  "integrityApproval": {"pr": 37, "commentId": 5647862213, "bundleSha256": "823632e4e1e9dd9787407965bef3e66c2b03e924a35df15607ef85f92d0e9527"},
+  "enforced": [],
+  "exceptions": []
+}

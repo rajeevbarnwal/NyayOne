@@ -936,6 +936,7 @@ CANONICAL_WORKFLOW_FILES = REQUIRED_WORKFLOW_FILES | {
     NYAY4_QUARANTINE_WORKFLOW_FILE,
     "nyay13-independent-qa-observe.yml",
     "nyay42-optimization-observe.yml",
+    "nyay66-conformance.yml",
 }
 NYAY4_QUARANTINED_ASSERTION_ID = (
     "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"
@@ -4123,6 +4124,13 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 
 
 def check_workflow(path: Path) -> list[str]:
+    if path.name == "nyay66-conformance.yml":
+        # Ordinary progressive conformance job; no protected context is added.
+        # Owner tolerance and QA workflow approval: NYAY-66 comment 15382.
+        expected = "e038b23a6d4ce4b6f83c75588e7d0cfd0307aebd91f81eb05083e9dda006ecb0"
+        return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
+            f"{path}: NYAY-66 conformance workflow differs from its current contract"
+        ]
     if path.name == "nyay42-optimization-observe.yml":
         # Exact additive non-required observer; existing producers, semantic
         # seals and seven required contexts are unchanged by this rollout.
@@ -4911,7 +4919,7 @@ def main() -> int:
     if {path.name for path in workflow_paths} != CANONICAL_WORKFLOW_FILES:
         failures.append(
             "workflow filename inventory differs from nine required gates plus the "
-            "single quarantined evidence workflow and NYAY-13/42 observations"
+            "single quarantined evidence workflow, NYAY-13/42 observations and NYAY-66 calibration"
         )
     failures.extend(check_db_gate_contract())
     failures.extend(check_nyay11_db_gate_contract())
@@ -4938,7 +4946,7 @@ def main() -> int:
     )
     required_names: list[tuple[Path, str]] = []
     for path in workflow_paths:
-        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml", "nyay42-optimization-observe.yml"}:
+        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml", "nyay42-optimization-observe.yml", "nyay66-conformance.yml"}:
             continue
         text = path.read_text(encoding="utf-8")
         match = re.search(r"^  required:\n    name:\s*([^\s#]+)", text, re.MULTILINE)

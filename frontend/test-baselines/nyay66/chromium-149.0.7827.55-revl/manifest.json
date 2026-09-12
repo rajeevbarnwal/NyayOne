@@ -1,0 +1,3986 @@
+{
+  "schema": 1,
+  "approval": "NYAY-66:15382",
+  "producerHead": "629f7cf5ed5638f5249d39aa44bd7132ab7e1a02",
+  "sourceSha256": "338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252",
+  "chromium": "149.0.7827.55",
+  "playwright": "1.61.1",
+  "platform": "linux-x64",
+  "fonts": {
+    "Carlito-Bold-latin.woff2": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012",
+    "Carlito-Regular-latin.woff2": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7",
+    "HankenGrotesk-Variable-latin.woff2": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+    "IBMPlexMono-Medium-latin.woff2": "a76f53ca6612e7b3828eec2311098675b7f9849ae4169a8bcef6302aec02a6c0",
+    "IBMPlexMono-Regular-latin.woff2": "c36f509c0a8f9f85f29cb44bc8701d8a9e0b14c499e77a884f789ead7093a7ac",
+    "IBMPlexMono-SemiBold-latin.woff2": "ad4580d8cb4b5f627c2d18457656732f7f7b070f7837fbc380e08054157e6f6c",
+    "Newsreader-Variable-latin.woff2": "01817351be3edfc1714fe6d60ddea6a22a169a5ebd033b50c7f9495e5d9c386a",
+    "PublicSans-latin.woff2": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d",
+    "SpaceGrotesk-latin.woff2": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557",
+    "Spectral-Light-latin.woff2": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9",
+    "Spectral-Semibold-latin.woff2": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a",
+    "SplineSansMono-latin.woff2": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+  },
+  "rows": [
+    {
+      "view": "s03",
+      "viewport": "mobile390",
+      "file": "s03-mobile390-0.png",
+      "sha256": "8d07bc5d38e9fff9b0915dfe407ecee2a78c5a3cc4a542ff69d82f6e7ec6440e",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Sign In Securely",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 304.28125,
+              "width": 358,
+              "height": 56
+            }
+          },
+          {
+            "role": "button",
+            "name": "I’m joining as Student▾",
+            "disabled": false,
+            "box": {
+              "x": 31,
+              "y": 473.46875,
+              "width": 328,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 31,
+              "y": 550.46875,
+              "width": 328,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Create Student Account",
+            "disabled": false,
+            "box": {
+              "x": 31,
+              "y": 608.46875,
+              "width": 328,
+              "height": 56
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "The record of your law-school career.",
+            "box": {
+              "x": 16,
+              "y": 66,
+              "width": 358,
+              "height": 55
+            }
+          },
+          {
+            "text": "Where would you like to begin?",
+            "box": {
+              "x": 16,
+              "y": 216.84375,
+              "width": 358,
+              "height": 28.59375
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD The record of your law-school career. Internships, moots, research and mentors: one verified student identity, private by default. WELCOME TO NYAYONE Where would you like to begin? Return to your workspace or create a secure student account in a few clear steps. Sign In Securely Signing in? Your saved role and language apply automatically. No need to choose again. NEW HERE? CHOOSE HOW YOU JOIN I’m joining as Student ▾ Language English ▾ Create Student Account By continuing, you acknowledge the Privacy Notice. No sign-in code is requested on this screen. Persona and language set presentation and routing intent only. They are never authorization. DPDP Act, 2023",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s04",
+      "viewport": "mobile390",
+      "file": "s04-mobile390-0.png",
+      "sha256": "0a61350682e3aa45d719603c8ae1176b64438951d5bf012775e49154b5c6d2b4",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 20,
+              "y": 313.59375,
+              "width": 173,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verified Email",
+            "disabled": false,
+            "box": {
+              "x": 197,
+              "y": 313.59375,
+              "width": 173,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 98,
+              "y": 401.59375,
+              "width": 276,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Send Code",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 582.53125,
+              "width": 358,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "The record of your law-school career.",
+            "box": {
+              "x": 16,
+              "y": 66,
+              "width": 358,
+              "height": 55
+            }
+          },
+          {
+            "text": "How do you want to sign in?",
+            "box": {
+              "x": 16,
+              "y": 246.421875,
+              "width": 358,
+              "height": 28.59375
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD The record of your law-school career. Internships, moots, research and mentors: one verified student identity, private by default. SIGN IN How do you want to sign in? Mobile Number Verified Email Mobile Number +91 We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release. If these details match an account, we’ll send a sign-in code. For your privacy, the response looks the same either way. Data handled under the DPDP Act, 2023. Send Code",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s05",
+      "viewport": "mobile390",
+      "file": "s05-mobile390-0.png",
+      "sha256": "3d8887ca61969d4e4feae5656c62959d7062f15e3274870aa040fd69109872a4",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Change sign-in identifier",
+            "disabled": false,
+            "box": {
+              "x": 213,
+              "y": 271.09375,
+              "width": 100,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "One-time code",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 329.09375,
+              "width": 322,
+              "height": 58
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify and Continue",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 523.09375,
+              "width": 174.5,
+              "height": 54
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Code",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 523.09375,
+              "width": 174.5,
+              "height": 54
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your account begins with verified access.",
+            "box": {
+              "x": 16,
+              "y": 66,
+              "width": 358,
+              "height": 55
+            }
+          },
+          {
+            "text": "Enter the code",
+            "box": {
+              "x": 16,
+              "y": 182,
+              "width": 358,
+              "height": 28.59375
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Your account begins with verified access. VERIFY ACCOUNT Enter the code Six digits sent to +91 ••••• ••340. Your code stays valid for the time shown below. Change One-time code Paste or platform autofill works. The field accepts the full code at once. Expires in [OTP_CLOCK] Resend in [OTP_CLOCK] Tries left 3 Verify and Continue Resend Code",
+        "masks": [
+          {
+            "kind": "otp-clock",
+            "text": "04:32",
+            "box": {
+              "x": 97,
+              "y": 457.09375,
+              "width": 40,
+              "height": 16
+            }
+          },
+          {
+            "kind": "otp-clock",
+            "text": "00:00",
+            "box": {
+              "x": 226,
+              "y": 457.09375,
+              "width": 40,
+              "height": 16
+            }
+          }
+        ],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s08",
+      "viewport": "mobile390",
+      "file": "s08-mobile390-0.png",
+      "sha256": "5e41be17aac9cfa3fa0ab0c7aa131c387419b816a8b662a15d0a31bdc430c83b",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Change persona, currently Student",
+            "disabled": false,
+            "box": {
+              "x": 179,
+              "y": 200.84375,
+              "width": 66,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 254.96875,
+              "y": 198.84375,
+              "width": 119.03125,
+              "height": 48
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "First Name",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 329.03125,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Middle Name (Optional)",
+            "disabled": false,
+            "box": {
+              "x": 200,
+              "y": 329.03125,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Last Name",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 401.03125,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 98,
+              "y": 481.03125,
+              "width": 276,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Date of Birth",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 553.03125,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "checkbox",
+            "name": "I agree to the Terms and acknowledge the Privacy Notice.",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 643.21875,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Create Account",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 694.21875,
+              "width": 358,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "The record of your law-school career.",
+            "box": {
+              "x": 16,
+              "y": 66,
+              "width": 358,
+              "height": 55
+            }
+          },
+          {
+            "text": "Create your student account.",
+            "box": {
+              "x": 16,
+              "y": 268.84375,
+              "width": 358,
+              "height": 24.1875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD The record of your law-school career. Internships, moots, research and mentors: one verified student identity, private by default. Joining as Student Change Language English ▾ CREATE ACCOUNT Create your student account. First Name Middle Name (Optional) Last Name Mobile Number +91 Date of Birth Used once to check whether guardian consent applies (S-16). Not shown on your profile. I agree to the Terms and acknowledge the Privacy Notice. Create Account If these details match an account, we’ll send a sign-in code. For your privacy, the response looks the same either way. Data handled under the DPDP Act, 2023.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s09",
+      "viewport": "mobile390",
+      "file": "s09-mobile390-0.png",
+      "sha256": "3438cba412de5d20bee087492f0ef3d704fd6afd6183a4535a20d204912ed490",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Change persona, currently Student",
+            "disabled": false,
+            "box": {
+              "x": 179,
+              "y": 151,
+              "width": 66,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 254.96875,
+              "y": 149,
+              "width": 119.03125,
+              "height": 48
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "One-time code",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 321.234375,
+              "width": 322,
+              "height": 58
+            }
+          },
+          {
+            "role": "button",
+            "name": "Set Up My Profile",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 429.234375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Skip for Now",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 429.234375,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your account begins with verified access.",
+            "box": {
+              "x": 16,
+              "y": 66,
+              "width": 358,
+              "height": 55
+            }
+          },
+          {
+            "text": "Verify your new account.",
+            "box": {
+              "x": 16,
+              "y": 227,
+              "width": 358,
+              "height": 26.390625
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Your account begins with verified access. Joining as Student Change Language English ▾ CREATE ACCOUNT Verify your new account. One code to +91 ••••• ••340 confirms this account is yours. One-time code Code accepted. Account created Set Up My Profile Skip for Now Skipping never bypasses guardian, verified-email, or other security gates. Those stay required where they apply.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s10a",
+      "viewport": "mobile390",
+      "file": "s10a-mobile390-0.png",
+      "sha256": "d17954a17f06af865c7212696678118325cecb307d0babe4f51ee10dcc39f240",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "First Name",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 225.5,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Middle Name (Optional)",
+            "disabled": false,
+            "box": {
+              "x": 200,
+              "y": 225.5,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Last Name",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 303.5,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "Preferred Language",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 391.5,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "City",
+            "disabled": false,
+            "box": {
+              "x": 200,
+              "y": 391.5,
+              "width": 174,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 450.5,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Save & Exit",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 450.5,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "About you.",
+            "box": {
+              "x": 16,
+              "y": 132.25,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Profile setup AN PROFILE · STEP 1 OF 3 About you. First Name Middle Name (Optional) Last Name Preferred Language English हिन्दी ಕನ್ನಡ City Continue Save & Exit",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s10b",
+      "viewport": "mobile390",
+      "file": "s10b-mobile390-0.png",
+      "sha256": "2fd1de6224b25cc9fdaac70cc59243f73f7d8139ccb53245d4cd4820a4d30fcd",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "link",
+            "name": "Enrolment Number",
+            "disabled": false,
+            "box": {
+              "x": 181,
+              "y": 157,
+              "width": 135,
+              "height": 50.140625
+            }
+          },
+          {
+            "role": "link",
+            "name": "Year of Study",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 177.140625,
+              "width": 101,
+              "height": 50.140625
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "College / University",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 284.421875,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "Year of Study",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 370.421875,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "College Enrolment Number",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 479.421875,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mark Fields Corrected (Demo)",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 598.609375,
+              "width": 358,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 659.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Back",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 659.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your academic record.",
+            "box": {
+              "x": 16,
+              "y": 114,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Profile setup AN PROFILE · STEP 2 OF 3 Your academic record. 2 fields need attention: Enrolment Number, Year of Study. Continue is blocked until they are fixed. College / University National Law School of India University (NLSIU) NALSAR University of Law NLU Delhi Year of Study Select year 4th Pick your current year. College Enrolment Number Format looks incomplete. Expected state / roll / year. Example: KA/1234/2023. Never public; used for institutional verification only. Mark Fields Corrected (Demo) Continue Back",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s11",
+      "viewport": "mobile390",
+      "file": "s11-mobile390-0.png",
+      "sha256": "a14a20a7669d5990fa2705cebc3e3ee5d0850d11eb991588490bc67fe05dc435",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Constitutional",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 278.34375,
+              "width": 125,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration",
+            "disabled": false,
+            "box": {
+              "x": 149,
+              "y": 278.34375,
+              "width": 103,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Criminal",
+            "disabled": false,
+            "box": {
+              "x": 260,
+              "y": 278.34375,
+              "width": 86,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Corporate",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 330.34375,
+              "width": 97,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Tech & Privacy",
+            "disabled": false,
+            "box": {
+              "x": 121,
+              "y": 330.34375,
+              "width": 129,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 414.34375,
+              "width": 104,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court",
+            "disabled": false,
+            "box": {
+              "x": 128,
+              "y": 414.34375,
+              "width": 104,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": false,
+            "box": {
+              "x": 240,
+              "y": 414.34375,
+              "width": 92,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Judiciary Prep",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 466.34375,
+              "width": 124,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 523.34375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Back",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 523.34375,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "What are you here for?",
+            "box": {
+              "x": 16,
+              "y": 132.25,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Profile setup AN PROFILE · STEP 3 OF 3 What are you here for? Pick any. These tune your matches and are easy to change later. Practice Interests Constitutional Arbitration Criminal Corporate Tech & Privacy Goals This Year Internships Moot Court Research Judiciary Prep Finish Back",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s12",
+      "viewport": "mobile390",
+      "file": "s12-mobile390-0.png",
+      "sha256": "5171ae0ecdc1e53867ecb390720eab73227ec0288ce115e2452ccb38db589b30",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Go to Dashboard",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 362.34375,
+              "width": 174.5,
+              "height": 54
+            }
+          },
+          {
+            "role": "button",
+            "name": "Review Profile",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 362.34375,
+              "width": 174.5,
+              "height": 54
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your NyayOne profile is ready",
+            "box": {
+              "x": 16,
+              "y": 240.40625,
+              "width": 358,
+              "height": 29.6875
+            }
+          }
+        ],
+        "text": "Profile AN PROFILE DETAILS COMPLETE Your NyayOne profile is ready Your academic and interest preferences are saved. You can review or update them from Profile at any time. Go to Dashboard Review Profile Email Verification Pending",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s13",
+      "viewport": "mobile390",
+      "file": "s13-mobile390-0.png",
+      "sha256": "cf88fc851515f8ebc93383b3422e32c08beccd03f82a043dcd1229e16e4d329c",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 251,
+              "y": 187.875,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resume Setup",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 273.25,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Not Now",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 273.25,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Pick up where you left off.",
+            "box": {
+              "x": 16,
+              "y": 95.25,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Welcome back AN Pick up where you left off. 67% Complete Your Profile Interests remaining · about 1 minute. Finish Resume Setup Not Now Saved Personal · Academic Remaining Interests (step 3)",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s14",
+      "viewport": "mobile390",
+      "file": "s14-mobile390-0.png",
+      "sha256": "2ddecf164f9dad0f1d3f83d8ae1a19f3e4dcf85c5c30b7d2eb3a2fbdfc7f5a01",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 251,
+              "y": 247.515625,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships 3 new matches for arbitration in Bengaluru Preview only",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 332.890625,
+              "width": 174,
+              "height": 114.71875
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court Memorial workspace · draft due Mon Preview only",
+            "disabled": true,
+            "box": {
+              "x": 200,
+              "y": 332.890625,
+              "width": 174,
+              "height": 114.71875
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research Saved thread: anticipatory bail standard Preview only",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 457.609375,
+              "width": 174,
+              "height": 132.109375
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only",
+            "disabled": true,
+            "box": {
+              "x": 200,
+              "y": 457.609375,
+              "width": 174,
+              "height": 132.109375
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify Now",
+            "disabled": false,
+            "box": {
+              "x": 227,
+              "y": 616.59375,
+              "width": 134,
+              "height": 44
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your legal journey, in one place.",
+            "box": {
+              "x": 16,
+              "y": 105,
+              "width": 358,
+              "height": 26.390625
+            }
+          },
+          {
+            "text": "Internships",
+            "box": {
+              "x": 30,
+              "y": 346.890625,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Moot Court",
+            "box": {
+              "x": 214,
+              "y": 346.890625,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Research",
+            "box": {
+              "x": 30,
+              "y": 471.609375,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Mentors",
+            "box": {
+              "x": 214,
+              "y": 471.609375,
+              "width": 146,
+              "height": 24
+            }
+          }
+        ],
+        "text": "NyayOne AN SATURDAY, 16 AUGUST · S-07 HOME Your legal journey, in one place. Continue your law-school record: internships, moots, research and mentors. 67% Complete Your Profile Interests remaining · about 1 minute. Finish Internships 3 new matches for arbitration in Bengaluru Preview only Moot Court Memorial workspace · draft due Mon Preview only Research Saved thread: anticipatory bail standard Preview only Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only Institutional email not verified yet, so some listings stay locked. Verify Now",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s14p",
+      "viewport": "mobile390",
+      "file": "s14p-mobile390-0.png",
+      "sha256": "68b821f4114623e2832690eea59df880f9dc4b11a1f19db61c2560510736b3f8",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships 3 new matches for arbitration in Bengaluru Preview only",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 219.140625,
+              "width": 174,
+              "height": 114.71875
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court Memorial workspace · draft due Mon Preview only",
+            "disabled": true,
+            "box": {
+              "x": 200,
+              "y": 219.140625,
+              "width": 174,
+              "height": 114.71875
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research Saved thread: anticipatory bail standard Preview only",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 343.859375,
+              "width": 174,
+              "height": 132.109375
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only",
+            "disabled": true,
+            "box": {
+              "x": 200,
+              "y": 343.859375,
+              "width": 174,
+              "height": 132.109375
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify Now",
+            "disabled": false,
+            "box": {
+              "x": 227,
+              "y": 502.84375,
+              "width": 134,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Close",
+            "disabled": false,
+            "box": {
+              "x": 322,
+              "y": 296.4375,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Complete Profile",
+            "disabled": false,
+            "box": {
+              "x": 32,
+              "y": 489.5625,
+              "width": 158.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Maybe Later",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 489.5625,
+              "width": 158.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your legal journey, in one place.",
+            "box": {
+              "x": 16,
+              "y": 105,
+              "width": 358,
+              "height": 26.390625
+            }
+          },
+          {
+            "text": "Internships",
+            "box": {
+              "x": 30,
+              "y": 233.140625,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Moot Court",
+            "box": {
+              "x": 214,
+              "y": 233.140625,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Research",
+            "box": {
+              "x": 30,
+              "y": 357.859375,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Mentors",
+            "box": {
+              "x": 214,
+              "y": 357.859375,
+              "width": 146,
+              "height": 24
+            }
+          },
+          {
+            "text": "Make NyayOne work better for you",
+            "box": {
+              "x": 32,
+              "y": 325.4375,
+              "width": 326,
+              "height": 24.1875
+            }
+          }
+        ],
+        "text": "NyayOne AN SATURDAY, 16 AUGUST · S-07 HOME Your legal journey, in one place. Continue your law-school record: internships, moots, research and mentors. Internships 3 new matches for arbitration in Bengaluru Preview only Moot Court Memorial workspace · draft due Mon Preview only Research Saved thread: anticipatory bail standard Preview only Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only Institutional email not verified yet, so some listings stay locked. Verify Now PROFILE · 67% COMPLETE · S-14 Make NyayOne work better for you Add your academic background and interests for more relevant internships, learning and research suggestions. You can do this now or return from Profile at any time. Complete Profile Maybe Later",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s15",
+      "viewport": "mobile390",
+      "file": "s15-mobile390-0.png",
+      "sha256": "3f466557373a73bebe0126abb3e89669af3f7d9e4bfd13520f427f0948b3224a",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Institutional Email",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 186.5,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Check Verification Status",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 367.25,
+              "width": 174.5,
+              "height": 50
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Link",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 367.25,
+              "width": 174.5,
+              "height": 50
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Verify your institutional email.",
+            "box": {
+              "x": 16,
+              "y": 95.25,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Verification AN Verify your institutional email. Institutional Email Verification Pending We sent a confirmation link to your NLU inbox. Email sign-in stays unavailable until ownership is confirmed. This is what keeps “Verified Email” honest. Check Verification Status Resend Link Unrecognised college domain?",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s16",
+      "viewport": "mobile390",
+      "file": "s16-mobile390-0.png",
+      "sha256": "52494b2d80aeef975cf4d89c45ce4a50ed9d581fa680f9fb6429cb882d61cb4a",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Guardian’s Name",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 286.453125,
+              "width": 358,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Guardian’s Mobile",
+            "disabled": false,
+            "box": {
+              "x": 98,
+              "y": 372.453125,
+              "width": 276,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Consent Request",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 505.640625,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue with Limited Access",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 505.640625,
+              "width": 174.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "A guardian’s consent is needed first.",
+            "box": {
+              "x": 16,
+              "y": 95.25,
+              "width": 358,
+              "height": 57.1875
+            }
+          }
+        ],
+        "text": "Guardian consent AN A guardian’s consent is needed first. Because you’re under 18, NyayOne asks a guardian to approve your account before your profile goes live. Nothing is shared until then. Guardian’s Name Guardian’s Mobile +91 They’ll get a consent request by SMS with a simple approval link. Consent Requested · Waiting Resend Consent Request Continue with Limited Access Limited access keeps community and sharing off until consent is recorded. Completing your profile later does not skip this step.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s17",
+      "viewport": "mobile390",
+      "file": "s17-mobile390-0.png",
+      "sha256": "813e9197d07beecf4a162799c894f21e2f134eab3dc8be48cee5a2b9cb087e0d",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 332,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Edit Profile",
+            "disabled": false,
+            "box": {
+              "x": 330,
+              "y": 83,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 251,
+              "y": 211.375,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Privacy Centre",
+            "disabled": false,
+            "box": {
+              "x": 187,
+              "y": 542.8125,
+              "width": 172,
+              "height": 44
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Aditi Nair",
+            "box": {
+              "x": 84,
+              "y": 83.21875,
+              "width": 203,
+              "height": 24.1875
+            }
+          }
+        ],
+        "text": "Profile AN Aditi Nair NLSIU · 4th year · B.A. LL.B. (Hons.) Email Verification Pending Profile 67% 67% Complete Your Profile Interests remaining · about 1 minute. Finish Mobile +91 ••••• ••340 Institutional Email aditi.nair@nls.ac.in City Bengaluru Interests Constitutional · Arbitration · Research Enrolment KA/1234/2023 · private Download My Data · Delete Account DPDP rights, self-serve. Deletion asks for OTP confirmation. Privacy Centre",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "view": "s03",
+      "viewport": "desktop",
+      "file": "s03-desktop-0.png",
+      "sha256": "e02e85a5a30994891969575c418717d8adb7915f02e74ca6c8c051ea7ef225d0",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": true,
+            "box": {
+              "x": 522.71875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 594.71875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 694.71875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 793.71875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": true,
+            "box": {
+              "x": 882.71875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Sign In Securely",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 294.5,
+              "width": 440,
+              "height": 56
+            }
+          },
+          {
+            "role": "button",
+            "name": "I’m joining as Student▾",
+            "disabled": false,
+            "box": {
+              "x": 579,
+              "y": 463.6875,
+              "width": 410,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 579,
+              "y": 540.6875,
+              "width": 410,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Create Student Account",
+            "disabled": false,
+            "box": {
+              "x": 579,
+              "y": 598.6875,
+              "width": 410,
+              "height": 56
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Learn the law.Build your path.",
+            "box": {
+              "x": 44,
+              "y": 702.875,
+              "width": 412,
+              "height": 92.375
+            }
+          },
+          {
+            "text": "Where would you like to begin?",
+            "box": {
+              "x": 564,
+              "y": 143,
+              "width": 440,
+              "height": 88
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile SECURE ACCESS NyayOne LEGAL, ON THE RECORD A LEGAL WORKSPACE FOR STUDENTS Learn the law. Build your path. Research, opportunities, mentoring and your professional profile, connected through one trusted NyayOne identity. Passwordless access Private by design Built for law students LEGAL, ON THE RECORD WELCOME TO NYAYONE Where would you like to begin? Return to your workspace or create a secure student account in a few clear steps. Sign In Securely Signing in? Your saved role and language apply automatically. No need to choose again. NEW HERE? CHOOSE HOW YOU JOIN I’m joining as Student ▾ Language English ▾ Create Student Account By continuing, you acknowledge the Privacy Notice. No sign-in code is requested on this screen. Persona and language set presentation and routing intent only. They are never authorization. DPDP Act, 2023 Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s04",
+      "viewport": "desktop",
+      "file": "s04-desktop-0.png",
+      "sha256": "411da9a4bbbdd294cb1f84652a8f2015266b64d38ea61db356ee15211c7ada86",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": true,
+            "box": {
+              "x": 522.71875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 594.71875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 694.71875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 793.71875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": true,
+            "box": {
+              "x": 882.71875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 568,
+              "y": 261.828125,
+              "width": 224,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verified Email",
+            "disabled": false,
+            "box": {
+              "x": 796,
+              "y": 261.828125,
+              "width": 224,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 646,
+              "y": 349.828125,
+              "width": 378,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Send Code",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 530.765625,
+              "width": 460,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Learn the law.Build your path.",
+            "box": {
+              "x": 44,
+              "y": 702.875,
+              "width": 412,
+              "height": 92.375
+            }
+          },
+          {
+            "text": "How do you want to sign in?",
+            "box": {
+              "x": 564,
+              "y": 179.21875,
+              "width": 460,
+              "height": 37.390625
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile SECURE ACCESS NyayOne LEGAL, ON THE RECORD A LEGAL WORKSPACE FOR STUDENTS Learn the law. Build your path. Research, opportunities, mentoring and your professional profile, connected through one trusted NyayOne identity. Passwordless access Private by design Built for law students LEGAL, ON THE RECORD SIGN IN How do you want to sign in? Mobile Number Verified Email Mobile Number +91 We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release. If these details match an account, we’ll send a sign-in code. For your privacy, the response looks the same either way. Data handled under the DPDP Act, 2023. Send Code Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s05",
+      "viewport": "desktop",
+      "file": "s05-desktop-0.png",
+      "sha256": "7b3f67097cce2543947c70939d02b394e213bbda5dc281e17a124961640d7b99",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": true,
+            "box": {
+              "x": 522.71875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 594.71875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 694.71875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 793.71875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": true,
+            "box": {
+              "x": 882.71875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Change sign-in identifier",
+            "disabled": false,
+            "box": {
+              "x": 724,
+              "y": 277.4375,
+              "width": 100,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "One-time code",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 335.4375,
+              "width": 322,
+              "height": 58
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify and Continue",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 493.4375,
+              "width": 225.5,
+              "height": 54
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Code",
+            "disabled": false,
+            "box": {
+              "x": 798.5,
+              "y": 493.4375,
+              "width": 225.5,
+              "height": 54
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your account begins with verified access.",
+            "box": {
+              "x": 44,
+              "y": 759.125,
+              "width": 412,
+              "height": 92.375
+            }
+          },
+          {
+            "text": "Enter the code",
+            "box": {
+              "x": 564,
+              "y": 158,
+              "width": 460,
+              "height": 44
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile SECURE ACCESS NyayOne LEGAL, ON THE RECORD Your account begins with verified access. Successful verification signs you in. Profile completion is recommended, not forced. Passwordless Private by design Built for law students LEGAL, ON THE RECORD VERIFY ACCOUNT Enter the code Six digits sent to +91 ••••• ••340. Your code stays valid for the time shown below. Change One-time code Paste or platform autofill works. The field accepts the full code at once. Expires in [OTP_CLOCK] Resend in [OTP_CLOCK] Tries left 3 Verify and Continue Resend Code Privacy Notice · Terms · Accessibility",
+        "masks": [
+          {
+            "kind": "otp-clock",
+            "text": "04:32",
+            "box": {
+              "x": 645,
+              "y": 449.4375,
+              "width": 40,
+              "height": 16
+            }
+          },
+          {
+            "kind": "otp-clock",
+            "text": "00:00",
+            "box": {
+              "x": 774,
+              "y": 449.4375,
+              "width": 40,
+              "height": 16
+            }
+          }
+        ],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s08",
+      "viewport": "desktop",
+      "file": "s08-desktop-0.png",
+      "sha256": "bd9ee8371a57dd21025aefd66babea512307aeee76affc0829e24bd801923b79",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": true,
+            "box": {
+              "x": 522.71875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 594.71875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 694.71875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 793.71875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": true,
+            "box": {
+              "x": 882.71875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Change persona, currently Student",
+            "disabled": false,
+            "box": {
+              "x": 727,
+              "y": 127,
+              "width": 66,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 904.96875,
+              "y": 125,
+              "width": 119.03125,
+              "height": 48
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "First Name",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 280.390625,
+              "width": 225,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Middle Name (Optional)",
+            "disabled": false,
+            "box": {
+              "x": 799,
+              "y": 280.390625,
+              "width": 225,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Last Name",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 358.390625,
+              "width": 460,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Mobile Number",
+            "disabled": false,
+            "box": {
+              "x": 646,
+              "y": 444.390625,
+              "width": 378,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Date of Birth",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 522.390625,
+              "width": 460,
+              "height": 46
+            }
+          },
+          {
+            "role": "checkbox",
+            "name": "I agree to the Terms and acknowledge the Privacy Notice.",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 618.578125,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Create Account",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 675.578125,
+              "width": 460,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Learn the law.Build your path.",
+            "box": {
+              "x": 44,
+              "y": 702.875,
+              "width": 412,
+              "height": 92.375
+            }
+          },
+          {
+            "text": "Create your student account.",
+            "box": {
+              "x": 564,
+              "y": 201,
+              "width": 460,
+              "height": 37.390625
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile SECURE ACCESS NyayOne LEGAL, ON THE RECORD A LEGAL WORKSPACE FOR STUDENTS Learn the law. Build your path. Research, opportunities, mentoring and your professional profile, connected through one trusted NyayOne identity. Passwordless access Private by design Built for law students LEGAL, ON THE RECORD Joining as Student Change Language English ▾ CREATE ACCOUNT Create your student account. First Name Middle Name (Optional) Last Name Mobile Number +91 Date of Birth Used once to check whether guardian consent applies (S-16). Not shown on your profile. I agree to the Terms and acknowledge the Privacy Notice. Create Account If these details match an account, we’ll send a sign-in code. For your privacy, the response looks the same either way. Data handled under the DPDP Act, 2023. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s09",
+      "viewport": "desktop",
+      "file": "s09-desktop-0.png",
+      "sha256": "2630dc211ee71698482748744b34cd58e92aa1621af815c0f9d69f27ddfb3360",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": true,
+            "box": {
+              "x": 522.71875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 594.71875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 694.71875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 793.71875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": true,
+            "box": {
+              "x": 882.71875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Change persona, currently Student",
+            "disabled": false,
+            "box": {
+              "x": 727,
+              "y": 127,
+              "width": 66,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Language English▾",
+            "disabled": false,
+            "box": {
+              "x": 904.96875,
+              "y": 125,
+              "width": 119.03125,
+              "height": 48
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "One-time code",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 287.3125,
+              "width": 322,
+              "height": 58
+            }
+          },
+          {
+            "role": "button",
+            "name": "Set Up My Profile",
+            "disabled": false,
+            "box": {
+              "x": 564,
+              "y": 395.3125,
+              "width": 225.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Skip for Now",
+            "disabled": false,
+            "box": {
+              "x": 798.5,
+              "y": 395.3125,
+              "width": 225.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your account begins with verified access.",
+            "box": {
+              "x": 44,
+              "y": 759.125,
+              "width": 412,
+              "height": 92.375
+            }
+          },
+          {
+            "text": "Verify your new account.",
+            "box": {
+              "x": 564,
+              "y": 203,
+              "width": 460,
+              "height": 37.390625
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile SECURE ACCESS NyayOne LEGAL, ON THE RECORD Your account begins with verified access. Successful verification signs you in. Profile completion is recommended, not forced. Passwordless Private by design Built for law students LEGAL, ON THE RECORD Joining as Student Change Language English ▾ CREATE ACCOUNT Verify your new account. One code to +91 ••••• ••340 confirms this account is yours. One-time code Code accepted. Account created Set Up My Profile Skip for Now Skipping never bypasses guardian, verified-email, or other security gates. Those stay required where they apply. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s10a",
+      "viewport": "desktop",
+      "file": "s10a-desktop-0.png",
+      "sha256": "b646d65054323e702636797b50bd7087ad03f6e12c34696afa2951cac566db82",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "First Name",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 243.5,
+              "width": 406.46875,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Middle Name (Optional)",
+            "disabled": false,
+            "box": {
+              "x": 450.46875,
+              "y": 243.5,
+              "width": 406.484375,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Last Name",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 321.5,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "Preferred Language",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 409.5,
+              "width": 406.46875,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "City",
+            "disabled": false,
+            "box": {
+              "x": 450.46875,
+              "y": 409.5,
+              "width": 406.484375,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 468.5,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Save & Exit",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 468.5,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "About you.",
+            "box": {
+              "x": 34,
+              "y": 144.75,
+              "width": 822.953125,
+              "height": 36
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN PROFILE · STEP 1 OF 3 About you. First Name Middle Name (Optional) Last Name Preferred Language English हिन्दी ಕನ್ನಡ City Continue Save & Exit WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s10b",
+      "viewport": "desktop",
+      "file": "s10b-desktop-0.png",
+      "sha256": "578058c4d6e7dcc1b6da795f656f9fb4b866e863d2d73ad60b67dcd6a01ca0a4",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "link",
+            "name": "Enrolment Number",
+            "disabled": false,
+            "box": {
+              "x": 199,
+              "y": 170,
+              "width": 135,
+              "height": 50.140625
+            }
+          },
+          {
+            "role": "link",
+            "name": "Year of Study",
+            "disabled": false,
+            "box": {
+              "x": 341,
+              "y": 170,
+              "width": 101,
+              "height": 50.140625
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "College / University",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 257.140625,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "combobox",
+            "name": "Year of Study",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 343.140625,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "College Enrolment Number",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 452.140625,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mark Fields Corrected (Demo)",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 555.234375,
+              "width": 822.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 616.234375,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Back",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 616.234375,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your academic record.",
+            "box": {
+              "x": 34,
+              "y": 124,
+              "width": 822.953125,
+              "height": 36
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN PROFILE · STEP 2 OF 3 Your academic record. 2 fields need attention: Enrolment Number, Year of Study. Continue is blocked until they are fixed. College / University National Law School of India University (NLSIU) NALSAR University of Law NLU Delhi Year of Study Select year 4th Pick your current year. College Enrolment Number Format looks incomplete. Expected state / roll / year. Example: KA/1234/2023. Never public; used for institutional verification only. Mark Fields Corrected (Demo) Continue Back WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s11",
+      "viewport": "desktop",
+      "file": "s11-desktop-0.png",
+      "sha256": "570fe3c7d4f919310bae84f9ba0026a68963b28dc8395b947e61469b6f4cef66",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Constitutional",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 275.421875,
+              "width": 125,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration",
+            "disabled": false,
+            "box": {
+              "x": 167,
+              "y": 275.421875,
+              "width": 103,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Criminal",
+            "disabled": false,
+            "box": {
+              "x": 278,
+              "y": 275.421875,
+              "width": 86,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Corporate",
+            "disabled": false,
+            "box": {
+              "x": 372,
+              "y": 275.421875,
+              "width": 97,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Tech & Privacy",
+            "disabled": false,
+            "box": {
+              "x": 477,
+              "y": 275.421875,
+              "width": 129,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 359.421875,
+              "width": 104,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court",
+            "disabled": false,
+            "box": {
+              "x": 146,
+              "y": 359.421875,
+              "width": 104,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": false,
+            "box": {
+              "x": 258,
+              "y": 359.421875,
+              "width": 92,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Judiciary Prep",
+            "disabled": false,
+            "box": {
+              "x": 358,
+              "y": 359.421875,
+              "width": 124,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 416.421875,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Back",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 416.421875,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "What are you here for?",
+            "box": {
+              "x": 34,
+              "y": 144.75,
+              "width": 822.953125,
+              "height": 36
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN PROFILE · STEP 3 OF 3 What are you here for? Pick any. These tune your matches and are easy to change later. Practice Interests Constitutional Arbitration Criminal Corporate Tech & Privacy Goals This Year Internships Moot Court Research Judiciary Prep Finish Back WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s12",
+      "viewport": "desktop",
+      "file": "s12-desktop-0.png",
+      "sha256": "a81756d2ad0e2c1701ae24f69f952e84c282e9f156d0c8aa47d8b6716b91e965",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Go to Dashboard",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 430.875,
+              "width": 235.5,
+              "height": 54
+            }
+          },
+          {
+            "role": "button",
+            "name": "Review Profile",
+            "disabled": false,
+            "box": {
+              "x": 278.5,
+              "y": 430.875,
+              "width": 235.5,
+              "height": 54
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your NyayOne profile is ready",
+            "box": {
+              "x": 34,
+              "y": 279.1875,
+              "width": 822.953125,
+              "height": 44
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN PROFILE DETAILS COMPLETE Your NyayOne profile is ready Your academic and interest preferences are saved. You can review or update them from Profile at any time. Go to Dashboard Review Profile Email Verification Pending WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s13",
+      "viewport": "desktop",
+      "file": "s13-desktop-0.png",
+      "sha256": "abe63be5e11314ff32e33040e755ac6ca7137f1ccc393960250d8816bdf309b9",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 733.953125,
+              "y": 209.78125,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resume Setup",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 285.78125,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Not Now",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 285.78125,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Pick up where you left off.",
+            "box": {
+              "x": 34,
+              "y": 111.890625,
+              "width": 822.953125,
+              "height": 41
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Pick up where you left off. 67% Complete Your Profile Interests remaining · about 1 minute. Finish Resume Setup Not Now Saved Personal · Academic Remaining Interests (step 3) WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s14",
+      "viewport": "desktop",
+      "file": "s14-desktop-0.png",
+      "sha256": "36e47c5cd83b02b4394cae9d7f6132486c076b8115264f02a0cb761a90de7bb6",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 733.953125,
+              "y": 242.65625,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships 3 new matches for arbitration in Bengaluru Preview only",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 318.65625,
+              "width": 406.46875,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court Memorial workspace · draft due Mon Preview only",
+            "disabled": true,
+            "box": {
+              "x": 450.46875,
+              "y": 318.65625,
+              "width": 406.484375,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research Saved thread: anticipatory bail standard Preview only",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 425.984375,
+              "width": 406.46875,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only",
+            "disabled": true,
+            "box": {
+              "x": 450.46875,
+              "y": 425.984375,
+              "width": 406.484375,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify Now",
+            "disabled": false,
+            "box": {
+              "x": 709.953125,
+              "y": 546.3125,
+              "width": 134,
+              "height": 44
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your legal journey, in one place.",
+            "box": {
+              "x": 34,
+              "y": 115,
+              "width": 822.953125,
+              "height": 35.1875
+            }
+          },
+          {
+            "text": "Internships",
+            "box": {
+              "x": 48,
+              "y": 332.65625,
+              "width": 378.46875,
+              "height": 24
+            }
+          },
+          {
+            "text": "Moot Court",
+            "box": {
+              "x": 464.46875,
+              "y": 332.65625,
+              "width": 378.484375,
+              "height": 24
+            }
+          },
+          {
+            "text": "Research",
+            "box": {
+              "x": 48,
+              "y": 439.984375,
+              "width": 378.46875,
+              "height": 24
+            }
+          },
+          {
+            "text": "Mentors",
+            "box": {
+              "x": 464.46875,
+              "y": 439.984375,
+              "width": 378.484375,
+              "height": 24
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN SATURDAY, 16 AUGUST · S-07 HOME Your legal journey, in one place. Continue your law-school record: internships, moots, research and mentors. 67% Complete Your Profile Interests remaining · about 1 minute. Finish Internships 3 new matches for arbitration in Bengaluru Preview only Moot Court Memorial workspace · draft due Mon Preview only Research Saved thread: anticipatory bail standard Preview only Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only Institutional email not verified yet, so some listings stay locked. Verify Now WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s14p",
+      "viewport": "desktop",
+      "file": "s14p-desktop-0.png",
+      "sha256": "99831891921a2d593860230236b049f2e147e093841c5aa5be2980b4ef3d466e",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Internships 3 new matches for arbitration in Bengaluru Preview only",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 223.65625,
+              "width": 406.46875,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Moot Court Memorial workspace · draft due Mon Preview only",
+            "disabled": true,
+            "box": {
+              "x": 450.46875,
+              "y": 223.65625,
+              "width": 406.484375,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research Saved thread: anticipatory bail standard Preview only",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 330.984375,
+              "width": 406.46875,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only",
+            "disabled": true,
+            "box": {
+              "x": 450.46875,
+              "y": 330.984375,
+              "width": 406.484375,
+              "height": 97.328125
+            }
+          },
+          {
+            "role": "button",
+            "name": "Verify Now",
+            "disabled": false,
+            "box": {
+              "x": 709.953125,
+              "y": 451.3125,
+              "width": 134,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Close",
+            "disabled": false,
+            "box": {
+              "x": 918,
+              "y": 144,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Complete Profile",
+            "disabled": false,
+            "box": {
+              "x": 494,
+              "y": 333.859375,
+              "width": 221.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Maybe Later",
+            "disabled": false,
+            "box": {
+              "x": 724.5,
+              "y": 333.859375,
+              "width": 221.5,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Your legal journey, in one place.",
+            "box": {
+              "x": 34,
+              "y": 115,
+              "width": 822.953125,
+              "height": 35.1875
+            }
+          },
+          {
+            "text": "Internships",
+            "box": {
+              "x": 48,
+              "y": 237.65625,
+              "width": 378.46875,
+              "height": 24
+            }
+          },
+          {
+            "text": "Moot Court",
+            "box": {
+              "x": 464.46875,
+              "y": 237.65625,
+              "width": 378.484375,
+              "height": 24
+            }
+          },
+          {
+            "text": "Research",
+            "box": {
+              "x": 48,
+              "y": 344.984375,
+              "width": 378.46875,
+              "height": 24
+            }
+          },
+          {
+            "text": "Mentors",
+            "box": {
+              "x": 464.46875,
+              "y": 344.984375,
+              "width": 378.484375,
+              "height": 24
+            }
+          },
+          {
+            "text": "Make NyayOne work better for you",
+            "box": {
+              "x": 494,
+              "y": 181,
+              "width": 452,
+              "height": 29.6875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN SATURDAY, 16 AUGUST · S-07 HOME Your legal journey, in one place. Continue your law-school record: internships, moots, research and mentors. Internships 3 new matches for arbitration in Bengaluru Preview only Moot Court Memorial workspace · draft due Mon Preview only Research Saved thread: anticipatory bail standard Preview only Mentors Adv. Meera Krishnan · Wed 6:30 PM Preview only Institutional email not verified yet, so some listings stay locked. Verify Now WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified. PROFILE · 67% COMPLETE · S-14 Make NyayOne work better for you Add your academic background and interests for more relevant internships, learning and research suggestions. You can do this now or return from Profile at any time. Complete Profile Maybe Later",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s15",
+      "viewport": "desktop",
+      "file": "s15-desktop-0.png",
+      "sha256": "ba4cf24e7538946e92fae1ab90202b1f82d8beccff816d70a09e5c3741a15550",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Institutional Email",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 217.78125,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Check Verification Status",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 381.28125,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Link",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 381.28125,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Verify your institutional email.",
+            "box": {
+              "x": 34,
+              "y": 111.890625,
+              "width": 822.953125,
+              "height": 41
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Verify your institutional email. Institutional Email Verification Pending We sent a confirmation link to your NLU inbox. Email sign-in stays unavailable until ownership is confirmed. This is what keeps “Verified Email” honest. Check Verification Status Resend Link Unrecognised college domain? WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s16",
+      "viewport": "desktop",
+      "file": "s16-desktop-0.png",
+      "sha256": "c8c66d79a1d781e92c2c0c373d24cffc6d5a7cecfb8411dcf73849e47cfa63b4",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Guardian’s Name",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 272.625,
+              "width": 822.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "textbox",
+            "name": "Guardian’s Mobile",
+            "disabled": false,
+            "box": {
+              "x": 116,
+              "y": 358.625,
+              "width": 740.953125,
+              "height": 46
+            }
+          },
+          {
+            "role": "button",
+            "name": "Resend Consent Request",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 475.71875,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Continue with Limited Access",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 475.71875,
+              "width": 406.984375,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "A guardian’s consent is needed first.",
+            "box": {
+              "x": 34,
+              "y": 111.890625,
+              "width": 822.953125,
+              "height": 41
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN A guardian’s consent is needed first. Because you’re under 18, NyayOne asks a guardian to approve your account before your profile goes live. Nothing is shared until then. Guardian’s Name Guardian’s Mobile +91 They’ll get a consent request by SMS with a simple approval link. Consent Requested · Waiting Resend Consent Request Continue with Limited Access Limited access keeps community and sharing off until consent is recorded. Completing your profile later does not skip this step. WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    },
+    {
+      "view": "s17",
+      "viewport": "desktop",
+      "file": "s17-desktop-0.png",
+      "sha256": "e8b5dd3ee05c40270ea16bb44b8e04ec5acfd8fc926038b66664d6a558758533",
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "Home",
+            "disabled": false,
+            "box": {
+              "x": 557.671875,
+              "y": 8,
+              "width": 46,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Research",
+            "disabled": true,
+            "box": {
+              "x": 629.671875,
+              "y": 8,
+              "width": 74,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Calendar",
+            "disabled": true,
+            "box": {
+              "x": 729.671875,
+              "y": 8,
+              "width": 73,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Careers",
+            "disabled": true,
+            "box": {
+              "x": 828.671875,
+              "y": 8,
+              "width": 63,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Profile",
+            "disabled": false,
+            "box": {
+              "x": 917.671875,
+              "y": 8,
+              "width": 54,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Your Profile · Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1382,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Edit Profile",
+            "disabled": false,
+            "box": {
+              "x": 812.953125,
+              "y": 93,
+              "width": 44,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Finish",
+            "disabled": false,
+            "box": {
+              "x": 733.953125,
+              "y": 212,
+              "width": 108,
+              "height": 44
+            }
+          },
+          {
+            "role": "button",
+            "name": "Privacy Centre",
+            "disabled": false,
+            "box": {
+              "x": 669.953125,
+              "y": 511,
+              "width": 172,
+              "height": 44
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Aditi Nair",
+            "box": {
+              "x": 102,
+              "y": 89.90625,
+              "width": 203,
+              "height": 30.796875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Aditi Nair NLSIU · 4th year · B.A. LL.B. (Hons.) Email Verification Pending Profile 67% 67% Complete Your Profile Interests remaining · about 1 minute. Finish Mobile +91 ••••• ••340 Institutional Email aditi.nair@nls.ac.in City Bengaluru Interests Constitutional · Arbitration · Research Enrolment KA/1234/2023 · private Download My Data · Delete Account DPDP rights, self-serve. Deletion asks for OTP confirmation. Privacy Centre WHY COMPLETE YOUR PROFILE? Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year. PRIVACY Every field is private by default. Gold appears only when something is verified.",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      }
+    }
+  ]
+}
