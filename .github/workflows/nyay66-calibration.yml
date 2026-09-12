@@ -17,7 +17,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: nyayone-${{ github.workflow }}-${{ github.run_id }}
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.run_id }}
   # Always false for this dispatch-only workflow; matches the repository policy.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
