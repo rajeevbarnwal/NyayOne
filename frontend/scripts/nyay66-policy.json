@@ -4,7 +4,7 @@
   "manifestSha256": "0cc054bf00bb22298cabfaa1a1cacf7f696ebedbb0531457b9dbd6c3d243f799",
   "ownerToleranceApproval": "NYAY-66:15382",
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
-  "integrityApproval": {"pr": 37, "commentId": 5647824341, "bundleSha256": "60324c13bc1749af1dd0fc69781f6ef9066ae5b26df8c01dd6ef38333109fba8"},
+  "integrityApproval": {"pr": 37, "commentId": 5647862213, "bundleSha256": "823632e4e1e9dd9787407965bef3e66c2b03e924a35df15607ef85f92d0e9527"},
   "enforced": [],
   "exceptions": []
 }
