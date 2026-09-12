@@ -937,6 +937,7 @@ CANONICAL_WORKFLOW_FILES = REQUIRED_WORKFLOW_FILES | {
     "nyay13-independent-qa-observe.yml",
     "nyay42-optimization-observe.yml",
     "nyay66-conformance.yml",
+    "nyay66-calibration.yml",
 }
 NYAY4_QUARANTINED_ASSERTION_ID = (
     "CONTRACT-COOKIE-ORIGIN-RELOAD-SYMMETRY"
@@ -4124,6 +4125,12 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 
 
 def check_workflow(path: Path) -> list[str]:
+    if path.name == "nyay66-calibration.yml":
+        # Owner-approved manual-only artifact generator; no required context.
+        expected = "172371c662b9c6271bfeeae6cacfd30b3ac5c1424075109106fb3adbac83e846"
+        return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
+            f"{path}: NYAY-66 manual calibration differs from its artifact-only contract"
+        ]
     if path.name == "nyay66-conformance.yml":
         # Ordinary progressive conformance job; no protected context is added.
         # Owner tolerance and QA workflow approval: NYAY-66 comment 15382.
@@ -4946,7 +4953,7 @@ def main() -> int:
     )
     required_names: list[tuple[Path, str]] = []
     for path in workflow_paths:
-        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml", "nyay42-optimization-observe.yml", "nyay66-conformance.yml"}:
+        if path.name in {NYAY4_QUARANTINE_WORKFLOW_FILE, "nyay13-independent-qa-observe.yml", "nyay42-optimization-observe.yml", "nyay66-conformance.yml", "nyay66-calibration.yml"}:
             continue
         text = path.read_text(encoding="utf-8")
         match = re.search(r"^  required:\n    name:\s*([^\s#]+)", text, re.MULTILINE)
