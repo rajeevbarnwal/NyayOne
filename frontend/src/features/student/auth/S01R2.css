@@ -1,0 +1,51 @@
+/* Approved R2 S-01 only. No shared tokens or other screen styles change. */
+.s01-r2 {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #F4F2FA 0%, #EFEDF6 46%, #E8E5F3 100%);
+  color: #14161A;
+  font: 14px/normal 'Public Sans', system-ui, sans-serif;
+  font-synthesis: weight;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+}
+.s01-r2__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+  padding: 32px 24px;
+}
+.s01-r2__lockup { display: inline-block; height: 52px; aspect-ratio: 300 / 72; }
+.s01-r2__lockup svg { width: 100%; height: 100%; }
+.s01-r2__status { font-size: 15px; color: #3E4254; }
+.s01-r2__bar { width: 132px; height: 4px; border-radius: 3px; background: #E4E1EF; overflow: hidden; position: relative; }
+.s01-r2__bar i { position: absolute; top: 0; bottom: 0; width: 42%; border-radius: 3px; background: #2E3A8C; }
+.s01-r2__tile { display: inline-grid; place-items: center; border: 1.5px solid; border-radius: 18px; flex: none; width: 60px; height: 60px; }
+.s01-r2__tile svg { width: 28px; height: 28px; }
+.s01-r2__tile--error { color: #9A2B21; background: #9A2B2114; border-color: #9A2B2133; }
+.s01-r2__tile--success { color: #1E6B4A; background: #1E6B4A14; border-color: #1E6B4A33; }
+.s01-r2 h1 { font-family: 'NyayOne Revision L Heading', Aptos, Calibri, Carlito, system-ui, sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -.01em; line-height: 1.1; margin: 0; }
+.s01-r2 p { margin: 9px 0 0; font-size: 14.5px; line-height: 1.6; color: #3E4254; max-width: 330px; }
+.s01-r2 button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; min-width: 190px; padding: 0 18px; border: 1.5px solid #2E3A8C; background: #2E3A8C; color: #fff; font-family: inherit; font-size: 14px; font-weight: 700; border-radius: 12px; cursor: pointer; }
+.s01-r2 button .v321-revl-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }
+.s01-r2 button:focus-visible { outline: 2.5px solid #2E3A8C; outline-offset: 2px; border-radius: 6px; }
+@media (min-width: 900px) {
+  .s01-r2__lockup { height: 72px; }
+  .s01-r2__tile { width: 68px; height: 68px; }
+  .s01-r2__tile svg { width: 31px; height: 31px; }
+  .s01-r2 h1 { font-size: 32px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .s01-r2__bar i { animation: s01-r2-slide 1.3s ease-in-out infinite; }
+  @keyframes s01-r2-slide { 0% { left: -42%; } 100% { left: 100%; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s01-r2__bar i { width: 100%; left: 0; opacity: .55; }
+}

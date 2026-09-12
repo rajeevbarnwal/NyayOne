@@ -46,6 +46,7 @@ import { consumeStudentAuthTransitionNotice } from '../lib/studentAuthTransition
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
 import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
+import { S01R2, readR2OnboardingSeen } from './S01R2';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 const OtpScreenThemeContext = createContext<ScreenProps>({});
@@ -305,10 +306,10 @@ function Field({ id, label, value, onChange, type = 'text', inputMode, autoCompl
 
 export function splashDestination(
   phase: StudentSessionPhase,
-  _retiredOnboardingSeen = false,
+  r2OnboardingSeen = false,
 ): string | null {
   if (phase === 'authenticated') return '/s-07';
-  if (phase === 'anonymous') return '/s-02';
+  if (phase === 'anonymous') return r2OnboardingSeen ? '/s-03' : '/s-02';
   return null;
 }
 
@@ -316,26 +317,10 @@ export function V34Splash() {
   const nav = useNavigate();
   const session = useStudentSession();
   useEffect(() => {
-    const destination = splashDestination(session.phase);
+    const destination = splashDestination(session.phase, readR2OnboardingSeen());
     if (destination) nav(destination, { replace: true });
   }, [nav, session.phase]);
-  return (
-    <Screen id="S-01" variant="splash">
-      <div className="v34-splash__hero">
-        <span className="v34-jaali v34-jaali--one"/><span className="v34-jaali v34-jaali--two"/>
-        <div className="v34-splash__ring"><i/><i/><i/><img src="/brand/nyayone-mark.svg" alt="" aria-hidden="true" draggable="false"/></div>
-        <div className="v34-splash__lockup"><h1 id="S-01-title">NyayOne</h1><p>For students of law in India. Sources first, always.</p></div>
-        <div className="v34-splash__strip"><span>INTERNSHIPS</span><span>MOOTS</span><span>DIGESTS</span><span>RESEARCH</span></div>
-      </div>
-      <div className="v34-splash__foot">
-        {session.phase === 'unavailable' ? (
-          <><span role="alert">Session check unavailable.</span><button type="button" className="v34-hit" onClick={() => { void session.refresh(); }}>Retry</button></>
-        ) : (
-          <><div role="progressbar" aria-label="Checking your session" aria-valuemin={0} aria-valuemax={100} aria-valuenow={62}><i/></div><span>Checking your session</span></>
-        )}
-      </div>
-    </Screen>
-  );
+  return <S01R2 phase={session.phase} retry={() => { void session.refresh(); }}/>;
 }
 
 const ONBOARDING = [
