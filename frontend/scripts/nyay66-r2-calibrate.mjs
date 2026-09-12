@@ -8,6 +8,7 @@ import {chromium} from 'playwright';
 import {R2_SOURCE_PATH,R2_SOURCE_SHA256,R2_STATES,R2_VIEWPORTS,validateR2Manifest,verifyR2PNG} from './lib/nyay66-r2.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {digest} from './lib/nyay66-enforcement.mjs';
+import {removeR2ReviewerClipping} from './lib/nyay66-r2-capture.mjs';
 const require=createRequire(import.meta.url),root=resolve('..'),out=resolve(process.argv[2]||'artifacts/nyay66-r2-calibration');
 const source=await readFile(resolve(root,R2_SOURCE_PATH));
 if(digest(source)!==R2_SOURCE_SHA256)throw Error('R2_SOURCE_BYTES_MISMATCH');
@@ -35,10 +36,11 @@ try{
           const actual=Object.entries(window.SCREENS).flatMap(([view,entry])=>entry.states.map(([s])=>`${view}-${s}`));
           if(JSON.stringify(actual)!==JSON.stringify(inventory))throw Error('R2_REGISTRY_DRIFT');
           window.S.screen=state.view;window.S.st[state.view]=state.state;window.S.dev=vp.preset;window.build();
-          // Remove only reviewer zoom/clipping; leave the .vp design untouched.
+          // Remove reviewer zoom; preserve source viewport dimensions/scrolling.
           const viewport=document.querySelector('.vp');
           for(let node=viewport.parentElement;node&&node!==document.body;node=node.parentElement){node.style.transform='none';node.style.overflow='visible';node.style.width=vp.width+'px';node.style.height='auto';}
         },{state,vp,inventory:R2_STATES.map(x=>x.id)});
+        await page.evaluate(removeR2ReviewerClipping);
         await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(x=>x.decode()));await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
         if(errors.length)throw Error(errors.join(','));
         const bytes=await page.locator('.vp').screenshot({animations:'disabled'});samples.push(digest(bytes));
