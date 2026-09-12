@@ -30,10 +30,11 @@ capture is not evidence of live implementation parity. No screen is newly
 enforced by this PR; `enforced` and `exceptions` remain unchanged.
 
 The import command stages a candidate cache; it grants no approval. The initial
-bundle was owner-approved in PR #39 comment `5648778039`, and that approval is
-recorded in `frontend/scripts/nyay66-policy.json`; it is not pending or empty.
-The archive-verification correction changes the bundle and requires a fresh
-top-level `NYAY66-INTEGRITY <exact-bundle-hash>` owner comment. The existing
+bundle was owner-approved in PR #39 comment `5648778039`. The archive-verification
+correction is owner-approved in comment `5649032040`; its current binding is
+recorded in `frontend/scripts/nyay66-policy.json`, not pending or empty.
+Any subsequent bundle change requires a fresh top-level
+`NYAY66-INTEGRITY <exact-bundle-hash>` owner comment. The existing
 trusted verifier must read back a matching comment before CI may use any changed
 bundle; the earlier approval cannot authorize changed importer code.
 The new bundle covers loader/evaluator code, all PNGs, manifest, provenance and
