@@ -6,3 +6,5 @@ docs/design/lawschool_reference/option_c_plus/* text eol=lf
 # NYAY-47 owner decision 15207: sealed design-source snapshot, not application source.
 # SHA-256: 338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252
 docs/design/nyayone-option-3.2.1/NYAYONE_OPTION3_2_1_REVL_SOURCE.html -text whitespace=-blank-at-eol
+# NYAY-50:15422 immutable supplied reference artifact; byte hash is authoritative.
+docs/design/nyayone-option-3.2.1/r2/NYAYONE_S01_S02_S06_R2_STANDALONE.html -text whitespace=-blank-at-eol

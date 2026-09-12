@@ -1,0 +1,23 @@
+{
+  "purpose": "REFERENCE_GENERATION_ONLY_NOT_IMPORT_APPROVAL",
+  "sourceHead": "643fb83b7f8316eeca01a020521b97f55856ba08",
+  "reference": "r2",
+  "chromium": "149.0.7827.55",
+  "playwright": "1.61.1",
+  "platform": "linux-x64",
+  "node": "v22.21.1",
+  "fonts": {
+    "Carlito-Bold-latin.woff2": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012",
+    "Carlito-Regular-latin.woff2": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7",
+    "HankenGrotesk-Variable-latin.woff2": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+    "IBMPlexMono-Medium-latin.woff2": "a76f53ca6612e7b3828eec2311098675b7f9849ae4169a8bcef6302aec02a6c0",
+    "IBMPlexMono-Regular-latin.woff2": "c36f509c0a8f9f85f29cb44bc8701d8a9e0b14c499e77a884f789ead7093a7ac",
+    "IBMPlexMono-SemiBold-latin.woff2": "ad4580d8cb4b5f627c2d18457656732f7f7b070f7837fbc380e08054157e6f6c",
+    "Newsreader-Variable-latin.woff2": "01817351be3edfc1714fe6d60ddea6a22a169a5ebd033b50c7f9495e5d9c386a",
+    "PublicSans-latin.woff2": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d",
+    "SpaceGrotesk-latin.woff2": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557",
+    "Spectral-Light-latin.woff2": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9",
+    "Spectral-Semibold-latin.woff2": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a",
+    "SplineSansMono-latin.woff2": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+  }
+}

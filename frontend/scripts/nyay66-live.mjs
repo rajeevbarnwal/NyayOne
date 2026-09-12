@@ -9,6 +9,7 @@ import {PNG} from 'pngjs';
 import {coverage,SOURCE_SHA256,VIEWPORTS} from './lib/nyay66-conformance.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
+import {loadR2,R2_SOURCE_SHA256,R2_VIEWPORTS,R2_LIVE_STATES,pendingStateRow,verifyR2PNG,mockR2Application} from './lib/nyay66-r2.mjs';
 import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression,LIMITS,canonical} from './lib/nyay66-enforcement.mjs';
 const require=createRequire(import.meta.url),root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const config=JSON.parse(await readFile(resolve(root,'frontend/scripts/nyay66-policy.json')));
@@ -18,6 +19,8 @@ const manifestBytes=await readFile(resolve(cache,'manifest.json'));
 if(digest(manifestBytes)!==config.manifestSha256)throw Error('REFERENCE_MANIFEST_MISMATCH');
 const manifest=JSON.parse(manifestBytes);
 if(manifest.sourceSha256!==SOURCE_SHA256)throw Error('REFERENCE_SOURCE_MISMATCH');
+const r2=await loadR2(root,config.r2);
+const coverageOptions={r2:!!r2};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
 const repository=resolve(process.env.NYAY66_REPO||root);
@@ -26,13 +29,13 @@ if(process.env.NYAY66_BASE){
   let previous;
   try{previous=JSON.parse(execFileSync('git',['show',`${process.env.NYAY66_BASE}:frontend/scripts/nyay66-policy.json`],{cwd:repository,encoding:'utf8',stdio:['ignore','pipe','pipe']}));}
   catch(error){if(execFileSync('git',['ls-tree','--name-only',process.env.NYAY66_BASE,'frontend/scripts/nyay66-policy.json'],{cwd:repository,encoding:'utf8'}).trim())throw error;previous={enforced:[]};}
-  validateProgression(previous.enforced,config.enforced);
+  validateProgression(previous.enforced,config.enforced,coverageOptions);
 }else throw Error('COMPARISON_BASE_REQUIRED');
 if(!process.env.NYAY66_AUTHORIZATION)throw Error('INTEGRITY_APPROVAL_REQUIRED');
 const authorization=JSON.parse(await readFile(process.env.NYAY66_AUTHORIZATION));
 if(authorization.head!==head||authorization.base!==process.env.NYAY66_BASE||authorization.bundleSha256!==config.integrityApproval?.bundleSha256)throw Error('AUTHORIZATION_HEAD_MISMATCH');
 const comments=authorization.comments;
-if(config.exceptions.some(entry=>!approveException(entry,comments)))throw Error('OWNER_EXCEPTION_APPROVAL_MISSING');
+if(config.exceptions.some(entry=>!approveException(entry,comments,coverageOptions)))throw Error('OWNER_EXCEPTION_APPROVAL_MISSING');
 const fonts={};
 for(const name of (await readdir(resolve(root,'frontend/public/fonts'))).filter(x=>x.endsWith('.woff2')).sort())fonts[name]=digest(await readFile(resolve(root,'frontend/public/fonts',name)));
 const dist=resolve(process.env.NYAY66_DIST||resolve(root,'frontend/dist'));
@@ -50,6 +53,7 @@ await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin=`http://127.0.0.1:${server.address().port}`;
 let browser;
 const report={head,generatedUTC:new Date().toISOString(),referenceCache:config.cache,referenceManifestSha256:config.manifestSha256,referenceGenerationExecuted:false,rows:[],enforced:config.enforced,approvedToleranceRecord:'NYAY-66:15382'};
+if(r2)report.r2Reference={cache:config.r2.cache,manifestSha256:config.r2.manifestSha256,sourceSha256:R2_SOURCE_SHA256,approval:r2.manifest.approval};
 const crop=(png,box)=>{
   const x=Math.max(0,Math.floor(box.x)),y=Math.max(0,Math.floor(box.y));
   const width=Math.min(png.width-x,Math.ceil(box.width)),height=Math.min(png.height-y,Math.ceil(box.height));
@@ -59,23 +63,32 @@ const crop=(png,box)=>{
 try{
   browser=await chromium.launch();
   enforcePins(manifest,{chromium:browser.version(),playwright:require('playwright/package.json').version,platform:`${process.platform}-${process.arch}`,sourceSha256:digest(await readFile(resolve(root,'docs/design/nyayone-option-3.2.1/NYAYONE_OPTION3_2_1_REVL_SOURCE.html'))),fonts});
-  for(const item of coverage())for(const vp of VIEWPORTS){
+  if(r2)enforcePins(r2.manifest,{chromium:browser.version(),playwright:require('playwright/package.json').version,platform:`${process.platform}-${process.arch}`,sourceSha256:R2_SOURCE_SHA256,fonts});
+  for(const item of coverage('light',coverageOptions))for(const vp of item.source==='r2'?R2_VIEWPORTS:VIEWPORTS){
     if(item.status==='DESIGN-GAP'){report.rows.push({screen:item.screen,viewport:vp.id,theme:'light',verdict:'DESIGN-GAP',executed:false});continue;}
     for(const view of item.views){
-      const id=item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen;
+      const isR2=item.source==='r2';
+      const id=isR2?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen;
+      if(isR2&&!R2_LIVE_STATES.includes(view)){
+        const row=pendingStateRow(item.screen,id,vp.id,config.enforced);
+        row.referenceSha256=r2.manifest.rows.find(x=>x.view===view&&x.viewport===vp.id).sha256;
+        report.rows.push(row);console.log(JSON.stringify(row));continue;
+      }
       const name=`${id}-${vp.id}`;const errors=[];
       const row={screen:item.screen,state:id,viewport:vp.id,theme:'light',executed:false,errors};
       let context;
       try{
-        const reference=manifest.rows.find(x=>x.view===view&&x.viewport===vp.id);
+        const reference=(isR2?r2.manifest:manifest).rows.find(x=>x.view===view&&x.viewport===vp.id);
         if(!reference)throw Error('REFERENCE_MISSING');
-        const referenceBytes=await readFile(resolve(cache,reference.file));
+        const referenceBytes=await readFile(resolve(isR2?r2.cache:cache,reference.file));
         if(digest(referenceBytes)!==reference.sha256)throw Error('REFERENCE_BYTES_MISMATCH');
+        if(isR2)verifyR2PNG(reference,referenceBytes);
         context=await browser.newContext({viewport:{width:vp.width,height:vp.height},deviceScaleFactor:1,locale:'en-IN',timezoneId:'Asia/Kolkata',colorScheme:'light',reducedMotion:'reduce',serviceWorkers:'block'});
         const page=await context.newPage();page.setDefaultTimeout(20000);
         page.on('pageerror',()=>errors.push('PAGE_ERROR'));
         page.on('console',msg=>{if(msg.type()==='error')errors.push('CONSOLE_ERROR');});
-        await mockApplication(page,id,origin,errors);
+        if(isR2)await mockR2Application(page,view,origin,errors);
+        else await mockApplication(page,id,origin,errors);
         await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode()));await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
         const surface=await page.evaluate(inspectSurface,{clocks:view==='s05'});
         const bytes=await page.screenshot({animations:'disabled'});

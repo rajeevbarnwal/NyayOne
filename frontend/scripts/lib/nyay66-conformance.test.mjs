@@ -1,11 +1,79 @@
 import { describe, expect, it } from 'vitest';
 import { PNG } from 'pngjs';
+import {createHash} from 'node:crypto';
+import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import * as r2 from './nyay66-r2.mjs';
 import {
   SOURCE_SHA256, VIEWS, VIEWPORTS, coverage, comparePixels,
   validateCalibration, classifyObservation,
 } from './nyay66-conformance.mjs';
 
 const image = () => new PNG({ width: 2, height: 2, fill: true });
+describe('R2 additive reference coverage', () => {
+  it('covers exactly 14 approved light states and 42 reference panels', () => {
+    expect(r2.R2_STATES).toHaveLength(14);
+    expect(r2.R2_VIEWPORTS).toHaveLength(3);
+    expect(coverage('light', {r2:true}).filter(x=>x.source==='r2').map(x=>[x.screen,x.views.length])).toEqual([['S-01',3],['S-02',2],['S-06',9]]);
+    expect(coverage('dark', {r2:true}).every(x=>x.status==='DESIGN-GAP')).toBe(true);
+    expect(coverage().filter(x=>x.status==='DESIGN-GAP')).toHaveLength(3);
+  });
+  it('never claims unimplemented state fixtures were executed or conformant', () => {
+    expect(r2.pendingStateRow('S-06','s06-success','desktop',[])).toMatchObject({executed:false,verdict:'NOT-YET-MEASURED',blocking:false});
+    expect(r2.pendingStateRow('S-06','s06-success','desktop',['S-06']).blocking).toBe(true);
+  });
+  const manifest=()=>({schema:1,sourceSha256:r2.R2_SOURCE_SHA256,approval:'NYAY-50:15422',theme:'light',chromium:'149.0.7827.55',playwright:'1.61.1',platform:'linux-x64',fonts:{},rows:r2.R2_STATES.flatMap(view=>r2.R2_VIEWPORTS.map(v=>({view:view.id,viewport:v.id,file:`${view.id}-${v.id}-0.png`,sha256:'a'.repeat(64),dimensions:[v.width,v.height],surface:{controls:[],headings:[],text:'reference',masks:[],dimensions:[v.width,v.height]}})))});
+  it('accepts only complete independently pinned R2 manifest',()=>expect(r2.validateR2Manifest(manifest())).toBe(true));
+  for(const [name,mutate] of [
+    ['source',m=>m.sourceSha256='a'.repeat(64)],['approval',m=>m.approval='self'],['dark',m=>m.theme='dark'],
+    ['missing',m=>m.rows.pop()],['duplicate',m=>m.rows[1]=m.rows[0]],['path escape',m=>m.rows[0].file='../outside.png'],
+    ['hash',m=>m.rows[0].sha256='invalid'],['dimensions',m=>m.rows[0].dimensions=[1,1]],['surface',m=>delete m.rows[0].surface],
+  ]) it(`refuses R2 ${name}`,()=>{const m=manifest();mutate(m);expect(()=>r2.validateR2Manifest(m)).toThrow();});
+  it('rejects PNG replacement on use, including coherent wrong file dimensions',()=>{
+    const bytes=PNG.sync.write(image());
+    expect(()=>r2.verifyR2PNG({sha256:'a'.repeat(64),dimensions:[2,2]},bytes)).toThrow();
+    const sha256=createHash('sha256').update(bytes).digest('hex');
+    expect(()=>r2.verifyR2PNG({sha256,dimensions:[3,2]},bytes)).toThrow('R2_REFERENCE_DIMENSION_MISMATCH');
+  });
+  it('refuses source/cache substitution and verifies every imported PNG, including pending states',async()=>{
+    const root=await mkdtemp(resolve(tmpdir(),'nyay50-loader-test-'));
+    const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+    try{
+      expect(await r2.loadR2(root,null)).toBe(null);
+      for(const cache of ['../outside','..','.','/absolute'])await expect(r2.loadR2(root,{cache,manifestSha256:'a'.repeat(64)})).rejects.toThrow('R2_INVALID_CACHE_BINDING');
+      const source=resolve(root,r2.R2_SOURCE_PATH);await mkdir(dirname(source),{recursive:true});await writeFile(source,'tampered');
+      const config={cache:'test-r2',manifestSha256:'a'.repeat(64)};
+      await expect(r2.loadR2(root,config)).rejects.toThrow('R2_SOURCE_BYTES_MISMATCH');
+      const repository=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+      await writeFile(source,await readFile(resolve(repository,r2.R2_SOURCE_PATH)));
+      const cache=resolve(root,'frontend/test-baselines/nyay66/test-r2');await mkdir(cache,{recursive:true});
+      const m=manifest();
+      const images=new Map(r2.R2_VIEWPORTS.map(v=>[v.id,PNG.sync.write(new PNG({width:v.width,height:v.height,fill:true}))]));
+      for(const row of m.rows){const bytes=images.get(row.viewport);row.sha256=sha(bytes);await writeFile(resolve(cache,row.file),bytes);}
+      const json=JSON.stringify(m);await writeFile(resolve(cache,'manifest.json'),json);
+      await expect(r2.loadR2(root,config)).rejects.toThrow('R2_MANIFEST_BYTES_MISMATCH');config.manifestSha256=sha(json);
+      expect((await r2.loadR2(root,config)).manifest.rows).toHaveLength(42);
+      const pending=m.rows.find(row=>row.view==='s06-success');await writeFile(resolve(cache,pending.file),'changed');
+      await expect(r2.loadR2(root,config)).rejects.toThrow('R2_REFERENCE_BYTES_MISMATCH');
+    }finally{await rm(root,{recursive:true,force:true});}
+  });
+  it('refuses unknown/error/terminal live fixtures instead of manufacturing coverage',async()=>{
+    for(const state of ['s01-error','s01-resolved','s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  });
+  it('blocks cross-origin and unmatched requests in pending splash fixtures',async()=>{
+    let handler;const page={route:async(_,fn)=>{handler=fn;},goto:async()=>{},locator:()=>({waitFor:async()=>{}})};
+    const errors=[];await r2.mockR2Application(page,'s01-checking','http://localhost',errors);
+    let aborted=0,continued=0;
+    const route=url=>({request:()=>({url:()=>url}),abort:()=>{aborted++;},continue:()=>{continued++;}});
+    handler(route('http://outside/api/v1/auth/student/session'));
+    handler(route('http://localhost/api/v1/unexpected'));
+    handler(route('http://localhost/api/v1/auth/student/session'));
+    handler(route('http://localhost/asset.js'));
+    expect(errors).toEqual(['OUTBOUND_REQUEST','UNMATCHED_API']);expect(aborted).toBe(2);expect(continued).toBe(1);
+  });
+});
 const report = () => ({
   sourceSha256: SOURCE_SHA256, head: 'a'.repeat(40), purpose: 'REFERENCE_CALIBRATION_ONLY',
   rows: VIEWS.flatMap(view => VIEWPORTS.map(viewport => ({
