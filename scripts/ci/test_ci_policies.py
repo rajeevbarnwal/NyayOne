@@ -45,7 +45,7 @@ class PolicyOracleTests(unittest.TestCase):
                 altered.write_text(path.read_text().replace(before, after))
                 self.assertTrue(policy.check_workflow(altered))
 
-    def test_nyay66_calibration_workflow_registered_and_mutation_rejected(self) -> None:
+    def test_nyay66_conformance_workflow_registered_and_mutation_rejected(self) -> None:
         policy = load("verify_nyayone_ci")
         path = policy.ROOT / ".github/workflows/nyay66-conformance.yml"
         self.assertIn(path.name, policy.CANONICAL_WORKFLOW_FILES)

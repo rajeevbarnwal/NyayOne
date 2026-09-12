@@ -18,6 +18,33 @@ class CalibrationWorkflowContracts(unittest.TestCase):
         self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
         self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["source_head"]["required"], "true")
 
+    def test_owner_actor_and_rerun_actor_are_both_required(self):
+        condition = self.workflow()["jobs"]["calibrate"]["if"]
+        self.assertEqual(condition, "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' && github.triggering_actor == 'rajeevbarnwal' }}")
+
+    def test_owner_dispatch_and_rerun_actor_matrix(self):
+        # Interpret the workflow's actual conjunction, not a duplicated predicate.
+        condition = self.workflow()["jobs"]["calibrate"]["if"]
+        self.assertTrue(condition.startswith("${{ ") and condition.endswith(" }}"))
+        clauses = []
+        for clause in condition[4:-3].split(" && "):
+            match = re.fullmatch(r"github\.(event_name|ref|actor|triggering_actor) == '([^']+)'", clause)
+            self.assertIsNotNone(match, "unexpected condition grammar")
+            clauses.append(match.groups())
+        for label, actor, triggering_actor, event, ref, expected in (
+            ("owner dispatch", "rajeevbarnwal", "rajeevbarnwal", "workflow_dispatch", "refs/heads/main", True),
+            ("owner rerun", "rajeevbarnwal", "rajeevbarnwal", "workflow_dispatch", "refs/heads/main", True),
+            ("collaborator reruns owner run", "rajeevbarnwal", "collaborator", "workflow_dispatch", "refs/heads/main", False),
+            ("owner reruns collaborator run", "collaborator", "rajeevbarnwal", "workflow_dispatch", "refs/heads/main", False),
+            ("collaborator dispatch", "collaborator", "collaborator", "workflow_dispatch", "refs/heads/main", False),
+            ("missing rerun actor", "rajeevbarnwal", "", "workflow_dispatch", "refs/heads/main", False),
+            ("wrong event", "rajeevbarnwal", "rajeevbarnwal", "push", "refs/heads/main", False),
+            ("wrong ref", "rajeevbarnwal", "rajeevbarnwal", "workflow_dispatch", "refs/heads/other", False),
+        ):
+            with self.subTest(case=label):
+                context = dict(actor=actor, triggering_actor=triggering_actor, event_name=event, ref=ref)
+                self.assertEqual(all(context[key] == value for key, value in clauses), expected)
+
     def test_read_only_token_and_no_persistence(self):
         workflow = self.workflow()
         self.assertEqual(workflow["permissions"], {})

@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   calibrate:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' && github.triggering_actor == 'rajeevbarnwal' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
