@@ -1,0 +1,60 @@
+// Additive owner-approved R2 continuation. Never replaces the Revision L oracle.
+import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {PNG} from 'pngjs';
+import {mockApplication} from './nyay66-fixtures.mjs';
+export const R2_SOURCE_SHA256='3bfdbaac7536d8ceeae660c57286b58f1b03cdc6a53545c458b3bc7636198a07';
+export const R2_SOURCE_PATH='docs/design/nyayone-option-3.2.1/r2/NYAYONE_S01_S02_S06_R2_STANDALONE.html';
+export const R2_STATES=Object.entries({s01:['checking','error','resolved'],s02:['default','focus'],s06:['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']}).flatMap(([view,states])=>states.map(state=>({id:`${view}-${state}`,view,state,screen:`S-${view.slice(1)}`})));
+export const R2_VIEWPORTS=[{id:'mobile390',width:390,height:844,preset:'m390'},{id:'mobile360',width:360,height:800,preset:'m360'},{id:'desktop',width:1440,height:1024,preset:'d1440'}];
+// Additional state fixtures are delivered with their screen PR, not fabricated
+// by rewriting the live DOM to look like the prototype.
+export const R2_LIVE_STATES=['s01-checking','s02-default','s06-entry'];
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+export async function mockR2Application(page,view,origin,errors){
+  if(!R2_LIVE_STATES.includes(view))throw Error('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  const state=R2_STATES.find(x=>x.id===view);
+  if(view!=='s01-checking')return mockApplication(page,state.screen,origin,errors);
+  await page.route('**/*',route=>{
+    const url=new URL(route.request().url());
+    if(url.origin!==origin){errors.push('OUTBOUND_REQUEST');return route.abort();}
+    // A pending response holds the existing splash. Context disposal cancels it.
+    if(url.pathname==='/api/v1/auth/student/session')return;
+    if(url.pathname.startsWith('/api/v1/')){errors.push('UNMATCHED_API');return route.abort();}
+    return route.continue();
+  });
+  await page.goto(origin+'/s-01');await page.locator('[data-screen="S-01"]').waitFor();
+}
+export function pendingStateRow(screen,state,viewport,enforced){
+  return {screen,state,viewport,theme:'light',source:'r2',executed:false,verdict:'NOT-YET-MEASURED',reason:'LIVE_STATE_FIXTURE_PENDING_SCREEN_PR',blocking:enforced.includes(screen)};
+}
+export function validateR2Manifest(manifest){
+  if(manifest?.schema!==1||manifest.sourceSha256!==R2_SOURCE_SHA256||manifest.approval!=='NYAY-50:15422'||manifest.theme!=='light')throw Error('R2_SOURCE_OR_APPROVAL_MISMATCH');
+  const expected=new Set(R2_STATES.flatMap(s=>R2_VIEWPORTS.map(v=>`${s.id}:${v.id}`)));
+  if(!Array.isArray(manifest.rows)||manifest.rows.length!==expected.size)throw Error('R2_INCOMPLETE_INVENTORY');
+  for(const row of manifest.rows){
+    const vp=R2_VIEWPORTS.find(v=>v.id===row.viewport);
+    if(!expected.delete(`${row.view}:${row.viewport}`)||row.file!==`${row.view}-${row.viewport}-0.png`||!/^[a-f0-9]{64}$/.test(row.sha256)||!vp||JSON.stringify(row.dimensions)!==JSON.stringify([vp.width,vp.height])||!row.surface||!Array.isArray(row.surface.controls)||!Array.isArray(row.surface.headings)||typeof row.surface.text!=='string'||JSON.stringify(row.surface.dimensions)!==JSON.stringify(row.dimensions))throw Error('R2_INVALID_REFERENCE_ROW');
+  }
+  return true;
+}
+export function verifyR2PNG(row,bytes){
+  if(hash(bytes)!==row.sha256)throw Error('R2_REFERENCE_BYTES_MISMATCH');
+  const png=PNG.sync.read(bytes);
+  if(JSON.stringify([png.width,png.height])!==JSON.stringify(row.dimensions))throw Error('R2_REFERENCE_DIMENSION_MISMATCH');
+  return bytes;
+}
+export async function loadR2(root,config){
+  if(!config)return null;
+  if(!/^[a-z0-9][a-z0-9.-]*$/.test(config.cache)||!/^[a-f0-9]{64}$/.test(config.manifestSha256))throw Error('R2_INVALID_CACHE_BINDING');
+  const source=await readFile(resolve(root,R2_SOURCE_PATH));
+  if(hash(source)!==R2_SOURCE_SHA256)throw Error('R2_SOURCE_BYTES_MISMATCH');
+  const cache=resolve(root,'frontend/test-baselines/nyay66',config.cache);
+  const bytes=await readFile(resolve(cache,'manifest.json'));
+  if(hash(bytes)!==config.manifestSha256)throw Error('R2_MANIFEST_BYTES_MISMATCH');
+  const manifest=JSON.parse(bytes);validateR2Manifest(manifest);
+  // Verify all states, even ones whose live fixture has not been implemented.
+  for(const row of manifest.rows)verifyR2PNG(row,await readFile(resolve(cache,row.file)));
+  return {cache,manifest};
+}

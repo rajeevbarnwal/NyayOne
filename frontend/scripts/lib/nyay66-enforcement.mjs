@@ -8,8 +8,8 @@ export function enforcePins(expected,actual){
   for(const key of ['chromium','playwright','platform','sourceSha256','fonts'])if(!expected[key]||canonical(expected[key])!==canonical(actual[key]))throw Error(`PIN_MISMATCH:${key}`);
   return true;
 }
-export function validateProgression(before,after){
-  const allowed=coverage().filter(x=>x.status!=='DESIGN-GAP').map(x=>x.screen);
+export function validateProgression(before,after,options){
+  const allowed=coverage('light',options).filter(x=>x.status!=='DESIGN-GAP').map(x=>x.screen);
   if(!Array.isArray(before)||!Array.isArray(after)||new Set(after).size!==after.length||before.some(x=>!after.includes(x))||after.some(x=>!allowed.includes(x)))throw Error('ENFORCEMENT_REGRESSION');
   return true;
 }
@@ -45,8 +45,10 @@ export function compareStructure(a,b,expectedClocks){
 }
 // PR comments are fetched using GitHub's authenticated read API by the job.
 // No key provisioning or independent signed-receipt mechanism is involved.
-export function approveException(entry,comments){
-  if(!entry||!coverage().some(x=>x.screen===entry.screen&&x.status!=='DESIGN-GAP')||!['mobile390','desktop'].includes(entry.viewport)||entry.theme!=='light'||!['referenceSha256','liveSha256'].every(k=>/^[a-f0-9]{64}$/.test(entry[k]))||!Array.isArray(entry.checks)||!entry.checks.length||entry.checks.some(x=>!['pixels','text','controls','headings','geometry'].includes(x)))return false;
+export function approveException(entry,comments,options){
+  const available=coverage('light',options).find(x=>x.screen===entry?.screen&&x.status!=='DESIGN-GAP');
+  const viewports=available?.source==='r2'?['mobile390','mobile360','desktop']:['mobile390','desktop'];
+  if(!entry||!available||!viewports.includes(entry.viewport)||entry.theme!=='light'||!['referenceSha256','liveSha256'].every(k=>/^[a-f0-9]{64}$/.test(entry[k]))||!Array.isArray(entry.checks)||!entry.checks.length||entry.checks.some(x=>!['pixels','text','controls','headings','geometry'].includes(x)))return false;
   const hash=digest(canonical(entry));
   if(comments===null)return hash;
   return Array.isArray(comments)&&comments.some(comment=>comment.user?.login==='rajeevbarnwal'&&comment.body?.trim()===`NYAY66-EXCEPTION ${hash}`);
