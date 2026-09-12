@@ -9,9 +9,10 @@ import {PNG} from 'pngjs';
 import {coverage,SOURCE_SHA256,VIEWPORTS} from './lib/nyay66-conformance.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
-import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression} from './lib/nyay66-enforcement.mjs';
+import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression,LIMITS,canonical} from './lib/nyay66-enforcement.mjs';
 const require=createRequire(import.meta.url),root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const config=JSON.parse(await readFile(resolve(root,'frontend/scripts/nyay66-policy.json')));
+if(config.ownerToleranceApproval!=='NYAY-66:15382'||canonical(config.tolerances)!==canonical(LIMITS))throw Error('TOLERANCE_APPROVAL_MISMATCH');
 const cache=resolve(root,'frontend/test-baselines/nyay66',config.cache);
 const manifestBytes=await readFile(resolve(cache,'manifest.json'));
 if(digest(manifestBytes)!==config.manifestSha256)throw Error('REFERENCE_MANIFEST_MISMATCH');
@@ -19,18 +20,22 @@ const manifest=JSON.parse(manifestBytes);
 if(manifest.sourceSha256!==SOURCE_SHA256)throw Error('REFERENCE_SOURCE_MISMATCH');
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
-const head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+const repository=resolve(process.env.NYAY66_REPO||root);
+const head=execFileSync('git',['rev-parse','HEAD'],{cwd:repository,encoding:'utf8'}).trim();
 if(process.env.NYAY66_BASE){
   let previous;
-  try{previous=JSON.parse(execFileSync('git',['show',`${process.env.NYAY66_BASE}:frontend/scripts/nyay66-policy.json`],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}));}
-  catch(error){if(execFileSync('git',['ls-tree','--name-only',process.env.NYAY66_BASE,'frontend/scripts/nyay66-policy.json'],{cwd:root,encoding:'utf8'}).trim())throw error;previous={enforced:[]};}
+  try{previous=JSON.parse(execFileSync('git',['show',`${process.env.NYAY66_BASE}:frontend/scripts/nyay66-policy.json`],{cwd:repository,encoding:'utf8',stdio:['ignore','pipe','pipe']}));}
+  catch(error){if(execFileSync('git',['ls-tree','--name-only',process.env.NYAY66_BASE,'frontend/scripts/nyay66-policy.json'],{cwd:repository,encoding:'utf8'}).trim())throw error;previous={enforced:[]};}
   validateProgression(previous.enforced,config.enforced);
-}else validateProgression([],config.enforced);
-const comments=process.env.NYAY66_COMMENTS?JSON.parse(await readFile(process.env.NYAY66_COMMENTS)):[];
+}else throw Error('COMPARISON_BASE_REQUIRED');
+if(!process.env.NYAY66_AUTHORIZATION)throw Error('INTEGRITY_APPROVAL_REQUIRED');
+const authorization=JSON.parse(await readFile(process.env.NYAY66_AUTHORIZATION));
+if(authorization.head!==head||authorization.base!==process.env.NYAY66_BASE||authorization.bundleSha256!==config.integrityApproval?.bundleSha256)throw Error('AUTHORIZATION_HEAD_MISMATCH');
+const comments=authorization.comments;
 if(config.exceptions.some(entry=>!approveException(entry,comments)))throw Error('OWNER_EXCEPTION_APPROVAL_MISSING');
 const fonts={};
 for(const name of (await readdir(resolve(root,'frontend/public/fonts'))).filter(x=>x.endsWith('.woff2')).sort())fonts[name]=digest(await readFile(resolve(root,'frontend/public/fonts',name)));
-const dist=resolve(root,'frontend/dist');
+const dist=resolve(process.env.NYAY66_DIST||resolve(root,'frontend/dist'));
 const server=http.createServer(async(req,res)=>{
   try{
     const path=decodeURIComponent(new URL(req.url,'http://localhost').pathname);

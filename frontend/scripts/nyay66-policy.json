@@ -3,6 +3,8 @@
   "cache": "chromium-149.0.7827.55-revl",
   "manifestSha256": "0cc054bf00bb22298cabfaa1a1cacf7f696ebedbb0531457b9dbd6c3d243f799",
   "ownerToleranceApproval": "NYAY-66:15382",
+  "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
+  "integrityApproval": {"pr": 37, "commentId": 0, "bundleSha256": "ab05f6cc977c19a116cdd3a284cda1b28334abea170d9ffd256d9137aa49d44c"},
   "enforced": [],
   "exceptions": []
 }

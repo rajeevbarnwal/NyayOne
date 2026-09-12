@@ -14,7 +14,7 @@ export async function mockApplication(page,id,origin,errors){
   const authenticated=['S-07','S-07-popup','S-10','S-10-academic','S-11','S-12','S-13','S-14','S-15','S-16','S-17'].includes(id);
   await page.route('**/*',async route=>{
     const url=new URL(route.request().url());
-    if(url.origin!==origin&&!url.pathname.startsWith('/api/v1/')){errors.push('OUTBOUND_REQUEST');return route.abort();}
+    if(url.origin!==origin){errors.push('OUTBOUND_REQUEST');return route.abort();}
     if(!url.pathname.startsWith('/api/v1/'))return route.continue();
     const path=url.pathname;
     const headers={'access-control-allow-origin':origin,'access-control-allow-credentials':'true','access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type,idempotency-key,x-csrf-token'};

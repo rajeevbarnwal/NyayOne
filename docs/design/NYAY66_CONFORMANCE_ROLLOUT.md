@@ -27,7 +27,10 @@ or retries are used. Deterministic synthetic fixtures intercept API traffic.
 `frontend/scripts/nyay66-policy.json` contains the enforced screen set. Every
 PR reports all screens, but uncorrected screens remain explicitly NONCONFORMANT.
 Capture errors and pin/inventory failures block regardless of that set. Once a
-screen is enforced, removing it relative to the PR base is rejected. Its next
+screen is enforced, removing it relative to the PR base (or push event's
+previous head) is rejected. Dispatch uses the current commit's first parent;
+an absent/unavailable/zero comparison base refuses rather than resetting the
+enforced set. Its next
 unapproved regression blocks the job. The owner merges each screen PR that
 expands the set; a green job does not mean all reported screens conform.
 
@@ -105,6 +108,48 @@ Accessibility, dynamic-region integrity and overflow cannot be waived.
    then executes the exact-head merge command. Codex starts the next screen only
    after owner confirmation. Codex merges nothing, including NYAY-66.
 
-After NYAY-66 owner merge: S-03 -> S-04 -> S-05 -> STOP at S-06 if its proposal
-is unapproved; then S-07/popup -> S-10 through S-13/S-17 -> S-14 -> S-15/S-16.
-NYAY-50/51 proposed references are review artifacts, not approved gate inputs.
+After NYAY-66 owner merge: standalone S-01/S-02/S-06 R2 reference-integration
+PR per NYAY-50 comment 15422, then S-01 -> S-02 -> S-03 -> S-04 -> S-05 ->
+S-06 -> S-07/popup -> S-10 through S-13/S-17 -> S-14 -> S-15/S-16.
+Dark references remain deferred under NYAY-51. Tester handoffs include real
+mobile-keyboard, backend-connected flow, and accessibility tests; the R2 source
+review covered layout only. No R2 reference is added by this corrective PR.
+
+## Seven-finding corrective: trusted evaluator and owner approval
+
+The GitHub default-branch `pull_request_target` workflow reads the candidate as
+data. It loads `nyay66_trust.py` from the event base, never from the candidate.
+PR #37 is the one-time bootstrap: main does not yet contain this gate, so its
+reviewed workflow pins an immutable first-install reader commit. The owner must
+review that bootstrap workflow as well as its content approval before merging.
+After installation, the PR-trigger bootstrap path is disabled except for this
+specific PR/base pair; candidate workflow edits do not replace the target run.
+This is not branch protection and does not prevent an owner from changing or
+disabling workflows directly on main.
+
+The trusted reader computes SHA-256 for every gate script, gate contract, workflow,
+reference-cache file, original design source, font and package/lock file directly
+from Git blobs. The policy's approved settings are included in that bundle digest.
+It rejects symlinks and checks progressive enforcement and the unchanged approved
+numeric tolerances. `integrityApproval` in the policy binds `pr`, `commentId`, and
+`bundleSha256`. The owner posts exactly `NYAY66-INTEGRITY <bundleSha256>` on that
+PR. The reader fetches all comment pages and requires that exact ID, PR, author
+and body. A changed evaluator, reference or tolerance-setting bundle cannot reuse
+an older approval. Unrelated screen implementation or additive enforcement does
+not require a new bundle approval. Exception entries retain their separate owner
+PR-comment approval. No private key, signed receipt or new ceremony is involved.
+
+Only the trusted reader receives the read token. It emits public approval data,
+then materializes the approved gate blobs into a separate directory. Application
+Vite/npm configuration is not exported there. Evaluator dependencies install from
+the approved lock with lifecycle scripts disabled. Candidate application builds
+run in a disposable read-only container with explicit input/output mounts, no
+host secrets/environment, no Docker socket, and no access to the evaluator.
+Symlink build output is rejected. The approved evaluator captures the build with
+the unchanged browser/font pins, masks, cached references and numeric limits.
+
+Reference import validates the checksum inventory and each selected PNG against
+its calibration sample hash before creating output, then writes the verified bytes
+without rereading a mutable source. Runtime continues to hash every reference at
+use. Cross-origin requests are refused before API-path matching, including requests
+whose paths resemble legitimate API routes.

@@ -3,65 +3,119 @@ name: NYAY-66 progressive visual conformance
 on:
   pull_request:
     branches: [main]
+  pull_request_target:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: read
-  pull-requests: read
+permissions: {}
 
 concurrency:
-  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: nyayone-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'bootstrap' || 'trusted' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # References are checked-in, versioned cache artifacts, never generated on PRs.
 # Unfixed screens report NONCONFORMANT; enforced screens block regressions.
 jobs:
   conformance-live:
+    # First installation is owner-reviewed PR #37. After its merge, only the
+    # default-branch pull_request_target definition judges candidate PRs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.number == 37 &&
+       github.event.pull_request.base.sha == '10c38bed2c50e9c7ccd66c0aead516593b3d9660')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
     env:
-      NYAY66_BASE: ${{ github.event.pull_request.base.sha || '' }}
-      NYAY66_COMMENTS: /tmp/nyay66-comments-${{ github.run_id }}.json
+      CANDIDATE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      TRUST_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      NYAY66_BOOTSTRAP: bb3c18f04a0f74a614f144a5089fc3730e01983c
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
+      - name: Load trusted reader and require comparison base
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            TRUST_BASE="$(git rev-parse "$CANDIDATE_HEAD^")"
+          fi
+          [[ "$TRUST_BASE" =~ ^[a-f0-9]{40}$ ]] && [ "$TRUST_BASE" != 0000000000000000000000000000000000000000 ]
+          git cat-file -e "$TRUST_BASE^{commit}"
+          if git cat-file -e "$TRUST_BASE:scripts/ci/nyay66_trust.py" 2>/dev/null; then
+            git show "$TRUST_BASE:scripts/ci/nyay66_trust.py" > "$RUNNER_TEMP/nyay66-trusted.py"
+          else
+            test "$TRUST_BASE" = 10c38bed2c50e9c7ccd66c0aead516593b3d9660
+            git show "$NYAY66_BOOTSTRAP:scripts/ci/nyay66_trust.py" > "$RUNNER_TEMP/nyay66-trusted.py"
+          fi
+          printf 'NYAY66_BASE=%s\n' "$TRUST_BASE" >> "$GITHUB_ENV"
+      - name: Read owner approvals using only the trusted reader
+        id: integrity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python "$RUNNER_TEMP/nyay66-trusted.py" --repo "$GITHUB_WORKSPACE"
+          --base "$NYAY66_BASE" --head "$CANDIDATE_HEAD" --read-approvals
+      - name: Save only public verified approval data
+        env:
+          AUTHORIZATION: ${{ steps.integrity.outputs.authorization }}
+        run: |
+          printf '%s' "$AUTHORIZATION" > "$RUNNER_TEMP/nyay66-authorization.json"
+          printf 'NYAY66_AUTHORIZATION=%s\n' "$RUNNER_TEMP/nyay66-authorization.json" >> "$GITHUB_ENV"
+          python "$RUNNER_TEMP/nyay66-trusted.py" --repo "$GITHUB_WORKSPACE" \
+            --base "$NYAY66_BASE" --head "$CANDIDATE_HEAD" \
+            --authorization "$RUNNER_TEMP/nyay66-authorization.json" --export "$RUNNER_TEMP/nyay66-trusted"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.21.1"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install locked dependencies and Chromium
-        working-directory: frontend
+      - name: Install approved evaluator dependencies and Chromium
+        working-directory: ${{ runner.temp }}/nyay66-trusted/frontend
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npx playwright install --with-deps chromium
-      - name: Validate negative calibration and progressive-verdict contracts
-        working-directory: frontend
-        run: npx vitest --run scripts/lib/nyay66-conformance.test.mjs scripts/lib/nyay66-enforcement.test.mjs
-      - name: Read owner PR-comment exception approvals
-        working-directory: frontend
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/nyay66-read-approvals.mjs
-      - name: Build application and capture live screens against pinned references
-        working-directory: frontend
+      - name: Validate review regressions and existing comparison contracts
+        working-directory: ${{ runner.temp }}/nyay66-trusted
         run: |
-          npm run build
+          python scripts/ci/test_nyay66_review_regressions.py
+          cd frontend
+          npx vitest --run scripts/lib/nyay66-conformance.test.mjs scripts/lib/nyay66-enforcement.test.mjs
+      - name: Build candidate in a credential-free disposable container
+        run: |
+          mkdir "$RUNNER_TEMP/nyay66-dist"
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,exec,size=6g --env HOME=/tmp \
+            --mount type=bind,src="$GITHUB_WORKSPACE/frontend",dst=/input,readonly \
+            --mount type=bind,src="$RUNNER_TEMP/nyay66-trusted/frontend/node_modules",dst=/dependencies,readonly \
+            --mount type=bind,src="$RUNNER_TEMP/nyay66-dist",dst=/output \
+            node:22.21.1-bookworm \
+            sh -eu -c 'cp -a /input /tmp/app; cd /tmp/app; ln -s /dependencies node_modules; npm run build; cp -a dist/. /output/'
+          if find "$RUNNER_TEMP/nyay66-dist" -type l | grep -q .; then
+            echo "Candidate build emitted a symlink" >&2
+            exit 1
+          fi
+      - name: Recheck approved bundle and capture with approved evaluator
+        env:
+          NYAY66_DIST: ${{ runner.temp }}/nyay66-dist
+          NYAY66_REPO: ${{ github.workspace }}
+        run: |
+          python "$RUNNER_TEMP/nyay66-trusted.py" --repo "$GITHUB_WORKSPACE" \
+            --base "$NYAY66_BASE" --head "$CANDIDATE_HEAD" --authorization "$NYAY66_AUTHORIZATION"
+          git diff --exit-code
+          cd "$RUNNER_TEMP/nyay66-trusted/frontend"
           node scripts/nyay66-live.mjs
       - name: Verify generated artifact hashes
         if: ${{ always() }}
-        working-directory: frontend/artifacts/nyay66-live
+        working-directory: ${{ runner.temp }}/nyay66-trusted/frontend/artifacts/nyay66-live
         run: sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ always() }}
         with:
           name: nyay66-live-${{ github.event.pull_request.head.sha || github.sha }}
-          path: frontend/artifacts/nyay66-live/
+          path: ${{ runner.temp }}/nyay66-trusted/frontend/artifacts/nyay66-live/
           if-no-files-found: error
           retention-days: 14
