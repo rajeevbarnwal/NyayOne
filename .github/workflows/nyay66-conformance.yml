@@ -88,7 +88,7 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/nyay66-dist"
           docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
-            --tmpfs /tmp:rw,exec,size=6g --env HOME=/tmp \
+            --tmpfs /tmp:rw,exec,size=6g --env HOME=/tmp --env VITE_API_BASE_URL= \
             --mount type=bind,src="$GITHUB_WORKSPACE/frontend",dst=/input,readonly \
             --mount type=bind,src="$RUNNER_TEMP/nyay66-trusted/frontend/node_modules",dst=/dependencies,readonly \
             --mount type=bind,src="$RUNNER_TEMP/nyay66-dist",dst=/output \

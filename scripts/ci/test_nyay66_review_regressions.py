@@ -67,6 +67,7 @@ class ReviewRegressions(unittest.TestCase):
                 trust.validate_tolerances({**settings, **delta})
 
     def test_06_cross_origin_api_is_aborted_not_mocked(self):
+        self.assertIn("--env VITE_API_BASE_URL=", (ROOT / ".github/workflows/nyay66-conformance.yml").read_text())
         script = """
 import {mockApplication} from './frontend/scripts/lib/nyay66-fixtures.mjs';
 let handler; const errors=[];
