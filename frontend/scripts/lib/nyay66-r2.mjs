@@ -45,6 +45,35 @@ export function verifyR2PNG(row,bytes){
   if(JSON.stringify([png.width,png.height])!==JSON.stringify(row.dimensions))throw Error('R2_REFERENCE_DIMENSION_MISMATCH');
   return bytes;
 }
+// Staging is not approval: the trusted gate still requires the owner's fresh
+// exact bundle comment before these candidate references can be used by CI.
+export async function verifyR2Calibration(sums,read,expectedHead,expectedFonts){
+  if(!/^[a-f0-9]{40}$/.test(expectedHead))throw Error('R2_INVALID_PRODUCER_HEAD');
+  const files=new Map();
+  const names=new Set(['manifest.json','runtime-pins.json',...R2_STATES.flatMap(s=>R2_VIEWPORTS.map(v=>`${s.id}-${v.id}-0.png`))]);
+  for(const line of sums.trim().split('\n')){
+    const match=/^([a-f0-9]{64}) {2}([a-z0-9.-]+)$/.exec(line);
+    if(!match||!names.delete(match[2]))throw Error('R2_CHECKSUM_INVENTORY_MISMATCH');
+    const bytes=await read(match[2]);
+    if(hash(bytes)!==match[1])throw Error('R2_ARTIFACT_BYTES_MISMATCH');
+    files.set(match[2],bytes);
+  }
+  if(names.size)throw Error('R2_CHECKSUM_INVENTORY_MISMATCH');
+  const manifest=JSON.parse(files.get('manifest.json')),pins=JSON.parse(files.get('runtime-pins.json'));
+  validateR2Manifest(manifest);
+  if(manifest.producerHead!==expectedHead||pins.sourceHead!==expectedHead||pins.reference!=='r2')throw Error('R2_PRODUCER_HEAD_MISMATCH');
+  for(const [key,value] of Object.entries({chromium:'149.0.7827.55',playwright:'1.61.1',platform:'linux-x64'})){
+    if(manifest[key]!==value||pins[key]!==value)throw Error('R2_RUNTIME_PIN_MISMATCH');
+  }
+  if(pins.node!=='v22.21.1')throw Error('R2_NODE_PIN_MISMATCH');
+  const canonical=o=>JSON.stringify(Object.entries(o||{}).sort(([a],[b])=>a.localeCompare(b)));
+  if(!Object.keys(expectedFonts).length||canonical(manifest.fonts)!==canonical(expectedFonts)||canonical(pins.fonts)!==canonical(expectedFonts))throw Error('R2_FONT_PIN_MISMATCH');
+  for(const row of manifest.rows){
+    if(row.sampleHashes?.length!==3||row.sampleHashes.some(x=>x!==row.sha256))throw Error('R2_REFERENCE_VARIANCE');
+    verifyR2PNG(row,files.get(row.file));
+  }
+  return {files,manifest,manifestSha256:hash(files.get('manifest.json'))};
+}
 export async function loadR2(root,config){
   if(!config)return null;
   if(!/^[a-z0-9][a-z0-9.-]*$/.test(config.cache)||!/^[a-f0-9]{64}$/.test(config.manifestSha256))throw Error('R2_INVALID_CACHE_BINDING');

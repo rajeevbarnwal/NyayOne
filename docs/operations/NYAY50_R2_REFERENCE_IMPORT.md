@@ -1,0 +1,99 @@
+# R2 light reference candidate — owner approval pending
+
+This is additive reference/loader work, not product implementation or a tolerance
+change. Revision L references and historical SHA labels are untouched. Dark
+references remain deferred under NYAY-51. NYAY-50 closes only after owner merge.
+
+## Run-bound verification
+
+- Owner-dispatched run: https://github.com/rajeevbarnwal/NyayOne/actions/runs/34719114626
+- Workflow revision (PR #38 merge): `3a844544b12134fd75e37d4a32ee3ea03ca191ea`.
+- Render source: `643fb83b7f8316eeca01a020521b97f55856ba08`.
+- Artifact ID: `10305658341`.
+- Downloaded ZIP SHA-256 matches GitHub: `cef91f7250239657671b06d5c2455e1f650cb74ee89c07e163ec7c894f0fc211`.
+- R2 source SHA-256: `3bfdbaac7536d8ceeae660c57286b58f1b03cdc6a53545c458b3bc7636198a07`; source-content approval NYAY-50:15422.
+- Manifest SHA-256: `0a7520d25f7c9e9fd01e6c8ec9f9e5baa8f86f128efdd119208344cfa107eac6`.
+- All 44 checksum entries verified: 42 PNGs, manifest and runtime pins.
+- All 42 PNG dimensions verified; all 126 recorded sample hashes match their
+  row's PNG hash (three identical captures per state/viewport).
+- Pins: Chromium `149.0.7827.55`, Playwright `1.61.1`, Node `22.21.1`, Linux x64.
+  Font-file hashes match the existing reviewed reference manifest. Per-panel
+  font-stack records remain in the unmodified downloaded manifest.
+
+## Coverage and approval
+
+The gate supplies live fixtures for S-01 checking, S-02 default and S-06 entry at
+390×844, 360×800 and 1440×1024 (nine measurements per successful live run).
+The remaining 33 state/viewports report `NOT-YET-MEASURED`, `executed:false`;
+they never count as passing and block enforced-screen promotion. Reference
+capture is not evidence of live implementation parity. No screen is newly
+enforced by this PR; `enforced` and `exceptions` remain unchanged.
+
+The import command stages a candidate cache; it grants no approval. The policy
+approval field is deliberately empty until the owner posts a top-level
+`NYAY66-INTEGRITY <exact-bundle-hash>` comment on the reference PR. The existing
+trusted verifier must read back that comment before CI may use the new bundle.
+The new bundle covers loader/evaluator code, all PNGs, manifest, provenance and
+reference settings. No self-approval or approval inheritance from PR #37.
+
+```sh
+node frontend/scripts/nyay66-r2-import.mjs \
+  /private/tmp/nyay50-r2-run-34719114626/artifact \
+  frontend/test-baselines/nyay66/chromium-149.0.7827.55-r2 \
+  643fb83b7f8316eeca01a020521b97f55856ba08 \
+  34719114626 10305658341 \
+  cef91f7250239657671b06d5c2455e1f650cb74ee89c07e163ec7c894f0fc211
+```
+
+The command refuses an existing output directory, non-regular input files,
+checksum inventory substitution, source/runtime/font mismatches, capture
+variance, changed PNG bytes and wrong dimensions. All checks precede writes.
+At use, the loader rechecks source, manifest and every PNG, including unmeasured
+states. The live runner also checks browser, platform and fonts.
+
+## PNG inventory
+
+| State | Viewport | SHA-256 |
+|---|---|---|
+| s01-checking | mobile390 | `3f59d8ab53b5b77c9297f6318e7d62c5ccc5c9e62b618dc5fde901f63ecf3318` |
+| s01-checking | mobile360 | `65b632991a829d4b9bc49507719c69309e96e836017f0b558f5711b813de7e46` |
+| s01-checking | desktop | `74e1107169f4295b040fb9f9912ebf7fe7175ade28095752837e16a13c8a3b55` |
+| s01-error | mobile390 | `bb076f757c2f9128c668d6cca58130e793ef7321342d1ea038c64479381da1d2` |
+| s01-error | mobile360 | `90c6baef86978467cf27893fbaff9138351ac46c2215858143bae57aa306a3c2` |
+| s01-error | desktop | `8853a186e303b6c9cce65b79e71e876ab9444ca8c325a0ef0da6c87939e1c144` |
+| s01-resolved | mobile390 | `f1297b81d010d09b39b91f2e87a82efaf5760f2118fe7f69a08ca74ee50cdfef` |
+| s01-resolved | mobile360 | `db4ec64086c529ba3b8ef35b40b450d0b0998052dc59f241bd508816ef7520e7` |
+| s01-resolved | desktop | `d243a45e72cf6fac9a728a1ec456ccf0b91d39a4a4554d9fa7ba368ee798acfc` |
+| s02-default | mobile390 | `ed5ea65e2b4e85cba928d6c71800313f3ceb4a9ae2d955f3a5f1e679ab37afd8` |
+| s02-default | mobile360 | `8b9eb40f02f548fe20f6803358a7403be79f86caa3bf1f7423e63493534a5bf3` |
+| s02-default | desktop | `a91b4b2f0400a14abd4be670d75d22a53d75d8c926186472d07b88ced8a5f6dc` |
+| s02-focus | mobile390 | `4061516bb5a507e92db1c7b728e8436a3319e70e1f7ff9af59ff164c61e80122` |
+| s02-focus | mobile360 | `91933b0e4f16e00cbec5dd808da4f73ef8771510c8536e1b8e33ecd379dbb14e` |
+| s02-focus | desktop | `a6689249787797ab231d0b90863c42914d897f7d1dd5151efc011419979999e5` |
+| s06-entry | mobile390 | `9e6613e460f8541931164a9d6cb40260f0c6f3098afa29582e56b4c4420212b2` |
+| s06-entry | mobile360 | `5ba0422179c1222e0e17bf72bfb172a3402008ecc2b5f2ebfce56c80d1b78b49` |
+| s06-entry | desktop | `e61de60790dcf7d354be912deb3f8c6254d19d3129eedd11d345032e14533c1a` |
+| s06-invalidnum | mobile390 | `d0989ae03b3a22ab44f9b8282f2da1d1a6e87441580c408d8dbd056014e67608` |
+| s06-invalidnum | mobile360 | `041a47bcff5408ac0b89ce8f5b4741973d42b91e66219d422fa15f5a59ec76a9` |
+| s06-invalidnum | desktop | `bc3ceed7512bf0f7462d08e31347cbafd344b868ce8cb26c8e1b009a33e75030` |
+| s06-submitting | mobile390 | `7c592849262e63b5e89ec4b525b261d6e97af2bd1ce7d64ac04878cbe394ece3` |
+| s06-submitting | mobile360 | `8d74829255d97321b902f40d511825b6b76a050c22318e6bc52f9dcb60fdb481` |
+| s06-submitting | desktop | `eb67ca1f5d610a7856f85c01c469da7383fb7fce7758c2a9471ca7b9777a9955` |
+| s06-challenge | mobile390 | `d4913df8c7afd8788c0fa7cd36a63975a11f4b2a8d3cb29db6f94b035c715289` |
+| s06-challenge | mobile360 | `a710f7f854ba4a9846cc808121f6e075a3881f23a7178a6d9f137577cce21a9c` |
+| s06-challenge | desktop | `dfc6d4df7464dc1110040a303217fd3e8e49b6b3475fb5ff9008cb766589f060` |
+| s06-wrong | mobile390 | `c24cd5f01e79b93b34ba36fddcc2a7b785b142b5739e888c1e95625b3c4af95a` |
+| s06-wrong | mobile360 | `e4a45b7bd1478fbdf0e0c939c9f196bd33fc38b7a5ad2a5c030e110998502716` |
+| s06-wrong | desktop | `70161b668288d18009af67d072406cd13ad86a637e02489f75e0f39d4390c49f` |
+| s06-expired | mobile390 | `c7416f7341713cff88ad46d4a1b9389ad6017d66952c32321e5f187f8588096d` |
+| s06-expired | mobile360 | `3ecf4b672c27da018709b7d7adaafc2dc2b5e41d708a57211243912dce030ce6` |
+| s06-expired | desktop | `60bd070ad0d78de416d41bc99bcb0bfe8949a155136da94a1a66d42655e47fc6` |
+| s06-locked | mobile390 | `8f5352dfaeb0e150dfe010ab0ad1e939a670d14f27356f4d8745109104ef256a` |
+| s06-locked | mobile360 | `3f045b2b1a87a390a731c805bd828a0f328794d589c1e937afd2cb3786bbdf0c` |
+| s06-locked | desktop | `0f7684ce66971b17132b66d6340486052c43583a180942f7c5951652f96526c4` |
+| s06-neterr | mobile390 | `f8c844042bd3e9a35ee2cd590987705d110c9a441a390b77c0fb8b8a3e79827a` |
+| s06-neterr | mobile360 | `6449d6053b85173632e2a8c89baec606af0ce7b58ac5ef0b1d3978955bacec86` |
+| s06-neterr | desktop | `560055d726505a78e738486e9c8281a9caddc24d4d101f205a1ed1c96364009e` |
+| s06-success | mobile390 | `9b3ab75ad72788883fdb7dc5366f687965aed2b3f37ecd1e41cce0fd700dfa48` |
+| s06-success | mobile360 | `0e2ef017d335101d6a3444ddee2f3c14652c57f49c01286669e25af565209340` |
+| s06-success | desktop | `bc14428287a23051fa08b406b2a960da6d4380b45b5bffc66bc47b2a396922b8` |
