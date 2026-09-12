@@ -194,6 +194,58 @@ class IntegrityAdversarial(ReviewRegressions):
                 self.module.validate(self.repo, base, head, comments)
 
 
+class ContainerCopyRegression(unittest.TestCase):
+    def build_step(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        return workflow.split("      - name: Build candidate in a credential-free disposable container\n", 1)[1].split("      - name:", 1)[0]
+
+    def test_18_dependencies_keep_node_modules_package_resolution_layout(self):
+        build = self.build_step()
+        self.assertIn("cp -a --no-preserve=ownership /dependencies node_modules", build)
+        self.assertNotIn("ln -s /dependencies node_modules", build)
+        self.assertIn("dst=/dependencies,readonly", build)
+
+    def test_19_imported_json_contract_is_available_read_only(self):
+        build = self.build_step()
+        contract = "contracts/unicode-legal-name-v1.json"
+        self.assertTrue((ROOT / contract).is_file())
+        self.assertIn(f'src="$GITHUB_WORKSPACE/{contract}",dst=/tmp/{contract},readonly', build)
+        for name in ("profileApi.test.ts", "registration.test.ts"):
+            source = ROOT / "frontend/src/features/student/lib" / name
+            self.assertIn("../../../../../" + contract, source.read_text())
+
+    def test_20_vite_temp_is_in_private_writable_scratch_not_host_dependencies(self):
+        build = self.build_step()
+        self.assertIn("--tmpfs /tmp:rw,exec,size=6g", build)
+        self.assertIn("cd /tmp/app; cp -a --no-preserve=ownership /dependencies node_modules; npm run build", build)
+        self.assertIn("dst=/input,readonly", build)
+        self.assertIn("dst=/dependencies,readonly", build)
+        self.assertIn("--cap-drop ALL", build)
+        self.assertNotIn("chmod", build)
+        self.assertNotIn("GH_TOKEN", build)
+        self.assertNotIn("--env-file", build)
+
+    def test_17_container_build_uses_runner_uid_for_output_directory(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        build = workflow.split("      - name: Build candidate in a credential-free disposable container\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('--user "$(id -u):$(id -g)"', build)
+        self.assertNotIn("chmod 777", build)
+        self.assertNotIn("--cap-add", build)
+
+    def test_16_capability_free_copy_does_not_preserve_host_ownership(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        build = workflow.split("      - name: Build candidate in a credential-free disposable container\n", 1)[1].split("      - name:", 1)[0]
+        # Both boundaries retain bytes/modes/symlinks, but never attempt chown.
+        self.assertIn("cp -a --no-preserve=ownership /input /tmp/app", build)
+        self.assertIn("cp -a --no-preserve=ownership dist/. /output/", build)
+        self.assertIn("--cap-drop ALL", build)
+        self.assertIn("--read-only", build)
+        self.assertIn("--security-opt no-new-privileges", build)
+        self.assertNotIn("--cap-add", build)
+        self.assertNotIn("--privileged", build)
+        self.assertIn("Candidate build emitted a symlink", build)
+
+
 # Inherited methods provide helpers, not a second run of the seven RED cases.
 for _name in list(ReviewRegressions.__dict__):
     if _name.startswith("test_"):
