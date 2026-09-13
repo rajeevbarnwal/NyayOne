@@ -1,10 +1,13 @@
 """Seven Copilot regression contracts; synthetic data, no authenticated calls."""
 import importlib.util
+import errno
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -110,7 +113,15 @@ class IntegrityAdversarial(ReviewRegressions):
         self.base = self.commit()
 
     def tearDown(self):
-        self.temp.cleanup()
+        # A late fixture file can race the final rmdir. Rewalk this same owned
+        # TemporaryDirectory only; never ignore persistent or unrelated errors.
+        for attempt in range(3):
+            try:
+                self.temp.cleanup()
+                return
+            except OSError as error:
+                if error.errno != errno.ENOTEMPTY or attempt == 2:
+                    raise
 
     def run_git(self, *args):
         return subprocess.check_output(["git", "-C", str(self.repo), *args], stderr=subprocess.PIPE).decode().strip()
@@ -192,6 +203,70 @@ class IntegrityAdversarial(ReviewRegressions):
         for base in ("0" * 40, "a" * 40):
             with self.assertRaises((ValueError, subprocess.CalledProcessError)):
                 self.module.validate(self.repo, base, head, comments)
+
+
+class DisposableGitCleanupRegression(unittest.TestCase):
+    def fixture(self, temp):
+        fixture = IntegrityAdversarial()
+        fixture.temp = temp
+        return fixture
+
+    def test_late_file_at_root_removal_is_deleted(self):
+        # Deterministically reproduce ENOTEMPTY without a timing-dependent writer.
+        with tempfile.TemporaryDirectory(prefix="nyay66-cleanup-regression-") as parent:
+            temp = tempfile.TemporaryDirectory(dir=parent)
+            repo = Path(temp.name)
+            (repo / ".git").mkdir()
+            (repo / ".git" / "config").write_text("synthetic fixture")
+            rmdir = os.rmdir
+            injected = []
+
+            def late_file(path, *args, **kwargs):
+                if str(path) == temp.name and not injected:
+                    (repo / "late-fixture.lock").write_text("synthetic late file")
+                    injected.append(True)
+                return rmdir(path, *args, **kwargs)
+
+            with mock.patch("os.rmdir", side_effect=late_file):
+                self.fixture(temp).tearDown()
+            self.assertEqual(injected, [True])
+            self.assertFalse(repo.exists(), "teardown must remove the late file and root")
+
+    def test_persistent_nonempty_refuses_after_three_attempts(self):
+        failure = OSError(errno.ENOTEMPTY, "persistent fixture writer")
+        temp = mock.Mock()
+        temp.cleanup.side_effect = failure
+        with self.assertRaises(OSError) as raised:
+            self.fixture(temp).tearDown()
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(temp.cleanup.call_count, 3)
+
+    def test_unrelated_cleanup_errors_are_not_suppressed_or_retried(self):
+        for code in (errno.EACCES, errno.EIO):
+            with self.subTest(errno=code):
+                failure = OSError(code, "unrelated cleanup failure")
+                temp = mock.Mock()
+                temp.cleanup.side_effect = failure
+                with self.assertRaises(OSError) as raised:
+                    self.fixture(temp).tearDown()
+                self.assertIs(raised.exception, failure)
+                temp.cleanup.assert_called_once_with()
+
+    def test_readonly_git_file_and_external_symlink_are_safe(self):
+        with tempfile.TemporaryDirectory(prefix="nyay66-cleanup-regression-") as parent:
+            outside = Path(parent) / "outside.txt"
+            outside.write_text("must remain untouched")
+            temp = tempfile.TemporaryDirectory(dir=parent)
+            repo = Path(temp.name)
+            readonly = repo / "packed-refs"
+            readonly.write_text("synthetic refs")
+            readonly.chmod(0o400)
+            (repo / "external-link").symlink_to(outside)
+            self.fixture(temp).tearDown()
+            self.assertFalse(repo.exists())
+            self.assertEqual(outside.read_text(), "must remain untouched")
+            # Idempotence uses TemporaryDirectory's missing-root handling.
+            self.fixture(temp).tearDown()
 
 
 class ContainerCopyRegression(unittest.TestCase):
