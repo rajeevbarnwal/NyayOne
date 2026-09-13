@@ -327,5 +327,45 @@ for _name in list(ReviewRegressions.__dict__):
         setattr(IntegrityAdversarial, _name, None)
 
 
+class ComponentBuildPlumbingRegression(unittest.TestCase):
+    def hook(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        line = next(line for line in workflow.splitlines() if "sh -eu -c '" in line)
+        return line.split("npm run build;", 1)[1].split("cp -a --no-preserve=ownership dist/.", 1)[0]
+
+    def execute_hook(self, present, status=0):
+        with tempfile.TemporaryDirectory(prefix="nyay66-component-hook-") as directory:
+            root = Path(directory)
+            if present:
+                (root / "scripts").mkdir()
+                (root / "scripts/nyay66-s01-component-build.mjs").write_text("// synthetic fixture builder\n")
+            shell = 'node() { printf "BUILD:%s\\n" "$1"; return ' + str(status) + '; }; ' + self.hook()
+            return subprocess.run(["sh", "-eu", "-c", shell], cwd=root, text=True, capture_output=True)
+
+    def test_present_component_builder_runs_after_production_build(self):
+        result = self.execute_hook(True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "BUILD:scripts/nyay66-s01-component-build.mjs\n")
+
+    def test_absent_component_builder_does_not_fabricate_component_evidence(self):
+        result = self.execute_hook(False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertNotIn("touch", self.hook())
+
+    def test_component_builder_failure_stops_before_output_copy(self):
+        result = self.execute_hook(True, status=17)
+        self.assertEqual(result.returncode, 17, result.stderr)
+
+    def test_component_hook_keeps_existing_container_isolation(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        build = workflow.split("      - name: Build candidate in a credential-free disposable container", 1)[1].split("      - name:", 1)[0]
+        for rail in ("--read-only", "--cap-drop ALL", "--security-opt no-new-privileges", '--user "$(id -u):$(id -g)"', "dst=/input,readonly", "dst=/dependencies,readonly"):
+            self.assertIn(rail, build)
+        self.assertNotIn("GH_TOKEN", build)
+        self.assertNotIn("github.token", build)
+        self.assertEqual(workflow.count("node scripts/nyay66-s01-component-build.mjs"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

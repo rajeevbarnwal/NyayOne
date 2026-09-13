@@ -103,7 +103,7 @@ describe('R2 additive reference coverage', () => {
     expect(JSON.parse(await text('frontend/package.json')).scripts.build).not.toContain('nyay66-s01-component');
     const workflow=await text('.github/workflows/nyay66-conformance.yml');
     const container=workflow.split('      - name: Build candidate in a credential-free disposable container\n')[1].split('      - name:')[0];
-    expect(container).toContain('npm run build; node scripts/nyay66-s01-component-build.mjs;');
+    expect(container).toContain('npm run build; if [ -f scripts/nyay66-s01-component-build.mjs ]; then node scripts/nyay66-s01-component-build.mjs; fi;');
     for(const rail of ['--read-only','--cap-drop ALL','--security-opt no-new-privileges','dst=/input,readonly','dst=/dependencies,readonly'])expect(container).toContain(rail);
     expect(container).not.toContain('GH_TOKEN');
     const evaluator=await text('frontend/scripts/nyay66-live.mjs');
