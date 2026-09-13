@@ -36,6 +36,11 @@
 .s01-r2 button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; min-width: 190px; padding: 0 18px; border: 1.5px solid #2E3A8C; background: #2E3A8C; color: #fff; font-family: inherit; font-size: 14px; font-weight: 700; border-radius: 12px; cursor: pointer; }
 .s01-r2 button .v321-revl-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }
 .s01-r2 button:focus-visible { outline: 2.5px solid #2E3A8C; outline-offset: 2px; border-radius: 6px; }
+/* Match R2's mobile filtered raster layer without adding a visible shadow,
+   moving content, changing colors, or affecting desktop rendering. */
+@media (max-width: 899px) {
+  .s01-r2 { filter: drop-shadow(0 0 0 transparent); }
+}
 @media (min-width: 900px) {
   .s01-r2__lockup { height: 72px; }
   .s01-r2__tile { width: 68px; height: 68px; }

@@ -4,12 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { AuthProvider, type StudentSessionPhase } from '../../../app/authContext';
 import { V34Splash, splashDestination } from './V34Screens';
 import { readR2OnboardingSeen } from './S01R2';
+import { readFileSync } from 'node:fs';
 
 function markup(phase: StudentSessionPhase) {
   return renderToStaticMarkup(<AuthProvider studentSession={{ phase, refresh: async () => undefined }}><MemoryRouter><V34Splash /></MemoryRouter></AuthProvider>);
 }
 
 describe('NYAY-77 S-01 approved R2 light states', () => {
+  it('isolates the mobile R2 raster layer without visible shadow or desktop changes', () => {
+    const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{\s*\.s01-r2\s*\{\s*filter:\s*drop-shadow\(0 0 0 transparent\)/);
+  });
   it('renders the R2 lockup and exact checking copy without invented percentage', () => {
     const html = markup('pending');
     expect(html).toContain('data-nyayone-design="3.2.1-r2"');
