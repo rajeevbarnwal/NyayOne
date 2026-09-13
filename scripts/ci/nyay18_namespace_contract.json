@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_inventory_sha256": "8face6ec17f864fbacea45184daba90fbdafea561a128cf2b111bdd5a132feb6",
+  "source_inventory_sha256": "09c723daa48687dc4da4037c95a6dbd803151220381dc5de1d6a043542ad26de",
   "metadata": {
     "package_name": "nyayone-frontend",
     "capacitor_app_id": "com.nyayone.app",
@@ -18,7 +18,7 @@
     "nyayone-clinical-hours-": 1,
     "nyayone-credential-qr.png": 1,
     "nyayone-frontend": 3,
-    "nyayone-mark.svg": 3,
+    "nyayone-mark.svg": 2,
     "nyayone-shell-": 2,
     "nyayone-shell-v1": 1,
     "nyayone.app": 1,
@@ -28,6 +28,7 @@
     "nyayone.lawyer.filing-workflow.v1.": 1,
     "nyayone.lawyer.review-workspace.v1.": 1,
     "nyayone.locale.v1": 1,
+    "nyayone.r2.onboarding-seen": 1,
     "nyayone.student.auth-session.v1": 1,
     "nyayone.student.auth-transition.v2": 1,
     "nyayone.student.reminder-prefs.v1.": 1,

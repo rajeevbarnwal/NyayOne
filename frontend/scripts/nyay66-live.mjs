@@ -87,7 +87,7 @@ try{
         const page=await context.newPage();page.setDefaultTimeout(20000);
         page.on('pageerror',()=>errors.push('PAGE_ERROR'));
         page.on('console',msg=>{if(msg.type()==='error')errors.push('CONSOLE_ERROR');});
-        if(isR2)await mockR2Application(page,view,origin,errors);
+        if(isR2)Object.assign(row,await mockR2Application(page,view,origin,errors));
         else await mockApplication(page,id,origin,errors);
         await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode()));await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
         const surface=await page.evaluate(inspectSurface,{clocks:view==='s05'});
@@ -120,7 +120,7 @@ try{
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
   report.blocking=report.rows.some(row=>row.blocking);
   await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');
-  const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | live | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
+  const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceKind==='component-visual'?'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified':'live route'} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
   await writeFile(resolve(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>NYAY-66 comparison</title><style>body{font:16px sans-serif;background:#102033;color:white}div{display:flex;gap:10px}img{width:32%;object-fit:contain;align-self:start}section{margin-bottom:40px}</style><h1>NYAY-66 exact-head comparison</h1><p>${head}; unapproved differences remain NONCONFORMANT, not waived.</p>${links}`);
   const files=(await readdir(out)).sort();
   await writeFile(resolve(out,'SHA256SUMS'),(await Promise.all(files.map(async file=>`${digest(await readFile(resolve(out,file)))}  ${file}`))).join('\n')+'\n');

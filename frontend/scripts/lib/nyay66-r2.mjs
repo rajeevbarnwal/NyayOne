@@ -3,28 +3,44 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {PNG} from 'pngjs';
-import {mockApplication} from './nyay66-fixtures.mjs';
+import {actor,mockApplication} from './nyay66-fixtures.mjs';
 export const R2_SOURCE_SHA256='3bfdbaac7536d8ceeae660c57286b58f1b03cdc6a53545c458b3bc7636198a07';
 export const R2_SOURCE_PATH='docs/design/nyayone-option-3.2.1/r2/NYAYONE_S01_S02_S06_R2_STANDALONE.html';
 export const R2_STATES=Object.entries({s01:['checking','error','resolved'],s02:['default','focus'],s06:['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']}).flatMap(([view,states])=>states.map(state=>({id:`${view}-${state}`,view,state,screen:`S-${view.slice(1)}`})));
 export const R2_VIEWPORTS=[{id:'mobile390',width:390,height:844,preset:'m390'},{id:'mobile360',width:360,height:800,preset:'m360'},{id:'desktop',width:1440,height:1024,preset:'d1440'}];
 // Additional state fixtures are delivered with their screen PR, not fabricated
 // by rewriting the live DOM to look like the prototype.
-export const R2_LIVE_STATES=['s01-checking','s02-default','s06-entry'];
+export const R2_LIVE_STATES=['s01-checking','s01-error','s01-resolved','s02-default','s06-entry'];
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 export async function mockR2Application(page,view,origin,errors){
   if(!R2_LIVE_STATES.includes(view))throw Error('R2_LIVE_STATE_NOT_IMPLEMENTED');
   const state=R2_STATES.find(x=>x.id===view);
-  if(view!=='s01-checking')return mockApplication(page,state.screen,origin,errors);
+  if(state.screen!=='S-01')return mockApplication(page,state.screen,origin,errors);
   await page.route('**/*',route=>{
     const url=new URL(route.request().url());
     if(url.origin!==origin){errors.push('OUTBOUND_REQUEST');return route.abort();}
     // A pending response holds the existing splash. Context disposal cancels it.
-    if(url.pathname==='/api/v1/auth/student/session')return;
+    if(url.pathname==='/api/v1/auth/student/session'){
+      if(view==='s01-checking')return;
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(view==='s01-error'?{invalid:'synthetic-session-projection'}:{authenticated:true,actor})});
+    }
+    // Hold the destination's independent profile request, never navigation.
+    if(view==='s01-resolved'&&url.pathname==='/api/v1/student/profile')return;
     if(url.pathname.startsWith('/api/v1/')){errors.push('UNMATCHED_API');return route.abort();}
     return route.continue();
   });
-  await page.goto(origin+'/s-01');await page.locator('[data-screen="S-01"]').waitFor();
+  await page.goto(origin+'/s-01');
+  if(view==='s01-resolved'){
+    await page.waitForURL('**/s-07');
+    await page.locator('[data-screen="S-01"]').waitFor({state:'detached'});
+    await page.goto(origin+'/__nyay66-components/scripts/nyay66-s01-component.html');
+    await page.locator('[data-nyay66-evidence="component-only"]').waitFor();
+    await page.getByText('Session confirmed. Opening your workspace…',{exact:true}).waitFor();
+    return {evidenceKind:'component-visual',coverageApproval:'NYAY-77:15493',liveRouteBehavior:{executed:true,from:'/s-01',to:'/s-07',syntheticServer:true,artificialDelay:false,navigationFrozen:false}};
+  }
+  await page.locator('[data-screen="S-01"]').waitFor();
+  if(view==='s01-error')await page.getByRole('heading',{name:'We could not reach NyayOne.',exact:true}).waitFor();
+  return {evidenceKind:'live-route'};
 }
 export function pendingStateRow(screen,state,viewport,enforced){
   return {screen,state,viewport,theme:'light',source:'r2',executed:false,verdict:'NOT-YET-MEASURED',reason:'LIVE_STATE_FIXTURE_PENDING_SCREEN_PR',blocking:enforced.includes(screen)};

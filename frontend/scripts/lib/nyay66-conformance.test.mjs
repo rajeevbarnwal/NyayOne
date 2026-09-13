@@ -59,8 +59,56 @@ describe('R2 additive reference coverage', () => {
       await expect(r2.loadR2(root,config)).rejects.toThrow('R2_REFERENCE_BYTES_MISMATCH');
     }finally{await rm(root,{recursive:true,force:true});}
   });
-  it('refuses unknown/error/terminal live fixtures instead of manufacturing coverage',async()=>{
-    for(const state of ['s01-error','s01-resolved','s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  it('refuses unimplemented recovery and unknown fixtures instead of manufacturing coverage',async()=>{
+    for(const state of ['s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  });
+  it('captures the real S-01 unavailable path from a malformed synthetic session response',async()=>{
+    let handler;const visits=[],waits=[];
+    const page={route:async(_,fn)=>{handler=fn;},goto:async path=>visits.push(path),locator:selector=>({waitFor:async()=>waits.push(selector)}),getByRole:(role,options)=>({waitFor:async()=>waits.push([role,options])})};
+    const evidence=await r2.mockR2Application(page,'s01-error','http://localhost',[]);
+    let response;await handler({request:()=>({url:()=> 'http://localhost/api/v1/auth/student/session'}),fulfill:async value=>{response=value;}});
+    expect(response.status).toBe(200);expect(JSON.parse(response.body)).toEqual({invalid:'synthetic-session-projection'});
+    expect(visits).toEqual(['http://localhost/s-01']);expect(waits).toContainEqual(['heading',{name:'We could not reach NyayOne.',exact:true}]);
+    expect(evidence).toEqual({evidenceKind:'live-route'});
+  });
+  it('separates resolved component visuals from an executed automatic production redirect',async()=>{
+    let handler;const actions=[];
+    const page={route:async(_,fn)=>{handler=fn;},goto:async path=>actions.push(['goto',path]),waitForURL:async path=>actions.push(['url',path]),locator:selector=>({waitFor:async options=>actions.push(['locator',selector,options])}),getByText:(text,options)=>({waitFor:async()=>actions.push(['text',text,options])})};
+    const evidence=await r2.mockR2Application(page,'s01-resolved','http://localhost',[]);
+    let response;await handler({request:()=>({url:()=> 'http://localhost/api/v1/auth/student/session'}),fulfill:async value=>{response=value;}});
+    expect(JSON.parse(response.body).authenticated).toBe(true);
+    expect(actions.slice(0,3)).toEqual([['goto','http://localhost/s-01'],['url','**/s-07'],['locator','[data-screen="S-01"]',{state:'detached'}]]);
+    expect(actions[3]).toEqual(['goto','http://localhost/__nyay66-components/scripts/nyay66-s01-component.html']);
+    expect(evidence).toEqual({evidenceKind:'component-visual',coverageApproval:'NYAY-77:15493',liveRouteBehavior:{executed:true,from:'/s-01',to:'/s-07',syntheticServer:true,artificialDelay:false,navigationFrozen:false}});
+    // No evaluate/addInitScript/clock methods: navigation must not be suppressed.
+  });
+  it('cannot capture the resolved component when the live redirect fails',async()=>{
+    const visits=[];
+    const page={route:async()=>{},goto:async path=>visits.push(path),waitForURL:async()=>{throw Error('REDIRECT_FAILED');}};
+    await expect(r2.mockR2Application(page,'s01-resolved','http://localhost',[])).rejects.toThrow('REDIRECT_FAILED');
+    expect(visits).toEqual(['http://localhost/s-01']);
+  });
+  it('does not manufacture success when the resolved component build is absent',async()=>{
+    const page={route:async()=>{},goto:async()=>{},waitForURL:async()=>{},locator:selector=>({waitFor:async()=>{if(selector.includes('component-only'))throw Error('COMPONENT_MISSING');}})};
+    await expect(r2.mockR2Application(page,'s01-resolved','http://localhost',[])).rejects.toThrow('COMPONENT_MISSING');
+  });
+  it('builds the actual resolved component only in isolated CI, never the normal production entry',async()=>{
+    const repository=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+    const text=path=>readFile(resolve(repository,path),'utf8');
+    const fixture=await text('frontend/scripts/nyay66-s01-component.tsx');
+    expect(fixture).toContain("import { S01R2 } from '../src/features/student/auth/S01R2'");
+    expect(fixture).toContain('phase="authenticated"');expect(fixture).not.toContain('setTimeout');expect(fixture).not.toContain('dangerouslySetInnerHTML');
+    // The trusted evaluator export deliberately excludes candidate app files.
+    // Normal-build output exclusion is additionally checked in the build rehearsal.
+    expect(JSON.parse(await text('frontend/package.json')).scripts.build).not.toContain('nyay66-s01-component');
+    const workflow=await text('.github/workflows/nyay66-conformance.yml');
+    const container=workflow.split('      - name: Build candidate in a credential-free disposable container\n')[1].split('      - name:')[0];
+    expect(container).toContain('npm run build; if [ -f scripts/nyay66-s01-component-build.mjs ]; then node scripts/nyay66-s01-component-build.mjs; fi;');
+    for(const rail of ['--read-only','--cap-drop ALL','--security-opt no-new-privileges','dst=/input,readonly','dst=/dependencies,readonly'])expect(container).toContain(rail);
+    expect(container).not.toContain('GH_TOKEN');
+    const evaluator=await text('frontend/scripts/nyay66-live.mjs');
+    expect(evaluator).toContain('component visual (not a stable live-route capture)');
+    expect(evaluator).toContain('Object.assign(row,await mockR2Application');
   });
   it('blocks cross-origin and unmatched requests in pending splash fixtures',async()=>{
     let handler;const page={route:async(_,fn)=>{handler=fn;},goto:async()=>{},locator:()=>({waitFor:async()=>{}})};

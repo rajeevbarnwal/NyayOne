@@ -21,7 +21,9 @@ describe('S-01 server-session bootstrap', () => {
 
     expect(authSource).not.toContain('>LegalSaathi<');
     expect(authSource).toContain('<b>NyayOne</b>');
-    expect(authSource).toContain('id="S-01-title">NyayOne</h1>');
+    // NYAY-77: S-01 now uses the approved R2 SVG lockup, not the retired text-only title.
+    const splashSource = readFileSync(join(process.cwd(), 'src/features/student/auth/S01R2.tsx'), 'utf8');
+    expect(splashSource).toContain('<NyayOneRevLLockup/>');
     expect(continuationShell).not.toContain('LegalSaathi');
     expect(continuationShell).toContain('aria-label="NyayOne home"');
     expect(continuationShell).toContain('<b>NyayOne</b>');
@@ -56,7 +58,8 @@ describe('S-01 server-session bootstrap', () => {
     expect(splashDestination('authenticated', false)).toBe('/s-07');
     expect(splashDestination('authenticated', true)).toBe('/s-07');
     expect(splashDestination('anonymous', false)).toBe('/s-02');
-    expect(splashDestination('anonymous', true)).toBe('/s-02');
+    // Approved R2 routing uses a new non-sensitive preference, never the retired marker.
+    expect(splashDestination('anonymous', true)).toBe('/s-03');
   });
 
   it('does not let a retired device marker bypass onboarding', () => {
