@@ -495,7 +495,7 @@ async function prepareStudentLoginOtp(page, mobile) {
     await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
   }
   failureStage = 'student_login_entry_action';
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
   await page.waitForURL(/\/s-04$/u);
   await page.locator('#v34-login-mobile').fill(mobile);
   failureStage = 'student_login_start_submit';
@@ -700,15 +700,15 @@ async function authWireAndPasswordlessProbe(browser) {
     const screenId = `S-${path.slice(3).padStart(2, '0')}`;
     await recordVisualContract(page, screenId);
     if (path === '/s-03') {
-      const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
-      const register = page.getByRole('button', { name: 'Register as a student', exact: true });
+      const signIn = page.getByRole('button', { name: 'Sign In Securely', exact: true });
+      const register = page.getByRole('button', { name: 'Create Student Account', exact: true });
       const selectorsExact = await signIn.count() === 1 && await register.count() === 1;
       await captureSafeScreenshot(page, 's03-gateway-public');
       await signIn.click();
       await page.waitForURL(/\/s-04$/u);
       const signInDestination = new URL(page.url()).pathname === '/s-04';
       await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('button', { name: 'Register as a student', exact: true }).click();
+      await page.getByRole('button', { name: 'Create Student Account', exact: true }).click();
       await page.waitForURL(/\/s-08$/u);
       const registerDestination = new URL(page.url()).pathname === '/s-08';
       gatewayExact = selectorsExact && signInDestination && registerDestination;

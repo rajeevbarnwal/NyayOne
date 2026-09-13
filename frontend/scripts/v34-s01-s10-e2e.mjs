@@ -433,7 +433,7 @@ try {
   await cancelledVerifyContext.close();
 
   await resetOtp();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
   await page.waitForURL('**/s-04');
   await page.locator('#v34-login-mobile').fill(loginMobile);
   await page.getByRole('button', { name: 'Send one time code' }).click();
