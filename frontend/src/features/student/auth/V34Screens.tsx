@@ -47,6 +47,7 @@ import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandof
 import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
 import { S01R2, readR2OnboardingSeen } from './S01R2';
+import { S02R2 } from './S02R2';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 const OtpScreenThemeContext = createContext<ScreenProps>({});
@@ -323,26 +324,8 @@ export function V34Splash() {
   return <S01R2 phase={session.phase} retry={() => { void session.refresh(); }}/>;
 }
 
-const ONBOARDING = [
-  { title: 'The years before the bar, organised.', copy: 'Internships, moots, digests and citation-bound research. One student account.', art: 'A STUDENT DESK, ORGANISED' },
-  { title: 'Read the judgment, not a summary of a summary.', copy: 'Digests carry the citation, the bench and the year. Every research answer points back to authority.', art: 'A READING ROOM OF AUTHORITIES' },
-  { title: 'Build evidence of the work you do.', copy: 'Keep verified records of moots, clinics and learning milestones without making private details public.', art: 'A TRUSTED STUDENT WALLET' },
-] as const;
-
 export function V34Onboarding() {
-  const nav = useNavigate();
-  const [index, setIndex] = useState(0);
-  const item = ONBOARDING[index];
-  const finish = () => { nav('/s-03'); };
-  return (
-    <Screen id="S-02" aside={<AuthAside title="The years before the bar, organised." copy="Internships, moots, digests and citation-bound research. One student account."/>}>
-      <Pane><main className="v34-main">
-        <div className="v34-onboard__top"><span className="v34-mono">{String(index + 1).padStart(2, '0')} / 03</span><span className="v34-meter"><i style={{ width: `${((index + 1) / 3) * 100}%` }}/></span><button className="v34-hit" onClick={finish}>Skip</button></div>
-        <div className="v34-illustration" aria-label={item.art}>{item.art}</div>
-        <h1 id="S-02-title" className="v34-title">{item.title}</h1><p className="v34-lede">{item.copy}</p><span className="v34-grow"/>
-      </main><Footer hint={index === 2 ? 'Choose how you want to sign in.' : 'Continue through the short introduction.'}><IconAction label={index === 2 ? 'Get started' : 'Next slide'} icon="forward" onClick={() => index === 2 ? finish() : setIndex((value) => value + 1)}/></Footer></Pane>
-    </Screen>
-  );
+  return <S02R2/>;
 }
 
 export function V34AuthGate(props: ScreenProps) {
