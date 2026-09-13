@@ -11,9 +11,16 @@ function markup(phase: StudentSessionPhase) {
 }
 
 describe('NYAY-77 S-01 approved R2 light states', () => {
-  it('isolates the mobile R2 raster layer without visible shadow or desktop changes', () => {
+  it('isolates the mobile R2 raster layer without a visible shadow', () => {
     const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');
     expect(css).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{\s*\.s01-r2\s*\{\s*filter:\s*drop-shadow\(0 0 0 transparent\)/);
+  });
+  it('isolates desktop error rasterization without changing checking or resolved states', () => {
+    const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/@media\s*\(min-width:\s*900px\)\s*\{\s*\.s01-r2:has\(\.s01-r2__tile--error\)\s*\{\s*filter:\s*drop-shadow\(0 0 0 transparent\)/);
+    expect(markup('unavailable')).toContain('s01-r2__tile--error');
+    expect(markup('pending')).not.toContain('s01-r2__tile--error');
+    expect(markup('authenticated')).not.toContain('s01-r2__tile--error');
   });
   it('keeps the unavailable heading on R2 ink rather than the legacy global heading color', () => {
     const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');

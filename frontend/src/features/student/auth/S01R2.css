@@ -42,6 +42,7 @@
   .s01-r2 { filter: drop-shadow(0 0 0 transparent); }
 }
 @media (min-width: 900px) {
+  .s01-r2:has(.s01-r2__tile--error) { filter: drop-shadow(0 0 0 transparent); }
   .s01-r2__lockup { height: 72px; }
   .s01-r2__tile { width: 68px; height: 68px; }
   .s01-r2__tile svg { width: 31px; height: 31px; }
