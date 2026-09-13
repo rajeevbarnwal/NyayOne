@@ -15,6 +15,10 @@ describe('NYAY-77 S-01 approved R2 light states', () => {
     const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');
     expect(css).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{\s*\.s01-r2\s*\{\s*filter:\s*drop-shadow\(0 0 0 transparent\)/);
   });
+  it('keeps the unavailable heading on R2 ink rather than the legacy global heading color', () => {
+    const css = readFileSync(new URL('./S01R2.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.s01-r2 h1\s*\{[^}]*color:\s*inherit/);
+  });
   it('renders the R2 lockup and exact checking copy without invented percentage', () => {
     const html = markup('pending');
     expect(html).toContain('data-nyayone-design="3.2.1-r2"');

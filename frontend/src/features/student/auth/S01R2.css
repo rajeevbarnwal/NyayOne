@@ -31,7 +31,7 @@
 .s01-r2__tile svg { width: 28px; height: 28px; }
 .s01-r2__tile--error { color: #9A2B21; background: #9A2B2114; border-color: #9A2B2133; }
 .s01-r2__tile--success { color: #1E6B4A; background: #1E6B4A14; border-color: #1E6B4A33; }
-.s01-r2 h1 { font-family: 'NyayOne Revision L Heading', Aptos, Calibri, Carlito, system-ui, sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -.01em; line-height: 1.1; margin: 0; }
+.s01-r2 h1 { color: inherit; font-family: 'NyayOne Revision L Heading', Aptos, Calibri, Carlito, system-ui, sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -.01em; line-height: 1.1; margin: 0; }
 .s01-r2 p { margin: 9px 0 0; font-size: 14.5px; line-height: 1.6; color: #3E4254; max-width: 330px; }
 .s01-r2 button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; min-width: 190px; padding: 0 18px; border: 1.5px solid #2E3A8C; background: #2E3A8C; color: #fff; font-family: inherit; font-size: 14px; font-weight: 700; border-radius: 12px; cursor: pointer; }
 .s01-r2 button .v321-revl-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }
