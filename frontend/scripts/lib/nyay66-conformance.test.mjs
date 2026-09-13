@@ -62,6 +62,17 @@ describe('R2 additive reference coverage', () => {
   it('refuses unimplemented recovery and unknown fixtures instead of manufacturing coverage',async()=>{
     for(const state of ['s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
   });
+  it('measures S-02 focus with real keyboard input instead of a manufactured visual attribute',async()=>{
+    const actions=[];
+    const page={route:async()=>{},waitForResponse:async()=>({finished:async()=>{}}),goto:async url=>actions.push(url),locator:()=>({waitFor:async()=>{}}),keyboard:{press:async key=>actions.push(key)},getByRole:(role,options)=>({evaluate:async()=>{actions.push([role,options]);return true;}})};
+    expect(await r2.mockR2Application(page,'s02-focus','http://localhost',[])).toEqual({evidenceKind:'live-route',interaction:'keyboard-Tab'});
+    expect(actions).toEqual(['http://localhost/s-02','Tab',['button',{name:'Continue',exact:true}]]);
+    // This double has no DOM-writing API or programmatic focus method.
+  });
+  it('refuses S-02 focus evidence when Tab does not focus Continue visibly',async()=>{
+    const page={route:async()=>{},waitForResponse:async()=>({finished:async()=>{}}),goto:async()=>{},locator:()=>({waitFor:async()=>{}}),keyboard:{press:async()=>{}},getByRole:()=>({evaluate:async()=>false})};
+    await expect(r2.mockR2Application(page,'s02-focus','http://localhost',[])).rejects.toThrow('R2_S02_KEYBOARD_FOCUS_MISSING');
+  });
   it('captures the real S-01 unavailable path from a malformed synthetic session response',async()=>{
     let handler;const visits=[],waits=[];
     const page={route:async(_,fn)=>{handler=fn;},goto:async path=>visits.push(path),locator:selector=>({waitFor:async()=>waits.push(selector)}),getByRole:(role,options)=>({waitFor:async()=>waits.push([role,options])})};

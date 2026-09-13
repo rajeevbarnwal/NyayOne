@@ -10,11 +10,18 @@ export const R2_STATES=Object.entries({s01:['checking','error','resolved'],s02:[
 export const R2_VIEWPORTS=[{id:'mobile390',width:390,height:844,preset:'m390'},{id:'mobile360',width:360,height:800,preset:'m360'},{id:'desktop',width:1440,height:1024,preset:'d1440'}];
 // Additional state fixtures are delivered with their screen PR, not fabricated
 // by rewriting the live DOM to look like the prototype.
-export const R2_LIVE_STATES=['s01-checking','s01-error','s01-resolved','s02-default','s06-entry'];
+export const R2_LIVE_STATES=['s01-checking','s01-error','s01-resolved','s02-default','s02-focus','s06-entry'];
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 export async function mockR2Application(page,view,origin,errors){
   if(!R2_LIVE_STATES.includes(view))throw Error('R2_LIVE_STATE_NOT_IMPLEMENTED');
   const state=R2_STATES.find(x=>x.id===view);
+  if(view==='s02-focus'){
+    await mockApplication(page,state.screen,origin,errors);
+    await page.keyboard.press('Tab');
+    const focused=await page.getByRole('button',{name:'Continue',exact:true}).evaluate(element=>document.activeElement===element&&element.matches(':focus-visible'));
+    if(!focused)throw Error('R2_S02_KEYBOARD_FOCUS_MISSING');
+    return {evidenceKind:'live-route',interaction:'keyboard-Tab'};
+  }
   if(state.screen!=='S-01')return mockApplication(page,state.screen,origin,errors);
   await page.route('**/*',route=>{
     const url=new URL(route.request().url());
