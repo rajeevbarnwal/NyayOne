@@ -5,7 +5,7 @@
   "ownerToleranceApproval": "NYAY-66:15382",
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
-  "integrityApproval": {"pr": 42, "commentId": 5653401946, "bundleSha256": "f23236e87a6d5c5288075b7a23a1baebf219d935c277be3109ce21057c284ee3"},
+  "integrityApproval": {"pr": 43, "commentId": 5655233403, "bundleSha256": "7fb940c0e7bc10905f1cdee41df41ffb88ba29942372aa60a6322906f3a09582"},
   "enforced": [],
   "exceptions": []
 }
