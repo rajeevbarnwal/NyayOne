@@ -93,7 +93,7 @@ jobs:
           NYAY66_OUTPUT: ${{ runner.temp }}/nyay66-calibration
         run: |
           if [ "$REFERENCE" = r2 ]; then
-            node scripts/nyay66-r2-calibrate.mjs "$NYAY66_OUTPUT"
+            node ../../control/frontend/scripts/nyay66-r2-calibrate.mjs "$NYAY66_OUTPUT"
           else
             node scripts/nyay66-calibrate.mjs
           fi

@@ -18,6 +18,17 @@ class CalibrationWorkflowContracts(unittest.TestCase):
         self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
         self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["source_head"]["required"], "true")
 
+    def test_r2_capture_uses_reviewed_control_code_with_original_candidate_inputs(self):
+        steps = self.workflow()["jobs"]["calibrate"]["steps"]
+        capture = next(step for step in steps if step.get("name") == "Generate reference artifacts only")
+        self.assertEqual(capture["working-directory"], "candidate/frontend")
+        self.assertIn('node ../../control/frontend/scripts/nyay66-r2-calibrate.mjs "$NYAY66_OUTPUT"', capture["run"])
+        self.assertNotIn('node scripts/nyay66-r2-calibrate.mjs', capture["run"])
+        candidate = next(step for step in steps if step.get("name") == "Read exact reference candidate")
+        self.assertEqual(candidate["with"]["ref"], "${{ inputs.source_head }}")
+        control = next(step for step in steps if step.get("name") == "Read reviewed control pins from the dispatch workflow revision")
+        self.assertEqual(control["with"]["ref"], "${{ github.workflow_sha }}")
+
     def test_owner_actor_and_rerun_actor_are_both_required(self):
         condition = self.workflow()["jobs"]["calibrate"]["if"]
         self.assertEqual(condition, "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' && github.triggering_actor == 'rajeevbarnwal' }}")
