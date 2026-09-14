@@ -1886,5 +1886,74 @@ class SealedDesignCheckoutTests(unittest.TestCase):
         self.check_checkout("false")
 
 
+class EnvironmentFilePolicyTests(unittest.TestCase):
+    """NYAY-82: local environment files never enter a candidate Git tree."""
+
+    samples = (
+        ".env", ".env.local", ".env.production", ".env~", ".envrc",
+        "production.env", "production.env.local", "production.env~",
+        "backend/.env", "backend/.env.local", "backend/.env~",
+        "backend/.envrc", "backend/production.env",
+        "infra/video/production.env.local",
+        ".ENV", "production.ENV", "backend/.ENV.local",
+        "infra/video/production.ENV~",
+    )
+    templates = {".env.example", "infra/video/.env.example"}
+
+    @classmethod
+    def local_environment_path(cls, path: str) -> bool:
+        if path in cls.templates:
+            return False
+        name = Path(path).name.lower()
+        return (
+            name.startswith(".env")
+            or name.endswith((".env", ".env~"))
+            or ".env." in name
+        )
+
+    def test_local_environment_variants_are_ignored_not_templates(self) -> None:
+        root = HERE.parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory)
+            env = {key: value for key, value in os.environ.items()
+                   if not key.startswith("GIT_")}
+            env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+            subprocess.run(["git", "init", "--quiet", str(candidate)],
+                           env=env, check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(candidate), "config", "core.ignorecase", "false"],
+                           env=env, check=True, capture_output=True)
+            (candidate / ".gitignore").write_bytes((root / ".gitignore").read_bytes())
+            paths = (*self.samples, *sorted(self.templates))
+            result = subprocess.run(
+                ["git", "-C", str(candidate), "check-ignore", "--no-index", "-z", "--stdin"],
+                input="\0".join(paths).encode() + b"\0", env=env,
+                check=False, capture_output=True,
+            )
+            self.assertIn(result.returncode, (0, 1))
+            ignored = set(result.stdout.decode().rstrip("\0").split("\0"))
+            self.assertEqual(set(self.samples) - ignored, set(),
+                             "a local environment filename can escape .gitignore")
+            self.assertFalse(self.templates & ignored,
+                             "the two intentionally tracked templates must stay available")
+
+    def test_tracked_environment_files_are_only_explicit_templates(self) -> None:
+        result = subprocess.run(
+            ["git", "-C", str(HERE.parents[1]), "ls-files", "-z"],
+            check=True, capture_output=True,
+        )
+        paths = result.stdout.decode().rstrip("\0").split("\0")
+        self.assertEqual([p for p in paths if self.local_environment_path(p)], [],
+                         "tracked local environment path; contents deliberately not read")
+        self.assertTrue(self.templates <= set(paths))
+
+    def test_forced_add_environment_names_fail_the_path_policy(self) -> None:
+        for path in self.samples:
+            with self.subTest(path=path):
+                self.assertTrue(self.local_environment_path(path))
+        for path in (*self.templates, "backend/app/core/config.py", "docs/environment.md"):
+            with self.subTest(path=path):
+                self.assertFalse(self.local_environment_path(path))
+
+
 if __name__ == "__main__":
     unittest.main()

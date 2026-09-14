@@ -6,6 +6,11 @@
 # Environment and secrets
 .env
 .env.*
+# Local dotenv backups/direnv and suffix-style environment files (NYAY-82).
+.[eE][nN][vV]*
+*.[eE][nN][vV]
+*.[eE][nN][vV].*
+*.[eE][nN][vV]~
 !.env.example
 *.pem
 *.key
