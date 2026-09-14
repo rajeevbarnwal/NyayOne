@@ -1510,14 +1510,15 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(signIn).toContain("if (!legalTextInert) throw new Error('NYAY83_S04_LEGAL_TEXT_INTERACTIVE')");
   });
 
-  it('uses the S-04 Mobile Number casing after recovery without changing S-06 or S-08', () => {
+  it('uses S-04 Mobile Number after recovery, R2 Registered mobile number on S-06, and unchanged S-08', () => {
     const runner = readFileSync(resolve(ROOT, 'scripts/registration-e2e.mjs'), 'utf8');
     const start = runner.indexOf("await page.waitForURL('**/s-04');");
     const end = runner.indexOf('// Responsive/theme and icon-tooltip contract matrix.', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(runner.slice(start, end)).toContain("getByLabel('Mobile Number', { exact: true }).fill('')");
-    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(2);
+    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(1);
+    expect(runner.match(/getByLabel\('Registered mobile number', \{ exact: true \}\)/gu)).toHaveLength(1);
   });
 
   it('kills exactly one deterministic perturbation for every named mutant', async () => {

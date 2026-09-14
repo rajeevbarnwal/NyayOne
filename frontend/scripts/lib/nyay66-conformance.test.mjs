@@ -59,8 +59,9 @@ describe('R2 additive reference coverage', () => {
       await expect(r2.loadR2(root,config)).rejects.toThrow('R2_REFERENCE_BYTES_MISMATCH');
     }finally{await rm(root,{recursive:true,force:true});}
   });
-  it('refuses unimplemented recovery and unknown fixtures instead of manufacturing coverage',async()=>{
-    for(const state of ['s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  it('includes all nine real recovery fixtures while refusing unknown coverage',async()=>{
+    expect(r2.R2_LIVE_STATES.filter(state=>state.startsWith('s06-'))).toEqual(r2.R2_STATES.filter(state=>state.id.startsWith('s06-')).map(state=>state.id));
+    await expect(r2.mockR2Application({},'s99-other','http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
   });
   it('measures S-02 focus with real keyboard input instead of a manufactured visual attribute',async()=>{
     const actions=[];

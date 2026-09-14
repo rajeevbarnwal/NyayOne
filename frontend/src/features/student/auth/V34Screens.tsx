@@ -23,11 +23,8 @@ import {
   isMaskedMobileDestination,
   startEmailLoginOtp,
   startLoginOtp,
-  startRecovery,
   type LoginChannels,
   verifyLoginOtp,
-  verifyRecovery,
-  completeRecovery,
   verifyStudentOtp,
   logoutStudent,
 } from '../lib/registrationApi';
@@ -48,6 +45,7 @@ import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
 import { S01R2, readR2OnboardingSeen } from './S01R2';
 import { S02R2 } from './S02R2';
+import { S06Recovery } from './S06Recovery';
 
 type ScreenProps = { theme?: ThemeMode; toggleTheme?: () => void };
 const OtpScreenThemeContext = createContext<ScreenProps>({});
@@ -487,49 +485,7 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
 }
 
 export function V34AccountRecovery() {
-  const nav = useNavigate();
-  const [mobile, setMobile] = useState('');
-  const [code, setCode] = useState('');
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const otpFlow = useOtpFlowState();
-  const recoveryPending = otpFlow.state?.status === 'pending'
-    && otpFlow.state.purpose === 'recovery';
-  async function send() {
-    if (!isValidMobile(mobile)) { setError(MOBILE_ERROR); return; }
-    setError('');
-    try {
-      otpFlow.adopt(await startRecovery(mobile));
-      setMessage('If an account matches, a six digit recovery code has been sent.');
-    } catch {
-      // Known and decoy identities retain the same user-facing failure shape.
-      setMessage('A recovery code could not be requested. Please retry.');
-    }
-  }
-  async function verifyCode() {
-    if (!/^\d{6}$/.test(code)) { setError('Enter the complete 6-digit recovery code.'); return; }
-    try {
-      otpFlow.adopt(await verifyRecovery(code));
-      otpFlow.adopt(await completeRecovery());
-      setError('');
-      nav('/s-04', { replace: true });
-    } catch (caught) {
-      if (caught instanceof RegistrationApiError && caught.otpState) {
-        otpFlow.adopt(caught.otpState);
-      }
-      setError('Recovery could not be verified. Check the code or request a new one.');
-    }
-  }
-  return (
-    <Screen id="S-06" aside={<AuthAside title="Recover your account." copy="The response stays identical whether or not the number is registered."/>}>
-      <Pane><PaneHead id="S-06 · RECOVERY" back={() => nav('/s-04')}/><main className="v34-main">
-        <h1 id="S-06-title" className="v34-title">Account recovery</h1><p className="v34-lede">Tell us the mobile number on the account. We will send a six digit code.</p>
-        <Field id="v34-reset-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" prefix="+91" placeholder="10 digit number" maxLength={15} error={error}/>
-        {recoveryPending && <Field id="v34-recovery-code" label="6-DIGIT RECOVERY CODE" value={code} onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/>}
-        {message && <div className="v34-well" role="status">{message}</div>}<div className="v34-rule"/><div><span className="v34-mono v34-accent">WHY THE WORDING IS CAREFUL</span><p className="v34-copy">The same confirmation protects your identity from anyone probing mobile numbers.</p></div><span className="v34-grow"/>
-      </main><Footer hint={recoveryPending ? 'Use the latest recovery code. It can only be consumed once.' : 'We will text a six digit code to that number.'}><IconAction label={recoveryPending ? 'Verify recovery code' : 'Send the code'} icon={recoveryPending ? 'verify' : 'send'} onClick={recoveryPending ? verifyCode : send}/></Footer></Pane>
-    </Screen>
-  );
+  return <S06Recovery/>;
 }
 
 const HOME_NAV: readonly { label: string; icon: IconName }[] = [
