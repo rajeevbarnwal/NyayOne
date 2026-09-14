@@ -132,6 +132,7 @@
 .v321-dpdp { min-height: 24px; align-self: flex-start; display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px; border: var(--nyayone-border-width) solid var(--nyayone-color-indigo); border-radius: 16px; background: var(--nyayone-color-indigo-surface); color: var(--nyayone-color-indigo); font-size: 11px; font-weight: 700; }
 .v321-dpdp i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
 .v321-revl-icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; }
+[data-screen='S-05'] .v321-primary > .v321-revl-icon { flex: 0 1 auto; }
 .v321-icon--indigo { color: var(--nyayone-color-indigo); }
 .v321-icon--gold { color: var(--nyayone-color-gold); }
 .v321-icon--teal { color: #0e6470; }
@@ -202,6 +203,14 @@
   font-weight: 700;
 }
 .v321-inline-action { display: inline-flex; align-items: center; gap: 6px; }
+[data-screen='S-05'] .v321-inline-action {
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  color: var(--nyayone-color-indigo);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: normal;
+}
 .v321-inline-links { display: flex; justify-content: space-between; gap: 8px; }
 
 .v321-segment { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--v34-well); }
@@ -254,6 +263,8 @@
 .v321-screen .v34-otp > span { width: 46px; height: 52px; flex: 0 0 46px; border: var(--nyayone-border-width) solid var(--v34-line2); border-radius: var(--nyayone-radius-control); background: var(--v34-surface); font: 500 24px var(--nyayone-font-mono); }
 .v321-screen .v34-kv { max-width: none; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 6px 24px; padding: 13px 16px; border-radius: var(--nyayone-radius-card); color: var(--v34-body); font-size: 13.5px; }
 .v321-screen .v34-kv > span { min-height: 0; padding: 0; border: 0; }
+[data-screen='S-05'].v321-screen .v34-kv > span { display: block; }
+[data-screen='S-05'] .v34-kv b { font-weight: 800; }
 .v321-screen .v34-checks { gap: 4px; padding: 0; background: transparent; }
 .v321-screen .v34-checks label { font-size: 12.5px; }
 .v321-screen .v34-checks input { width: 44px; height: 44px; }

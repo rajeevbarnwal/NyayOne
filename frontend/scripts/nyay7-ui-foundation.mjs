@@ -284,7 +284,7 @@ async function observeSelectorContext(page, screenId) {
     personaChanges: document.querySelectorAll('[data-nyayone-persona-change]').length,
   }));
 
-  if (screenId === 'S-04' || screenId === 'S-05') {
+  if (screenId === 'S-04') {
     return {
       pass: counts.createContexts === 1
         && counts.personaChanges === 1
@@ -292,6 +292,18 @@ async function observeSelectorContext(page, screenId) {
         && counts.personaTriggers === 0,
       counts,
       expected: 'one Student/English sign-in context',
+    };
+  }
+  // Owner disposition 15129: identity correction remains on S-05, but the
+  // persona/language context belongs on S-04, not the login OTP challenge.
+  if (screenId === 'S-05') {
+    return {
+      pass: counts.createContexts === 0
+        && counts.personaChanges === 0
+        && counts.languageTriggers === 0
+        && counts.personaTriggers === 0,
+      counts,
+      expected: 'no Student/persona/language controls on login OTP',
     };
   }
   if (screenId === 'S-08' || screenId === 'S-09') {

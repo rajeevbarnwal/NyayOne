@@ -282,7 +282,6 @@ describe('NYAY-8 passwordless mobile authentication RED contracts', () => {
 
   it.each([
     ['S-04', V34Login],
-    ['S-05', V34LoginOtp],
     ['S-08', V34Register],
     ['S-09', V34OtpVerify],
   ] as const)('carries explicit Student context with a Change action on %s', (_screen, Component) => {
@@ -292,6 +291,30 @@ describe('NYAY-8 passwordless mobile authentication RED contracts', () => {
     expect(html).toContain('Joining as <b>Student</b>');
     expect(html).toContain('data-nyayone-persona-change=""');
     expect(html).toMatch(/<button[^>]*data-nyayone-persona-change=""[^>]*>Change<\/button>/u);
+  });
+
+  it.each([
+    ['mobile', '••••••3210', true],
+    ['mobile', '••••••3210', false],
+    ['email', 's•••••@example.test', true],
+    ['email', 's•••••@example.test', false],
+  ] as const)('omits S-05 persona/language context for %s / %s (loading=%s)', (_channel, destinationMasked, loading) => {
+    otpHook.state = {
+      status: 'pending', purpose: 'login', destinationMasked,
+      attemptsLeft: 3, expiresInSeconds: 300, resendInSeconds: 30,
+      lockedForSeconds: 0, resendAllowed: false,
+    };
+    otpHook.loading = loading;
+    const html = renderWithStudentSession(V34LoginOtp, 'anonymous');
+
+    // Owner disposition 15129 removes only the S-05 context. The positive
+    // S-04/S-08/S-09 assertions above remain active.
+    expect(html).not.toContain('data-nyayone-create-context');
+    expect(html).not.toContain('Joining as');
+    expect(html).not.toContain('data-nyayone-persona-change');
+    expect(html).not.toContain('data-nyayone-persona-trigger');
+    expect(html).not.toContain('data-nyayone-language-trigger');
+    expect(html).not.toContain('aria-label="Change persona"');
   });
 
   it('distinguishes identity correction to S-04 from persona Change to S-03 safe focus', () => {
