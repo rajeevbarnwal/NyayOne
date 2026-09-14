@@ -182,7 +182,8 @@ function RevLBrandPanel({ verification = false }: { verification?: boolean }) {
   );
 }
 
-function RevLLegalFooter() {
+function RevLLegalFooter({ plainText = false }: { plainText?: boolean }) {
+  if (plainText) return <footer className="v321-legal"><span>Privacy Notice</span><span aria-hidden="true">·</span><span>Terms</span><span aria-hidden="true">·</span><span>Accessibility</span></footer>;
   return <footer className="v321-legal"><a href="/s-19">Privacy Notice</a><span aria-hidden="true">·</span><a href="/terms">Terms</a><span aria-hidden="true">·</span><a href="/accessibility">Accessibility</a></footer>;
 }
 
@@ -342,8 +343,9 @@ export function V34AuthGate(props: ScreenProps) {
     return () => cancelAnimationFrame(frame);
   }, [location.state]);
   return (
-    <Screen id="S-03" aside={<RevLBrandPanel/>}>
+    <Screen id="S-03">
       <RevLTopbar {...props}/>
+      <RevLBrandPanel/>
       <Pane><main id="main-content" aria-labelledby="S-03-title" className="v34-main v321-form v321-form--gateway">
         <div><span className="v321-eyebrow">Welcome to NyayOne</span><h1 id="S-03-title" className="v34-title">Where would you like to begin?</h1><p className="v34-lede">Return to your workspace or create a secure student account in a few clear steps.</p></div>
         {deletionAccepted && (
@@ -352,12 +354,12 @@ export function V34AuthGate(props: ScreenProps) {
             <span>You have been signed out and this browser's student context has been cleared.</span>
           </div>
         )}
-        <button type="button" className="v321-primary" aria-label="Sign in" onClick={() => nav('/s-04')}><NyayOneRevLIcon name="otp"/><span>Sign In Securely</span></button>
+        <button type="button" className="v321-primary" aria-label="Sign In Securely" onClick={() => nav('/s-04')}><NyayOneRevLIcon name="otp"/><span>Sign In Securely</span></button>
         <p className="v321-signin-note">Signing in? Your saved role and language apply automatically. No need to choose again.</p>
-        <div className="v321-join-card"><span className="v321-eyebrow">New here? Choose how you join</span><NyayOneAuthSelectors/><button type="button" className="v321-secondary" aria-label="Register as a student" onClick={() => nav('/s-08')}><span className="v321-icon--indigo"><NyayOneRevLIcon name="userplus"/></span><span>Create Student Account</span></button></div>
-        <p className="v321-consent">By continuing, you acknowledge the <a href="/s-19">Privacy Notice</a>. No sign-in code is requested on this screen. Persona and language set presentation and routing intent only. They are never authorization.</p>
+        <div className="v321-join-card"><span className="v321-eyebrow">New here? Choose how you join</span><NyayOneAuthSelectors/><button type="button" className="v321-secondary" aria-label="Create Student Account" onClick={() => nav('/s-08')}><span className="v321-icon--indigo"><NyayOneRevLIcon name="userplus"/></span><span>Create Student Account</span></button></div>
+        <p className="v321-consent">By continuing, you acknowledge the Privacy Notice. No sign-in code is requested on this screen. Persona and language set presentation and routing intent only. They are never authorization.</p>
         <span className="v321-dpdp"><i aria-hidden="true"/>DPDP Act, 2023</span>
-      </main><RevLLegalFooter/></Pane>
+      </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );
 }
