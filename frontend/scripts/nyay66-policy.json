@@ -25,6 +25,26 @@
       "liveSha256": "2b044e338803b78bd246782027be2c13cd9054962a9562e61361ce7c594b0caa",
       "checks": ["pixels", "text", "controls", "geometry"],
       "approvalPr": 47
+    },
+    {
+      "screen": "S-05",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "3d8887ca61969d4e4feae5656c62959d7062f15e3274870aa040fd69109872a4",
+      "liveSha256": "98278ee09eb1a20ae2ffeb9f515b2a1a428d937c6ac7c79c9b49a9ffba0e8de6",
+      "checks": ["controls"],
+      "reason": "Preserve existing channel-specific Change name, Six digit code and Verify and continue accessible names; retain blank Verify disabled until six digits and a valid server flow. No pixel, text, geometry, mask, or accessibility exception.",
+      "approvalPr": 48
+    },
+    {
+      "screen": "S-05",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7b3f67097cce2543947c70939d02b394e213bbda5dc281e17a124961640d7b99",
+      "liveSha256": "f2778043fe031b28eef4337eb8b4bb0a94ae3c4d2b4091b0dbaebd1fae271b9a",
+      "checks": ["controls"],
+      "reason": "Preserve existing channel-specific Change name, Six digit code and Verify and continue accessible names; retain blank Verify disabled until six digits and a valid server flow. No pixel, text, geometry, mask, or accessibility exception.",
+      "approvalPr": 48
     }
   ]
 }
