@@ -474,10 +474,10 @@ export async function completeRecovery(): Promise<OtpFlowState> {
   return requireOtpFlowState(result);
 }
 
-export async function startLoginOtp(mobile: string): Promise<OtpFlowState> {
+export async function startLoginOtp(mobile: string, signal?: AbortSignal): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/login/otp/start',
-    { method: 'POST', body: JSON.stringify({ mobile }) },
+    { method: 'POST', body: JSON.stringify({ mobile }), signal },
   );
   return requireOtpFlowState(result);
 }
@@ -520,10 +520,10 @@ export async function getLoginChannels(): Promise<LoginChannels> {
   return channels;
 }
 
-export async function startEmailLoginOtp(email: string): Promise<OtpFlowState> {
+export async function startEmailLoginOtp(email: string, signal?: AbortSignal): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/login/email/start',
-    { method: 'POST', body: JSON.stringify({ email }) },
+    { method: 'POST', body: JSON.stringify({ email }), signal },
   );
   return requireOtpFlowState(result);
 }

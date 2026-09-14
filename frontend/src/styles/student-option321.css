@@ -209,6 +209,13 @@
 .v321-segment button[aria-pressed='true'] { background: var(--v34-surface); color: var(--nyayone-color-deep); box-shadow: 0 1px 4px rgba(20,22,26,.14); }
 .v321-segment button[disabled] { opacity: .7; cursor: not-allowed; }
 
+[data-screen='S-04'] .v321-segment button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
 [data-theme='dark'] .v321-screen .v321-segment button[aria-pressed='true'],
 [data-theme='dark'] .v321-screen .v321-context__persona button {
   color: var(--v34-accent-text);

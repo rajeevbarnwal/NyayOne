@@ -400,6 +400,11 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const pendingLogin = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    pendingLogin.current?.abort();
+    pendingLogin.current = null;
+  }, []);
   const activeChannel = emailEnabled ? channel : 'mobile';
   function chooseChannel(next: 'mobile' | 'email') {
     if (next === 'email' && !emailEnabled) return;
@@ -407,6 +412,7 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
     setErrors({});
   }
   async function submit() {
+    if (busy || pendingLogin.current) return;
     const next: Record<string, string> = {};
     if (activeChannel === 'email') {
       if (!isValidLoginEmail(email)) next.email = LOGIN_EMAIL_ERROR;
@@ -415,27 +421,38 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
     }
     setErrors(next);
     if (Object.keys(next).length) return;
+    const request = new AbortController();
+    pendingLogin.current = request;
+    // Navigation can retire this screen while a response is pending. Abort
+    // the transport and separately fence every continuation to this request.
+    const isCurrentRequest = () => pendingLogin.current === request && !request.signal.aborted;
     setBusy(true);
     try {
       if (activeChannel === 'email') {
-        await startEmailLoginOtp(email.trim());
+        await startEmailLoginOtp(email.trim(), request.signal);
       } else {
-        await startLoginOtp(mobile);
+        await startLoginOtp(mobile, request.signal);
       }
+      if (!isCurrentRequest()) return;
       nav('/s-05');
     } catch (caught) {
+      if (!isCurrentRequest()) return;
       if (caught instanceof RegistrationApiError && caught.code === 'email_login_disabled') {
         setErrors({ submit: 'Email sign-in is not available right now. Use your mobile number.' });
       } else {
         setErrors({ submit: 'A one time code could not be requested. Please retry.' });
       }
     } finally {
-      setBusy(false);
+      if (isCurrentRequest()) {
+        pendingLogin.current = null;
+        setBusy(false);
+      }
     }
   }
   return (
-    <Screen id="S-04" aside={<RevLBrandPanel/>}>
+    <Screen id="S-04">
       <RevLTopbar {...topbarProps}/>
+      <RevLBrandPanel/>
       <Pane><main id="main-content" aria-labelledby="S-04-title" className="v34-main v321-form v321-form--login">
         <CreateAccountContext
           disabled={busy}
@@ -454,7 +471,7 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
         <div className="v34-fieldset">
           {activeChannel === 'email'
             ? <Field id="v34-login-email" label="EMAIL ADDRESS" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" error={errors.email} maxLength={254} revisionLIcon="badge"/>
-            : <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>}
+            : <Field id="v34-login-mobile" label="Mobile Number" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>}
         </div>
         <p className="v321-help">{activeChannel === 'email'
           ? 'We sign you in with a one-time code by email to your verified address. Only an email you have already verified from your profile can sign you in.'
@@ -463,8 +480,8 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
             : 'We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release.'}</p>
         {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
         <PrivacyNote/>
-        <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send one time code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
-      </main><RevLLegalFooter/></Pane>
+        <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send Code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
+      </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );
 }

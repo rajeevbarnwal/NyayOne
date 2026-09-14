@@ -96,7 +96,7 @@ describe('NYAY-12 S-04 server-proven channel choice', () => {
     expect(emailSelected).toContain('role="group" aria-label="Sign-in identity"');
     expect(emailSelected).toMatch(/one-time code by email/iu);
     expect(emailSelected).not.toMatch(/type="password"/u);
-    expect(emailSelected).toContain('aria-label="Send one time code"');
+    expect(emailSelected).toContain('aria-label="Send Code"');
   });
 
   it('never asks the client to decide channel availability', () => {

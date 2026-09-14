@@ -1199,9 +1199,9 @@ async function runFailClosedMatrix(browser) {
       await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible', timeout: 15_000 });
       await page.goto(`${WEB}/s-04`, { waitUntil: 'domcontentloaded' });
       await page.locator('[data-screen="S-04"]').waitFor({ state: 'visible' });
-      await page.getByLabel('MOBILE NUMBER').fill('9876543210');
+      await page.getByLabel('Mobile Number', { exact: true }).fill('9876543210');
       actionAttempts += 1;
-      await page.getByRole('button', { name: 'Send one time code', exact: true }).click();
+      await page.getByRole('button', { name: 'Send Code', exact: true }).click();
       const rejected = page.getByText(
         'A one time code could not be requested. Please retry.', { exact: true },
       );

@@ -362,7 +362,7 @@ describe('NYAY-18 real Chromium runner source contract', () => {
     for (const productionBoundary of [
       "'[data-screen=\"S-05\"]'",
       "'[data-screen=\"S-04\"]'",
-      "name: 'Send one time code'",
+      "name: 'Send Code'",
       "getByLabel('Six digit code')",
       "name: 'Verify and continue'",
       "'This browser cannot safely change sessions. Check browser privacy support and try again.'",

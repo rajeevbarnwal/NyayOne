@@ -508,7 +508,7 @@ async function prepareStudentLoginOtp(page, mobile) {
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
-  await page.getByRole('button', { name: 'Send one time code', exact: true }).click();
+  await page.getByRole('button', { name: 'Send Code', exact: true }).click();
   const settledReadiness = settleCanonicalReadiness(otpRouteReadiness);
   const startResponse = await startResponsePromise;
   if (startResponse.status() !== 202) {
@@ -723,6 +723,15 @@ async function authWireAndPasswordlessProbe(browser) {
       gatewayExact = selectorsExact && legalTextInert && signInDestination && registerDestination;
       await page.goto(`${WEB}/s-03`, { waitUntil: 'domcontentloaded' });
     }
+    if (path === '/s-04') {
+      const legalTextInert = await page.locator('[data-screen="S-04"]').evaluate((screen) => {
+        const footer = screen.querySelector('.v321-legal');
+        const interactive = 'a, button, [role="link"], [role="button"], [tabindex]';
+        return ['Privacy Notice', 'Terms', 'Accessibility'].every((label) => footer?.textContent?.includes(label))
+          && footer.querySelectorAll(interactive).length === 0;
+      });
+      if (!legalTextInert) throw new Error('NYAY83_S04_LEGAL_TEXT_INTERACTIVE');
+    }
     const bodyText = await page.locator('body').innerText();
     return await page.locator('input[type="password"]').count() === 0
       && await page.getByRole('button', { name: /password|use a one time code/iu }).count() === 0
@@ -875,7 +884,7 @@ async function authWireAndPasswordlessProbe(browser) {
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Send Code', exact: true }).click();
   const loginSettledReadiness = settleCanonicalReadiness(loginOtpRouteReadiness);
   const loginStartResponse = await loginStarted;
   const loginStartBody = loginStartResponse.ok() ? await loginStartResponse.json() : null;
