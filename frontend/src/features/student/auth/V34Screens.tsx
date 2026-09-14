@@ -434,8 +434,9 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
     }
   }
   return (
-    <Screen id="S-04" aside={<RevLBrandPanel/>}>
+    <Screen id="S-04">
       <RevLTopbar {...topbarProps}/>
+      <RevLBrandPanel/>
       <Pane><main id="main-content" aria-labelledby="S-04-title" className="v34-main v321-form v321-form--login">
         <CreateAccountContext
           disabled={busy}
@@ -454,7 +455,7 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
         <div className="v34-fieldset">
           {activeChannel === 'email'
             ? <Field id="v34-login-email" label="EMAIL ADDRESS" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" error={errors.email} maxLength={254} revisionLIcon="badge"/>
-            : <Field id="v34-login-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>}
+            : <Field id="v34-login-mobile" label="Mobile Number" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" error={errors.mobile} maxLength={15} revisionLIcon="sim"/>}
         </div>
         <p className="v321-help">{activeChannel === 'email'
           ? 'We sign you in with a one-time code by email to your verified address. Only an email you have already verified from your profile can sign you in.'
