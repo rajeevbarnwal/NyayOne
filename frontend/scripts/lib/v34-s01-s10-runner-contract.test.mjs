@@ -149,13 +149,37 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(login).toContain("await page.waitForURL('**/s-07')");
   });
 
-  it('preserves the exact 137-row inventory while enriching the existing lifecycle row', () => {
+  it('preserves all 137 existing rows while adding explicit synthetic subchecks to the lifecycle row', () => {
     expect(runner.match(/\brecord\(/gu)).toHaveLength(17);
     expect(runner).toContain('number <= 10');
     expect(runner).toContain("for (const theme of ['light', 'dark'])");
     expect(runner).toContain("{ name: 'mobile', width: 390, height: 844 }");
     expect(runner).toContain("{ name: 'desktop', width: 1440, height: 900 }");
     expect(runner).toContain("record('login_otp_server_lifecycle'");
+  });
+
+  it('executes abandoned S-04 submit regressions in the existing CI producer and gates the lifecycle row', () => {
+    expect(runner).toContain("import { runS04PendingSubmitBrowser } from './lib/s04-pending-submit-browser.mjs'");
+    expect(runner).toContain('await runS04PendingSubmitBrowser({ browser, base })');
+    const lifecycle = sourceBetween("record('login_otp_server_lifecycle'", "record('login_secret_storage_privacy'");
+    expect(lifecycle).toContain('pendingSubmitRegression,');
+    expect(lifecycle).toContain('pendingSubmitRegression.pass');
+    const helper = readFileSync(resolve('scripts/lib/s04-pending-submit-browser.mjs'), 'utf8');
+    expect(helper).toContain("['mobile', 'email']");
+    expect(helper).toContain("['success', 'failure']");
+    expect(helper).toContain("['honors-abort', 'ignores-abort']");
+    expect(helper).toContain('await page.goBack()');
+    expect(helper).toContain("result.observed.pathname === '/s-03'");
+    expect(helper).toContain("!result.observed.paths.includes('/s-05')");
+    expect(helper).toContain('result.observed.aborts === 1');
+    expect(helper).toContain('cases.length === 8 && cases.every(row => row.pass)');
+    expect(helper).toContain("evidenceClass: 'SYNTHETIC_API_REAL_BROWSER_HISTORY'");
+    expect(helper).toContain("boundedHandshake(startObserved, 'start-observed')");
+    expect(helper).toContain("boundedHandshake(responseFinished, 'response-finished')");
+    expect(helper).toContain('S04_SYNTHETIC_TIMEOUT:');
+    expect(helper).not.toContain('await startObserved;');
+    expect(helper).not.toContain('await responseFinished;');
+    expect(helper).not.toContain('route.fetch(');
   });
 
   it('samples the exact current S-08 icon tooltip CTA', () => {

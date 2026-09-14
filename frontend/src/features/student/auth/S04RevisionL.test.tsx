@@ -107,10 +107,20 @@ describe('NYAY-83 S-04 Revision L sign-in screen', () => {
     expect(login).toContain("if (next === 'email' && !emailEnabled) return;");
     expect(login).toContain('if (!isValidLoginEmail(email))');
     expect(login).toContain('if (!isValidMobile(mobile))');
-    expect(login).toContain('await startEmailLoginOtp(email.trim());');
-    expect(login).toContain('await startLoginOtp(mobile);');
-    expect(login.indexOf("nav('/s-05');")).toBeGreaterThan(login.indexOf('await startLoginOtp(mobile);'));
+    expect(login).toContain('await startEmailLoginOtp(email.trim(), request.signal);');
+    expect(login).toContain('await startLoginOtp(mobile, request.signal);');
+    expect(login.indexOf("nav('/s-05');")).toBeGreaterThan(login.indexOf('await startLoginOtp(mobile, request.signal);'));
     expect(login).toContain('onChangeStart={() => { setBusy(true); setMobile(\'\'); setEmail(\'\'); setErrors({}); }}');
+  });
+
+  it('binds S-04 submission continuation to its mounted current request (source contract)', () => {
+    expect(login).toContain('const pendingLogin = useRef<AbortController | null>(null);');
+    expect(login).toMatch(/useEffect\(\(\) => \(\) => \{\s*pendingLogin\.current\?\.abort\(\);\s*pendingLogin\.current = null;\s*\}, \[\]\);/u);
+    expect(login).toContain('if (busy || pendingLogin.current) return;');
+    expect(login).toContain('const isCurrentRequest = () => pendingLogin.current === request && !request.signal.aborted;');
+    expect(login).toMatch(/if \(!isCurrentRequest\(\)\) return;\s*nav\('\/s-05'\);/u);
+    expect(login).toMatch(/catch \(caught\) \{\s*if \(!isCurrentRequest\(\)\) return;/u);
+    expect(login).toMatch(/finally \{\s*if \(isCurrentRequest\(\)\) \{\s*pendingLogin\.current = null;\s*setBusy\(false\);/u);
   });
 
   it('retires the server OTP context before returning to persona selection', async () => {

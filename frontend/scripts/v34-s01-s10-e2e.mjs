@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
+import { runS04PendingSubmitBrowser } from './lib/s04-pending-submit-browser.mjs';
 
 const base = process.env.V34_BASE_URL ?? 'http://127.0.0.1:4174';
 const apiBase = process.env.V34_API_BASE_URL ?? base;
@@ -474,7 +475,8 @@ try {
       authCookieVisible: visibleCookieNames.some((name) => /(?:session|auth|token|bearer)/i.test(name)),
     };
   }, { mobile: loginMobile, otp: loginCode });
-  record('login_otp_server_lifecycle', 'real cancel retirement + fresh start + verify + cookie session endpoints', {
+  const pendingSubmitRegression = await runS04PendingSubmitBrowser({ browser, base });
+  record('login_otp_server_lifecycle', 'real cancel retirement + fresh start + verify + cookie session endpoints; synthetic abandoned-submit subchecks', {
     loginCalls,
     cancelRequest,
     cancelUpstream,
@@ -483,8 +485,10 @@ try {
     restartFloorReady,
     cancelledVerify: { status: cancelledVerify.status(), body: cancelledVerifyBody },
     authenticated,
+    pendingSubmitRegression,
   },
-    loginCalls.filter((call) => call.includes('POST /api/v1/auth/student/login/otp/start')).length >= 2
+    pendingSubmitRegression.pass
+      && loginCalls.filter((call) => call.includes('POST /api/v1/auth/student/login/otp/start')).length >= 2
       && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/otp/cancel'))
       && loginCalls.some((call) => call.includes('POST /api/v1/auth/student/login/otp/verify'))
       && cancelRequest?.method === 'POST'

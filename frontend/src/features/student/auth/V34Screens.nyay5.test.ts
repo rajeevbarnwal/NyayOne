@@ -97,7 +97,7 @@ describe('S-01 server-session bootstrap', () => {
 
     expect(authBoundary.toLowerCase()).not.toContain('password');
     expect(authBoundary).not.toContain("nav('/s-09')");
-    expect(authBoundary).toContain("await startLoginOtp(mobile)");
+    expect(authBoundary).toContain("await startLoginOtp(mobile, request.signal)");
     expect(authBoundary).toContain("nav('/s-05')");
     expect(otpBoundary).toContain("flow.purpose !== purpose");
     expect(otpBoundary).toContain('purpose="login"');

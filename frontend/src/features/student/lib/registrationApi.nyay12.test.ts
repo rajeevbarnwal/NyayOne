@@ -89,3 +89,50 @@ describe('NYAY-12 email login start', () => {
     expect(source).toContain("'/api/v1/auth/student/login/channels'");
   });
 });
+
+describe('QA-NYAY83-1 caller-owned login-start cancellation', () => {
+  it.each([
+    ['mobile', '9000000340', api.startLoginOtp, '/api/v1/auth/student/login/otp/start'],
+    ['email', 'synthetic.student@example.test', api.startEmailLoginOtp, '/api/v1/auth/student/login/email/start'],
+  ] as const)('forwards the exact AbortSignal for %s without changing the request body', async (channel, identity, start, endpoint) => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ...PENDING_EMAIL_FLOW,
+      destination_masked: channel === 'mobile' ? '••••••0340' : 's•••••@example.test',
+    }, 202));
+    const controller = new AbortController();
+
+    await start(identity, controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe(endpoint);
+    expect(init.method).toBe('POST');
+    expect(init.signal).toBe(controller.signal);
+    expect(JSON.parse(String(init.body))).toEqual({ [channel]: identity });
+  });
+
+  it.each([
+    ['mobile', '9000000340', api.startLoginOtp],
+    ['email', 'synthetic.student@example.test', api.startEmailLoginOtp],
+  ] as const)('propagates abort rejection for pending %s requests', async (_channel, identity, start) => {
+    const aborted = new DOMException('caller left S-04', 'AbortError');
+    let rejectTransport: ((reason: unknown) => void) | undefined;
+    fetchMock.mockImplementation((_path: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      rejectTransport = reject;
+      init.signal?.addEventListener('abort', () => reject(aborted), { once: true });
+    }));
+    const controller = new AbortController();
+    const attempt = start(identity, controller.signal);
+    const rejected = expect(attempt).rejects.toBe(aborted);
+    try {
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBe(controller.signal);
+      controller.abort();
+      await rejected;
+    } finally {
+      // Settle the synthetic transport even when the RED signal assertion fails.
+      rejectTransport?.(aborted);
+      await rejected;
+    }
+  });
+});

@@ -400,6 +400,11 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const pendingLogin = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    pendingLogin.current?.abort();
+    pendingLogin.current = null;
+  }, []);
   const activeChannel = emailEnabled ? channel : 'mobile';
   function chooseChannel(next: 'mobile' | 'email') {
     if (next === 'email' && !emailEnabled) return;
@@ -407,6 +412,7 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
     setErrors({});
   }
   async function submit() {
+    if (busy || pendingLogin.current) return;
     const next: Record<string, string> = {};
     if (activeChannel === 'email') {
       if (!isValidLoginEmail(email)) next.email = LOGIN_EMAIL_ERROR;
@@ -415,22 +421,32 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
     }
     setErrors(next);
     if (Object.keys(next).length) return;
+    const request = new AbortController();
+    pendingLogin.current = request;
+    // Navigation can retire this screen while a response is pending. Abort
+    // the transport and separately fence every continuation to this request.
+    const isCurrentRequest = () => pendingLogin.current === request && !request.signal.aborted;
     setBusy(true);
     try {
       if (activeChannel === 'email') {
-        await startEmailLoginOtp(email.trim());
+        await startEmailLoginOtp(email.trim(), request.signal);
       } else {
-        await startLoginOtp(mobile);
+        await startLoginOtp(mobile, request.signal);
       }
+      if (!isCurrentRequest()) return;
       nav('/s-05');
     } catch (caught) {
+      if (!isCurrentRequest()) return;
       if (caught instanceof RegistrationApiError && caught.code === 'email_login_disabled') {
         setErrors({ submit: 'Email sign-in is not available right now. Use your mobile number.' });
       } else {
         setErrors({ submit: 'A one time code could not be requested. Please retry.' });
       }
     } finally {
-      setBusy(false);
+      if (isCurrentRequest()) {
+        pendingLogin.current = null;
+        setBusy(false);
+      }
     }
   }
   return (

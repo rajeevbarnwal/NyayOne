@@ -107,6 +107,48 @@ on NYAY-83, not inferred from these local results.
 
 ## Validation and handoff boundary
 
+### QA-NYAY83-1: pending Send Code after leaving S-04
+
+Independent Claude QA at `68042ab6` failed on a Medium stale-redirect defect
+(NYAY-83 comments 15583/15584). A delayed OTP-start response navigated from S-03
+to S-05 after browser Back had already left S-04. Claude reproduced this on
+both the PR and base `5d2e64b`; the owner requires the pre-existing defect fixed
+before PR #47 merges. The original FAIL evidence remains unchanged in Jira:
+PNG 15958, `preview.svg` 15959 and full QA ZIP 15960, linked by comment 15585.
+
+The approved correction is request-lifecycle only: an S-04-owned AbortController
+is passed to either mobile or email OTP start, aborted on component unmount,
+and matched against the current request before navigation or state updates.
+This stops stale client continuation; aborting the browser request does not
+promise to undo an OTP request the server may already have processed. No new
+server cancellation endpoint, visual/reference change or tolerance exception
+is introduced. Regression evidence distinguishes synthetic delayed responses
+from Claude's earlier disposable-real-backend reproduction.
+
+The owner waived a full independent QA rerun for this targeted correction if
+the new regression passes and the hosted visual gate and broader auth checks
+remain unaffected. That waiver does not turn the original Claude FAIL into a
+Claude PASS. Physical-device and spoken-screen-reader gaps remain disclosed.
+
+Tests-first correction: the original implementation failed five new focused
+contracts (23 existing checks passed), then passed all 93 focused checks after
+the fix. The executable browser regression passed 0/8 on the original build
+(`68042ab6`), including four late-success redirects to S-05; the corrected build
+passed 8/8. These cover mobile/email, late success/failure, and transports that
+honor or ignore abort. They exercise real browser Back/unmount with synthetic
+API responses, not a fresh-remount/new-request scenario. Every passing case
+stays on S-03 with no S-05 history write, one cancellation and no stale alert.
+All 71 existing synthetic auth checks also pass. The eight new cases are
+explicit synthetic subchecks of the existing CI lifecycle row; all 137 row
+identities and their previous assertions remain intact.
+
+Corrective local matrix: frontend 1775 PASS / one inherited skip, typecheck,
+lint and build PASS; Python policy 600/600; workflow policy 14/14; namespace
+142 files / 22 compatibility literals / 17 self-tests PASS. One existing
+source-contract expectation now includes the optional `request.signal`
+argument; its passwordless routing assertion and all other assertions remain.
+Hosted validation at the corrective commit is reported separately on NYAY-83.
+
 Local checks include frontend typecheck/lint/build and the complete frontend
 suite, policy/security contracts, workflow/namespace checks and synthetic
 browser diagnostics at 390x844, 360x800 and 1440x1024. Same-host macOS reference
