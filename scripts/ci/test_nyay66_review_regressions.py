@@ -1,10 +1,12 @@
 """Seven Copilot regression contracts; synthetic data, no authenticated calls."""
 import importlib.util
+import ast
 import errno
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -204,6 +206,177 @@ class IntegrityAdversarial(ReviewRegressions):
             with self.assertRaises((ValueError, subprocess.CalledProcessError)):
                 self.module.validate(self.repo, base, head, comments)
 
+    def source_contract(self):
+        contract = self.repo / "contracts/unicode-legal-name-v1.json"
+        contract.parent.mkdir()
+        contract.write_bytes(b'{"synthetic":"legal name \\u0915"}\n')
+        return contract, self.commit(), self.repo / "materialized-contract.json"
+
+    def export_source_in_subprocess(self, head, destination):
+        # A regression that opens a FIFO must fail on timeout, never hang CI.
+        script = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('trusted_reader', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.export_source_contract(sys.argv[2], sys.argv[3], sys.argv[4])
+"""
+        return subprocess.run([sys.executable, "-c", script, str(ROOT / "scripts/ci/nyay66_trust.py"), str(self.repo), head, str(destination)], capture_output=True, text=True, timeout=5)
+
+    def test_21_source_contract_materializes_exact_git_blob_in_fresh_file(self):
+        contract, head, destination = self.source_contract()
+        expected = contract.read_bytes()
+        contract.write_bytes(b'{"uncommitted":"must not be mounted"}\n')
+        self.module.export_source_contract(self.repo, head, destination)
+        self.assertEqual(destination.read_bytes(), expected)
+        self.assertFalse(destination.is_symlink())
+        self.assertTrue(destination.is_file())
+        self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
+        self.assertNotEqual(destination.stat().st_ino, contract.stat().st_ino)
+        with self.assertRaises(FileExistsError):
+            self.module.export_source_contract(self.repo, head, destination)
+        self.assertEqual(destination.read_bytes(), expected)
+
+    def test_22_source_contract_rejects_git_symlink_tree_and_gitlink(self):
+        contract, head, destination = self.source_contract()
+        blob = self.run_git("rev-parse", f"{head}:contracts/unicode-legal-name-v1.json")
+        for mode, object_id in (("120000", blob), ("160000", self.base)):
+            with self.subTest(mode=mode):
+                self.run_git("update-index", "--cacheinfo", f"{mode},{object_id},contracts/unicode-legal-name-v1.json")
+                tree = self.run_git("write-tree")
+                revision = self.run_git("commit-tree", tree, "-m", "synthetic unsafe Git mode")
+                with self.assertRaisesRegex(ValueError, "UNSAFE_SOURCE_CONTRACT_GIT_ENTRY"):
+                    self.module.export_source_contract(self.repo, revision, destination)
+                self.assertFalse(destination.exists())
+        self.run_git("read-tree", head)
+        contract.unlink()
+        contract.mkdir()
+        (contract / "nested.json").write_text("{}")
+        revision = self.commit()
+        with self.assertRaisesRegex(ValueError, "UNSAFE_SOURCE_CONTRACT_GIT_ENTRY"):
+            self.module.export_source_contract(self.repo, revision, destination)
+        self.assertFalse(destination.exists())
+
+    def test_23_source_contract_rejects_checkout_symlink_directory_and_fifo(self):
+        contract, head, destination = self.source_contract()
+        outside = self.repo / "synthetic-private-file.json"
+        outside.write_text('{"synthetic":"must remain untouched"}')
+        for kind in ("symlink", "directory", "fifo"):
+            with self.subTest(kind=kind):
+                contract.unlink()
+                if kind == "symlink":
+                    contract.symlink_to(outside)
+                elif kind == "directory":
+                    contract.mkdir()
+                else:
+                    os.mkfifo(contract)
+                try:
+                    result = self.export_source_in_subprocess(head, destination)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("UNSAFE_SOURCE_CONTRACT_PATH", result.stderr)
+                    self.assertFalse(destination.exists())
+                finally:
+                    if kind == "directory":
+                        contract.rmdir()
+                    else:
+                        contract.unlink()
+                    contract.write_text("{}")
+        self.assertEqual(outside.read_text(), '{"synthetic":"must remain untouched"}')
+
+    def test_24_source_contract_rejects_symlinked_checkout_parent(self):
+        contract, head, destination = self.source_contract()
+        contract.parent.rename(self.repo / "actual-contracts")
+        (self.repo / "contracts").symlink_to(self.repo / "actual-contracts", target_is_directory=True)
+        result = self.export_source_in_subprocess(head, destination)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("UNSAFE_SOURCE_CONTRACT_PATH", result.stderr)
+        self.assertFalse(destination.exists())
+
+    def test_25_source_contract_rejects_missing_blob_and_destination_symlink(self):
+        contract, head, destination = self.source_contract()
+        with self.assertRaisesRegex(ValueError, "UNSAFE_SOURCE_CONTRACT_GIT_ENTRY"):
+            self.module.export_source_contract(self.repo, self.base, destination)
+        destination.symlink_to(contract)
+        expected = contract.read_bytes()
+        with self.assertRaises(FileExistsError):
+            self.module.export_source_contract(self.repo, head, destination)
+        self.assertEqual(contract.read_bytes(), expected)
+
+    def test_26_source_contract_cli_requires_matching_head_authorization(self):
+        contract, _, destination = self.source_contract()
+        head, comments = self.approve()
+        authorization = self.module.validate(self.repo, self.base, head, comments)
+        path = self.repo / "synthetic-authorization.json"
+        path.write_text(json.dumps({**authorization, "head": "f" * 40}))
+        command = [sys.executable, str(ROOT / "scripts/ci/nyay66_trust.py"), "--repo", str(self.repo), "--base", self.base, "--head", head, "--authorization", str(path), "--export-source-contract", str(destination)]
+        rejected = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("AUTHORIZATION_HEAD_MISMATCH", rejected.stderr)
+        self.assertFalse(destination.exists())
+        path.write_text(json.dumps(authorization))
+        accepted = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(destination.read_bytes(), contract.read_bytes())
+
+
+class ConformanceEligibilityRegression(unittest.TestCase):
+    def eligible(self, event_name, *, fork=False, ref="refs/heads/main", number=42,
+                 base="a" * 40, actor="contributor", repository="rajeevbarnwal/NyayOne"):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        expression = workflow.split("  conformance-live:\n", 1)[1].split("    if: >-\n", 1)[1].split("    runs-on:", 1)[0]
+        expression = " ".join(expression.split()).replace("&&", " and ").replace("||", " or ")
+        github = {"event_name": event_name, "ref": ref, "actor": actor, "repository": repository, "event": {}}
+        if event_name in {"pull_request", "pull_request_target"}:
+            github["event"]["pull_request"] = {"number": number, "base": {"sha": base}, "head": {"repo": {"full_name": "other/fork" if fork else repository}}}
+
+        # Interpret only the boolean workflow gate; never execute workflow text.
+        def evaluate(node):
+            if isinstance(node, ast.Constant):
+                return node.value
+            if isinstance(node, ast.Name) and node.id == "github":
+                return github
+            if isinstance(node, ast.Attribute):
+                return evaluate(node.value).get(node.attr, {})
+            if isinstance(node, ast.BoolOp):
+                values = (evaluate(value) for value in node.values)
+                return all(values) if isinstance(node.op, ast.And) else any(values)
+            if isinstance(node, ast.Compare) and len(node.ops) == 1:
+                left, right = evaluate(node.left), evaluate(node.comparators[0])
+                if isinstance(node.ops[0], ast.Eq):
+                    return left == right
+                if isinstance(node.ops[0], ast.NotEq):
+                    return left != right
+            self.fail(f"Unsupported workflow gate syntax: {ast.dump(node)}")
+
+        return bool(evaluate(ast.parse(expression, mode="eval").body))
+
+    def test_same_repository_target_prs_and_main_pushes_are_eligible(self):
+        self.assertTrue(self.eligible("pull_request_target"))
+        self.assertTrue(self.eligible("push"))
+
+    def test_forks_never_run_the_mount_job_including_bootstrap_target_events(self):
+        for event in ("pull_request", "pull_request_target"):
+            for number, base in ((42, "a" * 40), (37, "10c38bed2c50e9c7ccd66c0aead516593b3d9660")):
+                with self.subTest(event=event, number=number):
+                    self.assertFalse(self.eligible(event, fork=True, number=number, base=base))
+
+    def test_dispatch_other_refs_and_other_events_are_ineligible(self):
+        for actor in ("contributor", "rajeevbarnwal"):
+            with self.subTest(actor=actor):
+                self.assertFalse(self.eligible("workflow_dispatch", actor=actor))
+        for ref in ("refs/heads/feature", "refs/tags/main", "refs/pull/42/merge"):
+            with self.subTest(ref=ref):
+                self.assertFalse(self.eligible("push", ref=ref))
+        for event in ("schedule", "workflow_run", "issue_comment"):
+            with self.subTest(event=event):
+                self.assertFalse(self.eligible(event))
+
+    def test_retired_bootstrap_keeps_exact_pr_and_base_requirements(self):
+        bootstrap = "10c38bed2c50e9c7ccd66c0aead516593b3d9660"
+        self.assertTrue(self.eligible("pull_request", number=37, base=bootstrap))
+        self.assertFalse(self.eligible("pull_request", number=38, base=bootstrap))
+        self.assertFalse(self.eligible("pull_request", number=37, base="a" * 40))
+
 
 class DisposableGitCleanupRegression(unittest.TestCase):
     def fixture(self, temp):
@@ -286,8 +459,36 @@ class ContainerCopyRegression(unittest.TestCase):
         # This suite also runs inside the trusted evaluator export, which must
         # not contain candidate product files. Validate the workflow's read-only
         # mapping here; the complete container rehearsal validates the import.
-        self.assertIn(f'src="$GITHUB_WORKSPACE/{contract}",dst=/tmp/{contract},readonly', build)
+        self.assertIn(f'src="$RUNNER_TEMP/nyay66-source-contract.json",dst=/tmp/{contract},readonly', build)
+        self.assertNotIn(f'src="$GITHUB_WORKSPACE/{contract}"', build)
         self.assertNotIn(f'dst=/tmp/{contract},rw', build)
+
+    def test_source_contract_is_materialized_by_trusted_reader_after_authorization(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        export = workflow.split("      - name: Save only public verified approval data\n", 1)[1].split("      - uses:", 1)[0]
+        self.assertIn('python "$RUNNER_TEMP/nyay66-trusted.py" --repo "$GITHUB_WORKSPACE"', export)
+        self.assertIn('--head "$CANDIDATE_HEAD"', export)
+        self.assertIn('--authorization "$RUNNER_TEMP/nyay66-authorization.json"', export)
+        self.assertIn('--export-source-contract "$RUNNER_TEMP/nyay66-source-contract.json"', export)
+
+    def test_source_contract_handoff_supports_the_previous_base_reader(self):
+        workflow = (ROOT / ".github/workflows/nyay66-conformance.yml").read_text()
+        export = workflow.split("      - name: Save only public verified approval data\n", 1)[1].split("      - uses:", 1)[0]
+        calls = export.split('python "')[1:]
+        self.assertEqual(len(calls), 2, "base reader must approve/export before the approved reader handles the new option")
+        old_reader, approved_reader = calls
+        self.assertTrue(old_reader.startswith('$RUNNER_TEMP/nyay66-trusted.py"'))
+        self.assertIn('--export "$RUNNER_TEMP/nyay66-trusted"', old_reader)
+        self.assertNotIn("--export-source-contract", old_reader)
+        self.assertTrue(approved_reader.startswith('$RUNNER_TEMP/nyay66-trusted/scripts/ci/nyay66_trust.py"'))
+        self.assertIn('--export-source-contract "$RUNNER_TEMP/nyay66-source-contract.json"', approved_reader)
+        for call in calls:
+            self.assertIn('--repo "$GITHUB_WORKSPACE"', call)
+            self.assertIn('--base "$NYAY66_BASE" --head "$CANDIDATE_HEAD"', call)
+            self.assertIn('--authorization "$RUNNER_TEMP/nyay66-authorization.json"', call)
+        self.assertNotIn('python "$GITHUB_WORKSPACE/', workflow)
+        self.assertNotIn("GH_TOKEN", export)
+        self.assertNotIn("github.token", export)
 
     def test_20_vite_temp_is_in_private_writable_scratch_not_host_dependencies(self):
         build = self.build_step()

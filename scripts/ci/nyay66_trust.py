@@ -9,10 +9,12 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import urllib.request
 
 POLICY = "frontend/scripts/nyay66-policy.json"
+SOURCE_CONTRACT = "contracts/unicode-legal-name-v1.json"
 TOLERANCES = {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1}
 OWNER = "rajeevbarnwal"
 REPOSITORY = "rajeevbarnwal/NyayOne"
@@ -156,6 +158,37 @@ def export_bundle(repo, head, destination):
         output.write_bytes(git(repo, "show", f"{head}:{path}"))
 
 
+def export_source_contract(repo, head, destination):
+    """Copy the authorized candidate's blob into a fresh trusted-scratch file.
+
+    The contract is product input, not part of the approved evaluator bundle.
+    Inspect checkout metadata only: never open a candidate-controlled path for
+    content, including a symlink target or a FIFO that could block the reader.
+    """
+    if not re.fullmatch(r"[a-f0-9]{40}", head):
+        raise ValueError("INVALID_REVISION")
+    records = git(repo, "ls-tree", "-z", "--full-tree", head, "--", SOURCE_CONTRACT).split(b"\0")
+    if len(records) != 2 or records[1]:
+        raise ValueError("UNSAFE_SOURCE_CONTRACT_GIT_ENTRY")
+    metadata, path = records[0].split(b"\t", 1)
+    mode, kind, blob = metadata.decode("ascii").split()
+    if path != SOURCE_CONTRACT.encode() or kind != "blob" or mode not in {"100644", "100755"}:
+        raise ValueError("UNSAFE_SOURCE_CONTRACT_GIT_ENTRY")
+    checkout = Path(repo)
+    try:
+        for directory in (checkout, checkout / "contracts"):
+            if not stat.S_ISDIR(directory.lstat().st_mode):
+                raise ValueError("UNSAFE_SOURCE_CONTRACT_PATH")
+        if not stat.S_ISREG((checkout / SOURCE_CONTRACT).lstat().st_mode):
+            raise ValueError("UNSAFE_SOURCE_CONTRACT_PATH")
+    except OSError as error:
+        raise ValueError("UNSAFE_SOURCE_CONTRACT_PATH") from error
+    content = git(repo, "cat-file", "blob", blob)
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(content)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True)
@@ -165,6 +198,7 @@ def main():
     parser.add_argument("--authorization")
     parser.add_argument("--describe", action="store_true")
     parser.add_argument("--export")
+    parser.add_argument("--export-source-contract")
     args = parser.parse_args()
     if args.describe:
         config = config_at(args.repo, args.head)
@@ -182,6 +216,8 @@ def main():
         raise ValueError("AUTHORIZATION_BUNDLE_MISMATCH")
     if args.export:
         export_bundle(args.repo, args.head, args.export)
+    if args.export_source_contract:
+        export_source_contract(args.repo, args.head, args.export_source_contract)
     encoded = canonical(result)
     if args.read_approvals:
         # The only cross-job output is verified public approval data; no token.

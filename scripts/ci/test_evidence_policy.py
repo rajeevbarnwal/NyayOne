@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import ast
 import binascii
 import importlib.util
 import hashlib
@@ -1884,6 +1885,235 @@ class SealedDesignCheckoutTests(unittest.TestCase):
 
     def test_sealed_checkout_autocrlf_false(self) -> None:
         self.check_checkout("false")
+
+
+class EnvironmentFilePolicyTests(unittest.TestCase):
+    """NYAY-82: local environment files never enter a candidate Git tree."""
+
+    samples = (
+        ".env", ".env.local", ".env.production", ".env~", ".envrc",
+        "production.env", "production.env.local", "production.env~",
+        "backend/.env", "backend/.env.local", "backend/.env~",
+        "backend/.envrc", "backend/production.env",
+        "infra/video/production.env.local",
+        ".ENV", "production.ENV", "backend/.ENV.local",
+        "infra/video/production.ENV~",
+    )
+    templates = {".env.example", "infra/video/.env.example"}
+
+    @classmethod
+    def local_environment_path(cls, path: str) -> bool:
+        if path in cls.templates:
+            return False
+        name = Path(path).name.lower()
+        return (
+            name.startswith(".env")
+            or name.endswith((".env", ".env~"))
+            or ".env." in name
+        )
+
+    def test_local_environment_variants_are_ignored_not_templates(self) -> None:
+        root = HERE.parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory)
+            env = {key: value for key, value in os.environ.items()
+                   if not key.startswith("GIT_")}
+            env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+            subprocess.run(["git", "init", "--quiet", str(candidate)],
+                           env=env, check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(candidate), "config", "core.ignorecase", "false"],
+                           env=env, check=True, capture_output=True)
+            (candidate / ".gitignore").write_bytes((root / ".gitignore").read_bytes())
+            paths = (*self.samples, *sorted(self.templates))
+            result = subprocess.run(
+                ["git", "-C", str(candidate), "check-ignore", "--no-index", "-z", "--stdin"],
+                input="\0".join(paths).encode() + b"\0", env=env,
+                check=False, capture_output=True,
+            )
+            self.assertIn(result.returncode, (0, 1))
+            ignored = set(result.stdout.decode().rstrip("\0").split("\0"))
+            self.assertEqual(set(self.samples) - ignored, set(),
+                             "a local environment filename can escape .gitignore")
+            self.assertFalse(self.templates & ignored,
+                             "the two intentionally tracked templates must stay available")
+
+    def test_tracked_environment_files_are_only_explicit_templates(self) -> None:
+        result = subprocess.run(
+            ["git", "-C", str(HERE.parents[1]), "ls-files", "-z"],
+            check=True, capture_output=True,
+        )
+        paths = result.stdout.decode().rstrip("\0").split("\0")
+        self.assertEqual([p for p in paths if self.local_environment_path(p)], [],
+                         "tracked local environment path; contents deliberately not read")
+        self.assertTrue(self.templates <= set(paths))
+
+    def test_forced_add_environment_names_fail_the_path_policy(self) -> None:
+        for path in self.samples:
+            with self.subTest(path=path):
+                self.assertTrue(self.local_environment_path(path))
+        for path in (*self.templates, "backend/app/core/config.py", "docs/environment.md"):
+            with self.subTest(path=path):
+                self.assertFalse(self.local_environment_path(path))
+
+
+class ProviderSecretLiteralPolicyTests(unittest.TestCase):
+    """NYAY-82: ten external defaults and two named runtime-generated fixtures."""
+
+    # External credential defaults, not error-message/field-name strings or
+    # fake-provider signing inputs. Existing dev-only registration defaults
+    # have separate production startup refusal contracts in test_crypto_keyring.
+    production_fields = {
+        "storage_access_key", "storage_secret_key", "github_token",
+        "razorpay_key_id", "razorpay_key_secret", "livekit_api_key",
+        "livekit_api_secret", "otp_provider_token", "email_otp_provider_token",
+        "jira_api_token",
+    }
+    fixtures = {
+        "backend/tests/test_wave2_config_failclosed.py": ("KEY_SECRET", 11),
+        "backend/tests/test_wave2_video_webhook_livekit.py": ("API_SECRET", 16),
+    }
+
+    @classmethod
+    def settings_source(cls, name, expression):
+        return 'class Settings:\n' + ''.join(
+            f'    {field} = {expression if field == name else "None"}\n'
+            for field in sorted(cls.production_fields)
+        )
+
+    @classmethod
+    def empty_or_environment(cls, value):
+        if isinstance(value, ast.Constant):
+            return value.value is None or value.value is Ellipsis or value.value in ('', b'')
+        if isinstance(value, ast.Subscript) and ast.unparse(value.value) == 'os.environ':
+            return isinstance(value.slice, ast.Constant) and isinstance(value.slice.value, str) and bool(value.slice.value)
+        if not isinstance(value, ast.Call):
+            return False
+        call = ast.unparse(value.func)
+        keywords = {entry.arg: entry.value for entry in value.keywords}
+        if len(keywords) != len(value.keywords) or None in keywords:
+            return False
+        if call in {'os.getenv', 'os.environ.get'}:
+            if len(value.args) not in (1, 2) or set(keywords) - {'default'}:
+                return False
+            key = value.args[0]
+            if not isinstance(key, ast.Constant) or not isinstance(key.value, str) or not key.value:
+                return False
+            if len(value.args) == 2 and keywords:
+                return False
+            default = value.args[1] if len(value.args) == 2 else keywords.get('default', ast.Constant(None))
+            return isinstance(default, ast.Constant) and (default.value is None or default.value in ('', b''))
+        if call == 'SecretStr':
+            return len(value.args) == 1 and not keywords and cls.empty_or_environment(value.args[0])
+        if call == 'Field':
+            defaults = len(value.args) + ('default' in keywords) + ('default_factory' in keywords)
+            if len(value.args) > 1 or defaults > 1:
+                return False
+            if 'default_factory' in keywords:
+                factory = keywords['default_factory']
+                return isinstance(factory, ast.Lambda) and cls.empty_or_environment(factory.body)
+            default = value.args[0] if value.args else keywords.get('default', ast.Constant(None))
+            return cls.empty_or_environment(default)
+        return False
+
+    @classmethod
+    def production_failures(cls, source):
+        # Parse only; never import configuration or expose candidate values.
+        tree = ast.parse(source)
+        settings = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Settings']
+        declarations = {name: [] for name in cls.production_fields}
+        if len(settings) == 1:
+            for node in settings[0].body:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+                for target in targets:
+                    if isinstance(target, ast.Name) and target.id in declarations:
+                        declarations[target.id].append(node.value)
+        return sorted(name for name, values in declarations.items()
+                      if len(values) != 1 or not cls.empty_or_environment(values[0]))
+
+    @staticmethod
+    def generated_test_fixture(source, symbol, size):
+        tree = ast.parse(source)
+        imports = [n for n in tree.body if isinstance(n, ast.Import)
+                   for alias in n.names if alias.name == 'secrets' and alias.asname is None]
+        if len(imports) != 1:
+            return False
+        # A local reassignment cannot impersonate the stdlib generator.
+        if any(isinstance(n, ast.Name) and n.id == 'secrets' and isinstance(n.ctx, ast.Store)
+               for n in ast.walk(tree)):
+            return False
+        assignments = [n.value for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign))
+                       for target in (n.targets if isinstance(n, ast.Assign) else [n.target])
+                       if isinstance(target, ast.Name) and target.id == symbol]
+        if len(assignments) != 1:
+            return False
+        value = assignments[0]
+        return (isinstance(value, ast.Call) and ast.unparse(value.func) == 'secrets.token_hex'
+                and len(value.args) == 1 and not value.keywords
+                and isinstance(value.args[0], ast.Constant) and type(value.args[0].value) is int
+                and value.args[0].value == size)
+
+    def test_production_provider_defaults_remain_empty_or_environment_sourced(self):
+        root = HERE.parents[1]
+        source = (root / "backend/app/core/config.py").read_text()
+        self.assertEqual(self.production_failures(source), [])
+
+    def test_production_rejects_nonempty_literals_and_disguised_defaults(self):
+        expressions = (
+            "'synthetic-invalid-secret'", "b'synthetic-invalid-secret'",
+            "SecretStr('synthetic-invalid-secret')",
+            "Field(default='synthetic-invalid-secret', description='metadata')",
+            "os.getenv('LIVEKIT_API_SECRET', 'synthetic-invalid-secret')",
+            "os.environ.get('LIVEKIT_API_SECRET', default='synthetic-invalid-secret')",
+            "Field(default_factory=lambda: 'synthetic-invalid-secret')",
+            "secrets.token_hex(16)", "unknown_provider()",
+            "'synthetic-' + 'invalid-secret'", "f'synthetic-invalid-secret'",
+            "None or 'synthetic-invalid-secret'", "LITERAL_ALIAS",
+        )
+        for name in self.production_fields:
+            for expression in expressions:
+                with self.subTest(field=name, expression_type=type(ast.parse(expression, mode='eval').body).__name__):
+                    source = self.settings_source(name, expression)
+                    self.assertIn(name, self.production_failures(source))
+
+    def test_production_accepts_empty_and_environment_only_defaults(self):
+        expressions = (
+            "None", "''", "SecretStr('')", "Field(default=None)",
+            "Field('', description='non-secret metadata')",
+            "os.getenv('LIVEKIT_API_SECRET')",
+            "os.environ.get('LIVEKIT_API_SECRET', '')",
+            "os.environ['LIVEKIT_API_SECRET']",
+            "SecretStr(os.getenv('LIVEKIT_API_SECRET', ''))",
+            "Field(default_factory=lambda: os.getenv('LIVEKIT_API_SECRET', ''))",
+        )
+        for expression in expressions:
+            with self.subTest(expression_type=type(ast.parse(expression, mode='eval').body).__name__):
+                self.assertEqual(self.production_failures(self.settings_source('livekit_api_secret', expression)), [])
+
+    def test_removed_or_duplicate_provider_declarations_fail_closed(self):
+        self.assertEqual(set(self.production_failures('class Settings: pass')), self.production_fields)
+        source = self.settings_source('livekit_api_secret', 'None')
+        self.assertIn('livekit_api_secret', self.production_failures(source + '\n    livekit_api_secret = None\n'))
+
+    def test_named_provider_fixtures_use_approved_runtime_generation(self):
+        for path, (symbol, size) in self.fixtures.items():
+            with self.subTest(path=path, symbol=symbol):
+                source = (HERE.parents[1] / path).read_text()
+                self.assertTrue(self.generated_test_fixture(source, symbol, size),
+                                'named fixture must use the approved runtime generator; value omitted')
+
+    def test_test_fixture_literal_alias_wrapper_or_missing_generator_refuses(self):
+        expressions = ("'synthetic-invalid-secret'", "''", "SYNTHETIC_ALIAS",
+                       "str('synthetic-invalid-secret')", "secrets.token_hex(1)",
+                       "os.getenv('LIVEKIT_API_SECRET')")
+        for path, (symbol, size) in self.fixtures.items():
+            for expression in expressions:
+                self.assertFalse(self.generated_test_fixture('import secrets\n' + symbol + ' = ' + expression, symbol, size))
+            self.assertFalse(self.generated_test_fixture(symbol + f' = secrets.token_hex({size})', symbol, size))
+            self.assertFalse(self.generated_test_fixture('import secrets\nsecrets = replacement\n' + symbol + f' = secrets.token_hex({size})', symbol, size))
+
+    def test_policy_diagnostics_never_include_candidate_values(self):
+        failures = self.production_failures(self.settings_source('livekit_api_secret', "'synthetic-invalid-secret'"))
+        self.assertEqual(failures, ['livekit_api_secret'])
 
 
 if __name__ == "__main__":
