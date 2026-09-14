@@ -416,6 +416,10 @@ try {
   const capturedFlowCookie = (await context.cookies(`${apiBase}/api/v1/auth/student/otp/state`))
     .find((cookie) => cookie.name === 'nyayone_otp_flow');
   if (!capturedFlowCookie) throw new Error('login cancellation fixture did not expose its HttpOnly flow cookie to Playwright');
+  // S-05 no longer contains persona controls under owner disposition 15129.
+  // Keep the real cancellation contract on the existing S-04 persona action.
+  await page.getByRole('button', { name: 'Change mobile number', exact: true }).click();
+  await page.waitForURL('**/s-04');
   await page.getByRole('button', { name: 'Change persona', exact: true }).click();
   const cancelUpstream = await cancelObserved;
   const pathWhileCancelResponseDeferred = new URL(page.url()).pathname;
@@ -494,7 +498,7 @@ try {
       && cancelRequest?.method === 'POST'
       && JSON.stringify(cancelRequest?.body) === '{}'
       && cancelUpstream.status === 200
-      && pathWhileCancelResponseDeferred === '/s-05'
+      && pathWhileCancelResponseDeferred === '/s-04'
       && pathAfterCancel === '/s-03'
       && restartFloorReady === true
       && cancelledVerify.status() === 401

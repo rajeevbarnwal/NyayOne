@@ -126,14 +126,20 @@ describe('S-01-S-10 Chromium runner source contract', () => {
     expect(login).not.toContain("await page.waitForURL('**/s-09')");
   });
 
-  it('proves Change cancels authority before a fresh S-04 to S-05 to S-07 login', () => {
+  it('proves S-05 identity correction then S-04 persona Change cancels authority before a fresh login', () => {
     const login = sourceBetween('const loginCalls = []', 'await context.close()');
 
     expect(login).toContain("page.route('**/api/v1/auth/student/otp/cancel'");
     expect(login).toContain("route.request().postDataJSON()");
     expect(login).toContain('await route.fetch()');
+    const identityChange = login.indexOf("getByRole('button', { name: 'Change mobile number', exact: true })");
+    const returnedToLogin = login.indexOf("await page.waitForURL('**/s-04')", identityChange);
+    const personaChange = login.indexOf("getByRole('button', { name: 'Change persona', exact: true })");
+    expect(identityChange).toBeGreaterThan(-1);
+    expect(returnedToLogin).toBeGreaterThan(identityChange);
+    expect(personaChange).toBeGreaterThan(returnedToLogin);
     expect(login).toContain("getByRole('button', { name: 'Change persona', exact: true })");
-    expect(login).toContain("pathWhileCancelResponseDeferred === '/s-05'");
+    expect(login).toContain("pathWhileCancelResponseDeferred === '/s-04'");
     expect(login).toContain("cancelRequest?.method === 'POST'");
     expect(login).toContain("JSON.stringify(cancelRequest?.body) === '{}'");
     expect(login).toContain("pathAfterCancel === '/s-03'");

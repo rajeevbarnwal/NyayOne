@@ -291,10 +291,10 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
     expect(routeTransition).toBeGreaterThan(layoutReset);
   });
 
-  it('requires the exact Student and English context on the NYAY-8 sign-in screens', () => {
+  it('retains the exact Student and English context on S-04 after the S-05 disposition', () => {
     const runner = source('scripts/nyay7-ui-foundation.mjs');
-    const branchStart = runner.indexOf("if (screenId === 'S-04' || screenId === 'S-05')");
-    const branchEnd = runner.indexOf("if (screenId === 'S-08' || screenId === 'S-09')", branchStart);
+    const branchStart = runner.indexOf("if (screenId === 'S-04')");
+    const branchEnd = runner.indexOf("if (screenId === 'S-05')", branchStart);
     const signInContext = runner.slice(branchStart, branchEnd);
 
     expect(branchStart).toBeGreaterThan(-1);
@@ -305,5 +305,26 @@ describe('NYAY-7 Option 3.2.1 source contract', () => {
     expect(signInContext).toContain('counts.personaTriggers === 0');
     expect(signInContext).toContain('one Student/English sign-in context');
     expect(signInContext).not.toContain('Object.values(counts)');
+  });
+
+  it('requires zero persona and language controls on S-05 without weakening S-08 or S-09', () => {
+    const runner = source('scripts/nyay7-ui-foundation.mjs');
+    const branchStart = runner.indexOf("if (screenId === 'S-05')");
+    const branchEnd = runner.indexOf("if (screenId === 'S-08' || screenId === 'S-09')", branchStart);
+    const loginOtpContext = runner.slice(branchStart, branchEnd);
+    const signupContext = runner.slice(branchEnd, runner.indexOf('const personaTrigger =', branchEnd));
+
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(branchEnd).toBeGreaterThan(branchStart);
+    for (const field of ['createContexts', 'personaChanges', 'languageTriggers', 'personaTriggers']) {
+      expect(loginOtpContext).toContain(`counts.${field} === 0`);
+    }
+    expect(loginOtpContext).toContain('no Student/persona/language controls on login OTP');
+    expect(loginOtpContext).not.toContain('Object.values(counts)');
+    expect(signupContext).toContain('counts.createContexts === 1');
+    expect(signupContext).toContain('counts.personaChanges === 1');
+    expect(signupContext).toContain('counts.languageTriggers === 1');
+    expect(signupContext).toContain('counts.personaTriggers === 0');
+    expect(signupContext).toContain('one Student/English create-account context');
   });
 });
