@@ -3,6 +3,39 @@
 Scope: S-03 only. The approved Revision L source, references, tolerances,
 enforcement settings, other screens and historical evidence are unchanged.
 
+## Current disposition — QA D1 plain-text correction
+
+Independent QA 15553 reproduced broken anonymous legal destinations on both base
+and PR head: `/s-19` returns through an auth guard, and `/terms` / `/accessibility`
+are absent. The earlier “working links” description checked hrefs, not reachable
+content, and was incorrect. Owner accepted D1 and chose the prototype's inert
+text, recorded in NYAY-81 comment 15554. No new public legal pages are introduced.
+
+S-03 inline Privacy Notice and desktop Privacy Notice / Terms / Accessibility now
+render as plain text with no link semantics or tab stops. The shared footer has
+an explicit S-03-only plain-text option; all other call sites retain their prior
+behavior. The obsolete S-03 link-specific CSS override is removed.
+
+PR #45 exception approvals 5659878283 / 5659879160 are superseded and their two
+entries removed from the active config. Historical comments, screenshots and
+artifacts remain intact. S-03 requires strict PARITY with zero applied exceptions
+before a new Testing handoff; no tolerance or enforcement-mode change is made.
+
+Tests-first correction: 3 expected failures / 4 passes, then 7/7 passes. The two
+obsolete link expectations now assert the owner's plain-text decision; a new
+contract requires the live sealed browser gateway check to reject interactive
+legal descendants. Existing gateway routing assertions are retained and
+strengthened, not deleted; the producer's assertion inventory is unchanged.
+
+Necessary producer seal transition:
+`56e12579d2285dc2b048ae323c4ff09df7201f41fb9f53e88daf4ca2079c8373`
+→ `045927b95ab47bec86718d1a6e22d0f7eea164d448b861bf3919ae30060f6e78`.
+Only `EXPECTED_NYAY5_BROWSER_GATE_SHA256` changes in the verifier. No unrelated
+seal, workflow, reference, evaluator or approved tolerance changes.
+
+The following sections preserve the earlier implementation and exception history
+for traceability; their link-preservation disposition is superseded above.
+
 ## Product correction
 
 - The top bar precedes the brand panel in DOM reading order, matching desktop

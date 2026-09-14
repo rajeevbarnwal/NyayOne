@@ -33,18 +33,29 @@ describe('NYAY-81 S-03 Revision L entry screen', () => {
     expect(html.indexOf('class="v321-brandpanel"')).toBeLessThan(html.indexOf('id="main-content"'));
   });
 
-  it('retains working legal links rather than copying inert prototype text', () => {
+  it('renders S-03 legal notices as inert prototype text with no broken navigation', () => {
     const html = render();
-    expect(html).toContain('<a href="/s-19">Privacy Notice</a>');
-    expect(html).toContain('<a href="/terms">Terms</a>');
-    expect(html).toContain('<a href="/accessibility">Accessibility</a>');
-    expect(html.match(/href="\/s-19"/g)).toHaveLength(2);
+    expect(html).toContain('By continuing, you acknowledge the Privacy Notice.');
+    expect(html).toContain('<span>Privacy Notice</span>');
+    expect(html).toContain('<span>Terms</span>');
+    expect(html).toContain('<span>Accessibility</span>');
+    expect(html).not.toMatch(/href="\/(s-19|terms|accessibility)"/);
+    const footer = html.match(/<footer class="v321-legal">(.*?)<\/footer>/)?.[1];
+    expect(footer).toBeDefined();
+    expect(footer).not.toMatch(/<a\b|<button\b|tabindex=|role="(link|button)"/i);
   });
 
-  it('uses S-03-only regular link typography without removing its affordance or hit target', () => {
+  it('removes the superseded S-03 link affordance without changing other screens', () => {
     const css = readFileSync('src/styles/student-option321.css', 'utf8');
-    expect(css).toMatch(/\[data-screen="S-03"\] \.v321-consent a\s*\{[^}]*font-weight:\s*400;[^}]*text-decoration:\s*underline;/);
+    expect(css).not.toMatch(/\[data-screen="S-03"\] \.v321-consent a\s*\{/);
     expect(css).toMatch(/\.v321-consent a\s*\{[^}]*min-height:\s*44px;/);
+  });
+
+  it('checks inert legal content in the sealed live-browser gateway contract', () => {
+    const source = readFileSync('scripts/nyay5-profile-browser.mjs', 'utf8');
+    expect(source).toContain('const legalTextInert = await page.locator');
+    expect(source).toContain('selectorsExact && legalTextInert && signInDestination && registerDestination');
+    expect(source).toContain('a, button, [role="link"], [role="button"], [tabindex]');
   });
 
   it('keeps the two auth destinations and persona-return focus contract', () => {

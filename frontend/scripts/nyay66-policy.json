@@ -7,26 +7,5 @@
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
   "integrityApproval": {"pr": 44, "commentId": 5656277328, "bundleSha256": "db93f8407105300e132b0408b8a0988e220d4583bebb50de1443858343b68886"},
   "enforced": [],
-  "exceptions": [
-    {
-      "screen": "S-03",
-      "viewport": "mobile390",
-      "theme": "light",
-      "referenceSha256": "8d07bc5d38e9fff9b0915dfe407ecee2a78c5a3cc4a542ff69d82f6e7ec6440e",
-      "liveSha256": "f7132409a5d0e4997f59787bf781197eec3aeef967b7d87c78902b471d20d830",
-      "checks": ["controls", "geometry"],
-      "approvalPr": 45,
-      "reason": "Retain the working inline Privacy Notice link, underline and 44px target; approved prototype has inert legal text. All four shared controls, both headings and visible text match."
-    },
-    {
-      "screen": "S-03",
-      "viewport": "desktop",
-      "theme": "light",
-      "referenceSha256": "e02e85a5a30994891969575c418717d8adb7915f02e74ca6c8c051ea7ef225d0",
-      "liveSha256": "f4e61876b73526ffa1cc13a4418d3bc55b964477f1953d6a3005468c36469946",
-      "checks": ["controls", "geometry"],
-      "approvalPr": 45,
-      "reason": "Retain the working inline Privacy Notice and footer Privacy Notice/Terms/Accessibility links; approved prototype has inert legal text. All nine shared controls, both headings and visible text match."
-    }
-  ]
+  "exceptions": []
 }
