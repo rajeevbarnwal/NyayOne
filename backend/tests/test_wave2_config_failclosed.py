@@ -19,6 +19,8 @@ variables are cleared, so these tests never read (or reveal) a deployment's
 """
 from __future__ import annotations
 
+import secrets
+
 import pytest
 from pydantic import SecretStr, ValidationError as PydanticValidationError
 
@@ -43,7 +45,7 @@ from app.services.providers.video_provider import (
 #: Realistic, obviously-secret values. Nothing here is a real credential; the
 #: point is that NONE of them may ever appear in an error message.
 KEY_ID = "rzp_live_QQ7hV2mNbXk91z"
-KEY_SECRET = "Zt9k4WpLq2sVbN7xYd1RfE"
+KEY_SECRET = secrets.token_hex(11)  # Test-local only; never a provider credential.
 #: The scheme matters. ``LiveKitCommunityAdapter._twirp`` POSTs to
 #: ``{livekit_url}/twirp/livekit.RoomService/<Method>`` with httpx, so this fixture
 #: MUST model a value the adapter can actually reach. It used to be

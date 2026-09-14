@@ -39,6 +39,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 import uuid
 
@@ -64,7 +65,7 @@ T0 = W.T0
 #: Obviously-fake credentials. The KEY is an identifier; the SECRET is long
 #: enough for the adapter's own >= 16 char rule and is not a real credential.
 API_KEY = "APIwave2WebhookTest"
-API_SECRET = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+API_SECRET = secrets.token_hex(16)  # Test-local only; never a provider credential.
 OTHER_SECRET = "ffffffffffffffff0000000000000000"
 LIVEKIT_URL = "http://livekit.invalid:7880"
 
