@@ -464,8 +464,8 @@ export function V34LoginForm(props: ScreenProps & { channels: LoginChannels | nu
             : 'We sign you in with a one-time code by SMS. Mobile is the only enabled login channel in this release.'}</p>
         {errors.submit && <span className="v34-field__error" role="alert">{errors.submit}</span>}
         <PrivacyNote/>
-        <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send one time code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
-      </main><RevLLegalFooter/></Pane>
+        <button type="button" className="v321-primary" onClick={submit} disabled={busy} aria-label="Send Code"><NyayOneRevLIcon name="send"/><span>Send Code</span></button>
+      </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );
 }

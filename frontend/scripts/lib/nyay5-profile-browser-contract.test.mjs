@@ -1480,6 +1480,46 @@ describe('NYAY-5 browser release-gate source contract', () => {
     ).toHaveLength(3);
   });
 
+  it('uses the approved S-04 Send Code name without changing S-08 submit selectors', () => {
+    const inventory = [
+      ['nyay5-profile-browser.mjs', 2, 4],
+      ['nyay18-browser-namespace.mjs', 1, 0],
+      ['v34-s01-s10-e2e.mjs', 2, 2],
+      ['nyay12-email-identity-browser.mjs', 2, 0],
+      ['nyay19-auth-lifecycle-browser.mjs', 1, 0],
+    ];
+    for (const [file, signInCount, registrationCount] of inventory) {
+      const source = readFileSync(resolve(ROOT, 'scripts', file), 'utf8');
+      expect(source.match(/getByRole\('button', \{ name: 'Send Code', exact: true \}\)/gu) ?? [], file)
+        .toHaveLength(signInCount);
+      expect(source.match(/getByRole\('button', \{ name: 'Send one time code'/gu) ?? [], file)
+        .toHaveLength(registrationCount);
+    }
+  });
+
+  it('fails closed when S-04 legal notices gain a link, button or tab stop', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const start = runner.indexOf("if (path === '/s-04')");
+    const end = runner.indexOf("const bodyText = await page.locator('body').innerText();", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const signIn = runner.slice(start, end);
+    expect(signIn).toContain("['Privacy Notice', 'Terms', 'Accessibility']");
+    expect(signIn).toContain("'a, button, [role=\"link\"], [role=\"button\"], [tabindex]'");
+    expect(signIn).toContain('footer.querySelectorAll(interactive).length === 0');
+    expect(signIn).toContain("if (!legalTextInert) throw new Error('NYAY83_S04_LEGAL_TEXT_INTERACTIVE')");
+  });
+
+  it('uses the S-04 Mobile Number casing after recovery without changing S-06 or S-08', () => {
+    const runner = readFileSync(resolve(ROOT, 'scripts/registration-e2e.mjs'), 'utf8');
+    const start = runner.indexOf("await page.waitForURL('**/s-04');");
+    const end = runner.indexOf('// Responsive/theme and icon-tooltip contract matrix.', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(runner.slice(start, end)).toContain("getByLabel('Mobile Number', { exact: true }).fill('')");
+    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(2);
+  });
+
   it('kills exactly one deterministic perturbation for every named mutant', async () => {
     const contract = await import('./nyay5-profile-browser-contract.mjs');
     expect(contract.NYAY5_SEEDED_MUTANT_INVENTORY).toEqual(EXPECTED_MUTANTS);

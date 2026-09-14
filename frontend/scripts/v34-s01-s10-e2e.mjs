@@ -394,7 +394,7 @@ try {
   });
   await page.goto(`${base}/s-04`);
   await page.locator('#v34-login-mobile').fill(loginMobile);
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Send Code', exact: true }).click();
   await page.waitForURL('**/s-05');
   const cancelledCode = await latestOtp();
   // A same-identity restart remains subject to the server's issue floor even
@@ -436,7 +436,7 @@ try {
   await page.getByRole('button', { name: 'Sign In Securely', exact: true }).click();
   await page.waitForURL('**/s-04');
   await page.locator('#v34-login-mobile').fill(loginMobile);
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Send Code', exact: true }).click();
   await page.waitForURL('**/s-05');
   const loginCode = await latestOtp();
   await page.getByLabel('Six digit code').fill(loginCode);

@@ -285,7 +285,7 @@ try {
   // Unknown address: identical 202 shape, S-05 renders the masked destination, no delivery, no authentication.
   await resetCapture();
   await pageA.locator('#v34-login-email').fill(`unknown-${RUN_TAG}@example.test`);
-  await pageA.getByRole('button', { name: 'Send one time code' }).click();
+  await pageA.getByRole('button', { name: 'Send Code', exact: true }).click();
   await pageA.locator('[data-screen="S-05"]').waitFor({ state: 'visible', timeout: 20_000 });
   await pageA.getByLabel('Six digit code').waitFor({ state: 'visible' });
   const s05Unknown = await pageA.locator('[data-screen="S-05"]').innerText();
@@ -305,7 +305,7 @@ try {
   await resetCapture();
   await pageA.getByRole('button', { name: 'Verified Email' }).click();
   await pageA.locator('#v34-login-email').fill(EMAIL_A1.toUpperCase());
-  await pageA.getByRole('button', { name: 'Send one time code' }).click();
+  await pageA.getByRole('button', { name: 'Send Code', exact: true }).click();
   await pageA.locator('[data-screen="S-05"]').waitFor({ state: 'visible', timeout: 20_000 });
   await pageA.getByLabel('Six digit code').waitFor({ state: 'visible' });
   const s05Text = await pageA.locator('[data-screen="S-05"]').innerText();

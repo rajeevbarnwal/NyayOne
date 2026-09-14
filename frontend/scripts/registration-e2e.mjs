@@ -588,7 +588,7 @@ for (const [name, values, expected] of [
     calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/complete')));
   record('recovery_no_email_redirect', 'return to canonical sign-in at /s-04', new URL(page.url()).pathname,
     new URL(page.url()).pathname === '/s-04');
-  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill('');
+  await page.getByLabel('Mobile Number', { exact: true }).fill('');
   // Completion retires the verified recovery flow, so the code control must
   // disappear instead of remaining editable on the acknowledgement state.
   await recoveryCode.waitFor({ state: 'detached' });

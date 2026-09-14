@@ -36,16 +36,47 @@ NYAY-12's server-enabled email projection also changes the mobile helper copy.
 These are intentional functional deltas, not permission to remove controls,
 populate a real input with a sample, disable email, or modify references.
 
-Current S-04 additionally retains the older `Send one time code` accessible
-name and interactive desktop legal footer. The owner has been asked whether to
-align the name to `Send Code` and make only S-04's footer inert like Revision L.
-Neither pending correction is silently included in this PR revision.
+## Owner-approved narrow correction
 
-The raw S-04 gate is **NONCONFORMANT**, not a strict PARITY result. Exact-head
+Owner approved the S-04-only plain-text legal footer and `Send Code` accessible
+name, recorded on NYAY-83 comment 15577. Privacy Notice, Terms and Accessibility
+are now inert spans without links, buttons or tab stops. The shared footer's
+default is unchanged; only S-03 and S-04 opt into plain text. OTP endpoints,
+validation, cancellation, channel projection and navigation are unchanged.
+
+Tests-first product proof: three expected failures / 17 passes before the
+correction, then 20/20 passes across S-04 and NYAY-12 contracts. The prior OTP
+action assertion is retained with the approved accessible name; inert footer
+coverage is additive. Necessary S-04 producer selector updates preserve existing
+assertions and retain S-08's distinct `Send one time code` action name. The
+previous hosted registration failure was an exact `MOBILE NUMBER` selector
+against S-04's approved `Mobile Number` label, not an auth failure; its S-04
+selector is aligned without changing the S-08 label expectation.
+
+The unexcepted S-04 gate is **NONCONFORMANT**, not a strict PARITY result. Exact-head
 hosted screenshots and numbers must be reviewed before any owner-approved
 exception is added. No exceptions, tolerances, evaluator rules, enforced-screen
 settings or reference bytes are changed by this implementation. A green
 report-only workflow is not sufficient to move NYAY-83 to Testing.
+
+### Necessary seal transitions
+
+Only these five existing hash constants change in `verify_nyayone_ci.py`;
+no policy rule, workflow, required context or unrelated seal changes.
+
+| Existing constant | Old SHA-256 | New SHA-256 |
+| --- | --- | --- |
+| `EXPECTED_NYAY19_BROWSER_GATE_SHA256` | `9becbdf0e47201eceed8fe36b1311be28a21831c7ffb14d81247b7fd137e89c4` | `f8b547fa696761225a4f4130e42e80656171b05fd42f5713ac06825876c9e0df` |
+| `EXPECTED_NYAY5_BROWSER_GATE_SHA256` | `045927b95ab47bec86718d1a6e22d0f7eea164d448b861bf3919ae30060f6e78` | `c3e3a59be8d43ac5944bb3db5a41aee170dcff37b74dbf0ee505e1b8c48d6627` |
+| `EXPECTED_NYAY5_BROWSER_CONTRACT_TEST_SHA256` | `797ee22a74559fdca56e8e43a6711227dfb6e979c3fabfc05f3326fbabeed32b` | `b0820c673409b9ac75be5552683617f68783362f45940ad185f6ad4b9fd7e37a` |
+| `EXPECTED_NYAY18_BROWSER_GATE_SHA256` | `39850c55d708250e072594825c893bf000d19f84b159d0af53ccb357b18adb67` | `6de1d5540a666f75a19832357ce1658f6491e9252e8b4061edff1a3e3c07133f` |
+| `EXPECTED_NYAY18_BROWSER_CONTRACT_TEST_SHA256` | `31d913674781c111d5365cb1fa175b8c0cad73d902cc115673d4b3b52f2a4140` | `1bab1304261d5afaa376d3f2d759ce70ea1ce1f484d9d58248c7c20b03039374` |
+
+Local corrective validation: full frontend 1769 PASS / one inherited skip;
+S-04 and NYAY-12 product contracts 20/20; affected producer contracts 194/194;
+workflow policy 14/14; policy contracts 44/44; evidence contracts 49/49;
+integrity regressions 40/40. Hosted exact-head evidence is recorded additively
+on NYAY-83, not inferred from these local results.
 
 ## Validation and handoff boundary
 

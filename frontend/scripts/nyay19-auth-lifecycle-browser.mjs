@@ -253,7 +253,7 @@ async function loginWithBrowser(browser, mobile) {
     response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/auth/student/login/otp/start'
   ));
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Send Code', exact: true }).click();
   const startResponse = await startPromise;
   lastLoginIssueConfirmedAt = Date.now();
   const startCookieTransition = inspectCookieTransitionHeaders(

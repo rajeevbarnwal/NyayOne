@@ -85,8 +85,20 @@ describe('NYAY-83 S-04 Revision L sign-in screen', () => {
     const html = render();
     expect(html).toContain('If these details match an account, we’ll send a sign-in code.');
     expect(html).toContain('For your privacy, the response looks the same either way.');
-    expect(html).toContain('aria-label="Send one time code"');
+    expect(html).toContain('aria-label="Send Code"');
+    expect(html).not.toContain('aria-label="Send one time code"');
     expect(html).toContain('<span>Send Code</span>');
+  });
+
+  it('renders legal notices as inert prototype text with no link, button or tab stop', () => {
+    for (const channels of [null, { mobile: true, email: true }]) {
+      const footer = render(channels).match(/<footer class="v321-legal">(.*?)<\/footer>/su)?.[1];
+      expect(footer).toBeDefined();
+      expect(footer).toContain('<span>Privacy Notice</span>');
+      expect(footer).toContain('<span>Terms</span>');
+      expect(footer).toContain('<span>Accessibility</span>');
+      expect(footer).not.toMatch(/<(?:a|button|input)\b|\bhref=|\btabindex=|\bcontenteditable=|\brole="(?:link|button)"/iu);
+    }
   });
 
   it('retains source-level channel guards, validation and OTP destination wiring (not a live-route test)', () => {
