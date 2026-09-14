@@ -81,14 +81,6 @@ const LEGACY_CARLITO_HEADING_STACK = Object.freeze([
   'system-ui',
   'sans-serif',
 ]);
-const S06_R2_HEADING_STACK = Object.freeze([
-  'nyayone revision l heading',
-  'aptos',
-  'calibri',
-  'carlito',
-  'system-ui',
-  'sans-serif',
-]);
 let authWireExact = false;
 let registrationA11yExact = false;
 let crossRealmTransitionExact = false;
@@ -314,6 +306,14 @@ async function captureSafeScreenshot(page, name) {
 }
 
 async function recordVisualContract(page, screenId) {
+  const S06_R2_HEADING_STACK = Object.freeze([
+    'nyayone revision l heading',
+    'aptos',
+    'calibri',
+    'carlito',
+    'system-ui',
+    'sans-serif',
+  ]);
   await waitForVisualCensusSettled(page, {
     assertion: 'browser:redesigned_heading_stack',
     expectedTheme: 'light',
