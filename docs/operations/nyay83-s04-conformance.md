@@ -59,6 +59,33 @@ exception is added. No exceptions, tolerances, evaluator rules, enforced-screen
 settings or reference bytes are changed by this implementation. A green
 report-only workflow is not sufficient to move NYAY-83 to Testing.
 
+### Owner exception binding
+
+After the narrow correction, the owner approved the two exact-image entries on
+PR #47. Their bodies and `rajeevbarnwal` authorship were read back before binding:
+
+- Mobile: comment [5665196346](https://github.com/rajeevbarnwal/NyayOne/pull/47#issuecomment-5665196346),
+  `NYAY66-EXCEPTION e923dcafe953eae567879b328cfd9d13845fd3927d81f1ac192e44824f3af9ff`.
+- Desktop: comment [5665197698](https://github.com/rajeevbarnwal/NyayOne/pull/47#issuecomment-5665197698),
+  `NYAY66-EXCEPTION fae7c5b8bc25eeed1165addf76f044eb955fe78436ea020ff39d737d705ed450`.
+
+`nyay66-policy.json` now contains those exact proposals, with `approvalPr: 47`.
+The entries bind reference/live PNG digests and the existing pixels, text,
+controls and geometry categories. Comment IDs are recorded here; adding them
+to the hashed entries would change the owner's approved payload. This is
+category-level approval for the exact image pairs, not a rectangular mask.
+Accessibility, overflow, dynamic-region and heading-text checks remain active.
+References, tolerances, enforced-screen settings and evaluator code are unchanged.
+
+Disclosed deltas are the retained Student/Change/English context, its 61px
+vertical displacement, truthful verified-email helper and empty live identifier
+versus the reference sample. Corrected hosted captures at `7c79acb` show these
+differences, zero accessibility findings and zero overflow. The expected bound
+verdict is PARITY-WITH-DISCLOSED-DELTA, not strict PARITY; it must be verified by
+the hosted job at the new binding head before Testing. Source code is unchanged
+by the binding commit. The protected integrity bundle excludes exception entries
+and remains `d87f89d14e8f56427e1e9e921864c887d193c87f92961186936fba64e5195bb1`.
+
 ### Necessary seal transitions
 
 Only these five existing hash constants change in `verify_nyayone_ci.py`;

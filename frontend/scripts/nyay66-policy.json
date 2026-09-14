@@ -7,5 +7,24 @@
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
   "integrityApproval": {"pr": 46, "commentId": 5662576956, "bundleSha256": "d87f89d14e8f56427e1e9e921864c887d193c87f92961186936fba64e5195bb1"},
   "enforced": [],
-  "exceptions": []
+  "exceptions": [
+    {
+      "screen": "S-04",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "0a61350682e3aa45d719603c8ae1176b64438951d5bf012775e49154b5c6d2b4",
+      "liveSha256": "fd76f99f2080b1399694c8d4ee8572db85fffa25dd2ee7443fdd2bc21cfd6972",
+      "checks": ["pixels", "text", "controls", "geometry"],
+      "approvalPr": 47
+    },
+    {
+      "screen": "S-04",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "411da9a4bbbdd294cb1f84652a8f2015266b64d38ea61db356ee15211c7ada86",
+      "liveSha256": "2b044e338803b78bd246782027be2c13cd9054962a9562e61361ce7c594b0caa",
+      "checks": ["pixels", "text", "controls", "geometry"],
+      "approvalPr": 47
+    }
+  ]
 }
