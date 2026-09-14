@@ -39,6 +39,19 @@ NYAY-5 browser-producer constant in `verify_nyayone_ci.py` requires a seal updat
 the journey producer has no corresponding sealed constant. No unrelated seals
 or verifier rules change.
 
+## Owner-approved functional-link exception binding
+
+Owner reviewed the comparison sheet and approved the exact mobile and desktop
+entries in PR #45 top-level comments 5659878283 and 5659879160 respectively.
+Both comments were read back as authored by `rajeevbarnwal`, with exact
+`NYAY66-EXCEPTION` hashes `175ab074725ceec8ceaf8013738dcc95f116ec5bd0d436d4d30905308f0aa13e`
+and `99171fb3d27f894b26ab560201435db88cf82942ed4b29cd0147b2eeede6d4f0`.
+The config contains those exact approved entries; the existing reader verifies
+their hashes against owner comments on PR #45. Comment IDs are documented here,
+not inserted into the approved payload (which would change its digest).
+Only `controls`/`geometry` inventory differences for the exact PNG pair are
+excepted. Pixel, text, headings and accessibility checks remain unexcepted.
+
 ## Conformance status — not a Testing handoff
 
 Local same-host diagnostic (macOS, Chromium 149.0.7827.55) passes pixel limits:
@@ -55,9 +68,10 @@ The reference renders legal notices as inert text. The application retains one
 working Privacy Notice link on mobile and four legal links on desktop (inline
 Privacy Notice, footer Privacy Notice, Terms, Accessibility). These extra
 controls cause the current evaluator's `controls` and `geometry` differences.
-No exception is self-approved. Exact hosted hashes, screenshots and control
-coordinates must be presented for the owner's PR-comment approval before
-claiming conformance or moving NYAY-81 to Testing.
+The exact hosted hashes, screenshots and control coordinates were presented in
+PR #45 comment 5656779019 and approved as recorded above. No exception is
+self-approved. Hosted revalidation at the binding head must pass before moving
+NYAY-81 to Testing.
 
 ## Independent QA scope after conformance approval
 
