@@ -24,6 +24,10 @@ describe('NYAY-85 S-06 recovery authority and continuation', () => {
     // A reload with an unconsumed proof must offer reconciliation, not a new start.
     expect(recoveryView(verified, 'entry', false)).toBe('neterr');
   });
+  it('retires the rejected-resend message only when the server grants resend', () => {
+    expect(recoveryView({ ...pending, resendInSeconds: 0 }, 'cooldown', false)).toBe('cooldown');
+    expect(recoveryView({ ...pending, resendAllowed: true }, 'cooldown', false)).toBe('challenge');
+  });
   it('requires verified recovery before completing and retired state before success', async () => {
     const complete = vi.fn(async () => retired), current = () => true;
     await expect(runRecoveryCompletion(async () => verified, complete, current)).resolves.toEqual(retired);

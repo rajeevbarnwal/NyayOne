@@ -124,23 +124,6 @@ function Brand() {
   return <div className="v34-brand"><img className="v34-brand__mark" src="/brand/nyayone-mark.svg" alt="" aria-hidden="true" draggable="false"/><span><b>NyayOne</b><small>STUDENT MODULE</small></span></div>;
 }
 
-function AuthAside({ title, copy }: { title: string; copy: string }) {
-  return (
-    <aside className="v34-aside">
-      <Brand/>
-      <h2>{title}</h2>
-      <p>{copy}</p>
-      <div className="v34-rule"/>
-      <ul>
-        <li><V34Icon name="check" size={19}/> Verified by one time code. Your college is never contacted.</li>
-        <li><V34Icon name="verify" size={19}/> Consent is granular and revocable under the DPDP Act.</li>
-        <li><V34Icon name="research" size={19}/> Research is a study aid. Every answer carries its authorities.</li>
-      </ul>
-      <small>Sample content only. No production record is displayed here.</small>
-    </aside>
-  );
-}
-
 function RevLTopbar({ theme, toggleTheme }: ScreenProps) {
   return (
     <header className="v321-topbar">
@@ -261,27 +244,6 @@ function Screen({ id, variant = 'auth', aside, children }: { id: string; variant
 
 function Pane({ children }: { children: ReactNode }) {
   return <div className="v34-pane"><div className="v34-status" aria-hidden="true"><span>9:41</span><span>100</span></div>{children}</div>;
-}
-
-function PaneHead({ id, back, children }: { id: string; back?: () => void; children?: ReactNode }) {
-  return (
-    <div className="v34-panehead">
-      {back && <button type="button" className="v34-hit" onClick={back}><V34Icon name="back" size={17}/>Back</button>}
-      <span className="v34-mono">{id}</span><span className="v34-grow"/>{children}
-    </div>
-  );
-}
-
-function IconAction({ label, icon, onClick, disabled, secondary = false }: { label: string; icon: IconName; onClick?: () => void; disabled?: boolean; secondary?: boolean }) {
-  return (
-    <button type="button" className={`v34-iconbtn${secondary ? ' v34-iconbtn--secondary' : ''}`} aria-label={label} data-tip={label} onClick={onClick} disabled={disabled}>
-      <V34Icon name={icon} size={26}/>
-    </button>
-  );
-}
-
-function Footer({ hint, children }: { hint: ReactNode; children: ReactNode }) {
-  return <footer className="v34-footer"><div className="v34-actions"><span className="v34-actions__hint">{hint}</span>{children}</div></footer>;
 }
 
 function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, required, error, help, max, maxLength, prefix, revisionLIcon }: {

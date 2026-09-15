@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useStudentSession } from '../../../app/authContext';
 import { RegistrationApiError, cancelStudentOtp, completeRecovery, isMaskedMobileDestination, resendStudentOtp, startRecovery, verifyRecovery, type OtpFlowState } from '../lib/registrationApi';
 import { isValidMobile } from '../lib/registration';
 import { useOtpFlowState } from '../lib/useOtpFlowState';
@@ -19,6 +20,7 @@ export function recoveryView(state: OtpFlowState | null, view: S06R2State, loadE
   if (state?.status === 'pending' && state.purpose === 'recovery') {
     if ((state.lockedForSeconds ?? 0) > 0 || state.attemptsLeft === 0) return 'locked';
     if (state.expiresInSeconds === 0) return 'expired';
+    if (view === 'cooldown') return state.resendAllowed ? 'challenge' : 'cooldown';
     return view === 'wrong' ? 'wrong' : 'challenge';
   }
   return view === 'invalidnum' ? 'invalidnum' : 'entry';
@@ -37,11 +39,15 @@ export async function runRecoveryCompletion(verify: () => Promise<OtpFlowState>,
 /** S-06 alone. Cookies/server projections own recovery; the view owns no identity cache. */
 export function S06Recovery() {
   const navigate = useNavigate();
-  const flow = useOtpFlowState();
+  const session = useStudentSession();
+  const flow = useOtpFlowState(undefined, { enabled: session.phase === 'anonymous' });
   const [mobile, setMobile] = useState('');
   const [code, setCode] = useState('');
   const [view, setView] = useState<S06R2State>('entry');
   const [busy, setBusy] = useState(false);
+  const [focusRequest, setFocusRequest] = useState(0);
+  const sessionPhase = useRef(session.phase);
+  sessionPhase.current = session.phase;
   const mounted = useRef(true);
   const pending = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -50,24 +56,36 @@ export function S06Recovery() {
   }, []);
 
   const state = flow.state;
-  const ready = !flow.loading && !flow.loadError && state !== null;
+  const ready = session.phase === 'anonymous' && !flow.loading && !flow.loadError && state !== null;
   async function act(operation: (signal: AbortSignal, current: () => boolean) => Promise<void>) {
-    if (pending.current || !mounted.current) return;
+    if (pending.current || !mounted.current || sessionPhase.current !== 'anonymous') return;
+    const focusOrigin = typeof document === 'undefined' ? null : document.activeElement;
+    const keyboardOrigin = focusOrigin?.matches(':focus-visible') ?? false;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
-    const current = () => mounted.current && pending.current === controller && !controller.signal.aborted;
+    const current = () => mounted.current && pending.current === controller && !controller.signal.aborted && sessionPhase.current === 'anonymous';
     try { await operation(controller.signal, current); }
     catch (error) {
       if (!current()) return;
       if (error instanceof RegistrationApiError && error.otpState) {
         flow.adopt(error.otpState);
-        setView(error.otpState.status === 'pending' && error.otpState.purpose === 'recovery' ? 'wrong' : 'neterr');
+        setView(error.otpState.status === 'pending' && error.otpState.purpose === 'recovery'
+          ? error.code === 'resend_cooldown' ? 'cooldown' : 'wrong'
+          : 'neterr');
       } else { setView('neterr'); }
     } finally {
       if (pending.current === controller) {
         pending.current = null;
-        if (mounted.current) setBusy(false);
+        if (mounted.current) {
+          setBusy(false);
+          // Restore a disabled/replaced keyboard control, but never steal focus
+          // if the user deliberately moved elsewhere while the request ran.
+          if (sessionPhase.current === 'anonymous' && keyboardOrigin
+            && (document.activeElement === focusOrigin || document.activeElement === document.body)) {
+            setFocusRequest(value => value + 1);
+          }
+        }
       }
     }
   }
@@ -125,7 +143,7 @@ export function S06Recovery() {
   return <S06R2 state={recoveryView(state, view, flow.loadError)} mobile={mobile} code={code}
     destinationMasked={isMaskedMobileDestination(state?.destinationMasked) ? `+91 ••••• ••${String(state?.destinationMasked).slice(-3)}` : null} expiresInSeconds={state?.expiresInSeconds ?? null}
     resendInSeconds={state?.resendInSeconds ?? null} attemptsLeft={state?.attemptsLeft ?? null}
-    lockedForSeconds={state?.lockedForSeconds ?? null} busy={busy} authorityReady={ready}
+    lockedForSeconds={state?.lockedForSeconds ?? null} busy={busy} authorityReady={ready} focusRequest={focusRequest}
     resendAllowed={state?.resendAllowed ?? false}
     onMobileChange={value => { setMobile(value); if (view === 'invalidnum') setView('entry'); }}
     onCodeChange={value => setCode(value.replace(/\D/g, '').slice(0, 6))} onSend={send} onVerify={verify} onResend={resend}

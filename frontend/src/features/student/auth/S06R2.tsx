@@ -1,8 +1,8 @@
-import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from './NyayOneRevLIcon';
 import './S06R2.css';
 
-export type S06R2State = 'entry' | 'invalidnum' | 'submitting' | 'challenge' | 'wrong' | 'expired' | 'locked' | 'neterr' | 'success';
+export type S06R2State = 'entry' | 'invalidnum' | 'submitting' | 'challenge' | 'wrong' | 'cooldown' | 'expired' | 'locked' | 'neterr' | 'success';
 export type S06R2Props = Readonly<{
   state: S06R2State;
   mobile: string;
@@ -15,6 +15,7 @@ export type S06R2Props = Readonly<{
   busy: boolean;
   authorityReady: boolean;
   resendAllowed: boolean;
+  focusRequest?: number;
   onMobileChange: (value: string) => void;
   onCodeChange: (value: string) => void;
   onSend: () => void;
@@ -29,6 +30,14 @@ function timeLabel(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return 'Unavailable';
   const whole = Math.ceil(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+export function focusRecoveryTarget(root: HTMLElement, state: S06R2State) {
+  const selector = state === 'neterr' ? '[data-recovery-retry]'
+    : state === 'locked' || state === 'success' ? '[data-recovery-return]'
+      : state === 'entry' || state === 'invalidnum' || state === 'submitting' ? '#v34-reset-mobile'
+        : '#v34-recovery-code';
+  root.querySelector<HTMLElement>(selector)?.focus();
 }
 
 /** Vector primitives come from the approved R2 source, including its clock fallback. */
@@ -60,6 +69,18 @@ function Brand() {
 /** Controlled presentation only. Server/session authority and routing remain in the controller. */
 export function S06R2(props: S06R2Props) {
   const { state, busy, mobile, code, onBack } = props;
+  const root = useRef<HTMLElement>(null);
+  const focusedRequest = useRef(0);
+  const lastKeyboardTarget = useRef<HTMLElement | null>(null);
+  const focusRequest = props.focusRequest ?? 0;
+  useEffect(() => {
+    if (busy || !root.current) return;
+    const replacedKeyboardControl = lastKeyboardTarget.current && !lastKeyboardTarget.current.isConnected
+      && document.activeElement === document.body;
+    if (!replacedKeyboardControl && (focusRequest === 0 || focusRequest === focusedRequest.current)) return;
+    focusedRequest.current = focusRequest;
+    focusRecoveryTarget(root.current, state);
+  }, [busy, focusRequest, state]);
   const terminal = state === 'locked' || state === 'neterr' || state === 'success';
   const entry = state === 'entry' || state === 'invalidnum' || state === 'submitting';
   const sending = busy || state === 'submitting';
@@ -92,8 +113,9 @@ export function S06R2(props: S06R2Props) {
   </> : !terminal ? <>
     {(state === 'wrong' || state === 'expired') && <span className={`s06-r2__chip s06-r2__chip--${state}`}><span aria-hidden="true"/>{state === 'wrong' ? 'Incorrect code' : 'Code expired'}</span>}
     {title('Enter the recovery code.', props.destinationMasked ? <>Sent to <b className="s06-r2__mono">{props.destinationMasked}</b>.</> : 'The recovery response is unavailable. Change number to try again.')}
-    <div className="s06-r2__otpwrap"><div className="s06-r2__otpboxes" aria-hidden="true">{Array.from({ length: 6 }, (_, i) => <i className="s06-r2__digit" key={i}>{code[i] ?? ''}</i>)}</div><input className="s06-r2__otp" id="v34-recovery-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} aria-label="Six-digit recovery code" aria-invalid={state === 'wrong' || undefined} aria-describedby={state === 'wrong' ? 's06-code-error' : undefined} value={code} readOnly={busy} onChange={event => props.onCodeChange(event.target.value)}/></div>
+    <div className="s06-r2__otpwrap"><div className="s06-r2__otpboxes" aria-hidden="true">{Array.from({ length: 6 }, (_, i) => <i className="s06-r2__digit" key={i}>{code[i] ?? ''}</i>)}</div><input className="s06-r2__otp" id="v34-recovery-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} aria-label="Six-digit recovery code" aria-invalid={state === 'wrong' || undefined} aria-describedby={state === 'wrong' ? 's06-code-error' : state === 'cooldown' ? 's06-resend-cooldown' : undefined} value={code} readOnly={busy} onChange={event => props.onCodeChange(event.target.value)} onPaste={event => { event.preventDefault(); if (!busy) props.onCodeChange(event.clipboardData.getData('text').replace(/[\s-]/g, '')); }}/></div>
     {state === 'wrong' && <div className="s06-r2__error" id="s06-code-error" role="alert"><ErrorIcon/>That code is not correct. Check the last six digits you received.</div>}
+    {state === 'cooldown' && <div className="s06-r2__error" id="s06-resend-cooldown" role="status">A new code cannot be sent yet. Wait for the resend countdown, then try again.</div>}
     <div className="s06-r2__metadata">
       {metaRow(<RecoveryIcon name="clock"/>, 'Code expires in', state === 'expired' || expires === 0 ? 'Expired' : timeLabel(expires))}
       {metaRow(<NyayOneRevLIcon name="refresh"/>, 'Resend available', props.resendAllowed ? 'Now' : props.resendInSeconds === null ? 'Unavailable' : `in ${timeLabel(props.resendInSeconds)}`)}
@@ -103,15 +125,15 @@ export function S06R2(props: S06R2Props) {
   </> : state === 'locked' ? <>
     <span className="s06-r2__tile s06-r2__tile--error" aria-hidden="true"><RecoveryIcon name="clock" framed={false}/></span>
     {title('Recovery is paused.', lockSeconds !== null && Number.isFinite(lockSeconds) && lockSeconds > 0 ? `Too many attempts were made for this number. You can try again in ${lockDuration}.` : 'Too many attempts were made for this number. Try again after the recovery pause ends.')}
-    <button className="s06-r2__button" type="button" onClick={onBack}><RecoveryIcon name="back"/>Back to sign in</button>
+    <button className="s06-r2__button" type="button" onClick={onBack} data-recovery-return><RecoveryIcon name="back"/>Back to sign in</button>
   </> : state === 'neterr' ? <>
     <span className="s06-r2__tile s06-r2__tile--error" aria-hidden="true"><RecoveryIcon name="guard" framed={false}/></span>
     {title('We could not reach NyayOne.', 'We could not confirm whether your code was sent. Check your connection and try again.')}
-    <button className="s06-r2__button s06-r2__button--primary" type="button" onClick={props.onRetry} disabled={busy}><NyayOneRevLIcon name="refresh"/>Try again</button><button className="s06-r2__button s06-r2__button--ghost" type="button" onClick={onBack}>Back to sign in</button>
+    <button className="s06-r2__button s06-r2__button--primary" type="button" onClick={props.onRetry} disabled={busy} data-recovery-retry><NyayOneRevLIcon name="refresh"/>Try again</button><button className="s06-r2__button s06-r2__button--ghost" type="button" onClick={onBack}>Back to sign in</button>
   </> : <>
     <span className="s06-r2__tile s06-r2__tile--success" aria-hidden="true"><NyayOneRevLIcon name="checkc" framed={false}/></span>
     {title('Your account is ready.', 'Sign in with your mobile number to continue. You are not signed in yet.')}
-    <button className="s06-r2__button s06-r2__button--primary" type="button" onClick={onBack}><RecoveryIcon name="login"/>Back to sign in</button>
+    <button className="s06-r2__button s06-r2__button--primary" type="button" onClick={onBack} data-recovery-return><RecoveryIcon name="login"/>Back to sign in</button>
   </>;
-  return <section className={`s06-r2${terminal ? ' s06-r2--terminal' : ''}`} data-screen="S-06" data-state={state} data-nyayone-design="3.2.1-r2" aria-label="Account recovery"><Brand/><div className="s06-r2__body">{terminal ? <div className="s06-r2__column">{header}{body}</div> : <form className="s06-r2__column s06-r2__column--form" onSubmit={submit} noValidate aria-busy={busy}>{header}{body}</form>}</div></section>;
+  return <section ref={root} onFocusCapture={event => { const target = event.target; lastKeyboardTarget.current = target instanceof HTMLElement && target.matches(':focus-visible') ? target : null; }} className={`s06-r2${terminal ? ' s06-r2--terminal' : ''}`} data-screen="S-06" data-state={state} data-nyayone-design="3.2.1-r2" aria-label="Account recovery"><Brand/><div className="s06-r2__body">{terminal ? <div className="s06-r2__column">{header}{body}</div> : <form className="s06-r2__column s06-r2__column--form" onSubmit={submit} noValidate aria-busy={busy}>{header}{body}</form>}</div></section>;
 }
