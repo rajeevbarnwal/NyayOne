@@ -120,10 +120,6 @@ function ThemeButton({ theme = 'light', toggleTheme }: ScreenProps) {
   );
 }
 
-function Brand() {
-  return <div className="v34-brand"><img className="v34-brand__mark" src="/brand/nyayone-mark.svg" alt="" aria-hidden="true" draggable="false"/><span><b>NyayOne</b><small>STUDENT MODULE</small></span></div>;
-}
-
 function RevLTopbar({ theme, toggleTheme }: ScreenProps) {
   return (
     <header className="v321-topbar">
@@ -450,20 +446,26 @@ export function V34AccountRecovery() {
   return <S06Recovery/>;
 }
 
-const HOME_NAV: readonly { label: string; icon: IconName }[] = [
-  { label: 'Home', icon: 'home' },
-  { label: 'Ask', icon: 'research' },
-  { label: 'Calendar', icon: 'calendar' },
-  { label: 'Exam Prep', icon: 'prep' },
-  { label: 'Case Digests', icon: 'digest' },
-  { label: 'Moot Court', icon: 'moot' },
-  { label: 'Drafting Lab', icon: 'drafting' },
-  { label: 'Internships', icon: 'career' },
-  { label: 'Career & Jobs', icon: 'career' },
-  { label: 'Clinical Hours', icon: 'clinical' },
-  { label: 'Community', icon: 'community' },
-  { label: 'Profile & Settings', icon: 'profile' },
-];
+const S07_PREVIEWS = [
+  { title: 'Internships', icon: 'brief', color: '#2E3A8C', text: '3 new matches for arbitration in Bengaluru' },
+  { title: 'Moot Court', icon: 'mic2', color: '#9A2B21', text: 'Memorial workspace · draft due Mon' },
+  { title: 'Research', icon: 'book', color: '#0E6470', text: 'Saved thread: anticipatory bail standard' },
+  { title: 'Mentors', icon: 'users', color: '#1E6B4A', text: 'Adv. Meera Krishnan · Wed 6:30 PM' },
+] as const;
+
+/** Revision L primitives used only by the S-07 landing composition. */
+function S07Icon({ name }: { name: 'spark' | 'clock' | 'brief' | 'mic2' | 'book' | 'users' }) {
+  if (name === 'users') return <NyayOneRevLIcon name="users" framed={false}/>;
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" tabIndex={-1} focusable="false">
+      {name === 'spark' && <><path d="M12 3l1.9 5.3L19.2 10l-5.3 1.9L12 17.2l-1.9-5.3L4.8 10l5.3-1.7z" fill="currentColor" opacity=".18"/><path d="M12 3l1.9 5.3L19.2 10l-5.3 1.9L12 17.2l-1.9-5.3L4.8 10l5.3-1.7z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/><path d="M18.6 15.6l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor"/></>}
+      {name === 'clock' && <><circle cx="12" cy="12" r="8.5" fill="currentColor" opacity=".14"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></>}
+      {name === 'brief' && <><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" fill="currentColor" opacity=".16"/><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12h17" fill="none" stroke="currentColor" strokeWidth="1.9"/></>}
+      {name === 'mic2' && <><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" fill="currentColor" opacity=".2"/><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/></>}
+      {name === 'book' && <><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5z" fill="currentColor" opacity=".16"/><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></>}
+    </svg>
+  );
+}
 
 export const PROFILE_PROMPT_DISMISS_NAVIGATION = {
   to: '/s-14',
@@ -549,27 +551,61 @@ export function V34VerifiedHome(props: ScreenProps) {
   }
   if (!showDialog) return <Screen id="S-07" variant="app"><Pane><main className="v34-main"><h1 id="S-07-title" className="sr-only">Student workspace</h1><div role="status">Opening your dashboard…</div></main></Pane></Screen>;
   const projection = profile.data;
+  const personal = projection.profile.personal;
+  const fullName = [personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' ');
+  const initials = [personal.firstName, personal.lastName].map((name) => [...name.trim()][0] ?? '').join('').toUpperCase();
   return (
-    <>
-      <div ref={backgroundRef} data-testid="profile-prompt-background" aria-hidden={showDialog ? true : undefined}>
-         <Screen id="S-07" variant="app" aside={<nav className="v34-sidenav" aria-label="Main"><Brand/>{HOME_NAV.map((item, index) => <button type="button" key={item.label} className={index === 0 ? 'is-on' : ''} onClick={() => index === 11 ? nav('/s-17') : undefined}><V34Icon name={item.icon} size={19}/>{item.label}</button>)}<span className="v34-grow"/><small>Bar enrolment is optional and private.</small></nav>}>
-          <Pane><header className="v34-appbar"><Brand/><button type="button" className="v34-command">Ask a question or search…</button><button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button><ThemeButton {...props}/></header><main className="v34-main"><h1 id="S-07-title" className="v34-display">Welcome, {projection.profile.personal.firstName}.</h1><div className="v34-card"><b className="v34-stat">{projection.completionPercent}%</b><span>profile complete</span></div></main></Pane>
-        </Screen>
-      </div>
-      <div className="v34-dialog-backdrop">
-        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="profile-completion-dialog-title" aria-describedby="profile-completion-dialog-description" data-testid="profile-completion-dialog" className="v34-card v34-dialog" onKeyDown={trapDialogKeys}>
-          <button type="button" className="v34-hit v34-dialog__close" aria-label="Close profile prompt" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><V34Icon name="close" size={20}/></button>
-          <h2 ref={headingRef} tabIndex={-1} id="profile-completion-dialog-title">Complete your profile</h2>
-          <p id="profile-completion-dialog-description">Your profile is {projection.completionPercent}% complete. Finish the next section to tailor your student workspace.</p>
-          {dismissError && <div ref={dismissErrorRef} tabIndex={-1} role="alert" data-testid="profile-save-error">{dismissError}</div>}
-          <div className="v34-actions">
-            <button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button>
-            <button type="button" className="v34-hit" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}>Maybe Later</button>
-            <button type="button" className="v34-hit" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}>Complete Profile</button>
+    <section className="v34-screen v34-screen--app v34-s07" data-screen="S-07" aria-labelledby="S-07-title">
+      <div ref={backgroundRef} className="v34-s07-background" data-testid="profile-prompt-background" aria-hidden={showDialog ? true : undefined}>
+        <div className="v34-s07-app">
+          <header className="v34-s07-appbar">
+            <span className="v34-s07-desktopbrand"><NyayOneRevLLockup/></span>
+            <span className="v34-s07-mobilebrand"><img src="/brand/nyayone-mark.svg" alt="" aria-hidden="true" draggable="false"/><b>NyayOne</b></span>
+            <nav className="v34-s07-nav" aria-label="Site">
+              <button type="button" onClick={() => nav('/s-14')}>Home</button>
+              {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} aria-disabled="true">{label}</button>)}
+              <button type="button" onClick={() => nav('/s-17')}>Profile</button>
+            </nav>
+            <div className="v34-s07-tools"><ThemeButton {...props}/><button type="button" className="v34-s07-avatar" aria-label={`Your Profile · ${fullName}`} onClick={() => nav('/s-17')}><span>{initials}</span></button></div>
+          </header>
+          <div className="v34-s07-body">
+            <div className="v34-s07-main">
+              <div className="v34-s07-eyebrow">Student workspace · S-07 Home</div>
+              <h1 id="S-07-title" className="v34-s07-title">Your legal journey, in one place.</h1>
+              <p className="v34-s07-copy">Continue your law-school record: internships, moots, research and mentors.</p>
+              {projection.accessMode === 'limited' && <div className="v34-s07-note v34-s07-note--limited"><NyayOneRevLIcon name="shield" framed={false}/><span><b>Limited access.</b> Community and sharing stay off until guardian consent is recorded.</span><button type="button" className="v34-s07-button" onClick={() => nav('/s-16')}>Guardian Consent</button></div>}
+              <div className="v34-s07-tiles">
+                {S07_PREVIEWS.map((item) => <button type="button" className="v34-s07-tile" aria-disabled="true" key={item.title}><h3><span className="v34-s07-tile-icon" style={{ color: item.color, backgroundColor: `${item.color}1F` }}><S07Icon name={item.icon}/></span>{item.title}</h3><p>{item.text}</p><p className="v34-s07-preview-label">Preview only</p></button>)}
+              </div>
+              <div className="v34-s07-note">
+                <NyayOneRevLIcon name={projection.institutionalEmailStatus === 'verified' ? 'checkc' : 'shield'} framed={false}/>
+                <span>{projection.institutionalEmailStatus === 'verified' ? 'Institutional email verified.' : 'Institutional email not verified yet, so some listings stay locked.'}</span>
+                {projection.institutionalEmailStatus !== 'verified' && <button type="button" className="v34-s07-button" onClick={() => nav('/s-15')}><NyayOneRevLIcon name="badge" framed={false}/>Verify Now</button>}
+              </div>
+            </div>
+            <aside className="v34-s07-aside">
+              <div><div className="v34-s07-eyebrow">Why complete your profile?</div><p>Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year.</p></div>
+              <div><div className="v34-s07-eyebrow">Privacy</div><p>Every field is private by default. Gold appears only when something is verified.</p></div>
+            </aside>
           </div>
         </div>
       </div>
-    </>
+      <div className="v34-dialog-backdrop v34-s07-backdrop">
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="profile-completion-dialog-title" aria-describedby="profile-completion-dialog-description" data-testid="profile-completion-dialog" className="v34-card v34-dialog v34-s07-dialog" onKeyDown={trapDialogKeys}>
+          <button type="button" className="v34-hit v34-dialog__close" aria-label="Close profile prompt" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><V34Icon name="close" size={20}/></button>
+          <div className="v34-s07-eyebrow">Profile · {projection.completionPercent}% complete · S-07</div>
+          <h2 ref={headingRef} tabIndex={-1} id="profile-completion-dialog-title">Complete your profile</h2>
+          <p id="profile-completion-dialog-description">Add your academic background and interests for more relevant internships, learning and research suggestions. You can do this now or return from Profile at any time.</p>
+          <div className="v34-s07-progress" role="progressbar" aria-label="Profile completion" aria-valuenow={projection.completionPercent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${projection.completionPercent}%` }}/></div>
+          {dismissError && <div ref={dismissErrorRef} tabIndex={-1} role="alert" data-testid="profile-save-error">{dismissError}</div>}
+          <div className="v34-s07-actions">
+            <button type="button" className="v34-hit v34-s07-button v34-s07-button--primary" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}><S07Icon name="spark"/>Complete Profile</button>
+            <button type="button" className="v34-hit v34-s07-button" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><S07Icon name="clock"/>Maybe Later</button>
+          </div>
+          <div className="v34-s07-session-actions"><button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button></div>
+        </div>
+      </div>
+    </section>
   );
 }
 
