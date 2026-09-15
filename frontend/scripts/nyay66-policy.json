@@ -45,6 +45,181 @@
       "checks": ["controls"],
       "reason": "Preserve existing channel-specific Change name, Six digit code and Verify and continue accessible names; retain blank Verify disabled until six digits and a valid server flow. No pixel, text, geometry, mask, or accessibility exception.",
       "approvalPr": 48
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "153b8ce3485d055358cf786b5a4d7bd242061f14c2a763ee0b04e7bd38d04647",
+      "liveSha256": "3e9144e640ca8b73a660715d196da3bfc1c46b43ce28a8f640a0fc8d9142cd88",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-entry mobile390: propose accepting only the exact hosted heading-crop raster differences in region 4 ({\"x\":16,\"y\":220.78125,\"width\":358,\"height\":29.6875}): counted pixels 0%; RGB mean 0.349224084420/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 96.978315% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 153b8ce3485d055358cf786b5a4d7bd242061f14c2a763ee0b04e7bd38d04647; exact live PNG 3e9144e640ca8b73a660715d196da3bfc1c46b43ce28a8f640a0fc8d9142cd88.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "34b84fe0be917662d0220204885eac8e92a21622ca81df2f2697f6c4715fd1de",
+      "liveSha256": "9c27aa2bda4bfe83a5aeed01d38d400bceefd3a5006b605d559b8af5a031e9a7",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-invalidnum mobile390: propose accepting only the exact hosted heading-crop raster differences in region 5 ({\"x\":16,\"y\":220.78125,\"width\":358,\"height\":29.6875}): counted pixels 0%; RGB mean 0.349224084420/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 96.978315% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 34b84fe0be917662d0220204885eac8e92a21622ca81df2f2697f6c4715fd1de; exact live PNG 9c27aa2bda4bfe83a5aeed01d38d400bceefd3a5006b605d559b8af5a031e9a7.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "7f98c685b6723fe69bccbe796f9b10f21e676a91e3386bf08e89aef510bca216",
+      "liveSha256": "5c236038cf7372446952bb05eca3c0185af43e11fdcd5430df6d2e5c6f4179ff",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-submitting mobile390: propose accepting only the exact hosted heading-crop raster differences in region 4 ({\"x\":16,\"y\":220.78125,\"width\":358,\"height\":29.6875}): counted pixels 0%; RGB mean 0.349224084420/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 96.978315% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 7f98c685b6723fe69bccbe796f9b10f21e676a91e3386bf08e89aef510bca216; exact live PNG 5c236038cf7372446952bb05eca3c0185af43e11fdcd5430df6d2e5c6f4179ff.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "26be77985cacb60b2ba1d5f6ec08331d6aaa8d4e59e0167a16626cd672c87a70",
+      "liveSha256": "74f7e513a65da1c5048bb456d666277339af60443c2111a531cf6a0949026904",
+      "checks": [
+        "pixels",
+        "controls"
+      ],
+      "reason": "S-06 challenge only: keep Verify and continue disabled while the recovery code is blank, unlike the illustrative enabled reference. Approve only the resulting disabled-control appearance and disabled identity shown by these exact PNG hashes. No text, heading-identity, geometry, dynamic-region, accessibility, or other-state waiver. Additional narrowly proposed rendering acceptance: s06-challenge mobile390: propose accepting only the exact hosted heading-crop raster differences in region 6 ({\"x\":16,\"y\":220.78125,\"width\":358,\"height\":29.6875}): counted pixels 0%; RGB mean 0.341806331471/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 96.994461% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 26be77985cacb60b2ba1d5f6ec08331d6aaa8d4e59e0167a16626cd672c87a70; exact live PNG 74f7e513a65da1c5048bb456d666277339af60443c2111a531cf6a0949026904.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "54b3990a6d27e3a4ca816f87f0946ce9b37997728ae4c88b9d44a0b93c5ef231",
+      "liveSha256": "61cc48f2a55354256304b1e99b789804689b434e9d5001b2eb092f231e7a4608",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-wrong mobile390: propose accepting only the exact hosted heading-crop raster differences in region 6 ({\"x\":16,\"y\":257.78125,\"width\":358,\"height\":29.6875}): counted pixels 0%; RGB mean 0.386033519553/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 95.505708% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 54b3990a6d27e3a4ca816f87f0946ce9b37997728ae4c88b9d44a0b93c5ef231; exact live PNG 61cc48f2a55354256304b1e99b789804689b434e9d5001b2eb092f231e7a4608.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "aa5a893f98ce7681dc9d305e7ddb2f0c1ee192e2ffc079b56143b06201782f46",
+      "liveSha256": "b41900344bacd84aff05a0c27501d8b699da4fef38320a7896d2abb30f402fe9",
+      "checks": [
+        "pixels",
+        "text"
+      ],
+      "reason": "S-06 network-error only: replace the unsupported assertion that no code was sent with truthful uncertainty: We could not confirm whether your code was sent. Check your connection and try again. Approve only this copy and its rendered pixels shown by these exact PNG hashes. Control identities and headings remain unchanged. No dynamic-region, accessibility, other-copy, or other-state waiver.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "2e0d4be6c67a18de55c3af2cf3b98616a198efe82d681a9daca74c6c5c043924",
+      "liveSha256": "d26eca8084e1ec56e143f8a0695acbfa3c6ab81e2c45ca7a1978f9489443c6e6",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-entry mobile360: propose accepting only the exact hosted heading-crop raster differences in region 4 ({\"x\":16,\"y\":220.78125,\"width\":328,\"height\":29.6875}): counted pixels 0%; RGB mean 0.442107046070/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 95.939009% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 2e0d4be6c67a18de55c3af2cf3b98616a198efe82d681a9daca74c6c5c043924; exact live PNG d26eca8084e1ec56e143f8a0695acbfa3c6ab81e2c45ca7a1978f9489443c6e6.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "2e727423c37d6e5bb56680267144cf9cf9f6959a5b129a921772eac289305d1c",
+      "liveSha256": "fda1a668a4142196976bf6089958ef7e8d1fa471b13f105578c57bce74078226",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-invalidnum mobile360: propose accepting only the exact hosted heading-crop raster differences in region 5 ({\"x\":16,\"y\":220.78125,\"width\":328,\"height\":29.6875}): counted pixels 0%; RGB mean 0.442107046070/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 95.939009% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 2e727423c37d6e5bb56680267144cf9cf9f6959a5b129a921772eac289305d1c; exact live PNG fda1a668a4142196976bf6089958ef7e8d1fa471b13f105578c57bce74078226.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "5d175c67f089a3dc711b783ff03bf11d2b3dcd78056c0cbfe0c9a8617f40b53f",
+      "liveSha256": "2301f1bda52cd6bedfa385389391b56c19ed6b61749627ea0d253303893ca7c0",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-submitting mobile360: propose accepting only the exact hosted heading-crop raster differences in region 4 ({\"x\":16,\"y\":220.78125,\"width\":328,\"height\":29.6875}): counted pixels 0%; RGB mean 0.442107046070/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 95.939009% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 5d175c67f089a3dc711b783ff03bf11d2b3dcd78056c0cbfe0c9a8617f40b53f; exact live PNG 2301f1bda52cd6bedfa385389391b56c19ed6b61749627ea0d253303893ca7c0.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "d7740f40954bba83b3b9637c4ab7a5a33208189f11e1ce056c9951705f20c902",
+      "liveSha256": "05da092d362dbedd3e28ce01f797f32b1a80833efbea0d36af8d702b9d1b81b3",
+      "checks": [
+        "pixels",
+        "controls"
+      ],
+      "reason": "S-06 challenge only: keep Verify and continue disabled while the recovery code is blank, unlike the illustrative enabled reference. Approve only the resulting disabled-control appearance and disabled identity shown by these exact PNG hashes. No text, heading-identity, geometry, dynamic-region, accessibility, or other-state waiver. Additional narrowly proposed rendering acceptance: s06-challenge mobile360: propose accepting only the exact hosted heading-crop raster differences in region 6 ({\"x\":16,\"y\":220.78125,\"width\":328,\"height\":29.6875}): counted pixels 0%; RGB mean 0.428997289973/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 95.846494% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG d7740f40954bba83b3b9637c4ab7a5a33208189f11e1ce056c9951705f20c902; exact live PNG 05da092d362dbedd3e28ce01f797f32b1a80833efbea0d36af8d702b9d1b81b3.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "2b8e0d1d8e1372bebb8feb3ebe91709476a4e9ec03535e2e624d99a990c13f9d",
+      "liveSha256": "ed242499035b192cd43ebc7bd5f88b23046baf3cd9ecd1748885306954d581bb",
+      "checks": [
+        "pixels"
+      ],
+      "reason": "s06-wrong mobile360: propose accepting only the exact hosted heading-crop raster differences in region 6 ({\"x\":16,\"y\":257.78125,\"width\":328,\"height\":29.6875}): counted pixels 0%; RGB mean 0.312974254743/255; maximum RGB channel difference 2/255. Background-gradient raster differences account for 96.893603% of crop RGB absolute-difference energy under the disclosed R<210 ink diagnostic; the remaining contribution is foreground-like under this diagnostic threshold, not exact semantic antialiasing segmentation. Text, control/heading geometry, and thresholded ink extents match exactly. This is NOT strictly text-only antialiasing; owner approval of background-gradient plus text raster artifacts is required. No clipping, layout, heading-text, dynamic-region, accessibility, overflow, or other-state waiver. Exact reference PNG 2b8e0d1d8e1372bebb8feb3ebe91709476a4e9ec03535e2e624d99a990c13f9d; exact live PNG ed242499035b192cd43ebc7bd5f88b23046baf3cd9ecd1748885306954d581bb.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "mobile360",
+      "theme": "light",
+      "referenceSha256": "f68c4bbf320fde4f9dfd9e018a6326b8db4ef746902b126c2be0f54ceecdd04c",
+      "liveSha256": "b99d392a2a5176755068ff728829c79cc944cda6c6d62de9bfd21a0a45ee0922",
+      "checks": [
+        "pixels",
+        "text"
+      ],
+      "reason": "S-06 network-error only: replace the unsupported assertion that no code was sent with truthful uncertainty: We could not confirm whether your code was sent. Check your connection and try again. Approve only this copy and its rendered pixels shown by these exact PNG hashes. Control identities and headings remain unchanged. No dynamic-region, accessibility, other-copy, or other-state waiver.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "4b59123be365fef798198051d028af36dd1a6d7760cd67fdfc702116ca6b91a8",
+      "liveSha256": "cf2ac81ff8eab2149db3a70f58db3b966e27f4c9dafb5c4914e2812306196226",
+      "checks": [
+        "pixels",
+        "controls"
+      ],
+      "reason": "S-06 challenge only: keep Verify and continue disabled while the recovery code is blank, unlike the illustrative enabled reference. Approve only the resulting disabled-control appearance and disabled identity shown by these exact PNG hashes. No text, heading, geometry, dynamic-region, accessibility, or other-state waiver.",
+      "approvalPr": 49
+    },
+    {
+      "screen": "S-06",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "4e763a19da9273fad9684bdef823c11ae358d9dcc1afd006163a6fe846749ca2",
+      "liveSha256": "9a2b6d885cd45a211688e6ac3a4e063b33f648e0703f2aa38acffe3bb5fdf440",
+      "checks": [
+        "pixels",
+        "text",
+        "geometry"
+      ],
+      "reason": "S-06 network-error only: replace the unsupported assertion that no code was sent with truthful uncertainty: We could not confirm whether your code was sent. Check your connection and try again. Approve only this copy and its rendered pixels, including the vertical desktop status-block/action shift caused by the longer copy shown by these exact PNG hashes. Control identities and headings remain unchanged. No dynamic-region, accessibility, other-copy, or other-state waiver.",
+      "approvalPr": 49
     }
   ]
 }
