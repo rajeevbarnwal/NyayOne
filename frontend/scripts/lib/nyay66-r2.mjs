@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {PNG} from 'pngjs';
-import {actor,mockApplication} from './nyay66-fixtures.mjs';
+import {actor,mockApplication,projection} from './nyay66-fixtures.mjs';
 export const R2_SOURCE_SHA256='3bfdbaac7536d8ceeae660c57286b58f1b03cdc6a53545c458b3bc7636198a07';
 export const R2_SOURCE_PATH='docs/design/nyayone-option-3.2.1/r2/NYAYONE_S01_S02_S06_R2_STANDALONE.html';
 export const R2_STATES=Object.entries({s01:['checking','error','resolved'],s02:['default','focus'],s06:['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']}).flatMap(([view,states])=>states.map(state=>({id:`${view}-${state}`,view,state,screen:`S-${view.slice(1)}`})));
@@ -128,15 +128,33 @@ export async function mockR2Application(page,view,origin,errors){
       if(view==='s01-checking')return;
       return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(view==='s01-error'?{invalid:'synthetic-session-projection'}:{authenticated:true,actor})});
     }
-    // Hold the destination's independent profile request, never navigation.
-    if(view==='s01-resolved'&&url.pathname==='/api/v1/student/profile')return;
+    // Complete the destination's independent synthetic request before leaving
+    // it for component evidence. The ordinary prompt projection stays on S-07;
+    // it neither delays S-01's redirect nor starts unrelated dashboard requests.
+    if(view==='s01-resolved'&&url.pathname==='/api/v1/student/profile'&&route.request().method()==='GET'){
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(projection('S-07-popup'))});
+    }
     if(url.pathname.startsWith('/api/v1/')){errors.push('UNMATCHED_API');return route.abort();}
     return route.continue();
   });
+  // Observe before navigation so a fast response cannot be missed. Handle a
+  // rejected transport here, then refuse below; never suppress requestfailed.
+  const profileCompletion=view==='s01-resolved'?page.waitForResponse(response=>
+    response.url()===origin+'/api/v1/student/profile'&&response.request().method()==='GET'&&response.status()===200
+  ).then(response=>response.finished()).then(error=>({error}),error=>({error})):null;
   await page.goto(origin+'/s-01');
   if(view==='s01-resolved'){
     await page.waitForURL('**/s-07');
     await page.locator('[data-screen="S-01"]').waitFor({state:'detached'});
+    if((await profileCompletion).error)throw Error('R2_S01_PROFILE_RESPONSE_INCOMPLETE');
+    // The completed projection mounts the destination prompt. Let its real
+    // assets finish too; leaving early would cancel those requests instead.
+    await page.getByRole('dialog',{name:'Complete your profile',exact:true}).waitFor();
+    await page.waitForFunction(async()=>{
+      await document.fonts.ready;
+      await Promise.all([...document.images].map(image=>image.decode()));
+      return true;
+    },null,{timeout:20_000});
     await page.goto(origin+'/__nyay66-components/scripts/nyay66-s01-component.html');
     await page.locator('[data-nyay66-evidence="component-only"]').waitFor();
     await page.getByText('Session confirmed. Opening your workspace…',{exact:true}).waitFor();

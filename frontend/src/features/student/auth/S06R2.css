@@ -62,6 +62,10 @@
 .s06-r2__tile svg { width: 26px; height: 26px; }
 .s06-r2__tile--error { color: #9A2B21; background: #9A2B2114; border-color: #9A2B2133; }
 .s06-r2__tile--success { color: #1E6B4A; background: #1E6B4A14; border-color: #1E6B4A33; }
+@media (max-width: 899px) {
+  /* Match the R2 icon's intrinsic shrink when a narrow button label wraps. */
+  .s06-r2__buttonrow .v321-revl-icon { flex: 0 1 auto; }
+}
 @media (min-width: 900px) {
   .s06-r2 { display: grid; grid-template-columns: 500px minmax(0,1fr); }
   .s06-r2__brand { background: linear-gradient(168deg,#1C2454,#151B40); padding: 44px 44px 36px; display: flex; flex-direction: column; overflow: hidden; border-radius: 0; }

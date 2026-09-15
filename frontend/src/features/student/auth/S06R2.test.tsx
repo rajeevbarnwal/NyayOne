@@ -21,6 +21,15 @@ describe('S-06 approved R2 controlled recovery presentation', () => {
     expect(css).toContain('.s06-r2__brandcopy { margin-top: 9px; }');
     expect(css).toContain('.s06-r2__brandcopy { margin-top: auto; max-width: 360px; }');
   });
+  it('preserves the reference icon shrink behavior when the recovery button label wraps', () => {
+    const css = readFileSync(new URL('./S06R2.css', import.meta.url), 'utf8');
+    expect(css).toContain('.s06-r2__buttonrow .v321-revl-icon { flex: 0 1 auto; }');
+    expect(css).toContain('.s06-r2__buttonrow .s06-r2__button { flex: 1; min-width: 0; padding: 0 10px; text-align: center; }');
+    expect(css).toContain('.s06-r2__icon, .s06-r2 .v321-revl-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }');
+    const change = button(html({ ...challenge, state: 'wrong', code: '123456' }), 'Change number');
+    expect(change).toContain('class="v321-revl-icon"');
+    expect(change).not.toContain('disabled');
+  });
   it('renders mobile-only recovery and the approved brand copy with no invented identity', () => {
     const markup = html();
     for (const copy of ['Recover your account.', 'Registered mobile number', 'Keep your law-school record in one place.', 'Learn the law.', 'Build your path.', 'If this number matches an account, we will send a code. The response looks the same either way.']) expect(markup).toContain(copy);
