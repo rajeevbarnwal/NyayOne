@@ -76,13 +76,22 @@ try {
     await open();
     check(active+'-entry-focus', await page.locator('#profile-completion-dialog-title').evaluate(e=>e===document.activeElement));
     check(active+'-inert', await page.getByTestId('profile-prompt-background').evaluate(e=>e.hasAttribute('inert')));
-    await page.getByRole('button',{name:'Complete Profile',exact:true}).focus();
+    const dialog=page.getByRole('dialog');
+    await dialog.getByRole('button',{name:'Sign out',exact:true}).focus();
     await page.keyboard.press('Tab');
-    check(active+'-trap', await page.getByRole('button',{name:'Close profile prompt'}).evaluate(e=>e===document.activeElement));
+    check(active+'-trap', await dialog.getByRole('button',{name:'Close profile prompt',exact:true}).evaluate(e=>e===document.activeElement));
+    for (const [index,name] of ['Complete Profile','Maybe Later','Sign out','Close profile prompt'].entries()) {
+      await page.keyboard.press('Tab');
+      check(active+'-control-order-'+index, await dialog.getByRole('button',{name,exact:true}).evaluate(e=>e===document.activeElement));
+    }
     await page.keyboard.press('Shift+Tab');
-    check(active+'-reverse-trap', await page.getByRole('button',{name:'Complete Profile',exact:true}).evaluate(e=>e===document.activeElement));
-    const rect=await page.getByRole('dialog').boundingBox();
-    check(active+'-layout',viewport.width===390 ? Math.abs(rect.y+rect.height-viewport.height)<2 : rect.y>100);
+    check(active+'-reverse-trap', await dialog.getByRole('button',{name:'Sign out',exact:true}).evaluate(e=>e===document.activeElement));
+    const rect=await dialog.boundingBox();
+    check(active+'-layout',viewport.width===390
+      ? Math.abs(rect.x+rect.width/2-viewport.width/2)<2
+        && Math.abs(rect.y+rect.height/2-viewport.height/2)<2
+        && rect.width<=viewport.width-32
+      : rect.y>100);
     await page.addScriptTag({content:axe});
     const violations=await page.evaluate(async()=> (await window.axe.run(document)).violations
       .filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id));

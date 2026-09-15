@@ -27,13 +27,14 @@ function assertFields(actual, expected) {
   for (const [key, value] of Object.entries(expected)) assert.deepEqual(actual?.[key], value, key);
 }
 
-function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup = false } = {}) {
-  const revision = ['S-03', 'S-04', 'S-05', 'S-08', 'S-09'].includes(screenId);
+function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup } = {}) {
+  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09'].includes(screenId);
   const family = wrongFont ? 'serif' : revision ? revisionFamily : legacyFamily;
-  const svg = lockup
+  const svg = (lockup ?? revision)
     ? '<svg class="v321-lockup" role="img" aria-label="NyayOne — Legal, on the record" width="40" height="40"><rect width="30" height="30"/></svg>'
-    : `<svg ${badIcon ? '' : 'aria-hidden="true"'} width="40" height="40"><rect width="30" height="30"/></svg>`;
-  return `<section data-screen="${screenId}" style="display:block;min-height:40px">${heading ? `<h1 style='font-family:${family}'>Synthetic screen</h1>` : '<p role="status">Synthetic pending state</p>'}${svg}</section>`;
+    : '<svg aria-hidden="true" width="40" height="40"><rect width="30" height="30"/></svg>';
+  const invalidIcon = badIcon ? '<svg width="40" height="40"><rect width="30" height="30"/></svg>' : '';
+  return `<section data-screen="${screenId}" style="display:block;min-height:40px">${heading ? `<h1 style='font-family:${family}'>Synthetic screen</h1>` : '<p role="status">Synthetic pending state</p>'}${svg}${invalidIcon}</section>`;
 }
 
 async function withPage(task) {
@@ -89,6 +90,9 @@ function replacingPage(page, { startEmpty = false } = {}) {
       get(target, property) {
         if (property === 'locator') return (selector) => locatorProxy(target.locator(selector));
         if (property === 'waitForFunction') return async (callback, argument, options) => {
+          // S-07 now requires its labelled lockup at semantic readiness, before
+          // the later atomic sample. Model the pending render arriving there.
+          if (argument?.lockupRequired && startEmpty && events.startupMounts === 0) await mount();
           if (argument?.screenId === 'S-07') {
             if (startEmpty && events.startupMounts === 0) await mount();
             await replace();
@@ -160,16 +164,16 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact five-screen Revision L exception and legacy Carlito stack', async () => {
+  it('preserves the exact six-screen Revision L census and the legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
-      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-08', 'S-09', 'S-07']) {
-        await page.setContent(`<html data-theme="light"><body>${markup(screenId, { lockup: screenId !== 'S-07' })}</body></html>`);
+      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10']) {
+        await page.setContent(`<html data-theme="light"><body>${markup(screenId)}</body></html>`);
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 6);
+      assert.equal(rows.size, 7);
     });
   });
 
@@ -184,10 +188,10 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
 
   it('does not allow a legacy screen to acquire the Revision L-only lockup exception', async () => {
     await withPage(async (page) => {
-      await page.setContent(`<html data-theme="light"><body>${markup('S-07', { lockup: true })}</body></html>`);
+      await page.setContent(`<html data-theme="light"><body>${markup('S-10', { lockup: true })}</body></html>`);
       const rows = new Map();
-      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-07');
-      assertFields(rows.get('S-07'), { typographyExact: true, iconsExact: false });
+      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-10');
+      assertFields(rows.get('S-10'), { typographyExact: true, iconsExact: false });
     });
   });
 });
