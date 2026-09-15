@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type FocusEvent, type FormEvent, type ReactNode } from 'react';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from './NyayOneRevLIcon';
 import './S06R2.css';
 
@@ -72,6 +72,10 @@ export function S06R2(props: S06R2Props) {
   const root = useRef<HTMLElement>(null);
   const focusedRequest = useRef(0);
   const lastKeyboardTarget = useRef<HTMLElement | null>(null);
+  const rememberKeyboardTarget = (event: FocusEvent<HTMLElement>) => {
+    const target = event.target;
+    lastKeyboardTarget.current = target instanceof HTMLElement && target.matches(':focus-visible') ? target : null;
+  };
   const focusRequest = props.focusRequest ?? 0;
   useEffect(() => {
     if (busy || !root.current) return;
@@ -135,5 +139,5 @@ export function S06R2(props: S06R2Props) {
     {title('Your account is ready.', 'Sign in with your mobile number to continue. You are not signed in yet.')}
     <button className="s06-r2__button s06-r2__button--primary" type="button" onClick={onBack} data-recovery-return><RecoveryIcon name="login"/>Back to sign in</button>
   </>;
-  return <section ref={root} onFocusCapture={event => { const target = event.target; lastKeyboardTarget.current = target instanceof HTMLElement && target.matches(':focus-visible') ? target : null; }} className={`s06-r2${terminal ? ' s06-r2--terminal' : ''}`} data-screen="S-06" data-state={state} data-nyayone-design="3.2.1-r2" aria-label="Account recovery"><Brand/><div className="s06-r2__body">{terminal ? <div className="s06-r2__column">{header}{body}</div> : <form className="s06-r2__column s06-r2__column--form" onSubmit={submit} noValidate aria-busy={busy}>{header}{body}</form>}</div></section>;
+  return <section ref={root} onFocusCapture={rememberKeyboardTarget} className={`s06-r2${terminal ? ' s06-r2--terminal' : ''}`} data-screen="S-06" data-state={state} data-nyayone-design="3.2.1-r2" aria-label="Account recovery"><Brand/><div className="s06-r2__body">{terminal ? <div className="s06-r2__column">{header}{body}</div> : <form className="s06-r2__column s06-r2__column--form" onSubmit={submit} noValidate aria-busy={busy}>{header}{body}</form>}</div></section>;
 }
