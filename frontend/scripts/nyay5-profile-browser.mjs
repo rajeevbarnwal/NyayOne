@@ -306,10 +306,18 @@ async function captureSafeScreenshot(page, name) {
 }
 
 async function recordVisualContract(page, screenId) {
+  const S06_R2_HEADING_STACK = Object.freeze([
+    'nyayone revision l heading',
+    'aptos',
+    'calibri',
+    'carlito',
+    'system-ui',
+    'sans-serif',
+  ]);
   await waitForVisualCensusSettled(page, {
     assertion: 'browser:redesigned_heading_stack',
     expectedTheme: 'light',
-    requireRevisionLLockup: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId),
+    requireRevisionLLockup: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId) || screenId === 'S-06',
     readinessAttempts: 1,
   });
   const screen = page.locator(`[data-screen="${screenId}"]`).first();
@@ -332,12 +340,13 @@ async function recordVisualContract(page, screenId) {
     const headings = [...node.querySelectorAll('h1,h2')]
       .filter((element) => element.getClientRects().length > 0);
     if (!headings.some(visible)) return false;
-    if (contract.revisionLExpected && !node.querySelector('.v321-lockup')) return false;
+    if ((contract.revisionLExpected || contract.s06R2Expected)
+      && !node.querySelector('.v321-lockup')) return false;
     const normalizedFamily = (element) => getComputedStyle(element).fontFamily
       .replace(/["']/gu, '')
       .split(',')
       .map((name) => name.trim().toLowerCase());
-    const expected = contract.revisionLExpected
+    const expected = contract.s06R2Expected ? contract.s06R2HeadingStack : contract.revisionLExpected
       ? contract.revisionLHeadingStack
       : contract.legacyCarlitoHeadingStack;
     const icons = [...node.querySelectorAll('svg')]
@@ -359,7 +368,19 @@ async function recordVisualContract(page, screenId) {
       iconCount: icons.length,
       iconsExact: icons.every((icon) => {
         const isRevisionLLockup = icon.classList.contains('v321-lockup');
-        if (isRevisionLLockup) return contract.revisionLExpected && exactRevisionLLockup(icon);
+        if (isRevisionLLockup) return (contract.revisionLExpected || contract.s06R2Expected)
+          && exactRevisionLLockup(icon);
+        // The approved R2 desktop decoration is hidden at its exact wrapper.
+        // This is not a general inherited-aria rule for any other SVG/screen.
+        if (contract.s06R2Expected && icon.parentElement?.classList.contains('s06-r2__ring')) {
+          return icon.parentElement.getAttribute('class') === 's06-r2__ring'
+            && icon.parentElement.getAttribute('aria-hidden') === 'true'
+            && icon.parentElement.tabIndex < 0
+            && !icon.hasAttribute('aria-hidden')
+            && icon.tabIndex < 0
+            && icon.getAttribute('focusable') !== 'true'
+            && !icon.closest('button,a');
+        }
         return icon.getAttribute('aria-hidden') === 'true'
           && icon.tabIndex < 0
           && (!(icon.closest('button,a'))
@@ -371,6 +392,8 @@ async function recordVisualContract(page, screenId) {
   }, {
     screenId,
     revisionLExpected: REVISION_L_VISUAL_SCREEN_IDS.includes(screenId),
+    s06R2Expected: screenId === 'S-06',
+    s06R2HeadingStack: S06_R2_HEADING_STACK,
     revisionLHeadingStack: REVISION_L_HEADING_STACK,
     legacyCarlitoHeadingStack: LEGACY_CARLITO_HEADING_STACK,
   });

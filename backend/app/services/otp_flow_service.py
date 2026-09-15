@@ -457,13 +457,14 @@ def cancel_onboarding_flow(
     *,
     now: datetime,
 ) -> OnboardingCancellation:
-    """Atomically retire one cookie-owned signup/login authority graph.
+    """Atomically retire one cookie-owned signup/login/recovery authority graph.
 
-    Missing, expired, random, and non-onboarding capabilities share the same
-    unavailable projection. A live onboarding flow is consumed only after its
+    Missing, expired, random, and unsupported capabilities share the same
+    unavailable projection. A live flow is consumed only after its
     active or pending challenge and every relayable outbox row are locked and
     fenced, so a captured cookie/code pair or stale delivery worker cannot win
-    after the cancellation commit.
+    after the cancellation commit. Recovery also retires an already-verified
+    proof so that Change number cannot leave reset completion authority alive.
     """
 
     graph = resolve_flow(session, raw_token)
@@ -472,8 +473,11 @@ def cancel_onboarding_flow(
     authority, flow = graph
     now = as_utc(now)
     if (
-        flow.purpose not in {"signup", "login"}
-        or flow.state not in _CANCELLABLE_ONBOARDING
+        flow.purpose not in {"signup", "login", "recovery"}
+        or (
+            flow.state not in _CANCELLABLE_ONBOARDING
+            and not (flow.purpose == "recovery" and flow.state == "verified")
+        )
         or flow.consumed_at is not None
         or as_utc(flow.expires_at) <= now
     ):

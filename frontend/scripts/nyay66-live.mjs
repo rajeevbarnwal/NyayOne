@@ -8,6 +8,7 @@ import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {coverage,SOURCE_SHA256,VIEWPORTS} from './lib/nyay66-conformance.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
+import {classifyConsoleErrors} from './lib/nyay66-console-errors.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
 import {loadR2,R2_SOURCE_SHA256,R2_VIEWPORTS,R2_LIVE_STATES,pendingStateRow,verifyR2PNG,mockR2Application} from './lib/nyay66-r2.mjs';
 import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression,LIMITS,canonical} from './lib/nyay66-enforcement.mjs';
@@ -76,7 +77,9 @@ try{
       }
       const name=`${id}-${vp.id}`;const errors=[];
       const row={screen:item.screen,state:id,viewport:vp.id,theme:'light',executed:false,errors};
-      let context;
+      let context,page;
+      const consoleErrors=[],httpResponses=[];
+      const recordNetworkFailure=()=>errors.push('NETWORK_ERROR');
       try{
         const reference=(isR2?r2.manifest:manifest).rows.find(x=>x.view===view&&x.viewport===vp.id);
         if(!reference)throw Error('REFERENCE_MISSING');
@@ -84,9 +87,11 @@ try{
         if(digest(referenceBytes)!==reference.sha256)throw Error('REFERENCE_BYTES_MISMATCH');
         if(isR2)verifyR2PNG(reference,referenceBytes);
         context=await browser.newContext({viewport:{width:vp.width,height:vp.height},deviceScaleFactor:1,locale:'en-IN',timezoneId:'Asia/Kolkata',colorScheme:'light',reducedMotion:'reduce',serviceWorkers:'block'});
-        const page=await context.newPage();page.setDefaultTimeout(20000);
+        page=await context.newPage();page.setDefaultTimeout(20000);
         page.on('pageerror',()=>errors.push('PAGE_ERROR'));
-        page.on('console',msg=>{if(msg.type()==='error')errors.push('CONSOLE_ERROR');});
+        page.on('requestfailed',recordNetworkFailure);
+        page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push({text:msg.text(),url:msg.location().url});});
+        page.on('response',response=>{if(response.status()>=400)httpResponses.push({method:response.request().method(),url:response.url(),status:response.status()});});
         if(isR2)Object.assign(row,await mockR2Application(page,view,origin,errors));
         else await mockApplication(page,id,origin,errors);
         await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode()));await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
@@ -112,7 +117,16 @@ try{
         Object.assign(row,{executed:true,referenceSha256:reference.sha256,liveSha256:digest(bytes),metrics,regions,structure,referenceSurface:reference.surface,liveSurface:surface,accessibility,exceptionsApplied:approved,remaining});
         row.verdict=errors.length?'CAPTURE-FAILED':remaining.length?'NONCONFORMANT':approved.length?'PARITY-WITH-DISCLOSED-DELTA':'PARITY';
       }catch(error){row.verdict='CAPTURE-FAILED';row.failure=error.message?.split('\n')[0].replace(/https?:\/\/\S+/g,'[origin]').slice(0,160);}
-      finally{if(context)await context.close();}
+      finally{
+        // Closing the isolated context intentionally cancels the submitting
+        // fixture's held response; it is not an application network failure.
+        if(page)page.off('requestfailed',recordNetworkFailure);
+        if(context)await context.close();
+      }
+      const consoleDiagnostics=classifyConsoleErrors({state:view,origin,consoleErrors,httpResponses,expectedHttpErrors:row.expectedHttpErrors});
+      row.consoleDiagnostics=consoleDiagnostics;
+      errors.push(...consoleDiagnostics.errors);
+      if(errors.length)row.verdict='CAPTURE-FAILED';
       row.blocking=row.verdict==='CAPTURE-FAILED'||config.enforced.includes(item.screen)&&!row.verdict.startsWith('PARITY');
       report.rows.push(row);console.log(JSON.stringify({screen:id,viewport:vp.id,verdict:row.verdict,blocking:row.blocking}));
     }

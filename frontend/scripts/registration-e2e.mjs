@@ -567,17 +567,21 @@ for (const [name, values, expected] of [
     if (r.url().includes('/api/v1/auth/student/recovery/')) calls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
   await page.goto(`${base}/s-06`);
-  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill(qaPii.mobile);
+  await page.getByLabel('Registered mobile number', { exact: true }).fill(qaPii.mobile);
   await resetOtp();
-  await page.getByRole('button', { name: 'Send the code' }).click();
-  await page.getByText('If an account matches, a six digit recovery code has been sent.').waitFor();
-  const recoveryCode = page.getByLabel('6-DIGIT RECOVERY CODE');
+  await page.getByRole('button', { name: 'Send recovery code', exact: true }).click();
+  await page.getByRole('heading', { name: 'Enter the recovery code.', exact: true }).waitFor();
+  const recoveryCode = page.getByLabel('Six-digit recovery code', { exact: true });
   // Prove that the server-owned pending projection has rendered before waiting
   // on the independent provider capture. This preserves the exact oracle while
   // preventing provider scheduling from hiding a transient UI regression.
   await recoveryCode.waitFor({ state: 'visible' });
   await recoveryCode.fill(await latestOtp());
-  await page.getByRole('button', { name: 'Verify recovery code' }).click();
+  await page.getByRole('button', { name: 'Verify and continue', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your account is ready.', exact: true }).waitFor();
+  await recoveryCode.waitFor({ state: 'detached' });
+  await page.getByText('Sign in with your mobile number to continue. You are not signed in yet.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Back to sign in', exact: true }).click();
   await page.waitForURL('**/s-04');
   await page.getByRole('heading', { name: 'Sign in' }).waitFor({ state: 'visible' });
   record('recovery_server_start', 'POST /recovery/start', calls,

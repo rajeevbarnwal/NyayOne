@@ -96,7 +96,7 @@ describe('legacy registration browser runner contract', () => {
     expect(matrix).not.toContain('Exactly 10 digits. The one time code is sent here.');
   });
 
-  it('expects successful recovery to retire the flow and return to S-04', () => {
+  it('expects successful recovery to retire the flow, acknowledge R2 success and return to S-04', () => {
     const recovery = sourceBetween(
       '// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.',
       '// Responsive/theme and icon-tooltip contract matrix.',
@@ -107,6 +107,11 @@ describe('legacy registration browser runner contract', () => {
     expect(recovery).not.toContain('Recovery verified. You may now sign in again.');
     expect(recovery).toContain("calls.some((r) => r.includes('POST /api/v1/auth/student/recovery/complete'))");
     expect(recovery).toContain("await recoveryCode.waitFor({ state: 'detached' })");
+    expect(recovery).toContain("getByLabel('Registered mobile number', { exact: true })");
+    expect(recovery).toContain("getByRole('button', { name: 'Send recovery code', exact: true })");
+    expect(recovery).toContain("getByRole('heading', { name: 'Your account is ready.', exact: true })");
+    expect(recovery).toContain("getByRole('button', { name: 'Back to sign in', exact: true }).click()");
+    for (const id of ['recovery_server_start', 'recovery_server_verify', 'recovery_server_complete', 'recovery_no_email_redirect']) expect(recovery).toContain(`record('${id}'`);
   });
 
   it('waits for and allows only read-only session discovery on the retired auth prototype', () => {

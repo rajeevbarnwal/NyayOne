@@ -1192,7 +1192,7 @@ def otp_cancel(
     origin: None = Depends(require_trusted_mutation_origin),
     session: Session = Depends(get_session),
 ) -> otp_flow_service.OtpFlowState:
-    """Retire the current signup/login capability before persona change."""
+    """Retire signup/login/recovery authority before changing identity input."""
 
     del origin
     _otp_projection_headers(response)

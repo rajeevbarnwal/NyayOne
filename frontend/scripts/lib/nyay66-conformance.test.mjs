@@ -12,6 +12,40 @@ import {
 } from './nyay66-conformance.mjs';
 
 const image = () => new PNG({ width: 2, height: 2, fill: true });
+const resolvedPage = ({completionError=null,completionReject=false,responseReject=false,deferCompletion=false,dialogError=false,resourcesError=false}={}) => {
+  let handler,resolveResponse,responsePredicate,profileBody;
+  let releaseCompletion,notifyCompletionStarted;
+  const completionStarted=new Promise(resolve=>{notifyCompletionStarted=resolve;});
+  const completionRelease=new Promise(resolve=>{releaseCompletion=resolve;});
+  const actions=[];
+  const request={url:()=> 'http://localhost/api/v1/student/profile',method:()=> 'GET'};
+  const response={url:request.url,request:()=>request,status:()=>200,finished:async()=>{
+    actions.push(['profile-completion-started']);notifyCompletionStarted();
+    if(deferCompletion)await completionRelease;
+    if(completionReject)throw Error('PROFILE_TRANSPORT_FAILED');
+    actions.push(['profile-finished']);
+    return completionError;
+  }};
+  const pendingResponse=new Promise(resolve=>{resolveResponse=resolve;});
+  const profileRoute={request:()=>request,fulfill:async value=>{
+    profileBody=JSON.parse(value.body);actions.push(['profile-fulfilled',value.status]);resolveResponse(response);
+  }};
+  const page={route:async(_,fn)=>{handler=fn;},
+    goto:async path=>{actions.push(['goto',path]);if(path==='http://localhost/s-01')await handler(profileRoute);},
+    waitForResponse:predicate=>{responsePredicate=predicate;return responseReject?Promise.reject(Error('PROFILE_RESPONSE_MISSING')):pendingResponse;},
+    waitForURL:async path=>actions.push(['url',path]),
+    locator:selector=>({waitFor:async options=>actions.push(['locator',selector,options])}),
+    getByText:(text,options)=>({waitFor:async()=>actions.push(['text',text,options])}),
+    getByRole:(role,options)=>({waitFor:async()=>{actions.push(['profile-dialog',role,options]);if(dialogError)throw Error('PROFILE_DIALOG_MISSING');}}),
+    waitForFunction:async(fn,arg,options)=>{actions.push(['profile-resources-finished']);
+      expect(arg).toBe(null);expect(options).toEqual({timeout:20_000});
+      expect(fn.toString()).toContain('document.fonts.ready');expect(fn.toString()).toContain('image.decode()');
+      expect(fn.toString()).not.toMatch(/setTimeout|location\s*=|innerHTML\s*=|history\./);
+      if(resourcesError)throw Error('PROFILE_RESOURCE_FAILED');
+    },
+  };
+  return {page,actions,handler:()=>handler,profileBody:()=>profileBody,predicate:()=>responsePredicate,response,completionStarted,releaseCompletion};
+};
 describe('R2 additive reference coverage', () => {
   it('covers exactly 14 approved light states and 42 reference panels', () => {
     expect(r2.R2_STATES).toHaveLength(14);
@@ -59,8 +93,9 @@ describe('R2 additive reference coverage', () => {
       await expect(r2.loadR2(root,config)).rejects.toThrow('R2_REFERENCE_BYTES_MISMATCH');
     }finally{await rm(root,{recursive:true,force:true});}
   });
-  it('refuses unimplemented recovery and unknown fixtures instead of manufacturing coverage',async()=>{
-    for(const state of ['s06-success','s99-other'])await expect(r2.mockR2Application({},state,'http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
+  it('includes all nine real recovery fixtures while refusing unknown coverage',async()=>{
+    expect(r2.R2_LIVE_STATES.filter(state=>state.startsWith('s06-'))).toEqual(r2.R2_STATES.filter(state=>state.id.startsWith('s06-')).map(state=>state.id));
+    await expect(r2.mockR2Application({},'s99-other','http://localhost',[])).rejects.toThrow('R2_LIVE_STATE_NOT_IMPLEMENTED');
   });
   it('measures S-02 focus with real keyboard input instead of a manufactured visual attribute',async()=>{
     const actions=[];
@@ -83,24 +118,70 @@ describe('R2 additive reference coverage', () => {
     expect(evidence).toEqual({evidenceKind:'live-route'});
   });
   it('separates resolved component visuals from an executed automatic production redirect',async()=>{
-    let handler;const actions=[];
-    const page={route:async(_,fn)=>{handler=fn;},goto:async path=>actions.push(['goto',path]),waitForURL:async path=>actions.push(['url',path]),locator:selector=>({waitFor:async options=>actions.push(['locator',selector,options])}),getByText:(text,options)=>({waitFor:async()=>actions.push(['text',text,options])})};
+    const fixture=resolvedPage(),{page,actions}=fixture;
     const evidence=await r2.mockR2Application(page,'s01-resolved','http://localhost',[]);
-    let response;await handler({request:()=>({url:()=> 'http://localhost/api/v1/auth/student/session'}),fulfill:async value=>{response=value;}});
+    let response;await fixture.handler()({request:()=>({url:()=> 'http://localhost/api/v1/auth/student/session'}),fulfill:async value=>{response=value;}});
     expect(JSON.parse(response.body).authenticated).toBe(true);
-    expect(actions.slice(0,3)).toEqual([['goto','http://localhost/s-01'],['url','**/s-07'],['locator','[data-screen="S-01"]',{state:'detached'}]]);
-    expect(actions[3]).toEqual(['goto','http://localhost/__nyay66-components/scripts/nyay66-s01-component.html']);
+    const navigation=actions.filter(action=>!action[0].startsWith('profile-'));
+    expect(navigation.slice(0,3)).toEqual([['goto','http://localhost/s-01'],['url','**/s-07'],['locator','[data-screen="S-01"]',{state:'detached'}]]);
+    expect(navigation[3]).toEqual(['goto','http://localhost/__nyay66-components/scripts/nyay66-s01-component.html']);
+    expect(actions.findIndex(action=>action[0]==='profile-finished')).toBeGreaterThan(-1);
+    expect(actions.findIndex(action=>action[0]==='profile-finished')).toBeLessThan(actions.findIndex(action=>action[0]==='goto'&&action[1].includes('__nyay66-components')));
+    expect(actions.filter(action=>action[0].startsWith('profile-')).map(action=>action[0])).toEqual(['profile-fulfilled','profile-completion-started','profile-finished','profile-dialog','profile-resources-finished']);
+    expect(actions.findIndex(action=>action[0]==='profile-resources-finished')).toBeLessThan(actions.findIndex(action=>action[0]==='goto'&&action[1].includes('__nyay66-components')));
+    expect(fixture.profileBody()).toMatchObject({profile_prompt:{should_show:true,dismissed_for_session:false},access_mode:'full'});
     expect(evidence).toEqual({evidenceKind:'component-visual',coverageApproval:'NYAY-77:15493',liveRouteBehavior:{executed:true,from:'/s-01',to:'/s-07',syntheticServer:true,artificialDelay:false,navigationFrozen:false}});
-    // No evaluate/addInitScript/clock methods: navigation must not be suppressed.
+    // Only read-only fonts/image readiness uses a bounded waitForFunction. No
+    // navigation override, markup injection, clock or fixed delay is available.
+  });
+  it('waits for actual profile transport completion rather than response headers alone',async()=>{
+    const fixture=resolvedPage({deferCompletion:true});
+    const capture=r2.mockR2Application(fixture.page,'s01-resolved','http://localhost',[]);
+    await fixture.completionStarted;
+    expect(fixture.actions.some(action=>action[0]==='goto'&&action[1].includes('__nyay66-components'))).toBe(false);
+    fixture.releaseCompletion();await capture;
+    expect(fixture.actions).toContainEqual(['profile-finished']);
+  });
+  for(const [name,options,message] of [['dialog',{dialogError:true},'PROFILE_DIALOG_MISSING'],['fonts/images',{resourcesError:true},'PROFILE_RESOURCE_FAILED']]){
+    it(`refuses component evidence when destination ${name} readiness fails`,async()=>{
+      const fixture=resolvedPage(options);
+      await expect(r2.mockR2Application(fixture.page,'s01-resolved','http://localhost',[])).rejects.toThrow(message);
+      expect(fixture.actions.some(action=>action[0]==='goto'&&action[1].includes('__nyay66-components'))).toBe(false);
+    });
+  }
+  it('matches only the successful exact-origin GET destination-profile response',async()=>{
+    const fixture=resolvedPage();await r2.mockR2Application(fixture.page,'s01-resolved','http://localhost',[]);
+    const predicate=fixture.predicate(),response=fixture.response;
+    expect(predicate).toBeTypeOf('function');expect(predicate(response)).toBe(true);
+    expect(predicate({...response,url:()=> 'http://outside/api/v1/student/profile'})).toBe(false);
+    expect(predicate({...response,url:()=> 'http://localhost/api/v1/student/profile?unexpected=1'})).toBe(false);
+    expect(predicate({...response,status:()=>503})).toBe(false);
+    expect(predicate({...response,request:()=>({method:()=> 'POST'})})).toBe(false);
+  });
+  for(const [name,options] of [['aborted',{completionError:Error('net::ERR_ABORTED')}],['transport rejection',{completionReject:true}],['missing response',{responseReject:true}]]){
+    it(`refuses component evidence after destination-profile ${name}`,async()=>{
+      const fixture=resolvedPage(options);
+      await expect(r2.mockR2Application(fixture.page,'s01-resolved','http://localhost',[])).rejects.toThrow('R2_S01_PROFILE_RESPONSE_INCOMPLETE');
+      expect(fixture.actions).toContainEqual(['url','**/s-07']);
+      expect(fixture.actions.some(action=>action[0]==='goto'&&action[1].includes('__nyay66-components'))).toBe(false);
+    });
+  }
+  it('does not permit unexpected methods, paths or origins while completing the resolved fixture',async()=>{
+    const fixture=resolvedPage(),errors=[];await r2.mockR2Application(fixture.page,'s01-resolved','http://localhost',errors);
+    let aborted=0;
+    for(const [url,method] of [['http://outside/api/v1/student/profile','GET'],['http://localhost/api/v1/unexpected','GET'],['http://localhost/api/v1/student/profile','POST']]){
+      await fixture.handler()({request:()=>({url:()=>url,method:()=>method}),abort:()=>{aborted++;}});
+    }
+    expect(errors).toEqual(['OUTBOUND_REQUEST','UNMATCHED_API','UNMATCHED_API']);expect(aborted).toBe(3);
   });
   it('cannot capture the resolved component when the live redirect fails',async()=>{
     const visits=[];
-    const page={route:async()=>{},goto:async path=>visits.push(path),waitForURL:async()=>{throw Error('REDIRECT_FAILED');}};
+    const page={route:async()=>{},waitForResponse:async()=>({finished:async()=>null}),goto:async path=>visits.push(path),waitForURL:async()=>{throw Error('REDIRECT_FAILED');}};
     await expect(r2.mockR2Application(page,'s01-resolved','http://localhost',[])).rejects.toThrow('REDIRECT_FAILED');
     expect(visits).toEqual(['http://localhost/s-01']);
   });
   it('does not manufacture success when the resolved component build is absent',async()=>{
-    const page={route:async()=>{},goto:async()=>{},waitForURL:async()=>{},locator:selector=>({waitFor:async()=>{if(selector.includes('component-only'))throw Error('COMPONENT_MISSING');}})};
+    const page={route:async()=>{},waitForResponse:async()=>({finished:async()=>null}),goto:async()=>{},waitForURL:async()=>{},getByRole:()=>({waitFor:async()=>{}}),waitForFunction:async()=>{},locator:selector=>({waitFor:async()=>{if(selector.includes('component-only'))throw Error('COMPONENT_MISSING');}})};
     await expect(r2.mockR2Application(page,'s01-resolved','http://localhost',[])).rejects.toThrow('COMPONENT_MISSING');
   });
   it('builds the actual resolved component only in isolated CI, never the normal production entry',async()=>{

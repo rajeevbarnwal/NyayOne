@@ -410,22 +410,23 @@ export async function verifyStudentOtp(
   });
 }
 
-export async function resendStudentOtp(): Promise<OtpFlowState> {
+export async function resendStudentOtp(signal?: AbortSignal): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>('/api/v1/auth/student/otp/resend', {
     method: 'POST',
     body: JSON.stringify({}),
+    signal,
   });
   return requireOtpFlowState(result);
 }
 
-export async function cancelStudentOtp(): Promise<OtpFlowState> {
+export async function cancelStudentOtp(signal?: AbortSignal): Promise<OtpFlowState> {
   // Persona Change abandons the local registration attempt immediately. Its
   // request body may contain PII and must not survive while server retirement
   // is in flight or after a network failure.
   clearRegistrationAttempt();
   const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/otp/cancel',
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({}), signal },
   );
   const state = requireOtpFlowState(result);
   if (state.status !== 'unavailable' || state.purpose !== null) {
@@ -448,28 +449,31 @@ export async function saveAcademicProfile(
   });
 }
 
-export async function startRecovery(mobile: string): Promise<OtpFlowState> {
+export async function startRecovery(mobile: string, signal?: AbortSignal): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>(
     '/api/v1/auth/student/recovery/start',
-    { method: 'POST', body: JSON.stringify({ mobile }) },
+    { method: 'POST', body: JSON.stringify({ mobile }), signal },
   );
   return requireOtpFlowState(result);
 }
 
 export async function verifyRecovery(
   code: string,
+  signal?: AbortSignal,
 ): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/verify', {
     method: 'POST',
     body: JSON.stringify({ code }),
+    signal,
   });
   return requireOtpFlowState(result);
 }
 
-export async function completeRecovery(): Promise<OtpFlowState> {
+export async function completeRecovery(signal?: AbortSignal): Promise<OtpFlowState> {
   const result = await jsonRequest<unknown>('/api/v1/auth/student/recovery/complete', {
     method: 'POST',
     body: JSON.stringify({}),
+    signal,
   });
   return requireOtpFlowState(result);
 }

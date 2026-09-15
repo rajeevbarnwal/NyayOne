@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -19,6 +20,77 @@ function stringArrayConstant(source, name) {
   ));
   expect(match, `${name} must be an explicit frozen string array`).not.toBeNull();
   return [...match[1].matchAll(/'([^']+)'/gu)].map((entry) => entry[1]);
+}
+
+// Execute the producer's actual census callback, not a second implementation
+// of its predicates. The DOM double supplies only the observations it reads.
+async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration = false,
+  decorationParent = {}, decorationIcon = {} } = {}) {
+  class CensusElement {
+    constructor(attributes = {}, parentElement = null) {
+      this.attributes = attributes;
+      this.parentElement = parentElement;
+      this.isConnected = true;
+      this.tabIndex = Number(attributes.tabindex ?? -1);
+      this.classList = { contains: name => (attributes.class ?? '').split(' ').includes(name) };
+    }
+    getAttribute(name) { return this.attributes[name] ?? null; }
+    hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
+    getClientRects() { return [{}]; }
+    closest(selector) {
+      if (selector === 'button,a') return null;
+      throw new Error(`UNEXPECTED_CENSUS_SELECTOR:${selector}`);
+    }
+  }
+  const heading = new CensusElement();
+  heading.family = family ?? '"NyayOne Revision L Heading", Aptos, Calibri, Carlito, system-ui, sans-serif';
+  const lockup = new CensusElement({ class: 'v321-lockup', role: 'img',
+    'aria-label': 'NyayOne — Legal, on the record', ...logo });
+  const icons = [lockup];
+  if (decoration) icons.push(new CensusElement(decorationIcon,
+    new CensusElement({ class: 's06-r2__ring', 'aria-hidden': 'true', ...decorationParent })));
+  const root = new CensusElement();
+  root.textContent = 'Recover your account.';
+  root.querySelector = selector => {
+    if (selector === '.v321-lockup') return lockup.classList.contains('v321-lockup') ? lockup : null;
+    throw new Error(`UNEXPECTED_CENSUS_SELECTOR:${selector}`);
+  };
+  root.querySelectorAll = selector => {
+    if (selector === 'h1,h2') return [heading];
+    if (selector === 'svg') return icons;
+    throw new Error(`UNEXPECTED_CENSUS_SELECTOR:${selector}`);
+  };
+  const document = {
+    documentElement: { getAttribute: name => name === 'data-theme' ? 'light' : null },
+    fonts: { status: 'loaded', ready: Promise.resolve() },
+    querySelector: selector => {
+      expect(selector).toBe(`[data-screen="${screenId}"]`);
+      return root;
+    },
+  };
+  const readiness = [];
+  const locator = { first: () => locator, locator: () => locator, waitFor: async () => {} };
+  const page = {
+    locator: () => locator,
+    evaluate: async callback => callback(),
+    waitForFunction: async (callback, contract) => {
+      const observation = callback(contract);
+      if (!observation) throw new Error('CENSUS_NOT_READY');
+      return { jsonValue: async () => observation, dispose: async () => {} };
+    },
+  };
+  const visualScreens = new Map();
+  const runner = readFileSync(RUNNER, 'utf8');
+  const constants = runner.slice(runner.indexOf('const REVISION_L_VISUAL_SCREEN_IDS'),
+    runner.indexOf('let authWireExact'));
+  const callback = runner.slice(runner.indexOf('async function recordVisualContract'),
+    runner.indexOf('async function resetOtp'));
+  await runInNewContext(`${constants}\n${callback}\nrecordVisualContract(page, screenId)`, {
+    page, screenId, document, Element: CensusElement, visualScreens,
+    getComputedStyle: element => ({ visibility: 'visible', fontFamily: element.family ?? '' }),
+    waitForVisualCensusSettled: async (_page, options) => readiness.push(options),
+  });
+  return { ...visualScreens.get(screenId), readiness };
 }
 
 const EXPECTED_ASSERTIONS = [
@@ -921,6 +993,9 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(stringArrayConstant(runner, 'LEGACY_CARLITO_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'carlito', 'system-ui', 'sans-serif',
     ]);
+    expect(stringArrayConstant(runner, 'S06_R2_HEADING_STACK')).toEqual([
+      'nyayone revision l heading', 'aptos', 'calibri', 'carlito', 'system-ui', 'sans-serif',
+    ]);
 
     const visualSource = runner.slice(
       runner.indexOf('async function recordVisualContract'),
@@ -933,7 +1008,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
       "const isRevisionLLockup = icon.classList.contains('v321-lockup');",
     );
     expect(visualSource).toContain(
-      'if (isRevisionLLockup) return contract.revisionLExpected && exactRevisionLLockup(icon);',
+      "s06R2Expected: screenId === 'S-06'",
+    );
+    expect(visualSource).toMatch(
+      /if \(isRevisionLLockup\) return \(contract\.revisionLExpected \|\| contract\.s06R2Expected\)\s*&& exactRevisionLLockup\(icon\);/u,
     );
     for (const exactLockupClause of [
       "icon.getAttribute('class') === 'v321-lockup'",
@@ -947,6 +1025,65 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(visualSource).toMatch(
       /icon\.getAttribute\('aria-hidden'\) === 'true'[\s\S]*icon\.tabIndex < 0[\s\S]*icon\.closest\('button,a'\)/u,
     );
+  });
+
+  it('measures the approved S-06 R2 heading stack and exact labelled lockup', async () => {
+    const observed = await visualCensus();
+    expect(observed).toMatchObject({ headingCount: 1, typographyExact: true,
+      iconCount: 1, iconsExact: true, legacyBrandVisible: false });
+    expect(observed.readiness[0].requireRevisionLLockup).toBe(true);
+  });
+
+  it('measures only the exact nonfocusable S-06 decorative hidden parent', async () => {
+    expect(await visualCensus({ decoration: true })).toMatchObject({
+      headingCount: 1, typographyExact: true, iconCount: 2, iconsExact: true,
+    });
+  });
+
+  it.each([
+    'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
+    '"NyayOne Revision L Heading", Aptos, Calibri, system-ui, sans-serif',
+    'sans-serif',
+  ])('refuses an incorrect S-06 heading stack: %s', async family => {
+    expect((await visualCensus({ family })).typographyExact).toBe(false);
+  });
+
+  it.each([
+    { 'aria-label': 'Different logo' }, { role: 'presentation' },
+    { class: 'v321-lockup other' }, { 'aria-hidden': 'true' }, { tabindex: '0' },
+  ])('refuses a changed or focusable S-06 labelled lockup: %j', async logo => {
+    expect((await visualCensus({ logo })).iconsExact).toBe(false);
+  });
+
+  it.each([
+    [{ 'aria-hidden': 'false' }, {}], [{ 'aria-hidden': null }, {}],
+    [{ class: 'different-ring' }, {}], [{ class: 's06-r2__ring extra' }, {}],
+    [{ tabindex: '0' }, {}], [{}, { tabindex: '0' }],
+    [{}, { focusable: 'true' }], [{}, { 'aria-hidden': 'false' }],
+  ])('refuses an unhidden, changed, or focusable S-06 decoration: %j / %j',
+    async (decorationParent, decorationIcon) => {
+      expect((await visualCensus({ decoration: true, decorationParent, decorationIcon })).iconsExact).toBe(false);
+    });
+
+  it.each(['S-03', 'S-04', 'S-05', 'S-08', 'S-09', 'S-10', 'S-17'])(
+    'never grants the S-06 R2 stack or inherited decoration rule to %s', async screenId => {
+      const observed = await visualCensus({ screenId, decoration: true });
+      expect(observed.typographyExact).toBe(false);
+      expect(observed.iconsExact).toBe(false);
+    });
+
+  it.each(['S-03', 'S-04', 'S-05', 'S-08', 'S-09'])(
+    'retains the exact existing Revision L stack and lockup on %s', async screenId => {
+      expect(await visualCensus({ screenId,
+        family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
+      })).toMatchObject({ typographyExact: true, iconsExact: true });
+    });
+
+  it('retains the legacy font rule and rejects branded lockups outside approved screens', async () => {
+    expect(await visualCensus({ screenId: 'S-10',
+      family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
 
   it('builds failed-run stdout diagnostics from static privacy-safe inventories only', async () => {
@@ -1510,14 +1647,15 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(signIn).toContain("if (!legalTextInert) throw new Error('NYAY83_S04_LEGAL_TEXT_INTERACTIVE')");
   });
 
-  it('uses the S-04 Mobile Number casing after recovery without changing S-06 or S-08', () => {
+  it('uses S-04 Mobile Number after recovery, R2 Registered mobile number on S-06, and unchanged S-08', () => {
     const runner = readFileSync(resolve(ROOT, 'scripts/registration-e2e.mjs'), 'utf8');
     const start = runner.indexOf("await page.waitForURL('**/s-04');");
     const end = runner.indexOf('// Responsive/theme and icon-tooltip contract matrix.', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(runner.slice(start, end)).toContain("getByLabel('Mobile Number', { exact: true }).fill('')");
-    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(2);
+    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(1);
+    expect(runner.match(/getByLabel\('Registered mobile number', \{ exact: true \}\)/gu)).toHaveLength(1);
   });
 
   it('kills exactly one deterministic perturbation for every named mutant', async () => {
