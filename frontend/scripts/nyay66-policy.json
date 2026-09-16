@@ -250,6 +250,26 @@
         "geometry"
       ],
       "approvalPr": 50
+    },
+    {
+      "screen": "S-08",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5e41be17aac9cfa3fa0ab0c7aa131c387419b816a8b662a15d0a31bdc430c83b",
+      "liveSha256": "96fa59b9bde417aab4df8d3e442ea62aff36d84fcdc1fc306c441bc652e1f736",
+      "checks": ["pixels", "text", "controls", "geometry"],
+      "reason": "NYAY-7 security supersession: empty identity fields and two separate unchecked required Terms/Privacy acknowledgements instead of synthetic populated fields and a prechecked combined consent. Retain native date input, its 44px eligibility-help control and resulting 30px vertical shift; desktop separate consent adds a further 48px. Preserve existing Change persona accessible name and 3px context-chip width/position difference. No heading, overflow, accessibility, mask, tolerance or reference exception.",
+      "approvalPr": 51
+    },
+    {
+      "screen": "S-08",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "bd9ee8371a57dd21025aefd66babea512307aeee76affc0829e24bd801923b79",
+      "liveSha256": "173aefb942be7ba370ed50e493ca13923436e9aa7425288ec497abdcb3f0379f",
+      "checks": ["pixels", "text", "controls", "geometry"],
+      "reason": "NYAY-7 security supersession: empty identity fields and two separate unchecked required Terms/Privacy acknowledgements instead of synthetic populated fields and a prechecked combined consent. Retain native date input, its 44px eligibility-help control and resulting 30px vertical shift; desktop separate consent adds a further 48px. Preserve existing Change persona accessible name and 3px context-chip width/position difference. No heading, overflow, accessibility, mask, tolerance or reference exception.",
+      "approvalPr": 51
     }
   ]
 }
