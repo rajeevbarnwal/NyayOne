@@ -256,7 +256,6 @@
 /* NYAY-86: Revision L registration layout; other auth screens are unchanged.
    Empty identity, native date help and separate opt-in consents remain deliberate. */
 [data-screen='S-08'] .v321-form > div:has(> .v34-title) { gap: 2px; }
-[data-screen='S-08'] .v34-title { letter-spacing: normal; }
 [data-screen='S-08'] .v34-fieldset > .v34-row { align-items: end; gap: 10px; }
 [data-screen='S-08'] .v34-field__top { min-height: 0; }
 [data-screen='S-08'] .v34-field__top > label { display: inline-flex; align-items: center; gap: 6px; }

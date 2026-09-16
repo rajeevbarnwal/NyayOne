@@ -250,7 +250,7 @@ function Field({ id, label, value, onChange, type = 'text', inputMode, autoCompl
   return (
     <div className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`}>
       <span className="v34-field__top">
-        <label htmlFor={id}>{revisionLIcon && <span className="v321-icon--indigo"><NyayOneRevLIcon name={revisionLIcon}/></span>}<span>{label}{optional && inlineOptional && <> <span className="v321-optional-label">(Optional)</span></>}</span></label>
+        <label htmlFor={id}>{revisionLIcon && <span className="v321-icon--indigo"><NyayOneRevLIcon name={revisionLIcon}/></span>}<span>{label}</span>{optional && inlineOptional && <> <span className="v321-optional-label">(Optional)</span></>}</label>
         <span className="v34-field__meta">
           {optional && !inlineOptional && <small>OPTIONAL</small>}
           {help && <InfoTooltip label={`More information about ${label}`} text={help}/>}

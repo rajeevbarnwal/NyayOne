@@ -72,4 +72,10 @@ describe('NYAY-86 S-08 Revision L account creation', () => {
     expect(css).toMatch(/\[data-screen='S-08'\] \.v34-field__top > label\s*\{[^}]*display: inline-flex;[^}]*align-items: center;[^}]*gap: 6px;/u);
     expect(css).toMatch(/\[data-screen='S-08'\] \.v34-field__control > input\s*\{[^}]*min-height: 46px;[^}]*border:/u);
   });
+
+  it('preserves the prototype heading tracking and six-pixel inline optional spacing', () => {
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    expect(css).not.toContain("[data-screen='S-08'] .v34-title { letter-spacing: normal; }");
+    expect(render()).toContain('<span>Middle Name</span> <span class="v321-optional-label">(Optional)</span>');
+  });
 });
