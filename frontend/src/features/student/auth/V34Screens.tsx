@@ -761,15 +761,12 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
       }}
     />
   ) : null;
-  // S-05 follows Revision L's reading order without changing the S-09 shell.
-  const verificationAside = purpose === 'login'
-    ? <><RevLTopbar {...topbarProps}/><RevLBrandPanel verification/></>
-    : <RevLBrandPanel verification/>;
+  const verificationAside = <><RevLTopbar {...topbarProps}/><RevLBrandPanel verification/></>;
+  const formClass = `v34-main v321-form v321-form--otp${purpose === 'signup' ? ' v321-form--signup-otp' : ''}`;
   if (session.phase === 'pending' || (session.phase === 'anonymous' && otpFlow.loading)) {
     return (
       <Screen id={screenId} aside={verificationAside}>
-        {purpose === 'signup' && <RevLTopbar {...topbarProps}/>}
-        <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
+        <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className={formClass}>
           {studentContext}
           <h1 id={`${screenId}-title`} className="v34-title">Checking verification state</h1>
           <div className="v34-well" role="status">Restoring the server verification state…</div>
@@ -805,11 +802,11 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     : (purpose === 'signup' ? 'Change registration details' : 'Change mobile number');
   return (
     <Screen id={screenId} aside={verificationAside}>
-      {purpose === 'signup' && <RevLTopbar {...topbarProps}/>}
-      <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className="v34-main v321-form v321-form--otp">
+      <Pane><main id="main-content" aria-labelledby={`${screenId}-title`} className={formClass}>
         {studentContext}
-        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1><p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p></div>
-        {purpose === 'login' && <span className="sr-only">One-time code</span>}
+        <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1>{purpose === 'login' && <p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p>}</div>
+        {purpose === 'signup' && <p className="v34-lede">One code to <b className="v321-mono">{destination}</b> confirms this account is yours. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p>}
+        <span className="sr-only">One-time code</span>
         <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={busy} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
         <p className="v321-otp-help">Paste or platform autofill works. The field accepts the full code at once.</p>
         {status && <div className="v34-banner" role="alert">{status}</div>}

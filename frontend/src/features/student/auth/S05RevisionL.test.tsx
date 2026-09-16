@@ -118,7 +118,7 @@ describe('NYAY-48 S-05 Revision L verification alignment', () => {
     expect(brand).toBeLessThan(main);
   });
 
-  it.each([false, true])('preserves the existing S-09 reading order (loading=%s)', (loading) => {
+  it.each([false, true])('uses the aligned S-09 Revision L reading order (loading=%s)', (loading) => {
     otpHook.state = pending('signup');
     otpHook.loading = loading;
     const html = render('signup');
@@ -128,8 +128,8 @@ describe('NYAY-48 S-05 Revision L verification alignment', () => {
     expect(brand).toBeGreaterThanOrEqual(0);
     expect(header).toBeGreaterThanOrEqual(0);
     expect(main).toBeGreaterThanOrEqual(0);
-    expect(brand).toBeLessThan(header);
-    expect(header).toBeLessThan(main);
+    expect(header).toBeLessThan(brand);
+    expect(brand).toBeLessThan(main);
   });
 
   it.each([false, true])('renders S-05 legal notices as inert prototype text (loading=%s)', (loading) => {
