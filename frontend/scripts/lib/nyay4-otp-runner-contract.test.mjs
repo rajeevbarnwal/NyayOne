@@ -28,7 +28,7 @@ const validOtpView = (overrides = {}) => ({
     'Tries left\n5',
   ],
   ledeCount: 1,
-  ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below. Change',
+  ledeText: 'One code to +91 ••••• ••234 confirms this account is yours. Change',
   ...overrides,
 });
 
@@ -292,7 +292,7 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     }
   });
 
-  it('normalizes rendered flex whitespace but keeps the OTP view exact', () => {
+  it('accepts the approved S-09 wording while keeping the OTP view exact', () => {
     const snapshot = inspectOtpViewSnapshot(
       validOtpView(),
       5,
@@ -355,19 +355,22 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     ['missing lede', { ledeCount: 0, ledeText: undefined }],
     ['duplicate lede', { ledeCount: 2 }],
     ['fallback destination', {
-      ledeText: 'Six digits sent to your mobile. Your code stays valid for the time shown below. Change',
+      ledeText: 'One code to your mobile confirms this account is yours. Change',
     }],
     ['changed masked suffix', {
-      ledeText: 'Six digits sent to +91 ••••• ••235. Your code stays valid for the time shown below. Change',
+      ledeText: 'One code to +91 ••••• ••235 confirms this account is yours. Change',
     }],
     ['four-digit server suffix', {
-      ledeText: 'Six digits sent to +91 ••••• •1234. Your code stays valid for the time shown below. Change',
+      ledeText: 'One code to +91 ••••• •1234 confirms this account is yours. Change',
     }],
     ['missing Change action', {
-      ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below.',
+      ledeText: 'One code to +91 ••••• ••234 confirms this account is yours.',
     }],
     ['destination substring', {
-      ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below. Change extra',
+      ledeText: 'One code to +91 ••••• ••234 confirms this account is yours. Change extra',
+    }],
+    ['legacy S-05 sentence on S-09', {
+      ledeText: 'Six digits sent to +91 ••••• ••234. Your code stays valid for the time shown below. Change',
     }],
   ])('rejects the planted OTP view mutant: %s', (_label, overrides) => {
     expect(inspectOtpViewSnapshot(
@@ -379,7 +382,7 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
 
   it('derives the three-digit rendered suffix from the authoritative masked destination', () => {
     expect(inspectOtpViewSnapshot(validOtpView({
-      ledeText: 'Six digits sent to +91 ••••• ••876. Your code stays valid for the time shown below. Change',
+      ledeText: 'One code to +91 ••••• ••876 confirms this account is yours. Change',
     }), 5, '••••••9876').pass).toBe(true);
     expect(inspectOtpViewSnapshot(validOtpView(), 5, '••••••1235').pass).toBe(false);
   });
