@@ -1646,7 +1646,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
     ).toHaveLength(3);
   });
 
-  it('uses the approved S-04 Send Code name without changing S-08 submit selectors', () => {
+  it('uses the approved S-04 Send Code and S-08 Create Account names without changing assertions', () => {
     const inventory = [
       ['nyay5-profile-browser.mjs', 2, 4],
       ['nyay18-browser-namespace.mjs', 1, 0],
@@ -1658,7 +1658,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       const source = readFileSync(resolve(ROOT, 'scripts', file), 'utf8');
       expect(source.match(/getByRole\('button', \{ name: 'Send Code', exact: true \}\)/gu) ?? [], file)
         .toHaveLength(signInCount);
-      expect(source.match(/getByRole\('button', \{ name: 'Send one time code'/gu) ?? [], file)
+      expect(source.match(/getByRole\('button', \{ name: 'Create Account'/gu) ?? [], file)
         .toHaveLength(registrationCount);
     }
   });
@@ -1676,14 +1676,15 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(signIn).toContain("if (!legalTextInert) throw new Error('NYAY83_S04_LEGAL_TEXT_INTERACTIVE')");
   });
 
-  it('uses S-04 Mobile Number after recovery, R2 Registered mobile number on S-06, and unchanged S-08', () => {
+  it('uses the approved mobile-field names on S-04, S-06 and S-08', () => {
     const runner = readFileSync(resolve(ROOT, 'scripts/registration-e2e.mjs'), 'utf8');
     const start = runner.indexOf("await page.waitForURL('**/s-04');");
     const end = runner.indexOf('// Responsive/theme and icon-tooltip contract matrix.', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(runner.slice(start, end)).toContain("getByLabel('Mobile Number', { exact: true }).fill('')");
-    expect(runner.match(/getByLabel\('MOBILE NUMBER', \{ exact: true \}\)/gu)).toHaveLength(1);
+    const registration = runner.slice(runner.indexOf('async function fillBase'), runner.indexOf('// Explicit negative/boundary cases.'));
+    expect(registration.match(/getByLabel\('Mobile Number', \{ exact: true \}\)/gu)).toHaveLength(1);
     expect(runner.match(/getByLabel\('Registered mobile number', \{ exact: true \}\)/gu)).toHaveLength(1);
   });
 

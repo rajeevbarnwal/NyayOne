@@ -72,11 +72,11 @@ async function fillBase(page, {
   first = 'Aditi', middle = '', last = 'Nair', mobile = '9876543210', dob = '2004-03-14',
 } = {}) {
   await page.goto(`${base}/s-08`);
-  await page.getByLabel('FIRST NAME').fill(first);
-  await page.getByLabel('MIDDLE NAME').fill(middle);
-  await page.getByLabel('LAST NAME').fill(last);
-  await page.getByLabel('MOBILE NUMBER', { exact: true }).fill(mobile);
-  await page.getByLabel('DATE OF BIRTH', { exact: true }).fill(dob);
+  await page.getByLabel('First Name').fill(first);
+  await page.getByLabel('Middle Name (Optional)').fill(middle);
+  await page.getByLabel('Last Name').fill(last);
+  await page.getByLabel('Mobile Number', { exact: true }).fill(mobile);
+  await page.getByLabel('Date of Birth', { exact: true }).fill(dob);
   await page.getByRole('checkbox', { name: 'I accept the Terms.', exact: true }).check();
   await page.getByRole('checkbox', { name: 'I acknowledge the Privacy Notice.', exact: true }).check();
 }
@@ -92,7 +92,7 @@ for (const [name, values, expected] of [
 ]) {
   const { context, page } = await fresh();
   await fillBase(page, values);
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Create Account' }).click();
   const text = await page.locator('body').innerText();
   record(name, expected, text.includes(expected), text.includes(expected));
   record(`${name}_blocked`, 'remain /s-08', new URL(page.url()).pathname, new URL(page.url()).pathname === '/s-08');
@@ -106,7 +106,7 @@ for (const [name, values, expected] of [
   const blocked = {};
   for (const field of ['first', 'middle', 'last']) {
     await fillBase(page, { mobile: '9000000003', [field]: '<script>' });
-    await page.getByRole('button', { name: 'Send one time code' }).click();
+    await page.getByRole('button', { name: 'Create Account' }).click();
     outcomes[field] = (await page.locator('body').innerText()).includes('contains characters');
     blocked[field] = new URL(page.url()).pathname === '/s-08';
   }
@@ -121,10 +121,10 @@ for (const [name, values, expected] of [
 {
   const { context, page } = await fresh();
   const outcomes = {};
-  for (const [field, label] of [['first', 'FIRST NAME'], ['middle', 'MIDDLE NAME'], ['last', 'LAST NAME']]) {
+  for (const [field, label] of [['first', 'First Name'], ['middle', 'Middle Name (Optional)'], ['last', 'Last Name']]) {
     await fillBase(page, { mobile: '9000000004', [field]: 'A'.repeat(61) });
     const attemptedLength = (await page.getByLabel(label).inputValue()).length;
-    await page.getByRole('button', { name: 'Send one time code' }).click();
+    await page.getByRole('button', { name: 'Create Account' }).click();
     outcomes[field] = {
       attemptedLength,
       correctError: (await page.locator('body').innerText()).includes('60 characters or fewer'),
@@ -140,7 +140,7 @@ for (const [name, values, expected] of [
 {
   const { context, page } = await fresh();
   await fillBase(page, { first: 'A'.repeat(60), middle: 'B'.repeat(60), last: 'C'.repeat(60), mobile: '9000000005' });
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Create Account' }).click();
   await page.waitForURL('**/s-09');
   record('name_60_chars_all_fields', 'exactly 60 first/middle/last accepted and routed to /s-09', new URL(page.url()).pathname,
     new URL(page.url()).pathname === '/s-09');
@@ -187,14 +187,14 @@ for (const [name, values, expected] of [
   });
   await resetOtp();
 
-  const send = page.getByRole('button', { name: 'Send one time code' });
+  const send = page.getByRole('button', { name: 'Create Account' });
   const iconContract = await send.evaluate((button) => ({
     aria: button.getAttribute('aria-label'),
     tip: button.getAttribute('data-tip'),
     svg: button.querySelectorAll('svg').length,
   }));
   record('icon_tooltip_contract', 'icon CTA exposes matching accessible name and tooltip text', iconContract,
-    iconContract.aria === 'Send one time code' && iconContract.tip === iconContract.aria && iconContract.svg === 1);
+    iconContract.aria === 'Create Account' && iconContract.tip === iconContract.aria && iconContract.svg === 1);
 
   const registrationResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
@@ -606,9 +606,9 @@ for (const width of [390, 430, 768, 1024, 1440]) {
     const { context, page, consoleErrors } = await fresh({ width, height: 1000 });
     await page.addInitScript((value) => localStorage.setItem('nyayone.theme.v1', value), theme);
     await fillBase(page, { mobile: `91${String(width).padStart(8, '0')}`.slice(0, 10) });
-    const action = page.getByRole('button', { name: 'Send one time code' });
+    const action = page.getByRole('button', { name: 'Create Account' });
     const helpButton = page.getByRole('button', {
-      name: 'More information about DATE OF BIRTH',
+      name: 'More information about Date of Birth',
       exact: true,
     });
     await helpButton.focus();
@@ -635,11 +635,11 @@ for (const width of [390, 430, 768, 1024, 1440]) {
       && consoleErrors.length === 0);
     const file = `s08_v34_${width}_${theme}.png`;
     for (const label of [
-      'FIRST NAME',
-      'MIDDLE NAME',
-      'LAST NAME',
-      'MOBILE NUMBER',
-      'DATE OF BIRTH',
+      'First Name',
+      'Middle Name (Optional)',
+      'Last Name',
+      'Mobile Number',
+      'Date of Birth',
     ]) {
       await page.getByLabel(label, { exact: true }).fill('');
     }

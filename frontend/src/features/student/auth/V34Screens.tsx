@@ -242,17 +242,17 @@ function Pane({ children }: { children: ReactNode }) {
   return <div className="v34-pane"><div className="v34-status" aria-hidden="true"><span>9:41</span><span>100</span></div>{children}</div>;
 }
 
-function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, required, error, help, max, maxLength, prefix, revisionLIcon }: {
+function Field({ id, label, value, onChange, type = 'text', inputMode, autoComplete, placeholder, optional, inlineOptional = false, required, error, help, max, maxLength, prefix, revisionLIcon }: {
   id: string; label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: 'text' | 'numeric' | 'tel' | 'email'; autoComplete?: string;
-  placeholder?: string; optional?: boolean; required?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; revisionLIcon?: NyayOneRevLIconName;
+  placeholder?: string; optional?: boolean; inlineOptional?: boolean; required?: boolean; error?: string; help?: string; max?: string; maxLength?: number; prefix?: string; revisionLIcon?: NyayOneRevLIconName;
 }) {
   const describedBy = error ? `${id}-error` : undefined;
   return (
     <div className={`v34-field${error ? ' v34-field--error' : ''}${optional ? ' v34-field--optional' : ''}`}>
       <span className="v34-field__top">
-        <label htmlFor={id}>{revisionLIcon && <span className="v321-icon--indigo"><NyayOneRevLIcon name={revisionLIcon}/></span>}<span>{label}</span></label>
+        <label htmlFor={id}>{revisionLIcon && <span className="v321-icon--indigo"><NyayOneRevLIcon name={revisionLIcon}/></span>}<span>{label}</span>{optional && inlineOptional && <> <span className="v321-optional-label">(Optional)</span></>}</label>
         <span className="v34-field__meta">
-          {optional && <small>OPTIONAL</small>}
+          {optional && !inlineOptional && <small>OPTIONAL</small>}
           {help && <InfoTooltip label={`More information about ${label}`} text={help}/>}
         </span>
       </span>
@@ -653,8 +653,9 @@ export function V34Register(props: ScreenProps) {
     finally { setBusy(false); }
   }
   return (
-    <Screen id="S-08" aside={<RevLBrandPanel/>}>
+    <Screen id="S-08">
       <RevLTopbar {...props}/>
+      <RevLBrandPanel/>
       <Pane><main id="main-content" aria-labelledby="S-08-title" className="v34-main v321-form v321-form--register">
         <CreateAccountContext
           disabled={busy}
@@ -672,12 +673,12 @@ export function V34Register(props: ScreenProps) {
         <div ref={errorSummaryRef} id="s08-error-summary" tabIndex={-1} role={errorRows.length > 0 ? 'alert' : undefined} hidden={errorRows.length === 0} className="v34-well">
           <h2>Review the highlighted fields</h2><ul>{errorRows.map(([field, message]) => <li key={field}><a href={`#${errorTargets[field] ?? 'S-08-title'}`}>{message}</a></li>)}</ul>
         </div>
-        <div className="v34-fieldset"><div className="v34-row"><Field id="v34-first" label="FIRST NAME" value={firstName} onChange={setFirstName} autoComplete="given-name" required error={errors.firstName} revisionLIcon="idcard"/><Field id="v34-middle" label="MIDDLE NAME" value={middleName} onChange={setMiddleName} autoComplete="additional-name" optional error={errors.middleName}/></div><Field id="v34-last" label="LAST NAME" value={lastName} onChange={setLastName} autoComplete="family-name" required error={errors.lastName}/><Field id="v34-mobile" label="MOBILE NUMBER" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" maxLength={15} required error={errors.mobile} revisionLIcon="sim"/><Field id="v34-dob" label="DATE OF BIRTH" value={dob} onChange={setDob} type="date" required error={errors.dob} help={`Required for eligibility; must be on or before ${todayLocalISO()}.`}/><p className="v321-help v321-help--dob">Used once to check whether guardian consent applies (S-16). Not shown on your profile.</p></div>
+        <div className="v34-fieldset"><div className="v34-row"><Field id="v34-first" label="First Name" value={firstName} onChange={setFirstName} autoComplete="given-name" required error={errors.firstName} revisionLIcon="idcard"/><Field id="v34-middle" label="Middle Name" value={middleName} onChange={setMiddleName} autoComplete="additional-name" optional inlineOptional error={errors.middleName}/></div><Field id="v34-last" label="Last Name" value={lastName} onChange={setLastName} autoComplete="family-name" required error={errors.lastName}/><Field id="v34-mobile" label="Mobile Number" value={mobile} onChange={setMobile} type="tel" inputMode="numeric" autoComplete="tel-national" prefix="+91" maxLength={15} required error={errors.mobile} revisionLIcon="sim"/><Field id="v34-dob" label="Date of Birth" value={dob} onChange={setDob} type="date" required error={errors.dob} help={`Required for eligibility; must be on or before ${todayLocalISO()}.`}/><p className="v321-help v321-help--dob">Used once to check whether guardian consent applies (S-16). Not shown on your profile.</p></div>
         <div className="v34-well v34-checks"><label htmlFor="v34-terms"><input id="v34-terms" type="checkbox" required aria-required="true" aria-invalid={errors.terms ? true : undefined} aria-describedby={errors.terms ? 'v34-terms-error' : undefined} checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)}/>I accept the Terms.</label>{errors.terms && <span id="v34-terms-error" role="alert" className="v34-field__error">{errors.terms}</span>}<label htmlFor="v34-privacy"><input id="v34-privacy" type="checkbox" required aria-required="true" aria-invalid={errors.privacy ? true : undefined} aria-describedby={errors.privacy ? 'v34-privacy-error' : undefined} checked={privacyNoticeAcknowledged} onChange={(event) => setPrivacyNoticeAcknowledged(event.target.checked)}/>I acknowledge the Privacy Notice.</label>{errors.privacy && <span id="v34-privacy-error" role="alert" className="v34-field__error">{errors.privacy}</span>}</div>
         {errors.submit && <span role="alert" className="v34-field__error">{errors.submit}</span>}
-        <button type="button" className="v321-primary" aria-label="Send one time code" data-tip="Send one time code" onClick={submit} disabled={busy}><NyayOneRevLIcon name="userplus"/><span>Create Account</span></button>
+        <button type="button" className="v321-primary" aria-label="Create Account" data-tip="Create Account" onClick={submit} disabled={busy}><NyayOneRevLIcon name="userplus"/><span>Create Account</span></button>
         <PrivacyNote/>
-      </main><RevLLegalFooter/></Pane>
+      </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );
 }
