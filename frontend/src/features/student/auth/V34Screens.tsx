@@ -770,7 +770,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
           {studentContext}
           <h1 id={`${screenId}-title`} className="v34-title">Checking verification state</h1>
           <div className="v34-well" role="status">Restoring the server verification state…</div>
-        </main><RevLLegalFooter plainText={purpose === 'login'}/></Pane>
+        </main><RevLLegalFooter plainText/></Pane>
       </Screen>
     );
   }
@@ -812,7 +812,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
         {status && <div className="v34-banner" role="alert">{status}</div>}
         <div className="v34-card v34-kv"><span>Expires in <b className="v321-mono">{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend in <b className="v321-mono">{flow?.resendAllowed ? '00:00' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</b></span><span>Tries left <b>{attempts ?? '—'}</b></span></div>
         <div className="v321-button-row"><button type="button" className="v321-primary" aria-label="Verify and continue" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}><NyayOneRevLIcon name="checkc"/><span>Verify and Continue</span></button><button type="button" className="v321-secondary" disabled={!flow?.resendAllowed || busy} onClick={resendCode}><span className="v321-icon--indigo"><NyayOneRevLIcon name="refresh"/></span><span>Resend Code</span></button></div>
-      </main><RevLLegalFooter plainText={purpose === 'login'}/></Pane>
+      </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );
 }

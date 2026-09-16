@@ -44,6 +44,14 @@ describe('NYAY-87 S-09 Revision L with pending-OTP security supersession', () =>
     expect(html).toContain('Tries left <b>3</b>');
   });
 
+  it.each([false, true])('renders inert Revision L legal notices without navigation or tab stops (loading=%s)', (loading) => {
+    otp.loading = loading;
+    const legal = render().match(/<footer class="v321-legal">(.*?)<\/footer>/su)?.[1];
+    expect(legal).toBeDefined();
+    for (const label of ['Privacy Notice', 'Terms', 'Accessibility']) expect(legal).toContain(`<span>${label}</span>`);
+    expect(legal).not.toMatch(/<(?:a|button|input)\b|\bhref=|\btabindex=|\bcontenteditable=|\brole="(?:link|button)"/iu);
+  });
+
   it('uses S-09-only spacing and heading sizes without changing login OTP styling', () => {
     const css = readFileSync('src/styles/student-option321.css', 'utf8');
     expect(css).toMatch(/\[data-screen='S-09'\] \.v321-form--signup-otp\s*\{\s*gap: 13px;/u);

@@ -141,13 +141,14 @@ describe('NYAY-48 S-05 Revision L verification alignment', () => {
     expect(legal).not.toMatch(/<(?:a|button|input)\b|\bhref=|\btabindex=|\bcontenteditable=|\brole="(?:link|button)"/iu);
   });
 
-  it.each([false, true])('preserves the existing S-09 legal links (loading=%s)', (loading) => {
+  it.each([false, true])('renders S-09 legal notices as owner-approved inert prototype text (loading=%s)', (loading) => {
     otpHook.state = pending('signup');
     otpHook.loading = loading;
     const legal = footer(render('signup'));
-    expect(legal).toContain('<a href="/s-19">Privacy Notice</a>');
-    expect(legal).toContain('<a href="/terms">Terms</a>');
-    expect(legal).toContain('<a href="/accessibility">Accessibility</a>');
+    expect(legal).toContain('<span>Privacy Notice</span>');
+    expect(legal).toContain('<span>Terms</span>');
+    expect(legal).toContain('<span>Accessibility</span>');
+    expect(legal).not.toMatch(/<(?:a|button|input)\b|\bhref=|\btabindex=|\bcontenteditable=|\brole="(?:link|button)"/iu);
   });
 
   it('includes the prototype hidden label without changing the six-digit accessible input name', () => {
