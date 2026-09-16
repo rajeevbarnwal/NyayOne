@@ -16,11 +16,11 @@ describe('legacy registration browser runner contract', () => {
     );
 
     for (const label of [
-      'FIRST NAME',
-      'MIDDLE NAME',
-      'LAST NAME',
-      'MOBILE NUMBER',
-      'DATE OF BIRTH',
+      'First Name',
+      'Middle Name (Optional)',
+      'Last Name',
+      'Mobile Number',
+      'Date of Birth',
     ]) {
       expect(fixture).toContain(`getByLabel('${label}'`);
     }
@@ -87,12 +87,12 @@ describe('legacy registration browser runner contract', () => {
       '// Retired /auth/student prototype must fail closed',
     );
     expect(matrix).toMatch(
-      /getByRole\('button',\s*\{\s*name: 'More information about DATE OF BIRTH',\s*exact: true,?\s*\}\)/u,
+      /getByRole\('button',\s*\{\s*name: 'More information about Date of Birth',\s*exact: true,?\s*\}\)/u,
     );
     expect(matrix).toContain(
       "/^Required for eligibility; must be on or before \\d{4}-\\d{2}-\\d{2}\\.$/u.test(tooltipText)",
     );
-    expect(matrix).not.toContain('More information about MOBILE NUMBER');
+    expect(matrix).not.toContain('More information about Mobile Number');
     expect(matrix).not.toContain('Exactly 10 digits. The one time code is sent here.');
   });
 

@@ -194,7 +194,7 @@ describe('S-01-S-10 Chromium runner source contract', () => {
       'await resetOtp();',
     );
     expect(tooltip).toContain(
-      "getByRole('button', { name: 'Send one time code', exact: true })",
+      "getByRole('button', { name: 'Create Account', exact: true })",
     );
     expect(tooltip).toContain('item.tip === item.aria');
     expect(tooltip).toContain('item.svg === 1');

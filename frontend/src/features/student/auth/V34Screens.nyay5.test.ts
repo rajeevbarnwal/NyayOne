@@ -142,10 +142,10 @@ describe('S-01 server-session bootstrap', () => {
       createElement(MemoryRouter, null, createElement(V34Register)),
     );
     expect(html).toMatch(
-      /<button(?=[^>]*aria-label="Send one time code")(?=[^>]*data-tip="Send one time code")[^>]*>/,
+      /<button(?=[^>]*aria-label="Create Account")(?=[^>]*data-tip="Create Account")[^>]*>/,
     );
     expect(html).toMatch(
-      /<button(?=[^>]*aria-label="Send one time code")[^>]*>.*?<svg[^>]*aria-hidden="true"/,
+      /<button(?=[^>]*aria-label="Create Account")[^>]*>.*?<svg[^>]*aria-hidden="true"/,
     );
   });
 

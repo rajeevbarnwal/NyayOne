@@ -772,7 +772,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const registrationRequestsBeforeEmptySubmit = authRequests.filter((request) => (
     request.path === '/api/v1/auth/student/register'
   )).length;
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Create Account' }).click();
   const emptySummary = page.locator('#s08-error-summary');
   await emptySummary.waitFor();
   const emptySummaryExact = await emptySummary.getAttribute('role') === 'alert'
@@ -824,7 +824,7 @@ async function authWireAndPasswordlessProbe(browser) {
   const beforeUncheckedConsent = authRequests.filter((request) => (
     request.path === '/api/v1/auth/student/register'
   )).length;
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Create Account' }).click();
   await page.locator('#v34-privacy-error').waitFor();
   const afterUncheckedConsent = authRequests.filter((request) => (
     request.path === '/api/v1/auth/student/register'
@@ -841,7 +841,7 @@ async function authWireAndPasswordlessProbe(browser) {
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/auth/student/register'
   ));
-  await page.getByRole('button', { name: 'Send one time code' }).click();
+  await page.getByRole('button', { name: 'Create Account' }).click();
   const signupSettledReadiness = settleCanonicalReadiness(signupOtpRouteReadiness);
   const signupStartResponse = await signupStarted;
   const signupStartBody = signupStartResponse.ok() ? await signupStartResponse.json() : null;
@@ -3312,7 +3312,7 @@ async function unicodeAndRegistrationProbe(browser) {
     && new URL(response.url()).pathname === '/api/v1/auth/student/register'
   ));
   failureStage = 'unicode_registration_core_only_submit';
-  await registrationPage.getByRole('button', { name: 'Send one time code' }).click();
+  await registrationPage.getByRole('button', { name: 'Create Account' }).click();
   const createdResponse = await created;
   await registrationPage.waitForURL(/\/s-09$/u);
   const coreKeys = [

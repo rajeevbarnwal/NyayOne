@@ -244,14 +244,14 @@ try {
     await page.getByRole('heading', { name: 'Create your student account' }).waitFor();
   };
   const fillRequired = async ({ first = 'Rajeev', last = 'Barnwal', mobile = '9876543210', dob = '2000-01-01' } = {}) => {
-    await page.getByLabel('FIRST NAME').fill(first);
-    await page.getByLabel('LAST NAME').fill(last);
+    await page.getByLabel('First Name').fill(first);
+    await page.getByLabel('Last Name').fill(last);
     await page.locator('#v34-mobile').fill(mobile);
     await page.locator('#v34-dob').fill(dob);
     await page.getByRole('checkbox', { name: 'I accept the Terms.', exact: true }).check();
     await page.getByRole('checkbox', { name: 'I acknowledge the Privacy Notice.', exact: true }).check();
   };
-  const submit = () => page.getByRole('button', { name: 'Send one time code' }).click();
+  const submit = () => page.getByRole('button', { name: 'Create Account' }).click();
 
   await loadRegistration();
   await fillRequired({ mobile: '123456789' });
@@ -334,7 +334,7 @@ try {
 
   await loadRegistration();
   await fillRequired({ first: 'B'.repeat(61) });
-  const maxLengthActual = await page.getByLabel('FIRST NAME').inputValue();
+  const maxLengthActual = await page.getByLabel('First Name').inputValue();
   await submit();
   const name61Error = await page.locator('#v34-first-error').textContent();
   record('name_61_boundary', '61 characters retained, rejected, and remain S-08', {
@@ -347,11 +347,11 @@ try {
     && new URL(page.url()).pathname === '/s-08');
 
   const currentSelectors = {
-    'FIRST NAME': '#v34-first',
-    'MIDDLE NAME': '#v34-middle',
-    'LAST NAME': '#v34-last',
-    'MOBILE NUMBER': '#v34-mobile',
-    'DATE OF BIRTH': '#v34-dob',
+    'First Name': '#v34-first',
+    'Middle Name (Optional)': '#v34-middle',
+    'Last Name': '#v34-last',
+    'Mobile Number': '#v34-mobile',
+    'Date of Birth': '#v34-dob',
     'TERMS': '#v34-terms',
     'PRIVACY NOTICE': '#v34-privacy',
   };
@@ -367,7 +367,7 @@ try {
   );
 
   await page.goto(`${base}/s-08`);
-  const iconActions = page.getByRole('button', { name: 'Send one time code', exact: true });
+  const iconActions = page.getByRole('button', { name: 'Create Account', exact: true });
   const iconContract = await iconActions.evaluateAll((buttons) => buttons.map((button) => ({ aria: button.getAttribute('aria-label'), tip: button.getAttribute('data-tip'), svg: button.querySelectorAll('svg').length })));
   record('icon_tooltip_contract', 'every icon CTA has SVG, aria-label and visible-tooltip text', iconContract, iconContract.length > 0 && iconContract.every((item) => item.aria && item.tip === item.aria && item.svg === 1));
 
