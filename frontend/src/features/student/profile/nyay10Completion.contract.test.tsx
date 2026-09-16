@@ -57,7 +57,7 @@ describe('NYAY-10 completion UX contracts', () => {
   it('completion navigation cannot race an in-flight dismissal', () => {
     // NYAY-49 adds the decorative Revision L spark without changing the
     // server-dismissal guard on this exact Complete Profile button.
-    expect(prompt).toMatch(/disabled=\{dismiss\.isPending\}[^>]*><S07Icon name="spark"\/>Complete Profile<\/button>/u);
+    expect(prompt).toMatch(/disabled=\{dismiss\.isPending\}[^>]*><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="spark"\/><\/span>Complete Profile<\/button>/u);
   });
 });
 

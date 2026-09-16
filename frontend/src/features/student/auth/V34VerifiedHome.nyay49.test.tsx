@@ -30,6 +30,13 @@ function render(value = projection): string {
 }
 
 describe('NYAY-49 S-07 profile prompt presentation', () => {
+  it('uses the reference 20px icon wrappers around 18px button glyphs', () => {
+    const html = render();
+    for (const label of ['Complete Profile', 'Maybe Later', 'Verify Now']) {
+      const button = html.match(new RegExp(`<button[^>]*>((?:(?!<button)[\\s\\S])*?)${label}</button>`, 'u'))?.[1];
+      expect(button).toContain('class="v321-revl-icon"');
+    }
+  });
   it('keeps the two primary choices in reference order and sign out inside the dialog in a separate area', () => {
     const html = render();
     const dialog = html.slice(html.indexOf('data-testid="profile-completion-dialog"'));

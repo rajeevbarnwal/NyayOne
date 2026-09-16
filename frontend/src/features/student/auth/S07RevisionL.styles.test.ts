@@ -43,6 +43,10 @@ describe('S-07 Revision L presentation scope', () => {
 
   it('preserves the reference home-heading spacing and secondary action icon color', () => {
     expect(scoped).toMatch(/\.v34-s07-title\s*\{[^}]*margin:\s*2px 0 \.83em/su);
-    expect(scoped).toMatch(/\.v34-s07-actions > button:nth-child\(2\) > svg\s*\{[^}]*color:\s*var\(--nyayone-color-indigo\)/su);
+    expect(scoped).toMatch(/\.v34-s07-actions > button:nth-child\(2\) > \.v321-revl-icon\s*\{[^}]*color:\s*var\(--nyayone-color-indigo\)/su);
+  });
+
+  it('preserves the reference heading bottom margin instead of collapsing paragraph spacing', () => {
+    expect(scoped).toMatch(/\.v34-s07 \.v34-s07-dialog h2\s*\{[^}]*margin:\s*6px 36px \.83em 0/su);
   });
 });

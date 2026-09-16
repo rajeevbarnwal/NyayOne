@@ -580,7 +580,7 @@ export function V34VerifiedHome(props: ScreenProps) {
               <div className="v34-s07-note">
                 <NyayOneRevLIcon name={projection.institutionalEmailStatus === 'verified' ? 'checkc' : 'shield'} framed={false}/>
                 <span>{projection.institutionalEmailStatus === 'verified' ? 'Institutional email verified.' : 'Institutional email not verified yet, so some listings stay locked.'}</span>
-                {projection.institutionalEmailStatus !== 'verified' && <button type="button" className="v34-s07-button" onClick={() => nav('/s-15')}><NyayOneRevLIcon name="badge" framed={false}/>Verify Now</button>}
+                {projection.institutionalEmailStatus !== 'verified' && <button type="button" className="v34-s07-button" onClick={() => nav('/s-15')}><NyayOneRevLIcon name="badge"/>Verify Now</button>}
               </div>
             </div>
             <aside className="v34-s07-aside">
@@ -599,8 +599,8 @@ export function V34VerifiedHome(props: ScreenProps) {
           <div className="v34-s07-progress" role="progressbar" aria-label="Profile completion" aria-valuenow={projection.completionPercent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${projection.completionPercent}%` }}/></div>
           {dismissError && <div ref={dismissErrorRef} tabIndex={-1} role="alert" data-testid="profile-save-error">{dismissError}</div>}
           <div className="v34-s07-actions">
-            <button type="button" className="v34-hit v34-s07-button v34-s07-button--primary" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}><S07Icon name="spark"/>Complete Profile</button>
-            <button type="button" className="v34-hit v34-s07-button" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><S07Icon name="clock"/>Maybe Later</button>
+            <button type="button" className="v34-hit v34-s07-button v34-s07-button--primary" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="spark"/></span>Complete Profile</button>
+            <button type="button" className="v34-hit v34-s07-button" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="clock"/></span>Maybe Later</button>
           </div>
           <div className="v34-s07-session-actions"><button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button></div>
         </div>

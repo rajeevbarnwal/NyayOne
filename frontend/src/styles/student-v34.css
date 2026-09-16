@@ -635,7 +635,7 @@
 /* Until dark references are approved, keep this light-only layer readable
    even when a preference was set on an earlier screen. */
 .v34-s07 .v34-s07-dialog { color: var(--nyayone-color-ink); }
-.v34-s07 .v34-s07-dialog h2 { margin: 6px 36px 0 0; font: 700 22px/1.1 var(--nyayone-font-heading); letter-spacing: -.01em; }
+.v34-s07 .v34-s07-dialog h2 { margin: 6px 36px .83em 0; font: 700 22px/1.1 var(--nyayone-font-heading); letter-spacing: -.01em; }
 .v34-s07 .v34-s07-dialog p { margin: 8px 0 0; color: var(--nyayone-color-ink-secondary); font-size: 13.5px; line-height: 1.55; }
 .v34-s07-dialog .v34-dialog__close { top: 8px; right: 8px; min-width: 44px; min-height: 44px; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 50%; background: var(--nyayone-color-card); color: var(--nyayone-color-ink-secondary); }
 .v34-s07-progress { height: 8px; margin-top: 14px; overflow: hidden; border-radius: 5px; background: var(--nyayone-color-line); }
@@ -644,7 +644,7 @@
 .v34-s07 .v34-s07-actions > button { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 9px; min-width: 0; min-height: 48px; padding: 0 10px; text-align: center; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 12px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink); font: 700 14px var(--nyayone-font-body); cursor: pointer; }
 .v34-s07 .v34-s07-actions > button:first-child { background: var(--nyayone-color-indigo); border-color: var(--nyayone-color-indigo); color: white; }
 .v34-s07-actions > button > svg { flex: none; }
-.v34-s07-actions > button:nth-child(2) > svg { color: var(--nyayone-color-indigo); }
+.v34-s07-actions > button:nth-child(2) > .v321-revl-icon { color: var(--nyayone-color-indigo); }
 .v34-s07-session-actions { display: flex; justify-content: center; margin-top: 8px; }
 .v34-s07-session-actions > button { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--nyayone-color-indigo); font: 600 13px var(--nyayone-font-body); cursor: pointer; }
 .v34-s07-dialog button:disabled { opacity: .55; cursor: default; }
