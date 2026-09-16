@@ -122,8 +122,8 @@
 [data-screen='S-09'] .v321-form--signup-otp > div:has(> .v34-title) { display: flex; flex-direction: column; gap: 4px; }
 [data-screen='S-09'] .v321-form--signup-otp > div:has(> .v34-title) .v34-title { margin: 0; }
 [data-screen='S-09'] .v34-title { font-size: 24px; }
-[data-screen='S-09'] .v34-lede { margin: 0; font-size: 13.5px; line-height: 1.55; }
 .v321-screen .v34-lede { margin-top: 4px; color: var(--v34-body); font-size: 13.5px; line-height: 1.55; }
+[data-screen='S-09'] .v34-lede { margin: 0; font-size: 13.5px; line-height: 1.55; }
 .v321-form--gateway .v34-lede { margin-top: 0; }
 .v321-screen .v34-copy { padding: 0; color: var(--v34-body); font-size: 13px; }
 .v321-help { margin-top: -8px !important; color: var(--v34-muted) !important; font-size: 11.5px; line-height: 1.4; }

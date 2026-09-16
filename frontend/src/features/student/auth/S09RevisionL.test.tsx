@@ -50,5 +50,6 @@ describe('NYAY-87 S-09 Revision L with pending-OTP security supersession', () =>
     expect(css).toMatch(/\[data-screen='S-09'\] \.v34-title\s*\{\s*font-size: 24px;/u);
     expect(css).toMatch(/\[data-screen='S-09'\] \.v34-title\s*\{\s*font-size: 34px;/u);
     expect(css).toMatch(/\[data-screen='S-09'\] \.v34-lede\s*\{\s*margin: 0; font-size: 13\.5px; line-height: 1\.55;/u);
+    expect(css.indexOf("[data-screen='S-09'] .v34-lede")).toBeGreaterThan(css.indexOf('.v321-screen .v34-lede'));
   });
 });
