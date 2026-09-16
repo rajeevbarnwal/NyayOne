@@ -64,6 +64,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-03',
   'S-04',
   'S-05',
+  'S-07',
   'S-08',
   'S-09',
 ]);
@@ -2359,11 +2360,18 @@ async function promptAndRoutingProbe(browser) {
     node.hasAttribute('inert') && node.getAttribute('aria-hidden') === 'true'
   ));
   await page.keyboard.press('Shift+Tab');
-  const shiftWrapped = await page.getByRole('button', { name: 'Complete Profile' })
+  const shiftWrapped = await dialog.getByRole('button', { name: 'Sign out', exact: true })
     .evaluate((node) => document.activeElement === node);
   await page.keyboard.press('Tab');
-  const tabWrapped = await page.getByRole('button', { name: 'Close profile prompt' })
+  const tabWrapped = await dialog.getByRole('button', { name: 'Close profile prompt', exact: true })
     .evaluate((node) => document.activeElement === node);
+  const dialogControlOrder = ['Complete Profile', 'Maybe Later', 'Sign out', 'Close profile prompt'];
+  const dialogTraversal = [];
+  for (const name of dialogControlOrder) {
+    await page.keyboard.press('Tab');
+    dialogTraversal.push(await dialog.getByRole('button', { name, exact: true })
+      .evaluate((node) => document.activeElement === node));
+  }
 
   await page.route('**/api/v1/student/profile/prompt-dismiss', (route) => route.fulfill({
     status: 503,
@@ -2449,9 +2457,9 @@ async function promptAndRoutingProbe(browser) {
     backgroundInert: inert,
     dismissErrorRetained,
   });
-  observe('dialog_focus_and_inert_contract', dialogObservation.pass, {
-    focusChecks: 4,
-    focusPassed: [initialFocus, shiftWrapped, tabWrapped, focusRestored].filter(Boolean).length,
+  observe('dialog_focus_and_inert_contract', dialogObservation.pass && dialogTraversal.every(Boolean), {
+    focusChecks: 4 + dialogTraversal.length,
+    focusPassed: [initialFocus, shiftWrapped, tabWrapped, focusRestored, ...dialogTraversal].filter(Boolean).length,
     inert,
     dismissErrorRetained,
     selectorCount: promptHostSelectors + rotatedSelectorCount,

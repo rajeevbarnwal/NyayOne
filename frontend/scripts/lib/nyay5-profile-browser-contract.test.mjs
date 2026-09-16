@@ -982,10 +982,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(visualSource).toContain('await page.evaluate(() => document.fonts.ready);');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to exactly five screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the six approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-08', 'S-09',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1066,14 +1066,14 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect((await visualCensus({ decoration: true, decorationParent, decorationIcon })).iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-08', 'S-09', 'S-10', 'S-17'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-17'])(
     'never grants the S-06 R2 stack or inherited decoration rule to %s', async screenId => {
       const observed = await visualCensus({ screenId, decoration: true });
       expect(observed.typographyExact).toBe(false);
       expect(observed.iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-08', 'S-09'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09'])(
     'retains the exact existing Revision L stack and lockup on %s', async screenId => {
       expect(await visualCensus({ screenId,
         family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
@@ -1084,6 +1084,35 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(await visualCensus({ screenId: 'S-10',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
+  });
+
+  it.each([
+    'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    '"NyayOne Revision L Heading", Aptos, Calibri, system-ui, sans-serif',
+    'sans-serif',
+  ])('rejects an incorrect S-07 heading stack: %s', async family => {
+    expect((await visualCensus({ screenId: 'S-07', family })).typographyExact).toBe(false);
+  });
+
+  it.each([
+    { 'aria-label': 'Different logo' }, { role: 'presentation' },
+    { class: 'v321-lockup other' }, { 'aria-hidden': 'true' }, { tabindex: '0' },
+  ])('rejects a changed or focusable S-07 labelled lockup: %j', async logo => {
+    expect((await visualCensus({ screenId: 'S-07',
+      family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif', logo,
+    })).iconsExact).toBe(false);
+  });
+
+  it('observes both S-07 focus wraps and the entire approved dialog control order', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const prompt = runner.slice(runner.indexOf('async function promptAndRoutingProbe'),
+      runner.indexOf('async function crossSectionConflictProbe'));
+    expect(prompt).toMatch(/const shiftWrapped = await dialog\.getByRole\('button', \{ name: 'Sign out', exact: true \}\)/u);
+    expect(prompt).toMatch(/const tabWrapped = await dialog\.getByRole\('button', \{ name: 'Close profile prompt', exact: true \}\)/u);
+    expect(prompt).toContain("const dialogControlOrder = ['Complete Profile', 'Maybe Later', 'Sign out', 'Close profile prompt'];");
+    expect(prompt).toMatch(/for \(const name of dialogControlOrder\) \{\s*await page\.keyboard\.press\('Tab'\);/u);
+    expect(prompt).toContain("observe('dialog_focus_and_inert_contract', dialogObservation.pass && dialogTraversal.every(Boolean)");
+    expect(prompt).toContain('focusChecks: 4 + dialogTraversal.length');
   });
 
   it('builds failed-run stdout diagnostics from static privacy-safe inventories only', async () => {

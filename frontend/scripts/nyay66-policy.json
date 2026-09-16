@@ -220,6 +220,36 @@
       ],
       "reason": "S-06 network-error only: replace the unsupported assertion that no code was sent with truthful uncertainty: We could not confirm whether your code was sent. Check your connection and try again. Approve only this copy and its rendered pixels, including the vertical desktop status-block/action shift caused by the longer copy shown by these exact PNG hashes. Control identities and headings remain unchanged. No dynamic-region, accessibility, other-copy, or other-state waiver.",
       "approvalPr": 49
+    },
+    {
+      "screen": "S-07-popup",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "68b821f4114623e2832690eea59df880f9dc4b11a1f19db61c2560510736b3f8",
+      "liveSha256": "18fa194d42bcf7bd996f9b1ad05b4b30e4a16fe924ba2463fd5fa5826fabf92a",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "approvalPr": 50
+    },
+    {
+      "screen": "S-07-popup",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "99831891921a2d593860230236b049f2e147e093841c5aa5be2980b4ef3d466e",
+      "liveSha256": "cbf2382b90ebe587021f6d68231f2409bd14bdac2cf2cd38210e8760a02c9b11",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "approvalPr": 50
     }
   ]
 }

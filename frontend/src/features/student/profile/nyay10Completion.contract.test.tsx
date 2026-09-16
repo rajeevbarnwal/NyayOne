@@ -48,13 +48,16 @@ describe('NYAY-10 completion UX contracts', () => {
     expect(prompt).toMatch(/dismissErrorRef\.current\?\.focus\(\)/u);
     expect(prompt).toContain('tabIndex={-1} role="alert" data-testid="profile-save-error"');
   });
-  it('the mobile prompt is a bottom sheet, not the desktop-centered overlay', () => {
+  it('the mobile prompt follows Revision L centered geometry, superseding the older bottom sheet', () => {
     const css = source('styles/student-v34.css');
-    expect(css).toMatch(/@media\s*\(max-width:\s*600px\)\s*\{[^}]*\.v34-dialog-backdrop\s*\{[^}]*align-items:\s*end/su);
-    expect(css).toContain('env(safe-area-inset-bottom)');
+    const revisionL = css.slice(css.indexOf('/* NYAY-49 S-07 Revision L'));
+    expect(revisionL).toMatch(/\.v34-s07-backdrop\s*\{[^}]*align-items:\s*center[^}]*padding:\s*16px/su);
+    expect(revisionL).toMatch(/\.v34-s07-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 32px\)[^}]*border-radius:\s*20px[^}]*overflow:\s*auto/su);
   });
   it('completion navigation cannot race an in-flight dismissal', () => {
-    expect(prompt).toMatch(/disabled=\{dismiss\.isPending\}[^>]*>Complete Profile</u);
+    // NYAY-49 adds the decorative Revision L spark without changing the
+    // server-dismissal guard on this exact Complete Profile button.
+    expect(prompt).toMatch(/disabled=\{dismiss\.isPending\}[^>]*><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="spark"\/><\/span>Complete Profile<\/button>/u);
   });
 });
 
