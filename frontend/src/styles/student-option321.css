@@ -74,6 +74,18 @@
   .v321-profile__card .v321-profile__eyebrow { margin-bottom: 8px; }
   .v321-profile__card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--nyayone-color-ink-secondary); }
 }
+/* S-11 only. Keep S-10 metrics and every server-backed form control intact. */
+.ls-v34-content .v321-profile[data-screen='S-11'] :is(h1, h2) { font-family: var(--nyayone-font-heading); }
+.v321-profile[data-screen='S-11'] .v321-profile__heading-icon--interests { background: #0e64701f; color: #0e6470; }
+.v321-profile[data-screen='S-11'] .v321-profile__intro { margin: 0; color: var(--nyayone-color-ink-secondary); font-size: 13.5px; line-height: 1.55; }
+.v321-profile[data-screen='S-11'] .v321-profile__interest-field { display: flex; flex-direction: column; gap: 5px; }
+.v321-profile[data-screen='S-11'] .v321-profile__interest-label { display: flex; align-items: center; gap: 6px; min-height: 22px; color: var(--nyayone-color-ink-secondary); font: 700 12px var(--nyayone-font-body); line-height: normal; }
+.v321-profile[data-screen='S-11'] .v321-profile__label-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }
+.v321-profile[data-screen='S-11'] .v321-profile__card p { line-height: 1.55; }
+.v321-profile[data-screen='S-11'] .v321-profile__interest-label svg { width: 18px; height: 18px; color: var(--nyayone-color-indigo); }
+.v321-profile[data-screen='S-11'] .v321-profile__interests { display: flex; flex-wrap: wrap; gap: 8px; }
+.v321-profile[data-screen='S-11'] .v321-profile__interest { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 22px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink-secondary); font: 700 13px var(--nyayone-font-body); cursor: pointer; }
+.v321-profile[data-screen='S-11'] .v321-profile__interest[aria-pressed='true'] { border-color: var(--nyayone-color-indigo); background: var(--nyayone-color-indigo-surface); color: var(--nyayone-color-indigo); }
 .v321-screen {
   --v34-bg: var(--nyayone-color-paper);
   --v34-surface: var(--nyayone-color-card);

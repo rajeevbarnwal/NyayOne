@@ -68,6 +68,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-08',
   'S-09',
   'S-10',
+  'S-11',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -2209,7 +2210,7 @@ async function completeProfileProbe(browser) {
   await recordVisualContract(page, 'S-14');
   failureStage = 'complete_profile_interests_write';
   await page.goto(`${WEB}/s-11`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('heading', { name: 'What should find you?', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('heading', { name: 'What are you here for?', exact: true }).waitFor({ state: 'visible' });
   await recordVisualContract(page, 'S-11');
   const interestsGoalLabel = page.locator('label[for="profile-interests-goal"]');
   await interestsGoalLabel.waitFor({ state: 'visible' });

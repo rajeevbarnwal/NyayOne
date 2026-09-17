@@ -50,14 +50,15 @@ const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Te
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
 type FieldErrors = Record<string, string>;
 
-/** S-10 presentation only. Identity and form authority remain server-backed. */
+/** Revision L profile presentation only. Identity and form authority remain server-backed. */
 export function ProfileSetupFrame({ step, firstName, middleName, lastName, children }: {
-  step: 1 | 2; firstName: string; middleName: string | null; lastName: string; children: ReactNode;
+  step: 1 | 2 | 3; firstName: string; middleName: string | null; lastName: string; children: ReactNode;
 }) {
   const nav = useNavigate();
+  const screenId = step === 3 ? 'S-11' : 'S-10';
   const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
   const initials = [firstName, lastName].map((name) => [...name.trim()][0] ?? '').join('').toUpperCase();
-  return <section className="v321-profile" data-screen="S-10" data-profile-step={step} aria-labelledby="S-10-title">
+  return <section className="v321-profile" data-screen={screenId} data-profile-step={step} aria-labelledby={`${screenId}-title`}>
     <header className="v321-profile__header">
       <span className="v321-profile__desktop-brand"><NyayOneRevLLockup /></span>
       <span className="v321-profile__mobile-brand"><img src="/brand/nyayone-mark.svg" alt="NyayOne" draggable="false" /><b>Profile setup</b></span>
@@ -71,7 +72,7 @@ export function ProfileSetupFrame({ step, firstName, middleName, lastName, child
     <div className="v321-profile__layout">
       <div className="v321-profile__form">
         <div className="v321-profile__step"><div className="v321-profile__eyebrow">Profile · step {step} of 3</div><div className="v321-profile__steps" role="img" aria-label={`Step ${step} of 3`}>{[1, 2, 3].map((index) => <i key={index} className={index <= step ? 'is-current' : undefined} />)}</div></div>
-        <h1 id="S-10-title" className="v321-profile__title"><span className={`v321-profile__heading-icon${step === 2 ? ' v321-profile__heading-icon--academic' : ''}`} aria-hidden="true">{step === 1 ? <NyayOneRevLIcon name="idcard" framed={false} /> : <ProfileSetupIcon name="cap" />}</span>{step === 1 ? 'About you.' : 'Your academic record.'}</h1>
+        <h1 id={`${screenId}-title`} className="v321-profile__title"><span className={`v321-profile__heading-icon${step === 2 ? ' v321-profile__heading-icon--academic' : step === 3 ? ' v321-profile__heading-icon--interests' : ''}`} aria-hidden="true">{step === 1 ? <NyayOneRevLIcon name="idcard" framed={false} /> : <ProfileSetupIcon name={step === 2 ? 'cap' : 'spark'} />}</span>{step === 1 ? 'About you.' : step === 2 ? 'Your academic record.' : 'What are you here for?'}</h1>
         {children}
       </div>
       <section className="v321-profile__aside" aria-label="About profile setup">
@@ -82,8 +83,9 @@ export function ProfileSetupFrame({ step, firstName, middleName, lastName, child
   </section>;
 }
 
-function ProfileSetupIcon({ name }: { name: 'cap' | 'book' | 'grid' }) {
+function ProfileSetupIcon({ name }: { name: 'cap' | 'book' | 'grid' | 'spark' }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    {name === 'spark' && <><path d="M12 3l1.9 5.3L19.2 10l-5.3 1.9L12 17.2l-1.9-5.3L4.8 10l5.3-1.7z" fill="currentColor" opacity=".18"/><path d="M12 3l1.9 5.3L19.2 10l-5.3 1.9L12 17.2l-1.9-5.3L4.8 10l5.3-1.7z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/><path d="M18.6 15.6l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor"/></>}
     {name === 'cap' && <><path d="M12 4 22 9l-10 5L2 9z" fill="currentColor" opacity=".18" /><path d="M12 4 22 9l-10 5L2 9z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" /><path d="M6 11.5V16c0 1.6 2.7 3 6 3s6-1.4 6-3v-4.5M22 9v5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></>}
     {name === 'book' && <><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5z" fill="currentColor" opacity=".16" /><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></>}
     {name === 'grid' && <><rect x="4" y="4" width="7" height="7" rx="1.8" fill="currentColor" opacity=".2" /><rect x="13" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.9" /><rect x="4" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.9" /><rect x="13" y="13" width="7" height="7" rx="1.8" fill="currentColor" opacity=".45" /></>}
@@ -400,7 +402,27 @@ export function ProfileStep3() {
   }, [auth.userId, hydratedVersion, query.data]);
   async function persist(destination: 'done' | 'exit') { if (!query.data || hydratedVersion === null) return; const next: FieldErrors = {}; if (interests.length === 0) next.interests = 'Choose at least one area of interest.'; if (!goal) next.goal = 'Choose a career goal.'; setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft(); try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, interests, goals: [goal] }); setDirty(false); nav(profileSaveDestination(result.projection, destination === 'exit' ? 'exit' : 'next')); } catch (error) { if (isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); } }
   if (!query.data || blocked) return <ProfileLoadState screenId="S-11" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
-  return <AuthCard screenId="S-11" kicker="Step 3 of 3 · Interests" title="What should find you?" sub="Choose the legal work and direction you want surfaced first. You can change this later."><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} />{restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}<ErrorSummary errors={errors} ids={{ interests: 'profile-interests-first-option', goal: 'profile-interests-goal' }} /><span className="st-field__label" id="profile-interests-label">Areas of interest</span><div className="st-chips" role="group" aria-labelledby="profile-interests-label" aria-describedby={errors.interests ? 'profile-interests-options-error' : undefined}>{INTERESTS.map((interest, index) => <button id={index === 0 ? 'profile-interests-first-option' : undefined} key={interest} type="button" className="st-chip tap" aria-pressed={interests.includes(interest)} onClick={() => { setInterests((previous) => previous.includes(interest) ? previous.filter((item) => item !== interest) : [...previous, interest]); setDirty(true); }}>{interest}</button>)}</div>{errors.interests && <span id="profile-interests-options-error" className="ui-validation" role="alert">{errors.interests}</span>}<SelectField id="profile-interests-goal" label="Career goal" value={goal} onChange={(value) => { setGoal(value); setDirty(true); }} options={GOALS} error={errors.goal} /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="interests" draftSummary={[...interests, goal].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'interests')) preserveProfileConflictDraft({ section: 'interests', value: { interests, goals: [goal] } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('done'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Finish setup'}</button></div></AuthCard>;
+  return <ProfileSetupFrame step={3} {...query.data.profile.personal}>
+    <p className="v321-profile__intro">Pick any. These tune your matches and are easy to change later.</p>
+    <ReauthDraftRestored visible={reauthRestoreNotice} />
+    {restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}
+    <ErrorSummary errors={errors} ids={{ interests: 'profile-interests-first-option', goal: 'profile-interests-goal' }} />
+    <div className="v321-profile__interest-field">
+      <span className="v321-profile__interest-label" id="profile-interests-label"><span aria-hidden="true"><span className="v321-profile__label-icon"><ProfileSetupIcon name="spark" /></span></span>Practice Interests</span>
+      <div className="v321-profile__interests" role="group" aria-labelledby="profile-interests-label" aria-describedby={errors.interests ? 'profile-interests-options-error' : undefined}>
+        {INTERESTS.map((interest, index) => <button id={index === 0 ? 'profile-interests-first-option' : undefined} key={interest} type="button" className="v321-profile__interest" aria-pressed={interests.includes(interest)} onClick={() => { setInterests((previous) => previous.includes(interest) ? previous.filter((item) => item !== interest) : [...previous, interest]); setDirty(true); }}>{interest}</button>)}
+      </div>
+      {errors.interests && <span id="profile-interests-options-error" className="ui-validation" role="alert">{errors.interests}</span>}
+    </div>
+    <SelectField id="profile-interests-goal" label="Career goal" value={goal} onChange={(value) => { setGoal(value); setDirty(true); }} options={GOALS} error={errors.goal} />
+    <SaveError value={saveError} />
+    <ProfileConflictReview conflict={conflictReview.conflict} section="interests" draftSummary={[...interests, goal].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'interests')) preserveProfileConflictDraft({ section: 'interests', value: { interests, goals: [goal] } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} />
+    <div className="v321-profile__actions">
+      <button type="button" className="v321-profile__button" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="home" />Save and exit</button>
+      <button type="button" className="v321-profile__button v321-profile__button--primary" onClick={() => { void persist('done'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="checkc" />{save.isPending ? 'Saving…' : 'Finish setup'}</button>
+    </div>
+    <div className="v321-profile__completion">Saved profile completion: {query.data.completionPercent}%<Progress projection={query.data} /></div>
+  </ProfileSetupFrame>;
 }
 
 export function CompletionCard({ projection }: { projection: StudentProfileProjection }) {
