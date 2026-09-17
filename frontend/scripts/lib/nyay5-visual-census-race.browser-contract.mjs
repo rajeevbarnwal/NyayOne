@@ -28,7 +28,7 @@ function assertFields(actual, expected) {
 }
 
 function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup } = {}) {
-  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09'].includes(screenId);
+  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10'].includes(screenId);
   const family = wrongFont ? 'serif' : revision ? revisionFamily : legacyFamily;
   const svg = (lockup ?? revision)
     ? '<svg class="v321-lockup" role="img" aria-label="NyayOne — Legal, on the record" width="40" height="40"><rect width="30" height="30"/></svg>'
@@ -164,16 +164,16 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact six-screen Revision L census and the legacy Carlito stack', async () => {
+  it('preserves the exact seven-screen Revision L census and the legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
-      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10']) {
+      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11']) {
         await page.setContent(`<html data-theme="light"><body>${markup(screenId)}</body></html>`);
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 7);
+      assert.equal(rows.size, 8);
     });
   });
 
@@ -188,10 +188,10 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
 
   it('does not allow a legacy screen to acquire the Revision L-only lockup exception', async () => {
     await withPage(async (page) => {
-      await page.setContent(`<html data-theme="light"><body>${markup('S-10', { lockup: true })}</body></html>`);
+      await page.setContent(`<html data-theme="light"><body>${markup('S-11', { lockup: true })}</body></html>`);
       const rows = new Map();
-      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-10');
-      assertFields(rows.get('S-10'), { typographyExact: true, iconsExact: false });
+      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-11');
+      assertFields(rows.get('S-11'), { typographyExact: true, iconsExact: false });
     });
   });
 });

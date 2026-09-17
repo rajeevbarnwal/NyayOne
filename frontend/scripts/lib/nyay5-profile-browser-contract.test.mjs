@@ -93,6 +93,34 @@ async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration =
   return { ...visualScreens.get(screenId), readiness };
 }
 
+// Execute the real responsive callback with a focused, visible city field.
+async function responsiveCensus(family, viewportName = 'mobile-keyboard') {
+  class ResponsiveElement {
+    constructor(id, textContent = '') { this.id = id; this.textContent = textContent; }
+    getClientRects() { return [{}]; }
+    getBoundingClientRect() { return { top: 100, bottom: 148, width: 180, height: 48 }; }
+  }
+  const city = new ResponsiveElement('profile-personal-city');
+  const primary = new ResponsiveElement('save', 'Save & continue');
+  const heading = Object.assign(new ResponsiveElement('title'), { tagName: 'H1', className: 'v321-profile__title' });
+  const runner = readFileSync(RUNNER, 'utf8');
+  const start = runner.indexOf('geometries.push(await page.evaluate(');
+  const callback = runner.slice(start + 'geometries.push(await page.evaluate('.length,
+    runner.indexOf(', viewport.name));', start));
+  return runInNewContext(`(${callback})(viewportName)`, {
+    viewportName, HTMLElement: ResponsiveElement,
+    getComputedStyle: () => ({ fontFamily: family }),
+    window: { innerHeight: 430 },
+    document: { documentElement: { scrollWidth: 390, clientWidth: 390 }, activeElement: city,
+      querySelectorAll: selector => {
+        if (selector === 'h1,h2') return [heading];
+        if (selector === 'button') return [primary];
+        if (selector === 'button,a,input,select') return [city, primary];
+        throw new Error(`UNEXPECTED_RESPONSIVE_SELECTOR:${selector}`);
+      } },
+  });
+}
+
 const EXPECTED_ASSERTIONS = [
   'runtime_chromium',
   'pending_session_fail_closed',
@@ -274,7 +302,37 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(styles).toContain(
       ".ls-v34-content [data-screen='S-10'] :is(h1, h2) { font-family: Aptos, Calibri, Carlito, system-ui, sans-serif; }",
     );
+    const revisionLStyles = readFileSync(resolve(ROOT, 'src/styles/student-option321.css'), 'utf8');
+    expect(revisionLStyles).toContain(
+      ".ls-v34-content .v321-profile[data-screen='S-10'] :is(h1, h2) { font-family: var(--nyayone-font-heading); }",
+    );
   });
+
+  it('uses the approved S-10 heading after the Wave-1 edit-profile route without dropping its waits', () => {
+    const wave1 = readFileSync(resolve(ROOT, 'scripts/v34-s11-s26-e2e.mjs'), 'utf8');
+    expect(wave1).toContain("page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?section=personal')");
+    expect(wave1).toContain("getByRole('heading', { name: 'About you.', exact: true }).waitFor({ state: 'visible' })");
+    expect(wave1).not.toContain("getByRole('heading', { name: 'About you', exact: true })");
+  });
+
+  it('measures the S-10 Revision L keyboard font while retaining focus and target checks', async () => {
+    expect(await responsiveCensus('Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif'))
+      .toMatchObject({ typographyExact: true, keyboardGeometryExact: true, selectorCount: 2, minimumTarget: 48, overflow: false });
+  });
+
+  it.each([
+    'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    '"NyayOne Revision L Heading", Aptos, Calibri, system-ui, sans-serif',
+    'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, serif',
+  ])('rejects the wrong S-10 keyboard heading stack: %s', async family => {
+    expect((await responsiveCensus(family)).typographyExact).toBe(false);
+  });
+
+  it.each(['mobile-narrow', 'mobile-standard', 'desktop'])(
+    'preserves the existing S-16 responsive font expectations for %s', async viewport => {
+      expect((await responsiveCensus('Aptos, Calibri, Carlito, system-ui, sans-serif', viewport)).typographyExact).toBe(true);
+      expect((await responsiveCensus('sans-serif', viewport)).typographyExact).toBe(false);
+    });
 
   it('requires the production service worker and exact public-shell cache inventory', async () => {
     const { inspectBrowserPersistence } = await import(
@@ -982,10 +1040,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(visualSource).toContain('await page.evaluate(() => document.fonts.ready);');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the six approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the seven approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1073,7 +1131,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect(observed.iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10'])(
     'retains the exact existing Revision L stack and lockup on %s', async screenId => {
       expect(await visualCensus({ screenId,
         family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
@@ -1081,9 +1139,26 @@ describe('NYAY-5 browser release-gate source contract', () => {
     });
 
   it('retains the legacy font rule and rejects branded lockups outside approved screens', async () => {
-    expect(await visualCensus({ screenId: 'S-10',
+    expect(await visualCensus({ screenId: 'S-17',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
+  });
+
+  it.each([
+    'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    '"NyayOne Revision L Heading", Aptos, Calibri, system-ui, sans-serif',
+    'sans-serif',
+  ])('rejects an incorrect S-10 heading stack: %s', async family => {
+    expect((await visualCensus({ screenId: 'S-10', family })).typographyExact).toBe(false);
+  });
+
+  it.each([
+    { 'aria-label': 'Different logo' }, { role: 'presentation' },
+    { class: 'v321-lockup other' }, { 'aria-hidden': 'true' }, { tabindex: '0' },
+  ])('rejects a changed or focusable S-10 labelled lockup: %j', async logo => {
+    expect((await visualCensus({ screenId: 'S-10',
+      family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif', logo,
+    })).iconsExact).toBe(false);
   });
 
   it.each([

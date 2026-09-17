@@ -67,6 +67,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-07',
   'S-08',
   'S-09',
+  'S-10',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -3085,6 +3086,12 @@ async function minorAndResponsiveProbe(browser) {
       }));
       const typographyExact = headings.length > 0 && headings.every((item) => {
         const family = getComputedStyle(item).fontFamily.toLowerCase();
+        if (viewportName === 'mobile-keyboard') {
+          const stack = family.split(',').map((name) => name.trim().replace(/["']/gu, ''));
+          return JSON.stringify(stack) === JSON.stringify([
+            'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
+          ]);
+        }
         return family.includes('aptos')
           && family.includes('calibri')
           && family.includes('carlito')

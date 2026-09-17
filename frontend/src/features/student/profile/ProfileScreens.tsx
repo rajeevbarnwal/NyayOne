@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthCard, DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
@@ -44,10 +44,55 @@ import {
 } from './profileReauthHandoff';
 import { ENROLMENT_RE, institutionalEmailError } from '../lib/profile';
 import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
+import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
 type FieldErrors = Record<string, string>;
+
+/** S-10 presentation only. Identity and form authority remain server-backed. */
+export function ProfileSetupFrame({ step, firstName, middleName, lastName, children }: {
+  step: 1 | 2; firstName: string; middleName: string | null; lastName: string; children: ReactNode;
+}) {
+  const nav = useNavigate();
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  const initials = [firstName, lastName].map((name) => [...name.trim()][0] ?? '').join('').toUpperCase();
+  return <section className="v321-profile" data-screen="S-10" data-profile-step={step} aria-labelledby="S-10-title">
+    <header className="v321-profile__header">
+      <span className="v321-profile__desktop-brand"><NyayOneRevLLockup /></span>
+      <span className="v321-profile__mobile-brand"><img src="/brand/nyayone-mark.svg" alt="NyayOne" draggable="false" /><b>Profile setup</b></span>
+      <nav aria-label="Site" className="v321-profile__nav">
+        <button type="button" onClick={() => nav('/s-14')}>Home</button>
+        {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} disabled>{label}</button>)}
+        <button type="button" onClick={() => nav('/s-17')}>Profile</button>
+      </nav>
+      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+    </header>
+    <div className="v321-profile__layout">
+      <div className="v321-profile__form">
+        <div className="v321-profile__step"><div className="v321-profile__eyebrow">Profile · step {step} of 3</div><div className="v321-profile__steps" role="img" aria-label={`Step ${step} of 3`}>{[1, 2, 3].map((index) => <i key={index} className={index <= step ? 'is-current' : undefined} />)}</div></div>
+        <h1 id="S-10-title" className="v321-profile__title"><span className={`v321-profile__heading-icon${step === 2 ? ' v321-profile__heading-icon--academic' : ''}`} aria-hidden="true">{step === 1 ? <NyayOneRevLIcon name="idcard" framed={false} /> : <ProfileSetupIcon name="cap" />}</span>{step === 1 ? 'About you.' : 'Your academic record.'}</h1>
+        {children}
+      </div>
+      <section className="v321-profile__aside" aria-label="About profile setup">
+        <div className="v321-profile__card"><div className="v321-profile__eyebrow">Why complete your profile?</div><p>Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year.</p></div>
+        <div className="v321-profile__card"><div className="v321-profile__eyebrow">Privacy</div><p>Every field is private by default. Gold appears only when something is verified.</p></div>
+      </section>
+    </div>
+  </section>;
+}
+
+function ProfileSetupIcon({ name }: { name: 'cap' | 'book' | 'grid' }) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    {name === 'cap' && <><path d="M12 4 22 9l-10 5L2 9z" fill="currentColor" opacity=".18" /><path d="M12 4 22 9l-10 5L2 9z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" /><path d="M6 11.5V16c0 1.6 2.7 3 6 3s6-1.4 6-3v-4.5M22 9v5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></>}
+    {name === 'book' && <><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5z" fill="currentColor" opacity=".16" /><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></>}
+    {name === 'grid' && <><rect x="4" y="4" width="7" height="7" rx="1.8" fill="currentColor" opacity=".2" /><rect x="13" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.9" /><rect x="4" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.9" /><rect x="13" y="13" width="7" height="7" rx="1.8" fill="currentColor" opacity=".45" /></>}
+  </svg>;
+}
+
+function ProfileSetupField({ icon, children }: { icon: 'idcard' | 'home' | 'book' | 'cap' | 'grid'; children: ReactNode }) {
+  return <div className="v321-profile__icon-field"><span className="v321-profile__field-icon" aria-hidden="true">{icon === 'idcard' || icon === 'home' ? <NyayOneRevLIcon name={icon} /> : <ProfileSetupIcon name={icon} />}</span>{children}</div>;
+}
 
 function useActiveProfileReauthDraft(
   actorSubject: string | null | undefined,
@@ -240,7 +285,31 @@ export function ProfileStep1() {
   }
   if (!query.data) return <ProfileLoadState screenId="S-10" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   const ids = { firstName: 'profile-personal-first-name', middleName: 'profile-personal-middle-name', lastName: 'profile-personal-last-name', dateOfBirth: 'profile-personal-date-of-birth', preferredLanguage: 'profile-personal-language', city: 'profile-personal-city', pronouns: 'profile-personal-pronouns' };
-  return <AuthCard screenId="S-10" kicker="Step 1 of 3 · Personal" title="About you"><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} /><ErrorSummary errors={errors} ids={ids} /><fieldset className="st-namegroup"><legend className="st-namegroup__legend">Legal name</legend><TextField id={ids.firstName} label="First name" value={firstName} onChange={(value) => { setFirstName(value); setDirty(true); }} error={errors.firstName} autoComplete="given-name" /><TextField id={ids.middleName} label="Middle name" optional="optional" value={middleName} onChange={(value) => { setMiddleName(value); setDirty(true); }} error={errors.middleName} autoComplete="additional-name" /><TextField id={ids.lastName} label="Last name" value={lastName} onChange={(value) => { setLastName(value); setDirty(true); }} error={errors.lastName} autoComplete="family-name" /></fieldset><TextField id={ids.dateOfBirth} label="Date of birth" value={dateOfBirth} onChange={(value) => { setDateOfBirth(value); setDirty(true); }} type="date" error={errors.dateOfBirth} help="Used for eligibility and guardian policy · not shown publicly" /><SelectField id={ids.preferredLanguage} label="Preferred language" value={preferredLanguage} onChange={(value) => { setPreferredLanguage(value); setDirty(true); }} options={LANGUAGE_OPTIONS} error={errors.preferredLanguage} /><TextField id={ids.city} label="City" value={city} onChange={(value) => { setCity(value); setDirty(true); }} error={errors.city} autoComplete="address-level2" /><TextField id={ids.pronouns} label="Pronouns" optional="optional" value={pronouns} onChange={(value) => { setPronouns(value); setDirty(true); }} error={errors.pronouns} maxLength={60} /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="personal" draftSummary={[firstName, middleName, lastName, dateOfBirth, preferredLanguage, city, pronouns].filter(Boolean).join(' · ')} onAdopt={() => { conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Save & continue'}</button></div></AuthCard>;
+  return <ProfileSetupFrame step={1} {...query.data.profile.personal}>
+    <ReauthDraftRestored visible={reauthRestoreNotice} />
+    <ErrorSummary errors={errors} ids={ids} />
+    <fieldset className="st-namegroup v321-profile__names">
+      <legend className="sr-only">Legal name</legend>
+      <div className="v321-profile__pair">
+        <ProfileSetupField icon="idcard"><TextField id={ids.firstName} label="First name" value={firstName} onChange={(value) => { setFirstName(value); setDirty(true); }} error={errors.firstName} autoComplete="given-name" /></ProfileSetupField>
+        <TextField id={ids.middleName} label="Middle name" optional="optional" value={middleName} onChange={(value) => { setMiddleName(value); setDirty(true); }} error={errors.middleName} autoComplete="additional-name" />
+      </div>
+      <TextField id={ids.lastName} label="Last name" value={lastName} onChange={(value) => { setLastName(value); setDirty(true); }} error={errors.lastName} autoComplete="family-name" />
+    </fieldset>
+    <div className="v321-profile__pair">
+      <ProfileSetupField icon="book"><SelectField id={ids.preferredLanguage} label="Preferred language" value={preferredLanguage} onChange={(value) => { setPreferredLanguage(value); setDirty(true); }} options={LANGUAGE_OPTIONS} error={errors.preferredLanguage} /></ProfileSetupField>
+      <ProfileSetupField icon="home"><TextField id={ids.city} label="City" value={city} onChange={(value) => { setCity(value); setDirty(true); }} error={errors.city} autoComplete="address-level2" /></ProfileSetupField>
+    </div>
+    <TextField id={ids.dateOfBirth} label="Date of birth" value={dateOfBirth} onChange={(value) => { setDateOfBirth(value); setDirty(true); }} type="date" error={errors.dateOfBirth} help="Used for eligibility and guardian policy · not shown publicly" />
+    <TextField id={ids.pronouns} label="Pronouns" optional="optional" value={pronouns} onChange={(value) => { setPronouns(value); setDirty(true); }} error={errors.pronouns} maxLength={60} />
+    <SaveError value={saveError} />
+    <ProfileConflictReview conflict={conflictReview.conflict} section="personal" draftSummary={[firstName, middleName, lastName, dateOfBirth, preferredLanguage, city, pronouns].filter(Boolean).join(' · ')} onAdopt={() => { conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} />
+    <div className="v321-profile__actions">
+      <button type="button" className="v321-profile__button v321-profile__button--primary" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="send" />{save.isPending ? 'Saving…' : 'Save & continue'}</button>
+      <button type="button" className="v321-profile__button" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="home" />Save and exit</button>
+    </div>
+    <div className="v321-profile__completion"><span>Profile {query.data.completionPercent}% complete</span><Progress projection={query.data} /></div>
+  </ProfileSetupFrame>;
 }
 
 function AcademicStep({ screenId }: { screenId: string }) {
@@ -282,7 +351,24 @@ function AcademicStep({ screenId }: { screenId: string }) {
   }
   if (!query.data || blocked) return <ProfileLoadState screenId={screenId} error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   const ids = { college: 'profile-academic-college', yearOfStudy: 'profile-academic-year', enrolmentNumber: 'profile-academic-enrolment', institutionalEmail: 'profile-academic-email' };
-  return <AuthCard screenId={screenId} kicker="Step 2 of 3 · Academic" title="Your academic record" sub="Tailors internships, tutors and research to your college and year."><Progress projection={query.data} /><ReauthDraftRestored visible={reauthRestoreNotice} />{restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}<ErrorSummary errors={errors} ids={ids} /><SelectField id={ids.college} label="College / University" value={college} onChange={(value) => { setCollege(value); setDirty(true); }} options={COLLEGE_OPTIONS} error={errors.college} /><SelectField id={ids.yearOfStudy} label="Year of study" value={yearOfStudy} onChange={(value) => { setYear(value); setDirty(true); }} options={YEAR_OPTIONS} error={errors.yearOfStudy} /><TextField id={ids.enrolmentNumber} label="College enrolment number" value={enrolmentNumber} onChange={(value) => { setEnrolment(value); setDirty(true); }} error={errors.enrolmentNumber} help="Format: state code / roll / year — e.g. KA/1234/2023" /><TextField id={ids.institutionalEmail} label="Institutional email" optional="optional" value={institutionalEmail} onChange={(value) => { setEmail(value); setDirty(true); }} type="email" inputMode="email" error={errors.institutionalEmail} /><TextField id="profile-academic-bar-enrolment" label="Bar enrolment number" optional="optional · private" value={barEnrolmentNumber} onChange={(value) => { setBar(value); setDirty(true); }} help="Never shown on your public profile." /><SaveError value={saveError} /><ProfileConflictReview conflict={conflictReview.conflict} section="academic" draftSummary={[college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'academic')) preserveProfileConflictDraft({ section: 'academic', value: { college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} /><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>Save and exit</button><button type="button" className="btn btn--primary tap" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}>{save.isPending ? 'Saving…' : 'Save & continue'}</button></div><DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote></AuthCard>;
+  return <ProfileSetupFrame step={2} {...query.data.profile.personal}>
+    <ReauthDraftRestored visible={reauthRestoreNotice} />
+    {restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}
+    <ErrorSummary errors={errors} ids={ids} />
+    <ProfileSetupField icon="cap"><SelectField id={ids.college} label="College / University" value={college} onChange={(value) => { setCollege(value); setDirty(true); }} options={COLLEGE_OPTIONS} error={errors.college} /></ProfileSetupField>
+    <ProfileSetupField icon="grid"><SelectField id={ids.yearOfStudy} label="Year of study" value={yearOfStudy} onChange={(value) => { setYear(value); setDirty(true); }} options={YEAR_OPTIONS} error={errors.yearOfStudy} /></ProfileSetupField>
+    <ProfileSetupField icon="idcard"><TextField id={ids.enrolmentNumber} label="College enrolment number" value={enrolmentNumber} onChange={(value) => { setEnrolment(value); setDirty(true); }} error={errors.enrolmentNumber} help="Format: state code / roll / year — e.g. KA/1234/2023" /></ProfileSetupField>
+    <TextField id={ids.institutionalEmail} label="Institutional email" optional="optional" value={institutionalEmail} onChange={(value) => { setEmail(value); setDirty(true); }} type="email" inputMode="email" error={errors.institutionalEmail} />
+    <TextField id="profile-academic-bar-enrolment" label="Bar enrolment number" optional="optional · private" value={barEnrolmentNumber} onChange={(value) => { setBar(value); setDirty(true); }} help="Never shown on your public profile." />
+    <SaveError value={saveError} />
+    <ProfileConflictReview conflict={conflictReview.conflict} section="academic" draftSummary={[college, yearOfStudy, enrolmentNumber, institutionalEmail, barEnrolmentNumber].filter(Boolean).join(' · ')} onAdopt={() => { if (conflictReview.conflict && !canOpenProfileSection(conflictReview.conflict, 'academic')) preserveProfileConflictDraft({ section: 'academic', value: { college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null } }); conflictReview.adoptForDeliberateRetry(); setSaveError(null); }} />
+    <div className="v321-profile__actions">
+      <button type="button" className="v321-profile__button v321-profile__button--primary" onClick={() => { void persist('next'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="send" />{save.isPending ? 'Saving…' : 'Save & continue'}</button>
+      <button type="button" className="v321-profile__button" onClick={() => { void persist('exit'); }} disabled={save.isPending || Boolean(conflictReview.conflict)}><NyayOneRevLIcon name="home" />Save and exit</button>
+    </div>
+    <div className="v321-profile__completion"><span>Profile {query.data.completionPercent}% complete</span><Progress projection={query.data} /></div>
+    <DpdpFootnote>Collected under data minimisation — export or delete anytime in Settings</DpdpFootnote>
+  </ProfileSetupFrame>;
 }
 
 export function ProfileStep2() { return <AcademicStep screenId="S-10" />; }

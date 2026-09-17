@@ -300,6 +300,66 @@
       ],
       "reason": "S-09 light only, exact reference/live PNG pair: accept the NYAY-7 security supersession of the static successful-verification prototype by the pending server-issued OTP state and immediate S-07 redirect after actual verification. Retain the blank six-digit input with Six digit code accessible name, Change registration details action, paste/autofill help, server expiry/resend/attempt metadata, disabled-until-valid Verify and Continue, and server-controlled Resend Code instead of Code accepted, Account created, Set Up My Profile, Skip for Now and the skip explanatory copy. Accept only the resulting text/control identity, OTP/action placement and button-height differences and their pixels. Also retain the existing Change persona accessible name (rather than Change persona, currently Student) and its 3 CSS px leftward placement caused by the existing Student context-chip width. The legal footer is now inert and matches the approved disposition; no legal-link exception. Heading identity and geometry match. No heading, overflow, accessibility, dynamic-region, mask, reference, tolerance, navigation or other-screen waiver. This is a disclosed functional-state difference, not strict visual parity or merely antialiasing noise.",
       "approvalPr": 52
+    },
+    {
+      "screen": "S-10",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "d17954a17f06af865c7212696678118325cecb307d0babe4f51ee10dcc39f240",
+      "liveSha256": "646e6ffa608d85f69a265529284204ae1efde79e472e1714c0e67db1b42c9a2d",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-10 light only, this exact approved-reference/live PNG pair. Retain the server-backed profile identity and initials instead of the prototype Aditi Nair/AN sample. Retain existing accessible field names, fieldset legend, optional/private markers and real option/helper text. The fixed personal name-field alignment and fixed 22px academic icon-label heights are not waived. Header navigation, heading identity/geometry and desktop guidance geometry remain outside this exception. No accessibility, overflow, mask, dynamic-region, reference, tolerance, navigation-behavior or other-screen waiver. This is PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity or an antialiasing claim. Personal state: retain the real server values (Synthetic Student in the deterministic fixture), empty city and unselected language, existing English/Hindi choices rather than fabricated Bengaluru/Kannada, DOB with eligibility/guardian helper, optional pronouns, and authoritative completion indicator (0% in this fixture). Keep the existing version-bound Save & continue and Save and exit actions rather than prototype-only Continue and Save & Exit. Accept only resulting text/control differences, added field/progress pixels, and the action row displaced by the retained DOB/pronouns fields. All five common personal input boxes now match the reference exactly; no input-alignment exception.",
+      "approvalPr": 53
+    },
+    {
+      "screen": "S-10",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "2fd1de6224b25cc9fdaac70cc59243f73f7d8139ccb53245d4cd4820a4d30fcd",
+      "liveSha256": "5230c6789bdadd87a1f784ba12b9b85c52606355c9602e2213fa9798add9ffe7",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-10 light only, this exact approved-reference/live PNG pair. Retain the server-backed profile identity and initials instead of the prototype Aditi Nair/AN sample. Retain existing accessible field names, fieldset legend, optional/private markers and real option/helper text. The fixed personal name-field alignment and fixed 22px academic icon-label heights are not waived. Header navigation, heading identity/geometry and desktop guidance geometry remain outside this exception. No accessibility, overflow, mask, dynamic-region, reference, tolerance, navigation-behavior or other-screen waiver. This is PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity or an antialiasing claim. Academic state: preserve an untouched server-backed form with unselected college/year and empty enrolment rather than the prototype selected college, incomplete KA/1234 sample and fabricated two-field error state. Do not show the prototype error-summary links, invalid borders, static error help or Mark Fields Corrected (Demo) without real validation. Retain the existing real college/year option sets, enrolment-format helper, optional institutional email, private bar-enrolment field/helper, authoritative completion (34% in this fixture) and data-minimisation footer. Keep the existing version-bound Save & continue and Save and exit actions instead of the demo Continue/Back pair; validation remains enforced on submit. Accept only the resulting text/control differences and vertical placement/pixels caused by the differing validation state, removal of the demo correction control and retention of the extra server-backed fields, helpers and progress. The three icon labels are corrected to 22px; that structural mismatch is not waived.",
+      "approvalPr": 53
+    },
+    {
+      "screen": "S-10",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "b646d65054323e702636797b50bd7087ad03f6e12c34696afa2951cac566db82",
+      "liveSha256": "6d9d0263f99abd326b6a96ec253727413df4fdcf5803de4e2a08d79d32f87d4f",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-10 light only, this exact approved-reference/live PNG pair. Retain the server-backed profile identity and initials instead of the prototype Aditi Nair/AN sample. Retain existing accessible field names, fieldset legend, optional/private markers and real option/helper text. The fixed personal name-field alignment and fixed 22px academic icon-label heights are not waived. Header navigation, heading identity/geometry and desktop guidance geometry remain outside this exception. No accessibility, overflow, mask, dynamic-region, reference, tolerance, navigation-behavior or other-screen waiver. This is PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity or an antialiasing claim. Personal state: retain the real server values (Synthetic Student in the deterministic fixture), empty city and unselected language, existing English/Hindi choices rather than fabricated Bengaluru/Kannada, DOB with eligibility/guardian helper, optional pronouns, and authoritative completion indicator (0% in this fixture). Keep the existing version-bound Save & continue and Save and exit actions rather than prototype-only Continue and Save & Exit. Accept only resulting text/control differences, added field/progress pixels, and the action row displaced by the retained DOB/pronouns fields. All five common personal input boxes now match the reference exactly; no input-alignment exception.",
+      "approvalPr": 53
+    },
+    {
+      "screen": "S-10",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "578058c4d6e7dcc1b6da795f656f9fb4b866e863d2d73ad60b67dcd6a01ca0a4",
+      "liveSha256": "9a0ad851f5197b0aac4e9d63f9a44be5845723edac963e656ba7662621f435fc",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-10 light only, this exact approved-reference/live PNG pair. Retain the server-backed profile identity and initials instead of the prototype Aditi Nair/AN sample. Retain existing accessible field names, fieldset legend, optional/private markers and real option/helper text. The fixed personal name-field alignment and fixed 22px academic icon-label heights are not waived. Header navigation, heading identity/geometry and desktop guidance geometry remain outside this exception. No accessibility, overflow, mask, dynamic-region, reference, tolerance, navigation-behavior or other-screen waiver. This is PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity or an antialiasing claim. Academic state: preserve an untouched server-backed form with unselected college/year and empty enrolment rather than the prototype selected college, incomplete KA/1234 sample and fabricated two-field error state. Do not show the prototype error-summary links, invalid borders, static error help or Mark Fields Corrected (Demo) without real validation. Retain the existing real college/year option sets, enrolment-format helper, optional institutional email, private bar-enrolment field/helper, authoritative completion (34% in this fixture) and data-minimisation footer. Keep the existing version-bound Save & continue and Save and exit actions instead of the demo Continue/Back pair; validation remains enforced on submit. Accept only the resulting text/control differences and vertical placement/pixels caused by the differing validation state, removal of the demo correction control and retention of the extra server-backed fields, helpers and progress. The three icon labels are corrected to 22px; that structural mismatch is not waived.",
+      "approvalPr": 53
     }
   ]
 }

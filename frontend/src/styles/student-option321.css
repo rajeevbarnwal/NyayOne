@@ -1,4 +1,79 @@
-/* NyayOne Option 3.2.1, Revision L — isolated S-03/S-04/S-05/S-08/S-09 layer. */
+/* NyayOne Option 3.2.1, Revision L — isolated auth and S-10 layers. */
+/* S-10 personal + academic: presentation only; fields/progress remain server-backed. */
+.v321-profile {
+  min-height: 100vh; min-height: 100dvh; width: 100%; min-width: 0;
+  color: var(--nyayone-color-ink); background: var(--nyayone-color-paper);
+  font: 14px/1.5 var(--nyayone-font-body); font-synthesis: weight style small-caps position;
+  text-rendering: auto; -webkit-font-smoothing: antialiased;
+}
+.v321-profile *, .v321-profile *::before, .v321-profile *::after { box-sizing: border-box; }
+.v321-profile__header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; min-height: 61px; background: var(--nyayone-color-card); border-bottom: 1px solid var(--nyayone-color-line); }
+.v321-profile__desktop-brand, .v321-profile__nav { display: none; }
+.v321-profile__mobile-brand { display: flex; align-items: center; gap: 10px; }
+.v321-profile__mobile-brand img { width: 30px; height: 30px; }
+.v321-profile__mobile-brand b { font-size: 14px; font-weight: 800; }
+.v321-profile__avatar { margin-left: auto; display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border: 1.5px solid transparent; border-radius: 50%; background: var(--nyayone-color-indigo-surface); color: var(--nyayone-color-indigo); font: 800 12.5px var(--nyayone-font-body); cursor: pointer; }
+.v321-profile__layout { padding: 16px; }
+.v321-profile__form { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.v321-profile__eyebrow { font: 600 10px/1.3 var(--nyayone-font-eyebrow); letter-spacing: .18em; text-transform: uppercase; color: var(--nyayone-color-muted); }
+.v321-profile__step .v321-profile__eyebrow { margin-bottom: 6px; }
+.v321-profile__steps { display: flex; gap: 6px; }
+.v321-profile__steps i { flex: 1; height: 5px; border-radius: 3px; background: var(--nyayone-color-line); }
+.v321-profile__steps i.is-current { background: var(--nyayone-color-indigo); }
+.v321-profile .v321-profile__title { margin: .83em 0; font: 700 22px/1.1 var(--nyayone-font-heading); letter-spacing: -.01em; color: var(--nyayone-color-ink); }
+.ls-v34-content .v321-profile[data-screen='S-10'] :is(h1, h2) { font-family: var(--nyayone-font-heading); }
+.v321-profile[data-profile-step='2'] .v321-profile__title { margin: 0; }
+.v321-profile__heading-icon { display: inline-flex; width: 32px; height: 32px; border-radius: 10px; background: #2e3a8c1f; color: var(--nyayone-color-indigo); align-items: center; justify-content: center; margin-right: 10px; vertical-align: -8px; }
+.v321-profile__heading-icon--academic { background: #7a5a101f; color: #7a5a10; }
+.v321-profile__heading-icon svg { width: 20px; height: 20px; }
+.v321-profile .v321-profile__names { display: flex; flex-direction: column; gap: 13px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.v321-profile__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.v321-profile__pair .st-field__label { min-height: 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; }
+.v321-profile__pair .v321-profile__field-icon { top: 2px; }
+.v321-profile__icon-field { position: relative; min-width: 0; }
+.v321-profile__field-icon { position: absolute; top: 0; left: 0; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--nyayone-color-indigo); pointer-events: none; }
+.v321-profile__icon-field .st-field__label { min-height: 20px; padding-left: 26px; }
+.v321-profile .st-field { display: flex; flex-direction: column; gap: 5px; margin: 0; min-width: 0; }
+.v321-profile .st-field__label { margin: 0; color: var(--nyayone-color-ink-secondary); font: 700 12px/1.5 var(--nyayone-font-body); text-transform: capitalize; letter-spacing: 0; }
+/* Match Revision L's paired 24px labels; the icon wrapper must not shorten one side. */
+.v321-profile[data-screen='S-10'] .v321-profile__names .v321-profile__pair .st-field__label { min-height: 24px; }
+.v321-profile[data-screen='S-10'] .v321-profile__names > .st-field > .st-field__label { line-height: normal; }
+.v321-profile[data-screen='S-10'] .v321-profile__names + .v321-profile__pair .st-field__label { min-height: 24px; }
+.v321-profile[data-screen='S-10'][data-profile-step='2'] .v321-profile__icon-field .st-field__label { min-height: 22px; }
+.v321-profile .st-field__opt { color: var(--nyayone-color-muted); font-weight: 600; }
+.v321-profile .st-input, .v321-profile .st-select { height: 46px; min-height: 46px; width: 100%; min-width: 0; padding: 0 13px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 12px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink); font: 15px var(--nyayone-font-body); box-shadow: none; }
+.v321-profile .st-input[aria-invalid='true'], .v321-profile .st-select[aria-invalid='true'] { border-color: var(--nyayone-color-risk); }
+.v321-profile .st-field__help { margin: 0; color: var(--nyayone-color-muted); font: 11.5px/1.4 var(--nyayone-font-body); }
+.v321-profile .ui-validation { color: var(--nyayone-color-risk); font-size: 12.5px; line-height: 1.4; }
+.v321-profile .ui-state { margin: 0; padding: 11px 13px; border: 1.5px solid var(--nyayone-color-risk); border-radius: 12px; background: var(--nyayone-color-risk-surface); }
+.v321-profile .ui-state h2 { font-family: var(--nyayone-font-heading); }
+.v321-profile .ui-state a { display: inline-block; padding: 12px 4px; color: inherit; }
+.v321-profile__actions { display: flex; gap: 9px; }
+.v321-profile__button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: 1; min-width: 0; min-height: 48px; padding: 11px 12px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 12px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink); font: 700 15px/1.25 var(--nyayone-font-body); cursor: pointer; }
+.v321-profile__button > .v321-revl-icon { flex: 0 0 20px; color: var(--nyayone-color-indigo); }
+.v321-profile__button--primary { background: var(--nyayone-color-indigo); border-color: var(--nyayone-color-indigo); color: white; }
+.v321-profile__button--primary > .v321-revl-icon { color: inherit; }
+.v321-profile__button:disabled { opacity: .55; cursor: not-allowed; }
+.v321-profile :where(button, a, input, select):focus-visible { outline: 2.5px solid var(--nyayone-color-focus); outline-offset: 2px; }
+.v321-profile__completion { color: var(--nyayone-color-muted); font-size: 12px; }
+.v321-profile__completion .st-progress { margin: 6px 0 0; height: 5px; background: var(--nyayone-color-line); }
+.v321-profile__completion .st-progress__bar { background: var(--nyayone-color-indigo); }
+.v321-profile__aside { display: none; }
+@media (min-width: 900px) {
+  .v321-profile__mobile-brand { display: none; }
+  .v321-profile__desktop-brand { display: block; width: 133.333px; height: 32px; flex: 0 0 133.333px; }
+  .v321-profile__desktop-brand .v321-lockup { display: block; width: 100%; height: 100%; }
+  .v321-profile__nav { display: flex; gap: 26px; margin: 0 auto; }
+  .v321-profile__nav button { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--nyayone-color-ink-secondary); font: 600 14px var(--nyayone-font-body); cursor: pointer; }
+  .v321-profile__nav button:disabled { color: var(--nyayone-color-line-strong); cursor: not-allowed; }
+  .v321-profile__avatar { margin-left: 0; }
+  .v321-profile__layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .9fr); gap: 20px; padding: 26px 34px; align-items: start; }
+  .v321-profile .v321-profile__title { font-size: 25px; }
+  .v321-profile__aside { display: flex; flex-direction: column; gap: 13px; }
+  .v321-profile__card { padding: 16px; border: 1.5px solid var(--nyayone-color-line); border-radius: 16px; background: var(--nyayone-color-card); }
+  .v321-profile__card .v321-profile__eyebrow { margin-bottom: 8px; }
+  .v321-profile__card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--nyayone-color-ink-secondary); }
+}
 .v321-screen {
   --v34-bg: var(--nyayone-color-paper);
   --v34-surface: var(--nyayone-color-card);

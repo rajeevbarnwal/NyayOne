@@ -1,8 +1,83 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import * as profileScreens from './ProfileScreens';
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+
+describe('NYAY-57 S-10 Revision L presentation', () => {
+  function frame(step: 1 | 2) {
+    return renderToStaticMarkup(createElement(MemoryRouter, null,
+      createElement(profileScreens.ProfileSetupFrame, {
+        step, firstName: 'Synthetic', middleName: '', lastName: 'Student',
+        children: createElement('input', { id: 'preserved-form-control', 'aria-label': 'Preserved field' }),
+      })));
+  }
+  it.each([1, 2] as const)('renders the scoped shell and honest step %s without prototype authority', (step) => {
+    const markup = frame(step);
+    expect(markup).toContain('data-screen="S-10"');
+    expect(markup).toContain('class="v321-profile"');
+    expect(markup).toContain('Profile setup');
+    expect(markup).toContain(`Profile · step ${step} of 3`);
+    expect(markup).toContain(step === 1 ? 'About you.' : 'Your academic record.');
+    expect(markup).toContain('NyayOne — Legal, on the record');
+    expect(markup).toContain('Your Profile · Synthetic Student');
+    expect(markup).toContain('>SS</span>');
+    expect(markup).toContain('id="preserved-form-control"');
+    expect(markup).toContain('Why complete your profile?');
+    expect(markup).not.toMatch(/Aditi|Nair|Mark Fields Corrected|All fields valid|2 fields need attention/u);
+    expect(markup).not.toMatch(/data-screen="S-(?:11|12|13|17)"/u);
+  });
+  it('retains both existing server-backed forms, additional fields and both save destinations', () => {
+    const text = source('src/features/student/profile/ProfileScreens.tsx');
+    const personal = text.slice(text.indexOf('export function ProfileStep1'), text.indexOf('function AcademicStep'));
+    const academic = text.slice(text.indexOf('function AcademicStep'), text.indexOf('export function ProfileStep2'));
+    for (const [form, step] of [[personal, 1], [academic, 2]] as const) {
+      expect(form).toContain(`<ProfileSetupFrame step={${step}}`);
+      expect(form).toContain('<Progress projection={query.data} />');
+      expect(form).toContain('<ErrorSummary errors={errors} ids={ids} />');
+      expect(form).toContain('<ProfileConflictReview');
+      expect(form).toContain('expectedProfileVersion: hydratedVersion');
+      expect(form).toContain('nav(profileSaveDestination');
+      expect(form).toContain("persist('next')");
+      expect(form).toContain("persist('exit')");
+      expect(form).toContain('Save & continue');
+      expect(form).toContain('Save and exit');
+    }
+    expect(personal).toContain('profile-personal-date-of-birth');
+    expect(personal).toContain('profile-personal-pronouns');
+    expect(academic).toContain('profile-academic-email');
+    expect(academic).toContain('profile-academic-bar-enrolment');
+  });
+  it('keeps the icon-bearing first-name label aligned with the middle-name label', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-10'] .v321-profile__names .v321-profile__pair .st-field__label";
+    const rule = css.slice(css.indexOf(selector)).split('}')[0];
+    expect(css).toContain(selector);
+    expect(rule).toContain('min-height: 24px');
+    // The generic icon label is 20px; the name pair must not inherit that
+    // shorter label and lift only the first input four pixels above its peer.
+    expect(css.indexOf(selector)).toBeGreaterThan(css.indexOf('.v321-profile__icon-field .st-field__label'));
+  });
+  it('matches the adjacent last-name label height without shifting the language/city inputs', () => {
+    const css = source('src/styles/student-option321.css');
+    const lastName = ".v321-profile[data-screen='S-10'] .v321-profile__names > .st-field > .st-field__label";
+    const languageCity = ".v321-profile[data-screen='S-10'] .v321-profile__names + .v321-profile__pair .st-field__label";
+    expect(css.includes(lastName)).toBe(true);
+    expect(css.slice(css.indexOf(lastName)).split('}')[0]).toContain('line-height: normal');
+    expect(css.includes(languageCity)).toBe(true);
+    expect(css.slice(css.indexOf(languageCity)).split('}')[0]).toContain('min-height: 24px');
+  });
+  it('matches Revision L 22px icon labels only in the S-10 academic view', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-10'][data-profile-step='2'] .v321-profile__icon-field .st-field__label";
+    expect(css.includes(selector)).toBe(true);
+    expect(css.slice(css.indexOf(selector)).split('}')[0]).toContain('min-height: 22px');
+  });
+});
 
 describe('NYAY-5 server-authoritative frontend boundary', () => {
   it('does not derive persisted profile state or completion from the memory-only draft', () => {
