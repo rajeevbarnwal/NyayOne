@@ -118,7 +118,12 @@
 .v321-form--otp { gap: 14px; }
 .v321-form--otp > div:has(> .v34-title) { display: contents; }
 .v321-form--otp > div:has(> .v34-title) .v34-title { margin: 6px 0 21.58px; }
+[data-screen='S-09'] .v321-form--signup-otp { gap: 13px; }
+[data-screen='S-09'] .v321-form--signup-otp > div:has(> .v34-title) { display: flex; flex-direction: column; gap: 4px; }
+[data-screen='S-09'] .v321-form--signup-otp > div:has(> .v34-title) .v34-title { margin: 0; }
+[data-screen='S-09'] .v34-title { font-size: 24px; }
 .v321-screen .v34-lede { margin-top: 4px; color: var(--v34-body); font-size: 13.5px; line-height: 1.55; }
+[data-screen='S-09'] .v34-lede { margin: 0; font-size: 13.5px; line-height: 1.55; }
 .v321-form--gateway .v34-lede { margin-top: 0; }
 .v321-screen .v34-copy { padding: 0; color: var(--v34-body); font-size: 13px; }
 .v321-help { margin-top: -8px !important; color: var(--v34-muted) !important; font-size: 11.5px; line-height: 1.4; }
@@ -328,6 +333,7 @@
   [data-screen='S-05'].v321-screen .v321-form--otp > div:has(> .v34-title) .v34-title { margin: 6px 0 33.2px; }
   .v321-form--gateway .v34-title,
   .v321-form--otp .v34-title { font-size: 40px; }
+  [data-screen='S-09'] .v34-title { font-size: 34px; }
   .v321-legal { display: flex; padding-top: 26px; }
   .v321-legal a { min-height: 0; }
   .v321-form--register { gap: 10px; }

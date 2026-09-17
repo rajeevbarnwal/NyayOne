@@ -270,6 +270,36 @@
       "checks": ["pixels", "text", "controls", "geometry"],
       "reason": "NYAY-7 security supersession: empty identity fields and two separate unchecked required Terms/Privacy acknowledgements instead of synthetic populated fields and a prechecked combined consent. Retain native date input, its 44px eligibility-help control and resulting 30px vertical shift; desktop separate consent adds a further 48px. Preserve existing Change persona accessible name and 3px context-chip width/position difference. No heading, overflow, accessibility, mask, tolerance or reference exception.",
       "approvalPr": 51
+    },
+    {
+      "screen": "S-09",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "3438cba412de5d20bee087492f0ef3d704fd6afd6183a4535a20d204912ed490",
+      "liveSha256": "c1f858297135b0b972ffe9083eef8146f1278c4bb7966c233d1e5a93c856d483",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-09 light only, exact reference/live PNG pair: accept the NYAY-7 security supersession of the static successful-verification prototype by the pending server-issued OTP state and immediate S-07 redirect after actual verification. Retain the blank six-digit input with Six digit code accessible name, Change registration details action, paste/autofill help, server expiry/resend/attempt metadata, disabled-until-valid Verify and Continue, and server-controlled Resend Code instead of Code accepted, Account created, Set Up My Profile, Skip for Now and the skip explanatory copy. Accept only the resulting text/control identity, OTP/action placement and button-height differences and their pixels. Also retain the existing Change persona accessible name (rather than Change persona, currently Student) and its 3 CSS px leftward placement caused by the existing Student context-chip width. The legal footer is now inert and matches the approved disposition; no legal-link exception. Heading identity and geometry match. No heading, overflow, accessibility, dynamic-region, mask, reference, tolerance, navigation or other-screen waiver. This is a disclosed functional-state difference, not strict visual parity or merely antialiasing noise.",
+      "approvalPr": 52
+    },
+    {
+      "screen": "S-09",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "2630dc211ee71698482748744b34cd58e92aa1621af815c0f9d69f27ddfb3360",
+      "liveSha256": "ece3dd2168049fb649ba0c9409c3849b03efe5aa54cebc9579b432c79a9bf3e2",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-09 light only, exact reference/live PNG pair: accept the NYAY-7 security supersession of the static successful-verification prototype by the pending server-issued OTP state and immediate S-07 redirect after actual verification. Retain the blank six-digit input with Six digit code accessible name, Change registration details action, paste/autofill help, server expiry/resend/attempt metadata, disabled-until-valid Verify and Continue, and server-controlled Resend Code instead of Code accepted, Account created, Set Up My Profile, Skip for Now and the skip explanatory copy. Accept only the resulting text/control identity, OTP/action placement and button-height differences and their pixels. Also retain the existing Change persona accessible name (rather than Change persona, currently Student) and its 3 CSS px leftward placement caused by the existing Student context-chip width. The legal footer is now inert and matches the approved disposition; no legal-link exception. Heading identity and geometry match. No heading, overflow, accessibility, dynamic-region, mask, reference, tolerance, navigation or other-screen waiver. This is a disclosed functional-state difference, not strict visual parity or merely antialiasing noise.",
+      "approvalPr": 52
     }
   ]
 }

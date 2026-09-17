@@ -85,7 +85,7 @@ export function inspectOtpViewSnapshot(raw, expectedAttempts, expectedDestinatio
   const destinationExact = structureExact
     && expectedDestinationExact
     && normalizeDomText(raw.ledeText)
-      === `Six digits sent to ${renderedDestination}. Your code stays valid for the time shown below. Change`;
+      === `One code to ${renderedDestination} confirms this account is yours. Change`;
   const countdownMatch = structureExact
     ? /^Expires in (\d{2}):([0-5]\d)$/u.exec(rows[0])
     : null;
