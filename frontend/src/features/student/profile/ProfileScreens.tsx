@@ -408,7 +408,7 @@ export function ProfileStep3() {
     {restoreNotice && <p role="status" data-testid="profile-conflict-draft-restored">Your retained draft has been restored. Review it before saving.</p>}
     <ErrorSummary errors={errors} ids={{ interests: 'profile-interests-first-option', goal: 'profile-interests-goal' }} />
     <div className="v321-profile__interest-field">
-      <span className="v321-profile__interest-label" id="profile-interests-label"><span aria-hidden="true"><ProfileSetupIcon name="spark" /></span>Practice Interests</span>
+      <span className="v321-profile__interest-label" id="profile-interests-label"><span aria-hidden="true"><span className="v321-profile__label-icon"><ProfileSetupIcon name="spark" /></span></span>Practice Interests</span>
       <div className="v321-profile__interests" role="group" aria-labelledby="profile-interests-label" aria-describedby={errors.interests ? 'profile-interests-options-error' : undefined}>
         {INTERESTS.map((interest, index) => <button id={index === 0 ? 'profile-interests-first-option' : undefined} key={interest} type="button" className="v321-profile__interest" aria-pressed={interests.includes(interest)} onClick={() => { setInterests((previous) => previous.includes(interest) ? previous.filter((item) => item !== interest) : [...previous, interest]); setDirty(true); }}>{interest}</button>)}
       </div>

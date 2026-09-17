@@ -80,7 +80,15 @@ describe('NYAY-58 S-11 Revision L presentation', () => {
     const selector = ".v321-profile[data-screen='S-11'] .v321-profile__interest-label {";
     const rule = css.slice(css.indexOf(selector)).split('}')[0];
     expect(rule).toContain('line-height: normal');
-    expect(source('src/features/student/profile/ProfileScreens.tsx')).toContain('<span aria-hidden="true"><ProfileSetupIcon name="spark" /></span>Practice Interests');
+    expect(source('src/features/student/profile/ProfileScreens.tsx')).toContain('<span aria-hidden="true"><span className="v321-profile__label-icon"><ProfileSetupIcon name="spark" /></span></span>Practice Interests');
+  });
+
+  it('preserves the Revision L 20px icon wrapper and centered 18px drawing for the interest label', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-11'] .v321-profile__label-icon {";
+    expect(css).toContain(selector);
+    const rule = css.slice(css.indexOf(selector)).split('}')[0];
+    for (const declaration of ['display: inline-flex', 'width: 20px', 'height: 20px', 'align-items: center', 'justify-content: center']) expect(rule).toContain(declaration);
   });
 
   it('uses the prototype 1.55 line height only for S-11 desktop guidance', () => {

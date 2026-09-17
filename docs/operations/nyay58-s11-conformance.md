@@ -71,6 +71,15 @@ Two further presentation regressions fail before their S-11-only CSS correction
 (normal label line height and 1.55 guidance paragraph line height), then pass.
 These are corrected, not waived; the next hosted capture must verify them.
 
+Second hosted capture at `20fb9bfc0f3cda8bd4335a1a7a1b1f2f82ffe1a7`, run
+35216656784, artifact 10495607936: archive SHA-256
+`abf55b9d9f7ff763c86c505d094153d2c7c40c62782dc22330929485f07f4cb9`,
+224/224 entries verified. Desktop guidance now matches; a 2px interest-label
+offset remains because its icon is missing Revision L's centered 20px wrapper
+around the 18px SVG. Two presentation checks fail before adding that S-11-only
+wrapper. This offset is also fixed rather than included in a functional waiver.
+Full frontend before the wrapper correction: 2,033 passed / 1 existing skip.
+
 Intentional differences requiring scoped owner disposition: real identity/initials,
 unselected interests, current single career-goal control/options instead of demo
 multi-select goals, existing Save and exit / Finish setup actions, and authoritative
