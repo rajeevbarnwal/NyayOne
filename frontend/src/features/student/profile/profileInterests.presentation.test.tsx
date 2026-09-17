@@ -74,4 +74,19 @@ describe('NYAY-58 S-11 Revision L presentation', () => {
     expect(rule).toContain('<main className="ls-v34-content" id="main-content">');
     expect(text.indexOf("if (location.pathname === '/s-11')")).toBeLessThan(text.indexOf('<V34ContinuationShell'));
   });
+
+  it('matches the Revision L normal interest-label baseline without changing S-10 labels', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-11'] .v321-profile__interest-label {";
+    const rule = css.slice(css.indexOf(selector)).split('}')[0];
+    expect(rule).toContain('line-height: normal');
+    expect(source('src/features/student/profile/ProfileScreens.tsx')).toContain('<span aria-hidden="true"><ProfileSetupIcon name="spark" /></span>Practice Interests');
+  });
+
+  it('uses the prototype 1.55 line height only for S-11 desktop guidance', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-11'] .v321-profile__card p";
+    expect(css).toContain(selector);
+    expect(css.slice(css.indexOf(selector)).split('}')[0]).toContain('line-height: 1.55');
+  });
 });

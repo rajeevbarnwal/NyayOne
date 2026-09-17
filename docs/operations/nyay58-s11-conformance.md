@@ -48,7 +48,9 @@ No new integrity approval is needed for this implementation.
 ## Validation and evidence limitations
 
 - New presentation tests: 4 RED before implementation, then 4 GREEN.
-- Full frontend: 2,031 passed / 1 existing skipped; typecheck and lint pass.
+- Initial full frontend: 2,031 passed / 1 existing skipped; typecheck and lint pass.
+- Policy suite: 600 passed. The first sandboxed run had three denied `ps` calls;
+  rerunning with process inspection available passed without changing tests.
 - Local production build passes; workflow policy verifier passes 14 workflows.
 - Synthetic browser smoke: 26 checks pass (selection, keyboard, required values,
   focused errors, failed-save retention, version-bound retry and both destinations).
@@ -57,6 +59,17 @@ No new integrity approval is needed for this implementation.
   at 390 and 1440. Local macOS pixels are NOT hosted conformance results.
 - Hosted results and exact-image exception proposals are pending. Do not mark
   Testing based on report-only/nonconformant rows.
+
+First hosted capture at `3702659ca603c66452b1ae42ea57430312b3a8cf`, run
+35215744803, artifact 10494981393: archive SHA-256
+`08c34ba0329c11162fc3802ee3e417929833702219c9625cac11b1b95c6aa1a9`,
+224/224 entries verified. S-11 report-only rows are NONCONFORMANT (390:
+6.305444% counted / 11.022227 mean; desktop: 3.560859% / 6.061021).
+All five interest-chip boxes and the heading match reference geometry exactly.
+The capture exposed a label baseline and desktop guidance line-height mismatch.
+Two further presentation regressions fail before their S-11-only CSS correction
+(normal label line height and 1.55 guidance paragraph line height), then pass.
+These are corrected, not waived; the next hosted capture must verify them.
 
 Intentional differences requiring scoped owner disposition: real identity/initials,
 unselected interests, current single career-goal control/options instead of demo
