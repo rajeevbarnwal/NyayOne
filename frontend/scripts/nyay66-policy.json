@@ -390,6 +390,34 @@
       ],
       "reason": "S-11 light only, this exact approved Revision L reference/live PNG pair. Retain the real server-backed profile identity and initials instead of Aditi Nair/AN (Synthetic Student/SS in this deterministic fixture); retain empty initial practice-interest selections instead of prototype-selected Constitutional and Arbitration. Retain the existing required single Career goal select and its real options (Litigation & judiciary, Corporate / in-house, Policy & academia, Undecided), rather than the prototype Goals This Year multi-select choices and fabricated defaults. Retain the existing version-bound Save and exit / Finish setup actions, their order and destinations, instead of prototype Finish / Back; retain authoritative saved profile completion (67% in this fixture). Accept only these text/control/state changes and the associated lower-form pixels/placement from retaining that select, action pair and completion indicator. All five common practice-interest boxes and the heading match reference geometry exactly. The interest-label baseline and desktop guidance line-height were fixed, not waived. No header/heading/common-interest/guidance geometry, accessibility, overflow, dynamic-region, reference, tolerance, navigation-behavior, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
       "approvalPr": 54
+    },
+    {
+      "screen": "S-12",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5171ae0ecdc1e53867ecb390720eab73227ec0288ce115e2452ccb38db589b30",
+      "liveSha256": "40203f2f26252ad69f6b4be467604d1f31850067311f799c759b538f8eeea96b",
+      "checks": [
+        "pixels",
+        "text",
+        "controls"
+      ],
+      "reason": "S-12 light only, this exact approved Revision L reference/live PNG pair. Retain server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Retain the truthful institutional-email status: Institutional email not provided for the not_provided fixture, rather than fabricating Email Verification Pending. Accept only the resulting avatar/status text, avatar accessible-name and corresponding pixels. All common controls and heading geometry match exactly; Go to Dashboard, Review Profile and heading crops are pixel-identical. The 1px Review Profile icon baseline defect was fixed, not waived. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 55
+    },
+    {
+      "screen": "S-12",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "a81756d2ad0e2c1701ae24f69f952e84c282e9f156d0c8aa47d8b6716b91e965",
+      "liveSha256": "c6164609f5fbb22a66ff1f1b6163929af7ad7dcfe14e419dff9a8b7653a8d333",
+      "checks": [
+        "pixels",
+        "text",
+        "controls"
+      ],
+      "reason": "S-12 light only, this exact approved Revision L reference/live PNG pair. Retain server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Retain the truthful institutional-email status: Institutional email not provided for the not_provided fixture, rather than fabricating Email Verification Pending. Accept only the resulting avatar/status text, avatar accessible-name and corresponding pixels. All common controls and heading geometry match exactly; Go to Dashboard, Review Profile and heading crops are pixel-identical. The 1px Review Profile icon baseline defect was fixed, not waived. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 55
     }
   ]
 }
