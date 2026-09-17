@@ -94,3 +94,25 @@ comparison HTML and evidence pack; a presentation derivative is not a new test.
 
 Owner merges every PR. This ticket stays In Progress until the measured verdict,
 owner exception approvals where needed, and full CI justify Testing.
+
+## Owner exception binding
+
+Owner `rajeevbarnwal` posted the exact approval lines on PR #54. Read-back verified
+both author, PR identity and complete hash/body before binding:
+
+- Mobile 390: comment `5714942342`, exception hash
+  `ee5c4afae50e93c1f12363dd2ca74d2aaef2e3739faf996914c127c7475b2fbb`.
+- Desktop: comment `5714943261`, exception hash
+  `824cfc65daa61000cfd570190df7524df2a033d858fe526e9b941d8da2d83154`.
+
+Only the approved canonical entries are appended to the exception register.
+Comment IDs remain here for traceability; the existing evaluator re-reads owner
+comments on `approvalPr: 54` and requires the exact complete approval body.
+No approval metadata is added inside the hashed entry. No product, reference,
+tolerance, evaluator or enforcement-mode change accompanies this binding.
+
+The approved images are from head `ff11943f412b244b967598711e0aca30eb3cf6de`,
+hosted run 35217622292, artifact 10495880257. All 224 manifest entries verified.
+The new exact-head hosted run must reproduce both approved live hashes and report
+PARITY-WITH-DISCLOSED-DELTA before Testing. Historical NONCONFORMANT evidence
+and Jira attachments 16231–16236 remain unchanged; new evidence is additive.

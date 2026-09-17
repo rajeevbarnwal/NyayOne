@@ -360,6 +360,36 @@
       ],
       "reason": "S-10 light only, this exact approved-reference/live PNG pair. Retain the server-backed profile identity and initials instead of the prototype Aditi Nair/AN sample. Retain existing accessible field names, fieldset legend, optional/private markers and real option/helper text. The fixed personal name-field alignment and fixed 22px academic icon-label heights are not waived. Header navigation, heading identity/geometry and desktop guidance geometry remain outside this exception. No accessibility, overflow, mask, dynamic-region, reference, tolerance, navigation-behavior or other-screen waiver. This is PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity or an antialiasing claim. Academic state: preserve an untouched server-backed form with unselected college/year and empty enrolment rather than the prototype selected college, incomplete KA/1234 sample and fabricated two-field error state. Do not show the prototype error-summary links, invalid borders, static error help or Mark Fields Corrected (Demo) without real validation. Retain the existing real college/year option sets, enrolment-format helper, optional institutional email, private bar-enrolment field/helper, authoritative completion (34% in this fixture) and data-minimisation footer. Keep the existing version-bound Save & continue and Save and exit actions instead of the demo Continue/Back pair; validation remains enforced on submit. Accept only the resulting text/control differences and vertical placement/pixels caused by the differing validation state, removal of the demo correction control and retention of the extra server-backed fields, helpers and progress. The three icon labels are corrected to 22px; that structural mismatch is not waived.",
       "approvalPr": 53
+    },
+    {
+      "screen": "S-11",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "a14a20a7669d5990fa2705cebc3e3ee5d0850d11eb991588490bc67fe05dc435",
+      "liveSha256": "2e80280740eac6f86352ff6146fd750161b12a7aa8b26fdbf8781719874f4576",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-11 light only, this exact approved Revision L reference/live PNG pair. Retain the real server-backed profile identity and initials instead of Aditi Nair/AN (Synthetic Student/SS in this deterministic fixture); retain empty initial practice-interest selections instead of prototype-selected Constitutional and Arbitration. Retain the existing required single Career goal select and its real options (Litigation & judiciary, Corporate / in-house, Policy & academia, Undecided), rather than the prototype Goals This Year multi-select choices and fabricated defaults. Retain the existing version-bound Save and exit / Finish setup actions, their order and destinations, instead of prototype Finish / Back; retain authoritative saved profile completion (67% in this fixture). Accept only these text/control/state changes and the associated lower-form pixels/placement from retaining that select, action pair and completion indicator. All five common practice-interest boxes and the heading match reference geometry exactly. The interest-label baseline and desktop guidance line-height were fixed, not waived. No header/heading/common-interest/guidance geometry, accessibility, overflow, dynamic-region, reference, tolerance, navigation-behavior, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 54
+    },
+    {
+      "screen": "S-11",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "570fe3c7d4f919310bae84f9ba0026a68963b28dc8395b947e61469b6f4cef66",
+      "liveSha256": "4344426ce0ab749efcc5933103684db8f6799eb10d0cb4314cc18a446483e8bb",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-11 light only, this exact approved Revision L reference/live PNG pair. Retain the real server-backed profile identity and initials instead of Aditi Nair/AN (Synthetic Student/SS in this deterministic fixture); retain empty initial practice-interest selections instead of prototype-selected Constitutional and Arbitration. Retain the existing required single Career goal select and its real options (Litigation & judiciary, Corporate / in-house, Policy & academia, Undecided), rather than the prototype Goals This Year multi-select choices and fabricated defaults. Retain the existing version-bound Save and exit / Finish setup actions, their order and destinations, instead of prototype Finish / Back; retain authoritative saved profile completion (67% in this fixture). Accept only these text/control/state changes and the associated lower-form pixels/placement from retaining that select, action pair and completion indicator. All five common practice-interest boxes and the heading match reference geometry exactly. The interest-label baseline and desktop guidance line-height were fixed, not waived. No header/heading/common-interest/guidance geometry, accessibility, overflow, dynamic-region, reference, tolerance, navigation-behavior, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 54
     }
   ]
 }
