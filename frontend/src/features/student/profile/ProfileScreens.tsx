@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { AuthCard, DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
+import { DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
 import { ErrorState, LoadingState } from '../../../components/ui/primitives';
 import {
   ProfileApiError,
@@ -11,6 +11,7 @@ import {
   profileSectionRoute,
   validateLegalName,
   type EmailIdentity,
+  type InstitutionalEmailStatus,
   type ProfileSection,
   type StudentProfileProjection,
 } from '../lib/profileApi';
@@ -437,12 +438,55 @@ export function ProfileResume() {
   return <StudentScreen screenId="S-13" className="st-stack st-resume"><div><p className="st-eyebrow">Welcome back · {projection.completionPercent}% done</p><h1 className="st-h1">{projection.isComplete ? 'Your setup is complete' : 'Pick up where you stopped'}</h1><p className="st-card__sub">Your saved answers came from your authenticated profile.</p></div><section className="st-panel" aria-label="Profile setup progress">{(['personal', 'academic', 'interests'] as ProfileSection[]).map((section, index) => { const saved = projection.completedSections.includes(section); const active = current === section; return <div className="st-setrow" key={section}><div><div className="st-setrow__label">Step {index + 1} · {section[0].toUpperCase() + section.slice(1)}</div></div><span className={`status ${saved ? 'status--ok' : active ? 'status--warn' : 'status--info'}`}>{saved ? 'Saved' : active ? 'Continue here' : 'Not started'}</span></div>; })}</section><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => nav('/s-14')}>Browse first</button><button type="button" className="btn btn--primary tap" onClick={() => nav(profileResumeDestination(projection))}>{current ? 'Continue profile' : 'Open dashboard'}</button></div></StudentScreen>;
 }
 
+/** S-12 presentation; completion and verification remain separate server facts. */
+export function ProfileCompleteView({ firstName, middleName, lastName, verification }: {
+  firstName: string; middleName: string | null; lastName: string; verification: InstitutionalEmailStatus;
+}) {
+  const nav = useNavigate();
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  const initials = [firstName, lastName].map((name) => [...name.trim()][0] ?? '').join('').toUpperCase();
+  const verified = verification === 'verified';
+  const verificationCopy: Record<InstitutionalEmailStatus, string> = {
+    not_provided: 'Institutional email not provided', pending: 'Email Verification Pending',
+    verified: 'Institutional email verified', rejected: 'Institutional email verification rejected',
+    expired: 'Institutional email verification expired', revoked: 'Institutional email verification revoked',
+  };
+  return <section className="v321-profile" data-screen="S-12" aria-labelledby="S-12-title">
+    <header className="v321-profile__header">
+      <span className="v321-profile__desktop-brand"><NyayOneRevLLockup /></span>
+      <span className="v321-profile__mobile-brand"><img src="/brand/nyayone-mark.svg" alt="NyayOne" draggable="false" /><b>Profile</b></span>
+      <nav aria-label="Site" className="v321-profile__nav">
+        <button type="button" onClick={() => nav('/s-14')}>Home</button>
+        {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} disabled>{label}</button>)}
+        <button type="button" onClick={() => nav('/s-17')}>Profile</button>
+      </nav>
+      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+    </header>
+    <div className="v321-profile__layout">
+      <div className="v321-profile-done">
+        <span className="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#2E3A8C" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg></span>
+        <div className="v321-profile__eyebrow">{verified ? 'Profile complete' : 'Profile details complete'}</div>
+        <h1 id="S-12-title" className="v321-profile-done__title">Your NyayOne profile is ready</h1>
+        <p className="v321-profile-done__intro">Your academic and interest preferences are saved. You can review or update them from Profile at any time.</p>
+        <div className="v321-profile-done__actions">
+          <button type="button" className="v321-profile__button v321-profile__button--primary" onClick={() => nav('/s-14')}><span className="v321-revl-icon" aria-hidden="true"><ProfileSetupIcon name="grid" /></span>Go to Dashboard</button>
+          <button type="button" className="v321-profile__button" onClick={() => nav('/s-17')}><span className="v321-profile-done__review-icon"><NyayOneRevLIcon name="idcard" /></span>Review Profile</button>
+        </div>
+        <span className={`v321-profile-done__verification${verified ? ' v321-profile-done__verification--verified' : ''}`}><i aria-hidden="true" />{verificationCopy[verification]}</span>
+      </div>
+      <section className="v321-profile__aside" aria-label="About profile setup">
+        <div className="v321-profile__card"><div className="v321-profile__eyebrow">Why complete your profile?</div><p>Internship matches, moot records and mentor suggestions all key off your college, year and interests. Two minutes now, better matches all year.</p></div>
+        <div className="v321-profile__card"><div className="v321-profile__eyebrow">Privacy</div><p>Every field is private by default. Gold appears only when something is verified.</p></div>
+      </section>
+    </div>
+  </section>;
+}
+
 export function ProfileDone() {
   const nav = useNavigate(); const query = useStudentProfileProjection();
   useEffect(() => { if (query.data && !query.data.isComplete) nav(profileSectionRoute(query.data.nextIncompleteSection), { replace: true }); }, [nav, query.data]);
   if (!query.data || !query.data.isComplete) return <ProfileLoadState screenId="S-12" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
-  const firstName = query.data.profile.personal.firstName || 'Student'; const verification = query.data.institutionalEmailStatus === 'verified' ? 'Institutional email verified' : 'Profile complete · institutional verification not complete';
-  return <AuthCard screenId="S-12" kicker="Profile complete" title={`You’re ready, ${firstName}.`}><p className="st-card__sub">Your student workspace is organised. Verification remains a separate server-controlled process.</p><span className="st-badge">{verification}</span><div className="st-actions"><button type="button" className="btn btn--primary tap" onClick={() => nav('/s-14')}>Go to dashboard</button></div></AuthCard>;
+  return <ProfileCompleteView {...query.data.profile.personal} verification={query.data.institutionalEmailStatus} />;
 }
 
 /* -------------------------------------------------------------------------- */

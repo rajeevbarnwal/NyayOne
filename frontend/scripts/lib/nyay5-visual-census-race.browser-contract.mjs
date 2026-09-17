@@ -28,7 +28,7 @@ function assertFields(actual, expected) {
 }
 
 function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup } = {}) {
-  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11'].includes(screenId);
+  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12'].includes(screenId);
   const family = wrongFont ? 'serif' : revision ? revisionFamily : legacyFamily;
   const svg = (lockup ?? revision)
     ? '<svg class="v321-lockup" role="img" aria-label="NyayOne — Legal, on the record" width="40" height="40"><rect width="30" height="30"/></svg>'
@@ -164,16 +164,16 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact eight-screen Revision L census and the legacy Carlito stack', async () => {
+  it('preserves the exact nine-screen Revision L census and the legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
-      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12']) {
+      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13']) {
         await page.setContent(`<html data-theme="light"><body>${markup(screenId)}</body></html>`);
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 9);
+      assert.equal(rows.size, 10);
     });
   });
 
@@ -188,10 +188,36 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
 
   it('does not allow a legacy screen to acquire the Revision L-only lockup exception', async () => {
     await withPage(async (page) => {
-      await page.setContent(`<html data-theme="light"><body>${markup('S-12', { lockup: true })}</body></html>`);
+      await page.setContent(`<html data-theme="light"><body>${markup('S-13', { lockup: true })}</body></html>`);
       const rows = new Map();
-      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-12');
-      assertFields(rows.get('S-12'), { typographyExact: true, iconsExact: false });
+      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-13');
+      assertFields(rows.get('S-13'), { typographyExact: true, iconsExact: false });
     });
   });
+
+  for (const [name, screenId, decoration, expected] of [
+    ['exact hidden nonfocusable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"><path d="m5 12 4 4 8-8"/></svg></span>', true],
+    ['unhidden wrapper', 'S-12', '<span class="v321-profile-done__check"><svg width="42" height="42"/></span>', false],
+    ['extra wrapper class', 'S-12', '<span class="v321-profile-done__check extra" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['focusable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true" tabindex="0"><svg width="42" height="42"/></span>', false],
+    ['editable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true" contenteditable="true"><svg width="42" height="42"/></span>', false],
+    ['editable ancestor', 'S-12', '<div contenteditable="true"><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></div>', false],
+    ['focusable SVG', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42" tabindex="0"/></span>', false],
+    ['focusable=true SVG', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42" focusable="true"/></span>', false],
+    ['button ancestor', 'S-12', '<button><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></button>', false],
+    ['link ancestor', 'S-12', '<a href="#"><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></a>', false],
+    ['wrong wrapper element', 'S-12', '<div class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></div>', false],
+    ['other Revision L screen', 'S-11', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['legacy screen', 'S-13', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['generic hidden wrapper', 'S-12', '<span aria-hidden="true"><svg width="42" height="42"/></span>', false],
+  ]) {
+    it(`S-12 completion check: ${name}`, async () => {
+      await withPage(async page => {
+        await page.setContent(`<html data-theme="light"><body>${markup(screenId).replace('</section>', decoration + '</section>')}</body></html>`);
+        const rows = new Map();
+        await compileCensus(waitForVisualCensusSettled, rows)(page, screenId);
+        assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconCount: 2, iconsExact: expected });
+      });
+    });
+  }
 });

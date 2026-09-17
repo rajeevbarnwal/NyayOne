@@ -69,6 +69,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-09',
   'S-10',
   'S-11',
+  'S-12',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -379,6 +380,20 @@ async function recordVisualContract(page, screenId) {
           return icon.parentElement.getAttribute('class') === 's06-r2__ring'
             && icon.parentElement.getAttribute('aria-hidden') === 'true'
             && icon.parentElement.tabIndex < 0
+            && !icon.hasAttribute('aria-hidden')
+            && icon.tabIndex < 0
+            && icon.getAttribute('focusable') !== 'true'
+            && !icon.closest('button,a');
+        }
+        // S-12's approved completion decoration is hidden by this exact span.
+        // Do not grant inherited-hidden recognition to other icons or screens.
+        if (contract.screenId === 'S-12'
+          && icon.parentElement?.classList.contains('v321-profile-done__check')) {
+          return icon.parentElement.tagName === 'SPAN'
+            && icon.parentElement.getAttribute('class') === 'v321-profile-done__check'
+            && icon.parentElement.getAttribute('aria-hidden') === 'true'
+            && icon.parentElement.tabIndex < 0
+            && !icon.parentElement.isContentEditable
             && !icon.hasAttribute('aria-hidden')
             && icon.tabIndex < 0
             && icon.getAttribute('focusable') !== 'true'
@@ -2219,6 +2234,8 @@ async function completeProfileProbe(browser) {
   await page.locator('#profile-interests-goal').selectOption({ index: 1 });
   await page.getByRole('button', { name: 'Finish setup' }).click();
   await page.waitForURL(/\/s-12$/u);
+  await page.getByRole('heading', { name: 'Your NyayOne profile is ready', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Go to Dashboard', exact: true }).waitFor({ state: 'visible' });
   await recordVisualContract(page, 'S-12');
   failureStage = 'complete_profile_final_projection';
   const completed = await profileProjection(context);
