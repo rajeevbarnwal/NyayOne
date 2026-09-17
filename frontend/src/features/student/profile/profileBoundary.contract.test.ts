@@ -52,6 +52,25 @@ describe('NYAY-57 S-10 Revision L presentation', () => {
     expect(academic).toContain('profile-academic-email');
     expect(academic).toContain('profile-academic-bar-enrolment');
   });
+  it('keeps the icon-bearing first-name label aligned with the middle-name label', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-10'] .v321-profile__names .v321-profile__pair .st-field__label";
+    const rule = css.slice(css.indexOf(selector)).split('}')[0];
+    expect(css).toContain(selector);
+    expect(rule).toContain('min-height: 24px');
+    // The generic icon label is 20px; the name pair must not inherit that
+    // shorter label and lift only the first input four pixels above its peer.
+    expect(css.indexOf(selector)).toBeGreaterThan(css.indexOf('.v321-profile__icon-field .st-field__label'));
+  });
+  it('matches the adjacent last-name label height without shifting the language/city inputs', () => {
+    const css = source('src/styles/student-option321.css');
+    const lastName = ".v321-profile[data-screen='S-10'] .v321-profile__names > .st-field > .st-field__label";
+    const languageCity = ".v321-profile[data-screen='S-10'] .v321-profile__names + .v321-profile__pair .st-field__label";
+    expect(css.includes(lastName)).toBe(true);
+    expect(css.slice(css.indexOf(lastName)).split('}')[0]).toContain('line-height: normal');
+    expect(css.includes(languageCity)).toBe(true);
+    expect(css.slice(css.indexOf(languageCity)).split('}')[0]).toContain('min-height: 24px');
+  });
 });
 
 describe('NYAY-5 server-authoritative frontend boundary', () => {
