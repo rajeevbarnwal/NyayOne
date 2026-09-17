@@ -71,6 +71,12 @@ describe('NYAY-57 S-10 Revision L presentation', () => {
     expect(css.includes(languageCity)).toBe(true);
     expect(css.slice(css.indexOf(languageCity)).split('}')[0]).toContain('min-height: 24px');
   });
+  it('matches Revision L 22px icon labels only in the S-10 academic view', () => {
+    const css = source('src/styles/student-option321.css');
+    const selector = ".v321-profile[data-screen='S-10'][data-profile-step='2'] .v321-profile__icon-field .st-field__label";
+    expect(css.includes(selector)).toBe(true);
+    expect(css.slice(css.indexOf(selector)).split('}')[0]).toContain('min-height: 22px');
+  });
 });
 
 describe('NYAY-5 server-authoritative frontend boundary', () => {

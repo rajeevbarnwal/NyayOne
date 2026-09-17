@@ -39,6 +39,7 @@
 .v321-profile[data-screen='S-10'] .v321-profile__names .v321-profile__pair .st-field__label { min-height: 24px; }
 .v321-profile[data-screen='S-10'] .v321-profile__names > .st-field > .st-field__label { line-height: normal; }
 .v321-profile[data-screen='S-10'] .v321-profile__names + .v321-profile__pair .st-field__label { min-height: 24px; }
+.v321-profile[data-screen='S-10'][data-profile-step='2'] .v321-profile__icon-field .st-field__label { min-height: 22px; }
 .v321-profile .st-field__opt { color: var(--nyayone-color-muted); font-weight: 600; }
 .v321-profile .st-input, .v321-profile .st-select { height: 46px; min-height: 46px; width: 100%; min-width: 0; padding: 0 13px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 12px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink); font: 15px var(--nyayone-font-body); box-shadow: none; }
 .v321-profile .st-input[aria-invalid='true'], .v321-profile .st-select[aria-invalid='true'] { border-color: var(--nyayone-color-risk); }
