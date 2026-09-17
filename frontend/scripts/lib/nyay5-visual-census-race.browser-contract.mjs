@@ -194,4 +194,30 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
       assertFields(rows.get('S-13'), { typographyExact: true, iconsExact: false });
     });
   });
+
+  for (const [name, screenId, decoration, expected] of [
+    ['exact hidden nonfocusable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"><path d="m5 12 4 4 8-8"/></svg></span>', true],
+    ['unhidden wrapper', 'S-12', '<span class="v321-profile-done__check"><svg width="42" height="42"/></span>', false],
+    ['extra wrapper class', 'S-12', '<span class="v321-profile-done__check extra" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['focusable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true" tabindex="0"><svg width="42" height="42"/></span>', false],
+    ['editable wrapper', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true" contenteditable="true"><svg width="42" height="42"/></span>', false],
+    ['editable ancestor', 'S-12', '<div contenteditable="true"><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></div>', false],
+    ['focusable SVG', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42" tabindex="0"/></span>', false],
+    ['focusable=true SVG', 'S-12', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42" focusable="true"/></span>', false],
+    ['button ancestor', 'S-12', '<button><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></button>', false],
+    ['link ancestor', 'S-12', '<a href="#"><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></a>', false],
+    ['wrong wrapper element', 'S-12', '<div class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></div>', false],
+    ['other Revision L screen', 'S-11', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['legacy screen', 'S-13', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['generic hidden wrapper', 'S-12', '<span aria-hidden="true"><svg width="42" height="42"/></span>', false],
+  ]) {
+    it(`S-12 completion check: ${name}`, async () => {
+      await withPage(async page => {
+        await page.setContent(`<html data-theme="light"><body>${markup(screenId).replace('</section>', decoration + '</section>')}</body></html>`);
+        const rows = new Map();
+        await compileCensus(waitForVisualCensusSettled, rows)(page, screenId);
+        assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconCount: 2, iconsExact: expected });
+      });
+    });
+  }
 });

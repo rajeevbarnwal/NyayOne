@@ -385,6 +385,20 @@ async function recordVisualContract(page, screenId) {
             && icon.getAttribute('focusable') !== 'true'
             && !icon.closest('button,a');
         }
+        // S-12's approved completion decoration is hidden by this exact span.
+        // Do not grant inherited-hidden recognition to other icons or screens.
+        if (contract.screenId === 'S-12'
+          && icon.parentElement?.classList.contains('v321-profile-done__check')) {
+          return icon.parentElement.tagName === 'SPAN'
+            && icon.parentElement.getAttribute('class') === 'v321-profile-done__check'
+            && icon.parentElement.getAttribute('aria-hidden') === 'true'
+            && icon.parentElement.tabIndex < 0
+            && !icon.parentElement.isContentEditable
+            && !icon.hasAttribute('aria-hidden')
+            && icon.tabIndex < 0
+            && icon.getAttribute('focusable') !== 'true'
+            && !icon.closest('button,a');
+        }
         return icon.getAttribute('aria-hidden') === 'true'
           && icon.tabIndex < 0
           && (!(icon.closest('button,a'))

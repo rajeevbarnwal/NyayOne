@@ -25,12 +25,15 @@ function stringArrayConstant(source, name) {
 // Execute the producer's actual census callback, not a second implementation
 // of its predicates. The DOM double supplies only the observations it reads.
 async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration = false,
-  decorationParent = {}, decorationIcon = {} } = {}) {
+  decorationParent = {}, decorationIcon = {}, completionCheck = false,
+  completionParent = {}, completionIcon = {}, completionParentTag = 'SPAN' } = {}) {
   class CensusElement {
     constructor(attributes = {}, parentElement = null) {
       this.attributes = attributes;
       this.parentElement = parentElement;
       this.isConnected = true;
+      this.tagName = 'SPAN';
+      this.isContentEditable = attributes.contenteditable === 'true';
       this.tabIndex = Number(attributes.tabindex ?? -1);
       this.classList = { contains: name => (attributes.class ?? '').split(' ').includes(name) };
     }
@@ -49,6 +52,11 @@ async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration =
   const icons = [lockup];
   if (decoration) icons.push(new CensusElement(decorationIcon,
     new CensusElement({ class: 's06-r2__ring', 'aria-hidden': 'true', ...decorationParent })));
+  if (completionCheck) {
+    const parent = new CensusElement({ class: 'v321-profile-done__check', 'aria-hidden': 'true', ...completionParent });
+    parent.tagName = completionParentTag;
+    icons.push(new CensusElement(completionIcon, parent));
+  }
   const root = new CensusElement();
   root.textContent = 'Recover your account.';
   root.querySelector = selector => {
@@ -1146,6 +1154,32 @@ describe('NYAY-5 browser release-gate source contract', () => {
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
+
+  it('recognizes only the exact nonfocusable S-12 hidden completion check wrapper', async () => {
+    expect(await visualCensus({ screenId: 'S-12', completionCheck: true,
+      family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
+    })).toMatchObject({ headingCount: 1, typographyExact: true, iconCount: 2, iconsExact: true });
+  });
+
+  it.each([
+    { completionParent: { 'aria-hidden': 'false' } },
+    { completionParent: { 'aria-hidden': null } },
+    { completionParent: { class: 'different-check' } },
+    { completionParent: { class: 'v321-profile-done__check extra' } },
+    { completionParent: { tabindex: '0' } },
+    { completionParent: { contenteditable: 'true' } },
+    { completionIcon: { tabindex: '0' } },
+    { completionIcon: { focusable: 'true' } },
+    { completionIcon: { 'aria-hidden': 'false' } },
+    { completionParentTag: 'BUTTON' },
+  ])('refuses an altered or focusable S-12 completion decoration: %j', async change => {
+    expect((await visualCensus({ screenId: 'S-12', completionCheck: true, ...change })).iconsExact).toBe(false);
+  });
+
+  it.each(['S-03', 'S-04', 'S-05', 'S-06', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-13', 'S-17'])(
+    'does not grant S-12 hidden completion-wrapper recognition to %s', async screenId => {
+      expect((await visualCensus({ screenId, completionCheck: true })).iconsExact).toBe(false);
+    });
 
   it.each([
     'Aptos, Calibri, Carlito, system-ui, sans-serif',
