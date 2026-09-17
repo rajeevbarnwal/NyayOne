@@ -70,3 +70,35 @@ visually inspected as synthetic/prototype data; explicit upload disposition is
 pending. It is not yet attached, and is not a Testing handoff. Final handoff must
 include downloaded-hash verification, independent Claude test cases and the
 standing preview.svg attachment. Historical evidence stays unchanged.
+
+## Approved test alignment (2026-09-18)
+
+The owner subsequently approved the narrow alignment and six-file upload with
+the disclosed image-inspection limitation. The pending-permission statements
+above describe the earlier state, not a current blocker.
+
+- Producer: S-12 joins the nine-screen Revision L census; wait for the exact
+  approved heading and Go to Dashboard control before sampling. No behavior
+  assertions or acceptance/mutant inventories are removed.
+- Real Chromium fixture: S-12 is Revision L; unchanged S-13 remains the legacy
+  positive/negative control. All eight existing test cases are preserved.
+- Namespace inventory: only `nyayone-mark.svg` occurrence count changes 3 to 4;
+  no inventory-path digest or namespace rule changes.
+- RED: expectation suite 3 failed / 101 passed; Chromium 1 failed / 7 passed;
+  namespace 3 failed (old count, shipped audit and intentionally stale test seal).
+- GREEN: expectation suite 104/104, Chromium 8/8, namespace 21/21, policy 600/600,
+  workflow policy 14/14; full frontend 2048/2048 with no skip in this run;
+  typecheck/lint/build pass. Existing build chunk-size warning remains disclosed.
+
+Exactly four necessary seal constants are updated:
+
+| File | Old SHA-256 | New SHA-256 |
+| --- | --- | --- |
+| frontend/scripts/nyay5-profile-browser.mjs | cdd25cab0c46bb897f6071bce6d75e4f110a260676f210ec9f60bcaa1e176525 | 22cd1fff94d09ff7eb5464da9730d661d45f85c7af2c1b5e64bc331226316fa5 |
+| frontend/scripts/lib/nyay5-profile-browser-contract.test.mjs | 5081000b5f42faa01cb5a5bbdfbaddb82d07af55e3f0586021135bc283e3e9bd | 9003f357c15ced312197ac3224616692566842a4a4992ba2b64dfef6f36a761d |
+| scripts/ci/test_nyay18_namespace_policy.py | f3966e16057332621c958ac082501f66820a12776aa782931e3240b7fbaa9632 | 2c6729f8ed369d94ce38d08d63553662fad0d17eaa104eccb9fb5a1fba0c8113 |
+| scripts/ci/nyay18_namespace_contract.json | 9b90be815020f4f3fa0fbc8d02ce432a3242b054e7f3b3863145c9c5635746ea | 76493d9643f8c20c1b33c1a12b166d3570929a3fbd327a942ce419122ac7b052 |
+
+No product, reference, tolerance, enforcement or protected NYAY-66 bundle file
+changed. Hosted exact-head validation and downloaded Jira hash verification are
+required before Testing.

@@ -69,6 +69,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-09',
   'S-10',
   'S-11',
+  'S-12',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -2219,6 +2220,8 @@ async function completeProfileProbe(browser) {
   await page.locator('#profile-interests-goal').selectOption({ index: 1 });
   await page.getByRole('button', { name: 'Finish setup' }).click();
   await page.waitForURL(/\/s-12$/u);
+  await page.getByRole('heading', { name: 'Your NyayOne profile is ready', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Go to Dashboard', exact: true }).waitFor({ state: 'visible' });
   await recordVisualContract(page, 'S-12');
   failureStage = 'complete_profile_final_projection';
   const completed = await profileProjection(context);
