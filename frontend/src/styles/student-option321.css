@@ -108,6 +108,29 @@
   .v321-profile-done__intro { font-size: 15px; }
   .v321-profile-done__actions { max-width: 480px; }
 }
+/* S-13 only: server-backed resume presentation. */
+.v321-profile[data-screen='S-13'] { line-height: normal; }
+.ls-v34-content .v321-profile[data-screen='S-13'] :is(h1, h2) { font-family: var(--nyayone-font-heading); }
+.v321-profile-resume { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.v321-profile-resume__heading-icon { background: #7a5a101f; color: #7a5a10; }
+.v321-profile-resume__card { display: flex; align-items: center; gap: 12px; border: 1.5px solid var(--nyayone-color-indigo); border-radius: 16px; background: var(--nyayone-color-indigo-surface); padding: 14px; }
+.v321-profile-resume__ring { width: 52px; height: 52px; border-radius: 50%; background: conic-gradient(var(--nyayone-color-indigo) var(--resume-progress), var(--nyayone-color-line) 0); display: grid; place-items: center; flex: none; }
+.v321-profile-resume__ring b { width: 40px; height: 40px; border-radius: 50%; background: var(--nyayone-color-card); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.v321-profile-resume__summary { flex: 1; min-width: 0; }
+.v321-profile-resume__summary > b { font-size: 13.5px; }
+.v321-profile-resume__summary p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nyayone-color-ink-secondary); }
+.v321-profile-resume .v321-profile-resume__finish { flex: none; min-height: 44px; padding: 0 18px; gap: 7px; font-size: 14px; line-height: normal; }
+.v321-profile-resume__icon { color: var(--nyayone-color-indigo); }
+.v321-profile-resume__actions .v321-profile__button { padding: 0 10px; gap: 9px; font-size: 14px; line-height: normal; }
+.v321-profile-resume__row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--nyayone-color-line); font-size: 13px; }
+.v321-profile-resume__row b { text-align: right; }
+.v321-profile-resume__row:last-child { border-bottom: 0; }
+.v321-profile-resume__row--saved { border-top: 1px solid var(--nyayone-color-line); margin-top: 4px; }
+.v321-profile[data-screen='S-13'] .v321-profile__eyebrow { line-height: normal; }
+.v321-profile[data-screen='S-13'] .v321-profile__card p { line-height: 1.55; }
+@media (min-width: 900px) {
+  .v321-profile[data-screen='S-13'] .v321-profile__title { font-size: 30px; }
+}
 .v321-screen {
   --v34-bg: var(--nyayone-color-paper);
   --v34-surface: var(--nyayone-color-card);

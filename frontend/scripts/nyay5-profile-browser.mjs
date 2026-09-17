@@ -70,6 +70,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-10',
   'S-11',
   'S-12',
+  'S-13',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -2144,12 +2145,14 @@ async function completeProfileProbe(browser) {
   const resumed = await context.newPage();
   trackActorBoundary(resumed);
   await resumed.goto(`${WEB}/s-13`, { waitUntil: 'domcontentloaded' });
-  await resumed.getByText(/34% done/u).waitFor();
+  await resumed.getByRole('heading', { name: 'Pick up where you left off.', exact: true }).waitFor();
+  await resumed.locator('[data-testid="profile-completion-percent"][aria-valuenow="34"]').waitFor();
   await recordVisualContract(resumed, 'S-13');
-  const reloadResume = (await resumed.getByText('Continue here').count()) === 1;
+  const reloadResume = (await resumed.locator('[data-next-section="academic"]').count()) === 1
+    && (await resumed.getByRole('button', { name: 'Resume Setup', exact: true }).count()) === 1;
   await resumed.reload({ waitUntil: 'domcontentloaded' });
-  await resumed.getByText(/34% done/u).waitFor({ state: 'visible' });
-  const reloadStillResume = (await resumed.getByText(/34% done/u).count()) === 1;
+  await resumed.locator('[data-testid="profile-completion-percent"][aria-valuenow="34"]').waitFor({ state: 'visible' });
+  const reloadStillResume = (await resumed.locator('[data-testid="profile-completion-percent"][aria-valuenow="34"]').count()) === 1;
   await resumed.close();
 
   failureStage = 'complete_profile_academic_write';

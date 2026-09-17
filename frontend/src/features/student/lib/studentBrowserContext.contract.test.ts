@@ -269,7 +269,7 @@ describe('NYAY-19 browser-context source contract', () => {
       "url.pathname === '/s-10' && url.search === '?section=personal'",
       "page.getByRole('heading', { name: 'About you.', exact: true })",
       "expectedScreen: 'S-10'",
-      "page.getByRole('button', { name: 'Continue profile', exact: true })",
+      "page.getByRole('button', { name: 'Resume Setup', exact: true })",
       "url.pathname === '/s-10' && url.search === '?section=academic'",
       "url.pathname === '/api/v1/auth/student/verification/email/request'",
       "page.getByRole('button', { name: 'Request verification review', exact: true })",
