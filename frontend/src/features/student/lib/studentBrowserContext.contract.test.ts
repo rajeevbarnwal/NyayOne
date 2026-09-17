@@ -267,7 +267,7 @@ describe('NYAY-19 browser-context source contract', () => {
       'interests: {',
       "page.getByRole('button', { name: 'Edit profile', exact: true })",
       "url.pathname === '/s-10' && url.search === '?section=personal'",
-      "page.getByRole('heading', { name: 'About you', exact: true })",
+      "page.getByRole('heading', { name: 'About you.', exact: true })",
       "expectedScreen: 'S-10'",
       "page.getByRole('button', { name: 'Continue profile', exact: true })",
       "url.pathname === '/s-10' && url.search === '?section=academic'",

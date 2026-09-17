@@ -486,7 +486,7 @@ try {
             page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?section=personal'),
             edit.click(),
           ]);
-          await page.getByRole('heading', { name: 'About you', exact: true }).waitFor({ state: 'visible' });
+          await page.getByRole('heading', { name: 'About you.', exact: true }).waitFor({ state: 'visible' });
           await waitForDocumentReady(page);
         }
         await waitForVisualCensusSettled(page, {
