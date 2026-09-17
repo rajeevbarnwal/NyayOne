@@ -470,7 +470,7 @@ export function ProfileCompleteView({ firstName, middleName, lastName, verificat
         <p className="v321-profile-done__intro">Your academic and interest preferences are saved. You can review or update them from Profile at any time.</p>
         <div className="v321-profile-done__actions">
           <button type="button" className="v321-profile__button v321-profile__button--primary" onClick={() => nav('/s-14')}><span className="v321-revl-icon" aria-hidden="true"><ProfileSetupIcon name="grid" /></span>Go to Dashboard</button>
-          <button type="button" className="v321-profile__button" onClick={() => nav('/s-17')}><NyayOneRevLIcon name="idcard" />Review Profile</button>
+          <button type="button" className="v321-profile__button" onClick={() => nav('/s-17')}><span className="v321-profile-done__review-icon"><NyayOneRevLIcon name="idcard" /></span>Review Profile</button>
         </div>
         <span className={`v321-profile-done__verification${verified ? ' v321-profile-done__verification--verified' : ''}`}><i aria-hidden="true" />{verificationCopy[verification]}</span>
       </div>

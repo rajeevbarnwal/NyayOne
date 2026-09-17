@@ -56,4 +56,8 @@ describe('NYAY-59 S-12 Revision L completion presentation', () => {
       expect(css.slice(css.indexOf(selector)).split('}')[0]).toContain('line-height: normal');
     }
   });
+
+  it('preserves the prototype inline icon wrapper in Review Profile rather than shifting the glyph', () => {
+    expect(render('pending')).toContain('<span class="v321-profile-done__review-icon"><span class="v321-revl-icon"');
+  });
 });
