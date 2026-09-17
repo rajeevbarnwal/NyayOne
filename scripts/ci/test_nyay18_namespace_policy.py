@@ -141,7 +141,7 @@ class NamespacePolicyTests(unittest.TestCase):
             "NYAY-INT-": 1,
             "NYAY-INV-": 1,
             "nyayone-frontend": 3,
-            "nyayone-mark.svg": 2,
+            "nyayone-mark.svg": 3,
             "nyayone.r2.onboarding-seen": 2,
             "nyayone-shell-": 2,
             "nyayone-shell-v1": 1,
