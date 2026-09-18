@@ -9,6 +9,70 @@
   "enforced": [],
   "exceptions": [
     {
+      "screen": "S-14",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "2ddecf164f9dad0f1d3f83d8ae1a19f3e4dcf85c5c30b7d2eb3a2fbdfc7f5a01",
+      "liveSha256": "9cd701d3868090b0b7ffb93acfd63ef56a48ab97686a7724847fb3bd20e2e814",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-14 light mobile390 only, this exact approved Revision L reference/live PNG pair at PR57 head 3de95339. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN), and HOME rather than the prototype S-07 HOME eyebrow. Retain truthful module copy and availability: working Internships, Calendar and Careers routes; unavailable Moot Court, Research and Mentors marked Coming soon; no fabricated internship matches, research threads or mentor bookings. Retain semantic Finish/Verify Now navigation links and existing Calendar, Actions & momentum, Explore disclosures and privacy footer. These account for the exact text, accessible control roles/names/enabled states and additional content in this image. Shorter truthful Research/Mentors copy makes both cards 17.390625 CSS px shorter (114.71875 vs 132.109375) and moves the following verification row up 17.390625 px; approve this specific content-driven geometry delta, not arbitrary spacing drift. Original five heading boxes, profile/Finish and first-row tile boxes match exactly. The existing evaluator enumerates additional controls/headings inside closed native details even though they are not painted; accept only these retained disclosure descendants and added content for its headings/geometry reports, not an evaluator change. Include exact-image within-box tile-title raster differences (dark glyph-ink bounds differ at most 1px in the diagnostic); not a claim of full pixel parity. Four structural CSS defects were fixed, not waived; Finish crops are pixel-identical in both viewports. No accessibility, horizontal-overflow, dynamic-region, navigation-behavior, reference, tolerance, unrelated-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 57
+    },
+    {
+      "screen": "S-14",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "36e47c5cd83b02b4394cae9d7f6132486c076b8115264f02a0cb761a90de7bb6",
+      "liveSha256": "dca47b07213c3e6c6fcc645ca61400c9db88af473984458e6101e2ea4e68e314",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-14 light desktop only, this exact approved Revision L reference/live PNG pair at PR57 head 3de95339. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN), and HOME rather than the prototype S-07 HOME eyebrow. Retain truthful module copy and availability: working Internships, Calendar and Careers routes; unavailable Moot Court, Research and Mentors marked Coming soon; no fabricated internship matches, research threads or mentor bookings. Retain semantic Finish/Verify Now navigation links and existing Calendar, Actions & momentum, Explore disclosures and privacy footer. These account for the exact text, accessible control roles/names/enabled states and additional content in this image. All twelve common control boxes and all five original heading boxes match exactly. The existing evaluator enumerates additional controls/headings inside closed native details even though they are not painted; accept only these retained disclosure descendants and added content for its headings/geometry reports, not an evaluator change. Include exact-image within-box tile-title raster differences (dark glyph-ink bounds differ at most 1px in the diagnostic); not a claim of full pixel parity. Four structural CSS defects were fixed, not waived; Finish crops are pixel-identical in both viewports. No accessibility, horizontal-overflow, dynamic-region, navigation-behavior, reference, tolerance, unrelated-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 57
+    },
+    {
+      "screen": "S-07",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "2ddecf164f9dad0f1d3f83d8ae1a19f3e4dcf85c5c30b7d2eb3a2fbdfc7f5a01",
+      "liveSha256": "9cd701d3868090b0b7ffb93acfd63ef56a48ab97686a7724847fb3bd20e2e814",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-07 light mobile390 only, this exact approved Revision L reference/live PNG pair at PR57 head 3de95339. This is the S-07 dashboard alias of S-14, not S-07-popup. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN), and HOME rather than the prototype S-07 HOME eyebrow. Retain truthful module copy and availability: working Internships, Calendar and Careers routes; unavailable Moot Court, Research and Mentors marked Coming soon; no fabricated internship matches, research threads or mentor bookings. Retain semantic Finish/Verify Now navigation links and existing Calendar, Actions & momentum, Explore disclosures and privacy footer. These account for the exact text, accessible control roles/names/enabled states and additional content in this image. Shorter truthful Research/Mentors copy makes both cards 17.390625 CSS px shorter (114.71875 vs 132.109375) and moves the following verification row up 17.390625 px; approve this specific content-driven geometry delta, not arbitrary spacing drift. Original five heading boxes, profile/Finish and first-row tile boxes match exactly. The existing evaluator enumerates additional controls/headings inside closed native details even though they are not painted; accept only these retained disclosure descendants and added content for its headings/geometry reports, not an evaluator change. Include exact-image within-box tile-title raster differences (dark glyph-ink bounds differ at most 1px in the diagnostic); not a claim of full pixel parity. Four structural CSS defects were fixed, not waived; Finish crops are pixel-identical in both viewports. No accessibility, horizontal-overflow, dynamic-region, navigation-behavior, reference, tolerance, unrelated-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 57
+    },
+    {
+      "screen": "S-07",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "36e47c5cd83b02b4394cae9d7f6132486c076b8115264f02a0cb761a90de7bb6",
+      "liveSha256": "dca47b07213c3e6c6fcc645ca61400c9db88af473984458e6101e2ea4e68e314",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-07 light desktop only, this exact approved Revision L reference/live PNG pair at PR57 head 3de95339. This is the S-07 dashboard alias of S-14, not S-07-popup. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN), and HOME rather than the prototype S-07 HOME eyebrow. Retain truthful module copy and availability: working Internships, Calendar and Careers routes; unavailable Moot Court, Research and Mentors marked Coming soon; no fabricated internship matches, research threads or mentor bookings. Retain semantic Finish/Verify Now navigation links and existing Calendar, Actions & momentum, Explore disclosures and privacy footer. These account for the exact text, accessible control roles/names/enabled states and additional content in this image. All twelve common control boxes and all five original heading boxes match exactly. The existing evaluator enumerates additional controls/headings inside closed native details even though they are not painted; accept only these retained disclosure descendants and added content for its headings/geometry reports, not an evaluator change. Include exact-image within-box tile-title raster differences (dark glyph-ink bounds differ at most 1px in the diagnostic); not a claim of full pixel parity. Four structural CSS defects were fixed, not waived; Finish crops are pixel-identical in both viewports. No accessibility, horizontal-overflow, dynamic-region, navigation-behavior, reference, tolerance, unrelated-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 57
+    },
+    {
       "screen": "S-04",
       "viewport": "mobile390",
       "theme": "light",
