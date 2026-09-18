@@ -55,7 +55,7 @@ export function DashboardOverview({ projection, dateLabel, headingRef }: {
   const remaining = (['personal', 'academic', 'interests'] as const).filter(section => !projection.completedSections.includes(section));
   const internships = availableModules().find(module => module.id === 'internships');
   return <>
-    <div className="v321-profile__eyebrow v321-dashboard__date">{dateLabel} · Home</div>
+    <div className="st-eyebrow v321-profile__eyebrow v321-dashboard__date">{dateLabel} · Home</div>
     <h1 className="v321-profile__title" id="S-14-title" ref={headingRef} tabIndex={-1}>Your legal journey, in one place.</h1>
     <p className="v321-dashboard__intro">Continue your law-school record: internships, moots, research and mentors.</p>
     {projection.accessMode === 'limited' && <div className="v321-dashboard__note"><NyayOneRevLIcon name="shield" /><span><b>Limited access.</b> Community and sharing stay off until guardian consent is recorded. <Link to="/s-16">Guardian Consent</Link></span></div>}

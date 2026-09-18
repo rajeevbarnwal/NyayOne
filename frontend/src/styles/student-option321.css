@@ -129,7 +129,7 @@
 /* NYAY-61 S-14 dashboard. Live widgets remain below the Revision L overview. */
 .v321-profile[data-screen='S-14'] .v321-dashboard { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 .v321-profile[data-screen='S-14'] .v321-profile__eyebrow { line-height: normal; }
-.v321-profile[data-screen='S-14'] .v321-dashboard__date { color: var(--nyayone-color-indigo); }
+.v321-profile[data-screen='S-14'] .v321-dashboard__date { color: var(--nyayone-color-indigo); font: 600 10px/normal var(--nyayone-font-eyebrow); letter-spacing: .18em; }
 .v321-profile[data-screen='S-14'] .v321-profile__title { margin: 2px 0 0; font-size: 24px; }
 .v321-dashboard__intro { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--nyayone-color-ink-secondary); }
 .v321-dashboard__completion { display: flex; align-items: center; gap: 12px; border: 1.5px solid var(--nyayone-color-indigo); border-radius: 16px; background: var(--nyayone-color-indigo-surface); padding: 14px; }
@@ -166,6 +166,8 @@
 .v321-dashboard__disclosure > .st-grid { padding: 12px; }
 .v321-dashboard .st-grid { min-width: 0; }
 .v321-dashboard .st-panel__title { font-family: var(--nyayone-font-heading); }
+.v321-dashboard .st-panel { color: var(--text); }
+.v321-dashboard .st-dpdp { color: var(--nyayone-color-muted); }
 @media (min-width: 900px) {
   .v321-profile[data-screen='S-14'] .v321-profile__title { font-size: 32px; }
 }

@@ -90,4 +90,10 @@ describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
     for (const value of ['M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12h17', 'M6 11.5a6 6 0 0 0 12 0M12 17.5V20', 'M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z']) expect(html).toContain(`d="${value}"`);
     expect(html.match(/role="heading" aria-level="2"/g)).toHaveLength(4);
   });
+  it('preserves the calendar producer date hook and isolates retained-widget contrast', () => {
+    expect(render()).toContain('class="st-eyebrow v321-profile__eyebrow v321-dashboard__date"');
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    expect(css).toContain('.v321-dashboard .st-dpdp { color: var(--nyayone-color-muted); }');
+    expect(css).toContain('.v321-dashboard .st-panel { color: var(--text); }');
+  });
 });
