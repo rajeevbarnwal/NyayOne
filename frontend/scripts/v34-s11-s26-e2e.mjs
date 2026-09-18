@@ -605,7 +605,7 @@ try {
   const savedEmailVisible = await page.getByText('aditi@example.edu', { exact: true }).isVisible();
   record('S-15_server_email', 'saved institutional email comes from the canonical server projection',
     { visible: savedEmailVisible }, savedEmailVisible);
-  const pendingStatus = page.locator('.status').filter({ hasText: 'pending' });
+  const pendingStatus = page.locator('.v321-verification__status').filter({ hasText: 'Verification Pending' });
   const pendingStatusVisible = await pendingStatus.isVisible();
   record('S-15_server_status', 'pending verification remains server-authoritative',
     { visible: pendingStatusVisible }, pendingStatusVisible);

@@ -323,6 +323,29 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(wave1).not.toContain("getByRole('heading', { name: 'About you', exact: true })");
   });
 
+  it('locates the S-15 Revision L pending badge without weakening server-authority assertions', () => {
+    const wave1 = readFileSync(resolve(ROOT, 'scripts/v34-s11-s26-e2e.mjs'), 'utf8');
+    const match = wave1.match(/const pendingStatus = ([^;]+);/u);
+    expect(match).not.toBeNull();
+    const calls = [];
+    const pendingStatus = runInNewContext(match[1], {
+      page: { locator: selector => ({ filter: options => {
+        calls.push({ selector, text: options.hasText });
+        return { revisionLPending: selector === '.v321-verification__status'
+          && options.hasText === 'Verification Pending' };
+      } }) },
+    });
+    expect(calls).toEqual([{ selector: '.v321-verification__status', text: 'Verification Pending' }]);
+    expect(pendingStatus.revisionLPending).toBe(true);
+    expect(wave1).toContain("record('S-15_server_email'");
+    expect(wave1).toContain("record('S-15_server_status'");
+    expect(wave1).toContain("{ visible: pendingStatusVisible }, pendingStatusVisible)");
+    expect(wave1).toContain("{ editableEmailFields }, editableEmailFields === 0)");
+    expect(wave1).toContain("record('S-15_review_action'");
+    expect(wave1).toContain("completedReviewResponse.status === 202 && completedReviewResponse.finishedError === null");
+    expect(wave1).toContain("&& await reviewConfirmation.isVisible()\n      && await pendingStatus.isVisible()");
+  });
+
   it('measures the S-10 Revision L keyboard font while retaining focus and target checks', async () => {
     expect(await responsiveCensus('Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif'))
       .toMatchObject({ typographyExact: true, keyboardGeometryExact: true, selectorCount: 2, minimumTarget: 48, overflow: false });

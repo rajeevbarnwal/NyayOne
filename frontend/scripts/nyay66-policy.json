@@ -9,6 +9,36 @@
   "enforced": [],
   "exceptions": [
     {
+      "screen": "S-15",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "3f466557373a73bebe0126abb3e89669af3f7d9e4bfd13520f427f0948b3224a",
+      "liveSha256": "c2869aea8e8eb1b55d5348258a0a1d3e34bcbe7f5b8a07edad5de002ee57f33a",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-15 light mobile390 only, this exact approved Revision L reference/live PNG pair at PR58 head 666b6978. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN). Retain read-only saved institutional email; this unchanged gate fixture has no saved email and therefore truthfully shows Not provided, not the prototype's editable aditi.nair@nls.ac.in input or simulated Verification Pending state. Retain the original server-authority note instead of falsely claiming a confirmation link was sent. Retain the real Add institutional email and Back to dashboard actions in place of simulated Check Verification Status and Resend Link; actual nonempty-address review requests remain server-owned, not a client grant. The read-only value is not a textbox/control, so the semantic control list and its index-based geometry comparison differ intentionally. Exact content-driven geometry: actions start 17.25 CSS px above the reference because the truthful note wraps differently; action heights in order: 48px live versus 50px reference; 48px live versus 50px reference. Their x positions and widths match. The following disclosure moves with this content; it retains the non-authorizing review explanation instead of an invented 1–2 working-day promise. The approved CSS correction now matches 14px/normal/9px action typography and desktop aside paragraph line-height 1.55; these structural defects are fixed, not waived. Heading boxes match exactly in both viewports; desktop common header boxes match and aside crop passes the original pixel limits. Approve only these exact content, identity, control and resulting content-driven geometry/pixel differences. No accessibility, overflow, dynamic-region, heading, navigation-behavior, verification-authority, reference, tolerance, unrelated-screen, other-state or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 58
+    },
+    {
+      "screen": "S-15",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "ba4cf24e7538946e92fae1ab90202b1f82d8beccff816d70a09e5c3741a15550",
+      "liveSha256": "207081b6875ec18f411d1213a227aa8b31f5e7a656e428ddd17feb99e07996cd",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-15 light desktop only, this exact approved Revision L reference/live PNG pair at PR58 head 666b6978. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of prototype Aditi Nair/AN). Retain read-only saved institutional email; this unchanged gate fixture has no saved email and therefore truthfully shows Not provided, not the prototype's editable aditi.nair@nls.ac.in input or simulated Verification Pending state. Retain the original server-authority note instead of falsely claiming a confirmation link was sent. Retain the real Add institutional email and Back to dashboard actions in place of simulated Check Verification Status and Resend Link; actual nonempty-address review requests remain server-owned, not a client grant. The read-only value is not a textbox/control, so the semantic control list and its index-based geometry comparison differ intentionally. Exact content-driven geometry: actions start 16.5 CSS px above the reference because the truthful note wraps differently; action heights in order: 48px live versus 48px reference; 48px live versus 48px reference. Their x positions and widths match. The following disclosure moves with this content; it retains the non-authorizing review explanation instead of an invented 1–2 working-day promise. The approved CSS correction now matches 14px/normal/9px action typography and desktop aside paragraph line-height 1.55; these structural defects are fixed, not waived. Heading boxes match exactly in both viewports; desktop common header boxes match and aside crop passes the original pixel limits. Approve only these exact content, identity, control and resulting content-driven geometry/pixel differences. No accessibility, overflow, dynamic-region, heading, navigation-behavior, verification-authority, reference, tolerance, unrelated-screen, other-state or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; this is not strict parity.",
+      "approvalPr": 58
+    },
+    {
       "screen": "S-14",
       "viewport": "mobile390",
       "theme": "light",
