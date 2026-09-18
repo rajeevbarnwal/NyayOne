@@ -7,11 +7,11 @@ import { profileResumeDestination } from '../profile/profileHooks';
 
 function DashboardIcon({ name }: { name: 'brief' | 'moot' | 'book' | 'users' }) {
   if (name === 'users') return <NyayOneRevLIcon name="users" />;
-  const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9 };
   return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
-    {name === 'brief' && <><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" fill="currentColor" opacity=".16" /><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" {...line} /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17M10 12.5v2h4v-2" {...line} /></>}
-    {name === 'moot' && <><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" fill="currentColor" opacity=".2" /><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" {...line} /><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20M8.5 20h7" {...line} /></>}
-    {name === 'book' && <><path d="M3.5 5.5c3-1.2 5.8-.8 8.5 1.2v14c-2.7-2-5.5-2.4-8.5-1.2z" fill="currentColor" opacity=".17" /><path d="M20.5 5.5c-3-1.2-5.8-.8-8.5 1.2v14c2.7-2 5.5-2.4 8.5-1.2z" fill="currentColor" opacity=".28" /><path d="M12 6.7c-2.7-2-5.5-2.4-8.5-1.2v14c3-1.2 5.8-.8 8.5 1.2m0-14c2.7-2 5.5-2.4 8.5-1.2v14c-3-1.2-5.8-.8-8.5 1.2z" {...line} /></>}
+    {name === 'brief' && <><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" fill="currentColor" opacity=".16" /><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" {...line} /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12h17" {...line} /></>}
+    {name === 'moot' && <><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" fill="currentColor" opacity=".2" /><rect x="9.3" y="3.5" width="5.4" height="10.5" rx="2.7" {...line} /><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20" {...line} strokeLinecap="round" /></>}
+    {name === 'book' && <><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5z" fill="currentColor" opacity=".16" /><path d="M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z" {...line} strokeWidth="1.8" strokeLinejoin="round" /></>}
   </svg>;
 }
 
@@ -65,10 +65,10 @@ export function DashboardOverview({ projection, dateLabel, headingRef }: {
       <Link className="v321-profile__button v321-dashboard__finish" to={profileResumeDestination(projection)}><NyayOneRevLIcon name="checkc" />Finish</Link>
     </section>}
     <div className="v321-dashboard__tiles">
-      <button type="button" disabled={!internships} className="v321-dashboard__tile" onClick={() => { if (internships) nav(internships.route); }}><h3 className="v321-dashboard__tile-title"><span className="v321-dashboard__tile-icon" aria-hidden="true"><DashboardIcon name="brief" /></span>Internships</h3><span>Explore internships and track your applications.</span><small>{internships ? 'Open internships' : 'Coming soon'}</small></button>
-      <button type="button" disabled className="v321-dashboard__tile"><h3 className="v321-dashboard__tile-title"><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--moot" aria-hidden="true"><DashboardIcon name="moot" /></span>Moot Court</h3><span>Moot preparation and records.</span><small>Coming soon</small></button>
-      <button type="button" disabled className="v321-dashboard__tile"><h3 className="v321-dashboard__tile-title"><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--book" aria-hidden="true"><DashboardIcon name="book" /></span>Research</h3><span>Research tools for your law-school work.</span><small>Coming soon</small></button>
-      <button type="button" disabled className="v321-dashboard__tile"><h3 className="v321-dashboard__tile-title"><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--users" aria-hidden="true"><DashboardIcon name="users" /></span>Mentors</h3><span>Mentor discovery and guidance.</span><small>Coming soon</small></button>
+      <button type="button" disabled={!internships} className="v321-dashboard__tile" onClick={() => { if (internships) nav(internships.route); }}><span className="v321-dashboard__tile-title" role="heading" aria-level={2}><span className="v321-dashboard__tile-icon" aria-hidden="true"><DashboardIcon name="brief" /></span>Internships</span><span>Explore internships and track your applications.</span><small>{internships ? 'Open internships' : 'Coming soon'}</small></button>
+      <button type="button" disabled className="v321-dashboard__tile"><span className="v321-dashboard__tile-title" role="heading" aria-level={2}><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--moot" aria-hidden="true"><DashboardIcon name="moot" /></span>Moot Court</span><span>Moot preparation and records.</span><small>Coming soon</small></button>
+      <button type="button" disabled className="v321-dashboard__tile"><span className="v321-dashboard__tile-title" role="heading" aria-level={2}><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--book" aria-hidden="true"><DashboardIcon name="book" /></span>Research</span><span>Research tools for your law-school work.</span><small>Coming soon</small></button>
+      <button type="button" disabled className="v321-dashboard__tile"><span className="v321-dashboard__tile-title" role="heading" aria-level={2}><span className="v321-dashboard__tile-icon v321-dashboard__tile-icon--users" aria-hidden="true"><DashboardIcon name="users" /></span>Mentors</span><span>Mentor discovery and guidance.</span><small>Coming soon</small></button>
     </div>
     <div className="v321-dashboard__note v321-dashboard__verification">
       <NyayOneRevLIcon framed={false} name={projection.institutionalEmailStatus === 'verified' ? 'checkc' : 'shield'} />

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
 import type { StudentProfileProjection } from '../lib/profileApi';
 
@@ -30,6 +30,15 @@ function render(value = projection) {
 }
 
 describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
+  it('renders advancing product dates rather than importing the fixed conformance date', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T09:00:00Z'));
+      expect(render()).toContain('Thursday, 1 January');
+      vi.setSystemTime(new Date('2026-01-02T09:00:00Z'));
+      expect(render()).toContain('Friday, 2 January');
+    } finally { vi.useRealTimers(); }
+  });
   it('renders the approved hierarchy with server-derived identity, not prototype claims', () => {
     const html = render();
     for (const value of ['data-screen="S-14"', 'id="S-14-title"', 'Your legal journey, in one place.', 'Complete Your Profile', '>Finish</a>', 'Moot Court', 'Research', 'Mentors', 'Your Profile · Synthetic Student']) expect(html).toContain(value);
@@ -75,5 +84,10 @@ describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
     const source = readFileSync('src/features/student/dashboard/Dashboard.tsx', 'utf8');
     for (const value of ['useStudentProfileProjection()', 'getCalendarViewPreferences', 'listCalendarEvents({ timezone })', 'focusProfilePromptDestination', 'headingRef.current?.focus()', 'profileQuery.refetch()']) expect(source).toContain(value);
     expect(readFileSync('src/styles/student-option321.css', 'utf8')).toContain(".v321-profile[data-screen='S-14']");
+  });
+  it('uses the exact Revision L brief/moot/book paths and a sequential tile heading level', () => {
+    const html = render();
+    for (const value of ['M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12h17', 'M6 11.5a6 6 0 0 0 12 0M12 17.5V20', 'M5 4.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.5H5zM19 4.5h-6a0 0 0 0 0 0 0V20a2 2 0 0 1 2-1.5h4z']) expect(html).toContain(`d="${value}"`);
+    expect(html.match(/role="heading" aria-level="2"/g)).toHaveLength(4);
   });
 });
