@@ -1063,10 +1063,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the ten approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the eleven approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1147,14 +1147,14 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect((await visualCensus({ decoration: true, decorationParent, decorationIcon })).iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-17'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-17'])(
     'never grants the S-06 R2 stack or inherited decoration rule to %s', async screenId => {
       const observed = await visualCensus({ screenId, decoration: true });
       expect(observed.typographyExact).toBe(false);
       expect(observed.iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14'])(
     'retains the exact existing Revision L stack and lockup on %s', async screenId => {
       expect(await visualCensus({ screenId,
         family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
@@ -1162,6 +1162,9 @@ describe('NYAY-5 browser release-gate source contract', () => {
     });
 
   it('retains the legacy font rule and rejects branded lockups outside approved screens', async () => {
+    expect(await visualCensus({ screenId: 'S-15',
+      family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
+    })).toMatchObject({ typographyExact: true, iconsExact: false });
     expect(await visualCensus({ screenId: 'S-17',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
@@ -1188,7 +1191,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect((await visualCensus({ screenId: 'S-12', completionCheck: true, ...change })).iconsExact).toBe(false);
   });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-06', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-13', 'S-17'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-06', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-13', 'S-14', 'S-17'])(
     'does not grant S-12 hidden completion-wrapper recognition to %s', async screenId => {
       expect((await visualCensus({ screenId, completionCheck: true })).iconsExact).toBe(false);
     });
