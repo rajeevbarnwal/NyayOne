@@ -92,4 +92,18 @@ describe('NYAY-64 S-17 Revision L profile presentation', () => {
     expect(html).toContain('M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z');
     expect(html).toContain('m9.2 11.8 2 2 3.6-3.8');
   });
+  it('keeps the prototype intrinsic name column and separate flexible spacer', () => {
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    expect(css.split('.v321-profile-summary__name {')[1].split('}')[0]).toContain('flex: 0 1 auto;');
+    expect(css.split('.v321-profile-summary__spacer {')[1]?.split('}')[0]).toContain('flex: 1;');
+    expect(render()).toContain('class="v321-profile-summary__spacer" aria-hidden="true"');
+  });
+  it('uses the prototype nested 20px icon with its normal inline baseline wrapper', () => {
+    const html = render();
+    expect(html).toContain('class="v321-profile-summary__finish-icon" aria-hidden="true"><span class="v321-revl-icon"');
+    expect(html).toContain('class="v321-profile-summary__privacy-icon" aria-hidden="true"><span class="v321-profile-summary__glyph"');
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    expect(css).not.toContain('.v321-profile-summary__finish .v321-revl-icon { height: 22px; }');
+    expect(css.split('.v321-profile-summary__glyph {')[1]?.split('}')[0]).toContain('height: 20px;');
+  });
 });

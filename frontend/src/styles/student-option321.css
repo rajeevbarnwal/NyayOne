@@ -592,7 +592,8 @@
 .v321-profile-summary__identity { display: flex; align-items: center; gap: 12px; }
 .v321-profile-summary__seal { display: grid; place-items: center; width: 56px; height: 56px; flex: 0 0 56px; border-radius: 50%; border: 2.5px solid var(--nyayone-color-gold); background: var(--nyayone-color-gold-surface); }
 .v321-profile-summary__seal img { width: 34px; height: 34px; }
-.v321-profile-summary__name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.v321-profile-summary__name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.v321-profile-summary__spacer { flex: 1; }
 .v321-profile-summary__name h1, .v321-profile-summary__state-title { margin: 0; color: var(--nyayone-color-ink); font: 700 22px/1.1 var(--nyayone-font-heading); letter-spacing: -.01em; }
 .v321-profile-summary p { margin: 0; color: var(--nyayone-color-ink-secondary); font-size: 12.5px; line-height: 1.55; }
 .v321-profile-summary__edit { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 50%; background: var(--nyayone-color-card); color: var(--nyayone-color-ink-secondary); cursor: pointer; }
@@ -610,7 +611,7 @@
 .v321-profile-summary__remaining > b, .v321-profile-summary__privacy b { font-size: 13.5px; }
 .v321-profile-summary .v321-profile__button { flex: none; min-height: 44px; font-size: 14px; line-height: normal; padding: 0 18px; gap: 9px; }
 .v321-profile-summary .v321-profile-summary__finish { gap: 7px; }
-.v321-profile-summary__finish .v321-revl-icon { height: 22px; }
+.v321-profile-summary__finish-icon { color: var(--nyayone-color-indigo); }
 .v321-profile-summary__details { margin: 0; padding: 6px 16px; border: 1.5px solid var(--nyayone-color-line); border-radius: 16px; background: var(--nyayone-color-card); }
 .v321-profile-summary__row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--nyayone-color-line); font-size: 13px; }
 .v321-profile-summary__row:last-child { border-bottom: 0; }
@@ -619,7 +620,8 @@
 .v321-profile-summary__row dd.is-mono { font-family: var(--nyayone-font-mono); }
 .v321-profile-summary__manage { display: block; margin-left: auto; margin-top: 4px; min-width: 70px; min-height: 44px; padding: 0 10px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 10px; color: var(--nyayone-color-indigo); background: var(--nyayone-color-card); font: 700 13px var(--nyayone-font-body); cursor: pointer; }
 .v321-profile-summary__privacy { border-color: var(--nyayone-color-line-strong); background: var(--nyayone-color-card); }
-.v321-profile-summary__privacy-icon { display: inline-flex; width: 20px; height: 22px; align-items: center; justify-content: center; color: var(--nyayone-color-indigo); }
+.v321-profile-summary__privacy-icon { color: var(--nyayone-color-indigo); }
+.v321-profile-summary__glyph { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; }
 .v321-profile[data-screen='S-17'] .v321-profile__card p { line-height: 1.55; }
 .v321-profile[data-screen='S-17'] .ui-state { background: var(--nyayone-color-card); color: var(--nyayone-color-ink); }
 .v321-profile[data-screen='S-17'] .ui-state :is(.ui-state__detail, .ui-state__eyebrow) { color: var(--nyayone-color-ink-secondary); }

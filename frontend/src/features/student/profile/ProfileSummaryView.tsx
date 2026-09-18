@@ -61,6 +61,7 @@ export function ProfileSummaryView({ projection, emailManagement, children }: {
     <div className="v321-profile-summary__identity">
       <span className="v321-profile-summary__seal" aria-hidden="true"><img src="/brand/nyayone-mark.svg" alt="" draggable="false" /></span>
       <div className="v321-profile-summary__name"><h1 id="S-17-title">{fullName || 'Your profile'}</h1><p>{[college, year].filter(Boolean).join(' · ') || 'Academic details not provided'}</p></div>
+      <span className="v321-profile-summary__spacer" aria-hidden="true" />
       <button type="button" className="v321-profile-summary__edit" aria-label={projection.isComplete ? 'Edit profile' : 'Continue profile'} onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20l4-1L19.5 7.5a2 2 0 0 0-3-3L5 16z" /></svg></button>
     </div>
     <div className="v321-profile-summary__chips">
@@ -70,12 +71,12 @@ export function ProfileSummaryView({ projection, emailManagement, children }: {
     {!projection.isComplete && <section className="v321-profile-summary__completion" data-testid="profile-completion-card" aria-label="Profile completion">
       <span className="v321-profile-summary__ring" role="progressbar" aria-label="Profile setup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={projection.completionPercent} data-testid="profile-completion-percent" style={{ '--profile-progress': `${projection.completionPercent}%` } as CSSProperties}><b>{projection.completionPercent}%</b></span>
       <div className="v321-profile-summary__remaining"><b>Complete Your Profile</b><p>{remaining.map(section => sectionLabels[section]).join(' · ')} remaining{remaining.length === 1 && remaining[0] === 'interests' ? ' · about 1 minute.' : '.'}</p></div>
-      <button type="button" className="v321-profile__button v321-profile-summary__finish" onClick={() => nav(profileResumeDestination(projection))}><NyayOneRevLIcon name="checkc" />Finish</button>
+      <button type="button" className="v321-profile__button v321-profile-summary__finish" onClick={() => nav(profileResumeDestination(projection))}><span className="v321-profile-summary__finish-icon" aria-hidden="true"><NyayOneRevLIcon name="checkc" /></span>Finish</button>
     </section>}
     <dl className="v321-profile-summary__details">
       {rows.map(([label, value, mono]) => <div className="v321-profile-summary__row" key={label}><dt>{label}</dt><dd className={mono ? 'is-mono' : undefined}>{value}{label === 'Institutional Email' && emailManagement}</dd></div>)}
     </dl>
     {children}
-    <div className="v321-profile-summary__privacy"><div><b>Privacy &amp; settings</b><p>Review your privacy preferences and account settings.</p></div><button type="button" className="v321-profile__button" aria-label="Privacy & settings" onClick={() => nav('/s-19')}><span className="v321-profile-summary__privacy-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="currentColor" opacity=".14" /><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="m9.2 11.8 2 2 3.6-3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>Privacy Centre</button></div>
+    <div className="v321-profile-summary__privacy"><div><b>Privacy &amp; settings</b><p>Review your privacy preferences and account settings.</p></div><button type="button" className="v321-profile__button" aria-label="Privacy & settings" onClick={() => nav('/s-19')}><span className="v321-profile-summary__privacy-icon" aria-hidden="true"><span className="v321-profile-summary__glyph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="currentColor" opacity=".14" /><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="m9.2 11.8 2 2 3.6-3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span></span>Privacy Centre</button></div>
   </ProfileSummaryFrame>;
 }
