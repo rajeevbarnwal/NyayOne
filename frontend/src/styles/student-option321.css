@@ -128,6 +128,8 @@
 .v321-profile-resume__row--saved { border-top: 1px solid var(--nyayone-color-line); margin-top: 4px; }
 /* NYAY-61 S-14 dashboard. Live widgets remain below the Revision L overview. */
 .v321-profile[data-screen='S-14'] .v321-dashboard { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+/* Error-frame text must meet AA on the inherited risk surface; other states stay unchanged. */
+.v321-profile[data-screen='S-14'] .v321-dashboard > .ui-state[role='alert'] :is(.ui-state__eyebrow, .ui-state__body) { color: var(--nyayone-color-ink-secondary); }
 .v321-profile[data-screen='S-14'] .v321-profile__eyebrow { line-height: normal; }
 .v321-profile[data-screen='S-14'] .v321-dashboard__date { color: var(--nyayone-color-indigo); font: 600 10px/normal var(--nyayone-font-eyebrow); letter-spacing: .18em; }
 .v321-profile[data-screen='S-14'] .v321-profile__title { margin: 2px 0 .83em; font-size: 24px; }

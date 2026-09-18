@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
+import { DashboardFrame } from './DashboardView';
+import { ErrorState } from '../../../components/ui/primitives';
 import type { StudentProfileProjection } from '../lib/profileApi';
 
 const projection: StudentProfileProjection = {
@@ -30,6 +32,30 @@ function render(value = projection) {
 }
 
 describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
+  it('scopes error-frame secondary text contrast to the S-14 dashboard alert only', () => {
+    const html = renderToStaticMarkup(<MemoryRouter><DashboardFrame><ErrorState title="Could not load your profile" detail="Check your connection and try again." onRetry={() => {}} /></DashboardFrame></MemoryRouter>);
+    expect(html).toContain('data-screen="S-14"');
+    expect(html).toContain('class="ui-state" role="alert"');
+    expect(html).toContain('class="ui-state__eyebrow"');
+    expect(html).toContain('class="ui-state__body"');
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    const selector = ".v321-profile[data-screen='S-14'] .v321-dashboard > .ui-state[role='alert'] :is(.ui-state__eyebrow, .ui-state__body)";
+    const rule = css.split(`${selector} {`)[1]?.split('}')[0];
+    expect(rule, 'only the dashboard error label/detail use stronger text').toBeDefined();
+    expect(rule?.trim()).toBe('color: var(--nyayone-color-ink-secondary);');
+  });
+  it('keeps dashboard error text above WCAG AA normal-text contrast on the risk surface', () => {
+    const tokens = readFileSync('src/styles/nyayone-tokens.css', 'utf8');
+    const luminance = (hex: string) => {
+      const channels = hex.match(/[a-f0-9]{2}/gi)!.map(pair => parseInt(pair, 16) / 255)
+        .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const color = (name: string) => tokens.match(new RegExp(`${name}: (#[a-f0-9]{6});`, 'i'))![1];
+    const foreground = luminance(color('--nyayone-color-ink-secondary'));
+    const background = luminance(color('--nyayone-color-risk-surface'));
+    expect((Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
   it.each([
     [".v321-profile[data-screen='S-14'] .v321-profile__title", 'margin', '2px 0 .83em'],
     ['.v321-dashboard__summary', 'line-height', 'normal'],
