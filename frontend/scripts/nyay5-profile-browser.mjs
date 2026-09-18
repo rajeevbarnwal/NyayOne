@@ -74,6 +74,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-14',
   'S-15',
   'S-16',
+  'S-17',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -2438,7 +2439,7 @@ async function promptAndRoutingProbe(browser) {
   const focusRestored = await dashboardHeading.evaluate((node) => document.activeElement === node);
   failureStage = 'prompt_routing_profile_card';
   await page.goto(`${WEB}/s-17`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('heading', { name: 'Your profile', exact: true }).waitFor({ state: 'visible' });
+  await page.locator('[data-screen="S-17"] h1').waitFor({ state: 'visible' });
   await recordVisualContract(page, 'S-17');
   const profileCardLocator = page.getByTestId('profile-completion-card');
   await profileCardLocator.waitFor({ state: 'visible' });

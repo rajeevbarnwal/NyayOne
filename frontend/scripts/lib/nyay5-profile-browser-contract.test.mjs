@@ -1068,7 +1068,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       /await page\.waitForURL\(\/\\\/s-12\$\/u\);\s*await page\.getByRole\('heading', \{ name: 'Your NyayOne profile is ready', exact: true \}\)\.waitFor\(\{ state: 'visible' \}\);\s*await page\.getByRole\('button', \{ name: 'Go to Dashboard', exact: true \}\)\.waitFor\(\{ state: 'visible' \}\);\s*await recordVisualContract\(page, 'S-12'\);/u,
     );
     expect(promptSource).toMatch(
-      /await page\.goto\(`\$\{WEB\}\/s-17`[^;]*;\s*await page\.getByRole\('heading', \{ name: 'Your profile', exact: true \}\)\.waitFor\(\{ state: 'visible' \}\);\s*await recordVisualContract\(page, 'S-17'\);/u,
+      /await page\.goto\(`\$\{WEB\}\/s-17`[^;]*;\s*await page\.locator\('\[data-screen="S-17"\] h1'\)\.waitFor\(\{ state: 'visible' \}\);\s*await recordVisualContract\(page, 'S-17'\);/u,
     );
   });
 
@@ -1096,10 +1096,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the thirteen approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the fourteen approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1187,18 +1187,18 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect(observed.iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17'])(
     'retains the exact existing Revision L stack and lockup on %s', async screenId => {
       expect(await visualCensus({ screenId,
         family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it('rejects the legacy font on S-16 while retaining the S-17 legacy negative control', async () => {
-    expect(await visualCensus({ screenId: 'S-16',
+  it('rejects the legacy font on S-17 while retaining the S-18 legacy negative control', async () => {
+    expect(await visualCensus({ screenId: 'S-17',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
-    expect(await visualCensus({ screenId: 'S-17',
+    expect(await visualCensus({ screenId: 'S-18',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
