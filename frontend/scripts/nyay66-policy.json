@@ -9,6 +9,36 @@
   "enforced": [],
   "exceptions": [
     {
+      "screen": "S-16",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "52494b2d80aeef975cf4d89c45ce4a50ed9d581fa680f9fb6429cb882d61cb4a",
+      "liveSha256": "d152a8699e382514d205585f81dec6032fc9d5954e7d412cd029e0424567943c",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-16 light mobile390 only, exact approved Revision L reference/live PNG pair at PR59 head 0c78f0a3. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of Aditi Nair/AN). The current server contract supplies guardian requirement/status and disabled capabilities, but no guardian contact details or consent-request endpoint: show read-only Not available for Guardian’s Name and Guardian’s Mobile instead of editable prototype R. Nair/91234 56789 and fixed +91. Do not fabricate a sent SMS or Consent Requested state; show the server-derived Consent required status and truthful unavailability/server-verification explanation. Retain the existing Continue profile and View limited home actions rather than an unsupported Resend Consent Request, with their original destinations and no consent-grant mechanism. Keep the original server-authority restriction, disabled-capability list and minor-account note rather than prototype-only claims. The read-only values are not textboxes, so control-count/order and index-based geometry comparison differ intentionally. Copy-driven flow changes put the two 48px actions 10.3125 CSS px below reference; both action x positions, widths and heights match. No fixed spacing defect is waived: intro uses reference 13.5px/1.55, heading text/boxes match exactly, and desktop common header control geometry matches. Approve only this exact identity, truthful content, control and resulting content-driven geometry/pixel delta. No heading, accessibility, overflow, dynamic-region, navigation-behavior, guardian/access-authority, reference, tolerance, other-state, other-screen or dark-mode waiver. This becomes PARITY-WITH-DISCLOSED-DELTA only after owner approval; it is not strict parity.",
+      "approvalPr": 59
+    },
+    {
+      "screen": "S-16",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c8c66d79a1d781e92c2c0c373d24cffc6d5a7cecfb8411dcf73849e47cfa63b4",
+      "liveSha256": "5a8637d68eb73776510b9420991c8a3e1da59f73ecfdc5d3cd59d5198665b698",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "geometry"
+      ],
+      "reason": "S-16 light desktop only, exact approved Revision L reference/live PNG pair at PR59 head 0c78f0a3. Retain authenticated server-derived identity/initials and avatar accessible name (Synthetic Student/SS instead of Aditi Nair/AN). The current server contract supplies guardian requirement/status and disabled capabilities, but no guardian contact details or consent-request endpoint: show read-only Not available for Guardian’s Name and Guardian’s Mobile instead of editable prototype R. Nair/91234 56789 and fixed +91. Do not fabricate a sent SMS or Consent Requested state; show the server-derived Consent required status and truthful unavailability/server-verification explanation. Retain the existing Continue profile and View limited home actions rather than an unsupported Resend Consent Request, with their original destinations and no consent-grant mechanism. Keep the original server-authority restriction, disabled-capability list and minor-account note rather than prototype-only claims. The read-only values are not textboxes, so control-count/order and index-based geometry comparison differ intentionally. Copy-driven flow changes put the two 48px actions 11.765625 CSS px above reference; both action x positions, widths and heights match. No fixed spacing defect is waived: intro uses reference 13.5px/1.55, heading text/boxes match exactly, and desktop common header control geometry matches. Approve only this exact identity, truthful content, control and resulting content-driven geometry/pixel delta. No heading, accessibility, overflow, dynamic-region, navigation-behavior, guardian/access-authority, reference, tolerance, other-state, other-screen or dark-mode waiver. This becomes PARITY-WITH-DISCLOSED-DELTA only after owner approval; it is not strict parity.",
+      "approvalPr": 59
+    },
+    {
       "screen": "S-15",
       "viewport": "mobile390",
       "theme": "light",
