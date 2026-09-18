@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthCard, TextField, Checkbox, DpdpFootnote, StudentScreen, InfoTooltip } from '../components';
+import { AuthCard, TextField, Checkbox, DpdpFootnote, InfoTooltip } from '../components';
 import {
   isValidMobile, MOBILE_ERROR,
   isRegistrableDob, DOB_ERROR, todayLocalISO,
@@ -29,13 +29,14 @@ import {
   completeRecovery,
 } from '../lib/registrationApi';
 import { useOtpFlowState } from '../lib/useOtpFlowState';
-import { profileErrorMessage, profileSectionRoute } from '../lib/profileApi';
+import { profileErrorMessage } from '../lib/profileApi';
 import {
   useRequestInstitutionalEmailVerification,
   useStudentProfileProjection,
 } from '../profile/profileHooks';
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
 import { EmailVerificationFrame, EmailVerificationView } from './EmailVerificationView';
+import { GuardianConsentFrame, GuardianConsentView } from './GuardianConsentView';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
@@ -618,31 +619,7 @@ export function RestrictedDashboard() {
     if (profile.data?.accessMode === 'full') nav('/s-14', { replace: true });
   }, [nav, profile.data]);
   if (!profile.data || profile.data.accessMode === 'full') {
-    return <StudentScreen screenId="S-16" className="st-authwrap">{profile.isPending || profile.data ? <LoadingState label="Checking access…" /> : <ErrorState title="Could not check access" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</StudentScreen>;
+    return <GuardianConsentFrame title="Checking account access.">{profile.isPending || profile.data ? <LoadingState label="Checking access…" /> : <ErrorState title="Could not check access" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</GuardianConsentFrame>;
   }
-  const restriction = profile.data.guardian.required
-    ? 'Guardian consent is required before community and sharing access can be enabled. No client action can mark consent verified.'
-    : 'Your server-issued profile currently has limited access.';
-  return (
-    <StudentScreen screenId="S-16" className="st-authwrap">
-      <div className="st-card">
-        <p className="st-card__kicker">Restricted access</p>
-        <h1 className="st-card__title">Some features are still locked</h1>
-        <div className="st-metarow">
-          <StatusBadge status="risk" label="Restricted" />
-        </div>
-        <RestrictedState reason={restriction} />
-        <p>Disabled capabilities: {profile.data.disabledCapabilities.join(', ') || 'none'}.</p>
-        <div className="st-actions st-actions--split">
-          <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
-            View limited home
-          </button>
-          <button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(profile.data.nextIncompleteSection))}>
-            Continue profile
-          </button>
-        </div>
-        <DpdpFootnote>Minor-account checks run server-side · data minimised</DpdpFootnote>
-      </div>
-    </StudentScreen>
-  );
+  return <GuardianConsentView projection={profile.data} />;
 }
