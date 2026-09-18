@@ -126,6 +126,30 @@
 .v321-profile-resume__row b { text-align: right; }
 .v321-profile-resume__row:last-child { border-bottom: 0; }
 .v321-profile-resume__row--saved { border-top: 1px solid var(--nyayone-color-line); margin-top: 4px; }
+/* NYAY-62 S-15: presentation only; the saved address and verification remain server-owned. */
+.v321-verification { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.v321-profile[data-screen='S-15'] .v321-profile__title { font-size: 22px; }
+.v321-verification__heading-icon { background: #0e64701f; color: #0e6470; }
+.v321-verification__field { display: flex; flex-direction: column; gap: 5px; min-width: 0; margin: 0; }
+.v321-verification__label { display: flex; align-items: center; gap: 6px; min-height: 22px; color: var(--nyayone-color-ink-secondary); font-size: 12px; font-weight: 700; }
+.v321-verification__label .v321-revl-icon { color: var(--nyayone-color-gold); }
+.v321-verification__saved { display: flex; align-items: center; min-height: 46px; border: 1.5px solid var(--nyayone-color-line-strong); border-radius: 12px; background: var(--nyayone-color-card); margin: 0; padding: 0 13px; font-size: 15px; overflow-wrap: anywhere; }
+.v321-verification__status { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; border: 1.5px solid var(--nyayone-color-warning); border-radius: 16px; padding: 5px 11px; font-size: 11px; font-weight: 700; line-height: normal; color: var(--nyayone-color-warning); background: var(--nyayone-color-warning-surface); }
+.v321-verification__status > span { width: 8px; height: 8px; background: currentColor; transform: rotate(45deg); }
+.v321-verification__status.is-verified { border-color: var(--nyayone-color-gold); color: #7a5c14; background: var(--nyayone-color-gold-surface); }
+.v321-verification__status.is-verified > span { border-radius: 50%; transform: none; background: var(--nyayone-color-gold); }
+.v321-verification__note { display: flex; gap: 9px; border: 1.5px solid var(--nyayone-color-line); border-radius: 12px; background: var(--nyayone-color-card); padding: 9px 12px; color: var(--nyayone-color-ink-secondary); font-size: 11.5px; line-height: 1.5; }
+.v321-verification .v321-profile__button { padding: 0 10px; }
+.v321-verification__error { border: 1.5px solid var(--nyayone-color-risk); border-radius: 12px; background: var(--nyayone-color-risk-surface); color: var(--nyayone-color-ink-secondary); padding: 11px 13px; }
+.v321-verification__message { margin: 0; color: var(--nyayone-color-ink-secondary); }
+.v321-profile[data-screen='S-15'] .ui-state[role='alert'] :is(.ui-state__eyebrow, .ui-state__body) { color: var(--nyayone-color-ink-secondary); }
+.v321-verification__disclosure { border: 1.5px solid var(--nyayone-color-line); border-radius: 12px; background: var(--nyayone-color-card); overflow: hidden; }
+.v321-verification__disclosure > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; min-height: 48px; padding: 0 13px; font-size: 13px; font-weight: 700; }
+.v321-verification__disclosure > summary::-webkit-details-marker { display: none; }
+.v321-verification__disclosure > summary > span { color: var(--nyayone-color-indigo); }
+.v321-verification__disclosure > div { padding: 2px 13px 13px; color: var(--nyayone-color-ink-secondary); font-size: 13px; line-height: 1.5; }
+.v321-verification__disclosure > summary:focus-visible { outline: 2.5px solid var(--nyayone-color-focus); outline-offset: -3px; }
+@media (min-width: 900px) { .v321-profile[data-screen='S-15'] .v321-profile__title { font-size: 30px; } }
 /* NYAY-61 S-14 dashboard. Live widgets remain below the Revision L overview. */
 .v321-profile[data-screen='S-14'] .v321-dashboard { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 /* Error-frame text must meet AA on the inherited risk surface; other states stay unchanged. */
