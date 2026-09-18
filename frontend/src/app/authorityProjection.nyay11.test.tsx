@@ -69,7 +69,8 @@ describe('NYAY-11 canonical UI authority projection', () => {
   });
   it.each(INSTITUTION)('institutional %s display exposes no approval/rejection controls', (status) => {
     const html = render(projection('not_required', status), '/s-15', 'authenticated', <EmailVerify />);
-    expect(html).toContain(status.replace(/_/gu, ' '));
+    const statusLabels = { not_provided: 'Not provided', pending: 'Verification Pending', verified: 'Verified', rejected: 'Verification rejected', expired: 'Verification expired', revoked: 'Verification revoked' };
+    expect(html).toContain(`>${statusLabels[status]}</div>`);
     expect(html).not.toMatch(/>\s*(Approve|Reject|Mark verified|Verify student)\s*</u);
     expect(html).toContain('only an authorized review');
   });

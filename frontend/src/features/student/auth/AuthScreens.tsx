@@ -35,6 +35,7 @@ import {
   useStudentProfileProjection,
 } from '../profile/profileHooks';
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
+import { EmailVerificationFrame, EmailVerificationView } from './EmailVerificationView';
 
 /* -------------------------------------------------------------------------- */
 /* S-01 — Splash / session check (loading)                                     */
@@ -597,48 +598,14 @@ export function Lockout() {
 /* S-15 — Institutional email verification (pending)                           */
 /* -------------------------------------------------------------------------- */
 export function EmailVerify() {
-  const nav = useNavigate();
   const profile = useStudentProfileProjection();
   const requestVerification = useRequestInstitutionalEmailVerification();
   if (!profile.data) {
-    return <AuthCard screenId="S-15" kicker="Institutional email" title="Confirm your college email">{profile.isPending ? <LoadingState label="Loading verification status…" /> : <ErrorState title="Could not load verification status" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</AuthCard>;
+    return <EmailVerificationFrame>{profile.isPending ? <LoadingState label="Loading verification status…" /> : <ErrorState title="Could not load verification status" detail={profileErrorMessage(profile.error)} onRetry={() => { void profile.refetch(); }} />}</EmailVerificationFrame>;
   }
-  const email = profile.data.profile.academic.institutionalEmail;
-  const verified = profile.data.institutionalEmailStatus === 'verified';
-  return (
-    <AuthCard
-      screenId="S-15"
-      kicker="Institutional email status"
-      title="Confirm your college email"
-      meta={<StatusBadge status={verified ? 'ok' : 'warn'} label={profile.data.institutionalEmailStatus.replace(/_/gu, ' ')} />}
-      sub="This status comes only from the server. Typing or saving an address never marks it verified."
-    >
-      <div className="st-panel">
-        <div className="st-setrow"><div><div className="st-setrow__label">Saved institutional email</div><div className="st-setrow__sub">{email ?? 'Not provided'}</div></div></div>
-      </div>
-      <div className="st-panel" style={{ marginTop: 'var(--space-4)' }}>
-        <div className="st-setrow"><div><div className="st-setrow__label">Request</div><div className="st-setrow__sub">A request never grants verification; only an authorized review can do that.</div></div></div>
-        <div className="st-setrow"><div><div className="st-setrow__label">Verification</div><div className="st-setrow__sub">Server-authoritative status only</div></div></div>
-      </div>
-      {requestVerification.error && <div role="alert">{profileErrorMessage(requestVerification.error)}</div>}
-      {requestVerification.isSuccess && <p role="status">Verification review request recorded. Verification remains pending until an authorized review succeeds.</p>}
-      <div className="st-actions st-actions--split">
-        <button type="button" className="btn tap" onClick={() => nav('/s-14')}>
-          Back to dashboard
-        </button>
-        {!email
-          ? <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-10?section=academic')}>Add institutional email</button>
-          : <button
-              type="button"
-              className="btn btn--primary tap"
-              disabled={verified || requestVerification.isPending}
-              onClick={() => requestVerification.mutate()}
-            >
-              {verified ? 'Already verified' : requestVerification.isPending ? 'Recording request…' : 'Request verification review'}
-            </button>}
-      </div>
-    </AuthCard>
-  );
+  return <EmailVerificationView projection={profile.data} pending={requestVerification.isPending}
+    errorMessage={requestVerification.error ? profileErrorMessage(requestVerification.error) : null}
+    requestSucceeded={requestVerification.isSuccess} request={() => requestVerification.mutate()} />;
 }
 
 /* -------------------------------------------------------------------------- */

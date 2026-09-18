@@ -59,6 +59,24 @@ describe('legacy registration browser runner contract', () => {
     expect(fullJourney).toContain("record('protected_calls_use_server_actor'");
   });
 
+  it('uses the Revision L S-15 heading while retaining server verification authority checks', () => {
+    const fullJourney = sourceBetween(
+      '// Full v3.4 S-08 -> server OTP S-09 -> S-10 backend profile persistence.',
+      '// v3.4 S-06 recovery is mobile/OTP based and server-authoritative.',
+    );
+    expect(fullJourney).toContain(
+      "getByRole('heading', { name: 'Verify your institutional email.', exact: true })",
+    );
+    expect(fullJourney).not.toContain("name: 'Confirm your college email'");
+    expect(fullJourney).toContain("getByRole('button', { name: 'Request verification review' }).click()");
+    expect(fullJourney).toContain("hasText: 'Verification review request recorded'");
+    expect(fullJourney).toContain("request.method === 'POST'");
+    expect(fullJourney).toContain("request.path === '/api/v1/auth/student/verification/email/request'");
+    expect(fullJourney).toContain("statusResult.body?.status === 'in_review'");
+    expect(fullJourney).toContain("statusResult.body?.method === 'institutional_email'");
+    expect(fullJourney).toContain("record('protected_calls_use_server_actor'");
+  });
+
   it('observes the post-401 resend control by its accessible contract, not a retired class', () => {
     const fullJourney = sourceBetween(
       '// Full v3.4 S-08 -> server OTP S-09 -> S-10 backend profile persistence.',

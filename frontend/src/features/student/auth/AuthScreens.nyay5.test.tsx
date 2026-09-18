@@ -113,7 +113,9 @@ describe('NYAY-5 canonical verification and access surfaces', () => {
     const html = renderWithProjection(EmailVerify, PROJECTION);
 
     expect(html).toContain('Request verification review');
-    expect(html).not.toContain('disabled=""');
+    const requestButton = html.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*Request verification review<\/button>/u)?.[0];
+    expect(requestButton).toBeDefined();
+    expect(requestButton).not.toContain('disabled=""');
     expect(html).not.toContain('Verification link sent');
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -126,7 +128,9 @@ describe('NYAY-5 canonical verification and access surfaces', () => {
 
     expect(html).toContain('Request verification review');
     expect(html).not.toContain('Verification review pending');
-    expect(html).not.toContain('disabled=""');
+    const requestButton = html.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*Request verification review<\/button>/u)?.[0];
+    expect(requestButton).toBeDefined();
+    expect(requestButton).not.toContain('disabled=""');
   });
 
   it('renders the exact server-disabled capabilities for limited access', () => {
