@@ -336,7 +336,7 @@ for (const [name, values, expected] of [
   // registration from the authenticated HttpOnly session. Merely watching
   // for these paths would let a removed request false-green this oracle.
   await page.goto(`${base}/s-15`);
-  await page.getByRole('heading', { name: 'Confirm your college email' }).waitFor({ state: 'visible' });
+  await page.getByRole('heading', { name: 'Verify your institutional email.', exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Request verification review' }).click();
   await page.getByRole('status')
     .filter({ hasText: 'Verification review request recorded' })
