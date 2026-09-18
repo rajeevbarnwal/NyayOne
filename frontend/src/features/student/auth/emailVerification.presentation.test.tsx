@@ -74,4 +74,19 @@ describe('NYAY-62 S-15 Revision L presentation with server-only verification aut
     expect(css).toContain('.v321-verification .v321-profile__button { padding: 0 10px; }');
     expect(css).not.toContain('.v321-verification__note > svg { flex: 0 0 18px; }');
   });
+  it.each(['font-size: 14px', 'line-height: normal', 'gap: 9px'])(
+    'matches Revision L action %s only inside S-15', declaration => {
+      const css = readFileSync('src/styles/student-option321.css', 'utf8');
+      const action = css.split(".v321-profile[data-screen='S-15'] .v321-profile__button {")[1]?.split('}')[0];
+      expect(action).toBeDefined();
+      expect(action).toContain(declaration);
+      // Keep the shared styles consumed by other screens unchanged.
+      expect(css.split('.v321-profile__button {')[1].split('}')[0]).toContain('font: 700 15px/1.25');
+    },
+  );
+  it('matches the desktop aside paragraph rhythm only inside S-15', () => {
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    expect(css).toMatch(/@media \(min-width: 900px\) \{\s*\.v321-profile\[data-screen='S-15'\] \.v321-profile__title \{[^}]*\}\s*\.v321-profile\[data-screen='S-15'\] \.v321-profile__card p \{ line-height: 1\.55; \}\s*\}/);
+    expect(css.split('.v321-profile__card p {')[1].split('}')[0]).toContain('line-height: 1.5;');
+  });
 });

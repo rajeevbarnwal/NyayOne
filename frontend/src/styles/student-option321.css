@@ -140,6 +140,7 @@
 .v321-verification__status.is-verified > span { border-radius: 50%; transform: none; background: var(--nyayone-color-gold); }
 .v321-verification__note { display: flex; gap: 9px; border: 1.5px solid var(--nyayone-color-line); border-radius: 12px; background: var(--nyayone-color-card); padding: 9px 12px; color: var(--nyayone-color-ink-secondary); font-size: 11.5px; line-height: 1.5; }
 .v321-verification .v321-profile__button { padding: 0 10px; }
+.v321-profile[data-screen='S-15'] .v321-profile__button { font-size: 14px; line-height: normal; gap: 9px; }
 .v321-verification__error { border: 1.5px solid var(--nyayone-color-risk); border-radius: 12px; background: var(--nyayone-color-risk-surface); color: var(--nyayone-color-ink-secondary); padding: 11px 13px; }
 .v321-verification__message { margin: 0; color: var(--nyayone-color-ink-secondary); }
 .v321-profile[data-screen='S-15'] .ui-state[role='alert'] :is(.ui-state__eyebrow, .ui-state__body) { color: var(--nyayone-color-ink-secondary); }
@@ -149,7 +150,10 @@
 .v321-verification__disclosure > summary > span { color: var(--nyayone-color-indigo); }
 .v321-verification__disclosure > div { padding: 2px 13px 13px; color: var(--nyayone-color-ink-secondary); font-size: 13px; line-height: 1.5; }
 .v321-verification__disclosure > summary:focus-visible { outline: 2.5px solid var(--nyayone-color-focus); outline-offset: -3px; }
-@media (min-width: 900px) { .v321-profile[data-screen='S-15'] .v321-profile__title { font-size: 30px; } }
+@media (min-width: 900px) {
+  .v321-profile[data-screen='S-15'] .v321-profile__title { font-size: 30px; }
+  .v321-profile[data-screen='S-15'] .v321-profile__card p { line-height: 1.55; }
+}
 /* NYAY-61 S-14 dashboard. Live widgets remain below the Revision L overview. */
 .v321-profile[data-screen='S-14'] .v321-dashboard { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 /* Error-frame text must meet AA on the inherited risk surface; other states stay unchanged. */
