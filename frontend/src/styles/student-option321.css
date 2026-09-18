@@ -130,12 +130,12 @@
 .v321-profile[data-screen='S-14'] .v321-dashboard { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 .v321-profile[data-screen='S-14'] .v321-profile__eyebrow { line-height: normal; }
 .v321-profile[data-screen='S-14'] .v321-dashboard__date { color: var(--nyayone-color-indigo); font: 600 10px/normal var(--nyayone-font-eyebrow); letter-spacing: .18em; }
-.v321-profile[data-screen='S-14'] .v321-profile__title { margin: 2px 0 0; font-size: 24px; }
+.v321-profile[data-screen='S-14'] .v321-profile__title { margin: 2px 0 .83em; font-size: 24px; }
 .v321-dashboard__intro { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--nyayone-color-ink-secondary); }
 .v321-dashboard__completion { display: flex; align-items: center; gap: 12px; border: 1.5px solid var(--nyayone-color-indigo); border-radius: 16px; background: var(--nyayone-color-indigo-surface); padding: 14px; }
 .v321-dashboard__ring { width: 52px; height: 52px; border-radius: 50%; background: conic-gradient(var(--nyayone-color-indigo) var(--dashboard-progress), var(--nyayone-color-line) 0); display: grid; place-items: center; flex: none; }
 .v321-dashboard__ring b { width: 40px; height: 40px; border-radius: 50%; background: var(--nyayone-color-card); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
-.v321-dashboard__summary { flex: 1; min-width: 0; }
+.v321-dashboard__summary { flex: 1; min-width: 0; line-height: normal; }
 .v321-dashboard__summary > b { font-size: 13.5px; }
 .v321-dashboard__summary p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nyayone-color-ink-secondary); }
 .v321-dashboard .v321-dashboard__finish { flex: none; min-height: 44px; padding: 0 18px; gap: 7px; font-size: 14px; line-height: normal; text-decoration: none; }
@@ -155,7 +155,7 @@
 .v321-dashboard__note > svg { width: 18px; height: 18px; flex: none; }
 .v321-dashboard__verification { align-items: center; }
 .v321-dashboard__verification > span { flex: 1; }
-.v321-dashboard .v321-dashboard__verify { min-height: 44px; padding: 0 13px; flex: none; color: var(--nyayone-color-indigo); border-color: var(--nyayone-color-indigo); font-size: 14px; line-height: normal; text-decoration: none; }
+.v321-dashboard .v321-dashboard__verify { min-height: 44px; padding: 0 13px; gap: 9px; flex: none; color: var(--nyayone-color-indigo); border-color: var(--nyayone-color-indigo); font-size: 14px; line-height: normal; text-decoration: none; }
 .v321-dashboard__verify > svg { width: 18px; height: 18px; }
 .v321-profile[data-screen='S-14'] .v321-profile__card p { line-height: 1.55; }
 .v321-dashboard__disclosure { min-width: 0; border: 1.5px solid var(--nyayone-color-line); border-radius: 12px; background: var(--nyayone-color-card); }

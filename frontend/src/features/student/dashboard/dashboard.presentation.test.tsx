@@ -30,6 +30,20 @@ function render(value = projection) {
 }
 
 describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
+  it.each([
+    [".v321-profile[data-screen='S-14'] .v321-profile__title", 'margin', '2px 0 .83em'],
+    ['.v321-dashboard__summary', 'line-height', 'normal'],
+    ['.v321-dashboard .v321-dashboard__verify', 'gap', '9px'],
+  ])('preserves the approved structural %s %s value', (selector, property, value) => {
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    const rule = css.split(`${selector} {`)[1]?.split('}')[0];
+    expect(rule, 'S-14-scoped rule must exist').toBeDefined();
+    const declarations = Object.fromEntries(rule!.split(';').filter(part => part.includes(':')).map(part => {
+      const colon = part.indexOf(':');
+      return [part.slice(0, colon).trim(), part.slice(colon + 1).trim()];
+    }));
+    expect(declarations[property]).toBe(value);
+  });
   it('renders advancing product dates rather than importing the fixed conformance date', () => {
     vi.useFakeTimers();
     try {
