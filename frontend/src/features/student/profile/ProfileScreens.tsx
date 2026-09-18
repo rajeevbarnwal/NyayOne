@@ -44,9 +44,10 @@ import {
   type ProfileReauthDraft,
 } from './profileReauthHandoff';
 import { ENROLMENT_RE, institutionalEmailError } from '../lib/profile';
-import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
+import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { ProfileResumeView } from './ProfileResumeView';
+import { ProfileSummaryFrame, ProfileSummaryView } from './ProfileSummaryView';
 
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
@@ -626,8 +627,9 @@ export function EmailIdentityPanel({ expanded }: { expanded: boolean }) {
 export function ProfileView() {
   const nav = useNavigate(); const query = useStudentProfileProjection();
   const [emailIdentitiesOpen, setEmailIdentitiesOpen] = useState(false);
-  if (!query.data) return <ProfileLoadState screenId="S-17" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
-  const projection = query.data; const personal = projection.profile.personal; const academic = projection.profile.academic;
-  const rows: Array<[string, string]> = [['Full name', [personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' ')], ['Preferred language', personal.preferredLanguage ?? 'Not provided'], ['City', personal.city ?? 'Not provided'], ['College', labelFor(COLLEGE_OPTIONS, toCanonicalCollege(academic.college)) || 'Not provided'], ['Year of study', labelFor(YEAR_OPTIONS, toCanonicalYear(academic.yearOfStudy)) || 'Not provided'], ['Institutional email status', projection.institutionalEmailStatus.replace(/_/gu, ' ')], ['Guardian status', projection.guardian.status.replace(/_/gu, ' ')], ['Access', projection.accessMode]];
-  return <StudentScreen screenId="S-17" className="st-set"><div className="st-set__head"><p className="st-eyebrow">Profile</p><h1 className="st-h1">Your profile</h1></div><CompletionCard projection={projection} /><div className="st-panel">{rows.map(([label, value]) => <div className="st-setrow" key={label}><div><div className="st-setrow__label">{label}</div><div className="st-setrow__sub">{value}</div></div>{label === 'Institutional email status' && <button type="button" className="btn tap" aria-label="Manage sign-in emails" aria-expanded={emailIdentitiesOpen} aria-controls="profile-email-identity-section" data-testid="profile-email-identity-disclosure" onClick={() => setEmailIdentitiesOpen((open) => !open)}>{emailIdentitiesOpen ? 'Hide' : 'Manage'}</button>}</div>)}</div><EmailIdentityPanel expanded={emailIdentitiesOpen} /><div className="st-actions st-actions--split"><button type="button" className="btn btn--primary tap" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection ?? 'personal'))}>{projection.isComplete ? 'Edit profile' : 'Continue profile'}</button><button type="button" className="btn tap" onClick={() => nav('/s-19')}>Privacy &amp; settings</button></div></StudentScreen>;
+  if (!query.data) {
+    const signedOut = query.error instanceof ProfileApiError && query.error.status === 401;
+    return <ProfileSummaryFrame><h1 id="S-17-title" className="v321-profile-summary__state-title">Your profile</h1>{!query.error ? <LoadingState label="Loading your profile…" /> : signedOut ? <div className="ui-state" role="alert"><p className="ui-state__eyebrow">Signed out</p><p className="ui-state__title">Sign in to continue with your profile</p><div className="ui-state__action"><button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button></div></div> : <ErrorState title="Could not load your profile" detail={profileErrorMessage(query.error)} onRetry={() => { void query.refetch(); }} />}</ProfileSummaryFrame>;
+  }
+  return <ProfileSummaryView projection={query.data} emailManagement={<button type="button" className="v321-profile-summary__manage" aria-label="Manage sign-in emails" aria-expanded={emailIdentitiesOpen} aria-controls="profile-email-identity-section" data-testid="profile-email-identity-disclosure" onClick={() => setEmailIdentitiesOpen((open) => !open)}>{emailIdentitiesOpen ? 'Hide' : 'Manage'}</button>}><EmailIdentityPanel expanded={emailIdentitiesOpen} /></ProfileSummaryView>;
 }
