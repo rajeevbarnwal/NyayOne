@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { StudentScreen, DpdpFootnote } from '../components';
+import { DpdpFootnote } from '../components';
 import { ErrorState, LoadingState, StatusBadge } from '../../../components/ui/primitives';
 import {
   availableModules,
@@ -10,7 +10,7 @@ import {
   CURRENT_RELEASE,
 } from '../lib/dashboard';
 import { profileErrorMessage, type DisabledProfileCapability } from '../lib/profileApi';
-import { CompletionCard } from '../profile/ProfileScreens';
+import { DashboardFrame, DashboardOverview } from './DashboardView';
 import { useStudentProfileProjection } from '../profile/profileHooks';
 import { DEFAULT_TZ, localDateKey, localTime, SOURCE_LABELS, type CalendarEventStatus } from '../lib/calendar';
 import { getCalendarViewPreferences, listCalendarEvents, type CalendarEventRecord } from '../lib/calendarApi';
@@ -72,7 +72,6 @@ export function Dashboard() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const restoredPromptFocus = useRef(false);
   const profileQuery = useStudentProfileProjection();
-  const firstName = profileQuery.data?.profile.personal.firstName || 'Student';
   const live = availableModules(CURRENT_RELEASE);
   const soon = upcomingModules(CURRENT_RELEASE);
   const calendarPreferences = useQuery({
@@ -90,11 +89,9 @@ export function Dashboard() {
   const events = calendar.data?.items ?? [];
   const now = new Date();
   const week = buildDashboardWeek(now, timezone, events);
-  const weekday = dashboardWeekday(now, timezone);
-  const hour = Number(new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit', hourCycle: 'h23', timeZone: timezone,
-  }).format(now));
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const dateLabel = new Intl.DateTimeFormat('en-IN', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone,
+  }).format(now);
   const nextActions = events.slice(0, 4).map((e) => {
     const presentation = calendarStatusPresentation(e.status);
     return {
@@ -120,7 +117,8 @@ export function Dashboard() {
 
   if (!profileQuery.data) {
     return (
-      <StudentScreen screenId="S-14" className="st-dash">
+      <DashboardFrame>
+        <h1 className="v321-profile__title" id="S-14-title">Your dashboard</h1>
         {profileQuery.isPending ? <LoadingState label="Loading your dashboard…" /> : (
           <ErrorState
             title="Could not load your profile"
@@ -128,7 +126,7 @@ export function Dashboard() {
             onRetry={() => { void profileQuery.refetch(); }}
           />
         )}
-      </StudentScreen>
+      </DashboardFrame>
     );
   }
 
@@ -139,27 +137,12 @@ export function Dashboard() {
   const restrictedLive = live.filter((module) => (
     dashboardModuleIsDisabled(module.id, profile.disabledCapabilities)
   ));
-  const verificationLabel = profile.institutionalEmailStatus === 'verified'
-    ? 'Institutional email verified'
-    : 'Verification not complete';
-
   return (
-    <StudentScreen screenId="S-14" className="st-dash">
-      <div className="st-dash__head">
-        <div>
-          <p className="st-eyebrow">{weekday} · your week, one place</p>
-          <h1 ref={headingRef} tabIndex={-1}>{greeting}, {firstName}.</h1>
-          <p className="st-metatag" style={{ marginTop: 8 }}>Your deadlines, sessions and applications stay together without exposing private activity.</p>
-        </div>
-        <span className="st-badge">
-          {verificationLabel}
-        </span>
-      </div>
-
-      <CompletionCard projection={profile} />
+    <DashboardFrame projection={profile}>
+      <DashboardOverview projection={profile} dateLabel={dateLabel} headingRef={headingRef} />
 
       {/* Unified calendar strip */}
-      <details className="v34c-mobile-disclosure">
+      <details className="v321-dashboard__disclosure">
         <summary>Calendar · this week <span>7 days</span></summary>
         <section className="st-panel" aria-label="Unified calendar this week">
           <div className="st-panel__head">
@@ -183,7 +166,7 @@ export function Dashboard() {
         </section>
       </details>
 
-      <details className="v34c-mobile-disclosure">
+      <details className="v321-dashboard__disclosure">
         <summary>Actions &amp; momentum <span>{nextActions.length} actions</span></summary>
         <div className="st-grid">
         {/* Next actions across modules */}
@@ -234,7 +217,7 @@ export function Dashboard() {
             </div>
             <div>
               <div className="st-kpi__n">{clinicalHours}</div>
-              <div className="st-kpi__l">clinical hrs</div>
+              <div className="st-kpi__l">clinical hrs · demo</div>
             </div>
             <div>
               <div className="st-kpi__n">{accessibleLive.length}</div>
@@ -246,7 +229,7 @@ export function Dashboard() {
       </details>
 
       {/* Explore modules — graceful degradation for unreleased tranches */}
-      <details className="v34c-mobile-disclosure">
+      <details className="v321-dashboard__disclosure">
         <summary>Explore modules <span>{accessibleLive.length} available</span></summary>
         <section className="st-panel" aria-label="Explore modules">
           <div className="st-panel__head">
@@ -291,6 +274,6 @@ export function Dashboard() {
       </details>
 
       <DpdpFootnote>Data minimised — your calendar &amp; activity stay private to you</DpdpFootnote>
-    </StudentScreen>
+    </DashboardFrame>
   );
 }
