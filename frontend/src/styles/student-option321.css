@@ -139,6 +139,7 @@
 .v321-dashboard__summary > b { font-size: 13.5px; }
 .v321-dashboard__summary p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nyayone-color-ink-secondary); }
 .v321-dashboard .v321-dashboard__finish { flex: none; min-height: 44px; padding: 0 18px; gap: 7px; font-size: 14px; line-height: normal; text-decoration: none; }
+.v321-profile[data-screen='S-14'] .v321-dashboard__finish > .v321-revl-icon { height: 22px; padding-bottom: 2px; }
 .v321-dashboard__finish > svg { color: var(--nyayone-color-indigo); width: 18px; height: 18px; }
 .v321-dashboard__tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .v321-dashboard__tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 44px; padding: 13px; border: 1.5px solid var(--nyayone-color-line); border-radius: 14px; background: var(--nyayone-color-card); color: var(--nyayone-color-ink); text-align: left; font-family: var(--nyayone-font-body); cursor: pointer; }

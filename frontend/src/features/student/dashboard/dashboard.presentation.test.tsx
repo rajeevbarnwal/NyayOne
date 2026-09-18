@@ -44,6 +44,13 @@ describe('NYAY-61 S-14 Revision L dashboard presentation', () => {
     }));
     expect(declarations[property]).toBe(value);
   });
+  it('keeps the S-14 Finish icon in the prototype 22px wrapper with a 20px alignment area', () => {
+    const css = readFileSync('src/styles/student-option321.css', 'utf8');
+    const rule = css.split(".v321-profile[data-screen='S-14'] .v321-dashboard__finish > .v321-revl-icon {")[1]?.split('}')[0];
+    expect(rule, 'only the S-14 Finish wrapper is adjusted').toBeDefined();
+    expect(rule).toContain('height: 22px');
+    expect(rule).toContain('padding-bottom: 2px');
+  });
   it('renders advancing product dates rather than importing the fixed conformance date', () => {
     vi.useFakeTimers();
     try {
