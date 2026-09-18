@@ -11,6 +11,9 @@ export function projection(id){
     profile:{personal:{first_name:'Synthetic',middle_name:null,last_name:'Student',date_of_birth:'2000-01-01',preferred_language:personal?'en':null,city:personal?'Synthetic City':null,pronouns:null},academic:{college:academic?'Synthetic College':null,year_of_study:academic?'3':null,enrolment_number:academic?'KA/1234/2023':null,institutional_email:null,bar_enrolment_number:null},interests:{interests:complete?['Constitutional']:[],goals:complete?['Undecided']:[]}}};
 }
 export async function mockApplication(page,id,origin,errors){
+  // Dashboard-only synthetic display date; setFixedTime leaves timers running.
+  // 16 August 2025 is the Saturday shown by the approved Revision L prototype.
+  if(id==='S-14'||id==='S-07')await page.clock.setFixedTime(new Date('2025-08-16T09:00:00.000Z'));
   const authenticated=['S-07','S-07-popup','S-10','S-10-academic','S-11','S-12','S-13','S-14','S-15','S-16','S-17'].includes(id);
   await page.route('**/*',async route=>{
     const url=new URL(route.request().url());
