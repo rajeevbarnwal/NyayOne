@@ -27,6 +27,10 @@ export function AppShell({
   if (location.pathname === '/s-12') {
     return <main className="ls-v34-content" id="main-content">{children}</main>;
   }
+  // S-13 owns the Revision L resume shell; other continuation routes are unchanged.
+  if (location.pathname === '/s-13') {
+    return <main className="ls-v34-content" id="main-content">{children}</main>;
+  }
   // v3.4 S-01…S-10 own their responsive auth/app shell. Rendering the legacy
   // global shell around them would duplicate navigation and invalidate the
   // approved 900px single-shell contract.

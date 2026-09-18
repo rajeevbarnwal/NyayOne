@@ -576,7 +576,7 @@ try {
 
   await leaveSettledDocument(page, () => page.goto(`${base}/s-13`));
   await waitForDocumentReady(page);
-  const resume = page.getByRole('button', { name: 'Continue profile', exact: true });
+  const resume = page.getByRole('button', { name: 'Resume Setup', exact: true });
   await resume.waitFor({ state: 'visible' });
   await Promise.all([
     page.waitForURL((url) => url.pathname === '/s-10' && url.search === '?section=academic'),

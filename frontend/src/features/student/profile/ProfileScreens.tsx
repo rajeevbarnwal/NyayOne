@@ -46,6 +46,7 @@ import {
 import { ENROLMENT_RE, institutionalEmailError } from '../lib/profile';
 import { COLLEGE_OPTIONS, LANGUAGE_OPTIONS, YEAR_OPTIONS, labelFor, toCanonicalCollege, toCanonicalYear } from '../lib/catalog';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
+import { ProfileResumeView } from './ProfileResumeView';
 
 const INTERESTS = ['Constitutional', 'Arbitration', 'Criminal', 'Corporate', 'Tech & Privacy'];
 const GOALS = ['Litigation & judiciary', 'Corporate / in-house', 'Policy & academia', 'Undecided'];
@@ -432,10 +433,9 @@ export function CompletionCard({ projection }: { projection: StudentProfileProje
 }
 
 export function ProfileResume() {
-  const nav = useNavigate(); const query = useStudentProfileProjection();
+  const query = useStudentProfileProjection();
   if (!query.data) return <ProfileLoadState screenId="S-13" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
-  const projection = query.data; const current = projection.nextIncompleteSection;
-  return <StudentScreen screenId="S-13" className="st-stack st-resume"><div><p className="st-eyebrow">Welcome back · {projection.completionPercent}% done</p><h1 className="st-h1">{projection.isComplete ? 'Your setup is complete' : 'Pick up where you stopped'}</h1><p className="st-card__sub">Your saved answers came from your authenticated profile.</p></div><section className="st-panel" aria-label="Profile setup progress">{(['personal', 'academic', 'interests'] as ProfileSection[]).map((section, index) => { const saved = projection.completedSections.includes(section); const active = current === section; return <div className="st-setrow" key={section}><div><div className="st-setrow__label">Step {index + 1} · {section[0].toUpperCase() + section.slice(1)}</div></div><span className={`status ${saved ? 'status--ok' : active ? 'status--warn' : 'status--info'}`}>{saved ? 'Saved' : active ? 'Continue here' : 'Not started'}</span></div>; })}</section><div className="st-actions st-actions--split"><button type="button" className="btn tap" onClick={() => nav('/s-14')}>Browse first</button><button type="button" className="btn btn--primary tap" onClick={() => nav(profileResumeDestination(projection))}>{current ? 'Continue profile' : 'Open dashboard'}</button></div></StudentScreen>;
+  return <ProfileResumeView projection={query.data} />;
 }
 
 /** S-12 presentation; completion and verification remain separate server facts. */

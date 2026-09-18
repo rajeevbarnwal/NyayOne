@@ -1051,10 +1051,22 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(visualSource).toContain('await page.evaluate(() => document.fonts.ready);');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the nine approved screens', () => {
+  it('keeps the S-13 server progress and reload assertions using its approved presentation', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const resume = runner.slice(runner.indexOf("failureStage = 'complete_profile_resume_projection'"), runner.indexOf("failureStage = 'complete_profile_academic_write'"));
+    expect(resume).toContain("getByRole('heading', { name: 'Pick up where you left off.', exact: true })");
+    expect(resume.match(/profile-completion-percent/g)).toHaveLength(3);
+    expect(resume.match(/aria-valuenow="34"/g)).toHaveLength(3);
+    expect(resume).toContain("locator('[data-next-section=\"academic\"]')");
+    expect(resume).toContain("getByRole('button', { name: 'Resume Setup', exact: true })");
+    expect(resume).toContain("resumed.reload({ waitUntil: 'domcontentloaded' })");
+    expect(resume).not.toContain('34% done');
+  });
+
+  it('scopes the Revision L heading and labelled-lockup census to the ten approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1135,14 +1147,14 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect((await visualCensus({ decoration: true, decorationParent, decorationIcon })).iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-17'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-17'])(
     'never grants the S-06 R2 stack or inherited decoration rule to %s', async screenId => {
       const observed = await visualCensus({ screenId, decoration: true });
       expect(observed.typographyExact).toBe(false);
       expect(observed.iconsExact).toBe(false);
     });
 
-  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12'])(
+  it.each(['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13'])(
     'retains the exact existing Revision L stack and lockup on %s', async screenId => {
       expect(await visualCensus({ screenId,
         family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',

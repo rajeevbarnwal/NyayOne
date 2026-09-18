@@ -418,6 +418,26 @@
       ],
       "reason": "S-12 light only, this exact approved Revision L reference/live PNG pair. Retain server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Retain the truthful institutional-email status: Institutional email not provided for the not_provided fixture, rather than fabricating Email Verification Pending. Accept only the resulting avatar/status text, avatar accessible-name and corresponding pixels. All common controls and heading geometry match exactly; Go to Dashboard, Review Profile and heading crops are pixel-identical. The 1px Review Profile icon baseline defect was fixed, not waived. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
       "approvalPr": 55
+    },
+    {
+      "screen": "S-13",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "cf88fc851515f8ebc93383b3422e32c08beccd03f82a043dcd1229e16e4d329c",
+      "liveSha256": "8d4c9f814b347a2b1d14877d363d8ae24ab0ab3e41d631809f75bc141fada6a6",
+      "checks": ["pixels", "text", "controls"],
+      "reason": "S-13 light only, this exact approved Revision L reference/live PNG pair. Retain the authenticated server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Approve only the resulting avatar text, accessible-name and avatar pixels. All control and heading boxes match exactly; Finish, Resume Setup and Not Now crops are pixel-identical. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 56
+    },
+    {
+      "screen": "S-13",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "abe63be5e11314ff32e33040e755ac6ca7137f1ccc393960250d8816bdf309b9",
+      "liveSha256": "d546ee0ff2cfac501f51ce39a4b47e4d43dc30bd873af7b0d67294a4af19c0c3",
+      "checks": ["pixels", "text", "controls"],
+      "reason": "S-13 light only, this exact approved Revision L reference/live PNG pair. Retain the authenticated server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Approve only the resulting avatar text, accessible-name and avatar pixels. All control and heading boxes match exactly; Finish, Resume Setup and Not Now crops are pixel-identical. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
+      "approvalPr": 56
     }
   ]
 }
