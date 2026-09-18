@@ -73,6 +73,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-13',
   'S-14',
   'S-15',
+  'S-16',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -3090,7 +3091,7 @@ async function minorAndResponsiveProbe(browser) {
       await page.goto(`${WEB}/s-16`, { waitUntil: 'domcontentloaded' });
       await page.locator('[data-screen="S-16"]').waitFor();
       await page.getByRole('heading', {
-        name: 'Some features are still locked',
+        name: 'A guardian’s consent is needed first.',
       }).waitFor({ state: 'visible' });
     }
     geometries.push(await page.evaluate((viewportName) => {
@@ -3109,16 +3110,10 @@ async function minorAndResponsiveProbe(browser) {
       }));
       const typographyExact = headings.length > 0 && headings.every((item) => {
         const family = getComputedStyle(item).fontFamily.toLowerCase();
-        if (viewportName === 'mobile-keyboard') {
-          const stack = family.split(',').map((name) => name.trim().replace(/["']/gu, ''));
-          return JSON.stringify(stack) === JSON.stringify([
-            'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
-          ]);
-        }
-        return family.includes('aptos')
-          && family.includes('calibri')
-          && family.includes('carlito')
-          && family.includes('system-ui');
+        const stack = family.split(',').map((name) => name.trim().replace(/["']/gu, ''));
+        return JSON.stringify(stack) === JSON.stringify([
+          'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
+        ]);
       });
       const active = document.activeElement;
       const activeRect = active instanceof HTMLElement ? active.getBoundingClientRect() : null;
