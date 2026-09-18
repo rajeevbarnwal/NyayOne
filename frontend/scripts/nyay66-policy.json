@@ -9,6 +9,38 @@
   "enforced": [],
   "exceptions": [
     {
+      "screen": "S-17",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "813e9197d07beecf4a162799c894f21e2f134eab3dc8be48cee5a2b9cb087e0d",
+      "liveSha256": "adb8f521d282d7122c7b55366167fb13d61fbbe6b103210d6d9e6ce9b98093f2",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-17 light mobile390 only; exact Revision L reference/live PNG pair captured at PR60 head 7178e14c. Retain authenticated server-derived Synthetic Student/SS rather than prototype Aditi Nair/AN, actual college/year/city/interests and email status, and truthful Not available/Not provided values instead of fabricated mobile or institutional-email data. The name heading uses the prototype intrinsic column structure; its x/y/height match, while width differs only with actual identity/academic text. Keep the existing incomplete-profile edit action's truthful Continue profile accessible name, existing Finish destination and server-owned completion/verification/guardian/access authority. Retain Manage sign-in emails and the Preferred language, Guardian status and Access rows. Retain Privacy Centre's original route and Privacy & settings accessible name with truthful privacy-preferences copy, rather than claiming unsupported Download My Data/Delete Account/OTP guarantees. These additional controls and rows deliberately change control count/order and index-based geometry comparison; their content flow puts Privacy Centre 148 CSS px below the prototype with identical x/width/height. Finish and edit button geometry match exactly; Finish's corrected nested icon crop is pixel-identical, and desktop common header geometry matches. Approve only this exact identity/status/content/retained-control and resulting content-driven heading-width/flow/pixel delta. No structural icon-offset waiver; no accessibility, overflow, dynamic-region, route/profile/email behavior, authority, reference, tolerance, other-state, other-screen or dark-mode waiver. Verdict becomes PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity.",
+      "approvalPr": 60
+    },
+    {
+      "screen": "S-17",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "e8b5dd3ee05c40270ea16bb44b8e04ec5acfd8fc926038b66664d6a558758533",
+      "liveSha256": "676004d38f44f4c379fdc19bff6bbd24233e22b1c4e2a0ace7703ef604a3c89b",
+      "checks": [
+        "pixels",
+        "text",
+        "controls",
+        "headings",
+        "geometry"
+      ],
+      "reason": "S-17 light desktop only; exact Revision L reference/live PNG pair captured at PR60 head 7178e14c. Retain authenticated server-derived Synthetic Student/SS rather than prototype Aditi Nair/AN, actual college/year/city/interests and email status, and truthful Not available/Not provided values instead of fabricated mobile or institutional-email data. The name heading uses the prototype intrinsic column structure; its x/y/height match, while width differs only with actual identity/academic text. Keep the existing incomplete-profile edit action's truthful Continue profile accessible name, existing Finish destination and server-owned completion/verification/guardian/access authority. Retain Manage sign-in emails and the Preferred language, Guardian status and Access rows. Retain Privacy Centre's original route and Privacy & settings accessible name with truthful privacy-preferences copy, rather than claiming unsupported Download My Data/Delete Account/OTP guarantees. These additional controls and rows deliberately change control count/order and index-based geometry comparison; their content flow puts Privacy Centre 156 CSS px below the prototype with identical x/width/height. Finish and edit button geometry match exactly; Finish's corrected nested icon crop is pixel-identical, and desktop common header geometry matches. Approve only this exact identity/status/content/retained-control and resulting content-driven heading-width/flow/pixel delta. No structural icon-offset waiver; no accessibility, overflow, dynamic-region, route/profile/email behavior, authority, reference, tolerance, other-state, other-screen or dark-mode waiver. Verdict becomes PARITY-WITH-DISCLOSED-DELTA only after owner approval, not strict parity.",
+      "approvalPr": 60
+    },
+    {
       "screen": "S-16",
       "viewport": "mobile390",
       "theme": "light",
