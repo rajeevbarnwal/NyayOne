@@ -43,6 +43,10 @@ export function AppShell({
   if (location.pathname === '/s-16') {
     return <main className="ls-v34-content" id="main-content">{children}</main>;
   }
+  // S-17 owns its Revision L profile shell; email and profile authority are unchanged.
+  if (location.pathname === '/s-17') {
+    return <main className="ls-v34-content" id="main-content">{children}</main>;
+  }
   // v3.4 S-01…S-10 own their responsive auth/app shell. Rendering the legacy
   // global shell around them would duplicate navigation and invalidate the
   // approved 900px single-shell contract.

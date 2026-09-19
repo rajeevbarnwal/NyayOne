@@ -28,7 +28,7 @@ function assertFields(actual, expected) {
 }
 
 function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup } = {}) {
-  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16'].includes(screenId);
+  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17'].includes(screenId);
   const family = wrongFont ? 'serif' : revision ? revisionFamily : legacyFamily;
   const svg = (lockup ?? revision)
     ? '<svg class="v321-lockup" role="img" aria-label="NyayOne — Legal, on the record" width="40" height="40"><rect width="30" height="30"/></svg>'
@@ -164,16 +164,16 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact thirteen-screen Revision L census and the S-17 legacy Carlito stack', async () => {
+  it('preserves the exact fourteen-screen Revision L census and the S-18 legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
-      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17']) {
+      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18']) {
         await page.setContent(`<html data-theme="light"><body>${markup(screenId)}</body></html>`);
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 14);
+      assert.equal(rows.size, 15);
     });
   });
 
@@ -188,10 +188,10 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
 
   it('does not allow a legacy screen to acquire the Revision L-only lockup exception', async () => {
     await withPage(async (page) => {
-      await page.setContent(`<html data-theme="light"><body>${markup('S-17', { lockup: true })}</body></html>`);
+      await page.setContent(`<html data-theme="light"><body>${markup('S-18', { lockup: true })}</body></html>`);
       const rows = new Map();
-      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-17');
-      assertFields(rows.get('S-17'), { typographyExact: true, iconsExact: false });
+      await compileCensus(waitForVisualCensusSettled, rows)(page, 'S-18');
+      assertFields(rows.get('S-18'), { typographyExact: true, iconsExact: false });
     });
   });
 
@@ -208,7 +208,7 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     ['link ancestor', 'S-12', '<a href="#"><span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span></a>', false],
     ['wrong wrapper element', 'S-12', '<div class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></div>', false],
     ['other Revision L screen', 'S-11', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
-    ['legacy screen', 'S-17', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
+    ['legacy screen', 'S-18', '<span class="v321-profile-done__check" aria-hidden="true"><svg width="42" height="42"/></span>', false],
     ['generic hidden wrapper', 'S-12', '<span aria-hidden="true"><svg width="42" height="42"/></span>', false],
   ]) {
     it(`S-12 completion check: ${name}`, async () => {
