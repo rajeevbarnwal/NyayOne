@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { matchPath, Navigate, useLocation } from 'react-router-dom';
 import {
   hasRole,
@@ -10,6 +10,7 @@ import {
 import { screenRoutes } from './screenRegistry';
 import type { DisabledProfileCapability } from '../features/student/lib/profileApi';
 import { useStudentProfileProjection } from '../features/student/profile/profileHooks';
+import { hasStudentLogoutFailure, subscribeStudentAuthTransitionNotice } from '../features/student/lib/studentAuthTransitionNotice';
 
 export type StudentRouteDecision =
   | 'allow'
@@ -141,6 +142,7 @@ export function StudentRouteGuard({ children }: { children: ReactNode }) {
   const session = useStudentSession();
   const location = useLocation();
   const decision = studentRouteDecision(session.phase, auth);
+  const logoutFailed = useSyncExternalStore(subscribeStudentAuthTransitionNotice, hasStudentLogoutFailure, () => false);
 
   if (decision === 'pending') {
     return (
@@ -154,6 +156,7 @@ export function StudentRouteGuard({ children }: { children: ReactNode }) {
     return (
       <main className="route-loading" data-testid="student-session-unavailable" role="alert">
         <h1>We could not verify your session</h1>
+        {logoutFailed && <p>Sign out could not be confirmed. Your server session may still be active.</p>}
         <p>Your private student page remains locked until the server responds.</p>
         <button type="button" onClick={() => { void session.refresh(); }}>
           Retry session check
