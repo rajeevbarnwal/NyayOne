@@ -1243,9 +1243,12 @@ async function runFailClosedMatrix(browser) {
       await installRuntimeStorageFailure(page, mode);
       actionAttempts += 1;
       await signOut.click();
-      await page.waitForURL(/\/s-03$/u);
-      await page.locator(S03_SELECTOR).waitFor({ state: 'visible' });
-      const safeEntryVisible = await page.locator(S03_SELECTOR).count() === 1;
+      // P8: cleanup failure blocks logout; it must not masquerade as signed out.
+      await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible' });
+      await page.getByText('Sign out could not be confirmed.', { exact: false }).waitFor();
+      // Keep the evidence field: "safe entry" now means the truthful locked boundary.
+      const safeEntryVisible = await page.locator(SESSION_UNAVAILABLE).count() === 1
+        && await page.locator(S03_SELECTOR).count() === 0;
       const afterCookies = await context.cookies(`${WEB}/api/v1/auth/student/otp/state`);
       const afterFlowCookies = afterCookies.filter(
         (cookie) => cookie.name === 'nyayone_otp_flow',
