@@ -554,7 +554,7 @@ export function V34VerifiedHome(props: ScreenProps) {
     if (focusable.length === 0) { event.preventDefault(); return; }
     const first = focusable[0]; const last = focusable[focusable.length - 1];
     if (event.shiftKey && (document.activeElement === first || document.activeElement === headingRef.current)) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === headingRef.current)) { event.preventDefault(); first.focus(); }
   }
 
   if (!profile.data) {
@@ -707,8 +707,12 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const actionInFlight = useRef(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const [statusRevision, setStatusRevision] = useState(0);
   const session = useStudentSession();
   const otpFlow = useOtpFlowState(undefined, { enabled: session.phase === 'anonymous' });
+  useEffect(() => { if (status && !busy) statusRef.current?.focus(); }, [status, statusRevision, busy, session.phase, otpFlow.loading]);
   const flow = otpFlow.state;
   const expires = flow?.expiresInSeconds ?? 0;
   const resend = flow?.resendInSeconds ?? 0;
@@ -720,7 +724,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     if (!otpFlow.loadError) return;
     setCode('');
     setStatus('');
-    setBusy(false);
+    if (!actionInFlight.current) setBusy(false);
   }, [otpFlow.loadError]);
 
   function captureFailure(caught: unknown) {
@@ -731,13 +735,18 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   }
 
   async function submit() {
+    if (actionInFlight.current || busy) return;
+    setStatusRevision(revision => revision + 1);
     if (!isValidOtpInput(code)) { setStatus('Enter all six digits.'); return; }
     if (flow?.status !== 'pending' || flow.purpose !== purpose) {
       setStatus('Start registration or sign in before entering a code.');
       return;
     }
+    if ((flow.expiresInSeconds ?? 0) <= 0 || (flow.attemptsLeft ?? 0) <= 0 || (flow.lockedForSeconds ?? 0) > 0) return;
+    actionInFlight.current = true;
     const current = captureContinuation();
     const canSettle = captureSettlement();
+    setStatus('');
     setBusy(true);
     try {
       const result = purpose === 'signup'
@@ -752,23 +761,33 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     } catch (caught) {
       if (current()) captureFailure(caught);
     } finally {
+      actionInFlight.current = false;
       if (canSettle()) setBusy(false);
     }
   }
   async function resendCode() {
-    if (flow?.status !== 'pending' || !flow.resendAllowed) return;
+    if (actionInFlight.current || busy || flow?.status !== 'pending' || !flow.resendAllowed) return;
+    setStatusRevision(revision => revision + 1);
+    actionInFlight.current = true;
+    const current = captureContinuation();
+    const canSettle = captureSettlement();
+    setStatus('');
     setBusy(true);
     try {
-      otpFlow.adopt(await resendStudentOtp());
+      const result = await resendStudentOtp();
+      if (!current()) return;
+      otpFlow.adopt(result);
       setCode('');
       setStatus('A new code was sent.');
     } catch (caught) {
+      if (!current()) return;
       if (caught instanceof RegistrationApiError && caught.otpState) {
         otpFlow.adopt(caught.otpState);
       }
       setStatus('A new code could not be sent yet. Follow the server countdown and retry.');
     } finally {
-      setBusy(false);
+      actionInFlight.current = false;
+      if (canSettle()) setBusy(false);
     }
   }
   const studentContext = purpose === 'signup' ? (
@@ -828,11 +847,11 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
         <div><span className="v321-eyebrow">{purpose === 'signup' ? 'Create account' : 'Verify account'}</span><h1 id={`${screenId}-title`} className="v34-title">{purpose === 'signup' ? 'Verify your new account.' : 'Enter the code'}</h1>{purpose === 'login' && <p className="v34-lede">Six digits sent to <b className="v321-mono">{destination}</b>. Your code stays valid for the time shown below. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p>}</div>
         {purpose === 'signup' && <p className="v34-lede">One code to <b className="v321-mono">{destination}</b> confirms this account is yours. <button type="button" className="v321-inline-action" aria-label={changeLabel} onClick={() => nav(backRoute)} disabled={busy}><NyayOneRevLIcon name="pen"/><span>Change</span></button></p>}
         <span className="sr-only">One-time code</span>
-        <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={busy} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
+        <label className="v34-otp">{digits.map((digit, index) => <span key={index} aria-hidden="true">{digit}</span>)}<input aria-label="Six digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={busy} onChange={(event) => setCode(normalizeOtpDigits(event.target.value))} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.repeat) { event.preventDefault(); void submit(); } }} onPaste={(event) => { event.preventDefault(); setCode(normalizeOtpDigits(event.clipboardData.getData('text'))); }}/></label>
         <p className="v321-otp-help">Paste or platform autofill works. The field accepts the full code at once.</p>
-        {status && <div className="v34-banner" role="alert">{status}</div>}
+        {status && <div key={statusRevision} ref={statusRef} tabIndex={-1} className="v34-banner" role="alert" aria-atomic="true">{status}</div>}
         <div className="v34-card v34-kv"><span>Expires in <b className="v321-mono">{Math.floor(expires / 60).toString().padStart(2, '0')}:{(expires % 60).toString().padStart(2, '0')}</b></span><span>Resend in <b className="v321-mono">{flow?.resendAllowed ? '00:00' : `${Math.floor(resend / 60).toString().padStart(2, '0')}:${String(resend % 60).padStart(2, '0')}`}</b></span><span>Tries left <b>{attempts ?? '—'}</b></span></div>
-        <div className="v321-button-row"><button type="button" className="v321-primary" aria-label="Verify and continue" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}><NyayOneRevLIcon name="checkc"/><span>Verify and Continue</span></button><button type="button" className="v321-secondary" disabled={!flow?.resendAllowed || busy} onClick={resendCode}><span className="v321-icon--indigo"><NyayOneRevLIcon name="refresh"/></span><span>Resend Code</span></button></div>
+        <div className="v321-button-row"><button type="button" className="v321-primary" aria-label="Verify and continue" onClick={submit} disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.expiresInSeconds ?? 0) <= 0 || (flow.attemptsLeft ?? 0) <= 0 || (flow.lockedForSeconds ?? 0) > 0}><NyayOneRevLIcon name="checkc"/><span>Verify and Continue</span></button><button type="button" className="v321-secondary" disabled={!flow?.resendAllowed || busy} onClick={resendCode}><span className="v321-icon--indigo"><NyayOneRevLIcon name="refresh"/></span><span>Resend Code</span></button></div>
       </main><RevLLegalFooter plainText/></Pane>
     </Screen>
   );

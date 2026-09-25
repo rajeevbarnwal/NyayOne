@@ -36,7 +36,7 @@ import {
   takeProfileConflictDraft,
 } from './profileConflictDraftStore';
 import { isStudentMutationCancellation } from '../lib/useStudentMutation';
-import { useRouteContinuation } from '../lib/routeContinuation';
+import { useRequestSettlement, useRouteContinuation } from '../lib/routeContinuation';
 import { useAuth } from '../../../app/authContext';
 import {
   releaseActiveProfileReauthDraft,
@@ -510,6 +510,7 @@ export interface EmailIdentityPanelViewProps {
   errorTarget: 'add' | string | null;
   busy: boolean;
   errorRef?: (node: HTMLElement | null) => void;
+  errorRevision?: number;
   onDraftEmail: (value: string) => void;
   onAdd: () => void;
   onDraftCode: (identityId: string, value: string) => void;
@@ -552,10 +553,11 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
                 {pending && (
                   <div className="st-field">
                     <label className="st-field__label" htmlFor={codeId}>Six digit code for {identity.emailMasked}</label>
-                    <input id={codeId} className="st-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={draftCodes[identity.id] ?? ''} disabled={busy} aria-invalid={rowError ? true : undefined} aria-describedby={rowError ? `${codeId}-error` : undefined} onChange={(event) => props.onDraftCode(identity.id, event.target.value.replace(/\D/gu, '').slice(0, 6))} />
-                    {rowError && <span id={`${codeId}-error`} className="ui-validation" role="alert" tabIndex={-1} ref={errorRef}>{rowError}</span>}
+                    <input id={codeId} className="st-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={draftCodes[identity.id] ?? ''} disabled={busy} aria-invalid={rowError ? true : undefined} aria-describedby={rowError ? `${codeId}-error` : undefined} onChange={(event) => props.onDraftCode(identity.id, event.target.value.replace(/\D/gu, '').slice(0, 6))} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.repeat && !busy) { event.preventDefault(); props.onVerify(identity.id); } }} />
+                    {rowError && <span key={props.errorRevision} id={`${codeId}-error`} className="ui-validation" role="alert" aria-atomic="true" tabIndex={-1} ref={errorRef}>{rowError}</span>}
                   </div>
                 )}
+                {!pending && rowError && <span key={props.errorRevision} className="ui-validation" role="alert" aria-atomic="true" tabIndex={-1} ref={errorRef}>{rowError}</span>}
               </div>
               <div className="st-actions">
                 {pending && <button type="button" className="btn btn--primary tap" aria-label={`Verify email ${identity.emailMasked}`} disabled={busy || (draftCodes[identity.id] ?? '').length !== 6} onClick={() => props.onVerify(identity.id)}>Verify</button>}
@@ -569,8 +571,8 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
       </ul>
       <div className="st-field">
         <label className="st-field__label" htmlFor="profile-email-identity-input">Add a sign-in email</label>
-        <input id="profile-email-identity-input" className="st-input" type="email" inputMode="email" autoComplete="email" maxLength={254} value={draftEmail} disabled={busy || full} aria-invalid={addError ? true : undefined} aria-describedby={addError ? 'profile-email-identity-input-error' : undefined} onChange={(event) => props.onDraftEmail(event.target.value)} />
-        {addError && <span id="profile-email-identity-input-error" className="ui-validation" role="alert" tabIndex={-1} ref={errorRef}>{addError}</span>}
+        <input id="profile-email-identity-input" className="st-input" type="email" inputMode="email" autoComplete="email" maxLength={254} value={draftEmail} disabled={busy || full} aria-invalid={addError ? true : undefined} aria-describedby={addError ? 'profile-email-identity-input-error' : undefined} onChange={(event) => props.onDraftEmail(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.repeat && !busy && !full) { event.preventDefault(); props.onAdd(); } }} />
+        {addError && <span key={props.errorRevision} id="profile-email-identity-input-error" className="ui-validation" role="alert" aria-atomic="true" tabIndex={-1} ref={errorRef}>{addError}</span>}
         <p className="st-setrow__sub">We send a six digit code to confirm you own the address. The address never becomes a sign-in identity until that code is verified here.</p>
       </div>
       <div className="st-actions"><button type="button" className="btn btn--primary tap" aria-label="Add sign-in email" disabled={busy || full} onClick={props.onAdd}>Add email</button></div>
@@ -591,16 +593,40 @@ export function EmailIdentityPanel({ expanded }: { expanded: boolean }) {
   const [draftCodes, setDraftCodes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [errorTarget, setErrorTarget] = useState<'add' | string | null>(null);
+  const [errorRevision, setErrorRevision] = useState(0);
+  const actionInFlight = useRef(false);
+  const captureSettlement = useRequestSettlement();
   const errorNode = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (error) errorNode.current?.focus(); }, [error, errorTarget]);
+  useEffect(() => { if (error && expanded) errorNode.current?.focus(); }, [error, errorTarget, errorRevision, expanded]);
   const busy = add.isPending || verify.isPending || resend.isPending || remove.isPending || primary.isPending;
+  const { data: identityData, dataUpdatedAt, refetch: refreshIdentities } = listing;
+  useEffect(() => {
+    if (!expanded || !identityData || busy) return;
+    const cooldowns = identityData.identities.filter(identity => identity.state === 'pending')
+      .map(identity => identity.verification.resendInSeconds ?? 0).filter(seconds => seconds > 0);
+    if (!cooldowns.length) return;
+    // Elapsed time schedules a read, NEVER grants resend authority. Failed reads
+    // retain the disabled old projection; reopening permits a new read attempt.
+    const delay = Math.max(0, dataUpdatedAt + Math.min(...cooldowns) * 1000 - Date.now());
+    const timer = window.setTimeout(() => { void refreshIdentities(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [expanded, identityData, dataUpdatedAt, refreshIdentities, busy]);
   // Collapsed by default (zero S-17 height): no identity read happens until the owner opens it.
   if (!expanded) return null;
   if (!listing.data) {
     return <section className="st-panel" aria-labelledby="profile-email-identity-title" data-testid="profile-email-identities" id="profile-email-identity-section"><h2 id="profile-email-identity-title" className="st-panel__title">Sign-in email</h2>{listing.isPending ? <LoadingState label="Loading sign-in emails…" /> : <ErrorState title="Could not load sign-in emails" detail={emailIdentityErrorMessage(listing.error)} onRetry={() => { void listing.refetch(); }} />}</section>;
   }
-  function fail(target: 'add' | string, caught: unknown) { setErrorTarget(target); setError(emailIdentityErrorMessage(caught)); }
+  function fail(target: 'add' | string, caught: unknown) { setErrorTarget(target); setError(emailIdentityErrorMessage(caught)); setErrorRevision(revision => revision + 1); }
   function clear() { setError(null); setErrorTarget(null); }
+  async function runAction(target: string, action: () => Promise<unknown>, success: () => void = clear) {
+    if (actionInFlight.current || busy) return;
+    actionInFlight.current = true;
+    const canSettle = captureSettlement();
+    clear();
+    try { await action(); if (canSettle()) success(); }
+    catch (caught) { if (canSettle()) fail(target, caught); }
+    finally { actionInFlight.current = false; }
+  }
   return (
     <EmailIdentityPanelView
       channelEnabled={listing.data.loginChannelEnabled}
@@ -610,23 +636,30 @@ export function EmailIdentityPanel({ expanded }: { expanded: boolean }) {
       draftCodes={draftCodes}
       error={error}
       errorTarget={errorTarget}
+      errorRevision={errorRevision}
       busy={busy}
       errorRef={(node) => { errorNode.current = node; }}
       onDraftEmail={setDraftEmail}
       onDraftCode={(identityId, value) => setDraftCodes((previous) => ({ ...previous, [identityId]: value }))}
       onAdd={() => {
+        if (actionInFlight.current || busy || listing.data.identities.length >= listing.data.maxIdentities) return;
         const candidate = draftEmail.trim();
         if (!LOGIN_EMAIL_RE.test(candidate) || [...candidate].length > 254) { fail('add', new ProfileApiError(422, 'validation_error', 'email')); return; }
-        add.mutate({ email: candidate, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: () => { setDraftEmail(''); clear(); }, onError: (caught) => fail('add', caught) });
+        void runAction('add', () => add.mutateAsync({ email: candidate, idempotencyKey: newEmailIdentityIdempotencyKey() }), () => { setDraftEmail(''); clear(); });
       }}
       onVerify={(identityId) => {
+        if (actionInFlight.current || busy) return;
         const code = draftCodes[identityId] ?? '';
         if (code.length !== 6) { fail(identityId, new ProfileApiError(422, 'validation_error', 'code')); return; }
-        verify.mutate({ identityId, code, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: () => { setDraftCodes((previous) => { const next = { ...previous }; delete next[identityId]; return next; }); clear(); }, onError: (caught) => fail(identityId, caught) });
+        void runAction(identityId, () => verify.mutateAsync({ identityId, code, idempotencyKey: newEmailIdentityIdempotencyKey() }), () => { setDraftCodes((previous) => { const next = { ...previous }; delete next[identityId]; return next; }); clear(); });
       }}
-      onResend={(identityId) => resend.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
-      onRemove={(identityId) => remove.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
-      onPrimary={(identityId) => primary.mutate({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }, { onSuccess: clear, onError: (caught) => fail(identityId, caught) })}
+      onResend={(identityId) => {
+        const identity = listing.data.identities.find(item => item.id === identityId);
+        if (!identity || identity.state !== 'pending' || (identity.verification.resendInSeconds ?? 0) > 0) return;
+        void runAction(identityId, () => resend.mutateAsync({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() }));
+      }}
+      onRemove={(identityId) => { void runAction(identityId, () => remove.mutateAsync({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() })); }}
+      onPrimary={(identityId) => { void runAction(identityId, () => primary.mutateAsync({ identityId, idempotencyKey: newEmailIdentityIdempotencyKey() })); }}
     />
   );
 }

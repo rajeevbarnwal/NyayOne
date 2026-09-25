@@ -181,7 +181,7 @@ describe('NYAY-48 S-05 Revision L verification alignment', () => {
     expect(normalizeOtpDigits('12x34 5678')).toBe('123456');
     expect(challenge).toContain("if (!isValidOtpInput(code)) { setStatus('Enter all six digits.'); return; }");
     expect(challenge).toContain("if (flow?.status !== 'pending' || flow.purpose !== purpose)");
-    expect(challenge).toContain("disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.lockedForSeconds ?? 0) > 0}");
+    expect(challenge).toContain("disabled={busy || code.length !== 6 || flow?.status !== 'pending' || (flow.expiresInSeconds ?? 0) <= 0 || (flow.attemptsLeft ?? 0) <= 0 || (flow.lockedForSeconds ?? 0) > 0}");
     expect(challenge).toContain('await verifyStudentOtp(code)');
     expect(challenge).toContain('await verifyLoginOtp(code)');
     expect(challenge).toContain('otpFlow.adopt(result)');
