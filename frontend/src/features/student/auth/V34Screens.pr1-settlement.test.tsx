@@ -100,7 +100,7 @@ function held() {
 }
 function unmount() { for (const effect of h.effects.values()) effect.cleanup?.(); h.effects.clear(); h.slots = []; }
 beforeEach(() => {
-  unmount(); vi.clearAllMocks(); h.cursor = 0;
+  unmount(); vi.resetAllMocks(); h.cursor = 0;
   h.location = { key: 'entry', pathname: '/s-08', search: '', hash: '' };
 });
 
@@ -121,11 +121,19 @@ describe.each<Kind>(['register', 'login', 'signup'])('CQA-F1 %s settlement owner
       expect(find(render(kind), e => e.props.role === 'alert' && e.props.hidden !== true)).toBeUndefined();
     }
   });
-  it('does not let an older settlement clear a newer submission', async () => {
+  it('preserves settlement ownership and refuses overlapping OTP activation', async () => {
     fill(kind); const first = held(), second = held();
     (kind === 'register' ? h.register : h.verify).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const submit = button(kind).onClick;
-    const old = submit(), current = submit(); // Synthetic overlapping callbacks, not duplicate-dispatch acceptance.
+    const old = submit(), current = submit();
+    if (kind !== 'register') {
+      // PR2 adds a synchronous OTP action guard: no second transport is sent.
+      expect(h.verify).toHaveBeenCalledTimes(1);
+      expect(button(kind).disabled).toBe(true);
+      first.reject(Error('current')); await old; await current;
+      expect(button(kind).disabled).toBe(false);
+      return;
+    }
     first.reject(Error('old')); await old;
     expect(button(kind).disabled).toBe(true);
     second.reject(Error('current')); await current;

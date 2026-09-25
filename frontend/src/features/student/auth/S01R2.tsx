@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { StudentSessionPhase } from '../../../app/authContext';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from './NyayOneRevLIcon';
 import './S01R2.css';
@@ -15,6 +16,14 @@ export function readR2OnboardingSeen(store?: Pick<Storage, 'getItem'>): boolean 
 export function S01R2({ phase, retry }: { phase: StudentSessionPhase; retry: () => void }) {
   const failed = phase === 'unavailable';
   const resolved = phase === 'authenticated';
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const retryRequested = useRef(false);
+  useEffect(() => {
+    if (failed && retryRequested.current) {
+      retryRequested.current = false;
+      retryRef.current?.focus();
+    }
+  }, [failed]);
   return <section className="s01-r2" data-screen="S-01" data-nyayone-design="3.2.1-r2" aria-label="NyayOne session check">
     <div className="s01-r2__body">
       {failed ? <>
@@ -27,7 +36,7 @@ export function S01R2({ phase, retry }: { phase: StudentSessionPhase; retry: () 
           </svg>
         </span>
         <div role="alert"><h1>We could not reach NyayOne.</h1><p>Check your connection and try again. Nothing on your account has changed.</p></div>
-        <button type="button" onClick={retry}><NyayOneRevLIcon name="refresh"/>Try again</button>
+        <button ref={retryRef} type="button" onClick={() => { retryRequested.current = true; retry(); }}><NyayOneRevLIcon name="refresh"/>Try again</button>
       </> : <>
         {resolved
           ? <span className="s01-r2__tile s01-r2__tile--success" aria-hidden="true"><NyayOneRevLIcon name="checkc" framed={false}/></span>
