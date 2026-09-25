@@ -654,7 +654,7 @@ export async function logoutStudent(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({}),
     }, { notifyAuthChanged: false, authTransition: transition });
-  });
+  }, { requireAnonymousAfterSuccess: true });
 }
 
 export { STUDENT_AUTH_CHANGED_EVENT, notifyStudentAuthChanged };

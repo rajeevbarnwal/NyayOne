@@ -36,6 +36,7 @@ import {
   takeProfileConflictDraft,
 } from './profileConflictDraftStore';
 import { isStudentMutationCancellation } from '../lib/useStudentMutation';
+import { useRouteContinuation } from '../lib/routeContinuation';
 import { useAuth } from '../../../app/authContext';
 import {
   releaseActiveProfileReauthDraft,
@@ -221,6 +222,7 @@ function useRedirectBlockedSection(projection: StudentProfileProjection | undefi
 
 export function ProfileStep1() {
   const nav = useNavigate();
+  const captureContinuation = useRouteContinuation();
   const auth = useAuth();
   const query = useStudentProfileProjection();
   const save = useSavePersonalProfile();
@@ -278,12 +280,14 @@ export function ProfileStep1() {
     setErrors(next); if (Object.keys(next).length > 0) return;
     setSaveError(null);
     stageReauthDraft();
+    const current = captureContinuation();
     try {
       const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, firstName, middleName: middleName || null, lastName, dateOfBirth, preferredLanguage: preferredLanguage as 'en' | 'hi', city, pronouns: pronouns || null });
+      if (!current()) return;
       setDirty(false);
       nav(profileSaveDestination(result.projection, destination));
     } catch (error) {
-      if (isStudentMutationCancellation(error)) return;
+      if (!current() || isStudentMutationCancellation(error)) return;
       conflictReview.capture(error);
       setSaveError(profileErrorMessage(error));
     }
@@ -319,6 +323,7 @@ export function ProfileStep1() {
 
 function AcademicStep({ screenId }: { screenId: string }) {
   const nav = useNavigate(); const auth = useAuth(); const query = useStudentProfileProjection(); const save = useSaveAcademicProfile();
+  const captureContinuation = useRouteContinuation();
   const blocked = useRedirectBlockedSection(query.data, 'academic'); const [hydratedVersion, setHydratedVersion] = useState<number | null>(null);
   const [college, setCollege] = useState(''); const [yearOfStudy, setYear] = useState(''); const [enrolmentNumber, setEnrolment] = useState(''); const [institutionalEmail, setEmail] = useState(''); const [barEnrolmentNumber, setBar] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({}); const [saveError, setSaveError] = useState<string | null>(null);
@@ -352,7 +357,8 @@ function AcademicStep({ screenId }: { screenId: string }) {
     if (!college) next.college = 'Select your college or university.'; if (!yearOfStudy) next.yearOfStudy = 'Select your year of study.'; if (!ENROLMENT_RE.test(enrolmentNumber.trim())) next.enrolmentNumber = 'Use state code / roll / year, for example KA/1234/2023.';
     if (institutionalEmail.trim()) { const error = institutionalEmailError(institutionalEmail); if (error) next.institutionalEmail = error; }
     setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft();
-    try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null }); setDirty(false); nav(profileSaveDestination(result.projection, destination)); } catch (error) { if (isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); }
+    const current = captureContinuation();
+    try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, college, yearOfStudy, enrolmentNumber, institutionalEmail: institutionalEmail || null, barEnrolmentNumber: barEnrolmentNumber || null }); if (!current()) return; setDirty(false); nav(profileSaveDestination(result.projection, destination)); } catch (error) { if (!current() || isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); }
   }
   if (!query.data || blocked) return <ProfileLoadState screenId={screenId} error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   const ids = { college: 'profile-academic-college', yearOfStudy: 'profile-academic-year', enrolmentNumber: 'profile-academic-enrolment', institutionalEmail: 'profile-academic-email' };
@@ -380,6 +386,7 @@ export function ProfileStep2() { return <AcademicStep screenId="S-10" />; }
 
 export function ProfileStep3() {
   const nav = useNavigate(); const auth = useAuth(); const query = useStudentProfileProjection(); const save = useSaveInterestsProfile(); const blocked = useRedirectBlockedSection(query.data, 'interests'); const [hydratedVersion, setHydratedVersion] = useState<number | null>(null);
+  const captureContinuation = useRouteContinuation();
   const [interests, setInterests] = useState<string[]>([]); const [goal, setGoal] = useState(''); const [errors, setErrors] = useState<FieldErrors>({}); const [saveError, setSaveError] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState(false);
   const [reauthRestoreNotice, setReauthRestoreNotice] = useState(false);
@@ -403,7 +410,7 @@ export function ProfileStep3() {
     setReauthRestoreNotice(Boolean(reauthDraft));
     setDirty(Boolean(reauthDraft || preserved));
   }, [auth.userId, hydratedVersion, query.data]);
-  async function persist(destination: 'done' | 'exit') { if (!query.data || hydratedVersion === null) return; const next: FieldErrors = {}; if (interests.length === 0) next.interests = 'Choose at least one area of interest.'; if (!goal) next.goal = 'Choose a career goal.'; setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft(); try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, interests, goals: [goal] }); setDirty(false); nav(profileSaveDestination(result.projection, destination === 'exit' ? 'exit' : 'next')); } catch (error) { if (isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); } }
+  async function persist(destination: 'done' | 'exit') { if (!query.data || hydratedVersion === null) return; const next: FieldErrors = {}; if (interests.length === 0) next.interests = 'Choose at least one area of interest.'; if (!goal) next.goal = 'Choose a career goal.'; setErrors(next); if (Object.keys(next).length > 0) return; setSaveError(null); stageReauthDraft(); const current = captureContinuation(); try { const result = await save.mutateAsync({ expectedProfileVersion: hydratedVersion, interests, goals: [goal] }); if (!current()) return; setDirty(false); nav(profileSaveDestination(result.projection, destination === 'exit' ? 'exit' : 'next')); } catch (error) { if (!current() || isStudentMutationCancellation(error)) return; conflictReview.capture(error); setSaveError(profileErrorMessage(error)); } }
   if (!query.data || blocked) return <ProfileLoadState screenId="S-11" error={query.error ?? undefined} retry={() => { void query.refetch(); }} />;
   return <ProfileSetupFrame step={3} {...query.data.profile.personal}>
     <p className="v321-profile__intro">Pick any. These tune your matches and are easy to change later.</p>

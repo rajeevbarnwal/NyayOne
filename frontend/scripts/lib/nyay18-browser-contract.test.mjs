@@ -493,13 +493,17 @@ describe('NYAY-18 real Chromium runner source contract', () => {
     )).toBeLessThan(matrix.indexOf('await page.goto(`${WEB}/s-05`'));
     expect(matrix).toContain('await pendingStateResponse.finished()');
     expect(matrix).toContain("await pendingControl.waitFor({ state: 'visible' })");
-    expect(matrix).toContain("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })");
-    expect(matrix.indexOf("await page.waitForURL(/\\/s-03$/u);")).toBeLessThan(
-      matrix.indexOf("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })"),
+    expect(matrix).toContain("await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible' })");
+    expect(matrix.indexOf('await signOut.click()')).toBeLessThan(
+      matrix.indexOf("await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible' })"),
     );
-    expect(matrix.indexOf("await page.locator(S03_SELECTOR).waitFor({ state: 'visible' })")).toBeLessThan(
+    expect(matrix.indexOf("await page.locator(SESSION_UNAVAILABLE).waitFor({ state: 'visible' })")).toBeLessThan(
       matrix.indexOf('const safeEntryVisible ='),
     );
+    const rejection = matrix.slice(matrix.indexOf('await signOut.click()'), matrix.indexOf('const afterCookies ='));
+    expect(rejection).toContain("page.getByText('Sign out could not be confirmed.'");
+    expect(rejection).toContain('page.locator(S03_SELECTOR).count() === 0');
+    expect(rejection).not.toContain('waitForURL');
     expect(matrix).not.toContain("getByLabel('Six digit code').fill(");
     expect(matrix).not.toContain("name: 'Verify and continue'");
   });

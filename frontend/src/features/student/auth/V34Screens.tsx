@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { ThemeMode } from '../../../hooks/useTheme';
 import { useStudentSession, type StudentSessionPhase } from '../../../app/authContext';
@@ -39,7 +39,8 @@ import {
 import { resolveProfileStepRoute, useDismissProfilePrompt, useStudentProfileProjection } from '../profile/profileHooks';
 import { isStudentMutationCancellation } from '../lib/useStudentMutation';
 import { InfoTooltip } from '../components';
-import { consumeStudentAuthTransitionNotice } from '../lib/studentAuthTransitionNotice';
+import { consumeStudentAuthTransitionNotice, hasStudentLogoutFailure, recordStudentAuthTransitionNotice, subscribeStudentAuthTransitionNotice } from '../lib/studentAuthTransitionNotice';
+import { useRequestSettlement, useRouteContinuation } from '../lib/routeContinuation';
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
 import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
@@ -485,6 +486,8 @@ export function verifiedHomeShouldAutoOpenDashboard(
 
 export function V34VerifiedHome(props: ScreenProps) {
   const nav = useNavigate();
+  const captureContinuation = useRouteContinuation();
+  const logoutFailed = useSyncExternalStore(subscribeStudentAuthTransitionNotice, hasStudentLogoutFailure, () => false);
   const profile = useStudentProfileProjection();
   const dismiss = useDismissProfilePrompt();
   const backgroundRef = useRef<HTMLDivElement>(null);
@@ -511,8 +514,16 @@ export function V34VerifiedHome(props: ScreenProps) {
   }, [showDialog]);
 
   async function signOut() {
-    try { await logoutStudent(); } finally {
-      nav('/s-03', { replace: true });
+    const current = captureContinuation();
+    try {
+      await logoutStudent();
+      if (current()) nav('/s-03', { replace: true });
+      // In the real auth provider the transition can unmount this dialog.
+      // Its route guard then redirects only after an authoritative anonymous probe.
+    } catch {
+      // Process-only, non-identifying notice survives the transition's unmount.
+      // It is cleared by the next session lifecycle; never claim server revocation.
+      recordStudentAuthTransitionNotice('sign_out_failed');
     }
   }
 
@@ -602,6 +613,7 @@ export function V34VerifiedHome(props: ScreenProps) {
             <button type="button" className="v34-hit v34-s07-button v34-s07-button--primary" onClick={() => nav(profileSectionRoute(projection.nextIncompleteSection))} disabled={dismiss.isPending}><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="spark"/></span>Complete Profile</button>
             <button type="button" className="v34-hit v34-s07-button" onClick={() => { void dismissAndContinue(); }} disabled={dismiss.isPending}><span className="v321-revl-icon" aria-hidden="true"><S07Icon name="clock"/></span>Maybe Later</button>
           </div>
+          {logoutFailed && <div role="alert" className="v34-well">Sign out could not be confirmed. Your server session may still be active. Try Sign out again.</div>}
           <div className="v34-s07-session-actions"><button type="button" className="v34-hit v34-linkbtn" onClick={signOut}>Sign out</button></div>
         </div>
       </div>
@@ -611,6 +623,8 @@ export function V34VerifiedHome(props: ScreenProps) {
 
 export function V34Register(props: ScreenProps) {
   const nav = useNavigate();
+  const captureContinuation = useRouteContinuation();
+  const captureSettlement = useRequestSettlement();
   const [firstName, setFirstName] = useState(''); const [middleName, setMiddleName] = useState(''); const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState(''); const [dob, setDob] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -635,6 +649,8 @@ export function V34Register(props: ScreenProps) {
     if (!privacyNoticeAcknowledged) next.privacy = 'Acknowledge the Privacy Notice to continue.';
     setErrors(next); if (Object.keys(next).length) return;
     const payload = namePartsToPayload(parts);
+    const current = captureContinuation();
+    const canSettle = captureSettlement();
     setBusy(true);
     try {
       await registerStudent({
@@ -648,9 +664,9 @@ export function V34Register(props: ScreenProps) {
         privacyNoticeAcknowledged: true,
         privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
       });
-      nav('/s-09');
-    } catch { setErrors({ submit: 'Registration or code delivery could not be completed. Check your details or try again later.' }); }
-    finally { setBusy(false); }
+      if (current()) nav('/s-09');
+    } catch { if (current()) setErrors({ submit: 'Registration or code delivery could not be completed. Check your details or try again later.' }); }
+    finally { if (canSettle()) setBusy(false); }
   }
   return (
     <Screen id="S-08">
@@ -685,6 +701,8 @@ export function V34Register(props: ScreenProps) {
 
 function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const nav = useNavigate();
+  const captureContinuation = useRouteContinuation();
+  const captureSettlement = useRequestSettlement();
   const topbarProps = useContext(OtpScreenThemeContext);
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
@@ -718,20 +736,23 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
       setStatus('Start registration or sign in before entering a code.');
       return;
     }
+    const current = captureContinuation();
+    const canSettle = captureSettlement();
     setBusy(true);
     try {
       const result = purpose === 'signup'
         ? await verifyStudentOtp(code)
         : await verifyLoginOtp(code);
+      if (!current()) return;
       otpFlow.adopt(result);
       const resumeRoute = purpose === 'login'
         ? resolvedProfileReauthResumeRoute()
         : null;
       nav(resumeRoute ?? '/s-07', { replace: true });
     } catch (caught) {
-      captureFailure(caught);
+      if (current()) captureFailure(caught);
     } finally {
-      setBusy(false);
+      if (canSettle()) setBusy(false);
     }
   }
   async function resendCode() {
