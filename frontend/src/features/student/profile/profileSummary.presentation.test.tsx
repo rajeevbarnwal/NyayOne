@@ -23,7 +23,7 @@ const render = (value = projection) => renderToStaticMarkup(<MemoryRouter><Profi
 describe('NYAY-64 S-17 Revision L profile presentation', () => {
   it('uses the profile identity hierarchy without fabricated prototype identity', () => {
     const html = render();
-    for (const value of ['data-screen="S-17"', 'id="S-17-title"', 'Synthetic Student', 'Synthetic College · 3rd year', 'aria-label="Your Profile · Synthetic Student"', '>SS</span>']) expect(html).toContain(value);
+    for (const value of ['data-screen="S-17"', 'id="S-17-title"', 'Synthetic Student', 'Synthetic College · 3rd year', 'aria-label="SS · Your Profile · Synthetic Student"', '>SS</span>']) expect(html).toContain(value);
     expect(html).not.toMatch(/Aditi|Nair|aditi\.nair|9:41|\+91|Bengaluru/u);
     expect(html.match(/<h1\b/gu)).toHaveLength(1);
   });
@@ -68,7 +68,7 @@ describe('NYAY-64 S-17 Revision L profile presentation', () => {
     expect(screen).toContain('useStudentProfileProjection()');
     expect(screen).toContain('useState(false)');
     expect(screen).toContain('<EmailIdentityPanel expanded={emailIdentitiesOpen} />');
-    expect(screen).toContain('aria-label="Manage sign-in emails"');
+    expect(screen).toContain("aria-label={emailIdentitiesOpen ? 'Hide sign-in emails' : 'Manage sign-in emails'}");
     const view = readFileSync('src/features/student/profile/ProfileSummaryView.tsx', 'utf8');
     expect(view).toContain("profileSectionRoute(projection.nextIncompleteSection ?? 'personal')");
     expect(view).toContain('profileResumeDestination(projection)');

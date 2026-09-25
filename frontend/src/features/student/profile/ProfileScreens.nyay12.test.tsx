@@ -71,9 +71,9 @@ describe('NYAY-12 S-17 sign-in email panel', () => {
     expect(markup).toContain('aria-label="Resend code to p•••••@example.edu"');
     expect(markup).toContain('aria-label="Remove email p•••••@example.edu"');
     expect(markup).toContain('aria-label="Remove email v•••••@example.edu"');
-    expect(markup).toMatch(/<button(?=[^>]*aria-label="Make v•••••@example.edu the primary sign-in email")(?![^>]*disabled)[^>]*>/u);
-    expect(markup).not.toContain('aria-label="Make p•••••@example.edu the primary sign-in email"');
-    expect(markup).not.toContain('aria-label="Make m•••••@example.edu the primary sign-in email"');
+    expect(markup).toMatch(/<button(?=[^>]*aria-label="Make primary sign-in email v•••••@example.edu")(?![^>]*disabled)[^>]*>/u);
+    expect(markup).not.toContain('aria-label="Make primary sign-in email p•••••@example.edu"');
+    expect(markup).not.toContain('aria-label="Make primary sign-in email m•••••@example.edu"');
     expect(markup).toContain('data-testid="profile-email-identity-primary-badge"');
     expect(markup).not.toContain('aria-label="Verify email v•••••@example.edu"');
   });
@@ -89,14 +89,14 @@ describe('NYAY-12 S-17 sign-in email panel', () => {
 
   it('reflects server limits and channel availability without client authority', () => {
     const full = panel();
-    expect(full).toMatch(/<button(?=[^>]*aria-label="Add sign-in email")(?=[^>]*disabled)[^>]*>/u);
+    expect(full).toMatch(/<button(?=[^>]*aria-label="Add email")(?=[^>]*disabled)[^>]*>/u);
     const open = panel({ identities: [PRIMARY] });
-    expect(open).toMatch(/<button(?=[^>]*aria-label="Add sign-in email")(?![^>]*disabled)[^>]*>/u);
+    expect(open).toMatch(/<button(?=[^>]*aria-label="Add email")(?![^>]*disabled)[^>]*>/u);
     const disabledChannel = panel({ channelEnabled: false, identities: [PRIMARY] });
     expect(disabledChannel).toContain('data-testid="profile-email-identity-channel-status"');
     expect(disabledChannel).toMatch(/not enabled yet/iu);
     const busy = panel({ busy: true, identities: [PRIMARY] });
-    expect(busy).toMatch(/<button(?=[^>]*aria-label="Add sign-in email")(?=[^>]*disabled)[^>]*>/u);
+    expect(busy).toMatch(/<button(?=[^>]*aria-label="Add email")(?=[^>]*disabled)[^>]*>/u);
   });
 
   it('mounts the panel on S-17 from server state and stays storage-free', () => {
@@ -110,7 +110,7 @@ describe('NYAY-12 S-17 sign-in email panel', () => {
     expect(container).toContain('if (!expanded) return null;');
     expect(profileView).toContain('aria-expanded={emailIdentitiesOpen}');
     expect(profileView).toContain('data-testid="profile-email-identity-disclosure"');
-    expect(profileView).toContain('aria-label="Manage sign-in emails"');
+    expect(profileView).toContain("aria-label={emailIdentitiesOpen ? 'Hide sign-in emails' : 'Manage sign-in emails'}");
     expect(profileView).toContain('<EmailIdentityPanel expanded={emailIdentitiesOpen} />');
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/u);
     expect(source).not.toMatch(/state:\s*['"]verified['"]/u);

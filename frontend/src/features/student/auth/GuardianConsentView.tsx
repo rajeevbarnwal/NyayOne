@@ -1,3 +1,4 @@
+import { profileAvatarLabel } from '../components';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { profileSectionRoute, type StudentProfileProjection } from '../lib/profileApi';
@@ -22,7 +23,7 @@ export function GuardianConsentFrame({ projection, title, children }: { projecti
         {['Research', 'Calendar', 'Careers'].map(label => <button type="button" key={label} disabled>{label}</button>)}
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-guardian">
