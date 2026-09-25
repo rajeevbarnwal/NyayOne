@@ -29,6 +29,23 @@ def load(name: str) -> ModuleType:
 
 
 class PolicyOracleTests(unittest.TestCase):
+    def test_storage_retention_and_closed_pr_cleanup_contract(self) -> None:
+        contracts = load("test_storage_retention")
+        result = unittest.TestResult()
+        unittest.defaultTestLoader.loadTestsFromModule(contracts).run(result)
+        self.assertTrue(result.wasSuccessful(), result.errors + result.failures)
+        policy = load("verify_nyayone_ci")
+        source = policy.WORKFLOWS / "nyay42-optimization-observe.yml"
+        self.assertEqual(policy.check_workflow(source), [])
+        with tempfile.TemporaryDirectory() as directory:
+            altered = Path(directory) / source.name
+            for before, after in [("github.triggering_actor == github.repository_owner", "true"),
+                                  ("github.event_name == 'workflow_dispatch'", "true"),
+                                  ("7 days ago", "0 days ago"),
+                                  ("== closed", "!= closed")]:
+                altered.write_text(source.read_text().replace(before, after))
+                self.assertTrue(policy.check_workflow(altered))
+
     def test_manual_calibration_registered_without_new_required_context(self) -> None:
         policy = load("verify_nyayone_ci")
         path = policy.ROOT / ".github/workflows/nyay66-calibration.yml"
@@ -917,7 +934,7 @@ jobs:
             ),
             "upload config changed": (
                 original.replace(
-                    "          retention-days: 14",
+                    "          retention-days: 7",
                     "          retention-days: 1",
                     1,
                 ),
@@ -1749,7 +1766,7 @@ jobs:
             "          name: wave4-reporting-failure-diagnostic\n"
             "          path: ${{ github.workspace }}/test-results/wave4-browser/results.json\n"
             "          if-no-files-found: error\n"
-            "          retention-days: 14\n"
+            "          retention-days: 7\n"
             "          include-hidden-files: false\n"
         )
         self.assertEqual(source.count(diagnostic), 1)
@@ -1804,7 +1821,7 @@ jobs:
             "          name: nyay4-postgres-failure-diagnostic\n"
             "          path: ${{ github.workspace }}/backend/test-results/nyay4-postgres/summary.json\n"
             "          if-no-files-found: error\n"
-            "          retention-days: 14\n"
+            "          retention-days: 7\n"
             "          include-hidden-files: false\n"
         )
 

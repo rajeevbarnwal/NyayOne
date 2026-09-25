@@ -892,7 +892,7 @@ EXPECTED_NYAY22_FAILURE_UPLOAD_STEP = (
     "          name: nyay22-mentor-browser-failure-diagnostic\n"
     "          path: ${{ github.workspace }}/test-results/nyay22-browser/failure.json\n"
     "          if-no-files-found: error\n"
-    "          retention-days: 14\n"
+    "          retention-days: 7\n"
     "          include-hidden-files: false\n\n"
 )
 ACTION_REF = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
@@ -1051,7 +1051,7 @@ EXPECTED_NYAY18_BROWSER_EVIDENCE_CHAIN: tuple[dict[str, object], ...] = (
             "name": "nyay18-browser-namespace-attestation",
             "path": "${{ runner.temp }}/nyay18-browser-uploadable",
             "if-no-files-found": "error",
-            "retention-days": "14",
+            "retention-days": "7",
             "include-hidden-files": "false",
         },
     },
@@ -1434,7 +1434,7 @@ WAVE4_FAILURE_DIAGNOSTIC_UPLOAD = {
         "name": "wave4-reporting-failure-diagnostic",
         "path": "${{ github.workspace }}/test-results/wave4-browser/results.json",
         "if-no-files-found": "error",
-        "retention-days": "14",
+        "retention-days": "7",
         "include-hidden-files": "false",
     },
 }
@@ -1452,7 +1452,7 @@ NYAY4_FAILURE_DIAGNOSTIC_UPLOAD = {
             "summary.json"
         ),
         "if-no-files-found": "error",
-        "retention-days": "14",
+        "retention-days": "7",
         "include-hidden-files": "false",
     },
 }
@@ -1469,7 +1469,7 @@ NYAY22_FAILURE_DIAGNOSTIC_UPLOAD = {
             "${{ github.workspace }}/test-results/nyay22-browser/failure.json"
         ),
         "if-no-files-found": "error",
-        "retention-days": "14",
+        "retention-days": "7",
         "include-hidden-files": "false",
     },
 }
@@ -1489,7 +1489,7 @@ NYAY4_QUARANTINE_DIAGNOSTIC_UPLOAD = {
             "nyay4-ci-flaky/summary.json"
         ),
         "if-no-files-found": "error",
-        "retention-days": "14",
+        "retention-days": "7",
         "include-hidden-files": "false",
     },
 }
@@ -1575,7 +1575,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     (
         "ci-flaky-nyay4-cookie-reload-symmetry.yml",
         "postgres-16-pgvector-cookie-origin-reload",
-    ): "a9165baf7120fea7ea964b847de401092e5caab8d6f2b19fadc7b0555abf586d",
+    ): "39cd5bf78a0116a1514420bb2e43403dfb05be17916f68542b5e2582927ef269",
     (
         "nyay18-frontend-namespace-gate.yml",
         "namespace-static-policy",
@@ -1583,7 +1583,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     (
         "nyay18-frontend-namespace-gate.yml",
         "namespace-production-chromium",
-    ): "2938507619c53fbaa0f319824c4324acdd0518a82dcbc73f02936f01c5b77d33",
+    ): "275a9d05ea47fadce19d664b2521bdcebe08ff447f3c51177b2708c7254f3ba9",
     (
         "nyay18-frontend-namespace-gate.yml",
         "required",
@@ -1591,7 +1591,7 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     (
         "nyay5-profile-boundary-gate.yml",
         "profile-postgres-production-browser",
-    ): "d87c17bf770e64a32ac3be6a1d6e480f104e2777e4f738c464cb05071ec05220",
+    ): "7623432a5163eec3af8dff20b70c54b3e45fb0f9b14f93f2b5684c92bf730b61",
     (
         "nyay5-profile-boundary-gate.yml",
         "required",
@@ -1600,17 +1600,17 @@ EXPECTED_JOB_SEMANTIC_SHA256: dict[tuple[str, str], str] = {
     ("nyayone-policy-gate.yml", "required"): "cb7fdec8df817040ee48f877cd06a82a80b252603c51a9bd1771abcdffbe54e2",
     ("registration-db-gate.yml", "postgres-16-pgvector"): "4a5fe899f88d2cd98ec5108af462f8f9c08e612459538ccf809fc3aa23500b26",
     ("registration-db-gate.yml", "required"): "826db470f5620527b0929811c10b0550f6ce56c37e1c0225957731358e2f4aee",
-    ("wave1-foundation-gate.yml", "frontend-native"): "7cbafa269bc3a7c511f332cb626068e53bf185bd7d9528b2f4fac707ce1372d3",
-    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "153e02df5a01f3fecadc318a282b1145fbfb7faba905c24d3f75d202153d8911",
+    ("wave1-foundation-gate.yml", "frontend-native"): "0487eb99a6cdfd6082c8f50aeaa7987a2147afc8fec16624d4d7c6b3edae76c3",
+    ("wave1-foundation-gate.yml", "backend-postgres16-gate"): "35082cdd829a34de06493bce1f4de5b71f5e50b3574282f4192e418ab26f4dbc",
     ("wave1-foundation-gate.yml", "required"): "819f6d6b3187a38058f07e01be6573b315be27a9b296c2239731d33c12d8e67f",
-    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "449af3381247ff7d91c5b6c7a60ab220ecc63308af4553af6dd22a32bdaab758",
+    ("wave2-tutoring-db-gate.yml", "wave2-postgres-16-pgvector"): "c063de38b9e015b21ec57594245c5d4f3757d8382e5d04cbf57698ad7a92e144",
     ("wave2-tutoring-db-gate.yml", "required"): "3e311e18909eee9d1d5b63e2aa231a02296d1d17af0edbf5f3fb3f5609c6fd78",
-    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "f4e777be98ee755df10fa7e5613ad896fc67efd1d89572580c87ff29d599ed05",
+    ("wave3-credential-trust-gate.yml", "credential-trust-postgres-browser"): "a94981982cbc97b7864289b21c768adb93cd940dad9baa47566df8a5f4c9d3dd",
     ("wave3-credential-trust-gate.yml", "required"): "fb8b82abae6dcda07b3b8ab376d13882184fef23e2e17d7941a52656840e33de",
-    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "4364a064d6289dc2335601bdef539720e52999165b0051ec2c509dd6ebfdc412",
+    ("wave4-private-reporting-gate.yml", "private-reporting-postgres-browser"): "f94bbbceb51116d1038e4bb50d4f5734fd450d4ee72f2c41fd2ba8e489592533",
     ("wave4-private-reporting-gate.yml", "required"): "e7dba929f69d1c9783aecf806fed473f2eeb3d5f8155ed95a3e50f71d058e861",
-    ("wave5-calendar-gate.yml", "calendar-postgres"): "3e53e60acd87ec409045c0e7fc1dd0bcc474c4c8a13275545d72e0dfd4de7a27",
-    ("wave5-calendar-gate.yml", "calendar-real-browser"): "538128276a071cafcc082999f0b912756b4cd71500552432b49659eedd74f6d4",
+    ("wave5-calendar-gate.yml", "calendar-postgres"): "9cc96d639062bf9410b3f3f0d08211f9da1f8a53881b8e38b002dc369a28df86",
+    ("wave5-calendar-gate.yml", "calendar-real-browser"): "fe4d62ecf68991c16947e72963d6e56fb93702eb4b7db65b6cbf430bd3ccc4f4",
     ("wave5-calendar-gate.yml", "required"): "c4c8cefe36440feecc52c6968ae30095e94900cf677dbd9d203d2e8c3d07e3f1",
 }
 
@@ -2109,7 +2109,7 @@ def _structural_workflow_failures(text: str, path: Path) -> list[str]:
                     "name": expected_name,
                     "path": expected_path,
                     "if-no-files-found": "error",
-                    "retention-days": "14",
+                    "retention-days": "7",
                     "include-hidden-files": "false",
                 }:
                     failures.append(
@@ -4139,9 +4139,9 @@ def check_workflow(path: Path) -> list[str]:
             f"{path}: NYAY-66 conformance workflow differs from its current contract"
         ]
     if path.name == "nyay42-optimization-observe.yml":
-        # Exact additive non-required observer; existing producers, semantic
-        # seals and seven required contexts are unchanged by this rollout.
-        expected = "334e5a722bd40c3a107d92654afe88fe3a041dfbf2b7bd47df56c07e63859725"
+        # Exact non-required observer plus approved owner-only cache cleanup.
+        # Other jobs retain their least-privilege permissions and assertions.
+        expected = "959e0f3f99ba0a08177309fa5568c3fb8007044d704de6264fe097dd872f2a7e"
         return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
             f"{path}: NYAY-42 observation workflow differs from its exact sealed contract"
         ]

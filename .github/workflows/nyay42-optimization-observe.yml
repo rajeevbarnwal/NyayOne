@@ -43,3 +43,42 @@ jobs:
           OBSERVED_EVENT: ${{ github.event_name }}
         run: |
           python scripts/ci/nyay42_optimization.py --base "$BASE_HEAD" --head "$REVIEWED_HEAD" --event "$OBSERVED_EVENT" >> "$GITHUB_STEP_SUMMARY"
+
+  # Standalone storage maintenance: owner-dispatched on main only.
+  # No checkout, PR-controlled code, artifact deletion, or public evidence changes.
+  closed-pr-cache-cleanup:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Remove only unused closed-PR merge caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '7 days ago' +%s)
+          gh api --paginate "repos/$REPOSITORY/actions/caches?per_page=100" \
+            --jq '.actions_caches[] | [.id, .ref, .last_accessed_at] | @tsv' |
+          while IFS=$'\t' read -r cache_id cache_ref accessed; do
+            [[ "$cache_id" =~ ^[0-9]+$ ]] || exit 1
+            [[ "$cache_ref" =~ ^refs/pull/([0-9]+)/merge$ ]] || continue
+            pr_number="${BASH_REMATCH[1]}"
+            [[ $(date -u -d "$accessed" +%s) -lt $cutoff ]] || continue
+            [[ $(gh api "repos/$REPOSITORY/pulls/$pr_number" --jq .state) == closed ]] || continue
+            # Re-read the exact ID/ref/timestamp before removal.
+            fresh=$(gh api "repos/$REPOSITORY/actions/caches?ref=$cache_ref&per_page=100" \
+              --jq ".actions_caches[] | select(.id == $cache_id) | [.ref, .last_accessed_at] | @tsv")
+            [[ "$fresh" == "$cache_ref"$'\t'"$accessed" ]] || continue
+            gh api --method DELETE "repos/$REPOSITORY/actions/caches/$cache_id"
+            echo "Removed closed-PR cache ID $cache_id" >> "$GITHUB_STEP_SUMMARY"
+          done

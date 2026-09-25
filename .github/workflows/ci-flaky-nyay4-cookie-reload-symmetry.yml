@@ -117,5 +117,5 @@ jobs:
           name: nyay4-cookie-origin-reload-symmetry-diagnostic
           path: ${{ github.workspace }}/backend/test-results/nyay4-ci-flaky/summary.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
