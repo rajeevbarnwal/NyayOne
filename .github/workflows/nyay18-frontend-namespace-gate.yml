@@ -107,7 +107,7 @@ jobs:
           name: nyay18-browser-namespace-attestation
           path: ${{ runner.temp }}/nyay18-browser-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
 
   required:

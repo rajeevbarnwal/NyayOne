@@ -106,7 +106,7 @@ jobs:
           name: v34-s11-s26-browser-attestation
           path: ${{ runner.temp }}/v34-s11-s26-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: Require complete passing S-11–S-26 producer results
         id: evidence_result
@@ -199,7 +199,7 @@ jobs:
           name: nyay4-postgres-failure-diagnostic
           path: ${{ github.workspace }}/backend/test-results/nyay4-postgres/summary.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: SAATHI-60 owner-scoped save concurrency (isolated PostgreSQL database)
         run: |

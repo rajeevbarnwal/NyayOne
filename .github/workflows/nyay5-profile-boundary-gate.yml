@@ -122,7 +122,7 @@ jobs:
           name: nyay5-profile-boundary-attestation
           path: ${{ runner.temp }}/nyay5-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: Require complete passing producer results
         id: evidence_result

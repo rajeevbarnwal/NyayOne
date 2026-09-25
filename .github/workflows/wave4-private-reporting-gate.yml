@@ -203,7 +203,7 @@ jobs:
           name: wave4-reporting-failure-diagnostic
           path: ${{ github.workspace }}/test-results/wave4-browser/results.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: MOD-01/MOD-02/MOD-03 moderation Chromium and privacy matrix
         working-directory: frontend
@@ -300,7 +300,7 @@ jobs:
           name: wave4-private-reporting-attestation
           path: ${{ runner.temp }}/wave4-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: Require complete passing producer results
         id: evidence_result

@@ -89,7 +89,7 @@ jobs:
           name: wave5-calendar-postgres-attestation
           path: ${{ runner.temp }}/wave5-postgres-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: Require complete passing PostgreSQL producer results
         id: evidence_result
@@ -260,7 +260,7 @@ jobs:
           name: wave5-calendar-real-browser-attestation
           path: ${{ runner.temp }}/wave5-real-uploadable
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
           include-hidden-files: false
       - name: Require complete passing browser producer results
         id: evidence_result
