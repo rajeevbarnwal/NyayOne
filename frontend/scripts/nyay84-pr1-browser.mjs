@@ -16,11 +16,13 @@ const bounded = promise => Promise.race([promise, new Promise((_, reject) => { c
 async function check(kind, outcome, depart) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
   const page = await context.newPage(); page.setDefaultTimeout(8000);
-  const started = deferred(), release = deferred(), finished = deferred();
+  const started = deferred(), release = deferred(), finished = deferred(), retried = deferred();
   const errors = [], unexpected = [];
   let a11y = null;
   let isAuthenticated = ['personal', 'academic', 'interests', 'logout'].includes(kind);
   let probeUnavailable = false;
+  let mutationRequests = 0;
+  const sameScreenChange = depart === 'query' || depart === 'hash';
   const id = kind === 'personal' ? 'S-10' : kind === 'academic' ? 'S-10-academic' : kind === 'interests' ? 'S-11' : 'S-07-popup';
   let profile = projection(id);
   const purpose = ['signup', 'register'].includes(kind) ? 'signup' : 'login';
@@ -42,6 +44,8 @@ async function check(kind, outcome, depart) {
     if (!url.pathname.startsWith('/api/')) return route.continue();
     const path = url.pathname.slice('/api/v1'.length);
     if (path === endpoint && req.method() !== 'GET') {
+      mutationRequests += 1;
+      if (mutationRequests === 2) retried.resolve();
       started.resolve(); await release.promise;
       try {
         if (outcome === 'failure') return await json({ detail: { code: kind === 'logout' ? 'service_unavailable' : 'invalid_input' } }, kind === 'logout' ? 503 : 422);
@@ -88,7 +92,25 @@ async function check(kind, outcome, depart) {
       await page.getByRole('button', { name: kind === 'interests' ? 'Finish setup' : 'Save & continue', exact: true }).click();
     }
     await bounded(started.promise);
-    if (depart) { await page.goBack(); await page.waitForURL(origin + '/s-03'); await page.locator('[data-screen="S-03"]').waitFor(); }
+    const submitButton = kind === 'register'
+      ? page.getByRole('button', { name: 'Create Account', exact: true })
+      : page.getByRole('button', { name: /Verify.*Continue/i });
+    if (depart === true) { await page.goBack(); await page.waitForURL(origin + '/s-03'); await page.locator('[data-screen="S-03"]').waitFor(); }
+    if (sameScreenChange) {
+      const submissionBlocked = () => page.evaluate(() => {
+        const button = document.querySelector('button[aria-label="Create Account"], button[aria-label="Verify and continue"]');
+        return button ? button.disabled : Boolean(document.querySelector('[data-testid="student-session-pending"]'))
+          || [...document.querySelectorAll('h1')].some(heading => heading.textContent === 'Checking verification state');
+      });
+      assert.equal(await submissionBlocked(), true, 'request owns busy/session-pending before navigation');
+      await page.evaluate(change => {
+        history.pushState({ key: 'pr1-cqa-f1' }, '', location.pathname + (change === 'query' ? '?cqa=f1' : '#cqa-f1'));
+        dispatchEvent(new PopStateEvent('popstate'));
+      }, depart);
+      await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+      assert.equal(await submissionBlocked(), true, 'query/hash must NOT release pending request early');
+      assert.equal(mutationRequests, 1);
+    }
     const count = await page.evaluate(() => window.__pr1.settled);
     const pathCount = await page.evaluate(() => window.__pr1.paths.length);
     release.resolve(); await bounded(finished.promise);
@@ -96,7 +118,22 @@ async function check(kind, outcome, depart) {
     // Wait for promise parsing, auth-probe completion and React effects, not a product delay.
     await page.waitForFunction(() => !document.querySelector('[data-testid="student-session-pending"]'));
     await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-    if (depart) {
+    if (sameScreenChange) {
+      assert.equal(new URL(page.url()).pathname, target);
+      assert.deepEqual(await page.evaluate(n => window.__pr1.paths.slice(n), pathCount), [], 'retired continuation must not navigate');
+      assert.equal(await page.getByRole('alert').count(), 0, 'retired failure must not publish an error');
+      await page.waitForFunction(register => {
+        const button = document.querySelector(register ? 'button[aria-label="Create Account"]' : '.v321-primary');
+        return button && !button.disabled;
+      }, kind === 'register');
+      assert.equal(await submitButton.isEnabled(), true, 'settlement restores the mounted form after query/hash change');
+      if (kind !== 'register') assert.equal(await page.getByRole('textbox', { name: 'Six digit code', exact: true }).isEnabled(), true);
+      // A new submission is permitted only after the first transport has settled.
+      await submitButton.click();
+      await bounded(retried.promise);
+      assert.equal(mutationRequests, 2, 'the form is genuinely retryable, not only visually enabled');
+    }
+    else if (depart === true) {
       assert.equal(new URL(page.url()).pathname, '/s-03');
       assert.deepEqual(await page.evaluate(n => window.__pr1.paths.slice(n), pathCount), [], 'late completion must not navigate, even transiently');
       assert.equal(await page.getByRole('alert').count(), 0);
@@ -109,7 +146,7 @@ async function check(kind, outcome, depart) {
       assert.equal(new URL(page.url()).pathname, '/s-07');
       assert.equal(isAuthenticated, true);
     } else assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, target);
-    if (kind === 'logout' && !depart && outcome !== 'success') {
+    if (kind === 'logout' && depart === false && outcome !== 'success') {
       await page.addScriptTag({ content: axe.source });
       const audit = await page.evaluate(() => window.axe.run());
       a11y = audit.violations.map(v => ({ id: v.id, impact: v.impact }));
@@ -125,6 +162,12 @@ try {
     if (process.env.NYAY84_CASE && process.env.NYAY84_CASE !== kind) continue;
     const outcomes = kind === 'logout' ? ['success','failure','probe-authenticated','probe-unavailable'] : ['success','failure'];
     for (const outcome of outcomes) for (const depart of [false,true]) await check(kind,outcome,depart);
+    // CQA-F1: same mounted screen, a retired route continuation, and transport still pending.
+    if (['register', 'login', 'signup'].includes(kind)) {
+      for (const outcome of kind === 'register' ? ['success', 'failure'] : ['failure']) {
+        for (const change of ['query', 'hash']) await check(kind, outcome, change);
+      }
+    }
   }
   const report = { evidence: 'Synthetic transport; real production build/browser. Not independent QA or real backend proof.', origin, results, pass: results.filter(r => r.pass).length, fail: results.filter(r => !r.pass).length };
   if (process.env.NYAY84_RESULTS) writeFileSync(process.env.NYAY84_RESULTS, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });

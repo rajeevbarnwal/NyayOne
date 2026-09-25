@@ -40,7 +40,7 @@ import { resolveProfileStepRoute, useDismissProfilePrompt, useStudentProfileProj
 import { isStudentMutationCancellation } from '../lib/useStudentMutation';
 import { InfoTooltip } from '../components';
 import { consumeStudentAuthTransitionNotice, hasStudentLogoutFailure, recordStudentAuthTransitionNotice, subscribeStudentAuthTransitionNotice } from '../lib/studentAuthTransitionNotice';
-import { useRouteContinuation } from '../lib/routeContinuation';
+import { useRequestSettlement, useRouteContinuation } from '../lib/routeContinuation';
 import { resolvedProfileReauthResumeRoute } from '../profile/profileReauthHandoff';
 import { NyayOneAuthSelectors } from './NyayOneAuthSelectors';
 import { NyayOneRevLIcon, NyayOneRevLLockup, type NyayOneRevLIconName } from './NyayOneRevLIcon';
@@ -624,6 +624,7 @@ export function V34VerifiedHome(props: ScreenProps) {
 export function V34Register(props: ScreenProps) {
   const nav = useNavigate();
   const captureContinuation = useRouteContinuation();
+  const captureSettlement = useRequestSettlement();
   const [firstName, setFirstName] = useState(''); const [middleName, setMiddleName] = useState(''); const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState(''); const [dob, setDob] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -649,6 +650,7 @@ export function V34Register(props: ScreenProps) {
     setErrors(next); if (Object.keys(next).length) return;
     const payload = namePartsToPayload(parts);
     const current = captureContinuation();
+    const canSettle = captureSettlement();
     setBusy(true);
     try {
       await registerStudent({
@@ -664,7 +666,7 @@ export function V34Register(props: ScreenProps) {
       });
       if (current()) nav('/s-09');
     } catch { if (current()) setErrors({ submit: 'Registration or code delivery could not be completed. Check your details or try again later.' }); }
-    finally { if (current()) setBusy(false); }
+    finally { if (canSettle()) setBusy(false); }
   }
   return (
     <Screen id="S-08">
@@ -700,6 +702,7 @@ export function V34Register(props: ScreenProps) {
 function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
   const nav = useNavigate();
   const captureContinuation = useRouteContinuation();
+  const captureSettlement = useRequestSettlement();
   const topbarProps = useContext(OtpScreenThemeContext);
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
@@ -734,6 +737,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
       return;
     }
     const current = captureContinuation();
+    const canSettle = captureSettlement();
     setBusy(true);
     try {
       const result = purpose === 'signup'
@@ -748,7 +752,7 @@ function V34OtpChallenge({ purpose }: { purpose: 'login' | 'signup' }) {
     } catch (caught) {
       if (current()) captureFailure(caught);
     } finally {
-      if (current()) setBusy(false);
+      if (canSettle()) setBusy(false);
     }
   }
   async function resendCode() {

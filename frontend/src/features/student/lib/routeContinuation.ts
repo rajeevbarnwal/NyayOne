@@ -26,3 +26,15 @@ export function useRouteContinuation() {
   }, [owner, location.key, location.pathname, location.search, location.hash]);
   return owner.capture;
 }
+
+/** Request cleanup survives query/hash changes, but not unmount or a newer request.
+ * Use only after the transport settles; this is not navigation or lease authority.
+ */
+export function useRequestSettlement() {
+  const owner = useMemo(createRouteContinuationOwner, []);
+  useLayoutEffect(() => {
+    owner.activate();
+    return () => owner.retire();
+  }, [owner]);
+  return owner.capture;
+}
