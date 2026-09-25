@@ -101,7 +101,7 @@ try {
   });
   await check('email duplicate Add is single-flight', 's-17', async (p, calls) => {
     await p.locator('#profile-email-identity-input').fill('synthetic@example.edu');
-    await clickBurst(p.getByRole('button', { name: 'Add sign-in email', exact: true }));
+    await clickBurst(p.getByRole('button', { name: 'Add email', exact: true }));
     await p.getByRole('alert').waitFor(); assert.equal(calls.length, 1);
   });
   await check('email Enter + repeated invalid/error focus', 's-17', async (p, calls) => {
@@ -129,7 +129,7 @@ try {
     await p.waitForTimeout(3600); assert.ok(reads() >= 2); assert.equal(await resend.isEnabled(), false); assert.equal(calls.length, 0);
   }, { cooldown: true, cooldownFailure: true });
   await check('email error state automated accessibility', 's-17', async p => {
-    await p.locator('#profile-email-identity-input').fill('invalid'); await p.getByRole('button', { name: 'Add sign-in email', exact: true }).click();
+    await p.locator('#profile-email-identity-input').fill('invalid'); await p.getByRole('button', { name: 'Add email', exact: true }).click();
     await p.getByRole('alert').waitFor(); await p.addScriptTag({ content: axe.source });
     const issues = await p.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)); assert.deepEqual(issues, []);
   });

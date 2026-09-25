@@ -1,3 +1,4 @@
+import { profileAvatarLabel } from '../components';
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
@@ -25,7 +26,7 @@ export function ProfileSummaryFrame({ projection, children }: { projection?: Stu
         {['Research', 'Calendar', 'Careers'].map(label => <button type="button" key={label} disabled>{label}</button>)}
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-profile-summary">{children}</div>
@@ -77,6 +78,6 @@ export function ProfileSummaryView({ projection, emailManagement, children }: {
       {rows.map(([label, value, mono]) => <div className="v321-profile-summary__row" key={label}><dt>{label}</dt><dd className={mono ? 'is-mono' : undefined}>{value}{label === 'Institutional Email' && emailManagement}</dd></div>)}
     </dl>
     {children}
-    <div className="v321-profile-summary__privacy"><div><b>Privacy &amp; settings</b><p>Review your privacy preferences and account settings.</p></div><button type="button" className="v321-profile__button" aria-label="Privacy & settings" onClick={() => nav('/s-19')}><span className="v321-profile-summary__privacy-icon" aria-hidden="true"><span className="v321-profile-summary__glyph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="currentColor" opacity=".14" /><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="m9.2 11.8 2 2 3.6-3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span></span>Privacy Centre</button></div>
+    <div className="v321-profile-summary__privacy"><div><b>Privacy &amp; settings</b><p>Review your privacy preferences and account settings.</p></div><button type="button" className="v321-profile__button" aria-label="Privacy Centre" onClick={() => nav('/s-19')}><span className="v321-profile-summary__privacy-icon" aria-hidden="true"><span className="v321-profile-summary__glyph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="currentColor" opacity=".14" /><path d="M12 3.5 5 6v5.2c0 4.4 3 7.4 7 9.3 4-1.9 7-4.9 7-9.3V6z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="m9.2 11.8 2 2 3.6-3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span></span>Privacy Centre</button></div>
   </ProfileSummaryFrame>;
 }

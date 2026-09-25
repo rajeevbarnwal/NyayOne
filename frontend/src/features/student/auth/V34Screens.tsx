@@ -1,3 +1,4 @@
+import { profileAvatarLabel } from '../components';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { ThemeMode } from '../../../hooks/useTheme';
@@ -577,7 +578,7 @@ export function V34VerifiedHome(props: ScreenProps) {
               {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} aria-disabled="true">{label}</button>)}
               <button type="button" onClick={() => nav('/s-17')}>Profile</button>
             </nav>
-            <div className="v34-s07-tools"><ThemeButton {...props}/><button type="button" className="v34-s07-avatar" aria-label={`Your Profile · ${fullName}`} onClick={() => nav('/s-17')}><span>{initials}</span></button></div>
+            <div className="v34-s07-tools"><ThemeButton {...props}/><button type="button" className="v34-s07-avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials}</span></button></div>
           </header>
           <div className="v34-s07-body">
             <div className="v34-s07-main">

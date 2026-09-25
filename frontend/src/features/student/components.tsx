@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { TraceabilityBanner } from '../../components/shell/TraceabilityBanner';
 
+/** Keep visible initials in avatar names, including Unicode/fallback glyphs. */
+export function profileAvatarLabel(fullName: string, initials: string): string {
+  const identity = fullName.trim();
+  return `${initials || 'P'} · Your Profile${identity ? ` · ${identity}` : ''}`;
+}
+
 /**
  * Shared building blocks for the student screens (S-01…S-19). Token-driven,
  * accessible (labels tied to inputs, 44px targets, invalid state announced),

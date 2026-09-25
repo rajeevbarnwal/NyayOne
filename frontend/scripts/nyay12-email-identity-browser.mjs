@@ -138,7 +138,7 @@ try {
 
   // Add A1 (masked in UI), verify with a wrong code first, then the real code.
   await pageA.getByLabel('Add a sign-in email').fill(EMAIL_A1);
-  await pageA.getByRole('button', { name: 'Add sign-in email' }).click();
+  await pageA.getByRole('button', { name: 'Add email' }).click();
   const codeA1 = await latestDelivery(EMAIL_A1);
   secrets.push(codeA1);
   const rowA1 = panel.locator('[data-testid="profile-email-identity-row"]').first();
@@ -171,7 +171,7 @@ try {
 
   // Spoofed selector / DOM tampering: remove maxLength and push non-digits; client keeps the six-digit contract.
   await pageA.getByLabel('Add a sign-in email').fill(EMAIL_A2);
-  await pageA.getByRole('button', { name: 'Add sign-in email' }).click();
+  await pageA.getByRole('button', { name: 'Add email' }).click();
   const codeA2 = await latestDelivery(EMAIL_A2);
   secrets.push(codeA2);
   const rowA2 = panel.locator('[data-testid="profile-email-identity-row"]').filter({ hasNot: pageA.getByTestId('profile-email-identity-primary-badge') }).first();
@@ -205,7 +205,7 @@ try {
     return route.fulfill({ status: 503, contentType: 'application/json', headers: { 'Cache-Control': 'private, no-store' }, body: JSON.stringify({ detail: { code: 'email_delivery_unavailable', message: 'Request failed' } }) });
   });
   await pageA.getByLabel('Add a sign-in email').fill('gamma-unused@example.test');
-  await pageA.getByRole('button', { name: 'Add sign-in email' }).click();
+  await pageA.getByRole('button', { name: 'Add email' }).click();
   await pageA.locator('#profile-email-identity-input-error').waitFor({ state: 'visible' });
   const retained = (await pageA.getByLabel('Add a sign-in email').inputValue()) === 'gamma-unused@example.test';
   const errorFocused = await pageA.evaluate(() => document.activeElement?.id === 'profile-email-identity-input-error');
@@ -217,7 +217,7 @@ try {
   await codeField2.evaluate((node) => { node.setAttribute('maxlength', '6'); });
   await codeField2.fill(codeA2);
   await pageA.getByRole('button', { name: `Verify email ${maskA2}` }).click();
-  await pageA.getByRole('button', { name: `Make ${maskA2} the primary sign-in email` }).waitFor({ state: 'visible', timeout: 15_000 });
+  await pageA.getByRole('button', { name: `Make primary sign-in email ${maskA2}` }).waitFor({ state: 'visible', timeout: 15_000 });
   const listingA2 = await api(contextA, 'GET', '/api/v1/auth/student/email-identities', { idempotent: false });
   const ids = listingA2.json.identities.map((identity) => identity.id);
   const promotions = await Promise.all([...ids, ...ids].map((identityId) => api(contextA, 'POST', `/api/v1/auth/student/email-identities/${identityId}/primary`, { body: {} })));
