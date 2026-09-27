@@ -6,7 +6,7 @@
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
   "integrityApproval": {"pr": 57, "commentId": 5727576583, "bundleSha256": "81de7549f4b763b84451896a3e1cce00c16ec62d44c8e25bc99dfb03815941a9"},
-  "enforced": [],
+  "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
       "screen": "S-17",
