@@ -11,7 +11,7 @@ import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {classifyConsoleErrors} from './lib/nyay66-console-errors.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
 import {loadR2,R2_SOURCE_SHA256,R2_VIEWPORTS,R2_LIVE_STATES,pendingStateRow,verifyR2PNG,mockR2Application} from './lib/nyay66-r2.mjs';
-import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression,LIMITS,canonical} from './lib/nyay66-enforcement.mjs';
+import {enforcePins,digest,pixelMetrics,compareStructure,approveException,validateProgression,finalizeEnforcement,LIMITS,canonical} from './lib/nyay66-enforcement.mjs';
 const require=createRequire(import.meta.url),root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const config=JSON.parse(await readFile(resolve(root,'frontend/scripts/nyay66-policy.json')));
 if(config.ownerToleranceApproval!=='NYAY-66:15382'||canonical(config.tolerances)!==canonical(LIMITS))throw Error('TOLERANCE_APPROVAL_MISMATCH');
@@ -132,7 +132,7 @@ try{
     }
   }
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
-  report.blocking=report.rows.some(row=>row.blocking);
+  Object.assign(report,finalizeEnforcement(report.rows,config,comments,coverageOptions));
   await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');
   const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceKind==='component-visual'?'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified':'live route'} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
   await writeFile(resolve(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>NYAY-66 comparison</title><style>body{font:16px sans-serif;background:#102033;color:white}div{display:flex;gap:10px}img{width:32%;object-fit:contain;align-self:start}section{margin-bottom:40px}</style><h1>NYAY-66 exact-head comparison</h1><p>${head}; unapproved differences remain NONCONFORMANT, not waived.</p>${links}`);

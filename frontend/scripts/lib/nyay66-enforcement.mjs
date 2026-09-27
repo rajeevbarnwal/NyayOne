@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import pixelmatch from 'pixelmatch';
-import {coverage} from './nyay66-conformance.mjs';
+import {coverage,VIEWPORTS} from './nyay66-conformance.mjs';
+import {R2_VIEWPORTS} from './nyay66-r2.mjs';
 export const LIMITS={pixelRatio:0.001,mean:0.25,geometry:1};
 export const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b))):item);
 export const digest=value=>createHash('sha256').update(value).digest('hex');
@@ -48,8 +49,66 @@ export function compareStructure(a,b,expectedClocks){
 export function approveException(entry,comments,options){
   const available=coverage('light',options).find(x=>x.screen===entry?.screen&&x.status!=='DESIGN-GAP');
   const viewports=available?.source==='r2'?['mobile390','mobile360','desktop']:['mobile390','desktop'];
-  if(!entry||!available||!viewports.includes(entry.viewport)||entry.theme!=='light'||!['referenceSha256','liveSha256'].every(k=>/^[a-f0-9]{64}$/.test(entry[k]))||!Array.isArray(entry.checks)||!entry.checks.length||entry.checks.some(x=>!['pixels','text','controls','headings','geometry'].includes(x)))return false;
+  if(!entry||!available||!Number.isSafeInteger(entry.approvalPr)||entry.approvalPr<=0||!viewports.includes(entry.viewport)||entry.theme!=='light'||!['referenceSha256','liveSha256'].every(k=>/^[a-f0-9]{64}$/.test(entry[k]))||!Array.isArray(entry.checks)||!entry.checks.length||entry.checks.some(x=>!['pixels','text','controls','headings','geometry'].includes(x)))return false;
   const hash=digest(canonical(entry));
   if(comments===null)return hash;
-  return Array.isArray(comments)&&comments.some(comment=>comment.user?.login==='rajeevbarnwal'&&comment.body?.trim()===`NYAY66-EXCEPTION ${hash}`);
+  return Array.isArray(comments)&&comments.some(comment=>Number.isSafeInteger(comment.id)&&comment.id>0&&comment.approvalPr===entry.approvalPr&&comment.user?.login==='rajeevbarnwal'&&comment.body?.trim()===`NYAY66-EXCEPTION ${hash}`);
+}
+
+// Derive the required state/viewport inventory from the same approved coverage
+// registry as capture, not from the rows that happened to be emitted.
+export function lightRowInventory(options){
+  return coverage('light',options).filter(item=>item.status!=='DESIGN-GAP').flatMap(item=>
+    (item.source==='r2'?R2_VIEWPORTS:VIEWPORTS).flatMap(vp=>item.views.map(view=>({
+      screen:item.screen,
+      // S-06's existing live fixture records its source view as row.state.
+      state:item.screen==='S-06'?view:item.source==='r2'?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
+      viewport:vp.id,theme:'light',
+    }))));
+}
+const rowKey=row=>`${row.screen}:${row.state}:${row.viewport}`;
+const hashField=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+
+export function finalizeEnforcement(rows,config,comments,options){
+  validateProgression([],config.enforced,options);
+  if(!Array.isArray(config.exceptions)||config.exceptions.some(entry=>!approveException(entry,comments,options)))throw Error('OWNER_EXCEPTION_APPROVAL_MISSING');
+  if(!Array.isArray(rows))throw Error('INVALID_CAPTURE_ROWS');
+  const inventory=lightRowInventory(options),known=new Set(inventory.map(rowKey));
+  const required=inventory.filter(row=>config.enforced.includes(row.screen));
+  const seen=new Set(),failures=[];
+  const evaluated=rows.map(original=>{
+    const row={...original};
+    if(row.theme==='light'){
+      const key=rowKey(row);
+      if(!known.has(key))failures.push(`UNKNOWN_LIGHT_ROW:${key}`);
+      if(seen.has(key))failures.push(`DUPLICATE_LIGHT_ROW:${key}`);
+      seen.add(key);
+      if(row.executed===true&&row.verdict!=='CAPTURE-FAILED'){
+        const proof=hashField(row.referenceSha256)&&hashField(row.liveSha256)
+          &&typeof row.metrics?.pass==='boolean'&&Array.isArray(row.regions)
+          &&row.regions.every(region=>typeof region.pass==='boolean')
+          &&Array.isArray(row.structure)&&Array.isArray(row.accessibility)&&Array.isArray(row.errors);
+        const resolved=row.state==='S-01-resolved';
+        const route=row.liveRouteBehavior;
+        const componentProof=!resolved||(row.evidenceKind==='component-visual'&&row.coverageApproval==='NYAY-77:15493'
+          &&route?.executed===true&&route.from==='/s-01'&&route.to==='/s-07'&&route.syntheticServer===true
+          &&route.artificialDelay===false&&route.navigationFrozen===false);
+        if(!proof||!componentProof){row.verdict='CAPTURE-FAILED';row.failure='MEASURED_PROOF_INCOMPLETE';}
+        else{
+          const violations=[...row.structure,...(!row.metrics.pass||row.regions.some(region=>!region.pass)?['pixels']:[]),
+            ...(row.accessibility.some(v=>['serious','critical'].includes(v.impact))?['accessibility']:[])];
+          const approved=config.exceptions.filter(entry=>entry.screen===row.screen&&entry.viewport===row.viewport&&entry.theme===row.theme
+            &&entry.referenceSha256===row.referenceSha256&&entry.liveSha256===row.liveSha256);
+          row.exceptionsApplied=approved;
+          row.remaining=violations.filter(check=>!approved.some(entry=>entry.checks.includes(check)));
+          row.verdict=row.errors.length?'CAPTURE-FAILED':row.remaining.length?'NONCONFORMANT':approved.length?'PARITY-WITH-DISCLOSED-DELTA':'PARITY';
+        }
+      }
+    }
+    const passing=row.executed===true&&['PARITY','PARITY-WITH-DISCLOSED-DELTA'].includes(row.verdict);
+    row.blocking=row.verdict==='CAPTURE-FAILED'||row.theme==='light'&&config.enforced.includes(row.screen)&&!passing;
+    return row;
+  });
+  for(const row of required)if(!seen.has(rowKey(row)))failures.push(`MISSING_LIGHT_ROW:${rowKey(row)}`);
+  return {rows:evaluated,expectedLightRows:required.length,failures,blocking:failures.length>0||evaluated.some(row=>row.blocking)};
 }
