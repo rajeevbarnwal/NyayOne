@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { matchPath, NavLink, useLocation } from 'react-router-dom';
 import { railItems, splitBottomNav } from './navItems';
 import type { ThemeMode } from '../../hooks/useTheme';
+import { screenRoutes } from '../../app/screenRegistry';
 
 /**
  * Option J "Chambers" app shell (SAATHI-343): desktop chambers rail + top
@@ -18,7 +19,16 @@ export function AppShell({
   theme: ThemeMode;
   toggleTheme: () => void;
 }) {
-  const location = useLocation();
+  const currentLocation = useLocation();
+  // Select presentation using the same exact, case-insensitive route match as
+  // Routes/StudentRouteGuard (including trailing slashes). This is a local shell
+  // lookup only: the router URL, query/hash, guards and redirects are untouched.
+  const location = {
+    ...currentLocation,
+    pathname: screenRoutes.find(({ path }) => matchPath(
+      { path, end: true, caseSensitive: false }, currentLocation.pathname,
+    ))?.path ?? currentLocation.pathname,
+  };
   // S-11 now owns its Revision L profile shell; all other continuation routes stay unchanged.
   if (location.pathname === '/s-11') {
     return <main className="ls-v34-content" id="main-content">{children}</main>;
