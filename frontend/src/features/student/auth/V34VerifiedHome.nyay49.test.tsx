@@ -69,7 +69,7 @@ describe('NYAY-49 S-07 profile prompt presentation', () => {
     const html = render();
     expect(html).toContain('class="v34-s07-background"');
     expect(html).toContain('data-testid="profile-prompt-background" aria-hidden="true"');
-    expect(html).toContain('aria-label="Your Profile · Synthetic Test Student"');
+    expect(html).toContain('aria-label="SS · Your Profile · Synthetic Test Student"');
     expect(html).toContain('>SS</span>');
     expect(html).toContain('Your legal journey, in one place.');
     expect(html.match(/class="v34-s07-tile"/gu)).toHaveLength(4);

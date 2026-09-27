@@ -1,3 +1,4 @@
+import { profileAvatarLabel } from '../components';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
@@ -31,7 +32,7 @@ export function DashboardFrame({ projection, children }: { projection?: StudentP
         <button type="button" onClick={() => nav('/s-20')}>Careers</button>
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-dashboard">{children}</div>

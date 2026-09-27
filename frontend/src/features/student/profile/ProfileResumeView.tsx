@@ -1,3 +1,4 @@
+import { profileAvatarLabel } from '../components';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
@@ -30,7 +31,7 @@ export function ProfileResumeView({ projection }: { projection: StudentProfilePr
         {['Research', 'Calendar', 'Careers'].map(label => <button type="button" key={label} disabled>{label}</button>)}
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-profile-resume">

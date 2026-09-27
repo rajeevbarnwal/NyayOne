@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { DpdpFootnote, SelectField, StudentScreen, TextField } from '../components';
+import { DpdpFootnote, SelectField, StudentScreen, TextField, profileAvatarLabel } from '../components';
 import { ErrorState, LoadingState } from '../../../components/ui/primitives';
 import {
   ProfileApiError,
@@ -71,7 +71,7 @@ export function ProfileSetupFrame({ step, firstName, middleName, lastName, child
         {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} disabled>{label}</button>)}
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-profile__form">
@@ -468,7 +468,7 @@ export function ProfileCompleteView({ firstName, middleName, lastName, verificat
         {['Research', 'Calendar', 'Careers'].map((label) => <button type="button" key={label} disabled>{label}</button>)}
         <button type="button" onClick={() => nav('/s-17')}>Profile</button>
       </nav>
-      <button type="button" className="v321-profile__avatar" aria-label={fullName ? `Your Profile · ${fullName}` : 'Your Profile'} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
+      <button type="button" className="v321-profile__avatar" aria-label={profileAvatarLabel(fullName, initials)} onClick={() => nav('/s-17')}><span>{initials || 'P'}</span></button>
     </header>
     <div className="v321-profile__layout">
       <div className="v321-profile-done">
@@ -562,7 +562,7 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
               <div className="st-actions">
                 {pending && <button type="button" className="btn btn--primary tap" aria-label={`Verify email ${identity.emailMasked}`} disabled={busy || (draftCodes[identity.id] ?? '').length !== 6} onClick={() => props.onVerify(identity.id)}>Verify</button>}
                 {pending && <button type="button" className="btn tap" aria-label={`Resend code to ${identity.emailMasked}`} disabled={busy || (identity.verification.resendInSeconds ?? 0) > 0} onClick={() => props.onResend(identity.id)}>Resend code</button>}
-                {identity.state === 'verified' && !identity.isPrimary && <button type="button" className="btn tap" aria-label={`Make ${identity.emailMasked} the primary sign-in email`} disabled={busy} onClick={() => props.onPrimary(identity.id)}>Make primary</button>}
+                {identity.state === 'verified' && !identity.isPrimary && <button type="button" className="btn tap" aria-label={`Make primary sign-in email ${identity.emailMasked}`} disabled={busy} onClick={() => props.onPrimary(identity.id)}>Make primary</button>}
                 <button type="button" className="btn tap" aria-label={`Remove email ${identity.emailMasked}`} disabled={busy} onClick={() => props.onRemove(identity.id)}>Remove</button>
               </div>
             </li>
@@ -575,7 +575,7 @@ export function EmailIdentityPanelView(props: EmailIdentityPanelViewProps) {
         {addError && <span key={props.errorRevision} id="profile-email-identity-input-error" className="ui-validation" role="alert" aria-atomic="true" tabIndex={-1} ref={errorRef}>{addError}</span>}
         <p className="st-setrow__sub">We send a six digit code to confirm you own the address. The address never becomes a sign-in identity until that code is verified here.</p>
       </div>
-      <div className="st-actions"><button type="button" className="btn btn--primary tap" aria-label="Add sign-in email" disabled={busy || full} onClick={props.onAdd}>Add email</button></div>
+      <div className="st-actions"><button type="button" className="btn btn--primary tap" aria-label="Add email" disabled={busy || full} onClick={props.onAdd}>Add email</button></div>
     </section>
   );
 }
@@ -671,5 +671,5 @@ export function ProfileView() {
     const signedOut = query.error instanceof ProfileApiError && query.error.status === 401;
     return <ProfileSummaryFrame><h1 id="S-17-title" className="v321-profile-summary__state-title">Your profile</h1>{!query.error ? <LoadingState label="Loading your profile…" /> : signedOut ? <div className="ui-state" role="alert"><p className="ui-state__eyebrow">Signed out</p><p className="ui-state__title">Sign in to continue with your profile</p><div className="ui-state__action"><button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button></div></div> : <ErrorState title="Could not load your profile" detail={profileErrorMessage(query.error)} onRetry={() => { void query.refetch(); }} />}</ProfileSummaryFrame>;
   }
-  return <ProfileSummaryView projection={query.data} emailManagement={<button type="button" className="v321-profile-summary__manage" aria-label="Manage sign-in emails" aria-expanded={emailIdentitiesOpen} aria-controls="profile-email-identity-section" data-testid="profile-email-identity-disclosure" onClick={() => setEmailIdentitiesOpen((open) => !open)}>{emailIdentitiesOpen ? 'Hide' : 'Manage'}</button>}><EmailIdentityPanel expanded={emailIdentitiesOpen} /></ProfileSummaryView>;
+  return <ProfileSummaryView projection={query.data} emailManagement={<button type="button" className="v321-profile-summary__manage" aria-label={emailIdentitiesOpen ? 'Hide sign-in emails' : 'Manage sign-in emails'} aria-expanded={emailIdentitiesOpen} aria-controls="profile-email-identity-section" data-testid="profile-email-identity-disclosure" onClick={() => setEmailIdentitiesOpen((open) => !open)}>{emailIdentitiesOpen ? 'Hide' : 'Manage'}</button>}><EmailIdentityPanel expanded={emailIdentitiesOpen} /></ProfileSummaryView>;
 }

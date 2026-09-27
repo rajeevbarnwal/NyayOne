@@ -57,13 +57,13 @@ function ErrorIcon() {
 }
 
 function Brand() {
-  return <aside className="s06-r2__brand">
+  return <div className="s06-r2__brand">
     <div className="s06-r2__ring" aria-hidden="true"><svg viewBox="0 0 320 360"><rect x="16" y="20" width="272" height="324" rx="20" fill="none" stroke="currentColor" strokeWidth="2" opacity=".55"/><rect x="40" y="24" width="2.5" height="312" rx="1.25" fill="currentColor" opacity=".45"/>{Array.from({ length: 9 }, (_, i) => <rect key={i} x="40" y={54 + i * 30} width={220 - (i % 3) * 42} height="5" rx="2.5" fill="currentColor" opacity=".5"/>)}</svg></div>
     <div className="s06-r2__lockup"><NyayOneRevLLockup reversed/></div>
     <div className="s06-r2__brandcopy s06-r2__mobile"><h1>Keep your law-school record in one place.</h1><p>Profile, opportunities and case notes, together.</p></div>
     <div className="s06-r2__brandcopy s06-r2__desktop"><div className="s06-r2__eyebrow">A legal workspace for students</div><h1>Learn the law.<br/>Build your path.</h1><p>One record of your academics, interests and verified details.</p><div className="s06-r2__benefits">{['Your record, together', 'Opportunities that fit', 'Read with the source'].map(text => <div key={text}><i aria-hidden="true"/>{text}</div>)}</div></div>
     <div className="s06-r2__legal"><span>Privacy Notice</span><span aria-hidden="true">·</span><span>Terms</span></div>
-  </aside>;
+  </div>;
 }
 
 /** Controlled presentation only. Server/session authority and routing remain in the controller. */
