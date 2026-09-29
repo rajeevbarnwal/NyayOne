@@ -5,9 +5,277 @@
   "ownerToleranceApproval": "NYAY-66:15382",
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
-  "integrityApproval": {"pr": 69, "commentId": 5889348197, "bundleSha256": "f8f110b3ae858d9831e5be1e2ec65ba532f896207a1589630b85e63ef1beb87b"},
+  "s18": {"cache": "s18-v32108-chromium-149.0.7827.55-36565721312", "manifestSha256": "38aa36b79f8dc7cc9bbdbdbc9b1ce26626f34a52cc253f3e317d59a9ff2ba5e9", "provenanceSha256": "788ccd74f7f3b49576bbb59e5b2fd445aa246bf76c963742bfbd6e33f9e49ea3"},
+  "integrityApproval": {"pr": 68, "commentId": 5893175146, "bundleSha256": "658fb23ff8859fc054b9c4dc3d95abb7a2629f894c63d937606bbac84de5c431"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "4c298a895c215a8a55c58fa73f61cde4167bf2b60940c49332a8cd9a2137649c",
+      "liveSha256": "87fab4b426b378031c642c058a8a2a2d1bf51be4a618df3bee667ea58defd186",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Loading is announced by role=status aria-label=\"Loading your settings\" rather than the prototype hidden text node \"Loading\". No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7c5340add00b89db7ec7b5ec48a901808315d3f8d0d5fdab4ab11f8777484618",
+      "liveSha256": "f79146d10022a3f5ed7bc4060c10a24b275714b83a471fa1e5c3013355d119cc",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Loading is announced by role=status aria-label=\"Loading your settings\" rather than the prototype hidden text node \"Loading\". Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "063deff377e4d6f7eb7c78b66b9da46689699335cbfe7648496fdb094b9101bd",
+      "liveSha256": "31ad3a6580f8915e7fc0bcc63f462563e433bdc0bd903b06c137ea6d61981f02",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "657dc0ba3b3eab57aa2a1a1720c6a086123cad2cb356dfb8b44057d04c5f7020",
+      "liveSha256": "0f604b5c3e722a6f927f87076aa44c15b078d0b55b5fc0ce00b7f86ef164669e",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "d54936147596eda79987e6687de7b7f14ed6f68186dbc2000c1c60907b948bb6",
+      "liveSha256": "c6f3de4bf7530a4513a98bbe51c89e471c52da0dd95ab7834bca8d119df9736d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. SMS is true in the submitted pending draft / server-confirmed response respectively, whereas the static prototype snapshot retains false. Saving locks mutation controls until response; success is shown only after server confirmation. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "fa2a69f26e43d3ce9f2ae34afa93c81e2663be9ef2b1a86f2e0f9282a9392d2a",
+      "liveSha256": "c2c1946ba6c98174776e7beec5c3204cc818d17f9622ad07c0263577fca42892",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. SMS is true in the submitted pending draft / server-confirmed response respectively, whereas the static prototype snapshot retains false. Saving locks mutation controls until response; success is shown only after server confirmation. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5dd99f551dad3c57d0268ad1e411e43488e1ae7a259b5170e68e939c7afd32cb",
+      "liveSha256": "ce05a3d7488ab60cd873100a8adfce8598715ef28a99513b2bd9100b2a77cf44",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. SMS is true in the submitted pending draft / server-confirmed response respectively, whereas the static prototype snapshot retains false. Saving locks mutation controls until response; success is shown only after server confirmation. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "0004f24b4ae5b17c4a7744414a066f6d51c1e27aeb1e84fd783b6fb982dbe766",
+      "liveSha256": "867df9a53d654466685ab8a0cf25aa05f02cff7dd0e7ecc37f1e72335bad8e74",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. SMS is true in the submitted pending draft / server-confirmed response respectively, whereas the static prototype snapshot retains false. Saving locks mutation controls until response; success is shown only after server confirmation. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "09c05a5706a09dbf7b6a776f4e310ba7b4f5cae6dbfebb69955f117d2ed72bb1",
+      "liveSha256": "aee6ac389c6b18a04a2ea302b1044161a5d78ed0d81b785ea97d989f053cf6bf",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Synthetic notification-field 422 uses truthful selected-preference rollback/retry wording rather than a language-only claim; expanded Dark/Hindi annotations and error wrapping intentionally reflow the disclosure and following action. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7471d75e1e62e9b9af8b0423520e80c6e2ba2bfdd4321abab142fe2fcbea674d",
+      "liveSha256": "f89196cfc582138e8544e684dc622e14f4785b1a16e143470e12c732dd8bb393",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Synthetic notification-field 422 uses truthful selected-preference rollback/retry wording rather than a language-only claim; expanded Dark/Hindi annotations and error wrapping intentionally reflow the disclosure and following action. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5459022f2ebfe2608dae79b2dc46066d460e60310100f32956afc644536d9992",
+      "liveSha256": "5ac5a2a245968279c2fbb07cabf6e5e4a8c7c14500cfb785eb39455af43d6869",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Mutations are blocked until a successful version reload; no stale overwrite is permitted. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "10f9afcd5255ffe4c87d4f507dc2178f22f84a36a35407712ad81aca4f4a0770",
+      "liveSha256": "1c6e98c5fd1aa88fa1fb33d16ce40ed4fd9870254950d60424a1f617d35877ea",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Mutations are blocked until a successful version reload; no stale overwrite is permitted. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "fb3ad619e582dd5d4d8ad489b89af471c4f8fe59694d1cfa1e043b3ed6dc6ad6",
+      "liveSha256": "3b7a0c16533e433b927533ea9feeaa9e324fa91dd87c4ead719888cc26bf0785",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "560f4574d270ae4800a8e24095470e64b20660b148b8d10e36c78d657dd87fc0",
+      "liveSha256": "89d5b8395135c0f7699a59c19b3d22a1711238468a885799154ea1cdeba9fb0f",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "95322c879723f59ac1897d4f2c4d29e9519d6a4aef74003b409293e319a1385d",
+      "liveSha256": "4a5c0beec098b68e6c0ea70ed4c9f190bdde052f8af8b84cd6828e34907544c0",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "51245358ad0ba50d793f879fba162bb8f983760cebcdae18dcfb9743281280f0",
+      "liveSha256": "810d64e42d25fbd236ced59bb72c22f004c6e4a4f5e44543c3ee7ad51f097147",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "e4c082f035309d83c8245c01c2f148d19b16bce01f17e1f34d4311abbd5d04aa",
+      "liveSha256": "dfc1b9e90e14bc6cfc9c7c1ff3b601b226ac6326fee184aa802123dd8b52f6aa",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Owner-approved component-visual evidence plus separately verified genuine 401 redirect S-18 to S-03; no frozen navigation or artificial production delay. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
+    {
+      "screen": "S-18",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "89240c07fe752d0a313d42f94fe14659c49209316902d99ebc9244f8f4435cdf",
+      "liveSha256": "46e674c4c5a5721ac3193545a4a056ae507292f86e4601463b4c726dbf0eb867",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. Owner-approved component-visual evidence plus separately verified genuine 401 redirect S-18 to S-03; no frozen navigation or artificial production delay. No accessibility, overflow, unknown error, tolerance or reference waiver.",
+      "approvalPr": 68
+    },
     {
       "screen": "S-17",
       "viewport": "mobile390",

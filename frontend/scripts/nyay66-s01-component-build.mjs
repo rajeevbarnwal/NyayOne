@@ -4,3 +4,5 @@ import {build} from 'vite';
 import react from '@vitejs/plugin-react';
 import {resolve} from 'node:path';
 await build({configFile:false,root:resolve('.'),base:'/__nyay66-components/',plugins:[react()],build:{outDir:'dist/__nyay66-components',emptyOutDir:true,rollupOptions:{input:resolve('scripts/nyay66-s01-component.html')}}});
+// Separate output keeps the original S-01 fixture and its rendering unchanged.
+await build({configFile:false,root:resolve('.'),base:'/__nyay66-s18/',plugins:[react()],build:{outDir:'dist/__nyay66-s18',emptyOutDir:true,rollupOptions:{input:resolve('scripts/nyay66-s18-component.html')}}});

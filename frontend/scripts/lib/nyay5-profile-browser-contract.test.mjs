@@ -1096,10 +1096,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the fourteen approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the fifteen approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1194,13 +1194,31 @@ describe('NYAY-5 browser release-gate source contract', () => {
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it('rejects the legacy font on S-17 while retaining the S-18 legacy negative control', async () => {
-    expect(await visualCensus({ screenId: 'S-17',
+  it.each(['S-17', 'S-18'])('rejects the legacy font on %s while retaining the S-19 legacy negative control', async screenId => {
+    expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
-    expect(await visualCensus({ screenId: 'S-18',
+    expect(await visualCensus({ screenId: 'S-19',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
+  });
+
+  it('recognizes the exact S-18 Revision L heading and labelled logo', async () => {
+    expect(await visualCensus({ screenId: 'S-18',
+      family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
+    })).toMatchObject({ typographyExact: true, iconsExact: true });
+  });
+
+  it('uses S-18 Revision L heading and switch roles without changing the namespace migration assertions', () => {
+    const runner = readFileSync(RUNNER, 'utf8');
+    const settings = runner.slice(runner.indexOf("failureStage = 'storage_s18'"), runner.indexOf("failureStage = 'storage_s19_export'"));
+    expect(settings).toContain("getByRole('heading', { name: 'Notifications and appearance.', exact: true })");
+    for (const name of ['Email notifications', 'SMS notifications', 'Product updates']) {
+      expect(settings).toContain(`getByRole('switch', { name: '${name}', exact: true })`);
+    }
+    expect(settings).toContain("localStorage.getItem('nyayone.theme.v1') === 'dark'");
+    expect(settings).toContain("!cacheNames.includes('ls-shell-v1')");
+    expect(settings).toContain("recordStorage(page, 's18-settings')");
   });
 
   it('recognizes only the exact nonfocusable S-12 hidden completion check wrapper', async () => {
