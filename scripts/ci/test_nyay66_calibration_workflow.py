@@ -29,6 +29,17 @@ class CalibrationWorkflowContracts(unittest.TestCase):
         control = next(step for step in steps if step.get("name") == "Read reviewed control pins from the dispatch workflow revision")
         self.assertEqual(control["with"]["ref"], "${{ github.workflow_sha }}")
 
+    def test_s18_option_is_trusted_control_capture_only_and_preserves_old_options(self):
+        workflow = self.workflow()
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["reference"]["options"], ["r2", "revl", "s18-v32108"])
+        steps = workflow["jobs"]["calibrate"]["steps"]
+        validation = next(step for step in steps if step.get("name") == "Validate exact source selection")
+        self.assertIn('"$REFERENCE" = s18-v32108', validation["run"])
+        capture = next(step for step in steps if step.get("name") == "Generate reference artifacts only")
+        self.assertIn('node ../../control/frontend/scripts/nyay66-s18-calibrate.mjs "$NYAY66_OUTPUT"', capture["run"])
+        self.assertNotIn('node scripts/nyay66-s18-calibrate.mjs', capture["run"])
+        self.assertIn('node scripts/nyay66-calibrate.mjs', capture["run"])
+
     def test_owner_actor_and_rerun_actor_are_both_required(self):
         condition = self.workflow()["jobs"]["calibrate"]["if"]
         self.assertEqual(condition, "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'rajeevbarnwal' && github.triggering_actor == 'rajeevbarnwal' }}")
