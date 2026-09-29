@@ -6,14 +6,15 @@ import {
   runStudentMutationStep,
   useStudentMutation as useMutation,
 } from '../lib/useStudentMutation';
-import { StudentScreen, TextField, SelectField, DpdpFootnote } from '../components';
+import { StudentScreen, TextField, DpdpFootnote } from '../components';
+import { NotificationsSettingsView } from './NotificationsSettingsView';
+import { useNotificationSettings } from './useNotificationSettings';
 import {
   ErrorState,
   LoadingState,
   StatusBadge,
   ValidationState,
 } from '../../../components/ui/primitives';
-import type { ThemeMode } from '../../../hooks/useTheme';
 import { canSubmitDelete, DELETE_CONFIRM_PHRASE } from '../lib/dpdp';
 import { startRecovery, verifyRecovery } from '../lib/registrationApi';
 import { useOtpFlowState } from '../lib/useOtpFlowState';
@@ -30,7 +31,6 @@ import {
   type PrivacyRequestStatus,
   type StudentSettings,
   type StudentSettingsPatch,
-  type ThemePreference,
 } from '../lib/settingsApi';
 import {
   consumeStudentAuthTransitionNotice,
@@ -46,9 +46,6 @@ import {
  */
 
 const SETTINGS_KEY = ['student-settings'] as const;
-import { LANGUAGE_OPTIONS } from '../lib/catalog';
-
-const LANGUAGES = LANGUAGE_OPTIONS;
 const SETTINGS_WIDE_LAYOUT_QUERY = '(min-width: 821px)';
 
 export function settingsDisclosuresOpen(
@@ -155,118 +152,10 @@ function SettingsNotices({ conflict, failure }: { conflict: string | null; failu
 /* -------------------------------------------------------------------------- */
 /* S-18 — Notifications & appearance preferences (server-backed)               */
 /* -------------------------------------------------------------------------- */
-export function NotificationsSettings({ theme, toggleTheme }: { theme?: ThemeMode; toggleTheme?: () => void }) {
+export function NotificationsSettings() {
   const nav = useNavigate();
-  const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: getStudentSettings });
-  const { mutation, conflict, failure } = useSettingsPatch();
-  const s = settings.data;
-
-  function patch(p: StudentSettingsPatch): void {
-    if (!s) return;
-    mutation.mutate({ patch: p, expectedVersion: s.version });
-  }
-
-  function pickTheme(next: ThemePreference): void {
-    patch({ theme: next });
-    // Keep the shell theme in sync immediately for light/dark picks.
-    if ((next === 'light' || next === 'dark') && theme && theme !== next) toggleTheme?.();
-  }
-
-  const signedOut = settings.error instanceof SettingsApiError && settings.error.status === 401;
-
-  return (
-    <StudentScreen screenId="S-18" className="st-set">
-      <div className="st-set__head">
-        <p className="st-eyebrow">Settings · notifications, theme and language</p>
-        <h1 className="st-h1">How NyayOne reaches you</h1>
-      </div>
-
-      {settings.isPending && <LoadingState label="Loading your settings…" />}
-      {settings.isError && (signedOut ? (
-        <div className="ui-state" role="alert">
-          <p className="ui-state__eyebrow">Signed out</p>
-          <p className="ui-state__title">Sign in to manage settings</p>
-          <div className="ui-state__action">
-            <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button>
-          </div>
-        </div>
-      ) : (
-        <ErrorState title="Could not load settings" detail="Check your connection and retry." onRetry={() => void settings.refetch()} />
-      ))}
-
-      {s && (
-        <>
-          <SettingsNotices conflict={conflict} failure={failure} />
-          <details className="v34c-mobile-disclosure">
-            <summary>Notifications <span>3 preferences</span></summary>
-            <section className="st-panel">
-            <h2 className="st-panel__title">Notifications</h2>
-            <div className="st-setrow">
-              <div>
-                <div className="st-setrow__label">Email notifications</div>
-                <div className="st-setrow__sub">Deadlines, applications and account activity by email.</div>
-              </div>
-              <Toggle id="pref-email" on={s.notifEmail} label="Email notifications" onToggle={() => patch({ notifEmail: !s.notifEmail })} />
-            </div>
-            <div className="st-setrow">
-              <div>
-                <div className="st-setrow__label">SMS notifications</div>
-                <div className="st-setrow__sub">Time-critical alerts to your registered mobile.</div>
-              </div>
-              <Toggle id="pref-sms" on={s.notifSms} label="SMS notifications" onToggle={() => patch({ notifSms: !s.notifSms })} />
-            </div>
-            <div className="st-setrow">
-              <div>
-                <div className="st-setrow__label">Product updates</div>
-                <div className="st-setrow__sub">New features and followed-school admission updates.</div>
-              </div>
-              <Toggle id="pref-updates" on={s.notifUpdates} label="Product updates" onToggle={() => patch({ notifUpdates: !s.notifUpdates })} />
-            </div>
-            </section>
-          </details>
-
-          <details className="v34c-mobile-disclosure">
-            <summary>Appearance &amp; language <span>{s.theme}</span></summary>
-            <section className="st-panel">
-            <h2 className="st-panel__title">Appearance &amp; language</h2>
-            <div className="st-setrow">
-              <div>
-                <div className="st-setrow__label">Theme</div>
-                <div className="st-setrow__sub">Chambers Dark for focused work · Clean Chambers Light for reading.</div>
-              </div>
-              <div className="st-seg" role="group" aria-label="Theme">
-                {(['system', 'light', 'dark'] as ThemePreference[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className="st-seg__btn"
-                    aria-pressed={s.theme === t}
-                    onClick={() => pickTheme(t)}
-                  >
-                    {t === 'system' ? 'System' : t === 'light' ? 'Light' : 'Dark'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <SelectField
-              id="pref-language"
-              label="Language"
-              value={s.language}
-              onChange={(v) => v && patch({ language: v })}
-              options={LANGUAGES}
-            />
-            </section>
-          </details>
-        </>
-      )}
-
-      <div className="st-actions">
-        <button type="button" className="btn tap" onClick={() => nav('/s-19')}>
-          Privacy &amp; DPDP controls
-        </button>
-      </div>
-    </StudentScreen>
-  );
+  const { state, change, reload } = useNotificationSettings();
+  return <NotificationsSettingsView state={state} onChange={patch => { void change(patch); }} onReload={() => { void reload(); }} onNavigate={nav} />;
 }
 
 /* -------------------------------------------------------------------------- */

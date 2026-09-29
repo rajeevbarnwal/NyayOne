@@ -29,6 +29,11 @@ export function AppShell({
       { path, end: true, caseSensitive: false }, currentLocation.pathname,
     ))?.path ?? currentLocation.pathname,
   };
+  // S-18 owns one main and a sibling settings-context aside. Other routes keep
+  // their current shell, guards and query/hash handling.
+  if (location.pathname === '/s-18') {
+    return <div className="ls-v34-content">{children}</div>;
+  }
   // S-11 now owns its Revision L profile shell; all other continuation routes stay unchanged.
   if (location.pathname === '/s-11') {
     return <main className="ls-v34-content" id="main-content">{children}</main>;
