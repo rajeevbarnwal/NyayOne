@@ -51,4 +51,10 @@ describe('S-18 approved continuation presentation', () => {
     expect(html).toMatch(/<div aria-live="polite" aria-atomic="true"><div class="v321-settings__notice/);
     expect(html).not.toContain('<div aria-live="polite" aria-atomic="true"></div><div class="v321-settings__notice');
   });
+  it('uses the frozen continuation warning paths in the network error notice', () => {
+    const html = render('network');
+    expect(html).toContain('d="M12 4 21 20H3z"');
+    expect(html).toContain('d="M12 10v4.5M12 17.2v.3"');
+    expect(html).not.toContain('d="M12 3 2 21h20Z"');
+  });
 });
