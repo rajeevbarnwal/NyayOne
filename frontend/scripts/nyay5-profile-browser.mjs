@@ -75,6 +75,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-15',
   'S-16',
   'S-17',
+  'S-18',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -3407,6 +3408,10 @@ async function extendedStorageBoundaryProbe(browser) {
   failureStage = 'storage_s18';
   await page.goto(`${WEB}/s-18`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-screen="S-18"]').waitFor();
+  await page.getByRole('heading', { name: 'Notifications and appearance.', exact: true }).waitFor();
+  await page.getByRole('switch', { name: 'Email notifications', exact: true }).waitFor();
+  await page.getByRole('switch', { name: 'SMS notifications', exact: true }).waitFor();
+  await page.getByRole('switch', { name: 'Product updates', exact: true }).waitFor();
   const migratedNamespace = await page.waitForFunction(async () => {
     if (!('serviceWorker' in navigator) || !('caches' in window)) return false;
     await navigator.serviceWorker.ready;
