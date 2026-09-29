@@ -12,7 +12,7 @@ on:
         required: true
         default: r2
         type: choice
-        options: [r2, revl]
+        options: [r2, revl, s18-v32108]
 
 permissions: {}
 
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SOURCE_HEAD" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$REFERENCE" = r2 || "$REFERENCE" = revl ]]
+          [[ "$REFERENCE" = r2 || "$REFERENCE" = revl || "$REFERENCE" = s18-v32108 ]]
       - name: Read reviewed control pins from the dispatch workflow revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -94,6 +94,8 @@ jobs:
         run: |
           if [ "$REFERENCE" = r2 ]; then
             node ../../control/frontend/scripts/nyay66-r2-calibrate.mjs "$NYAY66_OUTPUT"
+          elif [ "$REFERENCE" = s18-v32108 ]; then
+            node ../../control/frontend/scripts/nyay66-s18-calibrate.mjs "$NYAY66_OUTPUT"
           else
             node scripts/nyay66-calibrate.mjs
           fi
