@@ -39,4 +39,16 @@ describe('S-18 approved continuation presentation', () => {
   it('retains the prototype nested 20px button icon wrapper around its 18px glyph', () => {
     expect(render()).toMatch(/class="v321-settings__button-icon" aria-hidden="true"><svg width="18" height="18"/);
   });
+  it.each(['session', 'forbidden'] as SettingsPhase[])('uses the approved decorative lock tile and action frame for %s', phase => {
+    const html = render(phase);
+    expect(html).toContain('class="v321-settings__error-icon" aria-hidden="true"');
+    expect(html).toContain('class="v321-settings__error-actions"');
+    expect(html).toMatch(/v321-settings__error-actions[\s\S]*v321-settings__button-icon/);
+    if (phase === 'session') expect(html).toContain('v321-settings__button is-primary');
+  });
+  it.each(['conflict', 'network'] as SettingsPhase[])('keeps the %s notice in the existing live-region slot without an empty flex sibling', phase => {
+    const html = render(phase);
+    expect(html).toMatch(/<div aria-live="polite" aria-atomic="true"><div class="v321-settings__notice/);
+    expect(html).not.toContain('<div aria-live="polite" aria-atomic="true"></div><div class="v321-settings__notice');
+  });
 });

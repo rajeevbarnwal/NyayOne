@@ -62,7 +62,11 @@
 .v321-settings__skeletons { display:flex; flex-direction:column; gap:13px; }
 .v321-settings__skeletons>div { height:76px; border-radius:14px; background:#e4e1ef; }
 .v321-settings__error { border:1.5px dashed #b9b5cf; border-radius:16px; background:#fff; padding:22px 16px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; }
-.ls-v34-content .v321-settings__error h2 { font-size:17px; }
+.ls-v34-content .v321-settings .v321-settings__error h2 { font-size:17px; }
+.v321-settings__error-icon { display:inline-flex; width:32px; height:32px; border-radius:10px; background:#7a5a101f; color:#7a5a10; align-items:center; justify-content:center; margin-right:10px; vertical-align:-8px; }
+.v321-settings__error-actions { display:flex; gap:9px; flex-wrap:wrap; justify-content:center; margin-top:4px; }
+.v321-settings .v321-settings__button.is-primary { background:#2e3a8c; border-color:#2e3a8c; color:#fff; }
+.v321-settings__button.is-primary svg { color:inherit; }
 .v321-settings__error p { margin:0; font-size:13px; color:#5c5f7a; line-height:1.5; max-width:38ch; }
 .v321-settings__code { font:11px 'Spline Sans Mono',monospace; color:#5c5f7a; letter-spacing:.04em; }
 .v321-settings__sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }

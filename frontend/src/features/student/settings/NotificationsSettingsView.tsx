@@ -1,14 +1,18 @@
 import { useEffect, useRef } from 'react';
-import { NyayOneRevLIcon, NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
+import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import type { NotificationPatch, NotificationSettingsState } from './notificationSettingsState';
 import './S18Settings.css';
 
-function SettingsIcon({ name, size = 18, framed = false }: { name: 'bell' | 'back' | 'guard' | 'warn'; size?: number; framed?: boolean }) {
+function SettingsIcon({ name, size = 18, framed = false }: { name: 'bell' | 'back' | 'guard' | 'warn' | 'lock' | 'login' | 'checkc' | 'refresh'; size?: number; framed?: boolean }) {
   const svg = <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
     {name === 'bell' && <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill="currentColor" opacity=".14"/><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/></>}
     {name === 'back' && <><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".14"/><path d="M13.8 7.8 9.6 12l4.2 4.2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></>}
     {name === 'guard' && <><circle cx="9" cy="9" r="3.2" fill="currentColor" opacity=".16"/><circle cx="9" cy="9" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="M17 8.5l4 1.6v2.6c0 2.3-1.7 4-4 5.1-.9-.4-1.7-1-2.4-1.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></>}
     {name === 'warn' && <><path d="M12 3 2 21h20Z" fill="currentColor" opacity=".14"/><path d="M12 3 2 21h20ZM12 9v5m0 3v.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></>}
+    {name === 'lock' && <><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="currentColor" opacity=".16"/><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" strokeWidth="1.9"/></>}
+    {name === 'login' && <><path d="M10 4.5h6.5A1.5 1.5 0 0 1 18 6v12a1.5 1.5 0 0 1-1.5 1.5H10" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/><circle cx="10" cy="12" r="7.5" fill="currentColor" opacity=".12"/><path d="M3.5 12H13M10 8.5 13.5 12 10 15.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></>}
+    {name === 'checkc' && <><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".14"/><path d="m8 12.3 2.7 2.7 5.3-5.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></>}
+    {name === 'refresh' && <><path d="M5 12a7 7 0 0 1 12-4.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/><path d="M17.6 3.8v4h-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/><path d="M19 12a7 7 0 0 1-12 4.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/><path d="M6.4 20.2v-4h4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".08"/></>}
   </svg>;
   return framed ? <span className="v321-settings__button-icon" aria-hidden="true">{svg}</span> : svg;
 }
@@ -55,10 +59,10 @@ export function NotificationsSettingsView({ state, onChange, onReload, onNavigat
         <div><h1><span className="v321-settings__heading-icon"><SettingsIcon name="bell" size={20}/></span>Notifications and appearance.</h1><p className="v321-settings__subtitle">{legacyStateCopy ? 'Saved to your account, not this device.' : 'Each change saves to your account as you make it.'}</p></div>
         {phase === 'loading' && <div className="v321-settings__skeletons" role="status" aria-label="Loading your settings"><div/><div/></div>}
         {hardError && <div className="v321-settings__error" role="alert" tabIndex={-1} ref={error}>
-          <SettingsIcon name="warn" size={24}/><h2>{title}</h2>
+          <span className="v321-settings__error-icon" aria-hidden="true"><SettingsIcon name={phase === 'session' || phase === 'forbidden' ? 'lock' : 'warn'} size={20}/></span><h2>{title}</h2>
           <p>{phase === 'session' ? 'Sign in again to keep editing. Unsaved changes are not stored on this device.' : phase === 'forbidden' ? 'Your account does not have the student role, so these preferences are not available.' : 'Your settings could not be loaded. Check your connection and try again.'}</p>
           {phase !== 'network' && <span className="v321-settings__code">HTTP {phase === 'session' ? '401' : '403'}</span>}
-          <button type="button" className="v321-settings__button" onClick={() => phase === 'session' ? onNavigate('/s-03') : phase === 'forbidden' ? onNavigate('/s-17') : onReload()}>{phase === 'session' ? 'Sign in again' : phase === 'forbidden' ? 'Back to profile' : 'Try again'}</button>
+          <div className="v321-settings__error-actions"><button type="button" className={`v321-settings__button${phase === 'session' ? ' is-primary' : ''}`} onClick={() => phase === 'session' ? onNavigate('/s-03') : phase === 'forbidden' ? onNavigate('/s-17') : onReload()}><SettingsIcon name={phase === 'session' ? 'login' : phase === 'forbidden' ? 'back' : 'refresh'} framed/>{phase === 'session' ? 'Sign in again' : phase === 'forbidden' ? 'Back to profile' : 'Try again'}</button></div>
         </div>}
         {draft && !hardError && phase !== 'loading' && <>
           <section className="v321-settings__card v321-settings__notifications" aria-labelledby="S-18-notifications">
@@ -78,11 +82,11 @@ export function NotificationsSettingsView({ state, onChange, onReload, onNavigat
           </details>
           <div aria-live="polite" aria-atomic="true">
             {phase === 'saving' && <p className="v321-settings__save-status" role="status">Saving…</p>}
-            {phase === 'saved' && <p className="v321-settings__save-status is-saved" role="status"><NyayOneRevLIcon name="checkc" framed={false}/>Saved to your account.</p>}
-          </div>
+            {phase === 'saved' && <p className="v321-settings__save-status is-saved" role="status"><SettingsIcon name="checkc" size={16}/>Saved to your account.</p>}
           {(phase === 'conflict' || phase === 'network') && <div className={`v321-settings__notice is-${phase}`} role="alert" tabIndex={-1} ref={error}>
-            <SettingsIcon name="warn"/><div><b>{phase === 'conflict' ? 'Your settings changed somewhere else.' : 'That change was not saved.'}</b><span>{phase === 'conflict' ? 'Nothing was overwritten. Reload to see the current values, then make the change again.' : 'The switch is back where it was. Check your connection and try again.'}</span><div><button type="button" className="v321-settings__button" onClick={() => phase === 'network' && state.retryPatch ? onChange(state.retryPatch) : onReload()}><NyayOneRevLIcon name="refresh" framed={false}/>{phase === 'conflict' ? 'Reload settings' : 'Try again'}</button></div></div>
+            <SettingsIcon name={phase === 'conflict' ? 'refresh' : 'warn'}/><div><b>{phase === 'conflict' ? 'Your settings changed somewhere else.' : 'That change was not saved.'}</b><span>{phase === 'conflict' ? 'Nothing was overwritten. Reload to see the current values, then make the change again.' : 'The switch is back where it was. Check your connection and try again.'}</span><div><button type="button" className="v321-settings__button" onClick={() => phase === 'network' && state.retryPatch ? onChange(state.retryPatch) : onReload()}><SettingsIcon name="refresh" framed/>{phase === 'conflict' ? 'Reload settings' : 'Try again'}</button></div></div>
           </div>}
+          </div>
           <nav aria-label="Related"><button type="button" className="v321-settings__button" onClick={() => onNavigate('/s-19')}><SettingsIcon name="guard" framed/>Privacy preferences and requests</button></nav>
         </>}
       </main>

@@ -50,6 +50,50 @@ async function waitForCall(calls, count) {
 }
 
 describe('S-18 real Chromium / synthetic API', { timeout: 120000 }, () => {
+  it('matches approved error-card typography, lock tile and 48px framed actions', async () => {
+    for (const width of [390, 1440]) for (const status of [401, 403]) {
+      const f = await fixture();
+      try {
+        await f.page.setViewportSize({ width, height: 1024 });
+        f.setResponse({ status, code: 'synthetic_rejection' });
+        await f.page.getByRole('switch', { name: 'SMS notifications' }).click();
+        await f.page.locator(`[data-settings-state="${status === 401 ? 'session' : 'forbidden'}"]`).waitFor();
+        const card = f.page.locator('.v321-settings__error');
+        assert.equal(await card.locator('h2').evaluate(el => getComputedStyle(el).fontSize), '17px');
+        assert.equal(await card.locator('.v321-settings__error-icon').count(), 1);
+        const tile = await card.locator('.v321-settings__error-icon').boundingBox();
+        assert.equal(tile.width, 32); assert.equal(tile.height, 32);
+        assert.equal(await card.locator('.v321-settings__button-icon').count(), 1);
+        assert.equal((await card.getByRole('button').boundingBox()).height, 48);
+        assert.equal(await card.locator('.v321-settings__error-actions').evaluate(el => getComputedStyle(el).marginTop), '4px');
+        if (status === 401) assert.equal(await card.getByRole('button').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(46, 58, 140)');
+      } finally { await f.context.close(); }
+    }
+  });
+  it('places conflict/network notice 13px below disclosure, with 20px framed retry glyph', async () => {
+    for (const status of [409, 503]) {
+      const f = await fixture();
+      try {
+        f.setResponse({ status, code: status === 409 ? 'settings_version_conflict' : 'unavailable' });
+        await f.page.getByRole('switch', { name: 'SMS notifications' }).click();
+        await f.page.locator(`[data-settings-state="${status === 409 ? 'conflict' : 'network'}"]`).waitFor();
+        const disclosure = await f.page.locator('.v321-settings__disclosure').boundingBox();
+        const notice = f.page.locator('.v321-settings__notice'), box = await notice.boundingBox();
+        assert.equal(box.y - (disclosure.y + disclosure.height), 13);
+        assert.equal((await notice.locator('button .v321-settings__button-icon').boundingBox()).width, 20);
+        assert.equal(await notice.locator('button svg').getAttribute('width'), '18');
+      } finally { await f.context.close(); }
+    }
+  });
+  it('uses the source 16px saved check without inflating the status line', async () => {
+    const f = await fixture();
+    try {
+      await f.page.getByRole('switch', { name: 'SMS notifications' }).click();
+      await f.page.locator('[data-settings-state="saved"]').waitFor();
+      assert.equal(await f.page.locator('.v321-settings__save-status svg').getAttribute('width'), '16');
+      assert.equal((await f.page.locator('.v321-settings__save-status').boundingBox()).height, 16);
+    } finally { await f.context.close(); }
+  });
   it('keeps persistence pending, rejects same-tick duplicate clicks, and uses the returned version next time', async () => {
     const f = await fixture();
     try {
