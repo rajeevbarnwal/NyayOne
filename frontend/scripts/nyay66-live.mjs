@@ -8,6 +8,8 @@ import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {coverage,SOURCE_SHA256,VIEWPORTS} from './lib/nyay66-conformance.mjs';
 import {loadContinuation,appendContinuation} from './lib/nyay66-continuation.mjs';
+import {loadS18Cache} from './lib/nyay66-s18-import.mjs';
+import {captureS18Rows} from './lib/nyay66-s18-live.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {classifyConsoleErrors} from './lib/nyay66-console-errors.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
@@ -23,7 +25,8 @@ const manifest=JSON.parse(manifestBytes);
 if(manifest.sourceSha256!==SOURCE_SHA256)throw Error('REFERENCE_SOURCE_MISMATCH');
 const r2=await loadR2(root,config.r2);
 const continuation=await loadContinuation(root);
-const coverageOptions={r2:!!r2};
+const s18=await loadS18Cache(root,config.s18,continuation,manifest.fonts);
+const coverageOptions={r2:!!r2,s18:!!s18};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
 const repository=resolve(process.env.NYAY66_REPO||root);
@@ -67,7 +70,7 @@ try{
   browser=await chromium.launch();
   enforcePins(manifest,{chromium:browser.version(),playwright:require('playwright/package.json').version,platform:`${process.platform}-${process.arch}`,sourceSha256:digest(await readFile(resolve(root,'docs/design/nyayone-option-3.2.1/NYAYONE_OPTION3_2_1_REVL_SOURCE.html'))),fonts});
   if(r2)enforcePins(r2.manifest,{chromium:browser.version(),playwright:require('playwright/package.json').version,platform:`${process.platform}-${process.arch}`,sourceSha256:R2_SOURCE_SHA256,fonts});
-  for(const item of coverage('light',coverageOptions))for(const vp of item.source==='r2'?R2_VIEWPORTS:VIEWPORTS){
+  for(const item of coverage('light',{r2:!!r2}))for(const vp of item.source==='r2'?R2_VIEWPORTS:VIEWPORTS){
     if(item.status==='DESIGN-GAP'){report.rows.push({screen:item.screen,viewport:vp.id,theme:'light',verdict:'DESIGN-GAP',executed:false});continue;}
     for(const view of item.views){
       const isR2=item.source==='r2';
@@ -133,11 +136,15 @@ try{
       report.rows.push(row);console.log(JSON.stringify({screen:id,viewport:vp.id,verdict:row.verdict,blocking:row.blocking}));
     }
   }
+  if(s18){
+    report.s18Reference={cache:config.s18.cache,manifestSha256:config.s18.manifestSha256,provenance:s18.provenance};
+    report.rows.push(...await captureS18Rows({browser,origin,out,reference:s18}));
+  }
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
   Object.assign(report,finalizeEnforcement(report.rows,config,comments,coverageOptions));
-  Object.assign(report,appendContinuation(report,continuation));
+  Object.assign(report,appendContinuation(report,continuation,{s18:!!s18}));
   await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');
-  const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceKind==='component-visual'?'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified':'live route'} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
+  const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceKind==='component-visual'?(r.state==='S-18-session'?'component visual (not a stable live-route capture); genuine 401 S-18 → S-03 separately verified':'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified'):'live route'} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
   await writeFile(resolve(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>NYAY-66 comparison</title><style>body{font:16px sans-serif;background:#102033;color:white}div{display:flex;gap:10px}img{width:32%;object-fit:contain;align-self:start}section{margin-bottom:40px}</style><h1>NYAY-66 exact-head comparison</h1><p>${head}; unapproved differences remain NONCONFORMANT, not waived.</p>${links}`);
   const files=(await readdir(out)).sort();
   await writeFile(resolve(out,'SHA256SUMS'),(await Promise.all(files.map(async file=>`${digest(await readFile(resolve(out,file)))}  ${file}`))).join('\n')+'\n');

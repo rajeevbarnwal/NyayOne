@@ -6,13 +6,15 @@ export const VIEWPORTS = [
   { id: 'desktop', width: 1440, height: 1024 },
 ];
 
-export function coverage(theme = 'light', {r2 = false} = {}) {
-  return [...Array.from({ length: 17 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`), 'S-07-popup'].map(screen => {
+export function coverage(theme = 'light', {r2 = false, s18 = false} = {}) {
+  const items = [...Array.from({ length: 17 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`), 'S-07-popup'].map(screen => {
     const views = screen === 'S-07-popup' ? ['s14p'] : screen === 'S-07' ? ['s14'] : screen === 'S-10' ? ['s10a', 's10b'] : VIEWS.filter(view => view === screen.toLowerCase().replace('-', ''));
     const states={'S-01':['checking','error','resolved'],'S-02':['default','focus'],'S-06':['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']};
     if(r2&&theme==='light'&&states[screen])return {screen,views:states[screen].map(state=>`${screen.toLowerCase().replace('-','')}-${state}`),source:'r2',status:'NOT-YET-MEASURED'};
     return { screen, views: theme === 'light' ? views : [], status: theme !== 'light' || !views.length ? 'DESIGN-GAP' : 'NOT-YET-MEASURED' };
   });
+  if(s18&&theme==='light')items.push({screen:'S-18',source:'s18',status:'NOT-YET-MEASURED',views:['loading','loaded','saving','saved','invalid','conflict','network','forbidden','session'].map(s=>`s18-${s}`)});
+  return items;
 }
 
 export function comparePixels(a, b) {

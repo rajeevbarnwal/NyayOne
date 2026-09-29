@@ -60,11 +60,21 @@ export function continuationRows(data){
     sourceVersion:data.version,sourceArchiveSha256:data.archiveSha256,
   }))));
 }
-export function appendContinuation(report,data){
-  const rows=continuationRows(data),ids=new Set(data.screens.map(s=>s.screen));
-  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)))throw Error('CONTINUATION_ALREADY_REPORTED');
+export function appendContinuation(report,data,{s18=false}={}){
+  let rows=continuationRows(data);const ids=new Set(data.screens.map(s=>s.screen));
+  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')))throw Error('CONTINUATION_ALREADY_REPORTED');
+  let measuredLightRows=0;
+  if(s18){
+    const expected=new Set(rows.filter(r=>r.screen==='S-18'&&r.designState!=='option-manual').map(r=>`${r.state}:${r.viewport}`));
+    const found=report.rows.filter(r=>r.theme==='light'&&r.screen==='S-18');
+    for(const row of found)if(!expected.delete(`${row.state}:${row.viewport}`))throw Error('S18_MEASURED_COVERAGE_INCOMPLETE');
+    if(expected.size)throw Error('S18_MEASURED_COVERAGE_INCOMPLETE');
+    measuredLightRows=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
+    rows=rows.filter(r=>r.screen!=='S-18'||r.designState==='option-manual');
+  }
   // Existing finalizer's verdict, failures, 74 required rows and blocking result
   // are preserved verbatim. These source-only rows cannot authorize promotion.
   return {...report,rows:[...report.rows,...rows],continuation:{version:data.version,archiveSha256:data.archiveSha256,
-    designApproval:data.designApproval,screens:15,states:191,unmeasuredLightRows:rows.length,pngBaselinesImported:false}};
+    designApproval:data.designApproval,screens:15,states:191,unmeasuredLightRows:382-measuredLightRows,pngBaselinesImported:false,
+    ...(s18?{rasterizedScreens:['S-18'],importedReferenceRows:18,measuredLightRows}: {})}};
 }

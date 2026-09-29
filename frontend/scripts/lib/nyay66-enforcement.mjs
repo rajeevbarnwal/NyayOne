@@ -62,7 +62,7 @@ export function lightRowInventory(options){
     (item.source==='r2'?R2_VIEWPORTS:VIEWPORTS).flatMap(vp=>item.views.map(view=>({
       screen:item.screen,
       // S-06's existing live fixture records its source view as row.state.
-      state:item.screen==='S-06'?view:item.source==='r2'?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
+      state:item.screen==='S-06'?view:['r2','s18'].includes(item.source)?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
       viewport:vp.id,theme:'light',
     }))));
 }
@@ -93,7 +93,10 @@ export function finalizeEnforcement(rows,config,comments,options){
         const componentProof=!resolved||(row.evidenceKind==='component-visual'&&row.coverageApproval==='NYAY-77:15493'
           &&route?.executed===true&&route.from==='/s-01'&&route.to==='/s-07'&&route.syntheticServer===true
           &&route.artificialDelay===false&&route.navigationFrozen===false);
-        if(!proof||!componentProof){row.verdict='CAPTURE-FAILED';row.failure='MEASURED_PROOF_INCOMPLETE';}
+        const sessionProof=row.state!=='S-18-session'||(row.evidenceKind==='component-visual'&&row.coverageApproval==='NYAY-88:16029'
+          &&route?.executed===true&&route.from==='/s-18'&&route.to==='/s-03'&&route.syntheticServer===true
+          &&route.artificialDelay===false&&route.navigationFrozen===false);
+        if(!proof||!componentProof||!sessionProof){row.verdict='CAPTURE-FAILED';row.failure='MEASURED_PROOF_INCOMPLETE';}
         else{
           const violations=[...row.structure,...(!row.metrics.pass||row.regions.some(region=>!region.pass)?['pixels']:[]),
             ...(row.accessibility.some(v=>['serious','critical'].includes(v.impact))?['accessibility']:[])];

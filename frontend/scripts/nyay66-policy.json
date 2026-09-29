@@ -5,7 +5,8 @@
   "ownerToleranceApproval": "NYAY-66:15382",
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
-  "integrityApproval": {"pr": 69, "commentId": 5889348197, "bundleSha256": "f8f110b3ae858d9831e5be1e2ec65ba532f896207a1589630b85e63ef1beb87b"},
+  "s18": {"cache": "s18-v32108-chromium-149.0.7827.55-36565721312", "manifestSha256": "38aa36b79f8dc7cc9bbdbdbc9b1ce26626f34a52cc253f3e317d59a9ff2ba5e9", "provenanceSha256": "788ccd74f7f3b49576bbb59e5b2fd445aa246bf76c963742bfbd6e33f9e49ea3"},
+  "integrityApproval": {"pr": 68, "commentId": 0, "bundleSha256": "fdb7f7c1b9149c1a5f2736bb19a3ddd0d4da0d4f8bb290549ff0aeef04b9c071"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
