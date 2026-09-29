@@ -1,0 +1,1202 @@
+{
+  "schema": 1,
+  "version": "v3.2.1.08",
+  "archive": "frontend/test-baselines/nyay66/v3.2.1.08/NYAYONE_S01_S35_v3.2.1.08.zip",
+  "archiveSha256": "0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964",
+  "htmlSha256": "8dcb94f89df7b434022e1c0d599e57d4348224b1ea7c5f5127e45705eb75c7f8",
+  "designApproval": "NYAY-90:16011",
+  "pngBaselinesImported": false,
+  "viewports": [
+    {
+      "id": "mobile390",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "id": "desktop",
+      "width": 1440,
+      "height": 1024
+    }
+  ],
+  "inventory": {
+    "embeddedResources": {"sourceSha256":"cd26225f6c528de9e70fb3d278ed8fdfd7bebab5bdbdeee9764cb591cb76c72a","fontFaces":[{"family":"'Carlito'","weight":"400","sha256":"7ae94aadec42e9faf01ea2d5ad9c74fb77ed4470f1d7be90bc2250a464e77ef7"},{"family":"'Carlito'","weight":"400","sha256":"8397b40b49a22d7db013fe11abdb3ce4746afadb80f4ea058be293086e5d0b2e"},{"family":"'Carlito'","weight":"400","sha256":"99137eccc6b84c6b386ca80a375bfad3c9a7c4f23cf6f88b6bb1b4747810279b"},{"family":"'Carlito'","weight":"400","sha256":"ed465b9cc36b74cb326952180a0cf1d54f049ec73cc1787059691414c1d1c0f0"},{"family":"'Carlito'","weight":"400","sha256":"59556636564c9a718b26dda2cfde435029c26593bac1fedb138161be7531262d"},{"family":"'Carlito'","weight":"400","sha256":"9691734199298cca3ceda3f6971824ac28a23d208b7fcb47028f41a7f52ac88f"},{"family":"'Carlito'","weight":"400","sha256":"e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7"},{"family":"'Carlito'","weight":"700","sha256":"8c4842e7af13ae8ea4aee9e3b680085b1148b38a03a0f7c2b6026d145e8f10a3"},{"family":"'Carlito'","weight":"700","sha256":"10b860d0ba0b86924faf739a92a1e2e8f85f35200737ed0122ad124bc590dde8"},{"family":"'Carlito'","weight":"700","sha256":"55af89610d8baf895b83c2e59e18db5f5621768da7d8d774ed5721b2188fc949"},{"family":"'Carlito'","weight":"700","sha256":"d9f554decce039d1f367b8eba1cc2c593989ae23318b88bb3d37885f171acb3b"},{"family":"'Carlito'","weight":"700","sha256":"447a903a31ea48002c6e1b5b68b0432f385764d460777fcc70bf545726aa4e1a"},{"family":"'Carlito'","weight":"700","sha256":"3a1a33c3f2a8d1b98f01f867a73a2085ada27df402678a4cd6d1f5016edcf670"},{"family":"'Carlito'","weight":"700","sha256":"3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012"},{"family":"'Public Sans'","weight":"400","sha256":"e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"},{"family":"'Public Sans'","weight":"400","sha256":"1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"},{"family":"'Public Sans'","weight":"400","sha256":"c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"},{"family":"'Public Sans'","weight":"500","sha256":"e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"},{"family":"'Public Sans'","weight":"500","sha256":"1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"},{"family":"'Public Sans'","weight":"500","sha256":"c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"},{"family":"'Public Sans'","weight":"600","sha256":"e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"},{"family":"'Public Sans'","weight":"600","sha256":"1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"},{"family":"'Public Sans'","weight":"600","sha256":"c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"},{"family":"'Public Sans'","weight":"700","sha256":"e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"},{"family":"'Public Sans'","weight":"700","sha256":"1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"},{"family":"'Public Sans'","weight":"700","sha256":"c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"},{"family":"'Public Sans'","weight":"800","sha256":"e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"},{"family":"'Public Sans'","weight":"800","sha256":"1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"},{"family":"'Public Sans'","weight":"800","sha256":"c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"},{"family":"'Space Grotesk'","weight":"500","sha256":"d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"},{"family":"'Space Grotesk'","weight":"500","sha256":"054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"},{"family":"'Space Grotesk'","weight":"500","sha256":"a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"},{"family":"'Space Grotesk'","weight":"600","sha256":"d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"},{"family":"'Space Grotesk'","weight":"600","sha256":"054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"},{"family":"'Space Grotesk'","weight":"600","sha256":"a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"},{"family":"'Spectral'","weight":"300","sha256":"24803666bf8b050f9d06af00a4d408b3ebdf3bc714aec6da9099d9fa3217508b"},{"family":"'Spectral'","weight":"300","sha256":"99422bba6a3397ac90e2fe1c37038b7796a7df320af2a46d22755513b41c7233"},{"family":"'Spectral'","weight":"300","sha256":"a28ea82d9a40e7f1d5b96935f09011581d2f92920f85e3921b02e4b9d5ca099a"},{"family":"'Spectral'","weight":"300","sha256":"a285ff771f79cb75675c139d5c7a2e2e6d1bd1941fc9e10b57478f75f212b4d8"},{"family":"'Spectral'","weight":"300","sha256":"3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9"},{"family":"'Spectral'","weight":"600","sha256":"3f8d833b64a1e7e1b8be07cd73513004cc680a466b84d6459fdcd2f1c1fcf0b3"},{"family":"'Spectral'","weight":"600","sha256":"9a6738241702381e65e80d1ee5f172ce12be2049dfedeb33016a5096444bc03b"},{"family":"'Spectral'","weight":"600","sha256":"74dc7e33abf296a6a7129a327d7b9c5bc02b11eb9ffb47447a0887997c863102"},{"family":"'Spectral'","weight":"600","sha256":"ccb889e04368c402021b9b73196f26fc903d6cb269028138fefb68bd56cc5c19"},{"family":"'Spectral'","weight":"600","sha256":"1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a"},{"family":"'Spline Sans Mono'","weight":"400","sha256":"bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"},{"family":"'Spline Sans Mono'","weight":"400","sha256":"2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"},{"family":"'Spline Sans Mono'","weight":"500","sha256":"bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"},{"family":"'Spline Sans Mono'","weight":"500","sha256":"2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"},{"family":"'Spline Sans Mono'","weight":"600","sha256":"bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"},{"family":"'Spline Sans Mono'","weight":"600","sha256":"2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"}],"logoDefinitions":[{"name":"LOCKUP","sha256":"829f3f1a8c4b340524ccf399c5f0dbed586a559f0b1030d8640ff1d5f6b6afc4"},{"name":"LOCKUP_REV","sha256":"f42c8b95145ad77c3782e9d5c9c706fe05bd658286f0100deec8723e56c9cd4e"},{"name":"MARK","sha256":"236192781d6e4c1dc11cf332a42962f8bc7334ed83e1cd91c18ca180578da95e"},{"name":"MARK_REV","sha256":"9704e9f9e56374a5c1b0ac89969c6e92b8f4566e8b0514666398c73c18585387"}]},
+    "scope": "approved-design-source-only",
+    "fonts": [
+      "Public Sans",
+      "Space Grotesk",
+      "Carlito (Aptos/Calibri fallback)",
+      "Spectral (wordmark)",
+      "Spline Sans Mono"
+    ],
+    "logo": {
+      "kind": "inline-svg",
+      "definitions": [
+        "MARK",
+        "MARK_REV"
+      ],
+      "note": "Frozen light source includes light/reverse marks; no dark-mode implementation or product namespace count change."
+    }
+  },
+  "screens": [
+    {
+      "screen": "S-18",
+      "route": "/s-18",
+      "states": [
+        [
+          "loading",
+          "GET in flight"
+        ],
+        [
+          "loaded",
+          "Server values; each change saves on its own (save-on-change)"
+        ],
+        [
+          "saving",
+          "Change saving; control stays focused"
+        ],
+        [
+          "saved",
+          "Change saved; confirmation announced"
+        ],
+        [
+          "invalid",
+          "422: field message shown at the control"
+        ],
+        [
+          "conflict",
+          "409 settings_version_conflict: reload to current_version"
+        ],
+        [
+          "network",
+          "Save failed; the switch is reverted and a retry is offered"
+        ],
+        [
+          "forbidden",
+          "403 forbidden: not a student account"
+        ],
+        [
+          "session",
+          "401: session ended"
+        ],
+        [
+          "option-manual",
+          "Owner option B: manual Save and Discard (proposed, not default)"
+        ]
+      ],
+      "serverDerived": [
+        "notif_email",
+        "notif_sms",
+        "notif_updates",
+        "theme (system | light | dark)",
+        "language (en | hi)",
+        "version",
+        "409 settings_version_conflict.current_version",
+        "422 field detail"
+      ],
+      "static": [
+        "section headings and help text",
+        "disclosure summaries",
+        "footer notices"
+      ],
+      "endpoints": [
+        "GET /student/settings",
+        "PATCH /student/settings {theme?, language?, notif_email?, notif_sms?, notif_updates?, expected_version}"
+      ],
+      "prototype": [
+        "default: each change saves on its own (PATCH with expected_version); optional option-manual: draft plus Save/Discard (owner option B, not default)",
+        "language availability flag (frontend capability, not a server field)"
+      ],
+      "gaps": [
+        "Frontend translation availability for hi is a separate capability decision; the contract accepting hi does not ship Hindi",
+        "Dark visuals deferred (NYAY-51): Dark stores the preference only"
+      ]
+    },
+    {
+      "screen": "S-19",
+      "route": "/s-19",
+      "states": [
+        [
+          "loading",
+          "GET in flight"
+        ],
+        [
+          "loaded",
+          "Server consents; each switch saves on its own (save-on-change)"
+        ],
+        [
+          "saving",
+          "Consent change saving"
+        ],
+        [
+          "saved",
+          "Consent change saved"
+        ],
+        [
+          "conflict",
+          "409 settings_version_conflict"
+        ],
+        [
+          "network",
+          "Save failed; the switch is reverted and a retry is offered"
+        ],
+        [
+          "export-accepted",
+          "202: request_id known; pending, not complete"
+        ],
+        [
+          "export-processing",
+          "GET status: processing"
+        ],
+        [
+          "export-complete",
+          "GET status: complete; no delivery promised"
+        ],
+        [
+          "export-failed",
+          "GET status: failed; request again"
+        ],
+        [
+          "request-not-found",
+          "404 request_not_found"
+        ],
+        [
+          "delete-confirm",
+          "Step 1: enter your registered mobile number"
+        ],
+        [
+          "delete-invalid",
+          "Typed text is not DELETE (client check; server 422 invalid_confirmation)"
+        ],
+        [
+          "delete-reauth",
+          "Step 2: six-digit code sent to your registered mobile"
+        ],
+        [
+          "delete-reauth-rejected",
+          "Recovery verify did not accept the code"
+        ],
+        [
+          "delete-reauth-required",
+          "401 reauth_required: proof missing or expired"
+        ],
+        [
+          "delete-conflict",
+          "409 concurrent_state_changed: nothing changed"
+        ],
+        [
+          "delete-accepted",
+          "202: account suspended, signed out; no polling"
+        ],
+        [
+          "session",
+          "401: session ended"
+        ],
+        [
+          "option-manual",
+          "Owner option B: one Save for consents (proposed, not default)"
+        ],
+        [
+          "export-check-failed",
+          "Status check failed; request kept"
+        ],
+        [
+          "delete-mobile-invalid",
+          "Step 1: mobile format rejected"
+        ],
+        [
+          "delete-start-failed",
+          "Step 1: recovery could not start"
+        ],
+        [
+          "delete-rate-limited",
+          "Step 1: otp_rate_limited"
+        ],
+        [
+          "delete-code-expired",
+          "Step 2: code expired"
+        ],
+        [
+          "delete-typed",
+          "Step 4: type DELETE to confirm"
+        ]
+      ],
+      "serverDerived": [
+        "privacy[] kinds analytics, marketing, share_partners with enabled",
+        "version",
+        "export: request_id, status",
+        "request GET: request_id, kind, status, created_at",
+        "delete errors: 422 invalid_confirmation, 401 reauth_required, 409 concurrent_state_changed, 404 profile_not_found",
+        "delete 202: request_id, status; account suspended and sessions revoked"
+      ],
+      "static": [
+        "rights explanation",
+        "typed-confirmation instruction",
+        "irreversibility warning"
+      ],
+      "endpoints": [
+        "GET /student/settings (privacy[])",
+        "PATCH /student/settings {privacy:[{kind,enabled}], expected_version}",
+        "POST /student/privacy/export (202)",
+        "GET /student/privacy/requests/{request_id}",
+        "POST /auth/student/recovery/start",
+        "POST /auth/student/recovery/verify",
+        "POST /student/privacy/delete {confirmation} (202)"
+      ],
+      "prototype": [
+        "the request_id returned by POST is known only for this visit (no list endpoint)",
+        "typed confirmation text entered by the user",
+        "Deletion re-authentication: recovery/start, then recovery/verify; the verified recovery proof is consumed by POST /student/privacy/delete. No recovery/complete call."
+      ],
+      "gaps": [
+        "No request history list endpoint: only the request created in this visit can be checked",
+        "No export delivery channel in the contract: Complete means the server says complete, nothing more",
+        "No user-facing cancellation endpoint (the cancelled enum alone does not authorise one)",
+        "Recovery start and verify error codes are not in the supplied snapshot: shown generically until the excerpt is supplied"
+      ]
+    },
+    {
+      "screen": "S-20",
+      "route": "/s-20",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "results",
+          "Listings with saved marks"
+        ],
+        [
+          "filters-open",
+          "Filters disclosure expanded"
+        ],
+        [
+          "verified-empty",
+          "verified_only returns zero"
+        ],
+        [
+          "empty",
+          "Catalogue empty"
+        ],
+        [
+          "partial",
+          "Listings loaded; saved list failed; save marks hidden"
+        ],
+        [
+          "save-failed",
+          "PUT or DELETE failed; state unchanged"
+        ],
+        [
+          "error",
+          "GET /internships failed"
+        ],
+        [
+          "offline",
+          "No connection"
+        ],
+        [
+          "local-empty",
+          "Page-local search or stipend filter matches nothing"
+        ]
+      ],
+      "serverDerived": [
+        "items[]: id, role, organisation, location, stipend_monthly_paise (paise or null), verification_status, application_deadline, eligibility, tags, description, source{name,url,retrieved_at,verified_at}",
+        "total, page, page_size",
+        "saved items"
+      ],
+      "static": [
+        "heading, filter labels, empty and error copy"
+      ],
+      "endpoints": [
+        "GET /internships ?page&page_size&verified_only",
+        "GET /student/internships/saved",
+        "PUT /student/internships/{listing_id}/saved",
+        "DELETE /student/internships/{listing_id}/saved"
+      ],
+      "prototype": [
+        "Paid only narrows the current page only and says so"
+      ],
+      "gaps": [
+        "No server search, location or sort parameter: none are drawn"
+      ]
+    },
+    {
+      "screen": "S-21",
+      "route": "/s-21?listing={id}",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "complete",
+          "Listing, not saved"
+        ],
+        [
+          "saved",
+          "Saved"
+        ],
+        [
+          "save-pending",
+          "PUT in flight"
+        ],
+        [
+          "save-failed",
+          "PUT failed"
+        ],
+        [
+          "session",
+          "401 on save"
+        ],
+        [
+          "missing",
+          "404 internship_listing_not_found"
+        ],
+        [
+          "error",
+          "GET failed"
+        ]
+      ],
+      "serverDerived": [
+        "role, organisation, location, stipend_monthly_paise, verification_status, application_deadline, eligibility, tags, description, source",
+        "saved state from saved list"
+      ],
+      "static": [
+        "section labels",
+        "blocked Apply explanation"
+      ],
+      "endpoints": [
+        "GET /internships/{listing_id}",
+        "PUT and DELETE /student/internships/{listing_id}/saved"
+      ],
+      "prototype": [
+        "from= return context"
+      ],
+      "gaps": [
+        "S-22 application flow has no endpoint: Apply stays disabled pending owner disposition"
+      ]
+    },
+    {
+      "screen": "S-25",
+      "route": "/s-25",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "list",
+          "Saved items"
+        ],
+        [
+          "empty",
+          "Empty response: recovery content"
+        ],
+        [
+          "remove-pending",
+          "DELETE in flight"
+        ],
+        [
+          "remove-failed",
+          "DELETE failed; still saved"
+        ],
+        [
+          "error",
+          "GET failed"
+        ]
+      ],
+      "serverDerived": [
+        "items[] in catalogue order (sort_order, slug); inactive or deleted listings are excluded by the server"
+      ],
+      "static": [
+        "heading, empty and error copy"
+      ],
+      "endpoints": [
+        "GET /student/internships/saved",
+        "DELETE /student/internships/{listing_id}/saved"
+      ],
+      "prototype": [],
+      "gaps": [
+        "Removed listings disappear from the response; no tombstone is shown because none is returned"
+      ]
+    },
+    {
+      "screen": "S-26",
+      "route": "/s-26",
+      "states": [
+        [
+          "empty",
+          "Actually empty"
+        ],
+        [
+          "loading",
+          "Not resolved: no empty claim"
+        ],
+        [
+          "error",
+          "Failed: no empty claim"
+        ],
+        [
+          "nonempty",
+          "Items exist: go to S-25"
+        ]
+      ],
+      "serverDerived": [
+        "items length from the actual response"
+      ],
+      "static": [
+        "empty copy, recovery actions"
+      ],
+      "endpoints": [
+        "GET /student/internships/saved (shared query)"
+      ],
+      "prototype": [],
+      "gaps": []
+    },
+    {
+      "screen": "S-27",
+      "route": "/s-27",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "results",
+          "Schools"
+        ],
+        [
+          "filters-open",
+          "Filters expanded"
+        ],
+        [
+          "compare",
+          "Selection tray: count and Compare"
+        ],
+        [
+          "no-results",
+          "Filters return zero"
+        ],
+        [
+          "invalid-filter",
+          "422 from server shown verbatim"
+        ],
+        [
+          "error",
+          "GET failed"
+        ],
+        [
+          "offline",
+          "No connection"
+        ],
+        [
+          "page-2",
+          "Second page of server results"
+        ],
+        [
+          "sort-fees",
+          "Order: fees, lowest first (sort=fees)"
+        ],
+        [
+          "sort-nirf",
+          "Order: NIRF rank, ranked first (sort=nirf_rank)"
+        ]
+      ],
+      "serverDerived": [
+        "items[]: id, name, slug, state, institution_type, accreditation, entrance_exam, fees_min, fees_max (whole INR), nirf_rank",
+        "total, page, page_size, compare_max",
+        "422 unsupported_sort, unsupported_institution_type"
+      ],
+      "static": [
+        "filter labels, card layout"
+      ],
+      "endpoints": [
+        "GET /law-schools ?q&state&institution_type&degree&accreditation&entrance_exam&fees_max&sort&page&page_size"
+      ],
+      "prototype": [
+        "comparison selection (local until Compare)",
+        "Order control sends sort=name|fees|nirf_rank (SchoolScreens Order); query wire names: q, state, institution_type, degree, accreditation, entrance_exam, fees_max, sort, page, page_size"
+      ],
+      "gaps": [
+        "Summary carries no provenance; per-fact sources appear on S-28"
+      ]
+    },
+    {
+      "screen": "S-28",
+      "route": "/s-28?id={id}",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "complete",
+          "Facts with source and retrieval date"
+        ],
+        [
+          "following",
+          "Following; notification choice visible"
+        ],
+        [
+          "save-pending",
+          "PUT saved in flight"
+        ],
+        [
+          "follow-error",
+          "Follow failed; unchanged"
+        ],
+        [
+          "missing",
+          "404 school_not_found"
+        ],
+        [
+          "error",
+          "GET failed"
+        ]
+      ],
+      "serverDerived": [
+        "summary fields",
+        "programmes[{degree,duration_years}]",
+        "facts[{key,value,source_name,source_url,retrieved_at}]",
+        "saved, followed",
+        "follow response: followed, notify_opt_in"
+      ],
+      "static": [
+        "fact labels",
+        "the note that retrieval dates are not verification"
+      ],
+      "endpoints": [
+        "GET /law-schools/{school_id}",
+        "PUT and DELETE /student/law-schools/{school_id}/saved",
+        "PUT /student/law-schools/{school_id}/follow {notify_opt_in}",
+        "DELETE .../follow"
+      ],
+      "prototype": [],
+      "gaps": []
+    },
+    {
+      "screen": "S-29",
+      "route": "/s-29?ids={ids}",
+      "states": [
+        [
+          "loading",
+          "POST in flight"
+        ],
+        [
+          "complete",
+          "Two schools aligned metric by metric"
+        ],
+        [
+          "three",
+          "Three schools: pair selector on mobile, three columns on desktop"
+        ],
+        [
+          "incomplete",
+          "Some facts not published: Not provided"
+        ],
+        [
+          "too-few",
+          "Server CompareError shown verbatim"
+        ],
+        [
+          "error",
+          "POST failed"
+        ]
+      ],
+      "serverDerived": [
+        "comparison_id, compare_max, items[] (detail projection)",
+        "CompareError code and extra, shown verbatim"
+      ],
+      "static": [
+        "13-row schema labels in frozen order"
+      ],
+      "endpoints": [
+        "POST /law-schools/compare {school_ids}"
+      ],
+      "prototype": [
+        "which pair is shown on mobile when 3 are compared"
+      ],
+      "gaps": [
+        "Mobile pair selector for 3 schools is an IA proposal needing owner approval"
+      ]
+    },
+    {
+      "screen": "S-30",
+      "route": "/s-30",
+      "states": [
+        [
+          "loading",
+          "Both queries pending"
+        ],
+        [
+          "both",
+          "Saved tab"
+        ],
+        [
+          "following-tab",
+          "Following tab with update status"
+        ],
+        [
+          "saved-empty",
+          "Saved empty"
+        ],
+        [
+          "followed-empty",
+          "Following empty"
+        ],
+        [
+          "item-pending",
+          "Remove in flight"
+        ],
+        [
+          "item-error",
+          "Remove failed"
+        ],
+        [
+          "error",
+          "A list failed"
+        ]
+      ],
+      "serverDerived": [
+        "saved items (summary)",
+        "followed items (summary plus notify_opt_in)"
+      ],
+      "static": [
+        "tab labels, empty copy"
+      ],
+      "endpoints": [
+        "GET /student/law-schools/saved",
+        "GET /student/law-schools/followed",
+        "DELETE .../saved",
+        "DELETE .../follow"
+      ],
+      "prototype": [],
+      "gaps": []
+    },
+    {
+      "screen": "S-31",
+      "route": "/s-31",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "results",
+          "Mentors"
+        ],
+        [
+          "filters-open",
+          "Filters expanded"
+        ],
+        [
+          "no-matches",
+          "Zero results"
+        ],
+        [
+          "rate-limited",
+          "429 rate_limit_exceeded"
+        ],
+        [
+          "error",
+          "GET failed"
+        ],
+        [
+          "offline",
+          "No connection"
+        ],
+        [
+          "page-2",
+          "Second page of mentors"
+        ]
+      ],
+      "serverDerived": [
+        "items[]: id, display_name, headline, experience_years, rating_avg, rating_count, verified_identity, verified_credentials, status, session_price_paise, currency",
+        "total, limit, offset, has_more, sort, allowed_sorts"
+      ],
+      "static": [
+        "filter labels, card layout"
+      ],
+      "endpoints": [
+        "GET /tutors ?q&subject&level&min_rating&min_experience_years&verified_only&sort&limit&offset"
+      ],
+      "prototype": [],
+      "gaps": [
+        "No price filter, next-slot or session-length field in the list projection: none are drawn"
+      ]
+    },
+    {
+      "screen": "S-32",
+      "route": "/s-32?tutor={id}",
+      "states": [
+        [
+          "loading",
+          "Skeleton"
+        ],
+        [
+          "complete",
+          "Profile and slots"
+        ],
+        [
+          "selected",
+          "Slot chosen"
+        ],
+        [
+          "availability-error",
+          "Profile loaded; availability failed"
+        ],
+        [
+          "no-slots",
+          "No slots returned"
+        ],
+        [
+          "profile-error",
+          "GET tutor failed (network)"
+        ],
+        [
+          "missing",
+          "404 NOT_FOUND"
+        ],
+        [
+          "zone-changed",
+          "Times shown in Europe/London"
+        ],
+        [
+          "day-empty",
+          "Single-day filter with no open times; Clear day recovery"
+        ],
+        [
+          "dst-ambiguous",
+          "Illustrative fixture: Europe/London repeats 1 to 2 AM on Sun 25 Oct 2026"
+        ],
+        [
+          "dst-gap",
+          "Illustrative fixture: Europe/London skips 1 to 2 AM on Sun 28 Mar 2027"
+        ]
+      ],
+      "serverDerived": [
+        "summary fields plus source, source_url, retrieved_at, subjects[{subject,level}], rating_aggregate",
+        "availability: timezone, local_resolution, slots[], limit, offset",
+        "422 VALIDATION_ERROR for an unknown timezone"
+      ],
+      "static": [
+        "section labels"
+      ],
+      "endpoints": [
+        "GET /tutors/{tutor_id}",
+        "GET /tutors/{tutor_id}/availability ?timezone&date"
+      ],
+      "prototype": [
+        "requested timezone sent as the timezone parameter (from the device, not settings)",
+        "selected slot",
+        "Display adapter: SlotView.as_dict {slot_id, tutor_id, start_utc, end_utc, iana_timezone, status, start_local (ISO), end_local (ISO), duration_minutes, price_paise, currency} is formatted with Intl in the chosen IANA zone. Fixture ids are short synthetic ids; formatted strings are display, not wire data."
+      ],
+      "gaps": [
+        "Slot view fields are not in the supplied snapshot: the prototype shows slot id, local start and time only",
+        "No session length field: not shown"
+      ]
+    },
+    {
+      "screen": "S-33",
+      "route": "/s-33?slot={slot_id}&tutor={tutor_id}",
+      "states": [
+        [
+          "hold-creating",
+          "POST hold in flight"
+        ],
+        [
+          "hold-active",
+          "Hold active until expires_at"
+        ],
+        [
+          "slot-conflict",
+          "SLOT_UNAVAILABLE"
+        ],
+        [
+          "hold-expired",
+          "GET hold expired or HOLD_EXPIRED"
+        ],
+        [
+          "order-pending",
+          "Order created; waiting for provider"
+        ],
+        [
+          "payment-failed",
+          "Order status failed"
+        ],
+        [
+          "creating-session",
+          "POST /tutoring/sessions in flight"
+        ],
+        [
+          "payment-unverified",
+          "PAYMENT_UNVERIFIED: no session written"
+        ],
+        [
+          "confirmed",
+          "Session created by the server"
+        ],
+        [
+          "rate-limited",
+          "429"
+        ],
+        [
+          "network",
+          "Timeout; retry reuses the same idempotency key"
+        ],
+        [
+          "session",
+          "401"
+        ],
+        [
+          "hold-60min",
+          "Hold bound to the 60-minute ₹1,199 slot sl-3304"
+        ],
+        [
+          "hold-other-mentor",
+          "Hold bound to Rohan Iyer’s 30-minute ₹299 slot sl-4301"
+        ]
+      ],
+      "serverDerived": [
+        "hold: id, slot_id, status, expires_at, hold_minutes, price_paise, currency, replayed; GET adds expired",
+        "order: id, hold_id, provider, provider_order_ref, amount_paise, currency, status, brand, masked_last4, replayed",
+        "session create: session projection plus replayed, reminder_jobs",
+        "typed errors: SLOT_UNAVAILABLE, HOLD_EXPIRED, PAYMENT_AMOUNT_MISMATCH, PAYMENT_UNVERIFIED, 429 rate_limit_exceeded"
+      ],
+      "static": [
+        "payment boundary copy"
+      ],
+      "endpoints": [
+        "POST /tutoring/booking-holds {slot_id, idempotency_key}",
+        "GET /tutoring/booking-holds/{hold_id}",
+        "POST /payments/orders {hold_id, idempotency_key}",
+        "POST /tutoring/sessions {hold_id}"
+      ],
+      "prototype": [
+        "idempotency keys generated per attempt",
+        "in-flow amount from the hold and order responses",
+        "Hold, order and session fixtures are derived from the selected slot (id, price_paise, duration, start). The client price is display only; the server hold is authoritative."
+      ],
+      "gaps": [
+        "Cancellation and reschedule policy text is not projected by any supplied response: shown as a dependency, not invented",
+        "Provider failure reason is not in the hold or order projection"
+      ]
+    },
+    {
+      "screen": "S-34",
+      "route": "/s-34?session={id}",
+      "states": [
+        [
+          "loading",
+          "GET in flight"
+        ],
+        [
+          "confirmed",
+          "status confirmed"
+        ],
+        [
+          "pending-provider",
+          "status pending_provider: not confirmed"
+        ],
+        [
+          "cancelled",
+          "status cancelled"
+        ],
+        [
+          "error",
+          "GET failed"
+        ],
+        [
+          "missing",
+          "404"
+        ]
+      ],
+      "serverDerived": [
+        "id, slot_id, tutor_id, order_id, status, version, start_local, end_local, iana_timezone, attendance_state"
+      ],
+      "static": [
+        "labels"
+      ],
+      "endpoints": [
+        "GET /tutoring/sessions/{session_id}"
+      ],
+      "prototype": [
+        "mentor name joined from the S-32 detail already loaded"
+      ],
+      "gaps": [
+        "Session GET has no amount, payment status, policy or join-eligibility fields: none are shown here"
+      ]
+    },
+    {
+      "screen": "S-35",
+      "route": "/s-35 (?session={id}&view=...)",
+      "states": [
+        [
+          "loading",
+          "GET list in flight"
+        ],
+        [
+          "list",
+          "Upcoming tab"
+        ],
+        [
+          "past",
+          "Past tab"
+        ],
+        [
+          "list-empty",
+          "No sessions"
+        ],
+        [
+          "list-error",
+          "GET failed"
+        ],
+        [
+          "detail",
+          "Session detail"
+        ],
+        [
+          "detail-error",
+          "GET session failed"
+        ],
+        [
+          "reschedule",
+          "Choose a new slot"
+        ],
+        [
+          "reschedule-closed",
+          "RESCHEDULE_WINDOW_CLOSED"
+        ],
+        [
+          "reschedule-conflict",
+          "409 stale version"
+        ],
+        [
+          "cancel-confirm",
+          "Confirm cancellation"
+        ],
+        [
+          "cancel-failed",
+          "SESSION_STATE_INVALID or network"
+        ],
+        [
+          "attendance",
+          "Attendance recorded: confirm or dispute (no review yet)"
+        ],
+        [
+          "dispute",
+          "Reason code chosen"
+        ],
+        [
+          "disputed",
+          "Dispute sent; reviews wait"
+        ],
+        [
+          "review",
+          "Write a review (confirmed attendance)"
+        ],
+        [
+          "review-invalid",
+          "VALIDATION_ERROR rating or body"
+        ],
+        [
+          "review-moderation",
+          "Submitted; moderation_state pending"
+        ],
+        [
+          "review-edit",
+          "Edit inside edit_deadline_at"
+        ],
+        [
+          "review-window-closed",
+          "Edit window passed"
+        ],
+        [
+          "prejoin",
+          "Device test not started"
+        ],
+        [
+          "prejoin-ready",
+          "Preview ready; Join enabled"
+        ],
+        [
+          "prejoin-denied",
+          "Browser permission denied"
+        ],
+        [
+          "join-refused",
+          "Credential request refused"
+        ],
+        [
+          "video-disabled",
+          "video_calls_enabled false"
+        ],
+        [
+          "room",
+          "In session"
+        ],
+        [
+          "rate-limited",
+          "429"
+        ],
+        [
+          "cancelled-full-refund",
+          "Cancel outcome: full_refund"
+        ],
+        [
+          "cancelled-no-auto-refund",
+          "Cancel outcome: no_auto_refund; exception request not available to students"
+        ],
+        [
+          "refund-pending",
+          "Proposal only: shown if a student refund-status read contract is added"
+        ],
+        [
+          "refund-failed",
+          "Proposal only: shown if a student refund-status read contract is added"
+        ],
+        [
+          "cancel-stale",
+          "409 stale version"
+        ],
+        [
+          "cancel-started",
+          "Already started"
+        ],
+        [
+          "cancel-invalid",
+          "Invalid state"
+        ],
+        [
+          "prejoin-audio-only",
+          "Camera unavailable; audio only"
+        ],
+        [
+          "prejoin-no-device",
+          "No device found"
+        ],
+        [
+          "prejoin-busy",
+          "Device in use"
+        ],
+        [
+          "prejoin-insecure",
+          "Insecure origin"
+        ],
+        [
+          "prejoin-unsupported",
+          "Unsupported browser"
+        ],
+        [
+          "prejoin-failed",
+          "Device test did not complete"
+        ],
+        [
+          "room-connecting",
+          "Connecting"
+        ],
+        [
+          "room-reconnecting",
+          "Reconnecting"
+        ],
+        [
+          "room-failed",
+          "Connection failed; ask for entry again"
+        ],
+        [
+          "room-token-expired",
+          "Entry expired; fresh credentials"
+        ],
+        [
+          "room-leave-confirm",
+          "Leave confirmation dialog"
+        ],
+        [
+          "left",
+          "Left; media released"
+        ],
+        [
+          "reschedule-unavailable",
+          "Reschedule refused: slot_unavailable"
+        ],
+        [
+          "attendance-pending",
+          "Attendance not recorded yet"
+        ],
+        [
+          "attendance-confirmed",
+          "Attendance confirmed by the server; review opens"
+        ],
+        [
+          "attendance-refused",
+          "Confirm refused: attendance_state_invalid"
+        ],
+        [
+          "attendance-resolved",
+          "Attendance resolved by an administrator; review opens"
+        ],
+        [
+          "review-refused",
+          "Review refused: review_blocked (attendance not confirmed)"
+        ],
+        [
+          "reschedule-wrong-tutor",
+          "Reschedule refused: slot belongs to another mentor (validation_error)"
+        ],
+        [
+          "review-delete-confirm",
+          "Delete review: confirmation (prototype, owned soft delete)"
+        ],
+        [
+          "review-deleted",
+          "Review deleted: removed from profile and rating; one review per session remains"
+        ],
+        [
+          "review-delete-failed",
+          "Delete review failed (simulated network error); nothing changed"
+        ]
+      ],
+      "serverDerived": [
+        "session projection (list and detail)",
+        "reschedule: session plus reminders_revoked; RESCHEDULE_WINDOW_CLOSED",
+        "cancel: session plus refund assessment, refund_id",
+        "review: edit_deadline_at, moderation_state, deleted",
+        "capabilities: video_calls_enabled, video_transport, recording_enabled (false), join_credential_ttl_seconds",
+        "join credentials: participant_ref, permissions, join_token (never stored or shown), expires_at"
+      ],
+      "static": [
+        "tab labels, prejoin instructions"
+      ],
+      "endpoints": [
+        "GET /tutoring/sessions",
+        "GET /tutoring/sessions/{id}",
+        "POST .../reschedule {new_slot_id, expected_version}",
+        "POST .../cancel {expected_version}",
+        "POST .../attendance/confirm",
+        "POST .../attendance/dispute {reason_code}",
+        "POST .../review {rating, body}",
+        "PATCH and DELETE /tutoring/reviews/{id}",
+        "GET /tutoring/capabilities",
+        "POST .../join-credentials"
+      ],
+      "prototype": [
+        "device preview (browser media only)",
+        "friendly dispute labels mapped to reason_code (proposal)",
+        "Attendance states: pending, recorded, confirmed, disputed, resolved; recorded_by is a separate field. Reviews require confirmed or resolved (REVIEWABLE_STATES).",
+        "v3.2.1.04: cancellation preview and result derive paid amount, time to start, refund decision and reference from the session in the address; synthetic clock 17 Aug 2026 12:30 PM IST (reviewer override &now=ISO).",
+        "v3.2.1.04: reschedule selection is bound to session and mentor; stale or other-mentor slots are refused and nothing moves.",
+        "v3.2.1.04: an explicit session is never replaced by a sample; unknown shows not_found, ineligible shows review_blocked for that same session.",
+        "v3.2.1.05: create and edit are separate. Edit is bound to the review created for this session, inclusive 7-day deadline, rating 1 to 5, text 10 to 1,000; changed text returns to moderation (reviews.py edit). Duplicate create stays refused. Reviewer clock &now=ISO is latched for the scene journey.",
+        "v3.2.1.07: the mentor rating shown on S-31/S-32 (for example 4.8 from 31 ratings) is a static aggregate projection. The simulated review create/delete changes only the session review record; it is NOT proof of a live aggregate refresh. Backend contract: owned soft delete recomputes the public aggregate (reviews.py).",
+        "v3.2.1.06: every review state uses the same session-bound record. Review states opened without a session use the sample session se-2207 (written to the address); an explicit session is never replaced. Delete review is a prototype confirmation, success and simulated failure flow backed by the reviews.py soft-delete contract; nothing is sent. An unchanged Save shows local \"No changes to save\"."
+      ],
+      "gaps": [
+        "Notice-window hours are not returned by session GET: copy says configured window",
+        "Dispute reason_code values are not a backend enum: the four-option mapping is a proposal for owner review",
+        "Join-credential error codes are not in the snapshot: refusal shown generically",
+        "No student refund-status read endpoint: refund status is not polled",
+        "No student endpoint to request an administrator exception after no_auto_refund"
+      ]
+    }
+  ]
+}
