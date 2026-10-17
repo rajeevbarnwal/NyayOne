@@ -207,3 +207,37 @@ Local frontend: 171 files, 2,658 PASS plus one existing skip. S-19 browser:
 axe checks. Local widths differ from Linux reference widths: no width override
 was introduced to compensate for that platform difference.
 Corrected hosted images and scoped owner exceptions are still pending.
+
+## 2026-10-17 owner-approved deletion-conflict correction
+
+Hosted capture exposed a fixture/notice mismatch: privacy deletion actually
+returns `409 concurrent_state_changed`, not `settings_version_conflict`, and
+the exclusive auth-transition remount restored a generic failure instead of
+the already-defined conflict message. The owner approved a narrow correction.
+
+- RED: a transport regression observed the wrong fixture code; a real-Chromium
+  synthetic-API regression could not find the specific conflict message after
+  the genuine auth-transition remount. The 422 and generic 503 controls passed.
+- GREEN: a sanitized, memory-only `account_deletion_conflict` notice restores
+  that existing message across the remount. No recovery inputs, authority or
+  request identifiers are carried. The exclusive transition, adapter, session
+  reconciliation and redirects are unchanged. The confirmation input resets,
+  a fresh authority read remains required, and deletion is not retried silently.
+- The protected fixture now uses the real backend code and explicitly requires
+  both conflict sentences; generic deletion failure can no longer satisfy the
+  conflict capture. Its new transport regression preserves all prior checks.
+- Local validation: 171 frontend files / 2,660 PASS + one existing skip; focused
+  fixture/notice tests 16/16; S-19 browser checks 17/17, including 409/422/503
+  remount outcomes and the unchanged successful 202 redirect. All 50 capture
+  rows execute with their original evidence-kind labels and zero serious or
+  critical axe findings. This is local synthetic-API evidence, not final pinned
+  hosted measurement or independent Claude QA.
+- Typecheck, lint, production and component builds pass. Trust/calibration
+  contracts pass 50/50; policy/evidence tests pass 94/94; workflow policy passes
+  all 14 workflows. Existing 74 blocking rows, 18 S-18 rows, all references,
+  tolerances, evaluator and enforcement settings are byte-unchanged by this fix.
+
+The protected-bundle delta is limited to `nyay66-s19-fixtures.mjs` and its
+regression test. A fresh owner integrity comment is required before final
+hosted measurement; the earlier approval is not reused for these new bytes.
+NYAY-91 remains In Progress. No new exceptions are approved or bound here.

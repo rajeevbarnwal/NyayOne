@@ -45,7 +45,10 @@ async function fixture() {
     if (path.includes('/privacy/requests/')) return response.checkError ? json({ detail: { code: 'not_found' } }, response.checkError) : json({ request_id: 'a'.repeat(32), kind: 'export', status: response.exportStatus || 'processing', created_at: '2026-10-17T10:00:00Z' });
     if (path.endsWith('/recovery/start')) { flow = pending; return json(flow, 202); }
     if (path.endsWith('/recovery/verify')) { flow = verified; return json(flow); }
-    if (path.endsWith('/privacy/delete')) { lostSession = true; flow = idle; return json({ request_id: 'b'.repeat(32), status: 'pending' }, 202); }
+    if (path.endsWith('/privacy/delete')) {
+      if (response.deleteStatus) return json({ detail: { code: response.deleteCode } }, response.deleteStatus);
+      lostSession = true; flow = idle; return json({ request_id: 'b'.repeat(32), status: 'pending' }, 202);
+    }
     return json({ detail: { code: 'unmatched_api' } }, 404);
   });
   await page.goto(origin + '/s-19'); await page.locator('[data-privacy-state="loaded"]').waitFor();
@@ -152,6 +155,32 @@ describe('S-19 real browser / synthetic server', { timeout: 60000 }, () => {
       ['/api/v1/auth/student/recovery/verify', { code: '123456' }],
       ['/api/v1/student/privacy/delete', { confirmation: 'DELETE' }],
     ]);
+  }));
+  for (const [status, code, title] of [
+    [409, 'concurrent_state_changed', 'Something changed on your account while this was processing.'],
+    [422, 'invalid_confirmation', 'Type DELETE in capital letters.'],
+    [503, 'unavailable', 'Could not submit the deletion request.'],
+  ]) it(`preserves the specific ${status} deletion notice across the real auth-transition remount`, () => using(async f => {
+    f.set({ deleteStatus: status, deleteCode: code });
+    await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByLabel('Registered mobile number').fill('9876500340');
+    await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+    await f.page.getByLabel('Six-digit code').fill('123456');
+    await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+    await f.page.getByLabel('Type DELETE to continue').fill('DELETE');
+    await f.page.getByRole('button', { name: 'Request account deletion', exact: true }).click();
+    await f.page.getByText(title, { exact: true }).waitFor();
+    assert.equal(new URL(f.page.url()).pathname, '/s-19');
+    assert.equal(await f.page.getByText('DELETION REQUEST ACCEPTED', { exact: true }).count(), 0);
+    assert.equal(await f.page.getByLabel('Type DELETE to continue').inputValue(), '');
+    assert.equal(await f.page.getByRole('button', { name: 'Request account deletion', exact: true }).isDisabled(), true);
+    const deletionIndex = f.requests.findIndex(r => r.path.endsWith('/privacy/delete'));
+    const subsequent = f.requests.slice(deletionIndex + 1);
+    assert.equal(subsequent.some(r => r.path.endsWith('/session') && r.method === 'GET'), true, 'auth transition still reconciles server authority');
+    assert.equal(subsequent.some(r => r.path.endsWith('/otp/state') && r.method === 'GET'), true, 'remounted route re-reads recovery authority');
+    assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/delete')).length, 1, 'no automatic deletion retry');
+    assert.equal(f.requests.some(r => r.path.endsWith('/recovery/complete')), false);
+    if (status === 409) assert.equal(await f.page.getByText('Could not submit the deletion request.', { exact: true }).count(), 0);
   }));
   it('restores a useful control after leaving the deletion steps', () => using(async f => {
     await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();

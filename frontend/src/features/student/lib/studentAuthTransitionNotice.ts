@@ -1,6 +1,7 @@
 export type StudentAuthTransitionNotice =
   | 'account_deletion_accepted'
   | 'account_deletion_confirmation_invalid'
+  | 'account_deletion_conflict'
   | 'account_deletion_failed'
   | 'sign_out_failed';
 

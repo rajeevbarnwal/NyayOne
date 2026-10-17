@@ -117,6 +117,7 @@ function usePrivacyExport() {
 const EMPTY_DELETE: PrivacyDeletionState = { stage: 'closed', mobile: '', code: '', typed: '', busy: false, authorityReady: false };
 function initialDeletion(): PrivacyDeletionState {
   if (consumeStudentAuthTransitionNotice('account_deletion_confirmation_invalid')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'confirmation' };
+  if (consumeStudentAuthTransitionNotice('account_deletion_conflict')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'conflict' };
   if (consumeStudentAuthTransitionNotice('account_deletion_failed')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'request' };
   return EMPTY_DELETE;
 }
@@ -190,7 +191,7 @@ function usePrivacyDeletion() {
     } catch (error) {
       // The auth transition can remount this route. Only sanitized notice
       // categories survive it; no mobile/code/request ID is persisted.
-      recordStudentAuthTransitionNotice(error instanceof SettingsApiError && error.status === 422 ? 'account_deletion_confirmation_invalid' : 'account_deletion_failed');
+      recordStudentAuthTransitionNotice(error instanceof SettingsApiError && error.status === 422 ? 'account_deletion_confirmation_invalid' : error instanceof SettingsApiError && error.status === 409 ? 'account_deletion_conflict' : 'account_deletion_failed');
       if (settled()) setDraft(d => ({ ...d, typed: '', error: error instanceof SettingsApiError && error.status === 409 ? 'conflict' : error instanceof SettingsApiError && error.status === 401 ? 'reauth' : error instanceof SettingsApiError && error.status === 422 ? 'confirmation' : 'request' }));
       if (owned()) nav('/s-19', { replace: true });
     } finally { if (settled()) { inFlight.current = false; setDraft(d => ({ ...d, busy: false })); } }

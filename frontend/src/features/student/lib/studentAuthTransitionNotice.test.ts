@@ -25,4 +25,16 @@ describe('sanitized auth-transition completion notice', () => {
     clearStudentAuthTransitionNotice();
     expect(consumeStudentAuthTransitionNotice('account_deletion_failed')).toBe(false);
   });
+
+  it('keeps a deletion conflict distinct from generic failure and consumes it only once', () => {
+    recordStudentAuthTransitionNotice('account_deletion_conflict');
+    expect(consumeStudentAuthTransitionNotice('account_deletion_accepted')).toBe(false);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_failed')).toBe(false);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_confirmation_invalid')).toBe(false);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_conflict')).toBe(true);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_conflict')).toBe(false);
+    recordStudentAuthTransitionNotice('account_deletion_conflict');
+    clearStudentAuthTransitionNotice();
+    expect(consumeStudentAuthTransitionNotice('account_deletion_conflict')).toBe(false);
+  });
 });

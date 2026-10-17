@@ -91,7 +91,7 @@ export async function mockS19Application(page,state,origin,errors){
     }
     if(path===DELETE&&method==='POST'&&['delete-accepted','delete-conflict'].includes(state)){
       if(flow.status!=='verified'||canonical(body)!==canonical({confirmation:'DELETE'}))return fail();
-      if(state==='delete-conflict')return respond(409,{detail:{code:'settings_version_conflict'}});
+      if(state==='delete-conflict')return respond(409,{detail:{code:'concurrent_state_changed'}});
       sessionLost=true;flow=idle;accepted=true;return respond(202,{request_id:'b'.repeat(32),status:'pending'});
     }
     return fail();
@@ -164,7 +164,8 @@ export async function mockS19Application(page,state,origin,errors){
                   evidenceDescription:'Actual S-03 accepted-deletion destination, not a stable S-19 page or prototype placeholder. Synthetic 202 and anonymous session confirmed.',
                   liveRouteBehavior:{executed:true,from:'/s-19',to:'/s-03',syntheticServer:true,sessionAnonymous,deletionAccepted:accepted,noticeObserved:true,artificialDelay:false,navigationFrozen:false}};
               }
-              await page.getByText(/Nothing (was deleted|is confirmed)/).waitFor();
+              await page.getByText('Something changed on your account while this was processing.',{exact:true}).waitFor();
+              await page.getByText('Nothing was deleted. Wait a moment and try again.',{exact:true}).waitFor();
             }
           }
         }
