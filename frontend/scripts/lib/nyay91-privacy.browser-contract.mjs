@@ -21,7 +21,8 @@ async function fixture() {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage(); page.setDefaultTimeout(5000);
   const settings = { theme: 'system', language: 'en', notif_email: true, notif_sms: false, notif_updates: false, version: 7, privacy: ['analytics', 'marketing', 'share_partners'].map(kind => ({ kind, enabled: false })) };
-  const requests = []; let response = {}, release, flow = idle, lostSession = false;
+  const requests = []; let response = {}, release, flow = idle, lostSession = false, observePatch;
+  const patchObserved = new Promise(resolve => { observePatch = resolve; });
   await page.route('**/api/v1/**', async route => {
     const req = route.request(), path = new URL(req.url()).pathname, method = req.method();
     requests.push({ path, method, body: req.postData() ? req.postDataJSON() : null });
@@ -31,6 +32,7 @@ async function fixture() {
     if (path.endsWith('/otp/state')) return response.otpError ? json({ detail: { code: 'unavailable' } }, 503) : json(flow);
     if (path.endsWith('/student/settings')) {
       if (method === 'PATCH') {
+        observePatch();
         if (response.hold) await new Promise(resolve => { release = resolve; });
         if (response.status) return json({ detail: { code: response.code } }, response.status);
         if (response.malformed) return json({ ...settings, version: settings.version });
@@ -47,15 +49,36 @@ async function fixture() {
     return json({ detail: { code: 'unmatched_api' } }, 404);
   });
   await page.goto(origin + '/s-19'); await page.locator('[data-privacy-state="loaded"]').waitFor();
-  return { context, page, requests, settings, set: value => { response = value; }, setFlow: value => { flow = value; }, release: () => release?.() };
+  return { context, page, requests, settings, patchObserved, set: value => { response = value; }, setFlow: value => { flow = value; }, release: () => release?.() };
 }
 async function using(test) { const f = await fixture(); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const patches = f => f.requests.filter(r => r.method === 'PATCH');
 describe('S-19 real browser / synthetic server', { timeout: 60000 }, () => {
+  for (const width of [390, 1440]) it(`matches the frozen S-19 focused-heading and action-gap geometry at ${width}px`, () => using(async f => {
+    await f.page.setViewportSize({ width, height: 1024 });
+    await f.page.evaluate(() => document.fonts.ready);
+    await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    const heading = f.page.locator('#S-19-delete-heading');
+    const layout = await heading.evaluate(el => {
+      const css = getComputedStyle(el), box = el.getBoundingClientRect();
+      return { size: css.fontSize, display: css.display, gap: css.gap, height: box.height };
+    });
+    assert.deepEqual(layout, { size: '19px', display: 'flex', gap: '9px', height: 32 });
+    const send = await f.page.getByRole('button', { name: 'Send code', exact: true }).boundingBox();
+    const cancel = await f.page.getByRole('button', { name: 'Back to privacy', exact: true }).boundingBox();
+    assert.equal(cancel.y - send.y - send.height, 8, 'deletion action gap');
+    assert.equal(await f.page.getByLabel('Registered mobile number').evaluate(el => getComputedStyle(el.labels[0]).fontSize), '12px');
+    await f.page.getByLabel('Registered mobile number').fill('9876500340');
+    await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+    const code = f.page.getByLabel('Six-digit code');
+    await code.waitFor();
+    assert.deepEqual(await code.evaluate(el => { const c = getComputedStyle(el); return [c.width, c.fontWeight, c.letterSpacing, c.paddingLeft]; }), ['322px', '500', '8px', '16px']);
+  }));
   it('holds duplicate toggles and shows no success before server confirmation', () => using(async f => {
     f.set({ hold: true });
     await f.page.getByRole('switch', { name: 'Usage analytics' }).evaluate(el => { el.click(); el.click(); });
     await f.page.locator('[data-privacy-state="saving"]').waitFor();
+    await f.patchObserved;
     assert.equal(patches(f).length, 1);
     assert.deepEqual(patches(f)[0].body, { privacy: [{ kind: 'analytics', enabled: true }], expected_version: 7 });
     assert.equal(await f.page.getByText('Saved to your account.').count(), 0);

@@ -179,3 +179,31 @@ live-backend certification, exception approval, or independent QA result.
 This new capture/coverage bundle requires a fresh owner integrity approval.
 The import approval is not reused to authorize it. Hosted S-19 verdicts and
 exact-image exceptions remain pending that approval; NYAY-91 stays In Progress.
+
+## 2026-10-17 first hosted measurement and presentation correction
+
+Owner comment `6233689134` binds bundle
+`695cb020fc1384e5c05c524d118db18cafe60849e0fbd1148aa70fe02ec54205`
+at binding head `2fc2815e8c75331419ccd6d11ff019b65cdd155e`.
+Run `39031658251` successfully measured all 50 S-19 default rows, with no
+serious/critical axe findings; all 50 are NONCONFORMANT before exceptions.
+The two manual rows remain DESIGN-GAP. Existing 74 blocking rows still pass;
+the successful report-only S-19 job is not a claim of visual parity.
+
+The owner-authorized presentation correction is confined to S-19's view/CSS:
+19px flex deletion headings, 12px field labels, 1.4 helper line-height,
+8px paired-action spacing, prototype OTP field sizing, .55 disabled opacity,
+centered session-error frame, frozen status icons/colors, and error placement
+after the relevant input. Loading/session retain their frozen overview copy.
+No settings/controller, recovery authority, routes, evaluator, reference,
+tolerance, enforcement, or existing exception bytes change.
+
+Tests were RED before correction: semantic error-frame/notice placement and
+mobile/desktop heading/action/OTP geometry. All existing behavioral assertions
+remain. The synthetic browser test now observes its held PATCH before asserting
+its count, eliminating a test-side scheduling race without changing behavior.
+Local frontend: 171 files, 2,658 PASS plus one existing skip. S-19 browser:
+14/14 PASS, including 320/390/1440 reflow, 48px controls and serious/critical
+axe checks. Local widths differ from Linux reference widths: no width override
+was introduced to compensate for that platform difference.
+Corrected hosted images and scoped owner exceptions are still pending.

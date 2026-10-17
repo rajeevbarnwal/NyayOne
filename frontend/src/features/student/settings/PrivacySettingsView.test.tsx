@@ -85,4 +85,29 @@ describe('S-19 approved continuation presentation (not conformance evidence)', (
     expect(html).not.toContain('Type DELETE to continue');
     expect(html).toMatch(/<button type="submit" class="v321-privacy__button is-primary" disabled=""/);
   });
+  it('renders the session component with the approved centered error frame and semantic heading', () => {
+    const html = render({ state: { phase: 'session' } });
+    expect(html).toContain('class="v321-privacy__error"');
+    expect(html).toContain('<h2>Your session ended.</h2>');
+    expect(html).toContain('class="v321-privacy__error-icon" aria-hidden="true"');
+    expect(html).toContain('class="v321-privacy__error-actions"');
+    expect(html).toContain('class="v321-privacy__button is-primary"');
+    expect(html).toContain('Sign in again');
+    expect(html).toContain('Each choice is separate and off unless you turn it on.');
+    expect(html).toContain('y="10.5" width="14" height="10"');
+  });
+  it('places a rejected recovery-start notice after its field, before the Send code action', () => {
+    const html = render({ deletion: { ...base.deletion, stage: 'mobile', error: 'start' } });
+    expect(html.indexOf('Registered mobile number')).toBeLessThan(html.indexOf('Could not start re-authentication.'));
+    expect(html.indexOf('Could not start re-authentication.')).toBeLessThan(html.indexOf('Send code'));
+  });
+  it('keeps the code mismatch inline with the code field instead of inserting a separate card above it', () => {
+    const html = render({ deletion: { ...base.deletion, stage: 'code', error: 'code' } });
+    expect(html).toContain('class="v321-privacy__field-error"');
+    expect(html.indexOf('Six-digit code')).toBeLessThan(html.indexOf('That code did not match.'));
+  });
+  it('uses the approved warning and success presentation without changing status semantics', () => {
+    expect(render({ state: { ...loaded, phase: 'conflict' } })).toContain('v321-privacy__notice is-warning is-warn');
+    expect(render({ exportState: { phase: 'tracked', request: { requestId: 'a'.repeat(32), status: 'complete' } } })).toContain('v321-privacy__notice is-ok');
+  });
 });
