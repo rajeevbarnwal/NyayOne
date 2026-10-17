@@ -1493,11 +1493,11 @@ async function runLifecycleScenario(browser, name, index) {
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   } else if (name === 'deletion') {
     failureStage = 'normative_lifecycle_matrix_deletion_open_confirmation';
-    await page.getByRole('button', { name: 'Delete…', exact: true }).click();
-    failureStage = 'normative_lifecycle_matrix_deletion_type_confirmation';
-    await page.getByLabel('Type DELETE to confirm').fill('DELETE');
-    failureStage = 'normative_lifecycle_matrix_deletion_submit';
     await page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    failureStage = 'normative_lifecycle_matrix_deletion_type_confirmation';
+    await page.getByLabel('Type DELETE to continue').fill('DELETE');
+    failureStage = 'normative_lifecycle_matrix_deletion_submit';
+    await page.getByRole('button', { name: 'Request account deletion', exact: true }).click();
   } else if (name === 'revocation' || name === 'canonical_loss') {
     releasePrivate401();
   } else {

@@ -76,6 +76,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-16',
   'S-17',
   'S-18',
+  'S-19',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -372,8 +373,12 @@ async function recordVisualContract(page, screenId) {
       headingCount: headings.length,
       typographyExact: headings.length > 0 && headings.every((heading) => {
         const family = normalizedFamily(heading);
-        return family.length === expected.length
-          && family.every((name, index) => name === expected[index]);
+        const s19Eyebrow = contract.screenId === 'S-19' && heading.tagName === 'H2'
+          && heading.getAttribute('class') === 'v321-privacy__eyebrow'
+          && ['S-19-consents', 'S-19-data'].includes(heading.getAttribute('id'));
+        const expectedFamily = s19Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
+        return family.length === expectedFamily.length
+          && family.every((name, index) => name === expectedFamily[index]);
       }),
       iconCount: icons.length,
       iconsExact: icons.every((icon) => {
@@ -3430,18 +3435,13 @@ async function extendedStorageBoundaryProbe(browser) {
   failureStage = 'storage_s19_export';
   await page.goto(`${WEB}/s-19`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-screen="S-19"]').waitFor();
-  const dataRightsDisclosure = page
-    .locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' });
-  const dataRightsSummary = dataRightsDisclosure.locator('summary');
-  if ((await dataRightsDisclosure.getAttribute('open')) === null) {
-    await dataRightsSummary.waitFor({ state: 'visible' });
-    await dataRightsSummary.click();
-  }
+  const exportButton = page.getByRole('button', { name: 'Request a copy of my data', exact: true });
+  await exportButton.waitFor({ state: 'visible' });
   const exportResponsePromise = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && new URL(response.url()).pathname === '/api/v1/student/privacy/export'
   ));
-  await page.getByRole('button', { name: 'Export' }).click();
+  await exportButton.click();
   const exportResponse = await exportResponsePromise;
   if (exportResponse.status() !== 202) throw new Error('NYAY5_PRIVACY_EXPORT_REQUEST_FAILED');
   await page.getByText(/Export request/iu).waitFor();

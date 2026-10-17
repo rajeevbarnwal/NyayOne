@@ -145,8 +145,8 @@ function assertRunnerWiring(source) {
     throw new Error('NYAY4_RELOAD_REPORT_PRIVACY_BREACH');
   }
   for (const required of [
-    /const REAUTHENTICATED_BADGE_SELECTOR = ['"]\.status\.status--ok['"];/,
-    /const REAUTHENTICATED_BADGE_LABEL = ['"]Re-authenticated['"];/,
+    /const REAUTHENTICATED_BADGE_SELECTOR = ['"]\.v321-privacy__notice:not\(\.is-warning\) b['"];/,
+    /const REAUTHENTICATED_BADGE_LABEL = ['"]Identity confirmed.['"];/,
     /async function waitForReauthenticatedBadge\(targetPage\)/,
     /targetPage\.locator\(REAUTHENTICATED_BADGE_SELECTOR\)/,
     /querySelectorAll\(['"]\[aria-hidden=[\\'"]true[\\'"]\]['"]\)/,
@@ -158,21 +158,21 @@ function assertRunnerWiring(source) {
     if (!required.test(source)) throw new Error('NYAY4_REAUTHENTICATED_BADGE_ORACLE_MISSING');
   }
   if ((source.match(/await waitForReauthenticatedBadge\(privacyPage\);/g) ?? []).length !== 3
-      || /getByText\(['"]Re-authenticated['"],\s*\{\s*exact:\s*true\s*\}\)/.test(source)) {
+      || /getByText\(['"]Identity confirmed.['"],\s*\{\s*exact:\s*true\s*\}\)/.test(source)) {
     throw new Error('NYAY4_REAUTHENTICATED_BADGE_ORACLE_MISSING');
   }
 }
 
 function exactReauthenticatedBadgeIndexes(badges) {
   return badges.flatMap((badge, index) => {
-    const classes = new Set(badge.className.split(/\s+/));
-    if (!classes.has('status') || !classes.has('status--ok')) return [];
+    const classes = new Set(badge.parentClassName.split(/\s+/));
+    if (!classes.has('v321-privacy__notice') || classes.has('is-warning') || badge.tagName !== 'B') return [];
     const label = badge.children
       .filter((child) => child.ariaHidden !== true)
       .map((child) => child.text)
       .join('')
       .trim();
-    return label === 'Re-authenticated' ? [index] : [];
+    return label === 'Identity confirmed.' ? [index] : [];
   });
 }
 
@@ -435,24 +435,25 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     expect(source).toContain("failedPage.getByRole('button', { name: 'Verify and continue', exact: true }).count()");
   });
 
-  it('matches the StatusBadge label after excluding its aria-hidden mark, exactly once', () => {
+  it('matches the Revision L confirmation label after excluding hidden decoration, exactly once', () => {
     const badge = (status, label) => ({
-      className: `status status--${status}`,
+      parentClassName: `v321-privacy__notice${status === 'warn' ? ' is-warning' : ''}`,
+      tagName: 'B',
       children: [
         { ariaHidden: true, text: '\u2713' },
         { ariaHidden: false, text: label },
       ],
     });
-    const rendered = badge('ok', 'Re-authenticated');
+    const rendered = badge('ok', 'Identity confirmed.');
     const rawText = rendered.children.map((child) => child.text).join('');
-    expect(rawText).toBe('\u2713Re-authenticated');
-    expect(rawText === 'Re-authenticated').toBe(false);
+    expect(rawText).toBe('\u2713Identity confirmed.');
+    expect(rawText === 'Identity confirmed.').toBe(false);
     expect(exactReauthenticatedBadgeIndexes([rendered])).toEqual([0]);
-    expect(exactReauthenticatedBadgeIndexes([badge('warn', 'Re-authenticated')])).toEqual([]);
+    expect(exactReauthenticatedBadgeIndexes([badge('warn', 'Identity confirmed.')])).toEqual([]);
     for (const label of [
-      'Not Re-authenticated',
-      'Re-authenticated later',
-      'Re-authenticated!',
+      'Not Identity confirmed.',
+      'Identity confirmed. later',
+      'Identity confirmed.!',
     ]) {
       expect(exactReauthenticatedBadgeIndexes([badge('ok', label)])).toEqual([]);
     }
@@ -546,11 +547,11 @@ describe('NYAY-4 browser runner exact assertion contract', () => {
     )],
     ['restored broken exact-text locator', (source) => source.replace(
       'await waitForReauthenticatedBadge(privacyPage);',
-      "await privacyPage.getByText('Re-authenticated', { exact: true }).waitFor({ state: 'visible' });",
+      "await privacyPage.getByText('Identity confirmed.', { exact: true }).waitFor({ state: 'visible' });",
     )],
     ['unscoped re-authenticated text', (source) => source.replace(
       'targetPage.locator(REAUTHENTICATED_BADGE_SELECTOR)',
-      "targetPage.getByText(/Re-authenticated/)",
+      "targetPage.getByText(/Identity confirmed./)",
     )],
     ['substring re-authenticated label', (source) => source.replace(
       'labelOnly.textContent?.trim() === expectedLabel',

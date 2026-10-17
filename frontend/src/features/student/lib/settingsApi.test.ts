@@ -20,7 +20,7 @@ import {
 } from './settingsApi';
 
 const settingsApiSource = readFileSync(new URL('./settingsApi.ts', import.meta.url), 'utf8');
-const settingsScreenSource = readFileSync(new URL('../settings/SettingsScreens.tsx', import.meta.url), 'utf8');
+const settingsScreenSource = readFileSync(new URL('../settings/usePrivacySettings.ts', import.meta.url), 'utf8');
 const reportSource = readFileSync(new URL('./report.ts', import.meta.url), 'utf8');
 const reminderSource = readFileSync(new URL('./reminderPrefs.ts', import.meta.url), 'utf8');
 

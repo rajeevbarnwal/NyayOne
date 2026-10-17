@@ -2,8 +2,8 @@
 
 S-19 is the next screen after the S-18 merge. This draft begins its state and
 projection boundaries; it is **not** a completed screen, measured conformance
-result, enforcement promotion, or independent QA handoff. The new state module
-is not connected to the production route in this first slice.
+result, enforcement promotion, or independent QA handoff. The state module is
+now connected to the S-19 route through its own controller and Revision L view.
 
 ## Frozen authority
 
@@ -39,15 +39,18 @@ or a visual-gate result.
 
 ## Remaining work and approval boundaries
 
-1. Connect the controller and Revision L shell/presentation to `/s-19` with
-   focused deletion substates replacing the overview (not appended below it).
-   Preserve shared auth transitions and server-authoritative deletion adapter.
-   Recovery start → verify → privacy/delete; never recovery/complete.
-2. Narrow S-19 browser expectation/census/legacy-negative-control and inventory
-   alignment needs owner approval before changing sealed expectations.
-3. S-19 hosted PNG calibration requires a narrow extension to the existing
-   owner-only manual calibration path. Prepare only after owner approval;
-   owner integrity approval, merge and dispatch precede verified import.
+1. Implemented focused deletion substates replacing the overview (not appended
+   below it), confirmed consent cache/rollback/conflict reload, and truthful
+   export request/status handling. Shared auth transitions and the deletion
+   adapter remain unchanged. Recovery start → verify → privacy/delete; never
+   recovery/complete. Failed recovery-authority reads still hide confirmation
+   and prevent Send/deletion until a fresh valid read.
+2. Owner approved narrow S-19 browser/census/inventory alignment on 2026-10-17.
+   Legacy negative control moved to unchanged S-20; security assertions stay
+   intact. Source-based authority tests follow the extracted controller.
+3. Owner approved a separate capture-only calibration prerequisite. It adds
+   `s19-v32108` to the existing owner-dispatched path. Owner integrity approval,
+   Terminal merge and dispatch precede hash-verified import; no dispatch by Codex.
 4. Disposition transient session/deletion-accepted and optional-manual rows
    explicitly. Do not manufacture delays or mark absent coverage as passing.
 5. Hosted measurement, geometry/accessibility corrections, scoped exact-image
@@ -57,3 +60,17 @@ or a visual-gate result.
 Existing evaluator, references, exception approvals, tolerances, and the 74
 blocking light rows remain unchanged. S-18's measured/report-only rows retain
 their merged disposition. This draft changes no backend or other screen.
+
+## 2026-10-17 local validation (not hosted conformance)
+
+- Presentation regression RED before the new view; census RED before S-19 was
+  classified Revision L; recovery-authority regression RED before correction.
+- Frontend: 167 test files, 2,621 passed, one existing skipped test. Typecheck
+  and lint pass. Namespace scan PASS including 17/17 negative controls.
+- Real Chromium / synthetic API: 12/12 S-19 tests; independent census fixture:
+  22/22. Includes duplicate toggles, version/conflict/reload, malformed 2xx,
+  same-component query/hash settlement, export truth, recovery-proof failure
+  and focused deletion, focus restoration, 320/390/1440 overflow, 48px targets,
+  and zero serious/critical axe on overview/mobile-entry states.
+- These do not certify all S-19 states, live backend behavior, physical mobile,
+  screen-reader output, hosted pixel parity, or independent Claude QA.
