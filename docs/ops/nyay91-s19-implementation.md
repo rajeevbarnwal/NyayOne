@@ -74,3 +74,50 @@ their merged disposition. This draft changes no backend or other screen.
   and zero serious/critical axe on overview/mobile-entry states.
 - These do not certify all S-19 states, live backend behavior, physical mobile,
   screen-reader output, hosted pixel parity, or independent Claude QA.
+
+## 2026-10-17 owner calibration and candidate reference import
+
+- Successful first-attempt owner dispatch: run `39029544967`, artifact
+  `12099474372`. Both actor and triggering actor are `rajeevbarnwal`;
+  `workflow_dispatch` on `main`, control revision
+  `3d0e1201ea672c6f96b7a86703def2d3bffa69f5`.
+- Reviewed source revision: `32573e0333baa5bea6098e8399b4a7108770fac0`.
+- Downloaded archive SHA-256 recomputed locally and matched to GitHub:
+  `42e208402d032613183474711c629efb4488a6613b4450f1e93d139d9dcf9030`.
+- 52/52 PNG hashes and decoded dimensions, 54/54 checksum entries, and all
+  156 sample hashes verify. Chromium `149.0.7827.55`, Playwright `1.61.1`,
+  Node `v22.21.1`, `linux-x64`, approved font bytes and frozen source hashes
+  match. The two viewports are 390x844 and 1440x1024.
+- Candidate cache:
+  `frontend/test-baselines/nyay66/s19-v32108-chromium-149.0.7827.55-39029544967/`.
+  `SHA256SUMS` contains every PNG digest. Manifest SHA-256:
+  `b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c`;
+  provenance SHA-256:
+  `5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf`.
+
+The new S-19-only importer recomputes the ZIP digest, checks its exact member
+inventory without extracting paths or executing helpers, validates all input
+before writing, and refuses to replace an existing cache. Its loader rechecks
+all PNGs, manifest, provenance and runtime pins at use. Tests include archive
+tampering, PNG tampering despite recomputed outer checksums, missing states,
+wrong source/control heads or pins, extra members, symlink input, unsafe cache
+names and post-import cache corruption. Import tests were RED before support;
+the real-cache binding test was RED before the policy binding.
+
+This commit adds only the reference cache, S-19 import/load support and tests,
+the `s19` cache binding, and this additive record. Existing 74-row enforcement,
+the 18 measured S-18 rows, old references, exceptions, evaluator and tolerances
+are unchanged. The prior integrity approval is deliberately not reused for the
+new bundle; a fresh owner top-level approval on PR #70 is required.
+
+**Reference ingestion is not product measurement.** The live producer is not
+extended by this import-only step; all 52 S-19 product rows remain DESIGN-GAP.
+Capturing the two optional-manual design rows does not approve manual-save
+product behavior. Transient session/deletion-accepted coverage still needs an
+explicit disposition; no production delays or navigation freezes are added.
+NYAY-91 stays In Progress, with no conformance or independent-QA pass claimed.
+
+Local candidate validation: 169 frontend files / 2,636 tests passed, one existing
+skip; trust/calibration Python contracts 50/50 passed; workflow policy passed
+all 14 workflows. The new protected bytes require owner approval before hosted
+conformance can accept this candidate.
