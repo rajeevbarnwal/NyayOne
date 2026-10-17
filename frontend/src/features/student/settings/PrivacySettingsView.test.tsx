@@ -111,4 +111,10 @@ describe('S-19 approved continuation presentation (not conformance evidence)', (
     expect(render({ state: { ...loaded, phase: 'conflict' } })).toContain('v321-privacy__notice is-warning is-warn');
     expect(render({ exportState: { phase: 'tracked', request: { requestId: 'a'.repeat(32), status: 'complete' } } })).toContain('v321-privacy__notice is-ok');
   });
+  it('uses the frozen warning tone for a deletion conflict without altering its specific notice', () => {
+    const html = render({ deletion: { ...base.deletion, stage: 'confirm', error: 'conflict', authorityReady: true } });
+    expect(html).toContain('v321-privacy__notice is-warning is-warn');
+    expect(html).toContain('Something changed on your account while this was processing.');
+    expect(html).toContain('Nothing was deleted. Wait a moment and try again.');
+  });
 });

@@ -241,3 +241,31 @@ The protected-bundle delta is limited to `nyay66-s19-fixtures.mjs` and its
 regression test. A fresh owner integrity comment is required before final
 hosted measurement; the earlier approval is not reused for these new bytes.
 NYAY-91 remains In Progress. No new exceptions are approved or bound here.
+
+## 2026-10-17 final-measurement presentation follow-up
+
+Owner comment `6235897983` was read back and bound at `5b05a119` to bundle
+`305c6832bd6bcf0f7c2442790250ea67e5b7e80961d886651a23ac3dfcb22441`.
+Hosted run `39046240355` executed all 50 S-19 rows; all 428 artifact file hashes
+verified. The 92 earlier measured rows retain their verdicts and reference
+hashes. The two optional manual rows remain DESIGN-GAP. No S-19 exception has
+been approved, and a report-only job success is not visual conformance.
+
+Screenshot and computed-style review found genuine remaining presentation
+defects, corrected before proposing exceptions:
+
+- The frozen desktop deletion stack uses 14px gaps, versus mobile's 13px.
+  Retaining 13px on desktop accumulated a 3px field / 4–5px action shift.
+- The rejected-code inline error belongs at the field's 5px helper gap, not
+  the outer form's 13/14px gap. Both viewports now preserve that field spacing.
+- Deletion conflict uses the reference warning border, not the risk border;
+  the exact conflict text, auth-transition remount and recovery authority stay
+  unchanged.
+
+Tests-first: three browser spacing assertions and the conflict-tone assertion
+failed before their respective fixes; the 19-check browser suite and 24 view
+tests pass after correction. Product changes are S-19-only presentation; test
+changes are outside the protected fixture bundle. References, tolerances,
+evaluator, enforcement and existing exceptions remain untouched. Fresh hosted
+captures are required for the final exact-image proposals; these earlier
+captures remain historical diagnostic evidence, not rebound approvals.

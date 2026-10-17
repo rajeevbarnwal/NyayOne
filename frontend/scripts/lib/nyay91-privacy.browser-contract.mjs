@@ -44,7 +44,10 @@ async function fixture() {
     if (path.endsWith('/privacy/export')) return json({ request_id: 'a'.repeat(32), status: response.exportStatus || 'pending' }, 202);
     if (path.includes('/privacy/requests/')) return response.checkError ? json({ detail: { code: 'not_found' } }, response.checkError) : json({ request_id: 'a'.repeat(32), kind: 'export', status: response.exportStatus || 'processing', created_at: '2026-10-17T10:00:00Z' });
     if (path.endsWith('/recovery/start')) { flow = pending; return json(flow, 202); }
-    if (path.endsWith('/recovery/verify')) { flow = verified; return json(flow); }
+    if (path.endsWith('/recovery/verify')) {
+      if (response.verifyRejected) return json({ detail: { code: 'otp_invalid', otp_state: pending } }, 400);
+      flow = verified; return json(flow);
+    }
     if (path.endsWith('/privacy/delete')) {
       if (response.deleteStatus) return json({ detail: { code: response.deleteCode } }, response.deleteStatus);
       lostSession = true; flow = idle; return json({ request_id: 'b'.repeat(32), status: 'pending' }, 202);
@@ -67,6 +70,11 @@ describe('S-19 real browser / synthetic server', { timeout: 60000 }, () => {
       return { size: css.fontSize, display: css.display, gap: css.gap, height: box.height };
     });
     assert.deepEqual(layout, { size: '19px', display: 'flex', gap: '9px', height: 32 });
+    const stackGap = width >= 900 ? '14px' : '13px';
+    for (const selector of ['.v321-privacy__deletion', '.v321-privacy__form']) {
+      assert.equal(await f.page.locator(selector).evaluate(el => getComputedStyle(el).gap), stackGap,
+        'frozen source uses a 14px desktop stack, not the 13px mobile stack');
+    }
     const send = await f.page.getByRole('button', { name: 'Send code', exact: true }).boundingBox();
     const cancel = await f.page.getByRole('button', { name: 'Back to privacy', exact: true }).boundingBox();
     assert.equal(cancel.y - send.y - send.height, 8, 'deletion action gap');
@@ -76,6 +84,21 @@ describe('S-19 real browser / synthetic server', { timeout: 60000 }, () => {
     const code = f.page.getByLabel('Six-digit code');
     await code.waitFor();
     assert.deepEqual(await code.evaluate(el => { const c = getComputedStyle(el); return [c.width, c.fontWeight, c.letterSpacing, c.paddingLeft]; }), ['322px', '500', '8px', '16px']);
+  }));
+  for (const width of [390, 1440]) it(`keeps the rejected-code error in the frozen 5px field-help spacing at ${width}px`, () => using(async f => {
+    await f.page.setViewportSize({ width, height: 1024 });
+    f.set({ verifyRejected: true });
+    await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByLabel('Registered mobile number').fill('9876500340');
+    await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+    await f.page.getByLabel('Six-digit code').fill('123456');
+    await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+    await f.page.getByText('That code did not match.', { exact: true }).waitFor();
+    const field = await f.page.locator('.v321-privacy__field').boundingBox();
+    const error = await f.page.locator('.v321-privacy__field-error').boundingBox();
+    assert.equal(error.y - field.y - field.height, 5, 'inline error belongs to the field, not the outer form stack');
+    assert.equal(await f.page.getByLabel('Six-digit code').inputValue(), '123456');
+    assert.equal(await f.page.getByRole('button', { name: 'Verify code', exact: true }).isEnabled(), true);
   }));
   it('holds duplicate toggles and shows no success before server confirmation', () => using(async f => {
     f.set({ hold: true });

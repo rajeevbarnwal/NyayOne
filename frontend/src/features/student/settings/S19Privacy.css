@@ -56,6 +56,7 @@
 .v321-privacy__skeletons { display:flex; flex-direction:column; gap:13px; }
 .v321-privacy__skeletons>div { height:76px; border-radius:14px; background:#e4e1ef; }
 .v321-privacy__deletion, .v321-privacy__form { display:flex; flex-direction:column; gap:13px; }
+.v321-privacy__field + .v321-privacy__field-error { margin-top:-8px; }
 .ls-v34-content .v321-privacy .v321-privacy__deletion h1 { font-size:19px; display:flex; align-items:center; gap:9px; }
 .v321-privacy__form + .v321-privacy__button { margin-top:-5px; }
 .v321-privacy__deletion>p { font-size:13px; }
@@ -93,6 +94,10 @@
   .v321-privacy__avatar { margin-left:0; }
   .v321-privacy__layout { padding:26px 34px; display:grid; grid-template-columns:1.4fr .9fr; gap:20px; align-items:start; align-content:start; }
   .v321-privacy__body { padding:0; }
+  /* The frozen desktop stack is 14px; field errors keep their 5px inner gap. */
+  .v321-privacy__deletion, .v321-privacy__form { gap:14px; }
+  .v321-privacy__form + .v321-privacy__button { margin-top:-6px; }
+  .v321-privacy__field + .v321-privacy__field-error { margin-top:-9px; }
   .v321-privacy__aside { display:flex; flex-direction:column; gap:13px; min-width:0; }
   .v321-privacy__aside .v321-privacy__eyebrow { margin-bottom:8px; }
   .ls-v34-content .v321-privacy h1 { font-size:28px; }
