@@ -130,11 +130,13 @@ function usePrivacyDeletion() {
   const open = draft.stage !== 'closed';
   const flow = useOtpFlowState(undefined, { enabled: open && session.phase === 'authenticated' });
   const capability = flow.state?.purpose === 'recovery' ? flow.state : null;
-  const verifyReady = !flow.loading && !flow.loadError && capability?.status === 'pending' && (capability.expiresInSeconds ?? 0) > 0 && (capability.lockedForSeconds ?? 0) === 0 && (capability.attemptsLeft ?? 0) > 0;
-  const stage = !open ? 'closed' : flow.loadError || forceMobile.current ? 'mobile' : capability?.status === 'verified' ? 'confirm' : capability?.status === 'pending' ? 'code' : draft.stage;
+  const verifyReady = draft.error !== 'unavailable' && draft.error !== 'reauth' && !flow.loading && !flow.loadError && capability?.status === 'pending' && (capability.expiresInSeconds ?? 0) > 0 && (capability.lockedForSeconds ?? 0) === 0 && (capability.attemptsLeft ?? 0) > 0;
+  // A deletion proof rejection remains authoritative until Start again. A
+  // remount's recovery projection must not contradict it with Identity confirmed.
+  const stage = !open ? 'closed' : flow.loadError || forceMobile.current || draft.error === 'reauth' ? 'mobile' : capability?.status === 'verified' ? 'confirm' : capability?.status === 'pending' ? 'code' : draft.stage;
   const state: PrivacyDeletionState = {
     ...draft, stage, verifyReady,
-    authorityReady: privacyDeleteReady('DELETE', capability, flow.loadError || flow.loading, inFlight.current),
+    authorityReady: draft.error !== 'reauth' && privacyDeleteReady('DELETE', capability, flow.loadError || flow.loading, inFlight.current),
     error: open && flow.loadError ? 'authority' : stage === 'code' && capability?.expiresInSeconds === 0 ? 'expired' : stage === 'code' && (capability?.lockedForSeconds ?? 0) > 0 ? 'locked' : draft.error,
   };
   const stateRef = useRef(state); stateRef.current = state;

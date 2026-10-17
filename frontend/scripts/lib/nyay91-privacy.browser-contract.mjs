@@ -176,9 +176,13 @@ describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
     await f.page.getByLabel('Six-digit code').fill('123456');
     await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
     await f.page.getByLabel('Type DELETE to continue').fill('DELETE');
+    const remountRead = f.page.waitForResponse(response => response.url().endsWith('/otp/state'));
     await f.page.getByRole('button', { name: 'Request account deletion', exact: true }).click();
     await f.page.getByText('The server did not confirm re-authentication.', { exact: true }).waitFor();
+    await remountRead;
+    await f.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.doesNotMatch(await f.page.locator('main').innerText(), /Check your connection/);
+    assert.equal(await f.page.getByText('Identity confirmed.', { exact: true }).count(), 0, 'denied deletion proof must not retain a contradictory success banner');
     await f.page.getByRole('button', { name: 'Start again', exact: true }).press('Enter');
     await f.page.getByLabel('Registered mobile number').waitFor();
     assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/delete')).length, 1);

@@ -381,3 +381,11 @@ exception binding or enforcement configuration changes are part of this fix.
 The existing protected bundle and all historical captures remain unchanged.
 Hosted exact-head revalidation and fresh independent Senior QA are required
 before owner merge; PR #70 remains Draft.
+
+Additional QA-F3 negative control waits for the remount's recovery-state read
+and paint before asserting no contradictory `Identity confirmed` banner.
+It failed before the rejection guard and passes afterward: the deletion-proof
+rejection keeps the route on reauthentication until Start again, even if the
+recovery projection still reports verified. Missing/unavailable verify authority
+also cannot reactivate Verify from a stale pending projection. All 41 S-19
+browser regressions pass after this guard; no reference or fixture changes.
