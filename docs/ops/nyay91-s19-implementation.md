@@ -461,3 +461,39 @@ The protected bundle remains
 Policy, all 50 bound exceptions, references, tolerances, evaluator and
 enforcement are byte-unchanged. No new visual exception is proposed. Exact-head
 hosted measurement and independent Senior QA Round 3 remain release conditions.
+
+## Senior QA Round 3 follow-up — 18 October 2026
+
+Round 3 at `d39f8836` independently confirmed QA-F1/F2/F3 but found the new
+Major QA-F4: deletion Send code, Verify, deletion submission and initial-load
+failures lost focus after removal of the generic alert-focus fallback. The
+original FAIL evidence remains unchanged in the private ticket, with all six
+uploaded files verified against the downloaded bytes.
+
+The correction awaits the deletion handlers' actual promises and wraps form
+submission in the existing explicit focus-ownership helper. Pending focus uses
+the stable deletion heading; failed completion selects the deletion error.
+This covers clicks and Enter from either the submit button or input. A one-shot
+arrival guard handles initial settings failure and the existing sanitized
+deletion notice after an auth-transition remount. It cannot re-arm on later
+polling/consent updates, and it relinquishes focus if the user moves elsewhere.
+Step changes preserve a deliberately focused external control or error notice.
+The generic focus-first-alert-on-update mechanism remains removed.
+
+Tests-first: the initial 85-case group produced 84 failures and one passing
+negative control before the fix, then 85 passes. Three retained-verification
+remount controls passed; two additional successful-step/moved-focus controls
+failed before the step fallback was narrowed, then all five passed. The final
+suite retains the preceding 70 browser tests and adds 91 QA-F4 cases, including
+320/390/1280px, click/button-Enter/input-Enter, 401/409/422/429/503, initial-load
+focus ownership, held requests and moved-focus controls. A failing control for
+an already-rendered session notice also established that arrival focus must
+require an actual initial loading transition; that control then passed without
+changing the component fixture. These are developer
+Chromium/synthetic-API checks, not independent or live-backend QA.
+
+No CSS, controller authority, navigation contract, reference, tolerance,
+evaluator, fixture, exception or enforcement change is included. The protected
+bundle remains `305c6832bd6bcf0f7c2442790250ea67e5b7e80961d886651a23ac3dfcb22441`.
+Exact-head hosted measurement and fresh independent Senior QA Round 4 remain
+required before owner merge. No functional defect is waived by image exceptions.

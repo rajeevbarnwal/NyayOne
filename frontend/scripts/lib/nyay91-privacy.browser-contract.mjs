@@ -17,11 +17,11 @@ after(async () => { await browser?.close(); await server?.close(); });
 const idle = { status: 'unavailable', purpose: null, destination_masked: null, attempts_left: null, expires_in_seconds: null, resend_in_seconds: null, locked_for_seconds: null, resend_allowed: false };
 const pending = { ...idle, status: 'pending', purpose: 'recovery', destination_masked: '••••••0340', attempts_left: 3, expires_in_seconds: 300, resend_in_seconds: 30, locked_for_seconds: 0 };
 const verified = { ...idle, status: 'verified', purpose: 'recovery' };
-async function fixture() {
+async function fixture(initialResponse = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage(); page.setDefaultTimeout(5000);
   const settings = { theme: 'system', language: 'en', notif_email: true, notif_sms: false, notif_updates: false, version: 7, privacy: ['analytics', 'marketing', 'share_partners'].map(kind => ({ kind, enabled: false })) };
-  const requests = []; let response = {}, release, flow = idle, lostSession = false, observePatch, observeHold;
+  const requests = []; let response = initialResponse, release, flow = idle, lostSession = false, observePatch, observeHold;
   const held = new Promise(resolve => { observeHold = resolve; });
   const hold = () => new Promise(resolve => { release = resolve; observeHold(); });
   const patchObserved = new Promise(resolve => { observePatch = resolve; });
@@ -36,6 +36,10 @@ async function fixture() {
       return response.otpError ? json({ detail: { code: 'unavailable' } }, 503) : json(flow);
     }
     if (path.endsWith('/student/settings')) {
+      if (method === 'GET') {
+        if (response.holdSettings) await hold();
+        if (response.settingsError) return json({ detail: { code: 'unavailable' } }, 503);
+      }
       if (method === 'PATCH') {
         observePatch();
         if (response.hold) await hold();
@@ -54,8 +58,13 @@ async function fixture() {
       if (response.holdCheck) await hold();
       return response.checkError ? json({ detail: { code: 'not_found' } }, response.checkError) : json({ request_id: 'a'.repeat(32), kind: 'export', status: response.exportStatus || 'processing', created_at: '2026-10-17T10:00:00Z' });
     }
-    if (path.endsWith('/recovery/start')) { flow = pending; return json(flow, 202); }
+    if (path.endsWith('/recovery/start')) {
+      if (response.holdSend) await hold();
+      if (response.sendStatus) return json({ detail: { code: response.sendStatus === 429 ? 'rate_limited' : 'unavailable' } }, response.sendStatus);
+      flow = pending; return json(flow, 202);
+    }
     if (path.endsWith('/recovery/verify')) {
+      if (response.holdVerify) await hold();
       if (response.recoveryFailed) {
         flow = response.recoveryProjection ?? idle;
         return json({ detail: { code: 'recovery_failed', ...(response.omitProjection ? {} : { otp_state: flow }) } }, 401);
@@ -64,17 +73,122 @@ async function fixture() {
       flow = verified; return json(flow);
     }
     if (path.endsWith('/privacy/delete')) {
+      if (response.holdDelete) await hold();
+      if (response.clearVerification) flow = idle;
       if (response.deleteStatus) return json({ detail: { code: response.deleteCode } }, response.deleteStatus);
       lostSession = true; flow = idle; return json({ request_id: 'b'.repeat(32), status: 'pending' }, 202);
     }
     return json({ detail: { code: 'unmatched_api' } }, 404);
   });
-  await page.goto(origin + '/s-19'); await page.locator('[data-privacy-state="loaded"]').waitFor();
+  await page.goto(origin + '/s-19');
+  if (initialResponse.holdSettings) await held;
+  else await page.locator(`[data-privacy-state="${initialResponse.settingsError ? 'network' : 'loaded'}"]`).waitFor();
   return { context, page, requests, settings, patchObserved, held, set: value => { response = value; }, setFlow: value => { flow = value; }, release: () => release?.() };
 }
 async function using(test) { const f = await fixture(); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const patches = f => f.requests.filter(r => r.method === 'PATCH');
 describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
+  it('QA-F4 pre-rendered session notice does not invent an initial-load focus transition', async () => {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      await page.goto(origin + '/scripts/nyay66-s19-component.html');
+      await page.getByRole('alert').waitFor(); await page.waitForTimeout(100);
+      assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'BODY');
+    } finally { await context.close(); }
+  });
+  for (const width of [320, 390, 1280]) for (const activation of ['click', 'button Enter', 'field Enter']) {
+    for (const action of ['send503', 'send429', 'verify-unavailable', 'verify-expired', 'verify-locked', 'delete401', 'delete409', 'delete422', 'delete503']) {
+      it(`QA-F4 ${action} focuses its error after ${activation} at ${width}px`, () => using(async f => {
+        await f.page.setViewportSize({ width, height: 680 });
+        await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+        await f.page.getByLabel('Registered mobile number').fill('9876500340');
+        let field = f.page.getByLabel('Registered mobile number');
+        if (!action.startsWith('send')) {
+          await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+          field = f.page.getByLabel('Six-digit code'); await field.fill('123456');
+        }
+        if (action.startsWith('delete')) {
+          await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+          field = f.page.getByLabel('Type DELETE to continue'); await field.fill('DELETE');
+          const status = Number(action.slice(6));
+          f.set({ deleteStatus: status, deleteCode: status === 401 ? 'reauth_required' : status === 409 ? 'concurrent_state_changed' : status === 422 ? 'confirmation_invalid' : 'unavailable', clearVerification: true });
+        } else if (action.startsWith('send')) f.set({ sendStatus: Number(action.slice(4)) });
+        else f.set({ recoveryFailed: true, recoveryProjection: action.endsWith('expired') ? { ...pending, expires_in_seconds: 0 } : action.endsWith('locked') ? { ...pending, locked_for_seconds: 60 } : idle });
+        const button = f.page.locator('.v321-privacy__deletion button[type="submit"]');
+        if (activation === 'click') await button.click();
+        else await (activation === 'field Enter' ? field : button).press('Enter');
+        await f.page.locator('.v321-privacy__deletion [role="alert"]').waitFor();
+        await f.page.waitForTimeout(180);
+        assert.equal(await f.page.evaluate(() => document.activeElement?.getAttribute('role')), 'alert');
+        assert.equal(await f.page.evaluate(() => !!document.activeElement?.closest('.v321-privacy__deletion')), true);
+        assert.equal(f.requests.filter(r => r.path.endsWith(action.startsWith('send') ? '/recovery/start' : action.startsWith('verify') ? '/recovery/verify' : '/privacy/delete')).length, 1);
+        assert.equal(f.requests.some(r => r.path.endsWith('/recovery/complete')), false);
+      }));
+    }
+  }
+  for (const moved of [false, true]) {
+    it(`QA-F4 initial 503 focuses error only if arrival focus is still owned (moved=${moved})`, async () => {
+      const f = await fixture({ holdSettings: true, settingsError: true });
+      try {
+        if (moved) await f.page.locator('.v321-privacy__back').focus();
+        f.release(); await f.page.getByText('Could not load consent preferences.', { exact: true }).waitFor();
+        await f.page.waitForTimeout(150);
+        assert.equal(await f.page.evaluate(() => document.activeElement?.getAttribute('role')), moved ? null : 'alert');
+        if (moved) assert.equal(await f.page.evaluate(() => document.activeElement?.textContent), 'Profile');
+      } finally { f.release(); await f.context.close(); }
+    });
+  }
+  for (const status of [409, 422, 503]) {
+    it(`QA-F4 deletion ${status} keeps notice focus after a verified recovery remount`, () => using(async f => {
+      await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+      await f.page.getByLabel('Registered mobile number').fill('9876500340');
+      await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+      await f.page.getByLabel('Six-digit code').fill('123456');
+      await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+      await f.page.getByLabel('Type DELETE to continue').fill('DELETE');
+      f.set({ deleteStatus: status, deleteCode: status === 409 ? 'concurrent_state_changed' : status === 422 ? 'confirmation_invalid' : 'unavailable' });
+      await f.page.locator('.v321-privacy__deletion button[type="submit"]').press('Enter');
+      await f.page.locator('.v321-privacy__deletion [role="alert"]').waitFor();
+      await f.page.waitForTimeout(200);
+      assert.equal(await f.page.evaluate(() => document.activeElement?.getAttribute('role')), 'alert');
+    }));
+  }
+  for (const action of ['send', 'verify']) {
+    it(`QA-F4 successful held ${action} does not steal moved focus when the step changes`, () => using(async f => {
+      await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+      await f.page.getByLabel('Registered mobile number').fill('9876500340');
+      if (action === 'verify') {
+        await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+        await f.page.getByLabel('Six-digit code').fill('123456');
+      }
+      f.set(action === 'send' ? { holdSend: true } : { holdVerify: true });
+      await f.page.locator('.v321-privacy__deletion button[type="submit"]').press('Enter');
+      await f.held;
+      await f.page.locator('.v321-privacy__back').focus(); f.release();
+      await f.page.getByLabel(action === 'send' ? 'Six-digit code' : 'Type DELETE to continue').waitFor();
+      await f.page.waitForTimeout(150);
+      assert.equal(await f.page.evaluate(() => document.activeElement?.textContent), 'Profile');
+    }));
+  }
+  for (const action of ['send', 'verify']) {
+    it(`QA-F4 held ${action} has pending focus but never steals deliberately moved focus`, () => using(async f => {
+      await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+      await f.page.getByLabel('Registered mobile number').fill('9876500340');
+      if (action === 'verify') {
+        await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+        await f.page.getByLabel('Six-digit code').fill('123456');
+      }
+      f.set(action === 'send' ? { holdSend: true, sendStatus: 503 } : { holdVerify: true, recoveryFailed: true });
+      await f.page.locator('.v321-privacy__deletion button[type="submit"]').press('Enter');
+      await f.held;
+      assert.notEqual(await f.page.evaluate(() => document.activeElement?.tagName), 'BODY');
+      await f.page.locator('.v321-privacy__back').focus(); f.release();
+      await f.page.locator('.v321-privacy__deletion [role="alert"]').waitFor();
+      await f.page.waitForTimeout(150);
+      assert.equal(await f.page.evaluate(() => document.activeElement?.textContent), 'Profile');
+    }));
+  }
   for (const width of [320, 390, 1440]) for (const outcome of ['accepted', 'failed', 'moved']) {
     it(`Round 3 first export retains owned focus, never steals moved focus: ${outcome} at ${width}px`, () => using(async f => {
       await f.page.setViewportSize({ width, height: 844 });

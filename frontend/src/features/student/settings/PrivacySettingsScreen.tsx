@@ -10,5 +10,5 @@ export function PrivacySettingsScreen() {
     onExport={e.request} onCheckExport={e.check} onDismissExport={e.dismiss}
     onDeleteOpen={() => { if (p.state.phase !== 'saving') d.openDelete(); }} onDeleteClose={d.closeDelete}
     onMobile={v => d.edit('mobile', v)} onCode={v => d.edit('code', v)} onTyped={v => d.edit('typed', v)}
-    onSend={() => { void d.recover('send'); }} onVerify={() => { void d.recover('verify'); }} onDelete={() => { void d.remove(); }} onStartAgain={d.startAgain}/>
+    onSend={() => d.recover('send')} onVerify={() => d.recover('verify')} onDelete={d.remove} onStartAgain={d.startAgain}/>
 }

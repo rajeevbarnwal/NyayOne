@@ -33,9 +33,9 @@ export interface PrivacySettingsViewProps {
   onMobile: (value: string) => void;
   onCode: (value: string) => void;
   onTyped: (value: string) => void;
-  onSend: () => void;
-  onVerify: () => void;
-  onDelete: () => void;
+  onSend: () => void | Promise<void>;
+  onVerify: () => void | Promise<void>;
+  onDelete: () => void | Promise<void>;
   onStartAgain: () => void | Promise<void>;
 }
 
@@ -93,6 +93,10 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const restoreOverview = useRef(false);
   const focusAction = useRef<{ anchor: HTMLElement; target: string; url: string; done: boolean } | null>(null);
+  // Only the initial settings load / sanitized deletion-remount notice can
+  // acquire arrival focus. Later errors and background updates cannot re-arm it.
+  const arrivalFocus = useRef({ pending: state.phase === 'loading', moved: false, url: '' });
+  const arrivalDeletion = useRef(d.stage !== 'closed' && Boolean(d.error));
   const [focusCompletion, setFocusCompletion] = useState(0);
   // User-initiated actions own focus only while it remains on their stable
   // heading. Background polling, another control, navigation or unmount must
@@ -112,7 +116,10 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   };
   const previousStage = useRef(d.stage);
   useEffect(() => {
+    arrivalFocus.current.url = window.location.href;
+    arrivalFocus.current.moved = document.activeElement !== document.body;
     const relinquish = (event: FocusEvent) => {
+      arrivalFocus.current.moved = true;
       if (focusAction.current && event.target !== focusAction.current.anchor) focusAction.current = null;
     };
     document.addEventListener('focusin', relinquish);
@@ -121,7 +128,8 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   useEffect(() => {
     if (previousStage.current !== d.stage) {
       if (d.stage === 'closed') restoreOverview.current = true;
-      else stepHeading.current?.focus();
+      else if (!focusAction.current && !arrivalFocus.current.pending &&
+        (document.activeElement === document.body || document.activeElement === stepHeading.current)) stepHeading.current?.focus();
       previousStage.current = d.stage;
     }
     if (restoreOverview.current && d.stage === 'closed') {
@@ -129,6 +137,16 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
       restoreOverview.current = false;
     }
   }, [d.stage]);
+  useEffect(() => {
+    const arrival = arrivalFocus.current;
+    if (!arrival.pending || state.phase === 'loading') return;
+    arrival.pending = false;
+    if (arrival.moved || arrival.url !== window.location.href || document.activeElement !== document.body) return;
+    const target = arrivalDeletion.current
+      ? root.current?.querySelector<HTMLElement>('.v321-privacy__deletion [role="alert"]')
+      : !state.settings ? root.current?.querySelector<HTMLElement>('main [role="alert"]') : null;
+    target?.focus();
+  }, [state.phase, state.settings, d.error, d.stage]);
   useEffect(() => {
     const intent = focusAction.current;
     if (intent) {
@@ -156,6 +174,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const exportAction = (action: () => void | Promise<void>) => withFocus('#S-19-data', '.v321-privacy__data > [role="alert"], .v321-privacy__data > [role="status"]', action);
   const dismissExport = () => withFocus('#S-19-data', '.v321-privacy__data-row button', props.onDismissExport);
   const startAgain = () => withFocus('#S-19-delete-heading', '.v321-privacy__deletion [role="alert"], #S-19-mobile', props.onStartAgain);
+  const submitDeletion = () => withFocus('#S-19-delete-heading', '.v321-privacy__deletion [role="alert"], #S-19-delete-heading', d.stage === 'mobile' ? props.onSend : d.stage === 'code' ? props.onVerify : props.onDelete);
   const blocked = state.phase === 'saving' || state.phase === 'conflict';
   const exportBusy = exportState.phase === 'requesting' || exportState.phase === 'checking';
   const activeExport = exportState.request && ['pending', 'processing'].includes(exportState.request.status) && exportState.phase !== 'not-found';
@@ -214,7 +233,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
         {d.stage === 'code' && <p>Sent to the mobile number you entered. The code works once and expires soon.</p>}
         {d.stage === 'confirm' && d.authorityReady && <Notice tone="ok" title="Identity confirmed.">The server issued deletion authority for this visit only.</Notice>}
         {restartNeeded && deletionError}
-        {!restartNeeded && <form className="v321-privacy__form" onSubmit={event => { event.preventDefault(); if (!d.busy) (d.stage === 'mobile' ? props.onSend : d.stage === 'code' ? props.onVerify : props.onDelete)(); }}>
+        {!restartNeeded && <form className="v321-privacy__form" onSubmit={event => { event.preventDefault(); if (!d.busy) submitDeletion(); }}>
           {d.stage === 'mobile' && <div className="v321-privacy__field"><label htmlFor="S-19-mobile">Registered mobile number</label><div className="v321-privacy__prefix"><span aria-hidden="true">+91</span><input id="S-19-mobile" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} value={d.mobile} onChange={event => props.onMobile(event.target.value)} aria-invalid={d.error === 'mobile' || undefined} aria-describedby="S-19-mobile-help" readOnly={d.busy}/></div><p id="S-19-mobile-help" className="v321-privacy__help">We send a six-digit code to this number to confirm it is you.</p></div>}
           {d.stage === 'code' && <div className="v321-privacy__field"><label htmlFor="S-19-code">Six-digit code</label><input id="S-19-code" className="v321-privacy__otp" inputMode="numeric" autoComplete="one-time-code" value={d.code} onChange={event => props.onCode(event.target.value)} aria-invalid={d.error === 'code' || undefined} aria-describedby="S-19-code-help" readOnly={d.busy}/><p id="S-19-code-help" className="v321-privacy__help">Six digits. Use the code sent to your registered mobile.</p></div>}
           {d.stage === 'confirm' && <div className="v321-privacy__field"><label htmlFor="S-19-confirm">Type DELETE to continue</label><input id="S-19-confirm" autoComplete="off" spellCheck={false} value={d.typed} onChange={event => props.onTyped(event.target.value)} aria-invalid={d.error === 'confirmation' || undefined} aria-describedby="S-19-confirm-help" readOnly={d.busy}/><p id="S-19-confirm-help" className="v321-privacy__help">Capital letters. This check stops accidental deletion.</p></div>}
