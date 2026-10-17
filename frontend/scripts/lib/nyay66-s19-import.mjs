@@ -43,4 +43,3 @@ export async function loadS19Cache(root,config,data,fonts){
   if(digest(files.get('manifest.json'))!==config.manifestSha256)throw Error('S19_MANIFEST_BYTES_MISMATCH');
   return {cache,provenance,...verifyFiles(files,provenance,data,fonts)};
 }
-

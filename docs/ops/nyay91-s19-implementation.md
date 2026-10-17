@@ -121,3 +121,61 @@ Local candidate validation: 169 frontend files / 2,636 tests passed, one existin
 skip; trust/calibration Python contracts 50/50 passed; workflow policy passed
 all 14 workflows. The new protected bytes require owner approval before hosted
 conformance can accept this candidate.
+
+## 2026-10-17 owner binding and additive measurement wiring
+
+Owner PR #70 comment `6233524485` was read back: author `rajeevbarnwal`, exact
+`NYAY66-INTEGRITY 0f871ce8128a03fa4901a533c3d219d8429f4e29daaf39b92a22343008f27613`.
+Binding commit `195eea69bf117715a99215db9fe6fb7d237abc7c` was pushed.
+Hosted conformance run `39030676385` succeeded at that head. All 278 artifact
+checksums verify; report: 30 PARITY + 62 PARITY-WITH-DISCLOSED-DELTA, zero
+blocking failures, 74 enforced rows. S-19 still correctly had 52 DESIGN-GAP
+rows at this import-only head. The independent policy job rejected three new
+EOF blank lines in the importer files; this follow-up removes those lines.
+
+The owner subsequently authorized product measurement and explicitly approved
+component-plus-route evidence for transient session/deletion acceptance in the
+chat, recorded at `NYAY-91:16160`. The new protected wiring adds:
+
+- S-19-only synthetic API fixtures exercising the real compiled route/controller
+  via normal user actions; exact request shape and negative HTTP diagnostics.
+  Held loading/saving responses are observed before capture, not timed sleeps.
+  Recovery inputs are validated but redacted in the published request record.
+- An additive producer using the existing pixel, region, structure and axe
+  comparison functions with unchanged tolerances, reference bytes and masks.
+- 46 stable live-route rows; two session presentation-component rows plus
+  genuine typed-401 redirect/anonymous-session evidence; two **actual S-03
+  deletion-accepted destination captures**, with successful 202, anonymous
+  session and accepted-notice checks. The latter is not relabeled as a stable
+  S-19 page or a component invented from the prototype's gateway placeholder.
+- A separate test-only S-19 session component build using the actual
+  `PrivacySettingsView`; production build/navigation are unchanged. Existing
+  S-01/S-18 component outputs and build invocations are preserved.
+- Additive registry/finalizer/report support, strict transient evidence labels,
+  missing/duplicate-row checks, and explicit preservation of the two deferred
+  optional-manual DESIGN-GAP rows. No new enforcement promotion or exception
+  approval. Existing 92-row inventory, old exception bytes and reference bytes
+  remain unchanged. Tests permit future structurally valid S-19 proposals only;
+  the hosted gate still requires the exact owner comment for every proposal.
+
+Coverage goal after authorization: 50 S-19 measured rows, 2 S-19 manual gaps;
+142 measured light rows overall (74 blocking + 18 S-18 + 50 S-19), 314 remaining
+continuation light gaps, and unchanged dark gaps. A failed capture is never a
+passing row. Wrong-case DELETE / invalid-mobile scenarios capture the actual
+disabled controls, not fabricated inline server errors or forced submissions.
+
+Tests-first evidence: missing measurement modules were RED; the 50-row browser
+test exposed an unobserved held PATCH and is GREEN after awaiting that request;
+the additive exception test and recovery-input redaction test were RED before
+their corrections. Final local checks: 108 focused unit tests; full frontend
+171 files / 2,654 passed + 1 existing skip; 40 trust regressions and 10
+calibration-workflow contracts; policy validates 14 workflows; typecheck,
+lint, production/component builds and base-to-worktree diff checks pass.
+The real Chromium synthetic-API rehearsal executes all 50 rows, with zero
+serious/critical axe findings and zero horizontal overflow at the two capture
+viewports. It is a **local macOS diagnostic**, not a pinned hosted verdict,
+live-backend certification, exception approval, or independent QA result.
+
+This new capture/coverage bundle requires a fresh owner integrity approval.
+The import approval is not reused to authorize it. Hosted S-19 verdicts and
+exact-image exceptions remain pending that approval; NYAY-91 stays In Progress.

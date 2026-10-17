@@ -63,6 +63,9 @@ describe('S-19 archive import fails closed before writing',()=>{
     const before=JSON.parse(execFileSync('git',['show','3d0e1201ea672c6f96b7a86703def2d3bffa69f5:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy),previous=structuredClone(before);
     delete current.s19;delete current.integrityApproval;delete previous.integrityApproval;
+    // New exact-image S-19 entries are separately owner-validated by the live
+    // gate; all previous exception bytes/order must remain identical here.
+    current.exceptions=current.exceptions.filter(e=>e.screen!=='S-19');
     expect(current).toEqual(previous);
   });
   it('rejects unexpected archive members and nonregular archive inputs',async()=>{
@@ -90,4 +93,3 @@ describe('S-19 archive import fails closed before writing',()=>{
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
 });
-

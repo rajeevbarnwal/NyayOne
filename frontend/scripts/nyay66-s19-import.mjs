@@ -18,4 +18,3 @@ for(const [name,bytes] of result.files)await writeFile(resolve(output,name),byte
 const provenance={status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId,artifactId,archiveSha256:result.archiveSha256,sourceHead,controlHead,manifestSha256:result.manifestSha256,referenceRows:52,manualRows:2};
 const bytes=JSON.stringify(provenance,null,2)+'\n';await writeFile(resolve(output,'provenance.json'),bytes,{flag:'wx'});
 console.log(JSON.stringify({...provenance,provenanceSha256:digest(bytes)},null,2));
-
