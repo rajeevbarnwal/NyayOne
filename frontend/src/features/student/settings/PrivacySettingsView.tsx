@@ -129,7 +129,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
       if (intent.url === window.location.href && (document.activeElement === intent.anchor || (!intent.anchor.isConnected && document.activeElement === document.body))) {
         // Ordered alternatives: a fresh failure takes precedence over its
         // earlier-in-DOM control. A user who moved away retains their focus.
-        intent.target.split(', ').map(selector => root.current?.querySelector<HTMLElement>(selector)).find(Boolean)?.focus();
+        intent.target.split(', ').map(selector => root.current?.querySelector<HTMLElement>(selector)).find(Boolean)?.focus({ preventScroll: true });
       }
       focusAction.current = null;
       return;

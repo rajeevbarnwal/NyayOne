@@ -389,3 +389,10 @@ rejection keeps the route on reauthentication until Start again, even if the
 recovery projection still reports verified. Missing/unavailable verify authority
 also cannot reactivate Verify from a stale pending projection. All 41 S-19
 browser regressions pass after this guard; no reference or fixture changes.
+
+Hosted inspection of the first corrective run identified two mobile export
+rows whose result focus changed the viewport scroll position (job success alone
+was not claimed as parity). A regression reproduced the scroll jump. Result
+focus now uses `preventScroll` to retain the pending viewport position while
+still restoring the semantic focus target. References and exact-image approvals
+are not changed to accommodate that implementation defect.

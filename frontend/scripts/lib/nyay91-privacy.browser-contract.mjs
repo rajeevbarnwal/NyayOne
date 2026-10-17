@@ -145,6 +145,18 @@ describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
     f.release(); await f.page.locator('[data-privacy-state="network"]').waitFor();
     assert.equal(await f.page.evaluate(() => document.activeElement.textContent), 'Profile');
   }));
+  it('QA-F1 restores export-result focus without overriding a pending scroll position', () => using(async f => {
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ holdCheck: true, exportStatus: 'complete' });
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).press('Enter');
+    await f.held;
+    await f.page.evaluate(() => scrollTo(0, 0));
+    f.release();
+    await f.page.getByText('Your export is complete.', { exact: true }).waitFor();
+    await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'status');
+    assert.equal(await f.page.evaluate(() => scrollY), 0);
+  }));
   for (const projection of ['unavailable', 'expired', 'locked', 'omitted', 'pending']) {
     it(`QA-F2 handles uniform 401 recovery_failed with ${projection} authority`, () => using(async f => {
       await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
