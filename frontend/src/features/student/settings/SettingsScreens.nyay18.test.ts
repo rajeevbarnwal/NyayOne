@@ -15,7 +15,7 @@ describe('S-19 responsive control accessibility', () => {
     expect(source).toContain('aria-labelledby="S-19-consents"');
     expect(source).toContain('aria-labelledby="S-19-data"');
     expect(source).toContain('role="switch"');
-    expect(source).toContain('onClick={props.onExport}');
+    expect(source).toContain('onClick={() => exportAction(props.onExport)}');
     expect(source).toContain('onClick={props.onDeleteOpen}');
   });
 });

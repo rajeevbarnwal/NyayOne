@@ -424,3 +424,40 @@ The three Senior QA blockers still require fresh independent verification.
 All existing exact-image exception entries, references, tolerances, evaluator
 and enforcement configuration remain unchanged. Final hosted per-row results
 must confirm conformance before the fresh Senior QA handoff is released.
+
+## Senior QA Round 2 follow-up — 18 October 2026
+
+Independent retesting at `f4f23767` confirmed QA-F2 and QA-F3, but found QA-F1
+still blocking: first export activation was not covered, background reads
+disabled focused actions, and the generic alert effect reclaimed focus on
+unrelated updates. The earlier corrective record remains historical, not an
+independent pass. All six original Round 2 files were uploaded and downloaded
+byte-for-byte; both SVG and PNG previews render in the private Jira record.
+
+This S-19-only correction gives first export activation the same explicit focus
+ownership as retries. Moving to another element relinquishes that ownership;
+alerts no longer acquire focus merely because state updates. Existing alert
+roles and messages remain. Background GETs leave controls enabled and deduplicate
+with a manual check. Dismiss invalidates a background result by generation, so
+its late response cannot restore a dismissed notice or overwrite a newer
+export. Foreground requests retain synchronous duplicate/competing-action
+guards. No authentication, recovery authority, routing, CSS or backend changes.
+
+RED: the initial 13 new browser cases produced 12 failures and one passing
+control. The expanded suite covers 320/390/1440px initial activation, mobile and
+desktop polling success/failure, deliberately moved focus/scroll, consent Space
+with an existing export error, recovery retry plus later updates, joining a
+background read, and dismiss/new-export isolation. All 47 previous browser
+assertions remain. The existing S-19 source test now expects the focus-wrapped
+export callback while preserving its visibility/accessibility assertions.
+
+Local validation: 70/70 browser regressions and 2,664 frontend tests pass; trust regressions 40/40 and namespace
+policy 21/21 pass. All 50 unchanged capture fixtures execute with zero
+serious/critical axe findings and their original evidence labels. This is local
+Chromium/synthetic-API evidence, not hosted parity or independent QA.
+
+The protected bundle remains
+`305c6832bd6bcf0f7c2442790250ea67e5b7e80961d886651a23ac3dfcb22441`.
+Policy, all 50 bound exceptions, references, tolerances, evaluator and
+enforcement are byte-unchanged. No new visual exception is proposed. Exact-head
+hosted measurement and independent Senior QA Round 3 remain release conditions.

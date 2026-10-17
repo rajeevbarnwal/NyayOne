@@ -94,7 +94,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const restoreOverview = useRef(false);
   const focusAction = useRef<{ anchor: HTMLElement; target: string; url: string; done: boolean } | null>(null);
   const [focusCompletion, setFocusCompletion] = useState(0);
-  // User-initiated retries own focus only while it remains on their stable
+  // User-initiated actions own focus only while it remains on their stable
   // heading. Background polling, another control, navigation or unmount must
   // never acquire that ownership. No timer or navigation delay is introduced.
   const withFocus = (anchorSelector: string, target: string, action: () => void | Promise<void>) => {
@@ -111,6 +111,13 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
     });
   };
   const previousStage = useRef(d.stage);
+  useEffect(() => {
+    const relinquish = (event: FocusEvent) => {
+      if (focusAction.current && event.target !== focusAction.current.anchor) focusAction.current = null;
+    };
+    document.addEventListener('focusin', relinquish);
+    return () => document.removeEventListener('focusin', relinquish);
+  }, []);
   useEffect(() => {
     if (previousStage.current !== d.stage) {
       if (d.stage === 'closed') restoreOverview.current = true;
@@ -141,10 +148,8 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
       focusAction.current = null;
       return;
     }
-    if (state.phase === 'loading') return;
-    if (d.error || ['conflict', 'network', 'invalid'].includes(state.phase) || ['request-failed', 'check-failed', 'not-found'].includes(exportState.phase)) {
-      root.current?.querySelector<HTMLElement>('[role="alert"]')?.focus();
-    }
+    // Alerts announce themselves. An unrelated render or background read has
+    // no focus authority, even when an older alert is still on the page.
   }, [state, d.error, exportState, focusCompletion]);
   const hardError = !state.settings && state.phase !== 'loading';
   const reload = () => withFocus('main h1', '[role="alert"], [role="switch"]', props.onReload);
@@ -195,7 +200,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
             </div>
           </section>
           <section className="v321-privacy__card v321-privacy__data" aria-labelledby="S-19-data"><h2 tabIndex={-1} id="S-19-data" className="v321-privacy__eyebrow">Your data</h2>
-            <div className="v321-privacy__data-row"><div><b>Request a copy of my data</b><p>The server prepares an export and reports its status.</p></div><Action icon="download" onClick={props.onExport} disabled={exportBusy || !!activeExport}>{exportState.phase === 'requesting' ? 'Requesting…' : 'Request a copy of my data'}</Action></div>
+            <div className="v321-privacy__data-row"><div><b>Request a copy of my data</b><p>The server prepares an export and reports its status.</p></div><Action icon="download" onClick={() => exportAction(props.onExport)} disabled={exportBusy || !!activeExport}>{exportState.phase === 'requesting' ? 'Requesting…' : 'Request a copy of my data'}</Action></div>
             {['request-failed', 'check-failed', 'not-found'].includes(exportState.phase) ? <Notice warning tone={exportState.phase === 'request-failed' ? 'risk' : 'warn'} icon={exportState.phase === 'not-found' ? 'info' : 'warn'} title={exportState.phase === 'not-found' ? 'That request was not found.' : exportState.phase === 'check-failed' ? 'Status check failed.' : 'Could not request the export.'} actions={<><Action onClick={() => exportAction(exportState.phase === 'check-failed' ? props.onCheckExport : props.onExport)}>{exportState.phase === 'check-failed' ? 'Check status' : 'Request again'}</Action><Action icon="back" onClick={dismissExport}>Dismiss</Action></>}>
               {exportState.phase === 'check-failed' ? <>The request is still on the server; last confirmed status: {exportState.request?.status}. Check again in a moment.</> : exportState.phase === 'not-found' ? 'It may belong to another session. Request a new export if you still need one.' : 'Check your connection and try again.'}
             </Notice> : exportMessage && exportState.request && <Notice warning={exportState.request.status === 'failed'} tone={exportState.request.status === 'complete' ? 'ok' : exportState.request.status === 'failed' ? 'risk' : 'ind'} icon={exportState.request.status === 'pending' ? 'info' : exportState.request.status === 'processing' ? 'clock' : exportState.request.status === 'failed' ? 'warn' : 'check'} title={exportMessage.title} actions={<><Action onClick={() => exportAction(exportState.request!.status === 'failed' || exportState.request!.status === 'cancelled' ? props.onExport : props.onCheckExport)} disabled={exportBusy}>{exportState.request.status === 'failed' || exportState.request.status === 'cancelled' ? 'Request again' : 'Check status'}</Action><Action icon="back" onClick={dismissExport} disabled={exportBusy}>Dismiss</Action></>}>{exportMessage.body} Reference <span className="v321-privacy__mono">{exportState.request.requestId}</span>.</Notice>}

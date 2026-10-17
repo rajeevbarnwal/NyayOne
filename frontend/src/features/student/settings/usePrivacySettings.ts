@@ -64,10 +64,11 @@ function usePrivacyExport() {
   const [state, setState] = useState<PrivacyExportState>({ phase: 'idle' });
   const stateRef = useRef(state); stateRef.current = state;
   const inFlight = useRef(false), generation = useRef(0), requestKey = useRef<string | null>(null);
+  const readFlight = useRef<{ generation: number; manual: boolean; promise: Promise<void> } | null>(null);
   const captureSettlement = useRequestSettlement();
   async function request() {
     const previous = stateRef.current;
-    if (inFlight.current || session.phase !== 'authenticated' || (previous.phase !== 'not-found' && previous.request && shouldPollExport(previous.request.status))) return;
+    if (inFlight.current || (readFlight.current?.generation === generation.current && readFlight.current.manual) || session.phase !== 'authenticated' || (previous.phase !== 'not-found' && previous.request && shouldPollExport(previous.request.status))) return;
     inFlight.current = true;
     const current = ++generation.current, settledHere = captureSettlement();
     const fence = captureStudentMutationSequence();
@@ -82,31 +83,43 @@ function usePrivacyExport() {
       if (!isStudentMutationCancellation(error) && settledHere() && current === generation.current) setState({ phase: 'request-failed' });
     } finally { if (settledHere()) inFlight.current = false; }
   }
-  async function check() {
+  async function check(background = false) {
     const previous = stateRef.current;
     if (inFlight.current || session.phase !== 'authenticated' || !previous.request || previous.phase === 'not-found') return;
-    inFlight.current = true;
+    // A manual check can join an automatic read, not issue a duplicate GET.
+    // Only an explicit check enters the disabling/pending UI state.
+    if (!background) setState({ ...previous, phase: 'checking' });
+    if (readFlight.current?.generation === generation.current) {
+      if (!background) readFlight.current.manual = true;
+      return readFlight.current.promise;
+    }
     const current = generation.current, settledHere = captureSettlement(), id = previous.request.requestId;
     const fence = captureStudentMutationSequence();
-    setState({ ...previous, phase: 'checking' });
-    try {
-      const data = await runStudentMutationStep(fence, () => getPrivacyRequest(id));
-      const request = readExportStatus(data, id);
-      if (settledHere() && current === generation.current) setState({ phase: 'tracked', request });
-    } catch (error) {
-      if (!isStudentMutationCancellation(error) && settledHere() && current === generation.current) setState({ ...previous, phase: error instanceof SettingsApiError && error.status === 404 ? 'not-found' : 'check-failed' });
-    } finally { if (settledHere()) inFlight.current = false; }
+    const flight = { generation: current, manual: !background, promise: Promise.resolve() };
+    readFlight.current = flight;
+    flight.promise = (async () => {
+      try {
+        const data = await runStudentMutationStep(fence, () => getPrivacyRequest(id));
+        const request = readExportStatus(data, id);
+        if (settledHere() && current === generation.current) setState({ phase: 'tracked', request });
+      } catch (error) {
+        if (!isStudentMutationCancellation(error) && settledHere() && current === generation.current) setState({ ...previous, phase: error instanceof SettingsApiError && error.status === 404 ? 'not-found' : 'check-failed' });
+      } finally { if (readFlight.current === flight) readFlight.current = null; }
+    })();
+    return flight.promise;
   }
   const checkRef = useRef(check); checkRef.current = check;
   useEffect(() => {
     // Terminal and failed-read states stop polling. A failed read is retried by
     // an explicit user action, never relabelled as a failed server request.
     if (state.phase !== 'tracked' || !state.request || !shouldPollExport(state.request.status)) return;
-    const timer = window.setTimeout(() => { void checkRef.current(); }, 4000);
+    const timer = window.setTimeout(() => { void checkRef.current(true); }, 4000);
     return () => window.clearTimeout(timer);
   }, [state]);
   function dismiss() {
-    if (inFlight.current) return;
+    if (inFlight.current || (readFlight.current?.generation === generation.current && readFlight.current.manual)) return;
+    // Dismissing a background read is local only. Its eventual response must
+    // not resurrect the notice or replace a subsequently requested export.
     generation.current++;
     requestKey.current = null;
     setState({ phase: 'idle' });

@@ -75,6 +75,103 @@ async function fixture() {
 async function using(test) { const f = await fixture(); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const patches = f => f.requests.filter(r => r.method === 'PATCH');
 describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
+  for (const width of [320, 390, 1440]) for (const outcome of ['accepted', 'failed', 'moved']) {
+    it(`Round 3 first export retains owned focus, never steals moved focus: ${outcome} at ${width}px`, () => using(async f => {
+      await f.page.setViewportSize({ width, height: 844 });
+      f.set({ holdExport: true, exportError: outcome !== 'accepted' });
+      await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).press('Enter');
+      await f.held;
+      assert.notEqual(await f.page.evaluate(() => document.activeElement.tagName), 'BODY');
+      if (outcome === 'moved') await f.page.getByRole('switch', { name: 'Usage analytics' }).focus();
+      f.release(); await f.page.getByRole('button', { name: 'Dismiss', exact: true }).waitFor();
+      await f.page.waitForTimeout(100);
+      assert.equal(await f.page.evaluate(() => document.activeElement.getAttribute('role')), outcome === 'moved' ? 'switch' : outcome === 'failed' ? 'alert' : 'status');
+      assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/export')).length, 1);
+    }));
+  }
+  for (const width of [390, 1440]) for (const focused of ['Check status', 'Dismiss']) for (const failure of [false, true]) {
+    it(`Round 3 background poll preserves ${focused} focus during/after ${failure ? 'failure' : 'success'} at ${width}px`, () => using(async f => {
+      await f.page.setViewportSize({ width, height: 844 });
+      await f.page.clock.install();
+      await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+      const control = f.page.getByRole('button', { name: focused, exact: true }); await control.waitFor();
+      await control.focus();
+      f.set({ holdCheck: true, checkError: failure ? 503 : undefined });
+      await f.page.clock.runFor(4100); await f.held;
+      assert.equal(await control.isEnabled(), true, 'background reads must not disable the focused control');
+      assert.equal(await f.page.evaluate(() => document.activeElement.textContent), focused);
+      f.release(); await f.page.getByText(failure ? 'Status check failed.' : 'Your export is being prepared.', { exact: true }).waitFor();
+      await f.page.clock.runFor(200);
+      assert.equal(await f.page.evaluate(() => document.activeElement.textContent), focused);
+      assert.equal(f.requests.filter(r => r.path.includes('/privacy/requests/')).length, 1);
+    }));
+  }
+  for (const failure of [false, true]) {
+    it(`Round 3 background ${failure ? 'failed' : 'successful'} checks do not steal consent focus or scroll`, () => using(async f => {
+      await f.page.clock.install();
+      await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+      await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+      f.set({ status: 503 }); await f.page.getByRole('switch', { name: 'Usage analytics' }).click();
+      await f.page.locator('[data-privacy-state="network"]').waitFor();
+      await f.page.getByRole('switch', { name: 'Marketing messages' }).focus();
+      const scroll = await f.page.evaluate(() => scrollY);
+      f.set({ holdCheck: true, checkError: failure ? 503 : undefined });
+      await f.page.clock.runFor(4100); await f.held;
+      f.release(); await f.page.getByText(failure ? 'Status check failed.' : 'Your export is being prepared.', { exact: true }).waitFor();
+      await f.page.clock.runFor(200);
+      assert.equal(await f.page.evaluate(() => document.activeElement.getAttribute('aria-labelledby')), 'S-19-marketing-label');
+      assert.equal(await f.page.evaluate(() => scrollY), scroll);
+    }));
+  }
+  it('Round 3 consent Space activation with an existing export alert keeps consent focus', () => using(async f => {
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ checkError: 503 }); await f.page.getByRole('button', { name: 'Check status', exact: true }).click();
+    await f.page.getByText('Status check failed.', { exact: true }).waitFor();
+    f.set({}); await f.page.getByRole('switch', { name: 'Usage analytics' }).press('Space');
+    await f.page.locator('[data-privacy-state="saved"]').waitFor(); await f.page.waitForTimeout(100);
+    assert.equal(await f.page.evaluate(() => document.activeElement.getAttribute('aria-labelledby')), 'S-19-analytics-label');
+  }));
+  it('Round 3 Dismiss during a held background poll invalidates its late response', () => using(async f => {
+    await f.page.clock.install();
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Dismiss', exact: true }).waitFor();
+    f.set({ holdCheck: true, checkError: 503 }); await f.page.clock.runFor(4100); await f.held;
+    await f.page.getByRole('button', { name: 'Dismiss', exact: true }).press('Enter');
+    await f.page.getByRole('button', { name: 'Dismiss', exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(await f.page.evaluate(() => document.activeElement.textContent), 'Request a copy of my data');
+    f.set({ exportStatus: 'complete' }); await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).press('Enter');
+    await f.page.getByText('Your export is complete.', { exact: true }).waitFor();
+    f.release(); await f.page.clock.runFor(200); await f.page.waitForTimeout(100);
+    assert.equal(await f.page.getByText('Status check failed.', { exact: true }).count(), 0);
+    assert.equal(await f.page.getByText('Your export is complete.', { exact: true }).count(), 1);
+    assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/export')).length, 2);
+  }));
+  it('Round 3 manual Check status joins a pending background read without a duplicate request', () => using(async f => {
+    await f.page.clock.install();
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ holdCheck: true, exportStatus: 'complete' }); await f.page.clock.runFor(4100); await f.held;
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).press('Enter');
+    assert.notEqual(await f.page.evaluate(() => document.activeElement.tagName), 'BODY');
+    f.release(); await f.page.getByText('Your export is complete.', { exact: true }).waitFor();
+    await f.page.clock.runFor(200);
+    assert.equal(f.requests.filter(r => r.path.includes('/privacy/requests/')).length, 1);
+    assert.equal(await f.page.evaluate(() => document.activeElement.getAttribute('role')), 'status');
+  }));
+  it('Round 3 failed recovery retry never reclaims focus on subsequent updates after user moves away', () => using(async f => {
+    await f.page.clock.install();
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ otpError: true }); await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByText('Re-authentication state is unavailable.', { exact: true }).waitFor();
+    f.set({ holdOtp: true, otpError: true }); await f.page.getByRole('button', { name: 'Try again', exact: true }).press('Enter');
+    await f.held; await f.page.locator('.v321-privacy__back').focus();
+    f.set({ otpError: true }); f.release(); await f.page.waitForTimeout(100);
+    await f.page.clock.runFor(5200); await f.page.waitForTimeout(100);
+    assert.equal(await f.page.evaluate(() => document.activeElement.textContent), 'Profile');
+    assert.equal(f.requests.some(r => r.method === 'POST' && !r.path.endsWith('/privacy/export')), false);
+  }));
   it('QA-F1 keeps consent retry focus meaningful while held and after confirmation', () => using(async f => {
     f.set({ status: 503 }); await f.page.getByRole('switch', { name: 'Usage analytics' }).click();
     await f.page.locator('[data-privacy-state="network"]').waitFor();
