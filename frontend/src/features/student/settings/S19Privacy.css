@@ -49,7 +49,7 @@
 .v321-privacy__notice.is-warn { border-left-color:#7a5a10; }
 .v321-privacy__notice.is-ok { border-left-color:#1e6b4a; }
 .v321-privacy__notice>div { flex:1; }
-.v321-privacy__field-error { display:flex; font-size:12.5px; font-weight:600; line-height:1.4; color:#9a2b21; }
+.v321-privacy__field-error { font-size:12.5px; font-weight:600; line-height:1.4; color:#9a2b21; }
 .v321-privacy__notice-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .v321-privacy__mono { font-family:'Spline Sans Mono',monospace; overflow-wrap:anywhere; }
 .v321-privacy__footer { margin-top:auto; padding:6px 16px 22px; display:flex; gap:9px; font-size:13px; color:#5c5f7a; flex-wrap:wrap; }

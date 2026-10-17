@@ -104,6 +104,7 @@ describe('S-19 approved continuation presentation (not conformance evidence)', (
   it('keeps the code mismatch inline with the code field instead of inserting a separate card above it', () => {
     const html = render({ deletion: { ...base.deletion, stage: 'code', error: 'code' } });
     expect(html).toContain('class="v321-privacy__field-error"');
+    expect(html).toContain('<span>That code did not match.</span>');
     expect(html.indexOf('Six-digit code')).toBeLessThan(html.indexOf('That code did not match.'));
   });
   it('uses the approved warning and success presentation without changing status semantics', () => {

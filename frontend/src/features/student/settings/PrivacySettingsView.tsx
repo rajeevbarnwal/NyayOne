@@ -124,7 +124,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const restartNeeded = d.error === 'expired' || d.error === 'reauth';
   const legacyOverview = state.phase === 'loading' || state.phase === 'session';
   const deletionError = error && (['mobile', 'code', 'confirmation'].includes(d.error!)
-    ? <div className="v321-privacy__field-error" role="alert" tabIndex={-1}>{error[0]} {error[1]}</div>
+    ? <div className="v321-privacy__field-error" role="alert" tabIndex={-1}><span>{error[0]}</span>{' '}<span>{error[1]}</span></div>
     : <Notice warning tone={d.error === 'rate' || d.error === 'expired' ? 'warn' : 'risk'} icon={d.error === 'rate' || d.error === 'expired' ? 'clock' : 'warn'} title={error[0]} actions={restartNeeded || d.error === 'authority' ? <Action onClick={props.onStartAgain} disabled={d.busy}>{d.error === 'authority' ? 'Try again' : 'Start again'}</Action> : undefined}>{error[1]}</Notice>);
   return <div ref={root} className="v321-privacy" data-screen="S-19" data-privacy-state={state.phase} data-deletion-stage={d.stage}>
     <header className="v321-privacy__header">
