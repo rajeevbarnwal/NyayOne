@@ -301,6 +301,20 @@ describe('NYAY-18 pure browser evidence contract', () => {
 });
 
 describe('NYAY-18 real Chromium runner source contract', () => {
+  it('uses the backend language enum in the S-19 deletion settings fixture', () => {
+    const source = readFileSync(RUNNER, 'utf8');
+    const fixture = source.match(/function settingsProjection\(\) \{([\s\S]*?)\n\}/u)?.[1];
+    expect(fixture).toBeDefined();
+    const settings = new Function(fixture)();
+    const backend = readFileSync(resolve(FRONTEND, '../backend/app/api/v1/student_settings.py'), 'utf8');
+    const allowed = [...backend.match(/LANGUAGES = \(([^)]+)\)/u)[1].matchAll(/"([^"]+)"/gu)].map(match => match[1]);
+    expect(allowed).toEqual(['en', 'hi']);
+    expect(allowed).toContain(settings.language);
+    expect(allowed).not.toContain('English');
+    expect(settings.privacy.map(pref => pref.kind)).toEqual(['analytics', 'marketing', 'share_partners']);
+    expect(settings.version).toBe(7);
+  });
+
   it('requires exact inputs, real Chromium, canonical anonymous authority and production SW activation', () => {
     const source = readFileSync(RUNNER, 'utf8');
     for (const env of [

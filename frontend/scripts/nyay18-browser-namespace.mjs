@@ -1320,7 +1320,7 @@ function incompleteProfileProjection() {
 
 function settingsProjection() {
   return {
-    language: 'English', notif_email: true, notif_sms: false,
+    language: 'en', notif_email: true, notif_sms: false,
     notif_updates: true,
     privacy: [
       { enabled: true, kind: 'analytics' },
