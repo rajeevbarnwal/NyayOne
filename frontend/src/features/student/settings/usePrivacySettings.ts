@@ -118,6 +118,7 @@ const EMPTY_DELETE: PrivacyDeletionState = { stage: 'closed', mobile: '', code: 
 function initialDeletion(): PrivacyDeletionState {
   if (consumeStudentAuthTransitionNotice('account_deletion_confirmation_invalid')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'confirmation' };
   if (consumeStudentAuthTransitionNotice('account_deletion_conflict')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'conflict' };
+  if (consumeStudentAuthTransitionNotice('account_deletion_reauth_required')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'reauth' };
   if (consumeStudentAuthTransitionNotice('account_deletion_failed')) return { ...EMPTY_DELETE, stage: 'mobile', error: 'request' };
   return EMPTY_DELETE;
 }
@@ -129,11 +130,12 @@ function usePrivacyDeletion() {
   const open = draft.stage !== 'closed';
   const flow = useOtpFlowState(undefined, { enabled: open && session.phase === 'authenticated' });
   const capability = flow.state?.purpose === 'recovery' ? flow.state : null;
+  const verifyReady = !flow.loading && !flow.loadError && capability?.status === 'pending' && (capability.expiresInSeconds ?? 0) > 0 && (capability.lockedForSeconds ?? 0) === 0 && (capability.attemptsLeft ?? 0) > 0;
   const stage = !open ? 'closed' : flow.loadError || forceMobile.current ? 'mobile' : capability?.status === 'verified' ? 'confirm' : capability?.status === 'pending' ? 'code' : draft.stage;
   const state: PrivacyDeletionState = {
-    ...draft, stage,
+    ...draft, stage, verifyReady,
     authorityReady: privacyDeleteReady('DELETE', capability, flow.loadError || flow.loading, inFlight.current),
-    error: open && flow.loadError ? 'authority' : stage === 'code' && capability?.expiresInSeconds === 0 ? 'expired' : draft.error,
+    error: open && flow.loadError ? 'authority' : stage === 'code' && capability?.expiresInSeconds === 0 ? 'expired' : stage === 'code' && (capability?.lockedForSeconds ?? 0) > 0 ? 'locked' : draft.error,
   };
   const stateRef = useRef(state); stateRef.current = state;
   function openDelete() { if (!inFlight.current) { forceMobile.current = false; setDraft({ ...EMPTY_DELETE, stage: 'mobile' }); } }
@@ -154,7 +156,7 @@ function usePrivacyDeletion() {
     const current = stateRef.current;
     if (inFlight.current || session.phase !== 'authenticated' || flow.loading || flow.loadError || current.stage === 'closed') return;
     if (action === 'send' && !/^[6-9]\d{9}$/.test(current.mobile)) { setDraft(d => ({ ...d, error: 'mobile' })); return; }
-    if (action === 'verify' && (!/^\d{6}$/.test(current.code) || capability?.status !== 'pending' || capability.expiresInSeconds === 0 || (capability.lockedForSeconds ?? 0) > 0)) return;
+    if (action === 'verify' && (!/^\d{6}$/.test(current.code) || !current.verifyReady)) return;
     inFlight.current = true;
     const owned = route(), settled = settlement(), fence = captureStudentMutationSequence();
     setDraft(d => ({ ...d, busy: true, error: undefined }));
@@ -168,7 +170,11 @@ function usePrivacyDeletion() {
       if (!isStudentMutationCancellation(error) && settled()) {
         if (error instanceof RegistrationApiError && error.otpState) flow.adopt(error.otpState);
         const code = error instanceof RegistrationApiError ? error.code : '';
-        setDraft(d => ({ ...d, error: error instanceof RegistrationApiError && error.status === 429 ? 'rate' : code === 'otp_expired' || code === 'flow_expired' ? 'expired' : action === 'send' ? 'start' : 'code' }));
+        const rejected = error instanceof RegistrationApiError ? error.otpState : undefined;
+        // A uniform recovery_failed does not disclose whether the flow expired,
+        // locked or disappeared. Only a usable server projection permits retry.
+        const retryable = rejected?.purpose === 'recovery' && rejected.status === 'pending' && (rejected.expiresInSeconds ?? 0) > 0 && (rejected.lockedForSeconds ?? 0) === 0 && (rejected.attemptsLeft ?? 0) > 0;
+        setDraft(d => ({ ...d, error: code === 'recovery_failed' && !retryable ? 'unavailable' : error instanceof RegistrationApiError && error.status === 429 ? 'rate' : code === 'otp_expired' || code === 'flow_expired' ? 'expired' : action === 'send' ? 'start' : 'code' }));
       }
     } finally {
       // Never release a transport/authority lease because of a URL change.
@@ -191,7 +197,7 @@ function usePrivacyDeletion() {
     } catch (error) {
       // The auth transition can remount this route. Only sanitized notice
       // categories survive it; no mobile/code/request ID is persisted.
-      recordStudentAuthTransitionNotice(error instanceof SettingsApiError && error.status === 422 ? 'account_deletion_confirmation_invalid' : error instanceof SettingsApiError && error.status === 409 ? 'account_deletion_conflict' : 'account_deletion_failed');
+      recordStudentAuthTransitionNotice(error instanceof SettingsApiError && error.status === 422 ? 'account_deletion_confirmation_invalid' : error instanceof SettingsApiError && error.status === 409 ? 'account_deletion_conflict' : error instanceof SettingsApiError && error.status === 401 ? 'account_deletion_reauth_required' : 'account_deletion_failed');
       if (settled()) setDraft(d => ({ ...d, typed: '', error: error instanceof SettingsApiError && error.status === 409 ? 'conflict' : error instanceof SettingsApiError && error.status === 401 ? 'reauth' : error instanceof SettingsApiError && error.status === 422 ? 'confirmation' : 'request' }));
       if (owned()) nav('/s-19', { replace: true });
     } finally { if (settled()) { inFlight.current = false; setDraft(d => ({ ...d, busy: false })); } }

@@ -348,3 +348,36 @@ hosted conformance and all CI checks passing.
 | S-19-delete-code-expired | desktop | 6236497412 | cf4aa504a46f11c9c4ddbe8adc08722048819dfc8fce86c6b6b19e705538546d |
 | S-19-delete-typed | mobile390 | 6236498969 | c50117ab9b69df418aa96b54e3ed2884ad639d3d7e90d6b3de5a816164b96b32 |
 | S-19-delete-typed | desktop | 6236499956 | 72e06b248a2d8f67d928ea61a9c9a35dd9cabb687eaffa12ebdd70527b492076 |
+
+## Senior QA corrective pass — 17 October 2026
+
+The independent review of `695ce69a` failed on three blocking S-19 defects.
+This correction does not supersede that historical verdict with a QA pass.
+
+- QA-F1: explicit consent/export/recovery retries retain focus on a stable
+  heading during pending work, then restore the relevant control or message.
+  A user who moves focus elsewhere or leaves the route keeps control; background
+  polling does not acquire the explicit action's focus intent. Identical recovery
+  failures can be focused again. No navigation delay or timer was added.
+- QA-F2: Verify is enabled only with a usable server recovery projection, not
+  six digits alone. Uniform `401 recovery_failed` with unavailable/missing
+  authority offers Start again; it does not invent an expiry/lock reason. A
+  server-projected expiry or lock is shown specifically. A still-usable pending
+  projection remains retryable after a wrong code.
+- QA-F3: a sanitized, memory-only reauthentication-required notice survives the
+  existing auth-transition remount. A deletion `401` is not a connection failure;
+  Start again re-enters recovery without automatically resubmitting deletion.
+
+Tests-first evidence: 14 focus regressions failed before the correction; the
+recovery/reauth group had four failures and two passing controls; the six-digit
+without-authority view test also failed. A negative focus-ownership test caught
+and corrected a focus-stealing edge during implementation. Final browser suite:
+41/41 pass (real Chromium, synthetic APIs), preserving all 19 original checks.
+These developer regressions do not replace the required fresh independent QA.
+Private independent evidence and downloaded-hash receipts remain on the ticket.
+
+No CSS, backend, navigation contract, reference, tolerance, evaluator, fixture,
+exception binding or enforcement configuration changes are part of this fix.
+The existing protected bundle and all historical captures remain unchanged.
+Hosted exact-head revalidation and fresh independent Senior QA are required
+before owner merge; PR #70 remains Draft.

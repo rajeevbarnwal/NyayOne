@@ -8,6 +8,16 @@ import {
 afterEach(() => clearStudentAuthTransitionNotice());
 
 describe('sanitized auth-transition completion notice', () => {
+  it('keeps reauthentication distinct from network failure and consumes it only once', () => {
+    recordStudentAuthTransitionNotice('account_deletion_reauth_required');
+    expect(consumeStudentAuthTransitionNotice('account_deletion_failed')).toBe(false);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_accepted')).toBe(false);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_reauth_required')).toBe(true);
+    expect(consumeStudentAuthTransitionNotice('account_deletion_reauth_required')).toBe(false);
+    recordStudentAuthTransitionNotice('account_deletion_reauth_required');
+    clearStudentAuthTransitionNotice();
+    expect(consumeStudentAuthTransitionNotice('account_deletion_reauth_required')).toBe(false);
+  });
   it('hands accepted deletion to the public gate exactly once', () => {
     recordStudentAuthTransitionNotice('account_deletion_accepted');
     expect(consumeStudentAuthTransitionNotice('account_deletion_accepted')).toBe(true);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { privacyRequestMessage, type ExportSnapshot, type PrivacySettingsState } from './privacySettingsState';
 import type { PrivacyConsent } from '../lib/settingsApi';
@@ -15,17 +15,18 @@ export interface PrivacyDeletionState {
   typed: string;
   busy: boolean;
   authorityReady: boolean;
-  error?: 'mobile' | 'start' | 'rate' | 'code' | 'expired' | 'reauth' | 'confirmation' | 'conflict' | 'request' | 'authority';
+  verifyReady?: boolean;
+  error?: 'mobile' | 'start' | 'rate' | 'code' | 'expired' | 'unavailable' | 'locked' | 'reauth' | 'confirmation' | 'conflict' | 'request' | 'authority';
 }
 export interface PrivacySettingsViewProps {
   state: PrivacySettingsState;
   exportState: PrivacyExportState;
   deletion: PrivacyDeletionState;
   onNavigate: (path: string) => void;
-  onChange: (consent: PrivacyConsent) => void;
-  onReload: () => void;
-  onExport: () => void;
-  onCheckExport: () => void;
+  onChange: (consent: PrivacyConsent) => void | Promise<void>;
+  onReload: () => void | Promise<void>;
+  onExport: () => void | Promise<void>;
+  onCheckExport: () => void | Promise<void>;
   onDismissExport: () => void;
   onDeleteOpen: () => void;
   onDeleteClose: () => void;
@@ -35,7 +36,7 @@ export interface PrivacySettingsViewProps {
   onSend: () => void;
   onVerify: () => void;
   onDelete: () => void;
-  onStartAgain: () => void;
+  onStartAgain: () => void | Promise<void>;
 }
 
 type IconName = 'guard' | 'back' | 'refresh' | 'check' | 'warn' | 'trash' | 'download' | 'lock' | 'login' | 'info' | 'clock' | 'shield';
@@ -77,6 +78,8 @@ const DELETE_ERRORS: Record<NonNullable<PrivacyDeletionState['error']>, [string,
   rate: ['Too many codes requested.', 'Wait a few minutes, then try again.'],
   code: ['That code did not match.', 'Try again.'],
   expired: ['That code has expired.', 'Start again to get a new code.'],
+  unavailable: ['This code can no longer be verified.', 'Start again to request a new code.'],
+  locked: ['Verification is temporarily locked.', 'Start again when the server allows another code.'],
   reauth: ['The server did not confirm re-authentication.', 'Start again.'],
   confirmation: ['Type DELETE in capital letters.', 'Nothing was deleted.'],
   conflict: ['Something changed on your account while this was processing.', 'Nothing was deleted. Wait a moment and try again.'],
@@ -89,7 +92,24 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const restoreOverview = useRef(false);
-  const restoreLoad = useRef(false);
+  const focusAction = useRef<{ anchor: HTMLElement; target: string; url: string; done: boolean } | null>(null);
+  const [focusCompletion, setFocusCompletion] = useState(0);
+  // User-initiated retries own focus only while it remains on their stable
+  // heading. Background polling, another control, navigation or unmount must
+  // never acquire that ownership. No timer or navigation delay is introduced.
+  const withFocus = (anchorSelector: string, target: string, action: () => void | Promise<void>) => {
+    const anchor = root.current?.querySelector<HTMLElement>(anchorSelector);
+    if (!anchor) { void action(); return; }
+    const intent = { anchor, target, url: window.location.href, done: false };
+    focusAction.current = intent;
+    anchor.focus();
+    void Promise.resolve(action()).finally(() => {
+      if (root.current?.isConnected && focusAction.current === intent) {
+        intent.done = true;
+        setFocusCompletion(value => value + 1);
+      }
+    });
+  };
   const previousStage = useRef(d.stage);
   useEffect(() => {
     if (previousStage.current !== d.stage) {
@@ -103,17 +123,27 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
     }
   }, [d.stage]);
   useEffect(() => {
-    if (state.phase === 'loading') return;
-    if (restoreLoad.current) {
-      root.current?.querySelector<HTMLElement>('[role="alert"], [role="switch"]')?.focus();
-      restoreLoad.current = false;
+    const intent = focusAction.current;
+    if (intent) {
+      if (!intent.done) return;
+      if (intent.url === window.location.href && (document.activeElement === intent.anchor || (!intent.anchor.isConnected && document.activeElement === document.body))) {
+        // Ordered alternatives: a fresh failure takes precedence over its
+        // earlier-in-DOM control. A user who moved away retains their focus.
+        intent.target.split(', ').map(selector => root.current?.querySelector<HTMLElement>(selector)).find(Boolean)?.focus();
+      }
+      focusAction.current = null;
+      return;
     }
+    if (state.phase === 'loading') return;
     if (d.error || ['conflict', 'network', 'invalid'].includes(state.phase) || ['request-failed', 'check-failed', 'not-found'].includes(exportState.phase)) {
       root.current?.querySelector<HTMLElement>('[role="alert"]')?.focus();
     }
-  }, [state, d.error, exportState]);
+  }, [state, d.error, exportState, focusCompletion]);
   const hardError = !state.settings && state.phase !== 'loading';
-  const reload = () => { restoreLoad.current = true; props.onReload(); };
+  const reload = () => withFocus('main h1', '[role="alert"], [role="switch"]', props.onReload);
+  const exportAction = (action: () => void | Promise<void>) => withFocus('#S-19-data', '.v321-privacy__data > [role="alert"], .v321-privacy__data > [role="status"]', action);
+  const dismissExport = () => withFocus('#S-19-data', '.v321-privacy__data-row button', props.onDismissExport);
+  const startAgain = () => withFocus('#S-19-delete-heading', '.v321-privacy__deletion [role="alert"], #S-19-mobile', props.onStartAgain);
   const blocked = state.phase === 'saving' || state.phase === 'conflict';
   const exportBusy = exportState.phase === 'requesting' || exportState.phase === 'checking';
   const activeExport = exportState.request && ['pending', 'processing'].includes(exportState.request.status) && exportState.phase !== 'not-found';
@@ -121,11 +151,11 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
   const step = d.stage === 'mobile' ? 1 : d.stage === 'code' ? 2 : 3;
   const error = d.error ? DELETE_ERRORS[d.error] : undefined;
   const title = d.stage === 'mobile' ? 'Delete your account' : d.stage === 'code' ? 'Enter the code we sent' : 'Type DELETE to finish';
-  const restartNeeded = d.error === 'expired' || d.error === 'reauth';
+  const restartNeeded = d.error === 'expired' || d.error === 'reauth' || d.error === 'unavailable' || d.error === 'locked';
   const legacyOverview = state.phase === 'loading' || state.phase === 'session';
   const deletionError = error && (['mobile', 'code', 'confirmation'].includes(d.error!)
     ? <div className="v321-privacy__field-error" role="alert" tabIndex={-1}><span>{error[0]}</span>{' '}<span>{error[1]}</span></div>
-    : <Notice warning tone={d.error === 'rate' || d.error === 'expired' || d.error === 'conflict' ? 'warn' : 'risk'} icon={d.error === 'rate' || d.error === 'expired' ? 'clock' : 'warn'} title={error[0]} actions={restartNeeded || d.error === 'authority' ? <Action onClick={props.onStartAgain} disabled={d.busy}>{d.error === 'authority' ? 'Try again' : 'Start again'}</Action> : undefined}>{error[1]}</Notice>);
+    : <Notice warning tone={d.error === 'rate' || d.error === 'expired' || d.error === 'conflict' ? 'warn' : 'risk'} icon={d.error === 'rate' || d.error === 'expired' ? 'clock' : 'warn'} title={error[0]} actions={restartNeeded || d.error === 'authority' ? <Action onClick={startAgain} disabled={d.busy}>{d.error === 'authority' ? 'Try again' : 'Start again'}</Action> : undefined}>{error[1]}</Notice>);
   return <div ref={root} className="v321-privacy" data-screen="S-19" data-privacy-state={state.phase} data-deletion-stage={d.stage}>
     <header className="v321-privacy__header">
       <span className="v321-privacy__desktop-brand"><NyayOneRevLLockup/></span>
@@ -136,7 +166,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
     <div className="v321-privacy__layout"><main className="v321-privacy__body" id="main-content">
       <button type="button" className="v321-privacy__button v321-privacy__back" onClick={() => props.onNavigate('/s-17')}><Icon name="back" framed/>Profile</button>
       {d.stage === 'closed' ? <>
-        <div><h1><span className="v321-privacy__heading-icon"><Icon name={legacyOverview ? 'shield' : 'guard'} size={20}/></span>Privacy preferences and requests.</h1><p className="v321-privacy__subtitle">{legacyOverview ? 'Each choice is separate and off unless you turn it on.' : 'Each choice is separate, off unless you turn it on, and saves as you change it.'}</p></div>
+        <div><h1 tabIndex={-1}><span className="v321-privacy__heading-icon"><Icon name={legacyOverview ? 'shield' : 'guard'} size={20}/></span>Privacy preferences and requests.</h1><p className="v321-privacy__subtitle">{legacyOverview ? 'Each choice is separate and off unless you turn it on.' : 'Each choice is separate, off unless you turn it on, and saves as you change it.'}</p></div>
         {state.phase === 'loading' && <div className="v321-privacy__skeletons" role="status" aria-label="Loading consent preferences"><div/><div/></div>}
         {hardError && (state.phase === 'session' ? <div className="v321-privacy__error" role="alert" tabIndex={-1}>
           <span className="v321-privacy__error-icon" aria-hidden="true"><Icon name="lock" size={20}/></span>
@@ -144,7 +174,7 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
           <div className="v321-privacy__error-actions"><button type="button" className="v321-privacy__button is-primary" onClick={() => props.onNavigate('/s-03')}><Icon name="login" framed/>Sign in again</button></div>
         </div> : <Notice warning title={state.phase === 'forbidden' ? 'These settings are for student accounts.' : 'Could not load consent preferences.'} actions={<Action onClick={reload}>Try again</Action>}>Your choices have not been changed.</Notice>)}
         {state.settings && !hardError && state.phase !== 'loading' && <>
-          <section className="v321-privacy__card v321-privacy__consents" aria-labelledby="S-19-consents"><h2 className="v321-privacy__eyebrow" id="S-19-consents">Consents</h2>
+          <section className="v321-privacy__card v321-privacy__consents" aria-labelledby="S-19-consents"><h2 tabIndex={-1} className="v321-privacy__eyebrow" id="S-19-consents">Consents</h2>
             {CONSENTS.map(([kind, label, help]) => {
               const confirmed = state.settings!.privacy.find(entry => entry.kind === kind)!.enabled;
               const pending = state.pendingConsent?.kind === kind ? state.pendingConsent.enabled : undefined;
@@ -154,14 +184,14 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
               {state.phase === 'saving' && <p className="v321-privacy__save-status" role="status">Saving…</p>}
               {state.phase === 'saved' && <p className="v321-privacy__save-status is-saved" role="status"><Icon name="check" size={16}/>Saved to your account.</p>}
               {state.phase === 'conflict' && <Notice warning tone="warn" icon="refresh" title="Your consents changed somewhere else." actions={<Action onClick={reload}>Reload</Action>}>Nothing was overwritten. Reload to see the current choices.</Notice>}
-              {(state.phase === 'network' || state.phase === 'invalid') && <Notice warning title={state.phase === 'network' ? 'That change was not saved.' : 'The server did not accept this choice.'} actions={<Action onClick={() => state.retryConsent ? props.onChange(state.retryConsent) : props.onReload()}>Try again</Action>}>The switch is back where it was. Try again.</Notice>}
+              {(state.phase === 'network' || state.phase === 'invalid') && <Notice warning title={state.phase === 'network' ? 'That change was not saved.' : 'The server did not accept this choice.'} actions={<Action onClick={() => { const consent = state.retryConsent; if (consent) withFocus('#S-19-consents', `.v321-privacy__consents [role="alert"], [aria-labelledby="S-19-${consent.kind}-label"]`, () => props.onChange(consent)); else reload(); }}>Try again</Action>}>The switch is back where it was. Try again.</Notice>}
             </div>
           </section>
-          <section className="v321-privacy__card v321-privacy__data" aria-labelledby="S-19-data"><h2 id="S-19-data" className="v321-privacy__eyebrow">Your data</h2>
+          <section className="v321-privacy__card v321-privacy__data" aria-labelledby="S-19-data"><h2 tabIndex={-1} id="S-19-data" className="v321-privacy__eyebrow">Your data</h2>
             <div className="v321-privacy__data-row"><div><b>Request a copy of my data</b><p>The server prepares an export and reports its status.</p></div><Action icon="download" onClick={props.onExport} disabled={exportBusy || !!activeExport}>{exportState.phase === 'requesting' ? 'Requesting…' : 'Request a copy of my data'}</Action></div>
-            {['request-failed', 'check-failed', 'not-found'].includes(exportState.phase) ? <Notice warning tone={exportState.phase === 'request-failed' ? 'risk' : 'warn'} icon={exportState.phase === 'not-found' ? 'info' : 'warn'} title={exportState.phase === 'not-found' ? 'That request was not found.' : exportState.phase === 'check-failed' ? 'Status check failed.' : 'Could not request the export.'} actions={<><Action onClick={exportState.phase === 'check-failed' ? props.onCheckExport : props.onExport}>{exportState.phase === 'check-failed' ? 'Check status' : 'Request again'}</Action><Action icon="back" onClick={props.onDismissExport}>Dismiss</Action></>}>
+            {['request-failed', 'check-failed', 'not-found'].includes(exportState.phase) ? <Notice warning tone={exportState.phase === 'request-failed' ? 'risk' : 'warn'} icon={exportState.phase === 'not-found' ? 'info' : 'warn'} title={exportState.phase === 'not-found' ? 'That request was not found.' : exportState.phase === 'check-failed' ? 'Status check failed.' : 'Could not request the export.'} actions={<><Action onClick={() => exportAction(exportState.phase === 'check-failed' ? props.onCheckExport : props.onExport)}>{exportState.phase === 'check-failed' ? 'Check status' : 'Request again'}</Action><Action icon="back" onClick={dismissExport}>Dismiss</Action></>}>
               {exportState.phase === 'check-failed' ? <>The request is still on the server; last confirmed status: {exportState.request?.status}. Check again in a moment.</> : exportState.phase === 'not-found' ? 'It may belong to another session. Request a new export if you still need one.' : 'Check your connection and try again.'}
-            </Notice> : exportMessage && exportState.request && <Notice warning={exportState.request.status === 'failed'} tone={exportState.request.status === 'complete' ? 'ok' : exportState.request.status === 'failed' ? 'risk' : 'ind'} icon={exportState.request.status === 'pending' ? 'info' : exportState.request.status === 'processing' ? 'clock' : exportState.request.status === 'failed' ? 'warn' : 'check'} title={exportMessage.title} actions={<><Action onClick={exportState.request.status === 'failed' || exportState.request.status === 'cancelled' ? props.onExport : props.onCheckExport} disabled={exportBusy}>{exportState.request.status === 'failed' || exportState.request.status === 'cancelled' ? 'Request again' : 'Check status'}</Action><Action icon="back" onClick={props.onDismissExport} disabled={exportBusy}>Dismiss</Action></>}>{exportMessage.body} Reference <span className="v321-privacy__mono">{exportState.request.requestId}</span>.</Notice>}
+            </Notice> : exportMessage && exportState.request && <Notice warning={exportState.request.status === 'failed'} tone={exportState.request.status === 'complete' ? 'ok' : exportState.request.status === 'failed' ? 'risk' : 'ind'} icon={exportState.request.status === 'pending' ? 'info' : exportState.request.status === 'processing' ? 'clock' : exportState.request.status === 'failed' ? 'warn' : 'check'} title={exportMessage.title} actions={<><Action onClick={() => exportAction(exportState.request!.status === 'failed' || exportState.request!.status === 'cancelled' ? props.onExport : props.onCheckExport)} disabled={exportBusy}>{exportState.request.status === 'failed' || exportState.request.status === 'cancelled' ? 'Request again' : 'Check status'}</Action><Action icon="back" onClick={dismissExport} disabled={exportBusy}>Dismiss</Action></>}>{exportMessage.body} Reference <span className="v321-privacy__mono">{exportState.request.requestId}</span>.</Notice>}
             <div className="v321-privacy__data-row"><div><b>Delete my account</b><p>Confirm your mobile, enter a code, then type DELETE.</p></div><button type="button" data-delete-open className="v321-privacy__button" onClick={props.onDeleteOpen} disabled={state.phase === 'saving'}><Icon name="trash" framed/>Delete my account</button></div>
           </section>
         </>}
@@ -177,9 +207,9 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
           {d.stage === 'code' && <div className="v321-privacy__field"><label htmlFor="S-19-code">Six-digit code</label><input id="S-19-code" className="v321-privacy__otp" inputMode="numeric" autoComplete="one-time-code" value={d.code} onChange={event => props.onCode(event.target.value)} aria-invalid={d.error === 'code' || undefined} aria-describedby="S-19-code-help" readOnly={d.busy}/><p id="S-19-code-help" className="v321-privacy__help">Six digits. Use the code sent to your registered mobile.</p></div>}
           {d.stage === 'confirm' && <div className="v321-privacy__field"><label htmlFor="S-19-confirm">Type DELETE to continue</label><input id="S-19-confirm" autoComplete="off" spellCheck={false} value={d.typed} onChange={event => props.onTyped(event.target.value)} aria-invalid={d.error === 'confirmation' || undefined} aria-describedby="S-19-confirm-help" readOnly={d.busy}/><p id="S-19-confirm-help" className="v321-privacy__help">Capital letters. This check stops accidental deletion.</p></div>}
           {deletionError}
-          <button type="submit" className={`v321-privacy__button ${d.stage === 'confirm' ? 'is-danger' : 'is-primary'}`} disabled={d.busy || d.error === 'authority' || (d.stage === 'mobile' ? !/^[6-9]\d{9}$/.test(d.mobile) : d.stage === 'code' ? !/^\d{6}$/.test(d.code) : d.typed !== 'DELETE' || !d.authorityReady)}><Icon name={d.stage === 'mobile' ? 'guard' : d.stage === 'code' ? 'check' : 'trash'} framed/>{d.busy ? d.stage === 'mobile' ? 'Sending…' : d.stage === 'code' ? 'Verifying…' : 'Requesting account deletion…' : d.stage === 'mobile' ? 'Send code' : d.stage === 'code' ? 'Verify code' : 'Request account deletion'}</button>
+          <button type="submit" className={`v321-privacy__button ${d.stage === 'confirm' ? 'is-danger' : 'is-primary'}`} disabled={d.busy || d.error === 'authority' || (d.stage === 'mobile' ? !/^[6-9]\d{9}$/.test(d.mobile) : d.stage === 'code' ? !d.verifyReady || !/^\d{6}$/.test(d.code) : d.typed !== 'DELETE' || !d.authorityReady)}><Icon name={d.stage === 'mobile' ? 'guard' : d.stage === 'code' ? 'check' : 'trash'} framed/>{d.busy ? d.stage === 'mobile' ? 'Sending…' : d.stage === 'code' ? 'Verifying…' : 'Requesting account deletion…' : d.stage === 'mobile' ? 'Send code' : d.stage === 'code' ? 'Verify code' : 'Request account deletion'}</button>
         </form>}
-        <Action icon="back" onClick={d.stage === 'code' ? props.onStartAgain : props.onDeleteClose} disabled={d.busy}>{d.stage === 'mobile' ? 'Back to privacy' : d.stage === 'code' ? 'Use a different number' : 'Keep my account'}</Action>
+        <Action icon="back" onClick={d.stage === 'code' ? startAgain : props.onDeleteClose} disabled={d.busy}>{d.stage === 'mobile' ? 'Back to privacy' : d.stage === 'code' ? 'Use a different number' : 'Keep my account'}</Action>
       </section>}
     </main><aside className="v321-privacy__aside" aria-label="Privacy context"><div className="v321-privacy__card"><div className="v321-privacy__eyebrow">Your rights</div><p>{legacyOverview ? 'Export and deletion run as server requests. This screen shows the status the server returns for the request you made on this visit.' : 'Consent changes save as you make them. Export and deletion are server requests; this screen shows only the status the server returns for this visit.'}</p></div></aside></div>
     <footer className="v321-privacy__footer"><span>Privacy Notice</span><span>·</span><span>Terms</span><span>·</span><span>Accessibility</span></footer>

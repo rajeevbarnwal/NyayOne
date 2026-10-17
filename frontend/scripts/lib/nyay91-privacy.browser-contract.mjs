@@ -21,7 +21,9 @@ async function fixture() {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage(); page.setDefaultTimeout(5000);
   const settings = { theme: 'system', language: 'en', notif_email: true, notif_sms: false, notif_updates: false, version: 7, privacy: ['analytics', 'marketing', 'share_partners'].map(kind => ({ kind, enabled: false })) };
-  const requests = []; let response = {}, release, flow = idle, lostSession = false, observePatch;
+  const requests = []; let response = {}, release, flow = idle, lostSession = false, observePatch, observeHold;
+  const held = new Promise(resolve => { observeHold = resolve; });
+  const hold = () => new Promise(resolve => { release = resolve; observeHold(); });
   const patchObserved = new Promise(resolve => { observePatch = resolve; });
   await page.route('**/api/v1/**', async route => {
     const req = route.request(), path = new URL(req.url()).pathname, method = req.method();
@@ -29,11 +31,14 @@ async function fixture() {
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.endsWith('/session')) return json(lostSession ? { authenticated: false, actor: null } : { authenticated: true, actor });
     if (path.endsWith('/login/channels')) return json({ channels: [{ channel: 'mobile', enabled: true }, { channel: 'email', enabled: true }] });
-    if (path.endsWith('/otp/state')) return response.otpError ? json({ detail: { code: 'unavailable' } }, 503) : json(flow);
+    if (path.endsWith('/otp/state')) {
+      if (response.holdOtp) await hold();
+      return response.otpError ? json({ detail: { code: 'unavailable' } }, 503) : json(flow);
+    }
     if (path.endsWith('/student/settings')) {
       if (method === 'PATCH') {
         observePatch();
-        if (response.hold) await new Promise(resolve => { release = resolve; });
+        if (response.hold) await hold();
         if (response.status) return json({ detail: { code: response.code } }, response.status);
         if (response.malformed) return json({ ...settings, version: settings.version });
         for (const c of req.postDataJSON().privacy) settings.privacy.find(p => p.kind === c.kind).enabled = c.enabled;
@@ -41,10 +46,20 @@ async function fixture() {
       }
       return json(settings);
     }
-    if (path.endsWith('/privacy/export')) return json({ request_id: 'a'.repeat(32), status: response.exportStatus || 'pending' }, 202);
-    if (path.includes('/privacy/requests/')) return response.checkError ? json({ detail: { code: 'not_found' } }, response.checkError) : json({ request_id: 'a'.repeat(32), kind: 'export', status: response.exportStatus || 'processing', created_at: '2026-10-17T10:00:00Z' });
+    if (path.endsWith('/privacy/export')) {
+      if (response.holdExport) await hold();
+      return response.exportError ? json({ detail: { code: 'unavailable' } }, 503) : json({ request_id: 'a'.repeat(32), status: response.exportStatus || 'pending' }, 202);
+    }
+    if (path.includes('/privacy/requests/')) {
+      if (response.holdCheck) await hold();
+      return response.checkError ? json({ detail: { code: 'not_found' } }, response.checkError) : json({ request_id: 'a'.repeat(32), kind: 'export', status: response.exportStatus || 'processing', created_at: '2026-10-17T10:00:00Z' });
+    }
     if (path.endsWith('/recovery/start')) { flow = pending; return json(flow, 202); }
     if (path.endsWith('/recovery/verify')) {
+      if (response.recoveryFailed) {
+        flow = response.recoveryProjection ?? idle;
+        return json({ detail: { code: 'recovery_failed', ...(response.omitProjection ? {} : { otp_state: flow }) } }, 401);
+      }
       if (response.verifyRejected) return json({ detail: { code: 'otp_invalid', otp_state: pending } }, 400);
       flow = verified; return json(flow);
     }
@@ -55,11 +70,120 @@ async function fixture() {
     return json({ detail: { code: 'unmatched_api' } }, 404);
   });
   await page.goto(origin + '/s-19'); await page.locator('[data-privacy-state="loaded"]').waitFor();
-  return { context, page, requests, settings, patchObserved, set: value => { response = value; }, setFlow: value => { flow = value; }, release: () => release?.() };
+  return { context, page, requests, settings, patchObserved, held, set: value => { response = value; }, setFlow: value => { flow = value; }, release: () => release?.() };
 }
 async function using(test) { const f = await fixture(); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const patches = f => f.requests.filter(r => r.method === 'PATCH');
-describe('S-19 real browser / synthetic server', { timeout: 60000 }, () => {
+describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
+  it('QA-F1 keeps consent retry focus meaningful while held and after confirmation', () => using(async f => {
+    f.set({ status: 503 }); await f.page.getByRole('switch', { name: 'Usage analytics' }).click();
+    await f.page.locator('[data-privacy-state="network"]').waitFor();
+    f.set({ hold: true }); await f.page.getByRole('button', { name: 'Try again', exact: true }).press('Enter');
+    await f.page.locator('[data-privacy-state="saving"]').waitFor();
+    await f.held;
+    assert.notEqual(await f.page.evaluate(() => document.activeElement.tagName), 'BODY');
+    f.release(); await f.page.locator('[data-privacy-state="saved"]').waitFor();
+    await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'switch');
+    assert.equal(await f.page.evaluate(() => document.activeElement.getAttribute('aria-labelledby')), 'S-19-analytics-label');
+  }));
+  for (const mode of ['pending', 'processing', 'complete', 'failed', 'cancelled', 'request-failed', 'not-found', 'check-failed']) {
+    it(`QA-F1 restores export Dismiss focus from ${mode}`, () => using(async f => {
+      f.set(mode === 'request-failed' ? { exportError: true } : { exportStatus: ['not-found', 'check-failed'].includes(mode) ? 'pending' : mode });
+      await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+      await f.page.getByRole('button', { name: 'Dismiss', exact: true }).waitFor();
+      if (['not-found', 'check-failed'].includes(mode)) {
+        f.set({ checkError: mode === 'not-found' ? 404 : 503 });
+        await f.page.getByRole('button', { name: 'Check status', exact: true }).click();
+        await f.page.getByText(mode === 'not-found' ? 'That request was not found.' : 'Status check failed.', { exact: true }).waitFor();
+      }
+      await f.page.getByRole('button', { name: 'Dismiss', exact: true }).press('Enter');
+      await f.page.waitForFunction(() => document.activeElement?.textContent === 'Request a copy of my data');
+    }));
+  }
+  for (const mode of ['pending', 'failed', 'request-failed', 'not-found']) {
+    it(`QA-F1 keeps ${mode} export retry/check focus during a hold and after settlement`, () => using(async f => {
+      f.set(mode === 'request-failed' ? { exportError: true } : { exportStatus: mode === 'not-found' ? 'pending' : mode });
+      await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+      await f.page.getByRole('button', { name: 'Dismiss', exact: true }).waitFor();
+      if (mode === 'not-found') {
+        f.set({ checkError: 404 }); await f.page.getByRole('button', { name: 'Check status', exact: true }).click();
+        await f.page.getByText('That request was not found.', { exact: true }).waitFor();
+      }
+      f.set({ [mode === 'pending' ? 'holdCheck' : 'holdExport']: true, exportStatus: 'complete' });
+      await f.page.getByRole('button', { name: mode === 'pending' ? 'Check status' : 'Request again', exact: true }).press('Enter');
+      await f.held;
+      await f.page.waitForFunction(() => document.querySelector('.v321-privacy__data button:disabled'));
+      assert.notEqual(await f.page.evaluate(() => document.activeElement.tagName), 'BODY');
+      f.release(); await f.page.getByText('Your export is complete.', { exact: true }).waitFor();
+      await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'status');
+    }));
+  }
+  it('QA-F1 recovery retry holds meaningful focus and restores the mobile input', () => using(async f => {
+    f.set({ otpError: true }); await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByText('Re-authentication state is unavailable.', { exact: true }).waitFor();
+    f.set({ holdOtp: true }); await f.page.getByRole('button', { name: 'Try again', exact: true }).press('Enter');
+    await f.held;
+    assert.notEqual(await f.page.evaluate(() => document.activeElement.tagName), 'BODY');
+    f.release(); await f.page.getByText('Re-authentication state is unavailable.', { exact: true }).waitFor({ state: 'hidden' });
+    await f.page.waitForFunction(() => document.activeElement?.id === 'S-19-mobile');
+  }));
+  it('QA-F1 re-focuses identical recovery failures without inventing authority', () => using(async f => {
+    f.set({ otpError: true }); await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByText('Re-authentication state is unavailable.', { exact: true }).waitFor();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await f.page.getByRole('button', { name: 'Try again', exact: true }).press('Enter');
+      await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    }
+    assert.equal(f.requests.some(r => r.method === 'POST'), false);
+  }));
+  it('QA-F1 does not steal focus if the user moves away while a retry is held', () => using(async f => {
+    f.set({ status: 503 }); await f.page.getByRole('switch', { name: 'Usage analytics' }).click();
+    await f.page.locator('[data-privacy-state="network"]').waitFor();
+    f.set({ hold: true, status: 503 }); await f.page.getByRole('button', { name: 'Try again', exact: true }).press('Enter');
+    await f.held;
+    await f.page.locator('.v321-privacy__back').focus();
+    f.release(); await f.page.locator('[data-privacy-state="network"]').waitFor();
+    assert.equal(await f.page.evaluate(() => document.activeElement.textContent), 'Profile');
+  }));
+  for (const projection of ['unavailable', 'expired', 'locked', 'omitted', 'pending']) {
+    it(`QA-F2 handles uniform 401 recovery_failed with ${projection} authority`, () => using(async f => {
+      await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+      await f.page.getByLabel('Registered mobile number').fill('9876500340');
+      await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+      await f.page.getByLabel('Six-digit code').fill('123456');
+      f.set({ recoveryFailed: true, omitProjection: projection === 'omitted', recoveryProjection: projection === 'pending' ? pending : projection === 'expired' ? { ...pending, expires_in_seconds: 0 } : projection === 'locked' ? { ...pending, locked_for_seconds: 60 } : idle });
+      await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+      if (projection === 'pending') {
+        await f.page.getByText('That code did not match.', { exact: true }).waitFor();
+        assert.equal(await f.page.getByRole('button', { name: 'Verify code', exact: true }).isEnabled(), true);
+      } else {
+        await f.page.getByRole('button', { name: 'Start again', exact: true }).waitFor();
+        assert.equal(await f.page.getByRole('button', { name: 'Verify code', exact: true }).count(), 0);
+        assert.equal(await f.page.getByText('That code did not match.', { exact: true }).count(), 0);
+        if (projection === 'unavailable') assert.match(await f.page.locator('main').innerText(), /code can no longer be verified/i);
+        await f.page.getByRole('button', { name: 'Start again', exact: true }).press('Enter');
+        await f.page.getByLabel('Registered mobile number').waitFor();
+      }
+      assert.equal(f.requests.filter(r => r.path.endsWith('/recovery/verify')).length, 1);
+      assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/delete')).length, 0);
+    }));
+  }
+  it('QA-F3 preserves reauth_required across auth remount without connection-error wording', () => using(async f => {
+    f.set({ deleteStatus: 401, deleteCode: 'reauth_required' });
+    await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();
+    await f.page.getByLabel('Registered mobile number').fill('9876500340');
+    await f.page.getByRole('button', { name: 'Send code', exact: true }).click();
+    await f.page.getByLabel('Six-digit code').fill('123456');
+    await f.page.getByRole('button', { name: 'Verify code', exact: true }).click();
+    await f.page.getByLabel('Type DELETE to continue').fill('DELETE');
+    await f.page.getByRole('button', { name: 'Request account deletion', exact: true }).click();
+    await f.page.getByText('The server did not confirm re-authentication.', { exact: true }).waitFor();
+    assert.doesNotMatch(await f.page.locator('main').innerText(), /Check your connection/);
+    await f.page.getByRole('button', { name: 'Start again', exact: true }).press('Enter');
+    await f.page.getByLabel('Registered mobile number').waitFor();
+    assert.equal(f.requests.filter(r => r.path.endsWith('/privacy/delete')).length, 1);
+    assert.equal(f.requests.some(r => r.path.endsWith('/recovery/complete')), false);
+  }));
   for (const width of [390, 1440]) it(`matches the frozen S-19 focused-heading and action-gap geometry at ${width}px`, () => using(async f => {
     await f.page.setViewportSize({ width, height: 1024 });
     await f.page.evaluate(() => document.fonts.ready);

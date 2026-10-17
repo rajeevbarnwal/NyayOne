@@ -12,6 +12,11 @@ const base: PrivacySettingsViewProps = {
 const render = (patch: Partial<PrivacySettingsViewProps> = {}) => renderToStaticMarkup(<PrivacySettingsView {...base} {...patch}/>);
 
 describe('S-19 approved continuation presentation (not conformance evidence)', () => {
+  it('QA-F2 never enables Verify merely because six digits are present', () => {
+    const deletion = { ...base.deletion, stage: 'code' as const, code: '123456' };
+    expect(render({ deletion })).toMatch(/<button type="submit" class="v321-privacy__button is-primary" disabled=""/);
+    expect(render({ deletion: { ...deletion, verifyReady: true } })).toMatch(/<button type="submit" class="v321-privacy__button is-primary">/);
+  });
   it('uses the frozen heading, named switches and save-on-change copy', () => {
     const html = render();
     expect(html).toContain('Privacy preferences and requests.');
