@@ -157,6 +157,67 @@ describe('S-19 real browser / synthetic server', { timeout: 180000 }, () => {
     await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'status');
     assert.equal(await f.page.evaluate(() => scrollY), 0);
   }));
+  it('QA-F1 failed Check status focuses and fully reveals the recovery notice', () => using(async f => {
+    // A short mobile viewport must reveal the focused error and its recovery
+    // actions, not merely move document.activeElement below the visible fold.
+    await f.page.setViewportSize({ width: 390, height: 680 });
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ holdCheck: true, checkError: 503 });
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).press('Enter');
+    await f.held;
+    await f.page.evaluate(() => scrollTo(0, 0));
+    f.release();
+    await f.page.getByText('Status check failed.', { exact: true }).waitFor();
+    await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    const visible = await f.page.evaluate(() => {
+      const box = document.activeElement.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, viewport: innerHeight,
+        headerBottom: document.querySelector('.v321-privacy__header').getBoundingClientRect().bottom };
+    });
+    assert.ok(visible.top >= visible.headerBottom, 'focused failure notice must not be hidden behind the header');
+    // Chromium scroll offsets are integer CSS pixels; ignore only a fractional
+    // border edge, not any hidden text or control.
+    assert.ok(Math.floor(visible.bottom) <= visible.viewport, `focused failure notice must fit in the viewport: ${JSON.stringify(visible)}`);
+    for (const button of await f.page.locator('[role="alert"] button').all()) {
+      const box = await button.boundingBox();
+      assert.ok(box.y + box.height <= visible.viewport, 'each recovery action must be fully visible');
+    }
+  }));
+  it('QA-F1 successful status read preserves user scroll even when the server reports export failed', () => using(async f => {
+    await f.page.setViewportSize({ width: 390, height: 680 });
+    await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).waitFor();
+    f.set({ holdCheck: true, exportStatus: 'failed' });
+    await f.page.getByRole('button', { name: 'Check status', exact: true }).press('Enter');
+    await f.held;
+    await f.page.evaluate(() => scrollTo(0, 0));
+    f.release();
+    await f.page.getByText('The export request failed.', { exact: true }).waitFor();
+    await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    assert.equal(await f.page.evaluate(() => scrollY), 0, 'a confirmed status is not a failed Check status action');
+  }));
+  for (const action of ['consent retry', 'Check status', 'Request again']) {
+    it(`QA-F1 ${action} retains meaningful focus after repeated failed responses`, () => using(async f => {
+      if (action === 'consent retry') {
+        f.set({ status: 503 });
+        await f.page.getByRole('switch', { name: 'Usage analytics' }).click();
+        await f.page.getByText('That change was not saved.', { exact: true }).waitFor();
+      } else {
+        f.set(action === 'Request again' ? { exportError: true } : {});
+        await f.page.getByRole('button', { name: 'Request a copy of my data', exact: true }).click();
+        await f.page.getByRole('button', { name: action, exact: true }).waitFor();
+      }
+      const button = action === 'consent retry' ? 'Try again' : action;
+      f.set(action === 'consent retry' ? { status: 503 } : action === 'Check status' ? { checkError: 503 } : { exportError: true });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await f.page.getByRole('button', { name: button, exact: true }).press('Enter');
+        await f.page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+        assert.equal(await f.page.locator('[role="alert"]').getAttribute('tabindex'), '-1');
+      }
+      assert.equal(await f.page.getByRole('button', { name: button, exact: true }).isEnabled(), true);
+    }));
+  }
   for (const projection of ['unavailable', 'expired', 'locked', 'omitted', 'pending']) {
     it(`QA-F2 handles uniform 401 recovery_failed with ${projection} authority`, () => using(async f => {
       await f.page.getByRole('button', { name: 'Delete my account', exact: true }).click();

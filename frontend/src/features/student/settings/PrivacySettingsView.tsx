@@ -129,7 +129,14 @@ export function PrivacySettingsView(props: PrivacySettingsViewProps) {
       if (intent.url === window.location.href && (document.activeElement === intent.anchor || (!intent.anchor.isConnected && document.activeElement === document.body))) {
         // Ordered alternatives: a fresh failure takes precedence over its
         // earlier-in-DOM control. A user who moved away retains their focus.
-        intent.target.split(', ').map(selector => root.current?.querySelector<HTMLElement>(selector)).find(Boolean)?.focus({ preventScroll: true });
+        const target = intent.target.split(', ').map(selector => root.current?.querySelector<HTMLElement>(selector)).find(Boolean);
+        // A failed action must reveal its focused recovery notice, including
+        // its actions on short mobile viewports. Successful status updates keep
+        // the user's viewport; neither path leaves focus on the document body.
+        // A successful GET reporting export status=failed is still a confirmed
+        // status update, not a failed Check status request.
+        const confirmedExport = exportState.phase === 'tracked' && target?.closest('.v321-privacy__data');
+        target?.focus({ preventScroll: target.getAttribute('role') !== 'alert' || Boolean(confirmedExport) });
       }
       focusAction.current = null;
       return;

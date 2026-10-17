@@ -396,3 +396,31 @@ was not claimed as parity). A regression reproduced the scroll jump. Result
 focus now uses `preventScroll` to retain the pending viewport position while
 still restoring the semantic focus target. References and exact-image approvals
 are not changed to accommodate that implementation defect.
+
+### Focus visibility correction after owner review
+
+The owner rejected the proposed scroll-composition exception. It was never
+bound. Functional/accessibility defects remain code fixes, not visual waivers.
+
+The action handlers retain meaningful focus through success and failure. An
+additional short-mobile-viewport regression exposed that blanket preventScroll
+could leave a failed action's focused recovery notice below the visible fold.
+Failed actions now allow native focus scrolling to reveal that notice and its
+recovery actions. Successful reads still preserve the user's viewport, including
+a successful status response reporting that the server-side export failed; that
+status is not a failed Check status transport request. No fixed scroll offset,
+capture-specific branch, timer, CSS change or navigation delay was introduced.
+
+RED: the short-viewport notice visibility assertion failed; three repeated-error
+focus controls passed. A separate negative control caught unwanted scrolling
+for a successfully retrieved terminal status before the distinction was fixed.
+GREEN: 47/47 browser regressions, including all original behavior assertions;
+2,663 frontend tests pass plus one existing skip; typecheck, lint and build pass.
+Consent Try again, Check status, Request again, Dismiss across eight states and
+recovery Try again have explicit focus assertions. Repeated failed responses,
+held requests, user-moved focus and successful-result scrolling are covered.
+The three Senior QA blockers still require fresh independent verification.
+
+All existing exact-image exception entries, references, tolerances, evaluator
+and enforcement configuration remain unchanged. Final hosted per-row results
+must confirm conformance before the fresh Senior QA handoff is released.
