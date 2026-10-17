@@ -269,3 +269,82 @@ changes are outside the protected fixture bundle. References, tolerances,
 evaluator, enforcement and existing exceptions remain untouched. Fresh hosted
 captures are required for the final exact-image proposals; these earlier
 captures remain historical diagnostic evidence, not rebound approvals.
+
+## 2026-10-17 exact owner exception binding
+
+The 50 top-level PR #70 comments below were read back through GitHub's API.
+Each was authored by `rajeevbarnwal`, belongs to this PR, and contains exactly
+the proposed `NYAY66-EXCEPTION <hash>` line. The policy adds only the 50
+previously disclosed entries for the `cbb750e8` hosted image pairs. Existing
+exception values/order and every other policy field remain unchanged.
+
+The two request-not-found rows retain their explicitly approved design-variant
+scope, not an antialiasing classification. Session component evidence and real
+deletion-redirect destination evidence keep their distinct labels. Per-row
+icon baseline offsets remain explicit. The two optional manual-save rows stay
+DESIGN-GAP; S-19 is not silently promoted to blocking enforcement.
+
+All six measurement-pack attachments (16804–16809) were downloaded through
+Jira's native bulk export and matched their uploaded SHA-256 hashes, including
+the manifest. The SVG rendered in Jira. Detailed numbers, privacy inspection
+limits and corrective evidence are recorded privately on the implementation
+ticket; private Jira links are not cross-posted to the public PR.
+
+Local binding verification replayed the verified hosted measurements:
+50/50 PARITY-WITH-DISCLOSED-DELTA, zero remaining checks. Removing one owner
+approval fails closed. This replay does not replace the fresh exact-head
+hosted capture or independent Senior QA. Testing remains conditional on final
+hosted conformance and all CI checks passing.
+
+| State | Viewport | Owner comment ID | Approved hash |
+| --- | --- | --- | --- |
+| S-19-loading | mobile390 | 6236423848 | 900917b81a33794dba8260a9f3b35e68c41a044f7b1ce41f95bdb0d9da3caa7a |
+| S-19-loading | desktop | 6236426280 | b37279e5c1159d9038be702daddf8707c0802df05475ae029f29d11068a643cd |
+| S-19-loaded | mobile390 | 6236428625 | e70d3a49591198a1c34743233e2d59c7882bf8cb15949f41b1f855ba7fe2a4e7 |
+| S-19-loaded | desktop | 6236431477 | 3aa0f788969121f1532b56d88286188bd0e02a3596f092817493bcf6db6c2764 |
+| S-19-saving | mobile390 | 6236433898 | 0795c39022705a3d9e60ec22649a0f71aca8a6d86af7bab997f39a39b42d5ef7 |
+| S-19-saving | desktop | 6236435986 | cd8ab1f80b6a2180178c4b0cbab8bc9cd7a6111f914a269755ee353e477ea905 |
+| S-19-saved | mobile390 | 6236438702 | 135f1a8363f130c204400d4d79bc80e86b2aadf9a1a624427e59f57e983a281d |
+| S-19-saved | desktop | 6236440179 | aca2a7b517d9bc819e3c2060d927eea2b667a94e831c6f3c15906d5981c4954e |
+| S-19-conflict | mobile390 | 6236441563 | 72fc1a6db54b808616099430e900ecf6cacb092bc94a6539abf7ddfe96dbe1d1 |
+| S-19-conflict | desktop | 6236442924 | 23aa2c3ccadacf455319955630c2dd92da4c53e3b60996c132075828087ba304 |
+| S-19-network | mobile390 | 6236444458 | 409319841ede3c7276bcff3ac2564607d7642a933df5f2e0a773db46dd8ca811 |
+| S-19-network | desktop | 6236446255 | f6db39297730392167be528bc6b6ecf957e239a1c611bd75afd2c3752a1a2b0b |
+| S-19-export-accepted | mobile390 | 6236447449 | 1da6abc29331f9b8986884df29a4d3be3a30c7dd6fefcf882f274f8b461806b7 |
+| S-19-export-accepted | desktop | 6236448648 | 2301ee4525fdd840cdbb7433b4a2a47db1790a0ebfbe09189cdceef668aa0755 |
+| S-19-export-processing | mobile390 | 6236449935 | 5e59b876711c9e27c045740d33e6909768067cd04581cbfb16e8a187eb3d6742 |
+| S-19-export-processing | desktop | 6236451376 | 58ca959210dbfc027d1d0f7124442489e81dda4740f47a246dec988da77fda54 |
+| S-19-export-complete | mobile390 | 6236453888 | 9f64bbf977322ecbcd9def25f931e2639def65869e8658747cae4a60de1624f9 |
+| S-19-export-complete | desktop | 6236455371 | f0c6d13069b17df111ed1cf3be69bf1d066cd7ddd26d6f5e9d829b5aa00aa45b |
+| S-19-export-failed | mobile390 | 6236457077 | e513dce36964f0558e49faf69d19aa1565ee59719be1048aa44866ac567fb385 |
+| S-19-export-failed | desktop | 6236458563 | 37727b3b5056da4b015c26620950f0dd8e4ae1bb908ebc3b9728a29d7bbdb08b |
+| S-19-request-not-found | mobile390 | 6236460347 | 7bc4a9d2c466f45c793b9d0ab482a2badfbfe446a3c9e221360468202f693609 |
+| S-19-request-not-found | desktop | 6236462007 | a515ef2ba4f3b7c056875eb5cba5e88f741d8c91879eec0503ecff1f628a1fb2 |
+| S-19-delete-confirm | mobile390 | 6236463287 | 176b2fa5dfa16409bb736a91a656ddaec42bc4f7848bfaf437a9bc8030f97210 |
+| S-19-delete-confirm | desktop | 6236464626 | 7958d43ef404cfadfb3350c1fdfa6f58d750c1c6b491320036891bc96778a19f |
+| S-19-delete-invalid | mobile390 | 6236466052 | c1ce39ceb95623837ad8c87951bcbd82ad5593a4a3f2804ecb36206398eec2d9 |
+| S-19-delete-invalid | desktop | 6236467420 | 2e6573872a90eb00bc89d491cd3d75047413abf3681c0f5272974cb1cf16fb15 |
+| S-19-delete-reauth | mobile390 | 6236468596 | cbb52663588111d76e5a1c91123ed73a530ab7e152a53e8ae4101b4c16242550 |
+| S-19-delete-reauth | desktop | 6236469731 | 1afa20436e24c36f5242b0af4b718ab5dddedf5efeb7b9a17e36a843cb35a766 |
+| S-19-delete-reauth-rejected | mobile390 | 6236470720 | 94ffad6c1ef1010a9e86c331d0cd52623ff9517d59641f0f222ba1b773000127 |
+| S-19-delete-reauth-rejected | desktop | 6236472106 | 158779595447ffaddb9aabfb4aa86f6d9e640633d76ed47df1f6d3c27da60668 |
+| S-19-delete-reauth-required | mobile390 | 6236473378 | d3290ca92eb3e90ba87f69c48533d11da1af02eb59217934477f249e3a3ef9c6 |
+| S-19-delete-reauth-required | desktop | 6236474525 | 50f733551f1095149ef902f2aeeedf8b5df667af79f00b446f76b5e38b9b7d24 |
+| S-19-delete-conflict | mobile390 | 6236476117 | 0b2ae83f6a71959392bf36a27855be2f06f9f9efa91d89fa1e043acbab3bec90 |
+| S-19-delete-conflict | desktop | 6236477572 | 2d80cd11070a09649caa3330f12ccfb818d88f6598312b4e93977c037479df35 |
+| S-19-delete-accepted | mobile390 | 6236478996 | 19352f9d4113cbe6f110abecdae4a1fb9bb1a8fafd7eca786871681f428bb267 |
+| S-19-delete-accepted | desktop | 6236480703 | 1380b6eaf1c6f96685c2507a1751f31fed1d6ff957eaf78db46a6dd8e296b394 |
+| S-19-session | mobile390 | 6236482185 | bf2c532a1ac14ca729acc5926fabf2f288ef8f5ed183417be4111da497861db9 |
+| S-19-session | desktop | 6236483470 | e8c4c778c3963c3d548d567ee3fc758427cfa18861dcbf1f619e375129ac598a |
+| S-19-export-check-failed | mobile390 | 6236484728 | 1773f5a8944d23c1272ce97ea2508121f7325c74c943754724c2066eccb60ff9 |
+| S-19-export-check-failed | desktop | 6236485858 | dea53570e946ba07a9d3f1fb13a62d0f2bb0afa9e41fda586164c1ac1298d980 |
+| S-19-delete-mobile-invalid | mobile390 | 6236487202 | 5e28fc11bc87a79cd8d99e504df90a485dacb7cba430c9bb10be0c70fd1cc6ea |
+| S-19-delete-mobile-invalid | desktop | 6236488440 | b5a1faf63d74ecba6a2c2339ecd2f143fcdd14a5fc715f545b05a524295a4942 |
+| S-19-delete-start-failed | mobile390 | 6236489947 | f7265c0b91587b879ee6ece3f1e6f6c212302dd9ae6065115f02db56ebfda41e |
+| S-19-delete-start-failed | desktop | 6236491516 | 39db1bd1b72688e7452c0840771dd65b197fa9404c89fd8dab6236a71222f583 |
+| S-19-delete-rate-limited | mobile390 | 6236492974 | d5b7ee691af79ca0cd35e9ce8eaf7d42d73e6a023d354908c1660ee3f2365ebc |
+| S-19-delete-rate-limited | desktop | 6236494352 | 98e2f796e0ee198216a88fe286e0d66add02d7d2c0e64bef2d9cb7d979901e52 |
+| S-19-delete-code-expired | mobile390 | 6236495841 | 16e2c42225f60b39cb3919953e32adb1984c45f88aa7bb774ab39ebfbd7c97ce |
+| S-19-delete-code-expired | desktop | 6236497412 | cf4aa504a46f11c9c4ddbe8adc08722048819dfc8fce86c6b6b19e705538546d |
+| S-19-delete-typed | mobile390 | 6236498969 | c50117ab9b69df418aa96b54e3ed2884ad639d3d7e90d6b3de5a816164b96b32 |
+| S-19-delete-typed | desktop | 6236499956 | 72e06b248a2d8f67d928ea61a9c9a35dd9cabb687eaffa12ebdd70527b492076 |
