@@ -90,10 +90,11 @@ describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
   it('renders known stipend metadata as one text run and unknown stipend in the frozen italic style', () => using({}, async f => {
     const meta = await f.page.locator('.s20-result').evaluateAll(cards => cards.map(card => {
       const line = card.querySelector('.s20-meta p'), unknown = line.querySelector('i');
-      return { text: line.textContent, nodes: line.childNodes.length, style: unknown && getComputedStyle(unknown).fontStyle, color: unknown && getComputedStyle(unknown).color };
+      return { text: line.textContent, nodes: line.childNodes.length, style: unknown && getComputedStyle(unknown).fontStyle, synthesis: unknown && getComputedStyle(unknown).fontSynthesis, color: unknown && getComputedStyle(unknown).color };
     }));
     assert.equal(meta[0].text, 'Delhi · ₹12,000 per month'); assert.equal(meta[0].nodes, 1);
     assert.equal(meta[1].text, 'Delhi · Stipend not stated'); assert.equal(meta[1].style, 'italic'); assert.equal(meta[1].color, 'rgb(62, 66, 84)');
+    assert.match(meta[1].synthesis, /style/, 'the frozen italic must render, not be suppressed by global font-synthesis:none');
   }));
   it('retains the frozen empty marker slot and label span for unverified chips', () => using({}, async f => {
     const chip = f.page.locator('.s20-chip:not(.s20-verified)');
