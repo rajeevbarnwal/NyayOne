@@ -44,6 +44,20 @@ async function fixture(options = {}, width = 390) {
 async function using(options, test, width) { const f = await fixture(options, width); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const mutations = f => f.requests.filter(r => r.method === 'PUT' || r.method === 'DELETE');
 describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
+  for (const width of [932, 1024, 1440]) for (const theme of ['light', 'dark']) it(`header navigation retains 48px targets without moving text at ${width}px/${theme}`, () => using({ theme }, async f => {
+    const geometry = await f.page.locator('.s20-header nav').evaluate(nav => [...nav.children].map(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const text = range.getBoundingClientRect(), box = el.getBoundingClientRect();
+      return { tag: el.tagName, name: el.textContent, x: box.x, right: box.right, width: box.width, height: box.height, textX: text.x, textRight: text.right };
+    }));
+    for (const item of geometry.filter(item => item.tag === 'BUTTON')) {
+      assert.ok(item.width >= 48 && item.height >= 48, `${item.name} target must be at least 48px: ${JSON.stringify(item)}`);
+    }
+    for (let i = 1; i < geometry.length; i++) {
+      assert.ok(geometry[i].x > geometry[i - 1].right, 'adjacent header targets must not overlap');
+      assert.ok(Math.abs(geometry[i].textX - geometry[i - 1].textRight - 26) <= 1, 'Revision L 26px text spacing must be retained');
+    }
+  }, width));
   for (const width of [390, 1440]) it(`Revision L heading, expanded-filter geometry and tokens at ${width}px`, () => using({}, async f => {
     await f.page.locator('.s20-filters summary').click();
     const style = await f.page.evaluate(() => {
@@ -72,6 +86,30 @@ describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
     assert.equal(await tile.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(154, 43, 33, 0.12)');
     assert.equal(await f.page.locator('.s20-empty h2').evaluate(el => getComputedStyle(el).letterSpacing), '-0.17px');
     assert.equal(await f.page.getByRole('button', { name: 'Retry', exact: true }).locator('svg').getAttribute('width'), '18');
+  }));
+  it('renders known stipend metadata as one text run and unknown stipend in the frozen italic style', () => using({}, async f => {
+    const meta = await f.page.locator('.s20-result').evaluateAll(cards => cards.map(card => {
+      const line = card.querySelector('.s20-meta p'), unknown = line.querySelector('i');
+      return { text: line.textContent, nodes: line.childNodes.length, style: unknown && getComputedStyle(unknown).fontStyle, color: unknown && getComputedStyle(unknown).color };
+    }));
+    assert.equal(meta[0].text, 'Delhi · ₹12,000 per month'); assert.equal(meta[0].nodes, 1);
+    assert.equal(meta[1].text, 'Delhi · Stipend not stated'); assert.equal(meta[1].style, 'italic'); assert.equal(meta[1].color, 'rgb(62, 66, 84)');
+  }));
+  it('retains the frozen empty marker slot and label span for unverified chips', () => using({}, async f => {
+    const chip = f.page.locator('.s20-chip:not(.s20-verified)');
+    assert.equal(await chip.locator(':scope > span').count(), 2);
+    assert.equal(await chip.locator('.s20-chip-dot').getAttribute('aria-hidden'), 'true');
+    assert.equal((await chip.locator('.s20-chip-dot').boundingBox()).width, 0);
+    assert.equal(await chip.locator('span').last().evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap');
+  }));
+  it('preserves frozen warning and save-error primitives without changing truthful copy', () => using({ saveError: true }, async f => {
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).click();
+    await f.page.locator('.s20-save-error').waitFor();
+    const style = await f.page.locator('.s20-save-error').evaluate(el => ({ weight: getComputedStyle(el).fontWeight, line: getComputedStyle(el).lineHeight, gap: getComputedStyle(el).gap, color: getComputedStyle(el).color }));
+    assert.equal(style.weight, '600'); assert.equal(style.line, '17.5px'); assert.equal(style.gap, '7px'); assert.equal(style.color, 'rgb(154, 43, 33)');
+    assert.equal(await f.page.locator('.s20-save-error svg path').getAttribute('d'), 'M6 6l12 12M18 6 6 18');
+    assert.equal(await f.page.locator('.s20-note > svg').evaluate(el => getComputedStyle(el).color), 'rgb(62, 66, 84)');
+    assert.match(await f.page.locator('.s20-save-error').innerText(), /Could not confirm the change/);
   }));
   it('local search/stipend does not query the server; verified filter does', () => using({}, async f => {
     const count = f.requests.filter(r => r.path === '/api/v1/internships').length;
