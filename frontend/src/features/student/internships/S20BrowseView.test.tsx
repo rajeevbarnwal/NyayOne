@@ -8,6 +8,13 @@ const props: S20BrowseViewProps = { phase: 'results', items: [], total: 0, page:
 const listing = { id: 'role', role: 'Research intern', org: 'Synthetic chambers', location: 'Delhi', stipendMonthlyPaise: null, verificationStatus: 'unverified' as const, deadline: '8 Jul 2027', eligibility: '', tags: [], description: '', source: { name: 'Synthetic', url: null, retrievedAt: null, verifiedAt: null } };
 const render = (extra: Partial<S20BrowseViewProps> = {}) => renderToStaticMarkup(<S20BrowseView {...props} {...extra}/>);
 describe('S-20 Revision L composition and honest states', () => {
+  it('keeps the frozen aside eyebrow labels separate from page headings', () => {
+    const html = render({ items: [listing], total: 1 });
+    expect(html).toContain('<div class="s20-eyebrow" id="S-20-saved">Saved</div>');
+    expect(html).toContain('<div class="s20-eyebrow" id="S-20-verification">About verification</div>');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).not.toContain('<h2');
+  });
   it('has page-local search, stipend disclosure, title action and no redundant View row', () => {
     const html = render({ items: [listing], total: 1 });
     expect(html).toContain('Browse internships.'); expect(html).toContain('Search this page');

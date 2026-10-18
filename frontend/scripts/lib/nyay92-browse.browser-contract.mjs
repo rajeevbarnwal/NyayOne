@@ -44,6 +44,35 @@ async function fixture(options = {}, width = 390) {
 async function using(options, test, width) { const f = await fixture(options, width); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const mutations = f => f.requests.filter(r => r.method === 'PUT' || r.method === 'DELETE');
 describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
+  for (const width of [390, 1440]) it(`Revision L heading, expanded-filter geometry and tokens at ${width}px`, () => using({}, async f => {
+    await f.page.locator('.s20-filters summary').click();
+    const style = await f.page.evaluate(() => {
+      const h = getComputedStyle(document.querySelector('h1'));
+      const label = document.querySelector('.s20-filter-body .s20-field:last-child > span');
+      const tag = document.querySelector('.s20-filter-tag');
+      const c = getComputedStyle(document.querySelector('.s20-verified'));
+      return { tracking: h.letterSpacing, labelSize: getComputedStyle(label).fontSize,
+        labelBottom: getComputedStyle(label).marginBottom,
+        tagWidth: tag.getBoundingClientRect().width, fieldWidth: tag.parentElement.getBoundingClientRect().width,
+        gold: c.borderTopColor, goldFill: c.backgroundColor,
+        asideLine: getComputedStyle(document.querySelector('.s20-card p')).lineHeight };
+    });
+    assert.equal(style.tracking, width === 390 ? '-0.22px' : '-0.28px');
+    assert.equal(style.labelSize, '12.5px'); assert.equal(style.labelBottom, '6px');
+    assert.equal(style.tagWidth, style.fieldWidth);
+    assert.equal(style.gold, 'rgb(200, 154, 58)'); assert.equal(style.goldFill, 'rgb(246, 237, 218)');
+    if (width === 1440) assert.equal(style.asideLine, '19.375px');
+    assert.equal(await f.page.locator('.s20-filters summary svg circle').getAttribute('r'), '9');
+    assert.equal(await f.page.locator('.s20-save svg path').first().getAttribute('d'), 'M7 4h10v17l-5-3.5L7 21z');
+  }, width));
+  it('Revision L error card keeps its 32px icon tile and 18px retry vector', () => using({ catalogueError: true }, async f => {
+    const tile = f.page.locator('.s20-empty > span').first();
+    assert.equal((await tile.boundingBox()).height, 32); assert.equal((await tile.boundingBox()).width, 32);
+    assert.equal(await tile.locator('svg').getAttribute('width'), '20');
+    assert.equal(await tile.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(154, 43, 33, 0.12)');
+    assert.equal(await f.page.locator('.s20-empty h2').evaluate(el => getComputedStyle(el).letterSpacing), '-0.17px');
+    assert.equal(await f.page.getByRole('button', { name: 'Retry', exact: true }).locator('svg').getAttribute('width'), '18');
+  }));
   it('local search/stipend does not query the server; verified filter does', () => using({}, async f => {
     const count = f.requests.filter(r => r.path === '/api/v1/internships').length;
     await f.page.getByLabel('Search this page').fill('absent'); await f.page.getByText('No matching listings', { exact: true }).waitFor();
