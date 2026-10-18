@@ -31,7 +31,7 @@ class CalibrationWorkflowContracts(unittest.TestCase):
 
     def test_s18_option_is_trusted_control_capture_only_and_preserves_old_options(self):
         workflow = self.workflow()
-        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["reference"]["options"], ["r2", "revl", "s18-v32108", "s19-v32108"])
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["reference"]["options"], ["r2", "revl", "s18-v32108", "s19-v32108", "s20-v32108"])
         steps = workflow["jobs"]["calibrate"]["steps"]
         validation = next(step for step in steps if step.get("name") == "Validate exact source selection")
         self.assertIn('"$REFERENCE" = s18-v32108', validation["run"])
@@ -52,6 +52,15 @@ class CalibrationWorkflowContracts(unittest.TestCase):
         self.assertIn('node ../../control/frontend/scripts/nyay66-s19-calibrate.mjs "$NYAY66_OUTPUT"', capture["run"])
         self.assertNotIn('node scripts/nyay66-s19-calibrate.mjs', capture["run"])
         self.assertNotIn('nyay66-s19-import', capture["run"])
+
+    def test_s20_option_executes_only_reviewed_control_capture_code(self):
+        steps = self.workflow()["jobs"]["calibrate"]["steps"]
+        validation = next(step for step in steps if step.get("name") == "Validate exact source selection")
+        capture = next(step for step in steps if step.get("name") == "Generate reference artifacts only")
+        self.assertIn('"$REFERENCE" = s20-v32108', validation["run"])
+        self.assertIn('node ../../control/frontend/scripts/nyay66-s20-calibrate.mjs "$NYAY66_OUTPUT"', capture["run"])
+        self.assertNotIn('node scripts/nyay66-s20-calibrate.mjs', capture["run"])
+        self.assertNotIn('nyay66-s20-import', capture["run"])
 
     def test_owner_dispatch_and_rerun_actor_matrix(self):
         # Interpret the workflow's actual conjunction, not a duplicated predicate.
