@@ -10,7 +10,9 @@ before(async () => { server = await createServer({ server: { host: '127.0.0.1', 
 after(async () => { await browser?.close(); await server?.close(); });
 const listing = { id: 'synthetic-intern', organisation_id: '00000000-0000-4000-8000-000000000001', role: 'Research intern', organisation: 'Synthetic chambers', location: 'Delhi', stipend_monthly_paise: 1200000, verification_status: 'verified', application_deadline: '2027-07-08', eligibility: 'Student', tags: [], description: 'Synthetic research', source: { name: 'Synthetic source', url: null, retrieved_at: null, verified_at: null } };
 async function fixture(options = {}, width = 390) {
-  const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce' }); const page = await context.newPage(); page.setDefaultTimeout(7000);
+  const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce', colorScheme: options.theme ?? 'light' });
+  if (options.theme) await context.addInitScript(theme => localStorage.setItem('nyayone.theme.v1', theme), options.theme);
+  const page = await context.newPage(); page.setDefaultTimeout(7000);
   const requests = []; let config = options, saved = [], release;
   await page.route('**/api/v1/**', async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname, method = req.method(); requests.push({ path, method, params: Object.fromEntries(url.searchParams) });
@@ -113,6 +115,19 @@ describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
     await f.page.getByText('Could not confirm the change. Reload your saved list before trying again.', { exact: true }).waitFor();
     assert.equal(await f.page.locator('.s20-save[aria-busy="true"]').count(), 0);
   }));
+  for (const width of [390, 1440]) it(`retains readable light-phase headings under an existing dark preference at ${width}px`, () => using({ theme: 'dark' }, async f => {
+    assert.equal(await f.page.locator('html').getAttribute('data-theme'), 'dark');
+    await f.page.addScriptTag({ content: await readFile(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8') });
+    const contrast = await f.page.evaluate(async () => (await window.axe.run({ runOnly: ['color-contrast'] })).violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })));
+    assert.deepEqual(contrast, []);
+    assert.equal(await f.page.locator('h1').evaluate(el => getComputedStyle(el).color), 'rgb(20, 22, 26)');
+    // The same scoped heading rule must protect empty/error states, not only
+    // the loaded catalogue sampled by the foundation producer.
+    for (const state of [{ empty: true }, { catalogueError: true }]) {
+      f.set(state); await f.page.reload(); await f.page.locator('.s20-empty h2').waitFor();
+      assert.equal(await f.page.locator('.s20-empty h2').evaluate(el => getComputedStyle(el).color), 'rgb(20, 22, 26)');
+    }
+  }, width));
   for (const width of [320, 390, 1440]) it(`reflow and axe at ${width}px`, () => using({}, async f => {
     await f.page.locator('.s20-filters summary').click();
     await f.page.addScriptTag({ content: await readFile(new URL('../../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8') });

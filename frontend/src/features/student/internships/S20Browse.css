@@ -9,7 +9,7 @@
 .s20-avatar{min-width:48px;min-height:48px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;padding:0;border-radius:50%;color:var(--s20-indigo)}
 .s20-avatar>span{width:44px;height:44px;border-radius:50%;background:var(--s20-indq);display:grid;place-items:center}
 .s20-layout{flex:1;min-width:0}.s20-layout main{padding:16px;display:flex;flex-direction:column;gap:13px;min-width:0}
-.s20-layout h1,.s20-empty h2{font-family:Aptos,Calibri,'NyayOne Revision L Heading',system-ui,sans-serif;font-weight:700;line-height:1.1;margin:0;letter-spacing:normal}
+.s20-layout h1,.s20-empty h2{font-family:Aptos,Calibri,'NyayOne Revision L Heading',system-ui,sans-serif;font-weight:700;line-height:1.1;margin:0;letter-spacing:normal;color:var(--s20-ink)}
 .s20-layout h1{font-size:22px}.s20-heading-icon{display:inline-flex;width:32px;height:32px;border-radius:10px;background:#2e3a8c1f;color:var(--s20-indigo);align-items:center;justify-content:center;margin-right:10px;vertical-align:-8px}
 .s20-lockup>.v321-lockup{height:32px;width:auto;display:block}
 .s20-sub{margin:6px 0 0;font-size:13.5px;line-height:1.55;color:var(--s20-ink2)}
