@@ -35,8 +35,14 @@ const policies=()=>({
   before:JSON.parse(execFileSync('git',['show','4a2827d37f60fc651b3a6dbace0dcddfab44b9c4:frontend/scripts/nyay66-policy.json'],{cwd:root})),
 });
 function expectApprovedExceptions(policy,before){
-  // Preserve every original field, string and array order; permit only S-18 additions.
-  expect(JSON.stringify(policy.exceptions.filter(e=>e.screen!=='S-18'))).toBe(JSON.stringify(before.exceptions));
+  // Preserve every original field/string/order and the exact 18 S-18 approvals.
+  // Optional S-19 proposals are validated here; the hosted finalizer still
+  // requires an exact owner comment for each hash (never test self-approval).
+  expect(JSON.stringify(policy.exceptions.filter(e=>!['S-18','S-19'].includes(e.screen)))).toBe(JSON.stringify(before.exceptions));
+  for(const entry of policy.exceptions.filter(e=>e.screen==='S-19')){
+    expect(entry.approvalPr).toBe(70);
+    expect(approveException(entry,null,{r2:true,s18:true,s19:true})).toMatch(/^[a-f0-9]{64}$/);
+  }
   const additions=policy.exceptions.filter(e=>e.screen==='S-18');
   expect(additions).toHaveLength(18);
   expect(additions.every(e=>e.approvalPr===68&&e.theme==='light')).toBe(true);
@@ -103,6 +109,17 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
     const {policy,before}=policies();
     mutate(policy);
     expect(()=>expectApprovedExceptions(policy,before)).toThrow();
+  });
+  it('permits additive S-19 proposals only while preserving all existing exception bytes; live approval is still required',()=>{
+    const {policy,before}=policies();
+    const proposal={screen:'S-19',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:70};
+    policy.exceptions.push(proposal);
+    expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
+    expect(approveException(proposal,[],{r2:true,s18:true,s19:true})).toBe(false);
+    for(const changed of [{...proposal,approvalPr:71},{...proposal,checks:['accessibility']},{...proposal,liveSha256:'invalid'}]){
+      policy.exceptions[policy.exceptions.length-1]=changed;
+      expect(()=>expectApprovedExceptions(policy,before)).toThrow();
+    }
   });
   it('keeps missing coverage, regressions and invalid exceptions blocking despite design intake',async()=>{
     const config=JSON.parse(readFileSync(resolve(root,'frontend/scripts/nyay66-policy.json')));

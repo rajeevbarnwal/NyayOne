@@ -6,7 +6,8 @@
   "tolerances": {"pixelRatio": 0.001, "mean": 0.25, "geometry": 1},
   "r2": {"cache": "chromium-149.0.7827.55-r2-unclipped", "manifestSha256": "84d8791e260ec4460e3babfac80aa2746416c670e9bb58724b3152daa164c0ed"},
   "s18": {"cache": "s18-v32108-chromium-149.0.7827.55-36565721312", "manifestSha256": "38aa36b79f8dc7cc9bbdbdbc9b1ce26626f34a52cc253f3e317d59a9ff2ba5e9", "provenanceSha256": "788ccd74f7f3b49576bbb59e5b2fd445aa246bf76c963742bfbd6e33f9e49ea3"},
-  "integrityApproval": {"pr": 71, "commentId": 6233000971, "bundleSha256": "e5f1f337bd9f51d7e262d4b411449c94d99a2d633b5b87c3e309075282f41db7"},
+  "s19": {"cache": "s19-v32108-chromium-149.0.7827.55-39029544967", "manifestSha256": "b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c", "provenanceSha256": "5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf"},
+  "integrityApproval": {"pr": 70, "commentId": 6235897983, "bundleSha256": "305c6832bd6bcf0f7c2442790250ea67e5b7e80961d886651a23ac3dfcb22441"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -862,6 +863,751 @@
       "checks": ["pixels", "text", "controls"],
       "reason": "S-13 light only, this exact approved Revision L reference/live PNG pair. Retain the authenticated server-derived profile identity and initials instead of the prototype Aditi Nair/AN (Synthetic Student/SS in the deterministic fixture), including the avatar accessible name. Approve only the resulting avatar text, accessible-name and avatar pixels. All control and heading boxes match exactly; Finish, Resume Setup and Not Now crops are pixel-identical. No geometry, heading, accessibility, overflow, dynamic-region, navigation-behavior, reference, tolerance, other-screen or dark-mode waiver. Only owner approval makes this PARITY-WITH-DISCLOSED-DELTA; it is not strict parity.",
       "approvalPr": 56
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "c35d8ca3648dab811252c51237d1faa7bc1d15a618903ec86da52e9ce20889a3",
+      "liveSha256": "60a721f552c90f0f3ff89832241bd0b20e4fa5d9c2a89b7237085396e1773a09",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 loading, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Loading is announced through role=status and its accessible label rather than the prototype hidden Loading text node. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "19695812658a30923e6610f99e2ccf61b8c401e12585e393911eba19fa480cfc",
+      "liveSha256": "c4c12a6559520acd0b71c5b97707364c7bd62fe0f4f48a915f29eff901c98e40",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 loading, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Loading is announced through role=status and its accessible label rather than the prototype hidden Loading text node. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "d921fdd6083af4c9eb88247fe13720cd5494bb92739934211607140a1fbe786d",
+      "liveSha256": "fcb46e740a68ad412aa52fc4996bbf4a12c7126b693c42810deaaaf8e7e85489",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 loaded, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Each consent has its concise label as accessible name and the explanation as aria-describedby; the prototype concatenates both into its control name. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "4cd1773dad62b1c8cd7c6ea75ecf0612a1e29566f0e50d9c235f6183f191bbc0",
+      "liveSha256": "2275ac4799e7d697d2d18f14f6960dc2c6dba6e2612896b6bc71f3dfa0dd6304",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 loaded, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Each consent has its concise label as accessible name and the explanation as aria-describedby; the prototype concatenates both into its control name. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5882320aa00bddf226c8bf360be4f058b3f449e79527595b9e881df13be284b0",
+      "liveSha256": "f2f06c19359739033ffade173a8c530d3ae33b1d3b8e4b4947346b5f2247d9ca",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 saving, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The real pending analytics draft is shown as true; all three switches and deletion are blocked until the held PATCH settles. The prototype has default switch values and an enabled deletion action; no successful persistence is claimed. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "ef30c811426b6c88d58bb1367dbb6363592441616aa4f0d889439e0bc4ef3c5a",
+      "liveSha256": "7a18eeecaa271b9339898cec14e556b13efa93ac6e4bf08cc7b693fdaa79e13f",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 saving, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The real pending analytics draft is shown as true; all three switches and deletion are blocked until the held PATCH settles. The prototype has default switch values and an enabled deletion action; no successful persistence is claimed. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "bbf5a325af33cc8450e7a2fd1deed9bbaa9edccdca130ab63a65a2fd58d8ae95",
+      "liveSha256": "3b8724b69577ea49d4771738f7363c00cded5efc9a79181ffd41ec60f3f58162",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 saved, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The analytics switch shows the server-confirmed true value after PATCH, rather than the prototype default false value. Saved appears only after the response. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7d02127d7d861c36b157a1ded29a23b8ff94dc1478823953b6d5d39b7ed8fdba",
+      "liveSha256": "cd094e36d776dba1f85151562dd8cde532928811fabed1cfc4ce9e55da9801ee",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 saved, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The analytics switch shows the server-confirmed true value after PATCH, rather than the prototype default false value. Saved appears only after the response. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "f9118b5f601f4b43726ff1446f3b5d268d30ca38a0e3c33593eec31dc2a25e04",
+      "liveSha256": "c11d865da663b9fc04e7268509cf14aefe4ddf20e0fcedd8b0a5abd809deee26",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 conflict, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The conflicted change is rolled back; all consent switches are disabled until an explicit reload. The prototype does not model those guarded controls. Residual icon baseline: Reload SVG is +1px vertically relative to its own button versus the reference; Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "10f266476bd27b110eea0e4a5eb61985b9482a6b49265e89a2768f76f8576289",
+      "liveSha256": "e95f017c44f91d9f5abc11f74c74864e609e9064d9d06a510c039ba13a075bd5",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 conflict, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The conflicted change is rolled back; all consent switches are disabled until an explicit reload. The prototype does not model those guarded controls. Residual icon baseline: Reload SVG is +1px vertically relative to its own button versus the reference; Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "f16f8621f9292f9773422d27f8bd263a9afe0db1da36665253e054029ff9a5db",
+      "liveSha256": "be63bf31bc6887229bf840321c1b4a40b3f855e9d47c2140750b5d59535ce1b9",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 network, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The rejected consent is rolled back, with retry of the same intended change. Concise switch names use separately described help. Residual icon baseline: Try again SVG is +1px vertically relative to its own button versus the reference; Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "420719d4bbbd90c3b76583f6a77917d6e109cdd30abb29cd9db7374d45b0c351",
+      "liveSha256": "8933666db598840d8a9cebc38027c041d39630ff589ca9c0d242a1d2ade274e9",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 network, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The rejected consent is rolled back, with retry of the same intended change. Concise switch names use separately described help. Residual icon baseline: Try again SVG is +1px vertically relative to its own button versus the reference; Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "9f1a85ee5395a4dcd9294484885d39de731bfe364e0a77090355eeff71d2f42f",
+      "liveSha256": "5a899f3bf15c6f34651e4e3a77f587c6969b7919bf2e51f67b1112c4d1ec4f6a",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-accepted, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The real schema-shaped 32-character request ID replaces the prototype dsr_7f3a9c21 value; the pending export disables duplicate requests. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "f4fd4f31e78efcc544cd29eb12633143bf6fece77f9f88185465662ed0b5f9f1",
+      "liveSha256": "8dba9c5dcf4baca5a253f13513d0ecf83ae12abb9ab48c7ae122528686504e8d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-accepted, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The real schema-shaped 32-character request ID replaces the prototype dsr_7f3a9c21 value; the pending export disables duplicate requests. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "b5f4b0a3ae1b2e64f07af22b2117d118495cc7a0b53cfe9d9b444687d448bb4e",
+      "liveSha256": "d2d432bace7c2024b0443e6873ae63a6bfdb66e64e42b800af287596c4e1d00f",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-processing, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual 32-character request ID changes the notice wrapping and downstream vertical placement. Pending/processing duplicate requests stay disabled. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "8ea903154b89dae1d3f549cd75c0833226dd87a4d7da5e370261ce234cbeab4d",
+      "liveSha256": "192d004e31cd403c6af242cf5f8c0729749480fb050b04a684a604fd9bef0882",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-processing, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual 32-character request ID changes the notice wrapping and downstream vertical placement. Pending/processing duplicate requests stay disabled. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "92a43731ad2dd6376233fc57360067436de29f0639ab1e6cc7da7bc8ff187c4c",
+      "liveSha256": "c06487e41afd79d1da499911b48e3056a921c9d3346a78e87ea22a3551bdf9bc",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-complete, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The backend status is complete, not the prototype completed. Truthful complete-status wording and the real 32-character ID alter wrapping; no download/delivery capability is invented. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "5bde8cbc875cdaa720bbfb5d95f20169e28ce0210e159b97cd6f9040a0212dd6",
+      "liveSha256": "4d87f84784d8794e45317ce2cb9b553ee6a6505c56b5704e522b4afcd23a3e79",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-complete, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The backend status is complete, not the prototype completed. Truthful complete-status wording and the real 32-character ID alter wrapping; no download/delivery capability is invented. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "9f8a3017a6349264e551e0cb7119ae77aa8f4b8cbbbf149ac98048216ce631f9",
+      "liveSha256": "e82486ac5d086c3e0cf63c8faa0cbe0791a3fba3f872c3928901d9c228106ff7",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-failed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The failed request retains its real 32-character ID and offers Request again/Dismiss; ID wrapping accounts for downstream vertical movement. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Request again SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "8f725f2894a81303b1b56d9d05f77d373fe728fc08b3b0ec2d506ad8497bc99d",
+      "liveSha256": "a9dce0a2886f178afaabee4f78b559ae3111c36cf92da2581c718e22b7b35bfe",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-failed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The failed request retains its real 32-character ID and offers Request again/Dismiss; ID wrapping accounts for downstream vertical movement. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Request again SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "fc6ffca166c1a740571264c87ebdff5a565f55a33fd6f62c6dfdbfbc0fa7622a",
+      "liveSha256": "2915dccb900bf85e0376a65810833860580fcf8a20fc4dfc9f402227aa863f86",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 request-not-found, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. OWNER-AUTHORIZED DESIGN-VARIANT PROPOSAL, not a server-data or antialiasing-only exception. The frozen not-found source falls back to its older manual-save composition. Retain the approved default save-on-change composition: default heading glyph, subtitle and aside copy, default consent/card spacing, no manual Save button, intrinsic-width mobile data actions with the default action glyphs, and Request again/Dismiss as real recovery actions. The resulting card heights and control positions differ from the legacy variant. The two separate optional-manual rows stay DESIGN-GAP; no nonexistent request capability is added. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. The separately disclosed intrinsic-width mobile design variant shifts the Request-copy icon -41.375px and Delete icon -66.671875px horizontally relative to their button origins; these are design-variant geometry, not 1px raster noise. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "a9971158a1f350417b7dc0174848ac8a77de721461e909522dc3306cbc45179c",
+      "liveSha256": "0c814409d12c78c17b0a699fb57c663507075de1f7304c86aa2c6b06d2ff90c5",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 request-not-found, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. OWNER-AUTHORIZED DESIGN-VARIANT PROPOSAL, not a server-data or antialiasing-only exception. The frozen not-found source falls back to its older manual-save composition. Retain the approved default save-on-change composition: default heading glyph, subtitle and aside copy, default consent/card spacing, no manual Save button, intrinsic-width mobile data actions with the default action glyphs, and Request again/Dismiss as real recovery actions. The resulting card heights and control positions differ from the legacy variant. The two separate optional-manual rows stay DESIGN-GAP; no nonexistent request capability is added. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "eab7a3f2355fa38838bd69a9dc129f26821b32653fcad5a72d9b3bcfb43f5f7c",
+      "liveSha256": "c5c0ace7d478ed435430bd1d4cf5ee92a6501292c8c6f43aad8d0340faea9c7d",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-confirm, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The focused mobile-confirmation form preserves real input/disabled Send semantics; no synthetic identity is prefilled. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "94bd7de785a4961906d67cc587f598ece7dc91f7d22cf700b74b3e1823954295",
+      "liveSha256": "a07dfc392ff9566926365fe939ee76ed226359551b1b8ebb8105d56f165276cb",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-confirm, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The focused mobile-confirmation form preserves real input/disabled Send semantics; no synthetic identity is prefilled. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "083e023eb314e0dbfece8ca06d50eb23193e83a60b34296a3272e4b0ed190d7e",
+      "liveSha256": "c9069ed912acb8981531605ae7b8587961171db40070477d8dadf5f5b415b799",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-invalid, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Wrong-case delete remains unsent with the final action disabled and keyboard focus visible on the input. The prototype depicts an inline confirmation error and red invalid boundary; the real flow does not force a disallowed submission to manufacture that response. Error-slot height, focus ring and downstream action placement consequently differ. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "8b8977a3432712dc51d11cfbcd686b4a0d4dc706141886dc49aacf447e7118b7",
+      "liveSha256": "0fd0b0c831292dd7d3e527b21e0fd8712d0d1dbadf270894f601ac2d2ee7b6a5",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-invalid, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Wrong-case delete remains unsent with the final action disabled and keyboard focus visible on the input. The prototype depicts an inline confirmation error and red invalid boundary; the real flow does not force a disallowed submission to manufacture that response. Error-slot height, focus ring and downstream action placement consequently differ. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "b1eb52dae3bacc9eed97bdf7c068e67e8b120524e85cfacaba7aedaa175b147a",
+      "liveSha256": "c5b0fae951306f98b0b0a3d7e1fc0d995033aadfede0c4b6671f2443dd16adfc",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual recovery input has its visible 48px-plus input boundary; the frozen source has a visually borderless code control. The helper instructs use of the delivered code instead of publishing the prototype demonstration code. Removing demo-only guidance changes helper height and subsequent action placement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "07f17a3f3fafe33e3ab9f4d556b0c591e0e6bc734109ad469cc382e477b98140",
+      "liveSha256": "aa19de2ceb4a2a63556a04378bf8f5163468ef8ae39702bfe621c560f2329731",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual recovery input has its visible 48px-plus input boundary; the frozen source has a visually borderless code control. The helper instructs use of the delivered code instead of publishing the prototype demonstration code. Removing demo-only guidance changes helper height and subsequent action placement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "616c28709cda73e29591c57e75b25931cae0703f86a1c92b6b2ee97385d3e1ef",
+      "liveSha256": "0dcdb9764665b2001cfe102ac37ae3d84c04a89b8a1c22c3611ca353bf5046cf",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth-rejected, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The attempted six-digit synthetic code remains in the visible invalid input after rejection, with its error boundary and enabled Verify retry. The frozen source has an empty visually borderless input, disabled Verify and demo-only helper guidance. The inline error now uses the same 5px field spacing; changed helper content accounts for remaining action movement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "f10920ea5fc4dd836312e7678bd9213ab498c33ffcb4953aedff0227e03f6898",
+      "liveSha256": "1df4efc97b41b55c22d845cd201ad8ce93925542735765a5f0be22718f87de03",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth-rejected, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The attempted six-digit synthetic code remains in the visible invalid input after rejection, with its error boundary and enabled Verify retry. The frozen source has an empty visually borderless input, disabled Verify and demo-only helper guidance. The inline error now uses the same 5px field spacing; changed helper content accounts for remaining action movement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "a645b254c6911318be42b425826ffdc3d998986988aa0fd90276d8b0cdb0d855",
+      "liveSha256": "4ad6ed07c9cd65706452ef36b2cf4e01736517605d3105a6aab774e1fe90315a",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth-required, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The verify response is HTTP 200 with an unavailable recovery projection, NOT a 401. The controller fails closed, returns to the mobile-step heading and explanation, hides the form and offers Start again plus Back to privacy. The prototype keeps a static code-step restart notice without the secondary action. No verified deletion authority or Send capability is fabricated. Residual icon baseline: Start again SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "e2a3515ae6ec0a91359dba1311af7f70f731ce0f9a382ce72c128e74a9e66831",
+      "liveSha256": "7aa038eb93b83c44fde9b5e7e4cb1409e4e060377ac9f4a4c42a429ba0f400e1",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-reauth-required, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The verify response is HTTP 200 with an unavailable recovery projection, NOT a 401. The controller fails closed, returns to the mobile-step heading and explanation, hides the form and offers Start again plus Back to privacy. The prototype keeps a static code-step restart notice without the secondary action. No verified deletion authority or Send capability is fabricated. Residual icon baseline: Start again SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "def67bf8ae8050a8d303c48c7ed01914097db05762d0ac313ae06e2d6fb26344",
+      "liveSha256": "2b352512466cfc88306346d1b2f9e0e626e5851a3e01ee0039b6edcff4d35d66",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-conflict, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual 409 concurrent_state_changed notice survives the genuine auth-transition remount. A fresh verified recovery read restores the Type DELETE step with its identity-confirmed notice, emptied confirmation input, disabled deletion action and Keep my account. The frozen source uses an older Confirm it is you code-step layout with Verify and request deletion / Send a new code / Back to privacy. Both specific conflict sentences and the warning tone are preserved; no automatic retry or authority bypass is waived. Residual icon baseline: Keep my account SVG is +1px vertically versus the reference Back to privacy icon. The server-authorized step has different action labels; their centered icon/text groups shift Request account deletion by 5.4375px and Keep my account by -6.265625px horizontally inside the full-width buttons versus the old labels. These horizontal differences follow changed label lengths, not a relaxed spacing rule. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "a6f2019e3e8c00cace33fd9b700d87a500e461ad0fd2152d534fb74c0f6e6ed4",
+      "liveSha256": "964247422e97159fcf0138e3a21162ad0a6e2b8b73eed11750f9342f11177c95",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-conflict, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The actual 409 concurrent_state_changed notice survives the genuine auth-transition remount. A fresh verified recovery read restores the Type DELETE step with its identity-confirmed notice, emptied confirmation input, disabled deletion action and Keep my account. The frozen source uses an older Confirm it is you code-step layout with Verify and request deletion / Send a new code / Back to privacy. Both specific conflict sentences and the warning tone are preserved; no automatic retry or authority bypass is waived. Residual icon baseline: Keep my account SVG is +1px vertically versus the reference Back to privacy icon. The server-authorized step has different action labels; their centered icon/text groups shift Request account deletion by 5.453125px and Keep my account by -6.28125px horizontally inside the full-width buttons versus the old labels. These horizontal differences follow changed label lengths, not a relaxed spacing rule. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "d375148fb095aac774ba33b2bcaba7c851c61041e2d5dd9999ac9211c64f0744",
+      "liveSha256": "cf04f290f8a806a919095f9e237926e102f49c24043b6e1b63872dbee1f07ebc",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-accepted, mobile390, light; exact reference/live image pair only. Explicit LIVE-REDIRECT-DESTINATION evidence: actual existing S-03 after accepted deletion, session clearing and accepted-notice proof. The frozen library represents an external-screen gateway placeholder, not the implemented S-03 design. The large whole-destination delta is intentional; no S-03 product changes, artificial S-19 success page, delay or navigation freeze. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "102da527623f869cfe7f5aa12d46c0da9673dd9ab53d8de50660b7fe916f4a9c",
+      "liveSha256": "43933c11746cdddd12e75dc933937a7c72a7cd43b6349e69154c7a60017acc15",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-accepted, desktop, light; exact reference/live image pair only. Explicit LIVE-REDIRECT-DESTINATION evidence: actual existing S-03 after accepted deletion, session clearing and accepted-notice proof. The frozen library represents an external-screen gateway placeholder, not the implemented S-03 design. The large whole-destination delta is intentional; no S-03 product changes, artificial S-19 success page, delay or navigation freeze. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "4abb08d1660bbe65d68254d74860be9327b397941d6d7afaa2a3f0834b6c3088",
+      "liveSha256": "bab32ebc75355f4ebbdf561025292974a8bd61f41102df098f545c205fb5659c",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 session, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Explicit COMPONENT-VISUAL evidence using the actual PrivacySettingsView, accompanied by an executed real-route synthetic 401 proof that immediately redirects /s-19 to /s-03 with anonymous session. Not a stable/live S-19 page capture; no production delay or navigation freeze. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "3a12a974ab0c5a5dc1e4be3ef2fe66b5b4e976bd66337ce506afd932958eea83",
+      "liveSha256": "b2b74ea6265fedf5e74251048486fd4d70b56c074ba68cfc6ce8124bb633de11",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 session, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Explicit COMPONENT-VISUAL evidence using the actual PrivacySettingsView, accompanied by an executed real-route synthetic 401 proof that immediately redirects /s-19 to /s-03 with anonymous session. Not a stable/live S-19 page capture; no production delay or navigation freeze. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "f761963cbaa048a8924d5df56bb570d123e0b8d8e5c49ee3ef33c283a9362009",
+      "liveSha256": "2e4993ae8392e91f82c05c82c2e33ba72cb61c37002b3657ae98dfa015ab3821",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-check-failed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. A failed status read retains and names the last server-confirmed pending state; the export action remains disabled to prevent a duplicate active request. The prototype instead displays its synthetic request reference and enables the export action. Content wrapping and browser scroll-to-focused-alert change the visible composition; neither is a fabricated completed export. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "0e41d748da456beea93c91b3f2a952d897dd7035c8ec21ff406c5f8210736e33",
+      "liveSha256": "3991d67ad51f164f4403a8663e34ca5bb399af4ef357535010066a6161cc4a36",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 export-check-failed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. A failed status read retains and names the last server-confirmed pending state; the export action remains disabled to prevent a duplicate active request. The prototype instead displays its synthetic request reference and enables the export action. Content wrapping and browser scroll-to-focused-alert change the visible composition; neither is a fabricated completed export. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Check status SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "1f12ecd07d9027ad24bb8759a30e2676972e954764575d2ae971c5261ec1a920",
+      "liveSha256": "c8987778b9c0cf6b8993f69458d863167f826ac8ca8e41d6985330dd8e38d060",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-mobile-invalid, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The typed invalid mobile value is real input. Send stays disabled, so no server request or artificial post-submit inline error is fabricated (the prototype shows such an error). This changes field/error height and subsequent action placement. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "78a8cf096c6b1b59ba6be0f153340960385408b82055a893d63230f7dd4fae2d",
+      "liveSha256": "d176a85cf8eed232726e077a5158de441ce09d3d6a2a7973e041f7f7da6a8234",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-mobile-invalid, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The typed invalid mobile value is real input. Send stays disabled, so no server request or artificial post-submit inline error is fabricated (the prototype shows such an error). This changes field/error height and subsequent action placement. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "5eae4206b61654522b7eee28a8813cce3a1d4514396d68d26f016842520bbd3c",
+      "liveSha256": "637b06f6102a933f9278a611e2f2096ba1656f026fa6241e5612654701c03ef7",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-start-failed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The entered synthetic mobile remains visible after the real rejected start response and Send is enabled for a valid retry. The prototype retains an empty field and disabled button. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "cb0169182a6c7c9dd7aea4addcec4a4d32328345326c81a69c5d966039320453",
+      "liveSha256": "d68fd79c3b99cb6d52efc4278ee607ce26130c3f206fd8a79854e7346685da03",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-start-failed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The entered synthetic mobile remains visible after the real rejected start response and Send is enabled for a valid retry. The prototype retains an empty field and disabled button. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "f8ae787313777c0de309ba40f7b888a06a51ea651f1e099f9084d29371126f7e",
+      "liveSha256": "9b3fd933c91e6819993331ffc8a6ed99a74550d3072858c92d15498b9eb7178c",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-rate-limited, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The entered mobile is retained and retry remains a valid action after the mocked 429. User-facing cooldown wording omits the prototype internal otp_rate_limited code; resulting notice text/height may differ. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "74cfef7616a36720a03375ca86952e616a0f520a1727d0b14b8adaf136dab601",
+      "liveSha256": "7ce0f80f0465956edd2622f7ea1c3629e45d594e9de6bcd0b41367824463b641",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-rate-limited, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The entered mobile is retained and retry remains a valid action after the mocked 429. User-facing cooldown wording omits the prototype internal otp_rate_limited code; resulting notice text/height may differ. Residual icon baseline: Back to privacy SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "66315c291419fd2b68140c06d5a1572cd89d25b217a63f7399bef7654e5b517d",
+      "liveSha256": "011ac55acaa171161a2028d2cd92700953981b97ca29de77ca2e48fe414ce683",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-code-expired, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Expired authority hides the verify form and offers Start again. The existing secondary Use a different number action is retained; the prototype omits that secondary action in this state. Residual icon baseline: Start again SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "f745abb251ea63987f21c66fd1a18eb6e00545559d98de2392214d333bf29f56",
+      "liveSha256": "79adb2fb6a3b34109a96a20388a1c61687ec4fbf526f7d21a29257c942ccd281",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-code-expired, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Expired authority hides the verify form and offers Start again. The existing secondary Use a different number action is retained; the prototype omits that secondary action in this state. Residual icon baseline: Start again SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "cf43a433557fd344be4b0b75844d15978c0e73dc2dc1c1f4b1fa32fc3e387ec7",
+      "liveSha256": "6411a35b6a365e7363684030400ecf0559205518689323a4070b0e8745f707ab",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-typed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The confirmed server authority permits the final focused DELETE step, while the final action remains disabled until exact uppercase input. Presentation-only alignment preserves those controls. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
+    },
+    {
+      "screen": "S-19",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "5bedc96c127381b56c3da47c3edca6562a3f04dac78b3441cca8d0c380a67ef9",
+      "liveSha256": "bc900233ecc3959c8e7c8b2ce19c3eb65d1731497fd9596aebfd0d826aedb225",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-19 delete-typed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The confirmed server authority permits the final focused DELETE step, while the final action remains disabled until exact uppercase input. Presentation-only alignment preserves those controls. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
+      "approvalPr": 70
     }
   ]
 }

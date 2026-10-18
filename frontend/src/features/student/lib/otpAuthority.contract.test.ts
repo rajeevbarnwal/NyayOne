@@ -9,6 +9,8 @@ const AUTHORITY_SOURCES = [
   'src/features/student/auth/AuthScreens.tsx',
   'src/features/student/auth/V34Screens.tsx',
   'src/features/student/settings/SettingsScreens.tsx',
+  'src/features/student/settings/usePrivacySettings.ts',
+  'src/features/student/settings/PrivacySettingsView.tsx',
   'src/features/student/lib/settingsApi.ts',
   'src/features/auth/screens.tsx',
   'src/features/auth/lib/authPersistence.ts',

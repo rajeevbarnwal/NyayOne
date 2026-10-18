@@ -711,9 +711,8 @@ async function openPrivacySettings(page) {
   await page.goto(`${WEB}/s-19`, { waitUntil: 'domcontentloaded' });
   const settingsResponse = await settingsPromise;
   await page.locator('[data-screen="S-19"]').waitFor({ state: 'visible' });
-  const disclosure = page.locator('details').filter({ hasText: 'Data rights' });
-  await disclosure.evaluate((element) => { element.open = true; });
-  await page.getByRole('button', { name: 'Delete…' }).waitFor({ state: 'visible' });
+  // Revision L exposes data actions directly; never force hidden DOM open.
+  await page.getByRole('button', { name: 'Delete my account' }).waitFor({ state: 'visible' });
   return settingsResponse.status();
 }
 
@@ -1081,7 +1080,7 @@ try {
   );
 
   currentStage = 'deletion_reauth';
-  await loginDelete.page.getByRole('button', { name: 'Delete…' }).click();
+  await loginDelete.page.getByRole('button', { name: 'Delete my account' }).click();
   await loginDelete.page.getByLabel('Registered mobile number').fill(mobile);
   await resetCapture();
   const recoveryStartPromise = loginDelete.page.waitForResponse((response) => (
@@ -1100,7 +1099,7 @@ try {
     response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/auth/student/recovery/verify'
   ));
-  await loginDelete.page.getByLabel('One-time code').fill(recoveryCode);
+  await loginDelete.page.getByLabel('Six-digit code').fill(recoveryCode);
   await loginDelete.page.getByRole('button', { name: 'Verify code' }).click();
   const recoveryVerify = await recoveryVerifyPromise;
   const recoveryVerifyTransition = inspectCookieTransitionHeaders(
@@ -1108,7 +1107,7 @@ try {
     [{ name: FLOW_COOKIE, action: 'issue', maxAge: RECOVERY_PROOF_TTL_SECONDS }],
     API,
   );
-  await loginDelete.page.getByLabel('Type DELETE to confirm').waitFor({ state: 'visible' });
+  await loginDelete.page.getByLabel('Type DELETE to continue').waitFor({ state: 'visible' });
   const beforeDeleteCookies = await loginDelete.context.cookies();
   await rememberCookieValues(loginDelete.context);
   const preDeletionSessionCookie = beforeDeleteCookies
@@ -1129,23 +1128,23 @@ try {
       verifyHttp: recoveryVerify.status(),
       verifiedFlowIssuanceExact: recoveryVerifyTransition.pass,
       twoCookieInventoryExact: deletionTwoCookieInventory.pass,
-      confirmationVisible: await loginDelete.page.getByLabel('Type DELETE to confirm').isVisible(),
+      confirmationVisible: await loginDelete.page.getByLabel('Type DELETE to continue').isVisible(),
     },
     recoveryStart.status() === 202
       && recoveryStartTransition.pass
       && recoveryVerify.status() === 200
       && recoveryVerifyTransition.pass
       && deletionTwoCookieInventory.pass
-      && await loginDelete.page.getByLabel('Type DELETE to confirm').isVisible(),
+      && await loginDelete.page.getByLabel('Type DELETE to continue').isVisible(),
   );
 
   currentStage = 'deletion_submit';
-  await loginDelete.page.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await loginDelete.page.getByLabel('Type DELETE to continue').fill('DELETE');
   const deletionResponsePromise = loginDelete.page.waitForResponse((response) => (
     response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/student/privacy/delete'
   ));
-  await loginDelete.page.getByRole('button', { name: 'Delete my account' }).click();
+  await loginDelete.page.getByRole('button', { name: 'Request account deletion' }).click();
   const deletionResponse = await deletionResponsePromise;
   await loginDelete.page.waitForURL('**/s-03');
   await loginDelete.page.getByText('DELETION REQUEST ACCEPTED', { exact: true })

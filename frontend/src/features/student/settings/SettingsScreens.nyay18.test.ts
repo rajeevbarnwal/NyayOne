@@ -1,30 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { settingsDisclosuresOpen } from './SettingsScreens';
 
-describe('S-19 responsive disclosure accessibility', () => {
-  it('keeps desktop-hidden disclosure summaries semantically open for their visible controls', () => {
-    let observedQuery = '';
-    expect(settingsDisclosuresOpen(undefined)).toBe(false);
-    expect(settingsDisclosuresOpen((query) => {
-      observedQuery = query;
-      return { matches: false };
-    })).toBe(false);
-    expect(settingsDisclosuresOpen(() => ({ matches: true }))).toBe(true);
-    expect(observedQuery).toBe('(min-width: 821px)');
-
+describe('S-19 responsive control accessibility', () => {
+  it('keeps visible consent and data controls outside collapsed disclosures at every width', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/features/student/settings/SettingsScreens.tsx'),
+      join(process.cwd(), 'src/features/student/settings/PrivacySettingsView.tsx'),
       'utf8',
     );
-    const privacy = source.slice(source.indexOf('export function PrivacySettings()'));
-
-    expect(source).toContain("const SETTINGS_WIDE_LAYOUT_QUERY = '(min-width: 821px)';");
-    expect(source).toContain("media.addEventListener('change', update)");
-    expect(privacy).toContain('const wideLayout = useWideSettingsLayout();');
-    expect([...privacy.matchAll(/<details open=\{wideLayout\} className="v34c-mobile-disclosure">/gu)])
-      .toHaveLength(2);
-    expect(privacy).not.toContain('<details open className="v34c-mobile-disclosure">');
+    // Revision L replaces the legacy responsive disclosures with visible cards.
+    // Keep the original accessibility requirement; no CSS-only disclosure opening.
+    expect(source).not.toContain('<details');
+    expect(source).not.toContain('<summary');
+    expect(source).toContain('aria-labelledby="S-19-consents"');
+    expect(source).toContain('aria-labelledby="S-19-data"');
+    expect(source).toContain('role="switch"');
+    expect(source).toContain('onClick={() => exportAction(props.onExport)}');
+    expect(source).toContain('onClick={props.onDeleteOpen}');
   });
 });

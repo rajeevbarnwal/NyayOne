@@ -36,6 +36,8 @@ describe('NYAY-18 shipped NyayOne identity contract', () => {
       'src/features/student/reporting/RiskLabelScreens.tsx',
       'src/features/student/schools/SchoolScreens.tsx',
       'src/features/student/settings/SettingsScreens.tsx',
+  'src/features/student/settings/usePrivacySettings.ts',
+  'src/features/student/settings/PrivacySettingsView.tsx',
       'src/features/student/tutoring/BookingScreens.tsx',
       'src/features/student/tutoring/SessionScreens.tsx',
       'src/features/student/tutoring/TutoringPrimitives.tsx',

@@ -26,7 +26,7 @@ function stringArrayConstant(source, name) {
 // of its predicates. The DOM double supplies only the observations it reads.
 async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration = false,
   decorationParent = {}, decorationIcon = {}, completionCheck = false,
-  completionParent = {}, completionIcon = {}, completionParentTag = 'SPAN' } = {}) {
+  completionParent = {}, completionIcon = {}, completionParentTag = 'SPAN', eyebrow } = {}) {
   class CensusElement {
     constructor(attributes = {}, parentElement = null) {
       this.attributes = attributes;
@@ -45,7 +45,8 @@ async function visualCensus({ screenId = 'S-06', family, logo = {}, decoration =
       throw new Error(`UNEXPECTED_CENSUS_SELECTOR:${selector}`);
     }
   }
-  const heading = new CensusElement();
+  const heading = new CensusElement(eyebrow ?? {});
+  if (eyebrow) heading.tagName = eyebrow.tagName ?? 'H2';
   heading.family = family ?? '"NyayOne Revision L Heading", Aptos, Calibri, Carlito, system-ui, sans-serif';
   const lockup = new CensusElement({ class: 'v321-lockup', role: 'img',
     'aria-label': 'NyayOne — Legal, on the record', ...logo });
@@ -1096,10 +1097,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the fifteen approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the sixteen approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1194,19 +1195,31 @@ describe('NYAY-5 browser release-gate source contract', () => {
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it.each(['S-17', 'S-18'])('rejects the legacy font on %s while retaining the S-19 legacy negative control', async screenId => {
+  it.each(['S-17', 'S-18', 'S-19'])('rejects the legacy font on %s while retaining the S-20 legacy negative control', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
-    expect(await visualCensus({ screenId: 'S-19',
+    expect(await visualCensus({ screenId: 'S-20',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
 
-  it('recognizes the exact S-18 Revision L heading and labelled logo', async () => {
-    expect(await visualCensus({ screenId: 'S-18',
+  it.each(['S-18', 'S-19'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
+    expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: true });
+  });
+
+  it('recognizes only the two S-19 Revision L eyebrow headings without relaxing other headings', async () => {
+    for (const id of ['S-19-consents', 'S-19-data']) {
+      const eyebrow = { id, class: 'v321-privacy__eyebrow' };
+      expect((await visualCensus({ screenId: 'S-19', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(true);
+      for (const mutant of [{ id: 'other' }, { class: 'other' }, { tagName: 'H1' }]) {
+        expect((await visualCensus({ screenId: 'S-19', eyebrow: { ...eyebrow, ...mutant }, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+      }
+      expect((await visualCensus({ screenId: 'S-20', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+      expect((await visualCensus({ screenId: 'S-19', eyebrow, family: 'serif' })).typographyExact).toBe(false);
+    }
   });
 
   it('uses S-18 Revision L heading and switch roles without changing the namespace migration assertions', () => {
@@ -1536,12 +1549,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     ]) {
       expect(runner).toContain(`failureStage = '${stage}'`);
     }
-    expect(runner).toContain(
-      "locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' })",
-    );
-    expect(runner).toContain("const dataRightsSummary = dataRightsDisclosure.locator('summary');");
+    expect(runner).toContain("const exportButton = page.getByRole('button', { name: 'Request a copy of my data', exact: true });");
+    expect(runner).toContain("await exportButton.waitFor({ state: 'visible' });");
     expect(runner).not.toContain("getByText('Data rights', { exact: true }).click()");
-    expect(runner).toContain("getByRole('button', { name: 'Export' })");
+    expect(runner).toContain('await exportButton.click();');
     expect(runner).toContain("getByRole('button', { name: 'Save private draft' })");
   });
 
@@ -1568,30 +1579,25 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(reportSource).toMatch(/failureClass,\s*failureStage,\s*failureCode,/u);
   });
 
-  it('kills an unconditional S-19 disclosure toggle before the privacy export', () => {
+  it('kills an unguarded or forced S-19 export activation', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     const storageProbeStart = runner.indexOf('async function extendedStorageBoundaryProbe');
     const storageProbe = runner.slice(
       storageProbeStart,
       runner.indexOf('async function run()', storageProbeStart),
     );
-    const guardedOpen = [
-      "  if ((await dataRightsDisclosure.getAttribute('open')) === null) {",
-      "    await dataRightsSummary.waitFor({ state: 'visible' });",
-      '    await dataRightsSummary.click();',
-      '  }',
-    ].join('\n');
+    const guardedOpen = "  await exportButton.waitFor({ state: 'visible' });";
     const guardedDisclosurePasses = (source) => (
       source.includes(guardedOpen)
-      && (source.match(/await dataRightsSummary\.click\(\);/gu) ?? []).length === 1
+      && (source.match(/await exportButton\.click\(\);/gu) ?? []).length === 1
       && !source.includes("click({ force: true })")
-      && !source.includes('dataRightsDisclosure.evaluate(')
+      && !source.includes('exportButton.evaluate(')
     );
 
     expect(guardedDisclosurePasses(storageProbe)).toBe(true);
     const unconditionalToggleMutant = storageProbe.replace(
       guardedOpen,
-      '  await dataRightsSummary.click();',
+      '',
     );
     expect(unconditionalToggleMutant).not.toBe(storageProbe);
     expect(guardedDisclosurePasses(unconditionalToggleMutant)).toBe(false);

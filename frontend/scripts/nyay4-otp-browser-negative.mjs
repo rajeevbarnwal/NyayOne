@@ -25,8 +25,8 @@ const safeKeys = [
   'expires_in_seconds', 'resend_in_seconds', 'locked_for_seconds',
   'resend_allowed',
 ];
-const REAUTHENTICATED_BADGE_SELECTOR = '.status.status--ok';
-const REAUTHENTICATED_BADGE_LABEL = 'Re-authenticated';
+const REAUTHENTICATED_BADGE_SELECTOR = '.v321-privacy__notice:not(.is-warning) b';
+const REAUTHENTICATED_BADGE_LABEL = 'Identity confirmed.';
 
 async function waitForReauthenticatedBadge(targetPage) {
   const badges = targetPage.locator(REAUTHENTICATED_BADGE_SELECTOR);
@@ -630,14 +630,13 @@ try {
     });
   });
   const exposeDataRights = async () => {
-    const disclosure = privacyPage.locator('details').filter({ hasText: 'Data rights' });
-    if (await disclosure.count()) await disclosure.evaluate((element) => { element.open = true; });
+    await privacyPage.getByRole('button', { name: 'Delete my account', exact: true }).waitFor({ state: 'visible' });
   };
 
   await privacyPage.goto(`${WEB}/s-19`, { waitUntil: 'domcontentloaded' });
   await privacyPage.locator('[data-screen="S-19"]').waitFor({ state: 'visible' });
   await exposeDataRights();
-  await privacyPage.getByRole('button', { name: 'Delete…' }).click();
+  await privacyPage.getByRole('button', { name: 'Delete my account' }).click();
   await privacyPage.getByLabel('Registered mobile number').fill(mobile);
   await resetCapture();
   const recoveryStartPromise = privacyPage.waitForResponse((response) => (
@@ -652,7 +651,7 @@ try {
     response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/auth/student/recovery/verify'
   ));
-  await privacyPage.getByLabel('One-time code').fill(recoveryCode);
+  await privacyPage.getByLabel('Six-digit code').fill(recoveryCode);
   await privacyPage.getByRole('button', { name: 'Verify code' }).click();
   const recoveryVerifyResponse = await recoveryVerifyPromise;
   const recoveryVerifyBody = await recoveryVerifyResponse.json();
@@ -683,7 +682,7 @@ try {
   );
 
   await waitForReauthenticatedBadge(privacyPage);
-  await privacyPage.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await privacyPage.getByLabel('Type DELETE to continue').fill('DELETE');
   let failRecoveryStateReads = false;
   await privacyPage.route('**/api/v1/auth/student/otp/state', async (route) => {
     if (failRecoveryStateReads) await fulfillStateFailure(route);
@@ -699,14 +698,14 @@ try {
   await recoveryFailurePromise;
   await privacyPage.getByText('Re-authentication state is unavailable.', { exact: false }).waitFor({ state: 'visible' });
   const recoveryFailureUi = {
-    confirmationAbsent: await privacyPage.getByLabel('Type DELETE to confirm').count() === 0,
-    deleteAbsent: await privacyPage.getByRole('button', { name: 'Delete my account' }).count() === 0,
+    confirmationAbsent: await privacyPage.getByLabel('Type DELETE to continue').count() === 0,
+    deleteAbsent: await privacyPage.getByRole('button', { name: 'Request account deletion' }).count() === 0,
     restartVisible: await privacyPage.getByLabel('Registered mobile number').isVisible(),
     restartDisabled: await privacyPage.getByRole('button', { name: 'Send code' }).isDisabled(),
   };
   await privacyPage.evaluate(() => {
     const button = [...document.querySelectorAll('button')]
-      .find((candidate) => candidate.textContent?.includes('Delete my account'));
+      .find((candidate) => candidate.textContent?.includes('Request account deletion'));
     if (button instanceof HTMLButtonElement) button.click();
   });
   await privacyPage.waitForTimeout(250);
@@ -733,7 +732,7 @@ try {
   const recoveryStateRecoveryResponse = await recoveryStateRecoveryPromise;
   const recoveryStateRecoveryBody = await recoveryStateRecoveryResponse.json();
   await waitForReauthenticatedBadge(privacyPage);
-  const recoveryConfirmationRecovered = await privacyPage.getByLabel('Type DELETE to confirm').isVisible();
+  const recoveryConfirmationRecovered = await privacyPage.getByLabel('Type DELETE to continue').isVisible();
   record(
     'recovery-refresh-recovery',
     'a later successful GET restores only the fresh strict verified recovery proof',
@@ -748,27 +747,27 @@ try {
   await privacyPage.reload({ waitUntil: 'domcontentloaded' });
   await privacyPage.locator('[data-screen="S-19"]').waitFor({ state: 'visible' });
   await exposeDataRights();
-  await privacyPage.getByRole('button', { name: 'Delete…' }).click();
+  await privacyPage.getByRole('button', { name: 'Delete my account' }).click();
   await waitForReauthenticatedBadge(privacyPage);
   record(
     'recovery-proof-reload',
     'reload restores verified confirmation stage solely through HttpOnly flow state',
     {
-      confirmationFieldVisible: await privacyPage.getByLabel('Type DELETE to confirm').isVisible(),
+      confirmationFieldVisible: await privacyPage.getByLabel('Type DELETE to continue').isVisible(),
       mobileFieldAbsent: await privacyPage.getByLabel('Registered mobile number').count() === 0,
-      otpFieldAbsent: await privacyPage.getByLabel('One-time code').count() === 0,
+      otpFieldAbsent: await privacyPage.getByLabel('Six-digit code').count() === 0,
     },
-    await privacyPage.getByLabel('Type DELETE to confirm').isVisible()
+    await privacyPage.getByLabel('Type DELETE to continue').isVisible()
       && await privacyPage.getByLabel('Registered mobile number').count() === 0
-      && await privacyPage.getByLabel('One-time code').count() === 0,
+      && await privacyPage.getByLabel('Six-digit code').count() === 0,
   );
 
-  await privacyPage.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await privacyPage.getByLabel('Type DELETE to continue').fill('DELETE');
   const deletionResponsePromise = privacyPage.waitForResponse((response) => (
     response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/student/privacy/delete'
   ));
-  await privacyPage.getByRole('button', { name: 'Delete my account' }).click();
+  await privacyPage.getByRole('button', { name: 'Request account deletion' }).click();
   const deletionResponse = await deletionResponsePromise;
   const deletionBody = await deletionResponse.json();
   const consumedStateResponse = await knownContext.request.get(

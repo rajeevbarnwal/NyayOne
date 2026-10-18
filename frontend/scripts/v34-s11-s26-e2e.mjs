@@ -743,12 +743,11 @@ try {
 
   await leaveSettledDocument(page, () => page.goto(`${base}/s-19`));
   await waitForDocumentReady(page);
-  await page.locator('details.v34c-mobile-disclosure').filter({ hasText: 'Data rights' }).locator('summary').click();
-  const deleteToggle = page.getByRole('button', { name: 'Delete…' });
+  const deleteToggle = page.getByRole('button', { name: 'Delete my account' });
   await deleteToggle.click();
   record('S-19_delete_reauth_gate', 'delete cannot be submitted before re-authentication',
-    { deleteButtons: await page.getByRole('button', { name: 'Delete my account' }).count() },
-    await page.getByRole('button', { name: 'Delete my account' }).count() === 0);
+    { deleteButtons: await page.getByRole('button', { name: 'Request account deletion' }).count() },
+    await page.getByRole('button', { name: 'Request account deletion' }).count() === 0);
 
   const storagePrivacy = await page.evaluate(() => {
     const local = { ...localStorage };
