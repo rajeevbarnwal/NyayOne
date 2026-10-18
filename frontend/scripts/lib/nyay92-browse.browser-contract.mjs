@@ -44,6 +44,30 @@ async function fixture(options = {}, width = 390) {
 async function using(options, test, width) { const f = await fixture(options, width); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const mutations = f => f.requests.filter(r => r.method === 'PUT' || r.method === 'DELETE');
 describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
+  for (const width of [390, 1440]) it(`rupee uses the frozen custom glyph only inside S-20 metadata at ${width}px`, () => using({}, async f => {
+    await f.page.evaluate(async () => { await document.fonts.ready; });
+    const cdp = await f.context.newCDPSession(f.page);
+    await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+    async function fonts(selector) {
+      const { root } = await cdp.send('DOM.getDocument');
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+      return (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts;
+    }
+    const stipend = await fonts('.s20-meta p');
+    assert.ok(stipend.length > 0);
+    assert.ok(stipend.every(font => font.isCustomFont), 'stipend must not fall back to the system rupee glyph');
+    await f.page.evaluate(async () => {
+      const probe = document.createElement('p'); probe.id = 's20-font-negative-control'; probe.textContent = '₹';
+      probe.style.cssText = "position:fixed;top:0;left:0;font:12.5px 'Public Sans',system-ui,sans-serif";
+      document.body.append(probe);
+      await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+    });
+    const outside = await fonts('#s20-font-negative-control');
+    assert.ok(outside.some(font => !font.isCustomFont), `the S-20 alias must not replace the global/other-screen fallback: ${JSON.stringify(outside)}`);
+    await f.page.locator('#s20-font-negative-control').evaluate(el => el.remove());
+    assert.equal(await f.page.locator('.s20-meta p').first().textContent(), 'Delhi · ₹12,000 per month');
+    await cdp.detach();
+  }, width));
   for (const width of [932, 1024, 1440]) for (const theme of ['light', 'dark']) it(`header navigation retains 48px targets without moving text at ${width}px/${theme}`, () => using({ theme }, async f => {
     const geometry = await f.page.locator('.s20-header nav').evaluate(nav => [...nav.children].map(el => {
       const range = document.createRange(); range.selectNodeContents(el);
