@@ -643,7 +643,7 @@ try {
   record('S-20_api_ready', 'catalogue and saved-list GETs finish with HTTP 200 before interaction', completedBrowseResponses,
     completedBrowseResponses.length === 2
       && completedBrowseResponses.every((item) => item.status === 200 && item.finishedError === null));
-  const search = page.getByRole('searchbox', { name: 'Search internships' });
+  const search = page.getByRole('searchbox', { name: 'Search this page' });
   await search.fill('not-a-real-placement');
   record('S-20_empty_search', 'truthful no-results state', await page.getByText('No matching listings').isVisible(),
     await page.getByText('No matching listings').isVisible());

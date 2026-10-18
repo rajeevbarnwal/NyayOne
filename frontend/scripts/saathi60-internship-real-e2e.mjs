@@ -282,24 +282,21 @@ try {
   await page.goto(new URL('/s-20', WEB).href, { waitUntil: 'domcontentloaded' });
   await Promise.all([finishedResponse(catalogueGet), finishedResponse(savedGet)]);
   await waitForTextReady(page, 'Loading internships');
-  const shownCount = page.locator('section[aria-label="Open listings"] .st-metatag');
-  requireRow('catalogue:count', '3 shown', (await shownCount.textContent())?.trim(),
-    (await shownCount.textContent())?.trim() === '3 shown');
-  await page.getByRole('button', { name: 'Verified only' }).click();
-  requireRow('catalogue:verified-only', 'exactly CAM', await page.locator('section[aria-label="Open listings"]').innerText(),
-    (await shownCount.textContent())?.trim() === '1 shown'
-      && await page.getByText(/Summer Associate, disputes — Cyril Amarchand Mangaldas/).isVisible()
-      && !(await page.getByText(/Judicial research assistant — Chambers/).isVisible().catch(() => false)));
-  await page.getByRole('button', { name: 'Verified only' }).click();
-  const disclosure = page.locator('details.v34c-mobile-disclosure');
-  const disclosureSummary = disclosure.locator('summary');
-  if (await disclosureSummary.isVisible() && !(await disclosure.getAttribute('open'))) {
-    await disclosureSummary.click();
-  }
-  const menonRow = page.getByRole('listitem').filter({ hasText: 'Chambers of Sr. Adv. R. Menon' });
+  const shownCount = page.locator('.s20-count');
+  requireRow('catalogue:count', '3 listings on this page', (await shownCount.textContent())?.trim(),
+    (await shownCount.textContent())?.trim() === '3 listings on this page');
+  await page.locator('.s20-filters summary').click();
+  await Promise.all([finishedResponse(page.waitForResponse(response => responseMatches(response, 'GET', '/api/v1/internships'))), page.getByRole('button', { name: 'Verified listings only' }).click()]);
+  await page.getByRole('button', { name: /Summer Associate, disputes.*Cyril Amarchand Mangaldas/ }).waitFor();
+  requireRow('catalogue:verified-only', 'exactly CAM', await page.locator('.s20-results').innerText(),
+    (await shownCount.textContent())?.trim() === '1 listing on this page'
+      && await page.getByRole('button', { name: /Summer Associate, disputes.*Cyril Amarchand Mangaldas/ }).isVisible()
+      && !(await page.getByRole('button', { name: /Judicial research assistant.*Chambers/ }).isVisible().catch(() => false)));
+  await Promise.all([finishedResponse(page.waitForResponse(response => responseMatches(response, 'GET', '/api/v1/internships'))), page.getByRole('button', { name: 'Verified listings only' }).click()]);
+  const menonRow = page.getByRole('article').filter({ hasText: 'Chambers of Sr. Adv. R. Menon' });
   await Promise.all([
     finishedResponse(page.waitForResponse((response) => responseMatches(response, 'GET', '/api/v1/internships/menon'))),
-    menonRow.getByRole('button', { name: 'View' }).click(),
+    menonRow.getByRole('button', { name: /Judicial research assistant.*Chambers/ }).click(),
   ]);
   await waitForTextReady(page, 'Loading internship');
   requireRow('identity:view-menon', '/s-21?listing=menon and Menon heading', {
