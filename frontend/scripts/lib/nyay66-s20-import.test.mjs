@@ -77,6 +77,10 @@ describe('S-20 archive import fails closed before writing',()=>{
     expect(got.manifestSha256).toBe('e121bff73a920ce1a563cc77317a6bbfe7a1970f131b8442cd61a4123f6b47d9');
     const before=JSON.parse(execFileSync('git',['show','48eeac1973053eb2fd8e4080091dd345bf08db69:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy);delete current.s20;delete current.integrityApproval;delete before.integrityApproval;
+    // S-20 additions are validated by the coverage/owner-approval contracts;
+    // this import assertion pins all pre-S-20 exceptions byte-for-byte/in order.
+    current.exceptions=current.exceptions.filter(e=>e.screen!=='S-20');
+    expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(before.exceptions));
     expect(current).toEqual(before);
   });
 });
