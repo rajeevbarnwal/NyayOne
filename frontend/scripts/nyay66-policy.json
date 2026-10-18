@@ -1609,6 +1609,304 @@
       ],
       "reason": "S-19 delete-typed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The confirmed server authority permits the final focused DELETE step, while the final action remains disabled until exact uppercase input. Presentation-only alignment preserves those controls. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
       "approvalPr": 70
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "c84a5de408b0c7df473938f42084366644886c5cc04746089660dba8bfd51d74",
+      "liveSha256": "13246161d3eddfa07854d0d491e895c279ccddedb277e6d04086173ec3c4d2ef",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 loading, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. Loading is exposed by an accessible named status rather than the prototype visually-hidden Loading text node. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "768c28c6cade23f54d3dc12ea1bd87a6981d1df94f0a7dd1fb97c70aa496f994",
+      "liveSha256": "37436589a8b56517b66286c4108e1bd8dcf9d612bf5c240ac1cfc008ba2be0f6",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 loading, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. Loading is exposed by an accessible named status rather than the prototype visually-hidden Loading text node. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "b477f3e4cdb428d249768c55c53c0d7d0bdacd449a73969b8776385f43fbcad0",
+      "liveSha256": "09fa5bcf6a0590dadc1e4884d92ac217960edb52aec3264860988ea39d166b39",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 results, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "40e4ba669f2c9b61c2e6eefef510e0724cd55dad46df9a082f9b71da86f06d5b",
+      "liveSha256": "8245f9112d321145ec591bd2d7d92ace0bfb8c454f2bae9321b690dcb7ba18b7",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 results, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "e80c8eee764af7241f37e8a98b51b9971cc0b120e454a5c2ec52c3b573a285d5",
+      "liveSha256": "b8e3ffac348f64fe034d28e3f2777dea949ef2014ddfcbdc16896d08dbbe0975",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 filters-open, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "96e0207ba4b70bd63f7dc67cd776c07e3d23c9096d8c798e21973f7f6d23825a",
+      "liveSha256": "4b4edf6bb5d7fef7c71ee9e49e2b88c5e6f3fdfb3fefcba0a490237b5eb42de2",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 filters-open, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "846f119c75defc1a3d9e6cc14e5b06803f636586cae410a879cba813476a088e",
+      "liveSha256": "6c5f7c59d18e33316c073ef7cd9e468b2e303319f087b49fe244e6ab5b21cf5d",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 verified-empty, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "f474f86d3a8e7345235563d1a5827dcf85d7ddb60d5f2f85bbdd233f0a11f69a",
+      "liveSha256": "1797c7fac804143fbdffced9ee37cfe06e907f7872cfab3bc543ef059bf297a3",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 verified-empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "ae76ac959a7bd3e044cf9075c340fd089e8e86d58d7bbdbeb49d2fd7b9155fa4",
+      "liveSha256": "8cf055ebd8e012b80343aa1a77b7171225d6eb3c917c1a489f7f2af851c00313",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 empty, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "09e063c546b42f89bcf5145676f354ded47533b08f7c49b2e18ecd0a4bec56c8",
+      "liveSha256": "89f9821bc99d861c9fe71f59ea559e85063a1f87fab9f8a967b951f21b14321b",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "d9eab4e46a008f8d81a3f80a4400c92e54ecb57b28207e3bae70b52110e5c235",
+      "liveSha256": "504873c089dadac5f7fdc6ab30621a38f162d3ff341bdf9e18d29fe6101780d2",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 partial, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. OWNER-APPROVED DESIGN-VARIANT PROPOSAL: retain Search this page and its helper/filter composition while the saved-list GET fails, rather than remove the active search control as the older frozen variant does. Measured shared card-title vertical offsets: Litigation intern Menon Chambers: 101.094 CSS px; Summer associate Kalpavriksha Legal: 101.094 CSS px; Policy research intern Sarvatra Policy Centre: 101.094 CSS px; Arbitration intern Nirvikar & Co.: 101.094 CSS px. Retry saved list explicitly targets the failed resource; unknown save marks remain disabled and unasserted. Current-page count wording remains truthful. This is an intentional composition difference, not antialiasing. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "e4216604334e1bcc3215daea349b811d4fb51b3c0fe3ef2834768ee5b271347d",
+      "liveSha256": "1f607144e20f27b359d3b5d3bf54b2cb0ed9854583ab35d4593140e087a689da",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 partial, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. OWNER-APPROVED DESIGN-VARIANT PROPOSAL: retain Search this page and its helper/filter composition while the saved-list GET fails, rather than remove the active search control as the older frozen variant does. Measured shared card-title vertical offsets: Litigation intern Menon Chambers: 101.094 CSS px; Summer associate Kalpavriksha Legal: 101.094 CSS px; Policy research intern Sarvatra Policy Centre: 101.094 CSS px; Arbitration intern Nirvikar & Co.: 101.094 CSS px. Retry saved list explicitly targets the failed resource; unknown save marks remain disabled and unasserted. Current-page count wording remains truthful. This is an intentional composition difference, not antialiasing. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "9806cec8127a5c6cb37559e783ced5766690709b258ab74c47baa229600513b6",
+      "liveSha256": "891790d3d1f79ee285e04219d2bc3182895a53135a7664ac48aec9a3a978c936",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 save-failed, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. OWNER-APPROVED DESIGN-VARIANT PROPOSAL: retain Search this page and the filter composition after the synthetic PUT failure. The uncertain response cannot justify prototype Nothing changed or saved selections: show Could not confirm the change, reload instructions, a saved-state-unavailable notice and Retry saved list, with save marks disabled until server reconciliation. The retained search plus truthful recovery notice moves the first card down by 226.094 CSS px; the longer error copy changes subsequent card positions. Measured shared card-title vertical offsets: Litigation intern Menon Chambers: 226.094 CSS px; Summer associate Kalpavriksha Legal: 243.094 CSS px; Policy research intern Sarvatra Policy Centre: 243.094 CSS px; Arbitration intern Nirvikar & Co.: 243.094 CSS px. Meaningful focus is retained on the error notice and its visible focus outline is preserved, not waived as a defect. This is an intentional composition/state difference, not antialiasing. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "0e870b947678387b0a02acc24b2f5b0a49083d13ff7dbf82fe93dcebcbb240f2",
+      "liveSha256": "f32b975931128ecc02ca9e3ff63af989506aeb9753cced361181ebba36ea79e4",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 save-failed, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. OWNER-APPROVED DESIGN-VARIANT PROPOSAL: retain Search this page and the filter composition after the synthetic PUT failure. The uncertain response cannot justify prototype Nothing changed or saved selections: show Could not confirm the change, reload instructions, a saved-state-unavailable notice and Retry saved list, with save marks disabled until server reconciliation. The retained search plus truthful recovery notice moves the first card down by 226.094 CSS px; the longer error copy changes subsequent card positions. Measured shared card-title vertical offsets: Litigation intern Menon Chambers: 226.094 CSS px; Summer associate Kalpavriksha Legal: 226.094 CSS px; Policy research intern Sarvatra Policy Centre: 226.094 CSS px; Arbitration intern Nirvikar & Co.: 226.094 CSS px. Meaningful focus is retained on the error notice and its visible focus outline is preserved, not waived as a defect. This is an intentional composition/state difference, not antialiasing. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "a187e1226ef124c372fda23dd9f7150511395620c61ce81dbabb0f06dd1979d2",
+      "liveSha256": "4ae6ae540af086647be629c89bb24c2c0ab2ed60c78fb0dbdeb48c0a48a4cf7a",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 error, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "5412d9657dc2e1f68323864962039af07fae1a3a79f81cdcb462723a0c9fca5a",
+      "liveSha256": "3cfd3c489f88e3a99d1f700a175e747d830a6881d8856cf8a03e248f9e88b97d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 error, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "75ee3e20503b029cdb6f31517e019d818e011fd483244bd37887ecbb4c4f0654",
+      "liveSha256": "9327353c3c9fdefa46b13c8b446377519d8257a7635e3e70043dec40a8611dbb",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 offline, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "624c11ae3ea0320dbcf41e2371bc0f07f336775d44480fafd738ea60c2e400eb",
+      "liveSha256": "fc4cfee6f970a4e83c00de2275cf2d0cf6117dcfb30fa523ea2fc089e18e4859",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 offline, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "91d6ef0b43324bdbd253eefcac13af2a63e336496ef13bce351763e00ae74e34",
+      "liveSha256": "3c9d17a42a37974e166d4dc5d335cd33cb8a3c2ee842f29067c6e9f26ad49449",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 local-empty, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. OWNER-APPROVED INTERACTION-STATE PROPOSAL: the actual local search uses No synthetic match and retains visible input focus/native clear affordance rather than the frozen preset zzz tax without focus. No invented server search and no extra catalogue request; the no-match card is unchanged. This is a disclosed interaction-state difference, not server-derived data and not a focus-loss/accessibility waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
+    },
+    {
+      "screen": "S-20",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "6c2927a4436ebb139e7f36cad51033a9409ffc1023fc463d9cf63cd41f99ca9f",
+      "liveSha256": "9d9632ed7ee3bee54ba3099339de861087c0528a746fe203ee11fddfaf9d7ab6",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-20 local-empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. OWNER-APPROVED INTERACTION-STATE PROPOSAL: the actual local search uses No synthetic match and retains visible input focus/native clear affordance rather than the frozen preset zzz tax without focus. No invented server search and no extra catalogue request; the no-match card is unchanged. This is a disclosed interaction-state difference, not server-derived data and not a focus-loss/accessibility waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "approvalPr": 72
     }
   ]
 }
