@@ -55,8 +55,8 @@ function render(
 describe('SAATHI-60 internship screens', () => {
   it('renders server catalogue/saved truth and no first-visit fake seed', () => {
     const html = render('/s-20', <InternshipBrowse />, (client) => {
-      client.setQueryData(['internships-catalogue'], { items: [CAM, MENON], total: 2, page: 1, pageSize: 20 });
-      client.setQueryData(['internships-saved', STUDENT.userId], [MENON]);
+      client.setQueryData(['s20-catalogue', 1, false], { items: [CAM, MENON], total: 2, page: 1, pageSize: 20 });
+      client.setQueryData(['s20-saved', STUDENT.userId], [MENON]);
     });
     expect(html).toContain('Summer Associate, disputes');
     expect(html).toContain('Judicial research assistant');
