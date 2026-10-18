@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
+import {S20_MEASURED_STATES} from './nyay66-s20-coverage.mjs';
 export const CONTINUATION_ARCHIVE_SHA256='0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964';
 const DIRECTORY='frontend/test-baselines/nyay66/v3.2.1.08';
 const ARCHIVE=`${DIRECTORY}/NYAYONE_S01_S35_v3.2.1.08.zip`;
@@ -61,9 +62,9 @@ export function continuationRows(data){
     sourceVersion:data.version,sourceArchiveSha256:data.archiveSha256,
   }))));
 }
-export function appendContinuation(report,data,{s18=false,s19=false}={}){
+export function appendContinuation(report,data,{s18=false,s19=false,s20=false}={}){
   let rows=continuationRows(data);const ids=new Set(data.screens.map(s=>s.screen));
-  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')))throw Error('CONTINUATION_ALREADY_REPORTED');
+  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')&&!(s20&&r.screen==='S-20')))throw Error('CONTINUATION_ALREADY_REPORTED');
   let measuredLightRows=0;
   if(s18){
     const expected=new Set(rows.filter(r=>r.screen==='S-18'&&r.designState!=='option-manual').map(r=>`${r.state}:${r.viewport}`));
@@ -82,9 +83,17 @@ export function appendContinuation(report,data,{s18=false,s19=false}={}){
     rows=rows.filter(r=>r.screen!=='S-19'||!S19_MEASURED_STATES.includes(r.designState));
     rows=rows.map(r=>r.screen==='S-19'?{...r,reason:'Reference PNG imported; optional manual-save product mode remains deferred and unmeasured. Not a pass.'}:r);
   }
+  if(s20){
+    const expected=new Set(rows.filter(r=>r.screen==='S-20'&&S20_MEASURED_STATES.includes(r.designState)).map(r=>`${r.state}:${r.viewport}`));
+    const found=report.rows.filter(r=>r.theme==='light'&&r.screen==='S-20');
+    for(const row of found)if(!expected.delete(`${row.state}:${row.viewport}`))throw Error('S20_MEASURED_COVERAGE_INCOMPLETE');
+    if(expected.size)throw Error('S20_MEASURED_COVERAGE_INCOMPLETE');
+    measuredLightRows+=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
+    rows=rows.filter(r=>r.screen!=='S-20');
+  }
   // Existing finalizer's verdict, failures, 74 required rows and blocking result
   // are preserved verbatim. These source-only rows cannot authorize promotion.
   return {...report,rows:[...report.rows,...rows],continuation:{version:data.version,archiveSha256:data.archiveSha256,
     designApproval:data.designApproval,screens:15,states:191,unmeasuredLightRows:382-measuredLightRows,pngBaselinesImported:false,
-    ...(s18||s19?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0),measuredLightRows}: {})}};
+    ...(s18||s19||s20?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[]),...(s20?['S-20']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0)+(s20?20:0),measuredLightRows}: {})}};
 }

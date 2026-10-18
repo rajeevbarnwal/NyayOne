@@ -36,12 +36,16 @@ const policies=()=>({
 });
 function expectApprovedExceptions(policy,before){
   // Preserve every original field/string/order and the exact 18 S-18 approvals.
-  // Optional S-19 proposals are validated here; the hosted finalizer still
+  // Optional S-19/S-20 proposals are validated here; the hosted finalizer still
   // requires an exact owner comment for each hash (never test self-approval).
-  expect(JSON.stringify(policy.exceptions.filter(e=>!['S-18','S-19'].includes(e.screen)))).toBe(JSON.stringify(before.exceptions));
+  expect(JSON.stringify(policy.exceptions.filter(e=>!['S-18','S-19','S-20'].includes(e.screen)))).toBe(JSON.stringify(before.exceptions));
   for(const entry of policy.exceptions.filter(e=>e.screen==='S-19')){
     expect(entry.approvalPr).toBe(70);
     expect(approveException(entry,null,{r2:true,s18:true,s19:true})).toMatch(/^[a-f0-9]{64}$/);
+  }
+  for(const entry of policy.exceptions.filter(e=>e.screen==='S-20')){
+    expect(entry.approvalPr).toBe(72);
+    expect(approveException(entry,null,{r2:true,s18:true,s19:true,s20:true})).toMatch(/^[a-f0-9]{64}$/);
   }
   const additions=policy.exceptions.filter(e=>e.screen==='S-18');
   expect(additions).toHaveLength(18);
@@ -117,6 +121,18 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
     expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
     expect(approveException(proposal,[],{r2:true,s18:true,s19:true})).toBe(false);
     for(const changed of [{...proposal,approvalPr:71},{...proposal,checks:['accessibility']},{...proposal,liveSha256:'invalid'}]){
+      policy.exceptions[policy.exceptions.length-1]=changed;
+      expect(()=>expectApprovedExceptions(policy,before)).toThrow();
+    }
+  });
+  it('permits future S-20 proposals only for PR72 while preserving all 112 existing exception records exactly',()=>{
+    const {policy,before}=policies();
+    expect(sha(JSON.stringify(policy.exceptions.filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
+    const proposal={screen:'S-20',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72};
+    policy.exceptions.push(proposal);
+    expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
+    expect(approveException(proposal,[],{r2:true,s18:true,s19:true,s20:true})).toBe(false);
+    for(const changed of [{...proposal,approvalPr:73},{...proposal,checks:['accessibility']},{...proposal,liveSha256:'invalid'}]){
       policy.exceptions[policy.exceptions.length-1]=changed;
       expect(()=>expectApprovedExceptions(policy,before)).toThrow();
     }

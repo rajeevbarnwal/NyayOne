@@ -63,7 +63,7 @@ export function lightRowInventory(options){
     (item.source==='r2'?R2_VIEWPORTS:VIEWPORTS).flatMap(vp=>item.views.map(view=>({
       screen:item.screen,
       // S-06's existing live fixture records its source view as row.state.
-      state:item.screen==='S-06'?view:['r2','s18','s19'].includes(item.source)?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
+      state:item.screen==='S-06'?view:['r2','s18','s19','s20'].includes(item.source)?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
       viewport:vp.id,theme:'light',
     }))));
 }

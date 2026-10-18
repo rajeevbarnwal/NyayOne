@@ -1,5 +1,6 @@
 // Current tooling only: never writes or supersedes historical reference evidence.
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
+import {S20_MEASURED_STATES} from './nyay66-s20-coverage.mjs';
 export const SOURCE_SHA256 = '338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252';
 export const VIEWS = ['s03', 's04', 's05', 's08', 's09', 's10a', 's10b', 's11', 's12', 's13', 's14', 's14p', 's15', 's16', 's17'];
 export const VIEWPORTS = [
@@ -7,7 +8,7 @@ export const VIEWPORTS = [
   { id: 'desktop', width: 1440, height: 1024 },
 ];
 
-export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false} = {}) {
+export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false, s20 = false} = {}) {
   const items = [...Array.from({ length: 17 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`), 'S-07-popup'].map(screen => {
     const views = screen === 'S-07-popup' ? ['s14p'] : screen === 'S-07' ? ['s14'] : screen === 'S-10' ? ['s10a', 's10b'] : VIEWS.filter(view => view === screen.toLowerCase().replace('-', ''));
     const states={'S-01':['checking','error','resolved'],'S-02':['default','focus'],'S-06':['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']};
@@ -16,6 +17,7 @@ export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false}
   });
   if(s18&&theme==='light')items.push({screen:'S-18',source:'s18',status:'NOT-YET-MEASURED',views:['loading','loaded','saving','saved','invalid','conflict','network','forbidden','session'].map(s=>`s18-${s}`)});
   if(s19&&theme==='light')items.push({screen:'S-19',source:'s19',status:'NOT-YET-MEASURED',views:S19_MEASURED_STATES.map(s=>`s19-${s}`)});
+  if(s20&&theme==='light')items.push({screen:'S-20',source:'s20',status:'NOT-YET-MEASURED',views:S20_MEASURED_STATES.map(s=>`s20-${s}`)});
   return items;
 }
 
