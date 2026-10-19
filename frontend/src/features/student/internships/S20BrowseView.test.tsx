@@ -38,6 +38,15 @@ describe('S-20 Revision L composition and honest states', () => {
     expect(render({ verifiedOnly: true })).toContain('No verified listings right now.');
     expect(render({ total: 1, query: 'missing' })).toContain('No matching listings');
   });
+  it('QA-5 scopes a filtered no-match to this page and discloses the server total', () => {
+    const html = render({ total: 45, query: 'only-on-another-page' });
+    expect(html).toContain('No matching listings on this page');
+    expect(html).toContain('45 total listings');
+    expect(render({ items: [listing], total: 45 })).toContain('45 total listings');
+  });
+  it('QA-4 uses singular saved-count copy for one confirmed listing', () => {
+    expect(render({ saved: ['role'] })).toContain('1 saved listing</p>');
+  });
   it.each(['/s-20', '/S-20/', '/s-20?x=1#y'])('owns one main, sibling aside and no legacy chrome for %s', path => {
     const html = renderToStaticMarkup(<MemoryRouter initialEntries={[path]}><AppShell theme="light" toggleTheme={vi.fn()}><S20BrowseView {...props}/></AppShell></MemoryRouter>);
     expect(html.match(/<main\b/g)).toHaveLength(1);

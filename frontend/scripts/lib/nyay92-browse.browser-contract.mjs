@@ -13,19 +13,25 @@ async function fixture(options = {}, width = 390) {
   const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce', colorScheme: options.theme ?? 'light' });
   if (options.theme) await context.addInitScript(theme => localStorage.setItem('nyayone.theme.v1', theme), options.theme);
   const page = await context.newPage(); page.setDefaultTimeout(7000);
-  const requests = []; let config = options, saved = [], release;
+  const requests = []; let config = options, saved = [], release, released = false;
+  const heldReads = new Map();
   await page.route('**/api/v1/**', async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname, method = req.method(); requests.push({ path, method, params: Object.fromEntries(url.searchParams) });
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.endsWith('/session')) return json(config.anonymous ? { authenticated: false, actor: null } : { authenticated: true, actor });
     if (path === '/api/v1/internships') {
+      if (config.holdCatalogue) await new Promise(resolve => heldReads.set('catalogue', resolve));
       if (config.catalogueError) return json({ detail: { code: 'unavailable' } }, 503);
       const pageNum = Number(url.searchParams.get('page') || 1), verified = url.searchParams.get('verified_only') === 'true';
       return json({ items: config.empty ? [] : pageNum === 2 ? [{ ...listing, id: 'page-two', role: 'Page two intern' }] : verified ? [listing] : [listing, { ...listing, id: 'unpaid', role: 'Unpaid intern', stipend_monthly_paise: null, verification_status: 'unverified' }], total: config.empty ? 0 : config.paginated ? 21 : verified ? 1 : 2, page: pageNum, page_size: 20 });
     }
-    if (path.endsWith('/internships/saved')) return config.savedError ? json({ detail: { code: 'unavailable' } }, 503) : json({ items: saved });
+    if (path.endsWith('/internships/saved')) {
+      if (config.holdSaved) await new Promise(resolve => heldReads.set('saved', resolve));
+      return config.savedError ? json({ detail: { code: 'unavailable' } }, 503) : json({ items: saved });
+    }
     if (path.endsWith('/saved')) {
-      if (config.hold) await new Promise(resolve => { release = resolve; });
+      if (config.hold && !released) await new Promise(resolve => { release = resolve; });
+      if (config.expireSession) { config = { ...config, anonymous: true }; return json({ detail: { code: 'authentication_required' } }, 401); }
       if (config.saveError) return json({ detail: { code: 'unavailable' } }, 503);
       if (config.malformed) return json({ saved: true, listing_id: 'wrong-listing' });
       saved = method === 'PUT' ? [listing] : [];
@@ -39,11 +45,95 @@ async function fixture(options = {}, width = 390) {
   await page.getByRole('heading', { name: 'Browse internships.' }).waitFor();
   await page.locator(`[data-s20-state="${config.catalogueError ? 'error' : 'results'}"]`).waitFor();
   if (!config.catalogueError && !config.anonymous && !config.savedError && !config.empty) await page.getByRole('button', { name: 'Save Research intern', exact: true }).waitFor();
-  return { context, page, requests, set: value => { config = value; }, release: () => release?.() };
+  return { context, page, requests, set: value => { config = value; }, releaseRead: key => heldReads.get(key)?.(), release: () => { released = true; release?.(); for (const resolve of heldReads.values()) resolve(); } };
 }
 async function using(options, test, width) { const f = await fixture(options, width); try { await test(f); } finally { f.release(); await f.context.close(); } }
 const mutations = f => f.requests.filter(r => r.method === 'PUT' || r.method === 'DELETE');
 describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
+  it('QA-1 observes an S-21 save and S-25 removal immediately on return, without stale marks', () => using({}, async f => {
+    await f.page.getByRole('button', { name: 'Research intern Synthetic chambers' }).click();
+    await f.page.getByRole('button', { name: 'Save', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Saved', exact: true }).waitFor();
+    await f.page.getByRole('button', { name: 'Back to listings', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Remove Research intern from saved', exact: true }).waitFor();
+    assert.equal(await f.page.getByRole('button', { name: 'Remove Research intern from saved', exact: true }).getAttribute('aria-pressed'), 'true');
+    await f.page.getByRole('button', { name: 'Saved internships', exact: true }).first().click();
+    await f.page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Browse internships', exact: true }).click();
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).waitFor();
+    assert.equal(await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).getAttribute('aria-pressed'), 'false');
+    assert.deepEqual(mutations(f).map(r => r.method), ['PUT', 'DELETE']);
+  }));
+  for (const direction of ['Next page', 'Previous page']) for (const fail of [false, true]) {
+    it(`QA-2 pagination focus is meaningful pending and settled: ${direction}, failure=${fail}`, () => using({ paginated: true }, async f => {
+      if (direction === 'Previous page') {
+        await f.page.getByRole('button', { name: 'Next page', exact: true }).click();
+        await f.page.getByText('Page two intern', { exact: true }).waitFor();
+        // The return page must be fetched rather than served from a fresh cache.
+        await f.page.clock.setFixedTime(Date.now() + 31000);
+      }
+      f.set({ paginated: true, holdCatalogue: true, catalogueError: fail });
+      const sent = f.page.waitForRequest(r => new URL(r.url()).pathname === '/api/v1/internships');
+      await f.page.getByRole('button', { name: direction, exact: true }).press('Enter'); await sent;
+      await f.page.waitForTimeout(60);
+      assert.notEqual(await f.page.evaluate(() => document.activeElement?.tagName), 'BODY', 'pending page fetch must retain a useful focus anchor');
+      f.releaseRead('catalogue');
+      await f.page.locator(`[data-s20-state="${fail ? 'error' : 'results'}"]`).waitFor();
+      await f.page.waitForTimeout(60);
+      assert.equal(await f.page.evaluate(() => document.activeElement?.matches('.s20-title, .s20-pager button, .s20-empty[role="alert"], h1')), true);
+    }));
+  }
+  for (const kind of ['catalogue', 'saved']) for (const fail of [false, true]) for (const move of [false, true]) {
+    it(`QA-3 retry focus is retained pending/settled without stealing: ${kind}, failure=${fail}, moved=${move}`, () => using(kind === 'catalogue' ? { catalogueError: true } : { savedError: true }, async f => {
+      f.set(kind === 'catalogue' ? { holdCatalogue: true, catalogueError: fail } : { holdSaved: true, savedError: fail });
+      const path = kind === 'catalogue' ? '/api/v1/internships' : '/api/v1/student/internships/saved';
+      const sent = f.page.waitForRequest(r => new URL(r.url()).pathname === path);
+      await f.page.getByRole('button', { name: kind === 'catalogue' ? 'Retry' : 'Retry saved list', exact: true }).press('Enter'); await sent;
+      await f.page.waitForTimeout(60);
+      assert.notEqual(await f.page.evaluate(() => document.activeElement?.tagName), 'BODY', 'pending retry must not drop focus');
+      if (move) await f.page.locator('.s20-filters summary').focus();
+      f.releaseRead(kind); await f.page.waitForTimeout(150);
+      if (move) assert.equal(await f.page.evaluate(() => document.activeElement?.matches('.s20-filters summary')), true);
+      else assert.equal(await f.page.evaluate(() => document.activeElement?.matches('h1, [role="alert"], .s20-btn')), true);
+    }));
+  }
+  for (const move of [false, true]) it(`QA-3 session-expiry remount preserves action focus without stealing, moved=${move}`, () => using({ hold: true, expireSession: true }, async f => {
+    const sent = f.page.waitForRequest(r => r.method() === 'PUT');
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).press('Enter'); await sent;
+    if (move) await f.page.getByRole('button', { name: 'Your Profile', exact: true }).focus();
+    f.release(); await f.page.getByText('Sign in to save internships', { exact: true }).waitFor();
+    await f.page.waitForTimeout(120);
+    assert.notEqual(await f.page.evaluate(() => document.activeElement?.tagName), 'BODY');
+    assert.equal(await f.page.evaluate(() => document.activeElement?.matches('h1, .s20-note, .s20-note button, .s20-avatar')), true);
+  }));
+  it('QA-4 distinguishes an uncertain mutation from a saved-list load failure', () => using({ saveError: true }, async f => {
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).click();
+    await f.page.locator('.s20-save-error').waitFor();
+    assert.equal(await f.page.getByText('Your saved list did not load.', { exact: true }).count(), 0);
+    assert.match(await f.page.locator('.s20-note').innerText(), /saved state needs confirmation/i);
+    assert.equal(await f.page.getByRole('button', { name: 'Retry saved list', exact: true }).count(), 1);
+  }));
+  it('QA-4 offline preflight says no request was sent and leaves confirmed state retryable', () => using({}, async f => {
+    await f.context.setOffline(true);
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).press('Enter');
+    await f.page.locator('.s20-save-error').waitFor();
+    assert.match(await f.page.locator('.s20-save-error').innerText(), /No request was sent/);
+    assert.doesNotMatch(await f.page.locator('.s20-save-error').innerText(), /Reload your saved list/);
+    assert.equal(mutations(f).length, 0);
+    await f.context.setOffline(false);
+    await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).press('Enter');
+    await f.page.getByRole('button', { name: 'Remove Research intern from saved', exact: true }).waitFor();
+    assert.equal(mutations(f).length, 1);
+  }));
+  it('QA-5 a page-local no-match shows the server total and preserves pagination', () => using({ paginated: true }, async f => {
+    await f.page.getByLabel('Search this page').fill('Page two intern');
+    await f.page.getByRole('heading', { name: 'No matching listings on this page', exact: true }).waitFor();
+    assert.match(await f.page.locator('.s20-empty').innerText(), /21 total listings/);
+    await f.page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await f.page.getByText('Page two intern', { exact: true }).waitFor();
+    assert.match(await f.page.locator('.s20-count').innerText(), /21 total listings/);
+    assert.equal(await f.page.getByLabel('Search this page').inputValue(), 'Page two intern');
+  }));
   for (const width of [390, 1440]) it(`rupee uses the frozen custom glyph only inside S-20 metadata at ${width}px`, () => using({}, async f => {
     await f.page.evaluate(async () => { await document.fonts.ready; });
     const cdp = await f.context.newCDPSession(f.page);
@@ -138,7 +228,7 @@ describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
   }));
   it('local search/stipend does not query the server; verified filter does', () => using({}, async f => {
     const count = f.requests.filter(r => r.path === '/api/v1/internships').length;
-    await f.page.getByLabel('Search this page').fill('absent'); await f.page.getByText('No matching listings', { exact: true }).waitFor();
+    await f.page.getByLabel('Search this page').fill('absent'); await f.page.getByText('No matching listings on this page', { exact: true }).waitFor();
     await f.page.getByLabel('Search this page').fill(''); await f.page.locator('.s20-filters summary').click();
     await f.page.getByRole('button', { name: 'Paid', exact: true }).click(); assert.equal(await f.page.locator('.s20-result').count(), 1);
     assert.equal(f.requests.filter(r => r.path === '/api/v1/internships').length, count);
@@ -204,7 +294,7 @@ describe('S-20 server truth and action lifecycle', { timeout: 120000 }, () => {
   it('an offline save fails promptly instead of remaining paused/busy indefinitely', () => using({}, async f => {
     await f.context.setOffline(true);
     await f.page.getByRole('button', { name: 'Save Research intern', exact: true }).press('Enter');
-    await f.page.getByText('Could not confirm the change. Reload your saved list before trying again.', { exact: true }).waitFor();
+    await f.page.getByText('You are offline. No request was sent. Reconnect and try again.', { exact: true }).waitFor();
     assert.equal(await f.page.locator('.s20-save[aria-busy="true"]').count(), 0);
   }));
   for (const width of [390, 1440]) it(`retains readable light-phase headings under an existing dark preference at ${width}px`, () => using({ theme: 'dark' }, async f => {

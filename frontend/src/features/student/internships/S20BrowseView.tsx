@@ -1,12 +1,15 @@
-import { useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import type { InternshipListing, StipendFilter } from '../lib/internships';
 import './S20Browse.css';
 
+export type S20FocusContinuity = { label: string | null; id: string } | null;
 export interface S20BrowseViewProps {
+  focusContinuity?: RefObject<S20FocusContinuity>;
+  catalogueBusy?: boolean;
   phase: 'loading' | 'results' | 'error' | 'offline'; items: InternshipListing[]; total: number; page: number;
   query: string; stipend: StipendFilter; verifiedOnly: boolean;
-  saved: string[]; savedPhase: 'loading' | 'ready' | 'error' | 'anonymous' | 'forbidden' | 'unavailable';
+  saved: string[]; savedPhase: 'loading' | 'ready' | 'error' | 'uncertain' | 'anonymous' | 'forbidden' | 'unavailable';
   pendingId: string | null; saveError: { id: string; message: string } | null; notice: string; statusCode: number | null;
   onNavigate: (path: string) => void; onQuery: (q: string) => void; onStipend: (v: StipendFilter) => void;
   onVerified: () => void; onPage: (page: number) => void; onClear: () => void;
@@ -34,21 +37,58 @@ function ActionIcon({ name, colored = true }: { name: string; colored?: boolean 
 }
 export function S20BrowseView(p: S20BrowseViewProps) {
   const root = useRef<HTMLDivElement>(null);
-  // Action-owned focus only. Background fetches never focus a notice. Pending
-  // save buttons remain mounted/focusable; aria-disabled + controller lock gate
-  // activation. A user who tabs elsewhere retains ownership of their focus.
-  async function perform(action: () => Promise<unknown>, button: HTMLButtonElement, target: string) {
+  const focusAction = useRef<{ button: HTMLElement; anchor: HTMLElement; target: string; done: boolean; page?: number } | null>(null);
+  const restore = useRef<() => void>(() => undefined);
+  const continuity = p.focusContinuity;
+  // Carry only the focused control's identity through the auth-key remount,
+  // never account data. Restore only focus lost with the departing S-20 tree.
+  useLayoutEffect(() => {
     const host = root.current;
-    await action();
-    requestAnimationFrame(() => {
-      if (!host?.isConnected || (document.activeElement !== button && document.activeElement !== document.body)) return;
-      const next = host.querySelector<HTMLElement>(target);
-      (next ?? (button.isConnected ? button : host.querySelector<HTMLElement>('h1')))?.focus({ preventScroll: true });
-    });
+    if (host && continuity?.current && document.activeElement === document.body) {
+      const { label, id } = continuity.current;
+      const next = Array.from(host.querySelectorAll<HTMLElement>('button, input, summary, h1')).find(el =>
+        (id && el.id === id) || (label && el.getAttribute('aria-label') === label));
+      (next ?? host.querySelector<HTMLElement>('h1'))?.focus({ preventScroll: true });
+    }
+    if (continuity) continuity.current = null;
+    return () => {
+      const active = document.activeElement;
+      if (continuity && active instanceof HTMLElement && host?.contains(active)) {
+        continuity.current = { label: active.getAttribute('aria-label'), id: active.id };
+      }
+    };
+  }, [continuity]);
+  useLayoutEffect(() => {
+    restore.current = () => {
+      const owned = focusAction.current, host = root.current;
+      if (!owned || !host?.isConnected) return;
+      const active = document.activeElement;
+      if (active !== owned.anchor && active !== owned.button && active !== document.body) {
+        focusAction.current = null; return; // The user has moved on.
+      }
+      if (!owned.done || p.phase === 'loading' || (owned.page !== undefined && (p.page !== owned.page || p.catalogueBusy))) return;
+      const target = owned.target.split(',').map(selector => host.querySelector<HTMLElement>(selector.trim())).find(Boolean);
+      (target ?? (owned.button.isConnected && !owned.button.matches(':disabled') ? owned.button : host.querySelector<HTMLElement>('h1')))?.focus({ preventScroll: true });
+      focusAction.current = null;
+    };
+    restore.current();
+  });
+  // Only explicit actions own focus. Move to the persistent heading before a
+  // retry/page transition removes its trigger; settlement respects user moves.
+  async function perform(action: () => Promise<unknown>, button: HTMLButtonElement, target: string, anchorPending = false, page?: number) {
+    // A rapid second activation must not replace the first action's pending
+    // focus owner with a no-op rejected by the synchronous mutation lock.
+    if (focusAction.current?.button === button) return;
+    const anchor = anchorPending ? root.current?.querySelector<HTMLElement>('h1') ?? button : button;
+    const owned = { button, anchor, target, done: false, page };
+    focusAction.current = owned;
+    if (anchorPending) anchor.focus({ preventScroll: true });
+    try { await action(); }
+    finally { owned.done = true; requestAnimationFrame(() => restore.current()); }
   }
   const savedLink = <button type="button" className="s20-btn" onClick={() => p.onNavigate('/s-25')}><ActionIcon name="bookmark"/>Saved internships</button>;
   const resultMode = p.phase === 'results';
-  const partial = p.savedPhase === 'error';
+  const partial = p.savedPhase === 'error' || p.savedPhase === 'uncertain';
   const showSearch = resultMode && (p.total > 0 || p.verifiedOnly);
   const activeCount = Number(p.verifiedOnly) + Number(p.stipend !== 'any');
   const empty = (title: string, hint: string, actions?: ReactNode, error = false, icon = 'brief') => <section className="s20-empty" role={error ? 'alert' : undefined} tabIndex={-1}>
@@ -75,14 +115,14 @@ export function S20BrowseView(p: S20BrowseViewProps) {
           </div>
         </details>
         {p.phase === 'loading' && <div role="status" aria-label="Loading internship listings" className="s20-skeletons">{[1, 2, 3].map(i => <div key={i}/>)}</div>}
-        {(p.phase === 'error' || p.phase === 'offline') && empty(p.phase === 'offline' ? 'You are offline.' : 'Listings did not load.', p.phase === 'offline' ? 'Listings need a connection.' : 'Nothing you saved is affected.', <button className="s20-btn s20-primary" onClick={e => void perform(p.onRetry, e.currentTarget, '.s20-empty[role="alert"], h1')}><ActionIcon name="refresh" colored={false}/>Retry</button>, true)}
-        {resultMode && partial && <section className="s20-note" role="alert" tabIndex={-1}><Icon name="warn" size={18}/><div><b>Your saved list did not load.</b><p>Save marks are hidden until it loads.</p><button className="s20-btn" onClick={e => void perform(p.onRetrySaved, e.currentTarget, '.s20-note, h1')}><ActionIcon name="refresh"/>Retry saved list</button></div></section>}
+        {(p.phase === 'error' || p.phase === 'offline') && empty(p.phase === 'offline' ? 'You are offline.' : 'Listings did not load.', p.phase === 'offline' ? 'Listings need a connection.' : 'Nothing you saved is affected.', <button className="s20-btn s20-primary" onClick={e => void perform(p.onRetry, e.currentTarget, '.s20-empty[role="alert"], h1', true)}><ActionIcon name="refresh" colored={false}/>Retry</button>, true)}
+        {resultMode && partial && <section className="s20-note" role="alert" tabIndex={-1}><Icon name="warn" size={18}/><div><b>{p.savedPhase === 'uncertain' ? 'Your saved state needs confirmation.' : 'Your saved list did not load.'}</b><p>{p.savedPhase === 'uncertain' ? 'Reload your saved list to confirm the change. Save marks are hidden until then.' : 'Save marks are hidden until it loads.'}</p><button className="s20-btn" onClick={e => void perform(p.onRetrySaved, e.currentTarget, '.s20-note, h1', true)}><ActionIcon name="refresh"/>Retry saved list</button></div></section>}
         {resultMode && ['anonymous', 'forbidden', 'unavailable'].includes(p.savedPhase) && <section className="s20-note"><div><b>{p.savedPhase === 'forbidden' ? 'Student account required' : p.savedPhase === 'unavailable' ? 'Session unavailable' : 'Sign in to save internships'}</b><p>Browsing is public. Saving requires your student account.</p>{p.savedPhase !== 'forbidden' && <button className="s20-btn" onClick={() => p.onNavigate('/s-03')}>Sign in</button>}</div></section>}
         {resultMode && !p.items.length && (p.total === 0 ? (p.verifiedOnly
           ? empty('No verified listings right now.', 'The server returned no verified listings. Turn the check off to see all listings.', <button className="s20-btn" onClick={e => void perform(async () => p.onVerified(), e.currentTarget, 'h1')}><ActionIcon name="back"/>Show all listings</button>)
           : empty('No internships are listed right now.', 'This page updates when organisations publish listings.', savedLink))
-          : empty('No matching listings', 'Try clearing filters or a different search.', <button className="s20-btn" onClick={e => void perform(async () => p.onClear(), e.currentTarget, 'h1')}><ActionIcon name="refresh"/>Clear search and filters</button>, false, 'search'))}
-        {resultMode && p.items.length > 0 && <><p className="s20-count" role="status">{p.items.length} listing{p.items.length === 1 ? '' : 's'} on this page</p>
+          : empty('No matching listings on this page', `${p.total} total listing${p.total === 1 ? '' : 's'}. Try another page, clear filters or change your search.`, <button className="s20-btn" onClick={e => void perform(async () => p.onClear(), e.currentTarget, 'h1')}><ActionIcon name="refresh"/>Clear search and filters</button>, false, 'search'))}
+        {resultMode && p.items.length > 0 && <><p className="s20-count" role="status">{p.items.length} listing{p.items.length === 1 ? '' : 's'} on this page · {p.total} total listing{p.total === 1 ? '' : 's'}</p>
           <div className="s20-results">{p.items.map(item => {
             const known = p.savedPhase === 'ready'; const selected = known && p.saved.includes(item.id);
             return <article className="s20-result" key={item.id}>
@@ -94,10 +134,10 @@ export function S20BrowseView(p: S20BrowseViewProps) {
               </div>
             </article>;
           })}</div><p className="s20-disclaimer">Listings are supplied by the organisations named. NyayOne is not affiliated with them.</p></>}
-        {resultMode && p.total > 20 && <nav className="s20-pager" aria-label="Internship pages"><button className="s20-btn" disabled={p.page <= 1} onClick={() => p.onPage(p.page - 1)}>Previous page</button><span>Page {p.page} of {Math.ceil(p.total / 20)}</span><button className="s20-btn" disabled={p.page * 20 >= p.total} onClick={() => p.onPage(p.page + 1)}>Next page</button></nav>}
+        {resultMode && p.total > 20 && <nav className="s20-pager" aria-label="Internship pages"><button className="s20-btn" disabled={p.page <= 1} onClick={e => void perform(async () => p.onPage(p.page - 1), e.currentTarget, '.s20-empty[role="alert"], .s20-title, h1', true, p.page - 1)}>Previous page</button><span>Page {p.page} of {Math.ceil(p.total / 20)}</span><button className="s20-btn" disabled={p.page * 20 >= p.total} onClick={e => void perform(async () => p.onPage(p.page + 1), e.currentTarget, '.s20-empty[role="alert"], .s20-title, h1', true, p.page + 1)}>Next page</button></nav>}
         <p className="s20-announcement" role="status" aria-live="polite">{p.notice}</p>
       </main>
-      <aside aria-label="Internship context"><section className="s20-card"><div className="s20-eyebrow" id="S-20-saved">Saved</div><p>{p.savedPhase === 'ready' ? `${p.saved.length} saved listings` : 'Saved count unavailable'}</p>{savedLink}</section><section className="s20-card"><div className="s20-eyebrow" id="S-20-verification">About verification</div><p>Verified means NyayOne checked the listing with the organisation named. It does not change who can apply.</p></section></aside>
+      <aside aria-label="Internship context"><section className="s20-card"><div className="s20-eyebrow" id="S-20-saved">Saved</div><p>{p.savedPhase === 'ready' ? `${p.saved.length} saved listing${p.saved.length === 1 ? '' : 's'}` : 'Saved count unavailable'}</p>{savedLink}</section><section className="s20-card"><div className="s20-eyebrow" id="S-20-verification">About verification</div><p>Verified means NyayOne checked the listing with the organisation named. It does not change who can apply.</p></section></aside>
     </div><footer><span>Privacy Notice</span><span>·</span><span>Terms</span><span>·</span><span>Accessibility</span></footer>
   </div>;
 }
