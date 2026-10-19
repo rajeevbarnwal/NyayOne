@@ -3,6 +3,7 @@ import pixelmatch from 'pixelmatch';
 import {coverage,VIEWPORTS} from './nyay66-conformance.mjs';
 import {R2_VIEWPORTS} from './nyay66-r2.mjs';
 import {hasS19RouteProof} from './nyay66-s19-coverage.mjs';
+import {hasS21LiveProof} from './nyay66-s21-coverage.mjs';
 export const LIMITS={pixelRatio:0.001,mean:0.25,geometry:1};
 export const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b))):item);
 export const digest=value=>createHash('sha256').update(value).digest('hex');
@@ -63,7 +64,7 @@ export function lightRowInventory(options){
     (item.source==='r2'?R2_VIEWPORTS:VIEWPORTS).flatMap(vp=>item.views.map(view=>({
       screen:item.screen,
       // S-06's existing live fixture records its source view as row.state.
-      state:item.screen==='S-06'?view:['r2','s18','s19','s20'].includes(item.source)?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
+      state:item.screen==='S-06'?view:['r2','s18','s19','s20','s21'].includes(item.source)?`${item.screen}-${view.slice(4)}`:item.screen==='S-10'&&view==='s10b'?'S-10-academic':item.screen,
       viewport:vp.id,theme:'light',
     }))));
 }
@@ -97,7 +98,7 @@ export function finalizeEnforcement(rows,config,comments,options){
         const sessionProof=row.state!=='S-18-session'||(row.evidenceKind==='component-visual'&&row.coverageApproval==='NYAY-88:16029'
           &&route?.executed===true&&route.from==='/s-18'&&route.to==='/s-03'&&route.syntheticServer===true
           &&route.artificialDelay===false&&route.navigationFrozen===false);
-        if(!proof||!componentProof||!sessionProof||!hasS19RouteProof(row)){row.verdict='CAPTURE-FAILED';row.failure='MEASURED_PROOF_INCOMPLETE';}
+        if(!proof||!componentProof||!sessionProof||!hasS19RouteProof(row)||!hasS21LiveProof(row)){row.verdict='CAPTURE-FAILED';row.failure='MEASURED_PROOF_INCOMPLETE';}
         else{
           const violations=[...row.structure,...(!row.metrics.pass||row.regions.some(region=>!region.pass)?['pixels']:[]),
             ...(row.accessibility.some(v=>['serious','critical'].includes(v.impact))?['accessibility']:[])];
