@@ -8,6 +8,7 @@ import {PNG} from 'pngjs';
 import {digest} from './nyay66-enforcement.mjs';
 import {loadS20Source,S20_STATES,S20_VIEWPORTS,S20_PINS} from './nyay66-s20-reference.mjs';
 import {verifyS20Archive,loadS20Cache} from './nyay66-s20-import.mjs';
+import {normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const {data}=await loadS20Source(root);
 const policy=JSON.parse(readFileSync(join(root,'frontend/scripts/nyay66-policy.json')));
@@ -78,8 +79,9 @@ describe('S-20 archive import fails closed before writing',()=>{
     const before=JSON.parse(execFileSync('git',['show','48eeac1973053eb2fd8e4080091dd345bf08db69:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy);delete current.s20;delete current.integrityApproval;delete before.integrityApproval;
     // S-20 additions are validated by the coverage/owner-approval contracts;
-    // this import assertion pins all pre-S-20 exceptions byte-for-byte/in order.
-    current.exceptions=current.exceptions.filter(e=>e.screen!=='S-20');
+    // Pin every old byte/order after separately checking the one exact S-19
+    // capture replacement; this test-only normalization never edits policy.
+    current.exceptions=normalizeS19RasterForTest(current.exceptions).filter(e=>e.screen!=='S-20');
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(before.exceptions));
     expect(current).toEqual(before);
   });

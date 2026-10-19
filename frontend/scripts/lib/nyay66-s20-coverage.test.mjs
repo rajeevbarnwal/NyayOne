@@ -5,6 +5,7 @@ import {coverage} from './nyay66-conformance.mjs';
 import {lightRowInventory,finalizeEnforcement,approveException,digest} from './nyay66-enforcement.mjs';
 import {loadContinuation,appendContinuation} from './nyay66-continuation.mjs';
 import {S20_STATES} from './nyay66-s20-reference.mjs';
+import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url)),data=await loadContinuation(root);
 const previous={r2:true,s18:true,s19:true},options={...previous,s20:true};
 const rows=()=>S20_STATES.flatMap(state=>['mobile390','desktop'].map(viewport=>({screen:'S-20',state:`S-20-${state}`,designState:state,viewport,theme:'light',executed:true,measured:true,evidenceKind:'live-route',syntheticServer:true,verdict:'PENDING-EVALUATION',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),metrics:{pass:true},regions:[],structure:[],accessibility:[],errors:[]})));
@@ -14,7 +15,7 @@ const referenceRows=JSON.parse(readFileSync(new URL(`../../test-baselines/nyay66
 const proposals=()=>referenceRows.map(row=>({screen:'S-20',viewport:row.viewport,theme:'light',referenceSha256:row.sha256,liveSha256:'a'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72}));
 function expectS20Policy(policy){
   expect(policy.enforced).not.toContain('S-20');
-  const existing=policy.exceptions.filter(e=>e.screen!=='S-20');
+  const existing=normalizeS19RasterForTest(policy.exceptions).filter(e=>e.screen!=='S-20');
   expect(existing).toHaveLength(112);
   expect(digest(JSON.stringify(existing))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
   const seen=new Set();
@@ -31,6 +32,12 @@ function expectS20Policy(policy){
   }
 }
 describe('S-20 additive product capture inventory',()=>{
+  it('allows the pinned one-row S-19 raster replacement while retaining the pre-S-20 policy contract',()=>{
+    const policy=readPolicy();
+    const index=policy.exceptions.findIndex(e=>e.referenceSha256===s19RasterPredecessor.referenceSha256&&e.viewport===s19RasterPredecessor.viewport);
+    policy.exceptions[index]=structuredClone(s19RasterReplacement);
+    expect(()=>expectS20Policy(policy)).not.toThrow();
+  });
   it('adds exactly 20 rows to the existing 142 without changing their identities or dark coverage',()=>{
     const all=lightRowInventory(options);
     expect(all).toHaveLength(162);

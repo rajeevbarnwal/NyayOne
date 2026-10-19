@@ -6,6 +6,7 @@ import {lightRowInventory,finalizeEnforcement,approveException} from './nyay66-e
 import {loadContinuation,appendContinuation} from './nyay66-continuation.mjs';
 import {S19_STATES} from './nyay66-s19-reference.mjs';
 import {S19_MEASURED_STATES,S19_COVERAGE_APPROVAL} from './nyay66-s19-coverage.mjs';
+import {normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url)),data=await loadContinuation(root);
 const options={r2:true,s18:true,s19:true};
 const rows=()=>lightRowInventory(options).filter(r=>r.screen==='S-19').map(r=>({...r,executed:true,measured:true,verdict:'PARITY',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),metrics:{pass:true},regions:[],structure:[],accessibility:[],errors:[],evidenceKind:'live-route',
@@ -44,7 +45,7 @@ describe('S-19 additive measured coverage',()=>{
     expect(()=>finalizeEnforcement(rows(),{enforced:[],exceptions:[entry]},[],options)).toThrow('OWNER_EXCEPTION_APPROVAL_MISSING');
     const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
     expect(policy.enforced).not.toContain('S-19');
-    for(const proposal of policy.exceptions.filter(e=>e.screen==='S-19')){
+    for(const proposal of normalizeS19RasterForTest(policy.exceptions).filter(e=>e.screen==='S-19')){
       expect(proposal.approvalPr).toBe(70);expect(approveException(proposal,[],options)).toBe(false);
     }
   });
