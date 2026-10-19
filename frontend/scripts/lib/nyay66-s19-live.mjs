@@ -8,6 +8,7 @@ import {inspectSurface} from './nyay66-dom.mjs';
 import {S19_VIEWPORTS,verifyS19PNG} from './nyay66-s19-reference.mjs';
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 import {mockS19Application,classifyS19Errors} from './nyay66-s19-fixtures.mjs';
+import {needsS19RasterIsolation,withS19RasterBrowser} from './nyay66-s19-raster.mjs';
 const require=createRequire(import.meta.url);
 function crop(png,box){
   const x=Math.max(0,Math.floor(box.x)),y=Math.max(0,Math.floor(box.y));
@@ -18,8 +19,14 @@ function crop(png,box){
 export async function captureS19Rows({browser,origin,out,reference}){
   const rows=[];
   for(const state of S19_MEASURED_STATES)for(const vp of S19_VIEWPORTS){
+    rows.push(await withS19RasterBrowser(browser,state,vp.id,isolated=>captureS19Row({browser:isolated,origin,out,reference,state,vp})));
+  }
+  return rows;
+}
+async function captureS19Row({browser,origin,out,reference,state,vp}){
     const name=`S-19-${state}-${vp.id}`,errors=[];
     const row={screen:'S-19',state:`S-19-${state}`,designState:state,viewport:vp.id,theme:'light',source:'s19',executed:false,measured:false,errors};
+    if(needsS19RasterIsolation(state,vp.id))row.captureRaster={browser:'isolated-single-row-chromium',version:browser.version(),partialRaster:false,pixelPostprocessing:false,approvalHashSelection:false};
     let context,page;const consoleErrors=[],httpResponses=[],failed=()=>errors.push('NETWORK_ERROR');
     try{
       const ref=reference.manifest.rows.find(r=>r.view===`s19-${state}`&&r.viewport===vp.id);
@@ -48,8 +55,6 @@ export async function captureS19Rows({browser,origin,out,reference}){
     row.consoleDiagnostics=classifyS19Errors(state,origin,consoleErrors,httpResponses,row.expectedHttpErrors||[]);
     errors.push(...row.consoleDiagnostics.errors);
     if(errors.length){row.verdict='CAPTURE-FAILED';row.measured=false;}
-    rows.push(row);
     if(process.env.NYAY91_FIXTURE_DIAGNOSTIC)console.log(JSON.stringify({state,viewport:vp.id,executed:row.executed,errors:row.errors,failure:row.failure}));
-  }
-  return rows;
+    return row;
 }
