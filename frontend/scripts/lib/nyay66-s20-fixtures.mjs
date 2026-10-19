@@ -97,7 +97,7 @@ export async function mockS20Application(page,state,origin,errors){
         await page.getByText('No verified listings right now.',{exact:true}).waitFor();
         await page.locator('.s20-filters summary').click();
       }
-      if(state==='local-empty'){await page.getByLabel('Search this page',{exact:true}).fill('No synthetic match');await page.getByText('No matching listings',{exact:true}).waitFor();}
+      if(state==='local-empty'){await page.getByLabel('Search this page',{exact:true}).fill('No synthetic match');await page.getByText('No matching listings on this page',{exact:true}).waitFor();}
       if(state==='save-failed'){await save.click();await page.locator('[data-save-error="litigation-intern"]').waitFor();await page.getByText('Your saved list did not load.',{exact:true}).waitFor();}
     }
   }

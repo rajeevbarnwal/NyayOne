@@ -43,7 +43,7 @@ for(const state of S20_STATES)for(const vp of S20_VIEWPORTS)it(`${state} ${vp.id
 it('page-local filters never invent server parameters; server pagination and verified-only reset remain real',{timeout:30_000},()=>using(async page=>{
   const errors=[],server=await installS20Server(page,'results',origin,errors,{paginated:true});
   await page.goto(origin+'/s-20');await page.getByText('Page 1 of 2',{exact:true}).waitFor();
-  await page.getByLabel('Search this page').fill('Second page only');await page.getByText('No matching listings',{exact:true}).waitFor();
+  await page.getByLabel('Search this page').fill('Second page only');await page.getByText('No matching listings on this page',{exact:true}).waitFor();
   assert.equal(server.catalogueRequests.length,1);
   await page.getByRole('button',{name:'Next page',exact:true}).click();await page.getByText('Second page only',{exact:true}).waitFor();
   assert.equal(server.catalogueRequests.at(-1).page,2);
