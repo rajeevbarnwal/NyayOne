@@ -1615,14 +1615,14 @@
       "viewport": "mobile390",
       "theme": "light",
       "referenceSha256": "c84a5de408b0c7df473938f42084366644886c5cc04746089660dba8bfd51d74",
-      "liveSha256": "13246161d3eddfa07854d0d491e895c279ccddedb277e6d04086173ec3c4d2ef",
+      "liveSha256": "ad8c1642e0f77e1246c01b5cbb1b98282aaaded8f9d52b1e0f611b653371d4ff",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-20 loading, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. Loading is exposed by an accessible named status rather than the prototype visually-hidden Loading text node. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "reason": "S-20 loading, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. The closed filter disclosure retains the approved page-local Any/Paid/Unpaid controls plus server verified_only; the older frozen state contains hidden checkbox controls. This accounts for hidden control-inventory/geometry flags, not a visible layout shift. Loading is exposed by an accessible named status rather than the prototype visually-hidden Loading text node. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification. CAPTURE-PATH-ONLY REAPPROVAL: test-only isolated-per-row Chromium with partial raster disabled changes 18 rounded-border pixels (26 channels; maximum absolute RGB-channel delta 1/255) versus the previously approved live image 13246161d3eddfa07854d0d491e895c279ccddedb277e6d04086173ec3c4d2ef. Changed-pixel bounds x=23..204, y=200..201. This exact new image is stable across hosted run 39209255660 attempts 1 and 2 at head 2538d6356e7e0001afca65c67e0c2bafe7f4c8cb; no retry image was selected to match an approval. Complete recorded text/control/heading geometry is identical to the prior approved live surface; no additional layout or icon-baseline offset is proposed. The frozen reference and all previously disclosed functional/content scope above are unchanged. No product, reference, tolerance, evaluator or accessibility waiver.",
       "approvalPr": 72
     },
     {
@@ -1660,14 +1660,14 @@
       "viewport": "desktop",
       "theme": "light",
       "referenceSha256": "40e4ba669f2c9b61c2e6eefef510e0724cd55dad46df9a082f9b71da86f06d5b",
-      "liveSha256": "8245f9112d321145ec591bd2d7d92ace0bfb8c454f2bae9321b690dcb7ba18b7",
+      "liveSha256": "8be09055315fb6c21e116c96a9da545b23783cf65bc8b13071478316a6665b41",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-20 results, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "reason": "S-20 results, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The contract-shaped synthetic GET returns four current-page records and an empty saved list: truthful 4 listings on this page and unselected save marks replace prototype 4 of 4 wording and synthetic saved selections. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification. CAPTURE-PATH-ONLY REAPPROVAL: test-only isolated-per-row Chromium with partial raster disabled changes 16 rounded-border pixels (25 channels; maximum absolute RGB-channel delta 1/255) versus the previously approved live image 8245f9112d321145ec591bd2d7d92ace0bfb8c454f2bae9321b690dcb7ba18b7. Changed-pixel bounds x=34..35, y=195..228. This exact new image is stable across hosted run 39209255660 attempts 1 and 2 at head 2538d6356e7e0001afca65c67e0c2bafe7f4c8cb; no retry image was selected to match an approval. Complete recorded text/control/heading geometry is identical to the prior approved live surface; no additional layout or icon-baseline offset is proposed. The frozen reference and all previously disclosed functional/content scope above are unchanged. No product, reference, tolerance, evaluator or accessibility waiver.",
       "approvalPr": 72
     },
     {
@@ -1704,13 +1704,13 @@
       "viewport": "mobile390",
       "theme": "light",
       "referenceSha256": "846f119c75defc1a3d9e6cc14e5b06803f636586cae410a879cba813476a088e",
-      "liveSha256": "6c5f7c59d18e33316c073ef7cd9e468b2e303319f087b49fe244e6ab5b21cf5d",
+      "liveSha256": "bdb9f1cb501c559ca9a0e8226e74e454fc86bd526a911e05b638040def459d00",
       "checks": [
         "controls",
         "pixels",
         "text"
       ],
-      "reason": "S-20 verified-empty, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "reason": "S-20 verified-empty, mobile390, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification. CAPTURE-PATH-ONLY REAPPROVAL: test-only isolated-per-row Chromium with partial raster disabled changes 82 rounded-border pixels (139 channels; maximum absolute RGB-channel delta 1/255) versus the previously approved live image 6c5f7c59d18e33316c073ef7cd9e468b2e303319f087b49fe244e6ab5b21cf5d. Changed-pixel bounds x=16..373, y=161..355. This exact new image is stable across hosted run 39209255660 attempts 1 and 2 at head 2538d6356e7e0001afca65c67e0c2bafe7f4c8cb; no retry image was selected to match an approval. Complete recorded text/control/heading geometry is identical to the prior approved live surface; no additional layout or icon-baseline offset is proposed. The frozen reference and all previously disclosed functional/content scope above are unchanged. No product, reference, tolerance, evaluator or accessibility waiver.",
       "approvalPr": 72
     },
     {
@@ -1718,14 +1718,14 @@
       "viewport": "desktop",
       "theme": "light",
       "referenceSha256": "f474f86d3a8e7345235563d1a5827dcf85d7ddb60d5f2f85bbdd233f0a11f69a",
-      "liveSha256": "1797c7fac804143fbdffced9ee37cfe06e907f7872cfab3bc543ef059bf297a3",
+      "liveSha256": "fa685dff35f6da7c582864d98d8c517ae09ae51137b60d2d30f33b043f98ea3c",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-20 verified-empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification.",
+      "reason": "S-20 verified-empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification. CAPTURE-PATH-ONLY REAPPROVAL: test-only isolated-per-row Chromium with partial raster disabled changes 37 rounded-border pixels (63 channels; maximum absolute RGB-channel delta 1/255) versus the previously approved live image 1797c7fac804143fbdffced9ee37cfe06e907f7872cfab3bc543ef059bf297a3. Changed-pixel bounds x=34..36, y=195..309. This exact new image is stable across hosted run 39209255660 attempts 1 and 2 at head 2538d6356e7e0001afca65c67e0c2bafe7f4c8cb; no retry image was selected to match an approval. Complete recorded text/control/heading geometry is identical to the prior approved live surface; no additional layout or icon-baseline offset is proposed. The frozen reference and all previously disclosed functional/content scope above are unchanged. No product, reference, tolerance, evaluator or accessibility waiver.",
       "approvalPr": 72
     },
     {
