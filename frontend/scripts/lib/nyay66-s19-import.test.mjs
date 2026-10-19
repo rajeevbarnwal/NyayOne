@@ -62,7 +62,9 @@ describe('S-19 archive import fails closed before writing',()=>{
     expect(got.manifest.controlHead).toBe('3d0e1201ea672c6f96b7a86703def2d3bffa69f5');
     const before=JSON.parse(execFileSync('git',['show','3d0e1201ea672c6f96b7a86703def2d3bffa69f5:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy),previous=structuredClone(before);
-    delete current.s19;delete current.s20;delete current.integrityApproval;delete previous.integrityApproval;
+    delete current.s19;delete current.s20;delete current.s21;delete current.integrityApproval;delete previous.integrityApproval;
+    // S-21's additive cache is pinned by its exact-provenance import test;
+    // every historical setting and exception below remains compared unchanged.
     // The additive S-20 cache has its own exact-provenance test, which also
     // compares every pre-existing setting against the post-S-19 main policy.
     // Additive S-19/S-20 exceptions have their own coverage/approval contracts;
