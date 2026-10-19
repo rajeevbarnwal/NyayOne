@@ -8,7 +8,7 @@
   "s18": {"cache": "s18-v32108-chromium-149.0.7827.55-36565721312", "manifestSha256": "38aa36b79f8dc7cc9bbdbdbc9b1ce26626f34a52cc253f3e317d59a9ff2ba5e9", "provenanceSha256": "788ccd74f7f3b49576bbb59e5b2fd445aa246bf76c963742bfbd6e33f9e49ea3"},
   "s19": {"cache": "s19-v32108-chromium-149.0.7827.55-39029544967", "manifestSha256": "b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c", "provenanceSha256": "5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf"},
   "s20": {"cache": "s20-v32108-chromium-149.0.7827.55-39111251228", "manifestSha256": "e121bff73a920ce1a563cc77317a6bbfe7a1970f131b8442cd61a4123f6b47d9", "provenanceSha256": "a6bd9be03065ed65b81a24bf657f3bd5a654bc6251866f14288f4ed07c512f0c"},
-  "integrityApproval": {"pr": 72, "commentId": 6261786359, "bundleSha256": "99da4d708636d8488055fe379196377b89eaf0c0b7b839b3fd110722c14340be"},
+  "integrityApproval": {"pr": 72, "commentId": 6262112112, "bundleSha256": "15e0c4ecdeda83d886c53ee8e4d2d48fefb8823f7fedcab3962317ef48e1950c"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -1282,15 +1282,15 @@
       "viewport": "mobile390",
       "theme": "light",
       "referenceSha256": "616c28709cda73e29591c57e75b25931cae0703f86a1c92b6b2ee97385d3e1ef",
-      "liveSha256": "0dcdb9764665b2001cfe102ac37ae3d84c04a89b8a1c22c3611ca353bf5046cf",
+      "liveSha256": "5d0d65991eab65170212526da6ef4305ece72b912b14934e3888748800db81d7",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-19 delete-reauth-rejected, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The attempted six-digit synthetic code remains in the visible invalid input after rejection, with its error boundary and enabled Verify retry. The frozen source has an empty visually borderless input, disabled Verify and demo-only helper guidance. The inline error now uses the same 5px field spacing; changed helper content accounts for remaining action movement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
-      "approvalPr": 70
+      "reason": "S-19 delete-reauth-rejected, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The attempted six-digit synthetic code remains in the visible invalid input after rejection, with its error boundary and enabled Verify retry. The frozen source has an empty visually borderless input, disabled Verify and demo-only helper guidance. The inline error now uses the same 5px field spacing; changed helper content accounts for remaining action movement. Residual icon baseline: Use a different number SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification. Capture-path replacement on PR72: the isolated same-version Chromium capture with partial raster disabled produces the stable newer rounded-card border pattern. Relative to the historical approved live image, exactly 21 pixels / 38 channels change by at most 1 RGB level at x16 y561 width358 height6; recorded text, controls, geometry and overflow are identical. This is a disclosed test-capture raster artifact, not a product change or functional/accessibility waiver. The existing +1px Use a different number icon-baseline disclosure remains unchanged. No reference, tolerance, evaluator, enforcement or unrelated approval changes; historical evidence and the prior approval remain preserved.",
+      "approvalPr": 72
     },
     {
       "screen": "S-19",
