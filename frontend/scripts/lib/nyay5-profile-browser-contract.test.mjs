@@ -1097,10 +1097,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the sixteen approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the seventeen approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1195,16 +1195,16 @@ describe('NYAY-5 browser release-gate source contract', () => {
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it.each(['S-17', 'S-18', 'S-19'])('rejects the legacy font on %s while retaining the S-20 legacy negative control', async screenId => {
+  it.each(['S-17', 'S-18', 'S-19', 'S-20'])('rejects the legacy font on %s while retaining the S-21 legacy negative control', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
-    expect(await visualCensus({ screenId: 'S-20',
+    expect(await visualCensus({ screenId: 'S-21',
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
 
-  it.each(['S-18', 'S-19'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
+  it.each(['S-18', 'S-19', 'S-20'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: true });
@@ -1220,6 +1220,22 @@ describe('NYAY-5 browser release-gate source contract', () => {
       expect((await visualCensus({ screenId: 'S-20', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
       expect((await visualCensus({ screenId: 'S-19', eyebrow, family: 'serif' })).typographyExact).toBe(false);
     }
+  });
+
+  it('recognizes only the S-20 context headings and retains all negative font controls', async () => {
+    for (const id of ['S-20-saved', 'S-20-verification']) {
+      const eyebrow = { id, class: 's20-eyebrow' };
+      expect((await visualCensus({ screenId: 'S-20', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(true);
+      for (const mutant of [{ id: 'other' }, { class: 'other' }, { tagName: 'H1' }]) {
+        expect((await visualCensus({ screenId: 'S-20', eyebrow: { ...eyebrow, ...mutant }, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+      }
+      expect((await visualCensus({ screenId: 'S-21', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+    }
+    const runner = readFileSync(RUNNER, 'utf8');
+    const browse = runner.slice(runner.indexOf("failureStage = 'storage_s20'"), runner.indexOf("failureStage = 'storage_s21'"));
+    expect(browse).toContain("locator('.s20-title').first()");
+    expect(browse).toContain("recordStorage(page, 's20-internship-browse')");
+    expect(browse).toContain('await viewListing.click()');
   });
 
   it('uses S-18 Revision L heading and switch roles without changing the namespace migration assertions', () => {

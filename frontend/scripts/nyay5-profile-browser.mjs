@@ -77,6 +77,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-17',
   'S-18',
   'S-19',
+  'S-20',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -376,7 +377,10 @@ async function recordVisualContract(page, screenId) {
         const s19Eyebrow = contract.screenId === 'S-19' && heading.tagName === 'H2'
           && heading.getAttribute('class') === 'v321-privacy__eyebrow'
           && ['S-19-consents', 'S-19-data'].includes(heading.getAttribute('id'));
-        const expectedFamily = s19Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
+        const s20Eyebrow = contract.screenId === 'S-20' && heading.tagName === 'H2'
+          && heading.getAttribute('class') === 's20-eyebrow'
+          && ['S-20-saved', 'S-20-verification'].includes(heading.getAttribute('id'));
+        const expectedFamily = s19Eyebrow || s20Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
         return family.length === expectedFamily.length
           && family.every((name, index) => name === expectedFamily[index]);
       }),
@@ -3450,7 +3454,7 @@ async function extendedStorageBoundaryProbe(browser) {
   failureStage = 'storage_s20';
   await page.goto(`${WEB}/s-20`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-screen="S-20"]').waitFor();
-  const viewListing = page.getByRole('button', { name: 'View' }).first();
+  const viewListing = page.locator('.s20-title').first();
   await viewListing.waitFor();
   await recordStorage(page, 's20-internship-browse');
   await viewListing.click();

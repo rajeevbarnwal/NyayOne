@@ -118,6 +118,7 @@ const calendarEvents = { items: [], total: 0, failed_sources: [] };
 const internshipListings = [
   {
     id: 'cam',
+    organisation_id: '00000000-0000-4000-8000-000000000301',
     role: 'Summer Associate, disputes',
     organisation: 'Cyril Amarchand Mangaldas',
     location: 'Mumbai',
@@ -136,6 +137,7 @@ const internshipListings = [
   },
   {
     id: 'menon',
+    organisation_id: '00000000-0000-4000-8000-000000000302',
     role: 'Judicial research assistant',
     organisation: 'Chambers of Sr. Adv. R. Menon',
     location: 'Delhi High Court',
@@ -154,6 +156,7 @@ const internshipListings = [
   },
   {
     id: 'vidhi',
+    organisation_id: '00000000-0000-4000-8000-000000000303',
     role: 'Research fellowship, policy',
     organisation: 'Vidhi Centre for Legal Policy',
     location: 'New Delhi',
@@ -282,12 +285,12 @@ function isCalendarResponse(response, pathname) {
   return response.request().method() === 'GET' && url.pathname === pathname;
 }
 
-function isExactApiResponse(response, method, pathname) {
+function isExactApiResponse(response, method, pathname, expectedSearch = '') {
   const url = new URL(response.url());
   return response.request().method() === method
     && url.origin === canonicalApiOrigin
     && url.pathname === pathname
-    && url.search === ''
+    && url.search === expectedSearch
     && url.hash === '';
 }
 
@@ -428,7 +431,7 @@ try {
           page.waitForResponse((response) => isCalendarResponse(response, '/api/v1/calendar/events')),
         ] : [];
         const internshipResponses = state.id === 'S-20' ? [
-          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
+          page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships', '?page=1&page_size=20&verified_only=false')),
           page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
         ] : state.id === 'S-21' ? [
           page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships/cam')),
@@ -634,7 +637,7 @@ try {
       && await pendingStatus.isVisible());
 
   const browseResponses = [
-    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships')),
+    page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/internships', '?page=1&page_size=20&verified_only=false')),
     page.waitForResponse((response) => isExactApiResponse(response, 'GET', '/api/v1/student/internships/saved')),
   ];
   await leaveSettledDocument(page, () => page.goto(`${base}/s-20`));
@@ -643,7 +646,7 @@ try {
   record('S-20_api_ready', 'catalogue and saved-list GETs finish with HTTP 200 before interaction', completedBrowseResponses,
     completedBrowseResponses.length === 2
       && completedBrowseResponses.every((item) => item.status === 200 && item.finishedError === null));
-  const search = page.getByRole('searchbox', { name: 'Search internships' });
+  const search = page.getByRole('searchbox', { name: 'Search this page' });
   await search.fill('not-a-real-placement');
   record('S-20_empty_search', 'truthful no-results state', await page.getByText('No matching listings').isVisible(),
     await page.getByText('No matching listings').isVisible());

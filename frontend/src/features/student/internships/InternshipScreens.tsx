@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,7 +6,6 @@ import { StudentScreen, DpdpFootnote } from '../components';
 import { useAuth } from '../../../app/authContext';
 import { StatusBadge, EmptyState, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
-  filterListings,
   stipendText,
   isVerifiedListing,
   listingSourceLabel,
@@ -21,18 +20,17 @@ import {
   APPLICATION_STAGES,
   SAMPLE_APPLICATIONS,
   type InternshipListing,
-  type StipendFilter,
   type Application,
 } from '../lib/internships';
 import {
   InternshipsApiError,
   getInternship,
-  listInternships,
   listSavedInternships,
   saveInternship,
   unsaveInternship,
 } from '../lib/internshipsApi';
 import { PublicRiskLabelPanel } from '../reporting/RiskLabelScreens';
+import { S20BrowseScreen } from './S20BrowseScreen';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -44,22 +42,6 @@ function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; s
   );
 }
 
-const CATALOGUE_KEY = ['internships-catalogue'] as const;
-
-function useWideInternshipLayout(): boolean {
-  const query = '(min-width: 821px)';
-  const [wide, setWide] = useState(() => (
-    typeof window !== 'undefined' && window.matchMedia(query).matches
-  ));
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setWide(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  return wide;
-}
 
 function internshipFailureCopy(
   error: unknown,
@@ -156,92 +138,7 @@ function useSavedInternships() {
 /* S-20 — Browse & filter                                                      */
 /* -------------------------------------------------------------------------- */
 export function InternshipBrowse() {
-  const nav = useNavigate();
-  const wideLayout = useWideInternshipLayout();
-  const [query, setQuery] = useState('');
-  const [stipend, setStipend] = useState<StipendFilter>('any');
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const catalogue = useQuery({ queryKey: CATALOGUE_KEY, queryFn: listInternships, retry: false });
-  const saved = useSavedInternships();
-  const results = useMemo(
-    () => filterListings(catalogue.data?.items ?? [], { query, stipend, verifiedOnly }),
-    [catalogue.data?.items, query, stipend, verifiedOnly],
-  );
-  const listingRow = (l: InternshipListing) => (
-    <li className="st-item" key={l.id}>
-      <div>
-        <div>{l.role} — {l.org}</div>
-        <div className="st-item__meta">
-          {l.location} · <span className="st-price">{stipendText(l)}</span> · deadline {l.deadline}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-        <StatusBadge status={isVerifiedListing(l) ? 'ok' : 'info'} label={isVerifiedListing(l) ? 'Verified listing' : 'Unverified listing'} />
-        <button
-          type="button"
-          className="btn tap"
-          aria-pressed={saved.savedIds.has(l.id)}
-          disabled={saved.pendingId === l.id || (saved.canSave && saved.query.isPending)}
-          onClick={() => saved.toggle(l)}
-        >
-          {saved.pendingId === l.id ? 'Saving…' : saved.savedIds.has(l.id) ? 'Saved' : 'Save'}
-        </button>
-        <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}`)}>View</button>
-      </div>
-    </li>
-  );
-
-  return (
-    <StudentScreen screenId="S-20">
-      <div className="st-stack">
-        <ModuleHead eyebrow="Internships · S4" title="Internship Hub" sub="discover · filter · save" />
-        {saved.failure && <ValidationState message={saved.failure} />}
-        {saved.query.isError && <ValidationState message={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} />}
-        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
-        <input
-          className="st-search"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search role, city, stipend…"
-          aria-label="Search internships"
-        />
-        <div className="st-tabsrow" role="group" aria-label="Filters">
-          {(['any', 'paid', 'unpaid'] as StipendFilter[]).map((s) => (
-            <button key={s} type="button" className="st-chip" aria-pressed={stipend === s} onClick={() => setStipend(s)}>
-              {s === 'any' ? 'All stipends' : s === 'paid' ? 'Stipend' : 'Unpaid'}
-            </button>
-          ))}
-          <button type="button" className="st-chip" aria-pressed={verifiedOnly} onClick={() => setVerifiedOnly((v) => !v)}>
-            Verified only
-          </button>
-        </div>
-
-        <section className="st-panel" aria-label="Open listings">
-          <div className="st-panel__head">
-            <h2 className="st-panel__title">Open listings</h2>
-            <span className="st-metatag">{results.length} shown</span>
-          </div>
-          {catalogue.isPending ? <LoadingState label="Loading internships…" /> : catalogue.isError ? (
-            <ErrorState title="Could not load internships" detail="Check your connection and retry." onRetry={() => void catalogue.refetch()} />
-          ) : results.length === 0 ? (
-            <EmptyState title="No matching listings" hint="Try clearing filters or a different search." />
-          ) : (
-            <>
-              <ul className="st-list">{results.slice(0, 1).map(listingRow)}</ul>
-              {results.length > 1 && (
-                <details className="v34c-mobile-disclosure" open={wideLayout}>
-                  <summary>More listings <span>{results.length - 1} more</span></summary>
-                  <ul className="st-list">{results.slice(1).map(listingRow)}</ul>
-                </details>
-              )}
-            </>
-          )}
-        </section>
-        <DpdpFootnote>Each listing shows its own verification status and source. Sample and unverified listings are not affiliated with the organisation.</DpdpFootnote>
-      </div>
-    </StudentScreen>
-  );
+  return <S20BrowseScreen/>;
 }
 
 /* -------------------------------------------------------------------------- */

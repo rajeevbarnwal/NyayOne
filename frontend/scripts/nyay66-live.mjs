@@ -12,6 +12,8 @@ import {loadS18Cache} from './lib/nyay66-s18-import.mjs';
 import {captureS18Rows} from './lib/nyay66-s18-live.mjs';
 import {loadS19Cache} from './lib/nyay66-s19-import.mjs';
 import {captureS19Rows} from './lib/nyay66-s19-live.mjs';
+import {loadS20Cache} from './lib/nyay66-s20-import.mjs';
+import {captureS20Rows} from './lib/nyay66-s20-live.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {classifyConsoleErrors} from './lib/nyay66-console-errors.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
@@ -29,7 +31,8 @@ const r2=await loadR2(root,config.r2);
 const continuation=await loadContinuation(root);
 const s18=await loadS18Cache(root,config.s18,continuation,manifest.fonts);
 const s19=await loadS19Cache(root,config.s19,continuation,manifest.fonts);
-const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19};
+const s20=await loadS20Cache(root,config.s20,continuation,manifest.fonts);
+const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19,s20:!!s20};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
 const repository=resolve(process.env.NYAY66_REPO||root);
@@ -147,9 +150,13 @@ try{
     report.s19Reference={cache:config.s19.cache,manifestSha256:config.s19.manifestSha256,provenance:s19.provenance};
     report.rows.push(...await captureS19Rows({browser,origin,out,reference:s19}));
   }
+  if(s20){
+    report.s20Reference={cache:config.s20.cache,manifestSha256:config.s20.manifestSha256,provenance:s20.provenance};
+    report.rows.push(...await captureS20Rows({browser,origin,out,reference:s20}));
+  }
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
   Object.assign(report,finalizeEnforcement(report.rows,config,comments,coverageOptions));
-  Object.assign(report,appendContinuation(report,continuation,{s18:!!s18,s19:!!s19}));
+  Object.assign(report,appendContinuation(report,continuation,{s18:!!s18,s19:!!s19,s20:!!s20}));
   await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');
   const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceDescription||(r.evidenceKind==='component-visual'?(r.state==='S-18-session'?'component visual (not a stable live-route capture); genuine 401 S-18 → S-03 separately verified':'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified'):'live route')} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
   await writeFile(resolve(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>NYAY-66 comparison</title><style>body{font:16px sans-serif;background:#102033;color:white}div{display:flex;gap:10px}img{width:32%;object-fit:contain;align-self:start}section{margin-bottom:40px}</style><h1>NYAY-66 exact-head comparison</h1><p>${head}; unapproved differences remain NONCONFORMANT, not waived.</p>${links}`);
