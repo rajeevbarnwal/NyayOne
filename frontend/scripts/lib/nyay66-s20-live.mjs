@@ -8,6 +8,7 @@ import {inspectSurface} from './nyay66-dom.mjs';
 import {S20_VIEWPORTS,verifyS20PNG} from './nyay66-s20-reference.mjs';
 import {S20_MEASURED_STATES} from './nyay66-s20-coverage.mjs';
 import {mockS20Application,classifyS20Errors} from './nyay66-s20-fixtures.mjs';
+import {withS20RasterBrowser} from './nyay66-s20-raster.mjs';
 const require=createRequire(import.meta.url);
 function crop(png,box){
   const x=Math.max(0,Math.floor(box.x)),y=Math.max(0,Math.floor(box.y));
@@ -18,8 +19,14 @@ function crop(png,box){
 export async function captureS20Rows({browser,origin,out,reference}){
   const rows=[];
   for(const state of S20_MEASURED_STATES)for(const vp of S20_VIEWPORTS){
+    rows.push(await withS20RasterBrowser(browser,isolated=>captureS20Row({browser:isolated,origin,out,reference,state,vp})));
+  }
+  return rows;
+}
+async function captureS20Row({browser,origin,out,reference,state,vp}){
     const name=`S-20-${state}-${vp.id}`,errors=[];
-    const row={screen:'S-20',state:`S-20-${state}`,designState:state,viewport:vp.id,theme:'light',source:'s20',executed:false,measured:false,errors};
+    const row={screen:'S-20',state:`S-20-${state}`,designState:state,viewport:vp.id,theme:'light',source:'s20',executed:false,measured:false,errors,
+      captureRaster:{browser:'isolated-per-row-chromium',version:browser.version(),partialRaster:false,pixelPostprocessing:false,approvalHashSelection:false}};
     let context,page;const consoleErrors=[],httpResponses=[],failedRequests=[];
     const failed=r=>failedRequests.push({method:r.method(),url:r.url(),errorText:r.failure()?.errorText});
     try{
@@ -49,7 +56,5 @@ export async function captureS20Rows({browser,origin,out,reference}){
     row.consoleDiagnostics=classifyS20Errors(state,origin,consoleErrors,httpResponses,failedRequests,row.expectedHttpErrors||[]);
     errors.push(...row.consoleDiagnostics.errors);
     if(errors.length){row.verdict='CAPTURE-FAILED';row.measured=false;}
-    rows.push(row);
-  }
-  return rows;
+    return row;
 }

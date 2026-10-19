@@ -12,6 +12,7 @@ import {loadContinuation} from './nyay66-continuation.mjs';
 import {loadS20Cache} from './nyay66-s20-import.mjs';
 import {captureS20Rows} from './nyay66-s20-live.mjs';
 import {finalizeEnforcement} from './nyay66-enforcement.mjs';
+import {createHash} from 'node:crypto';
 let server,browser,origin;
 before(async()=>{server=await preview({preview:{host:'127.0.0.1',port:0,strictPort:false},logLevel:'error'});origin=`http://127.0.0.1:${server.httpServer.address().port}`;browser=await chromium.launch();});
 after(async()=>{await browser?.close();await new Promise(done=>server?.httpServer.close(done));});
@@ -52,7 +53,7 @@ it('page-local filters never invent server parameters; server pagination and ver
   await page.getByText(S20_LISTINGS[0].role,{exact:true}).waitFor();
   assert.deepEqual(server.catalogueRequests.at(-1),{page:1,pageSize:20,verifiedOnly:true});assert.deepEqual(errors,[]);
 }));
-it('20-row measurement producer emits verified hashes and unwaived comparison evidence; tampered PNGs fail closed',{timeout:180_000},async()=>{
+it('20-row measurement producer is reproducible across cold captures; tampered PNGs fail closed',{timeout:360_000},async()=>{
   const root=resolve('..'),policy=JSON.parse(await readFile('scripts/nyay66-policy.json'));
   const control=JSON.parse(await readFile(resolve('test-baselines/nyay66',policy.cache,'manifest.json')));
   const reference=await loadS20Cache(root,policy.s20,await loadContinuation(root),control.fonts);
@@ -62,9 +63,20 @@ it('20-row measurement producer emits verified hashes and unwaived comparison ev
     assert.equal(rows.length,20);
     assert.deepEqual(rows.filter(r=>!r.executed||!r.measured||r.errors.length).map(r=>({state:r.state,failure:r.failure,errors:r.errors,diagnostics:r.consoleDiagnostics})),[]);
     assert.equal(rows.every(r=>r.evidenceKind==='live-route'&&r.syntheticServer),true);
+    assert.equal(rows.every(r=>!r.accessibility.some(v=>['serious','critical'].includes(v.impact))),true);
     const result=finalizeEnforcement(rows,{enforced:[],exceptions:[]},[],{r2:true,s18:true,s19:true,s20:true});
     assert.deepEqual(result.failures,[]);assert.equal(result.rows.some(r=>r.verdict==='CAPTURE-FAILED'),false);
     assert.equal(result.rows.every(r=>r.exceptionsApplied.length===0),true);
+    // Same source, state, browser version and viewport must not change raw
+    // bytes with a different cold paint history. Compare captures with each
+    // other, never select an image by its approved exception hash.
+    const identity=rs=>rs.map(r=>({state:r.state,viewport:r.viewport,liveSha256:r.liveSha256,surfaceSha256:createHash('sha256').update(JSON.stringify(r.liveSurface)).digest('hex'),errors:r.errors}));
+    for(let repeat=0;repeat<2;repeat++){
+      const again=await captureS20Rows({browser,origin,out,reference});
+      assert.deepEqual(again.filter(r=>!r.executed||!r.measured||r.errors.length),[]);
+      assert.deepEqual(identity(again),identity(rows),'S-20 cold captures must be byte-identical, not merely within pixel tolerance');
+      assert.equal(again.every(r=>r.captureRaster.partialRaster===false&&r.captureRaster.version===browser.version()&&r.captureRaster.pixelPostprocessing===false&&r.captureRaster.approvalHashSelection===false),true);
+    }
     const tampered={...reference,manifest:{...reference.manifest,rows:reference.manifest.rows.map(r=>({...r,sha256:'0'.repeat(64)}))}};
     const failures=await captureS20Rows({browser,origin,out,reference:tampered});
     assert.equal(failures.every(r=>r.verdict==='CAPTURE-FAILED'&&!r.measured&&r.failure==='S20_REFERENCE_BYTES_MISMATCH'),true);
