@@ -155,6 +155,8 @@ for (const width of [390, 1440]) it(`S-21-specific chip spacing and action decor
   assert.equal(await page.locator('.s21-card p').first().evaluate(el => getComputedStyle(el).fontSize), '13.5px');
   assert.equal(await page.locator('.s21-card p').first().evaluate(el => getComputedStyle(el).lineHeight), '20.925px');
   assert.equal(await page.locator('.s21-source').evaluate(el => getComputedStyle(el).fontSize), '12px');
+  assert.equal(await page.locator('.s21-kvs').evaluate(el => getComputedStyle(el).fontFamily.includes('NyayOne S21 Rupee')), true);
+  assert.equal(await page.evaluate(() => [...document.fonts].some(face => face.family === 'NyayOne S21 Rupee' && face.weight === '700' && face.unicodeRange === 'U+20B9')), true);
   assert.equal(await page.locator('.s20-chips').evaluate(el => getComputedStyle(el).marginTop), '0px');
   assert.equal(await page.locator('.s21-tag').count(), item.tags.length);
   assert.equal(await page.locator('.s21-tag').first().evaluate(el => getComputedStyle(el).color), 'rgb(46, 58, 140)');
