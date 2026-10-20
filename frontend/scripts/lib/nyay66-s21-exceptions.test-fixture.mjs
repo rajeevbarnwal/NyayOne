@@ -274,4 +274,3 @@ export function withoutS21ProposalsForTest(exceptions){
   // comparisons still pin all old bytes; this never mutates input or policy.
   return exceptions.filter(e=>e.screen!=='S-21');
 }
-
