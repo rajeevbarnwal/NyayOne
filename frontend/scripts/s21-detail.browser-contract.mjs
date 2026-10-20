@@ -2,16 +2,17 @@
 import { before, after, it } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdtemp } from 'node:fs/promises';
 import { preview } from 'vite';
 import { chromium } from 'playwright';
 import { actor } from './lib/nyay66-fixtures.mjs';
 import { S20_LISTINGS } from './lib/nyay66-s20-fixtures.mjs';
 let server, browser, origin;
+const diagnosticDir = await mkdtemp('/private/tmp/NYAY93-S21-round2-browser-');
 before(async () => { server = await preview({ preview: { host: '127.0.0.1', port: 0 }, logLevel: 'error' }); origin = `http://127.0.0.1:${server.httpServer.address().port}`; browser = await chromium.launch(); });
 after(async () => { await browser?.close(); await new Promise(done => server?.httpServer.close(done)); });
 const item = { ...S20_LISTINGS[0], tags: ['Research'], source: { name: 'Synthetic organisation submission', url: 'https://example.test/listing', retrieved_at: null, verified_at: null } };
-async function using(run, { saved = false, width = 390, detailStatus = 200, mutationStatus = 200, savedStatus = 200, malformedMutation = false, malformedDetail = false } = {}) {
+async function using(run, { saved = false, width = 390, detailStatus = 200, mutationStatus = 200, savedStatus = 200, malformedMutation = false, malformedDetail = false, listing = item } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 844 }, locale: 'en-IN', timezoneId: 'Asia/Kolkata', reducedMotion: 'reduce' });
   const page = await context.newPage(); page.setDefaultTimeout(6000);
   const s = { saved, detailStatus, mutationStatus, savedStatus, malformedMutation, authenticated: true, mutations: [], reads: 0, holdMutation: false, holdRead: false, heldMutation: null, heldRead: null, unexpected: [] };
@@ -24,7 +25,7 @@ async function using(run, { saved = false, width = 390, detailStatus = 200, muta
     if (url.pathname === '/api/v1/internships') return reply({ items: [item], total: 1, page: 1, page_size: 20 });
     if (url.pathname === `/api/v1/internships/${item.id}`) {
       if (s.detailStatus === 0) return route.abort('failed');
-      return reply(s.detailStatus === 200 ? malformedDetail ? {} : item : { detail: { code: s.detailStatus === 404 ? 'internship_listing_not_found' : 'unavailable' } }, s.detailStatus);
+      return reply(s.detailStatus === 200 ? malformedDetail ? {} : listing : { detail: { code: s.detailStatus === 404 ? 'internship_listing_not_found' : 'unavailable' } }, s.detailStatus);
     }
     if (url.pathname === '/api/v1/student/internships/saved') {
       if (s.savedStatus !== 200) return reply({ detail: { code: 'unavailable' } }, s.savedStatus);
@@ -194,8 +195,7 @@ for (const width of [320, 390, 1440]) it(`layout/axe diagnostic at ${width}px`, 
   const violations = await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) })));
   assert.deepEqual(violations, []);
   assert.equal(await page.locator('.s21-actions button').evaluateAll(nodes => nodes.every(n => n.getBoundingClientRect().height >= 48)), true);
-  await mkdir('/private/tmp/NYAY93-S21-initial-diagnostic', { recursive: true });
-  await page.screenshot({ path: `/private/tmp/NYAY93-S21-initial-diagnostic/s21-${width}.png`, fullPage: true });
+  await page.screenshot({ path: `${diagnosticDir}/s21-${width}.png`, fullPage: true });
 }, { width }));
 for (const status of [404, 429, 500, 503]) it(`shows genuine detail HTTP ${status}, not an invented generic 500`, () => using(async page => {
   await page.goto(detailUrl()); await page.getByRole('alert').waitFor();
@@ -218,7 +218,7 @@ for (const width of [390, 1440]) it(`S-21-specific chip spacing and action decor
   assert.equal(await page.locator('.s21-tag').first().evaluate(el => getComputedStyle(el).color), 'rgb(46, 58, 140)');
   assert.equal(await page.locator('.s21-tag > [aria-hidden="true"]').count(), item.tags.length);
   assert.equal(await page.locator('.s21-icon--send').count(), 2);
-  assert.equal(await page.getByRole('link', { name: 'Open source listing (opens Synthetic organisation submission in a new tab)', exact: true }).count(), 1);
+  assert.equal(await page.getByRole('link', { name: 'Open source listing (opens example.test in a new tab)', exact: true }).count(), 1);
   assert.equal(await page.locator('.s21-actions > button').first().locator('.s21-action-indigo').count(), 1);
   await page.getByRole('button', { name: 'Save listing', exact: true }).click(); await ready(page, true);
   assert.equal(await page.locator('.s21-action-gold').evaluate(el => getComputedStyle(el).color), 'rgb(122, 92, 20)');
@@ -236,3 +236,37 @@ it('failed-save risk and session warning use their own tokens without changing f
   assert.equal(await page.locator('.s21-icon--login').count(), 1);
   assert.equal(s.mutations.length, 2);
 }, { mutationStatus: 503 }));
+for (const [source, saved] of [['s20', false], ['s20', true], ['s25', true]]) it(`QA-S21-1: ${source} ${saved ? 'Remove' : 'Save'} then S-21 fences a late pre-commit GET`, { timeout: 20000 }, () => using(async (page, s) => {
+  await page.goto(`${origin}/${source === 's20' ? 's-20' : 's-25'}`);
+  const toggle = source === 's20' ? page.locator('.s20-save') : page.getByRole('button', { name: 'Remove', exact: true });
+  await toggle.waitFor();
+  if (source === 's20') await page.waitForFunction(() => document.querySelector('.s20-save')?.disabled === false);
+  s.holdMutation = true; await toggle.click(); await heldMutation(s);
+  assert.equal(s.saved, saved, 'no persistence before confirmation');
+  s.holdRead = true;
+  await (source === 's20' ? page.locator('.s20-title') : page.getByRole('button', { name: 'View', exact: true })).click();
+  await page.waitForFunction(() => document.querySelector('.s21-actions button')?.getAttribute('aria-disabled') === 'true');
+  assert.equal(typeof s.heldRead, 'function');
+  await s.heldMutation();
+  await ready(page, !saved);
+  await s.heldRead();
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  assert.equal(await page.locator('.s21-actions button').first().getAttribute('aria-pressed'), String(!saved));
+  assert.equal(s.saved, !saved);
+  assert.deepEqual(s.mutations, [saved ? 'DELETE' : 'PUT']);
+}, { saved }));
+it('QA-S21-2: real Saved → View → detail → Back navigation retains S-25 context', () => using(async page => {
+  await page.goto(origin + '/s-25');
+  await page.getByRole('button', { name: 'View', exact: true }).click(); await ready(page, true);
+  assert.equal(new URL(page.url()).searchParams.get('from'), 's25');
+  await page.getByRole('button', { name: 'Back to saved internships', exact: true }).click();
+  assert.equal(new URL(page.url()).pathname, '/s-25');
+}, { saved: true }));
+it('QA-S21-7: a long backend tag wraps without 320px overflow or clipped text', () => using(async page => {
+  await page.goto(detailUrl()); await ready(page); await page.evaluate(() => document.fonts.ready);
+  console.log('QA-S21-7 reflow diagnostic', await page.locator('.s21-tag, .s21-tag>span, .s20-chips, .s20-layout, main').evaluateAll(nodes => nodes.map(el => ({ tag: el.tagName, cls: el.className, width: el.getBoundingClientRect().width, scroll: el.scrollWidth, whiteSpace: getComputedStyle(el).whiteSpace, wrap: getComputedStyle(el).overflowWrap, min: getComputedStyle(el).minWidth }))));
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.equal(await page.locator('.s21-tag').innerText(), 'W'.repeat(55));
+  assert.equal(await page.locator('.s21-tag').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+  await page.screenshot({ path: `${diagnosticDir}/s21-long-tag-320.png`, fullPage: true });
+}, { width: 320, listing: { ...item, tags: ['W'.repeat(55)] } }));

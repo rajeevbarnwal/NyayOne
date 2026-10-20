@@ -26,4 +26,14 @@ describe('S-21 detail contract', () => {
   });
   it.each(['javascript:alert(1)', 'data:text/html,test', 'https://user:password@example.test', null, '/relative'])('does not activate unsafe source URL %s', value => expect(safeSourceUrl(value)).toBeNull());
   it('retains an ordinary public source link', () => expect(safeSourceUrl('https://example.test/role')).toBe('https://example.test/role'));
+  it.each(['bad-date', '', '2026-02-30T12:00:00Z', '2026-09-02', '2026-09-02T25:00:00Z'])('QA-S21-6 rejects malformed provenance timestamp %j', async value => {
+    for (const field of ['retrieved_at', 'verified_at']) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...wire, source: { ...wire.source, [field]: value } }))));
+      await expect(readInternshipDetail(wire.id)).rejects.toMatchObject({ code: 'invalid_response' });
+    }
+  });
+  it.each(['2026-09-02T02:00:00+05:30', '2026-09-01T20:30:00Z', '2026-09-01T20:30:00.123456+00:00'])('accepts genuine backend timestamp %s and empty optional source name', async value => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...wire, source: { ...wire.source, name: '', retrieved_at: value, verified_at: value } }))));
+    expect((await readInternshipDetail(wire.id)).source).toMatchObject({ name: '', retrievedAt: value, verifiedAt: value });
+  });
 });

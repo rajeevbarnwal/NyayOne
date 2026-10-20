@@ -49,7 +49,7 @@ describe('S-21 presentation corrections preserve action authority', () => {
     expect(html).toContain('s21-tag');
     expect(html).toMatch(/s21-tag[^>]*><span[^>]*aria-hidden="true"/);
     expect(html.match(/s21-icon--send/g)).toHaveLength(2);
-    expect(html).toContain('(opens Synthetic source in a new tab)');
+    expect(html).toContain('(opens example.test in a new tab)');
     expect(html).toContain('aria-disabled="true"');
     expect(html).not.toContain('/s-22');
   });
@@ -67,5 +67,34 @@ describe('S-21 presentation corrections preserve action authority', () => {
     expect(html).toContain('s21-icon--login');
     expect(html).toContain('Saved state unavailable');
     expect(html).not.toContain('aria-pressed=');
+  });
+});
+
+describe('Senior QA S-21 source and stipend regressions', () => {
+  it('QA-S21-3 uses the same IST calendar date in both provenance lines', () => {
+    const html = view({ item: { ...item, verificationStatus: 'verified', source: { ...item.source,
+      retrievedAt: '2026-09-02T02:00:00+05:30', verifiedAt: '2026-09-02T02:00:00+05:30' } } });
+    expect(html.match(/verified 2 Sept 2026/g)).toHaveLength(2);
+    expect(html).toContain('Retrieved 2 Sept 2026');
+    expect(html).not.toContain('1 Sept 2026');
+  });
+  it.each([[49, '₹0.49'], [150, '₹1.50'], [12345, '₹123.45'], [0, '₹0'], [100000, '₹1,000']])(
+    'QA-S21-4 preserves exact stipend paise %s', (paise, text) => {
+      expect(view({ item: { ...item, stipendMonthlyPaise: Number(paise) } })).toContain(`${text} per month`);
+    });
+  it('QA-S21-5 discloses the actual destination host, not the untrusted source name', () => {
+    const html = view({ item: { ...item, source: { ...item.source, name: 'Official Registry', url: 'https://unrelated.example.test/role' } } });
+    expect(html).toContain('(opens unrelated.example.test in a new tab)');
+    expect(html).not.toContain('(opens Official Registry');
+    expect(html).toMatch(/class="s21-source-host"[^>]*>unrelated\.example\.test</);
+  });
+  it('QA-S21-6 handles empty names and malformed provenance without implying verification', () => {
+    const html = view({ item: { ...item, source: { name: '  ', url: null, retrievedAt: 'bad-date', verifiedAt: 'bad-date' } } });
+    expect(html).toContain('Source not provided');
+    expect(html).toContain('not verified');
+    expect(html).not.toContain('Invalid Date');
+    expect(html).not.toContain('; verified not provided');
+    const verified = view({ item: { ...item, verificationStatus: 'verified', source: { ...item.source, verifiedAt: 'bad-date' } } });
+    expect(verified).not.toContain('Invalid Date');
   });
 });

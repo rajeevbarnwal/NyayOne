@@ -29,6 +29,8 @@ import {
 } from '../lib/internshipsApi';
 import { S20BrowseScreen } from './S20BrowseScreen';
 import { S21DetailScreen } from './S21DetailScreen';
+import { settleS21Saved } from './s21SavedCache';
+import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib/studentBrowserContext';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -87,15 +89,12 @@ function useSavedInternships() {
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean }) => (
+    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean; fence: ReturnType<typeof captureStudentContextFence> }) => (
       wasSaved ? unsaveInternship(listing.id) : saveInternship(listing.id)
     ),
-    onSuccess: (result, variables) => {
-      client.setQueryData<InternshipListing[]>(key, (current = []) => (
-        result.saved
-          ? [variables.listing, ...current.filter((item) => item.id !== variables.listing.id)]
-          : current.filter((item) => item.id !== variables.listing.id)
-      ));
+    onSuccess: async (result, variables) => {
+      if (auth.userId) await settleS21Saved(client, auth.userId, variables.listing, result.saved, () => isStudentContextFenceCurrent(variables.fence));
+      if (!isStudentContextFenceCurrent(variables.fence)) return;
       setFailure(null);
       setMessage(result.saved
         ? 'Saved privately to your account. The organisation is not notified.'
@@ -118,7 +117,7 @@ function useSavedInternships() {
       setFailure(access?.hint ?? 'Saved internships are unavailable for this session.');
       return;
     }
-    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id) });
+    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id), fence: captureStudentContextFence() });
   }
   return {
     canSave,
@@ -398,7 +397,7 @@ export function InternshipSaved() {
                 </div>
                 <div className="st-actions">
                   <button type="button" className="btn tap" disabled={saved.pendingId === l.id} onClick={() => saved.toggle(l)}>{saved.pendingId === l.id ? 'Removing…' : 'Remove'}</button>
-                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}`)}>View</button>
+                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}&from=s25`)}>View</button>
                 </div>
               </li>
             ))}

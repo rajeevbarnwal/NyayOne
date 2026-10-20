@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { settleS21Saved } from './s21SavedCache';
 import type { InternshipListing } from '../lib/internships';
 
@@ -36,6 +36,17 @@ describe('S-21 R2-1 confirmed save/unsave versus pre-commit saved reads', () => 
     const client = new QueryClient();
     await settleS21Saved(client, 'actor-a', item, true, () => false);
     expect(client.getQueryData(key)).toBeUndefined();
+    client.clear();
+  });
+  it('rechecks the actor fence after cancellation awaits, without publishing into a replaced session', async () => {
+    const client = new QueryClient();
+    client.setQueryData(key, []);
+    let current = true;
+    const original = client.cancelQueries.bind(client);
+    vi.spyOn(client, 'cancelQueries').mockImplementation(async (...args) => { await original(...args); current = false; });
+    await settleS21Saved(client, 'actor-a', item, true, () => current);
+    expect(client.getQueryData(key)).toEqual([]);
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
     client.clear();
   });
 });

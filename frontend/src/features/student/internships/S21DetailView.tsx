@@ -3,7 +3,7 @@ import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { listingSourceLabel, type InternshipListing } from '../lib/internships';
 import { PublicRiskLabelPanel } from '../reporting/RiskLabelScreens';
 import { Icon } from './S20BrowseView';
-import { safeSourceUrl } from './s21Api';
+import { safeSourceUrl, validSourceTimestamp } from './s21Api';
 import './S21Detail.css';
 
 export type S21Focus = { owned: boolean; anchor?: HTMLElement } | null;
@@ -17,8 +17,8 @@ export interface S21DetailViewProps {
   onNavigate: (path: string) => void; onToggle: () => Promise<unknown>; onRetry: () => Promise<unknown>; onRetrySaved: () => Promise<unknown>;
 }
 const dateLabel = (date: string | null) => {
-  const parsed = date ? new Date(date) : null;
-  return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'not provided';
+  const parsed = validSourceTimestamp(date) ? new Date(date) : null;
+  return parsed ? parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : 'not provided';
 };
 function DetailIcon({ name, size = 18 }: { name: string; size?: number }) {
   // Frozen continuation primitives, local to S-21: do not alter shared icons.
@@ -75,6 +75,12 @@ export function S21DetailView(p: S21DetailViewProps) {
   const item = p.phase === 'detail' ? p.item : null;
   const known = ['saved', 'unsaved'].includes(p.savedState);
   const sourceUrl = safeSourceUrl(item?.source.url ?? null);
+  const sourceHost = sourceUrl ? new URL(sourceUrl).host : null;
+  const sourceItem = item ? { ...item, source: { ...item.source,
+    name: item.source.name.trim() || 'Source not provided',
+    retrievedAt: validSourceTimestamp(item.source.retrievedAt) ? item.source.retrievedAt : null,
+    verifiedAt: validSourceTimestamp(item.source.verifiedAt) ? item.source.verifiedAt : null,
+  } } : null;
   const savedError = ['error', 'uncertain', 'unavailable', 'anonymous', 'forbidden'].includes(p.savedState);
   const saveDisabled = !known || p.busy;
   const sessionNotice = ['anonymous', 'unavailable', 'forbidden'].includes(p.savedState);
@@ -100,9 +106,9 @@ export function S21DetailView(p: S21DetailViewProps) {
           <p>{p.savedState === 'anonymous' ? 'Saving requires your student account.' : p.savedState === 'forbidden' ? 'Saved internships are available only to student accounts.' : 'No saved or unsaved claim is made until the server confirms it.'}</p>
           {['anonymous', 'unavailable'].includes(p.savedState) ? <button className="s20-btn" onClick={() => p.onNavigate('/s-03')}><ActionIcon name="login" color="indigo"/>Sign in again</button> : p.savedState !== 'forbidden' && <button className="s20-btn" onClick={e => void perform(p.onRetrySaved, e.currentTarget, true)}><ActionIcon name="refresh" color="indigo"/>Reload saved state</button>}
         </div></section>}
-        <div className="s21-kvs"><div><span>Stipend</span><b>{item.stipendMonthlyPaise === null ? 'Not stated' : `${(item.stipendMonthlyPaise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })} per month`}</b></div><div><span>Apply by</span><b>{item.deadline}</b></div><div><span>Eligibility</span><b>{item.eligibility || 'Not provided'}</b></div></div>
-        <section className="s21-card" aria-labelledby="s21-about"><h2 id="s21-about" className="s21-eyebrow">About this internship</h2><p>{item.description || 'Description not provided.'}</p><p className="s21-source">{listingSourceLabel(item)}<br/>Retrieved {dateLabel(item.source.retrievedAt)}; {item.source.verifiedAt ? `verified ${dateLabel(item.source.verifiedAt)}` : 'not verified'}</p></section>
-        {sourceUrl && <div className="s21-source-row"><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="s20-btn"><ActionIcon name="send"/>Open source listing<span className="s21-sr"> (opens {item.source.name || new URL(sourceUrl).host} in a new tab)</span></a></div>}
+        <div className="s21-kvs"><div><span>Stipend</span><b>{item.stipendMonthlyPaise === null ? 'Not stated' : `${(item.stipendMonthlyPaise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: item.stipendMonthlyPaise % 100 ? 2 : 0, maximumFractionDigits: 2 })} per month`}</b></div><div><span>Apply by</span><b>{item.deadline}</b></div><div><span>Eligibility</span><b>{item.eligibility || 'Not provided'}</b></div></div>
+        <section className="s21-card" aria-labelledby="s21-about"><h2 id="s21-about" className="s21-eyebrow">About this internship</h2><p>{item.description || 'Description not provided.'}</p><p className="s21-source">{sourceItem && listingSourceLabel(sourceItem)}<br/>Retrieved {dateLabel(item.source.retrievedAt)}; {item.verificationStatus === 'verified' ? validSourceTimestamp(item.source.verifiedAt) ? `verified ${dateLabel(item.source.verifiedAt)}` : 'verification date not provided' : 'not verified'}</p></section>
+        {sourceUrl && <div className="s21-source-row"><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="s20-btn"><ActionIcon name="send"/>Open source listing<span className="s21-sr"> (opens {sourceHost} in a new tab)</span></a><span className="s21-source-host">{sourceHost}</span></div>}
         <div className="s21-actions"><button type="button" className="s20-btn" aria-pressed={known ? p.savedState === 'saved' : undefined} aria-disabled={saveDisabled} aria-busy={p.busy || undefined} onClick={e => { if (!saveDisabled) void perform(p.onToggle, e.currentTarget); }}><ActionIcon name={p.savedState === 'saved' ? 'bookmark-filled' : 'bookmark'} color={p.savedState === 'saved' ? 'gold' : 'indigo'}/>{p.busy ? 'Saving' : p.savedState === 'saved' ? 'Saved' : known ? 'Save listing' : 'Saved state unavailable'}</button>
           <button className="s20-btn s20-primary" aria-disabled="true" aria-describedby="s21-apply-explanation" onClick={() => undefined}><ActionIcon name="send"/>Apply</button></div>
         <p className="s21-explanation" id="s21-apply-explanation">Apply is not available yet. Save the listing and check back.</p>
