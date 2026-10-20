@@ -152,6 +152,9 @@ for (const scenario of ['transport', 'malformed-2xx', 'invalid-link']) it(`does 
 }, { detailStatus: scenario === 'transport' ? 0 : 200, malformedDetail: scenario === 'malformed-2xx' }));
 for (const width of [390, 1440]) it(`S-21-specific chip spacing and action decoration at ${width}px`, () => using(async page => {
   await page.goto(detailUrl()); await ready(page);
+  assert.equal(await page.locator('.s21-card p').first().evaluate(el => getComputedStyle(el).fontSize), '13.5px');
+  assert.equal(await page.locator('.s21-card p').first().evaluate(el => getComputedStyle(el).lineHeight), '20.925px');
+  assert.equal(await page.locator('.s21-source').evaluate(el => getComputedStyle(el).fontSize), '12px');
   assert.equal(await page.locator('.s20-chips').evaluate(el => getComputedStyle(el).marginTop), '0px');
   assert.equal(await page.locator('.s21-tag').count(), item.tags.length);
   assert.equal(await page.locator('.s21-tag').first().evaluate(el => getComputedStyle(el).color), 'rgb(46, 58, 140)');
