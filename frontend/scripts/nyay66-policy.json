@@ -9,7 +9,7 @@
   "s19": {"cache": "s19-v32108-chromium-149.0.7827.55-39029544967", "manifestSha256": "b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c", "provenanceSha256": "5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf"},
   "s20": {"cache": "s20-v32108-chromium-149.0.7827.55-39111251228", "manifestSha256": "e121bff73a920ce1a563cc77317a6bbfe7a1970f131b8442cd61a4123f6b47d9", "provenanceSha256": "a6bd9be03065ed65b81a24bf657f3bd5a654bc6251866f14288f4ed07c512f0c"},
   "s21": {"cache": "s21-v32108-chromium-149.0.7827.55-39279617257", "manifestSha256": "1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0", "provenanceSha256": "dae65825f99fda6e069ee91e2bb12a2981e0e961ca42d05633ca14cca96de92d"},
-  "integrityApproval": {"pr": 74, "commentId": 6284843684, "bundleSha256": "20336c831d868d45b69488c17094a2096e1eee3ccd80f0e2fe0eafd8a2d4c752"},
+  "integrityApproval": {"pr":74,"commentId":6286906988,"bundleSha256":"df908d2efde294f8111d3c3e9c5ea2e4bcd9bcd9d3a1f92997450014949a0c4d"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -1910,6 +1910,243 @@
       ],
       "reason": "S-20 local-empty, desktop, light; exact reference/live image pair only. The catalogue/saved-list contracts do not supply a profile-name projection: an honest generic person icon and Your Profile replace prototype AN / Aditi Nair. Desktop retains functional Home/Profile navigation with non-overlapping 48px-minimum hit areas instead of static prototype labels; text positions are preserved. The synthetic saved-list fixture returns [] (0 saved listings), or explicitly fails so availability is unknown, rather than the prototype count of 3. The unchanged structural inspector records descendants of the closed filter disclosure; its reference inventory includes one additional hidden Any button rectangle, while the rendered closed composition is unchanged and the open-filter controls are matched. The resulting inventory/order geometry flag is disclosed, not presented as a visible offset or a functional waiver. OWNER-APPROVED INTERACTION-STATE PROPOSAL: the actual local search uses No synthetic match and retains visible input focus/native clear affordance rather than the frozen preset zzz tax without focus. No invented server search and no extra catalogue request; the no-match card now uses the owner-approved page-specific heading and server-total helper described below. This is a disclosed interaction-state difference, not server-derived data and not a focus-loss/accessibility waiver. No residual common icon-baseline offset is proposed. No accessibility, focus-loss, overflow, unexpected-error, reference, tolerance, enforcement, or unrelated-screen waiver. Live-route evidence uses synthetic API responses; it is not live-backend or independent QA certification. COPY-CORRECTION REAPPROVAL: The approved QA-5 correction changes the heading to \"No matching listings on this page\" and the helper to \"4 total listings. Try another page, clear filters or change your search.\" The total comes from the catalogue response; search/stipend remain page-local and do not imply server-wide filtering. The heading keeps its existing y-position and 18.6875px height; its width grows from 145.609375px to 237.390625px and is recentered. The longer helper wraps to two lines, increasing the empty-card height and moving the 48px Clear search and filters button down exactly 19.5 CSS px versus both the prior live image and frozen reference. This explicitly includes the changed heading text and copy-driven reflow, not antialiasing or a layout-defect waiver. The previously approved typed query, visible input focus and clear affordance remain. No additional icon-baseline offset is introduced. Exact current pair captured at head 4a0fda47720d10848deaff86786b8aeeda2de475, hosted run 39232713138 attempt 1; replaces prior live SHA-256 9d9632ed7ee3bee54ba3099339de861087c0528a746fe203ee11fddfaf9d7ab6. Raw prior-to-current difference: 26344 pixels, bounds x=34..856, y=333..550. Only this row is proposed for replacement; the frozen reference, tolerances, enforcement and other historical approvals remain unchanged. Approval covers the corrected text rendering and explicitly disclosed reflow only, not functional/cache/focus defects or independent QA acceptance.",
       "approvalPr": 72
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "e30fc7449903554537b2357966a13d1be2ebb43825f30311d0031d7db1024eff",
+      "liveSha256": "3146d72a82891a32cff676e5e92d54ad53bb9b0e9400518b7401338f54654a2c",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 loading, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Loading is an accessible \"Loading internship\" status and genuine unresolved GET, rather than the prototype hidden Loading span; no fabricated completed listing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "31ed63858ef1222aa5cb611b4713b335198a191f9f1349da2e0d88927871a4b9",
+      "liveSha256": "6c95265f2ccca9ae0b67192e22e2be32293f96641f70e82f449e324b92adf197",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 loading, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Loading is an accessible \"Loading internship\" status and genuine unresolved GET, rather than the prototype hidden Loading span; no fabricated completed listing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "1529f011cf88f10c3b8abcdad0c4b19bc66c7b3092b2f0ecd23b43503392dfdc",
+      "liveSha256": "5c2c1895b82661fb7f3a7aabc7117763ef728fb2e0f2d2ab1f34a2427b6066cd",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 complete, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "fa019a88299bae4f4f154ad1fc4b2bc21184ba4a2254b0e21dc45dfffaf1a855",
+      "liveSha256": "3affd453b161265f9097a9ee07bae368f22c96c7182f967effe03a0739e71b87",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 complete, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "cdacbaef8de4821221703daa5fc4efd4313517b7c5b5f343fdf10c8014f8d700",
+      "liveSha256": "acd43daa4cf50b1ca129f8c331db79b212149a199000e208396b23150a14c93d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 saved, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "5f35ebc9851c9e2635ba09acc9944c768fdb2052f634ca7db81f019041c42671",
+      "liveSha256": "3e1aaa44a4e7c294c11cab00811530ab6d9d3f1f47516798f23fab02255af00d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 saved, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "89eef61f10762c77d8c3643a38be1594002544593a00ac7c8451f4c221847046",
+      "liveSha256": "477384b6b1d66067bf4ddf92de752ea2b0f1bb7c70ee88b8ece4fe2b85dca388",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 save-pending, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. Saving remains pending and aria-disabled until the PUT response; no early success claim. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "9930b3b323bab7f4f4034e9c59f81e60e14088ccb31a6060a429f48e89e02f62",
+      "liveSha256": "4f4c1b7980854687312c605a549edc23fdd2ff19c21a32830c82063bc558bf4d",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 save-pending, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. Saving remains pending and aria-disabled until the PUT response; no early success claim. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "a367d59ca4ece9887d9eb95cc0bccc515d170cc7a2915180056de3dc36ff5d97",
+      "liveSha256": "5c5a6e6175619ca17171e61456c0c2949409f708e589d9704e3f8543ca97e18b",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 save-failed, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 54.59375px and 54.59375px lower respectively; this is disclosed content height, not antialiasing. Failure-truthfulness delta: genuine PUT 503 cannot prove \"Nothing changed\". Show \"Could not confirm this change\" and uncertainty wording; replace mutation retry with \"Reload saved state\" GET, and disable the unknown saved mark. Reload is 71px wider and 36px lower than prototype Try again. The meaningful error-notice focus outline is retained after the focus race was fixed in code; this does not waive focus loss. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "48c2c9fe0afa7cd2b29b6aa18d281ac7da2f44649cc6d93f110bf6df02e589d5",
+      "liveSha256": "159c6f02e3e46195e62276813221f1acbd21e44ec5fc439b89dde9296ad96e41",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 save-failed, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. Failure-truthfulness delta: genuine PUT 503 cannot prove \"Nothing changed\". Show \"Could not confirm this change\" and uncertainty wording; replace mutation retry with \"Reload saved state\" GET, and disable the unknown saved mark. Reload is 71px wider and 0px lower than prototype Try again. The meaningful error-notice focus outline is retained after the focus race was fixed in code; this does not waive focus loss. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "854d4249a8dd52530870b2c15dcc66f911c9ceae85dbc2c852bdd039feca3927",
+      "liveSha256": "13277ead3d74ffe40b427b40ade2bcc9fd79c1db92427954ca4aceadc0c2a249",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 session, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. Session-authority delta: genuine PUT 401 clears student authority through the production handler. Retain \"Saving requires your student account\", Sign in again and disabled \"Saved state unavailable\", not the prototype enabled Save listing. Focus is restored to the notice through remount; its visible outline is retained, not a waiver of a functional defect. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "a61d9238080546de3417cdcc7a04dda9b82f598dfb1adf35717eb538b8d29696",
+      "liveSha256": "320e2570b2005d723257ba54569363701819beddaf4301ec68c2e7d906db2f1c",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 session, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. Provenance delta: retain the shared source verification/non-affiliation disclosure plus retrieved/verified dates on a second line. The source action and Save/Apply row are 18.59375px and 18.59375px lower respectively; this is disclosed content height, not antialiasing. Session-authority delta: genuine PUT 401 clears student authority through the production handler. Retain \"Saving requires your student account\", Sign in again and disabled \"Saved state unavailable\", not the prototype enabled Save listing. Focus is restored to the notice through remount; its visible outline is retained, not a waiver of a functional defect. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "9ec88a6768d52e891cf924ee3d871838d78e076c995c6337e6576008061efd56",
+      "liveSha256": "365627c7663bc54d22ec5bfcd260440c631e37184c6644fa930521601df4eb0f",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 missing, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". The visible HTTP 404 is the genuine GET response; the missing-listing body and Browse internships action are otherwise retained. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "3f4ad9c91f30e7dda4cf48a2c3ae5fc80546bea6748389a273c4c42f1fe39e61",
+      "liveSha256": "e0c6203366764d2a5e1655889369b9d7acae06a0a749ce172404fad873552cf4",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 missing, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. The visible HTTP 404 is the genuine GET response; the missing-listing body and Browse internships action are otherwise retained. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "db56343f99fa7a1a20d9cb2e8aec760f007fbb806a987fe53990e6fd216e9653",
+      "liveSha256": "8f7f25304b13e94b9d41b15e640b0182325749ed852046233ef840ab28d1773f",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 error, mobile390, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". The visible HTTP 500 is the genuine GET response; transport errors and malformed 2xx do not manufacture an HTTP code. The error body and Retry action are otherwise retained. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
+    },
+    {
+      "screen": "S-21",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "788cae47425f9b127bd3067ad8444602723906c397efb2dab28ddeb858a348d6",
+      "liveSha256": "0405590a916f72b768d00e78e6a026dce6a2d899b043b47c9267b07d4fb23775",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-21 error, desktop, light. Live-route capture with synthetic backend responses; not live-backend or independent QA evidence. Identity delta: generic person avatar with accessible name \"Your Profile\" replaces the prototype-only AN/Aditi Nair identity; no fabricated user initials. Retained accessibility/navigation delta: the unchanged visible Internships back control is named \"Back to internships\". Retained desktop navigation delta: Home and Profile are real 48px route buttons rather than prototype static text; this changes the control inventory and index-based geometry comparison, not their visible positions. The visible HTTP 500 is the genuine GET response; transport errors and malformed 2xx do not manufacture an HTTP code. The error body and Retry action are otherwise retained. No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.",
+      "approvalPr": 74
     }
   ]
 }
