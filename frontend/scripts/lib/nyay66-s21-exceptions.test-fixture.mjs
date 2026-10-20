@@ -259,6 +259,28 @@ export const s21ProposalHashes=[
   "ca0682706742b194c0a6d22510da413da962ac8a00558209f7d56091dfe11ed0"
 ];
 export const historicalExceptionsSha256='83e9d6f966360866cadb702150920f171929166e7be95848bde36208d08baebf';
+// Round 2 test-only candidates. Keep the original sixteen entries/hashes above
+// intact. These ten exact replacements are NOT owner approval or policy binding.
+export const s21Round2Pins=[
+  [2,'6320cddadc60e597871d346fe452a81dbd80fe88afbeb0da7d9bc897a171a73c','19063e59405afa1cb553b8b431bf963cf914beeb6d0962a88154687a4718aa8c',[230,580,307,589]],
+  [3,'cff573e09a7a64f4e91459f123595128355c3c297638fe06cf037baf14f83886','983cc88c211b1245de8f960acfebea31a69ddde3f435704ca7c0979214f96aa9',[248,555,325,564]],
+  [4,'f35a25cfacfe0f7d8c29bae968178400daa7a6024268dbc6179f4a7f788ac7c0','e2207077b686e014828f5ed9bc2af58782b5b7c0cdb66578e61a35741a8fed07',[230,580,307,589]],
+  [5,'dd07cc411b1e6c8e648bec7ab3756651fc6a1a408a88c9e3d571c2c87869f5ba','47d334a121eb9dfd8233064486805012fc4cced1b37babe1efe2778b29880fd9',[248,555,325,564]],
+  [6,'bd035e8289e2fa35a1f3a2a9efd8e44dd0abdab266067a6ecdfb61ec1bca1a53','b5741327c1000bf642e69caf96e3ae966ec16970933e5b89c651212374ee7d94',[230,580,307,589]],
+  [7,'6615207b96a548e45c1c6061541bf31fc9ac8fb1ade315e25bfe281f4d81fafb','0f6bda9e1476aaa3f8c459395015601d436d81bf85f0aa9550148dd448863645',[248,555,325,564]],
+  [8,'03033516eff0ecea2faa03c2a28f669a35e48256228c7bfd4c72f7be6f94be0d','8ebcd08067c6484ba4b33a0ba72646956a916662834738b50888874700483e83',[230,741,307,750]],
+  [9,'0500c6a0de207f1d3d6574a251f50d891983b333a1771fd160132b3a454c422f','88865ed6e8586f30f7d684573d99f709bba97c124ccd368296a3ae5376ed075a',[248,680,325,689]],
+  [10,'633b82475e14db52c836723da9745ec046e3dbb9b5b26130ca7ac17d83ba6402','1abc179cfe79ffcded9436e02965604239bc4555fce579c424c8c9ff99ae3f2d',[230,705,307,714]],
+  [11,'8a5cdd5a5acc5dfc4c4f98e67f6f2ca5743c681877db37f5c3aed48e217bc24b','f6a208fff9a11c794d68e2d78145362720a0e49a8d0ba2b76848834a5401d45f',[248,680,325,689]],
+].map(([index,liveSha256,hash,bounds])=>({index,liveSha256,hash,bounds}));
+export const s21Round2Proposals=s21Proposals.map((entry,index)=>{
+  const pin=s21Round2Pins.find(p=>p.index===index);
+  if(!pin)return structuredClone(entry);
+  const retained=entry.reason.replace('No reference, tolerance, evaluator or historical approval change; no unrelated CSS defect or unmeasured functional failure is covered.','').trim();
+  return {...structuredClone(entry),liveSha256:pin.liveSha256,
+    reason:retained+' QA-S21-5 corrected destination-disclosure rendering: the safe source URL host example.test is now visible beside Open source listing and replaces the untrusted free-text source name in its new-tab accessible disclosure. Relative to the previously approved f9c84dce image, exactly 414 pixels change inside ['+pin.bounds.join(', ')+'] (inclusive x1,y1,x2,y2), solely the added host text; headings and control geometry are identical, with zero additional positional offset. This replaces only this exact S-21 pair to represent the implemented fix, not to waive the functional defect. Previously disclosed reference-relative offsets remain as stated above. All 162 historical rows and the other unaffected approvals remain unchanged. No reference, tolerance or evaluator change; no unrelated layout, accessibility or functional defect is covered.'};
+});
+export const s21Round2ProposalHashes=s21ProposalHashes.map((hash,index)=>s21Round2Pins.find(p=>p.index===index)?.hash??hash);
 export function withoutS21ProposalsForTest(exceptions){
   const additions=exceptions.filter(e=>e.screen==='S-21');
   if(additions.length){
@@ -267,10 +289,13 @@ export function withoutS21ProposalsForTest(exceptions){
     if(additions.length!==16||additions.some(e=>Object.keys(e).sort().join(',')!==keys))
       throw new Error('S21_PROPOSAL_INVENTORY_CHANGED');
     const hashes=additions.map(e=>approveException(e,null,options)).sort();
-    if(JSON.stringify(hashes)!==JSON.stringify([...s21ProposalHashes].sort()))
+    const pinnedSets=[s21ProposalHashes,s21Round2ProposalHashes];
+    if(!pinnedSets.some(pins=>JSON.stringify(hashes)===JSON.stringify([...pins].sort())))
       throw new Error('S21_PROPOSAL_CONTENT_CHANGED');
   }
-  // Only the exact additive set is removed for historical comparisons. Those
-  // comparisons still pin all old bytes; this never mutates input or policy.
+  // Only the complete original set or its ten exact Round 2 replacements is
+  // removed for historical comparisons; partial mixtures fail closed. Those
+  // comparisons still pin all old bytes; this never mutates input or policy,
+  // and the unchanged runtime gate still requires actual owner comments.
   return exceptions.filter(e=>e.screen!=='S-21');
 }
