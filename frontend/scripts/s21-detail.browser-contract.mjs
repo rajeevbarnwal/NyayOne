@@ -73,8 +73,8 @@ for (const saved of [false, true]) it(`R2-1: delayed ${saved ? 'DELETE' : 'PUT'}
   assert.equal(await page.locator('.s20-save').getAttribute('aria-pressed'), String(!saved));
   assert.equal(s.mutations.length, 1);
   await page.getByRole('button', { name: 'Saved internships', exact: true }).first().click();
-  if (!saved) await page.getByText(`${item.role} — ${item.organisation}`, { exact: true }).waitFor();
-  else await page.getByText('No saved internships yet', { exact: true }).waitFor();
+  if (!saved) await page.getByRole('button', { name: `${item.role} ${item.organisation}`, exact: true }).waitFor();
+  else await page.getByText('No saved internships yet.', { exact: true }).waitFor();
 }, { saved }));
 it('save failure focuses the truthful notice; retry restores truth, never sends another mutation', { timeout: 20000 }, () => using(async (page, s) => {
   await page.goto(detailUrl()); const b = await ready(page); s.holdMutation = true;
@@ -238,13 +238,14 @@ it('failed-save risk and session warning use their own tokens without changing f
 }, { mutationStatus: 503 }));
 for (const [source, saved] of [['s20', false], ['s20', true], ['s25', true]]) it(`QA-S21-1: ${source} ${saved ? 'Remove' : 'Save'} then S-21 fences a late pre-commit GET`, { timeout: 20000 }, () => using(async (page, s) => {
   await page.goto(`${origin}/${source === 's20' ? 's-20' : 's-25'}`);
-  const toggle = source === 's20' ? page.locator('.s20-save') : page.getByRole('button', { name: 'Remove', exact: true });
+  const toggle = source === 's20' ? page.locator('.s20-save') : page.getByRole('button', { name: `Remove ${item.role} from saved`, exact: true });
   await toggle.waitFor();
   if (source === 's20') await page.waitForFunction(() => document.querySelector('.s20-save')?.disabled === false);
+  else await page.waitForFunction(() => document.querySelector('[data-remove-id]')?.getAttribute('aria-disabled') === 'false');
   s.holdMutation = true; await toggle.click(); await heldMutation(s);
   assert.equal(s.saved, saved, 'no persistence before confirmation');
   s.holdRead = true;
-  await (source === 's20' ? page.locator('.s20-title') : page.getByRole('button', { name: 'View', exact: true })).click();
+  await page.locator('.s20-title').click();
   await page.waitForFunction(() => document.querySelector('.s21-actions button')?.getAttribute('aria-disabled') === 'true');
   assert.equal(typeof s.heldRead, 'function');
   await s.heldMutation();
@@ -255,9 +256,9 @@ for (const [source, saved] of [['s20', false], ['s20', true], ['s25', true]]) it
   assert.equal(s.saved, !saved);
   assert.deepEqual(s.mutations, [saved ? 'DELETE' : 'PUT']);
 }, { saved }));
-it('QA-S21-2: real Saved → View → detail → Back navigation retains S-25 context', () => using(async page => {
+it('QA-S21-2: real Saved → title control → detail → Back navigation retains S-25 context', () => using(async page => {
   await page.goto(origin + '/s-25');
-  await page.getByRole('button', { name: 'View', exact: true }).click(); await ready(page, true);
+  await page.getByRole('button', { name: `${item.role} ${item.organisation}`, exact: true }).click(); await ready(page, true);
   assert.equal(new URL(page.url()).searchParams.get('from'), 's25');
   await page.getByRole('button', { name: 'Back to saved internships', exact: true }).click();
   assert.equal(new URL(page.url()).pathname, '/s-25');

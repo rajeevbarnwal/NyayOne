@@ -316,7 +316,7 @@ try {
   await finishedResponse(savedPageGet);
   await waitForTextReady(page, 'Loading saved internships');
   requireRow('saved:first-context', 'Menon persisted', await page.locator('main').innerText(),
-    await page.getByText(/Judicial research assistant — Chambers of Sr. Adv. R. Menon/).isVisible());
+    await page.getByRole('button', { name: 'Judicial research assistant Chambers of Sr. Adv. R. Menon', exact: true }).isVisible());
   record('runtime:primary', '0 console/page/request/HTTP errors', runtime, runtimeClean(runtime));
   await context.close();
 
@@ -328,7 +328,7 @@ try {
   await finishedResponse(secondSavedGet);
   await waitForTextReady(secondPage, 'Loading saved internships');
   requireRow('saved:fresh-browser-context', 'same account still contains Menon', await secondPage.locator('main').innerText(),
-    await secondPage.getByText(/Judicial research assistant — Chambers of Sr. Adv. R. Menon/).isVisible());
+    await secondPage.getByRole('button', { name: 'Judicial research assistant Chambers of Sr. Adv. R. Menon', exact: true }).isVisible());
   record('runtime:fresh-context', '0 console/page/request/HTTP errors', secondRuntime, runtimeClean(secondRuntime));
   await secondContext.close();
 
@@ -369,9 +369,9 @@ try {
   await finishedResponse(removalGet);
   await waitForTextReady(removalPage, 'Loading saved internships');
   const removeDelete = removalPage.waitForResponse((response) => responseMatches(response, 'DELETE', '/api/v1/student/internships/menon/saved'));
-  await removalPage.getByRole('button', { name: 'Remove', exact: true }).click();
+  await removalPage.getByRole('button', { name: 'Remove Judicial research assistant from saved', exact: true }).click();
   await finishedResponse(removeDelete);
-  await removalPage.getByText('Removed from your saved internships.').waitFor();
+  await removalPage.getByText('Judicial research assistant removed from your saved internships.').waitFor();
   await removalContext.close();
 
   for (const viewport of viewports) {
