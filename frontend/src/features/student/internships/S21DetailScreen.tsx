@@ -57,6 +57,10 @@ function DetailController({ focus }: Pick<S21DetailViewProps, 'focus'>) {
     finally { lock.current = false; }
   }
   const phase = !valid ? 'incomplete' : detail.isError ? detail.error instanceof InternshipsApiError && detail.error.status === 404 ? 'missing' : 'error' : detail.isPending ? 'loading' : 'detail';
+  // Presentation only: retain the actual response status, never invent 500 for
+  // a transport failure, invalid link, or malformed successful response.
+  const statusCode = valid && detail.isError && detail.error instanceof InternshipsApiError
+    && Number.isInteger(detail.error.status) && detail.error.status >= 400 && detail.error.status <= 599 ? detail.error.status : null;
   return <S21DetailView focus={focus} phase={phase} item={detail.data ?? null} savedState={savedState} busy={busy} failure={failure} notice={notice}
-    fromSaved={params.get('from') === 's25'} onNavigate={nav} onToggle={toggle} onRetry={() => detail.refetch()} onRetrySaved={retrySaved}/>;
+    statusCode={statusCode} fromSaved={params.get('from') === 's25'} onNavigate={nav} onToggle={toggle} onRetry={() => detail.refetch()} onRetrySaved={retrySaved}/>;
 }

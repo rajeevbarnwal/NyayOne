@@ -10,3 +10,11 @@
 .s21-detail .s21-actions>.s20-btn{flex:1;min-width:0;padding:0 10px;text-align:center;overflow-wrap:anywhere}.s21-detail .s21-actions>[aria-disabled=true]{cursor:default}
 .s21-detail .s21-actions>[aria-busy=true]{opacity:.55}.s21-detail .s21-explanation{font-size:11.5px;line-height:1.55;color:#5c5f7a;margin:0}
 .s21-detail h1{overflow-wrap:anywhere}.s21-detail a:focus-visible{outline:3px solid #2e3a8c;outline-offset:3px}
+.s21-detail .s20-chips{margin-top:0}
+.s21-detail .s21-tag{border-color:#2e3a8c;color:#2e3a8c;background:#e7e9f7}
+.s21-detail .s21-tag>.s20-chip-dot{width:8px;height:8px;border-radius:2px;background:#2e3a8c;flex:none}
+.s21-detail .s21-action-indigo{color:#2e3a8c}.s21-detail .s21-action-gold{color:#7a5c14}
+.s21-detail .s21-save-error{border-left-color:#9a2b21}
+.s21-detail .s21-session{border-left-color:#7a5a10}
+.s21-detail .s21-source-row a{gap:8px}
+.s21-detail .s21-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
