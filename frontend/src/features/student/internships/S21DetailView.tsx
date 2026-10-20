@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { listingSourceLabel, type InternshipListing } from '../lib/internships';
 import { PublicRiskLabelPanel } from '../reporting/RiskLabelScreens';
@@ -7,6 +7,7 @@ import { safeSourceUrl } from './s21Api';
 import './S21Detail.css';
 
 export type S21Focus = { owned: boolean; anchor?: HTMLElement } | null;
+type FocusAction = { anchor: HTMLElement; trigger: HTMLElement };
 export interface S21DetailViewProps {
   focus: RefObject<S21Focus>;
   phase: 'incomplete' | 'missing' | 'error' | 'loading' | 'detail'; item: InternshipListing | null;
@@ -34,8 +35,8 @@ function ActionIcon({ name, color }: { name: string; color?: 'indigo' | 'gold' }
 }
 export function S21DetailView(p: S21DetailViewProps) {
   const root = useRef<HTMLDivElement>(null);
-  const action = useRef<{ anchor: HTMLElement; trigger: HTMLElement; done: boolean } | null>(null);
-  const restore = useRef<() => void>(() => undefined);
+  const action = useRef<FocusAction | null>(null);
+  const [completedAction, setCompletedAction] = useState<FocusAction | null>(null);
   useLayoutEffect(() => {
     const host = root.current;
     return () => { if (host?.contains(document.activeElement)) p.focus.current = { owned: true }; };
@@ -53,23 +54,23 @@ export function S21DetailView(p: S21DetailViewProps) {
         if (p.phase !== 'loading' && p.savedState !== 'loading') p.focus.current = null;
       } else p.focus.current = null;
     }
-    restore.current = () => {
-      const owned = action.current, host = root.current;
-      if (!owned || !host?.isConnected) return;
-      if (![owned.anchor, owned.trigger, document.body].includes(document.activeElement as HTMLElement)) { action.current = null; return; }
-      if (!owned.done || p.phase === 'loading') return;
-      const error = host.querySelector<HTMLElement>('[role="alert"]');
-      (error ?? (owned.trigger.isConnected ? owned.trigger : host.querySelector<HTMLElement>('h1')))?.focus({ preventScroll: true });
-      action.current = null;
-    };
-    restore.current();
+    const owned = action.current, host = root.current;
+    if (!owned || !host?.isConnected) return;
+    if (![owned.anchor, owned.trigger, document.body].includes(document.activeElement as HTMLElement)) { action.current = null; return; }
+    // A promise's finally/animation frame can precede React's error commit.
+    // Consume ownership only in a committed, settled render; otherwise the
+    // later error notice would have no action left to restore focus for.
+    if (completedAction !== owned || p.busy || p.phase === 'loading' || p.savedState === 'loading') return;
+    const error = host.querySelector<HTMLElement>('[role="alert"]');
+    (error ?? (owned.trigger.isConnected ? owned.trigger : host.querySelector<HTMLElement>('h1')))?.focus({ preventScroll: true });
+    action.current = null;
   });
   async function perform(run: () => Promise<unknown>, trigger: HTMLElement, anchorPending = false) {
     if (action.current) return;
     const anchor = anchorPending ? root.current?.querySelector<HTMLElement>('h1') ?? trigger : trigger;
-    const owned = { trigger, anchor, done: false }; action.current = owned;
+    const owned = { trigger, anchor }; action.current = owned;
     anchor.focus({ preventScroll: true });
-    try { await run(); } finally { owned.done = true; requestAnimationFrame(() => restore.current()); }
+    try { await run(); } finally { setCompletedAction(owned); }
   }
   const item = p.phase === 'detail' ? p.item : null;
   const known = ['saved', 'unsaved'].includes(p.savedState);

@@ -87,6 +87,37 @@ it('save failure focuses the truthful notice; retry restores truth, never sends 
   assert.notEqual(await page.evaluate(() => document.activeElement?.tagName), 'BODY');
   assert.equal(s.mutations.length, 1);
 }, { mutationStatus: 503 }));
+for (const saved of [false, true]) it(`focus handoff survives a frame before the ${saved ? 'DELETE' : 'PUT'} error commit`, { timeout: 20000 }, () => using(async (page, s) => {
+  await page.goto(detailUrl()); const b = await ready(page, saved); s.holdMutation = true;
+  await b.focus(); await page.keyboard.press('Enter'); await heldMutation(s);
+  await page.waitForFunction(() => document.querySelector('[aria-busy="true"]'));
+  // Scheduler negative control, not a capture fixture: force the next frame
+  // callback to run before React can commit the response-driven state update.
+  // The old handoff consumes ownership here while the error notice is absent.
+  await page.evaluate(() => {
+    const nativeFrame = window.requestAnimationFrame;
+    window.__s21EarlyFrame = null;
+    window.requestAnimationFrame = callback => {
+      window.requestAnimationFrame = nativeFrame;
+      window.__s21EarlyFrame = {
+        busy: !!document.querySelector('[aria-busy="true"]'),
+        alert: !!document.querySelector('.s21-detail [role="alert"]'),
+      };
+      callback(performance.now());
+      return 0;
+    };
+  });
+  await s.heldMutation(); await page.getByRole('alert').waitFor();
+  try {
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert', null, { polling: 25 });
+  } catch (error) {
+    console.error('S-21 pre-commit frame ordering', await page.evaluate(() => window.__s21EarlyFrame));
+    throw error;
+  }
+  assert.equal(s.saved, saved);
+  assert.deepEqual(s.mutations, [saved ? 'DELETE' : 'PUT']);
+  assert.equal(await page.locator('.s21-actions button').first().getAttribute('aria-pressed'), null);
+}, { saved, mutationStatus: 503 }));
 it('does not steal focus if the user moves away during a pending save', { timeout: 20000 }, () => using(async (page, s) => {
   await page.goto(detailUrl()); const b = await ready(page); s.holdMutation = true;
   await b.click(); await page.waitForFunction(() => document.querySelector('[aria-busy="true"]'));
@@ -95,6 +126,31 @@ it('does not steal focus if the user moves away during a pending save', { timeou
   await s.heldMutation(); await page.getByRole('alert').waitFor();
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Back to internships');
 }, { mutationStatus: 503 }));
+it('offline rejection and repeated failed saves each focus their committed notice', { timeout: 20000 }, () => using(async (page, s) => {
+  await page.goto(detailUrl()); await ready(page);
+  await page.context().setOffline(true);
+  await page.getByRole('button', { name: 'Save listing', exact: true }).press('Enter');
+  await page.getByText('You are offline. No request was sent. Reconnect and try again.', { exact: true }).waitFor();
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+  assert.deepEqual(s.mutations, []);
+  await page.context().setOffline(false);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await (await ready(page)).press('Enter');
+    await page.getByText('Could not confirm this change. Reload your saved list before trying again.', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    assert.equal(s.mutations.length, attempt);
+    await page.getByRole('button', { name: 'Reload saved state' }).press('Enter'); await ready(page);
+    await page.waitForFunction(() => document.activeElement?.tagName === 'H1');
+  }
+}, { mutationStatus: 503 }));
+for (const saved of [false, true]) it(`successful ${saved ? 'DELETE' : 'PUT'} retains focus on its confirmed toggle`, { timeout: 20000 }, () => using(async (page, s) => {
+  await page.goto(detailUrl()); const b = await ready(page, saved); s.holdMutation = true;
+  await b.press('Enter'); await heldMutation(s);
+  assert.equal(await page.getByRole('button', { name: 'Saving', exact: true }).evaluate(el => document.activeElement === el), true);
+  await s.heldMutation(); const confirmed = await ready(page, !saved);
+  assert.equal(await confirmed.evaluate(el => document.activeElement === el), true);
+  assert.equal(s.mutations.length, 1);
+}, { saved }));
 it('Apply stays unavailable; return context is restricted to the approved routes', { timeout: 20000 }, () => using(async page => {
   await page.goto(detailUrl() + '&from=s25'); await ready(page);
   const apply = page.getByRole('button', { name: 'Apply', exact: true }); assert.equal(await apply.getAttribute('aria-disabled'), 'true');
