@@ -5,7 +5,8 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {PNG} from 'pngjs';
-import {digest} from './nyay66-enforcement.mjs';
+import {digest,approveException} from './nyay66-enforcement.mjs';
+import {s21Proposals,s21ProposalHashes,historicalExceptionsSha256,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
 import {loadS21Source,S21_STATES,S21_VIEWPORTS,S21_PINS} from './nyay66-s21-reference.mjs';
 import {verifyS21Archive,loadS21Cache} from './nyay66-s21-import.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
@@ -70,15 +71,45 @@ describe('S-21 archive import fails closed before writing',()=>{
       await expect(loadS21Cache(f.dir,config,data,fonts)).rejects.toThrow('S21_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it('pins the owner-dispatched cache and preserves every historical policy byte except the new cache binding',async()=>{
+  it.each(['current','proposed'])('pins the owner-dispatched cache and preserves every historical policy byte (%s exceptions)',async(mode)=>{
     const got=await loadS21Cache(root,policy.s21,data,fonts);
     expect(got).not.toBe(null);expect(got.manifest.rows).toHaveLength(16);
     expect(got.provenance).toEqual({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39279617257',artifactId:'12200177444',archiveSha256:'4ae108aab062f6b3e7ded73b85e4efdcb95962fe3ca3ce54400107ce95e9de60',sourceHead:'0d381b7aee9d438712549cb62275582951536438',controlHead:'0d381b7aee9d438712549cb62275582951536438',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',referenceRows:16,manualRows:0});
     expect(policy.s21).toEqual({cache:'s21-v32108-chromium-149.0.7827.55-39279617257',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',provenanceSha256:'dae65825f99fda6e069ee91e2bb12a2981e0e961ca42d05633ca14cca96de92d'});
     const before=JSON.parse(execFileSync('git',['show','0d381b7aee9d438712549cb62275582951536438:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy);delete current.s21;delete current.integrityApproval;delete before.integrityApproval;
+    if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    current.exceptions=withoutS21ProposalsForTest(current.exceptions);
+    expect(current.exceptions).toHaveLength(132);
+    expect(digest(JSON.stringify(current.exceptions))).toBe(historicalExceptionsSha256);
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(before.exceptions));
     expect(current).toEqual(before);
-    expect(policy.exceptions.some(e=>e.screen==='S-21')).toBe(false);
+  });
+  it('pins all 16 proposed hashes without substituting test fixtures for owner read-back',()=>{
+    const options={r2:true,s18:true,s19:true,s20:true,s21:true};
+    expect(s21Proposals.map(e=>approveException(e,null,options))).toEqual(s21ProposalHashes);
+    for(const entry of s21Proposals)expect(approveException(entry,[],options)).toBe(false);
+    const before=JSON.stringify(policy.exceptions.filter(e=>e.screen!=='S-21'));
+    const candidate=[...JSON.parse(before),...structuredClone(s21Proposals)];
+    const original=JSON.stringify(candidate);
+    expect(JSON.stringify(withoutS21ProposalsForTest(candidate))).toBe(before);
+    expect(JSON.stringify(candidate)).toBe(original);
+  });
+  it.each([
+    ['missing row',p=>p.pop()],
+    ['duplicate row',p=>{p[1]=structuredClone(p[0]);}],
+    ['extra row',p=>p.push(structuredClone(p[0]))],
+    ['reference bytes',p=>{p[0].referenceSha256='0'.repeat(64);}],
+    ['live bytes',p=>{p[0].liveSha256='0'.repeat(64);}],
+    ['disclosure',p=>{p[0].reason+=' widened';}],
+    ['check scope',p=>{p[0].checks=['pixels'];}],
+    ['approval PR',p=>{p[0].approvalPr=73;}],
+    ['viewport',p=>{p[0].viewport='mobile360';}],
+    ['screen',p=>{p[0].screen='S-22';}],
+    ['theme',p=>{p[0].theme='dark';}],
+    ['extra field',p=>{p[0].approved=true;}],
+  ])('rejects changed S-21 %s without relaxing any historical comparison',(_,mutate)=>{
+    const additions=structuredClone(s21Proposals);mutate(additions);
+    expect(()=>withoutS21ProposalsForTest([...policy.exceptions.filter(e=>e.screen!=='S-21'),...additions])).toThrow();
   });
 });

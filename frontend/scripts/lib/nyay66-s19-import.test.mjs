@@ -8,6 +8,7 @@ import {PNG} from 'pngjs';
 import {digest} from './nyay66-enforcement.mjs';
 import {loadS19Source,S19_STATES,S19_VIEWPORTS,S19_PINS} from './nyay66-s19-reference.mjs';
 import {verifyS19Archive,loadS19Cache} from './nyay66-s19-import.mjs';
+import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const {data}=await loadS19Source(root);
 const policy=JSON.parse(readFileSync(join(root,'frontend/scripts/nyay66-policy.json')));
@@ -51,7 +52,7 @@ describe('S-19 archive import fails closed before writing',()=>{
     expect(await loadS19Cache(root,undefined,data,fonts)).toBe(null);
     await expect(loadS19Cache(root,{cache:'../escape'},data,fonts)).rejects.toThrow('S19_INVALID_CACHE_BINDING');
   });
-  it('revalidates the owner-dispatched 52-PNG cache and its exact provenance at use',async()=>{
+  it.each(['current','proposed'])('revalidates the owner-dispatched 52-PNG cache and its exact provenance (%s exceptions)',async(mode)=>{
     expect(policy.s19).toEqual({cache:'s19-v32108-chromium-149.0.7827.55-39029544967',manifestSha256:'b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c',provenanceSha256:'5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf'});
     const got=await loadS19Cache(root,policy.s19,data,fonts);
     expect(got.manifest.rows).toHaveLength(52);
@@ -70,7 +71,8 @@ describe('S-19 archive import fails closed before writing',()=>{
     // Additive S-19/S-20 exceptions have their own coverage/approval contracts;
     // the live gate still requires exact owner comments. Compare only the
     // exceptions present at this pre-S-19 snapshot, preserving their bytes/order.
-    current.exceptions=current.exceptions.filter(e=>!['S-19','S-20'].includes(e.screen));
+    if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    current.exceptions=withoutS21ProposalsForTest(current.exceptions).filter(e=>!['S-19','S-20'].includes(e.screen));
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(previous.exceptions));
     expect(current).toEqual(previous);
   });

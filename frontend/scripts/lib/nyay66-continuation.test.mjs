@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {loadContinuation,continuationRows,appendContinuation,validateContinuation} from './nyay66-continuation.mjs';
 import {lightRowInventory,finalizeEnforcement,validateProgression,approveException} from './nyay66-enforcement.mjs';
 import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
+import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const sha=b=>createHash('sha256').update(b).digest('hex');
 // Exact S-18 proposals read back from the owner's 18 top-level PR68 comments.
@@ -36,7 +37,7 @@ const policies=()=>({
   before:JSON.parse(execFileSync('git',['show','4a2827d37f60fc651b3a6dbace0dcddfab44b9c4:frontend/scripts/nyay66-policy.json'],{cwd:root})),
 });
 function expectApprovedExceptions(policy,before){
-  policy={...policy,exceptions:normalizeS19RasterForTest(policy.exceptions)};
+  policy={...policy,exceptions:normalizeS19RasterForTest(withoutS21ProposalsForTest(policy.exceptions))};
   // Preserve every original field/string/order and the exact 18 S-18 approvals.
   // Optional S-19/S-20 proposals are validated here; the hosted finalizer still
   // requires an exact owner comment for each hash (never test self-approval).
@@ -136,7 +137,7 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
   });
   it('permits future S-20 proposals only for PR72 while preserving all 112 existing exception records exactly',()=>{
     const {policy,before}=policies();
-    expect(sha(JSON.stringify(normalizeS19RasterForTest(policy.exceptions).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
+    expect(sha(JSON.stringify(normalizeS19RasterForTest(withoutS21ProposalsForTest(policy.exceptions)).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
     const proposal={screen:'S-20',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72};
     policy.exceptions.push(proposal);
     expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
@@ -144,6 +145,21 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
     for(const changed of [{...proposal,approvalPr:73},{...proposal,checks:['accessibility']},{...proposal,liveSha256:'invalid'}]){
       policy.exceptions[policy.exceptions.length-1]=changed;
       expect(()=>expectApprovedExceptions(policy,before)).toThrow();
+    }
+  });
+  it('permits only the exact 16 S-21 proposals while preserving the original continuation and approval checks',()=>{
+    const {policy,before}=policies();
+    policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
+    for(const change of [
+      p=>p.exceptions.pop(),
+      p=>{p.exceptions.find(e=>e.screen==='S-21').approvalPr=75;},
+      p=>{p.exceptions.find(e=>e.screen==='S-21').reason+=' changed';},
+      p=>{p.exceptions.find(e=>e.screen==='S-21').liveSha256='0'.repeat(64);},
+      p=>{p.exceptions.find(e=>e.screen!=='S-21').reason+=' changed';},
+    ]){
+      const altered=structuredClone(policy);change(altered);
+      expect(()=>expectApprovedExceptions(altered,before)).toThrow();
     }
   });
   it('keeps missing coverage, regressions and invalid exceptions blocking despite design intake',async()=>{
