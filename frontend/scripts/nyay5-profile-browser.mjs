@@ -78,6 +78,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-18',
   'S-19',
   'S-20',
+  'S-21',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -380,7 +381,10 @@ async function recordVisualContract(page, screenId) {
         const s20Eyebrow = contract.screenId === 'S-20' && heading.tagName === 'H2'
           && heading.getAttribute('class') === 's20-eyebrow'
           && ['S-20-saved', 'S-20-verification'].includes(heading.getAttribute('id'));
-        const expectedFamily = s19Eyebrow || s20Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
+        const s21Eyebrow = contract.screenId === 'S-21' && heading.tagName === 'H2'
+          && heading.getAttribute('class') === 's21-eyebrow'
+          && heading.getAttribute('id') === 's21-about';
+        const expectedFamily = s19Eyebrow || s20Eyebrow || s21Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
         return family.length === expectedFamily.length
           && family.every((name, index) => name === expectedFamily[index]);
       }),
@@ -3460,9 +3464,16 @@ async function extendedStorageBoundaryProbe(browser) {
   await viewListing.click();
   failureStage = 'storage_s21';
   await page.waitForURL(/\/s-21\?listing=/u);
-  await page.getByRole('button', { name: 'Apply now' }).waitFor();
+  const apply = page.getByRole('button', { name: 'Apply', exact: true });
+  await apply.waitFor();
+  if (await apply.getAttribute('aria-disabled') !== 'true') throw new Error('NYAY5_S21_APPLICATION_MUST_REMAIN_UNAVAILABLE');
+  const detailUrl = new URL(page.url());
+  await apply.evaluate(button => button.click());
+  if (page.url() !== detailUrl.href) throw new Error('NYAY5_S21_DISABLED_APPLICATION_NAVIGATED');
   await recordStorage(page, 's21-internship-detail');
-  await page.getByRole('button', { name: 'Apply now' }).click();
+  // Keep the reserved legacy flow's independent storage assertions without
+  // exposing an application route from the approved S-21 design.
+  await page.goto(`${WEB}/s-22?listing=${encodeURIComponent(detailUrl.searchParams.get('listing'))}`);
   failureStage = 'storage_s22';
   await page.waitForURL(/\/s-22\?listing=/u);
   await page.getByRole('button', { name: 'Continue to documents' }).waitFor();

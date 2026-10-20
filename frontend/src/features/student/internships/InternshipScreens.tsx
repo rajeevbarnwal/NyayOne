@@ -7,8 +7,6 @@ import { useAuth } from '../../../app/authContext';
 import { StatusBadge, EmptyState, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
   stipendText,
-  isVerifiedListing,
-  listingSourceLabel,
   stepForStatus,
   statusChip,
   newApplicationRef,
@@ -29,8 +27,10 @@ import {
   saveInternship,
   unsaveInternship,
 } from '../lib/internshipsApi';
-import { PublicRiskLabelPanel } from '../reporting/RiskLabelScreens';
 import { S20BrowseScreen } from './S20BrowseScreen';
+import { S21DetailScreen } from './S21DetailScreen';
+import { settleS21Saved } from './s21SavedCache';
+import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib/studentBrowserContext';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -89,15 +89,12 @@ function useSavedInternships() {
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean }) => (
+    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean; fence: ReturnType<typeof captureStudentContextFence> }) => (
       wasSaved ? unsaveInternship(listing.id) : saveInternship(listing.id)
     ),
-    onSuccess: (result, variables) => {
-      client.setQueryData<InternshipListing[]>(key, (current = []) => (
-        result.saved
-          ? [variables.listing, ...current.filter((item) => item.id !== variables.listing.id)]
-          : current.filter((item) => item.id !== variables.listing.id)
-      ));
+    onSuccess: async (result, variables) => {
+      if (auth.userId) await settleS21Saved(client, auth.userId, variables.listing, result.saved, () => isStudentContextFenceCurrent(variables.fence));
+      if (!isStudentContextFenceCurrent(variables.fence)) return;
       setFailure(null);
       setMessage(result.saved
         ? 'Saved privately to your account. The organisation is not notified.'
@@ -120,7 +117,7 @@ function useSavedInternships() {
       setFailure(access?.hint ?? 'Saved internships are unavailable for this session.');
       return;
     }
-    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id) });
+    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id), fence: captureStudentContextFence() });
   }
   return {
     canSave,
@@ -145,81 +142,7 @@ export function InternshipBrowse() {
 /* S-21 — Internship detail                                                    */
 /* -------------------------------------------------------------------------- */
 export function InternshipDetail() {
-  const nav = useNavigate();
-  const [params] = useSearchParams();
-  const listingId = params.get('listing')?.trim() ?? '';
-  const detail = useQuery({
-    queryKey: ['internship', listingId],
-    queryFn: () => getInternship(listingId),
-    enabled: Boolean(listingId),
-    retry: false,
-  });
-  const saved = useSavedInternships();
-  const l = detail.data;
-  return (
-    <StudentScreen screenId="S-21">
-      <div className="st-stack">
-        {!listingId ? (
-          <ErrorState title="Listing unavailable" detail="This listing link is incomplete. Return to internships and select a listing." />
-        ) : detail.isPending ? (
-          <LoadingState label="Loading internship…" />
-        ) : detail.isError || !l ? (
-          <ErrorState title="Listing unavailable" detail={internshipFailureCopy(detail.error, 'We could not load this internship. Please retry.')} onRetry={() => void detail.refetch()} />
-        ) : <>
-        <ModuleHead eyebrow="Internships · S4" title={l.role} sub={l.org} />
-        {saved.failure && <ValidationState message={saved.failure} />}
-        {saved.query.isError && <ValidationState message={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} />}
-        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
-        <div className="st-grid">
-          <section className="st-panel">
-            <div className="st-panel__head">
-              <h2 className="st-panel__title">Role</h2>
-              <span className="st-metatag">{isVerifiedListing(l) ? 'verified source' : 'unverified source'}</span>
-            </div>
-            <p>{l.description}</p>
-            <div className="st-chips" style={{ marginTop: 'var(--space-3)' }}>
-              {l.tags.map((t) => (
-                <span key={t} className="status status--info">
-                  <span className="ui-badge__mark" aria-hidden>
-                    i
-                  </span>
-                  {t}
-                </span>
-              ))}
-            </div>
-          </section>
-          <section className="st-panel">
-            <h2 className="st-panel__title">Eligibility &amp; dates</h2>
-            <p className="st-item__meta">{l.eligibility}</p>
-            <div className="st-actions">
-              <button type="button" className="btn btn--primary tap" onClick={() => nav(`/s-22?listing=${encodeURIComponent(l.id)}`)}>
-                Apply now
-              </button>
-              <button
-                type="button"
-                className="btn tap"
-                aria-pressed={saved.savedIds.has(l.id)}
-                disabled={saved.pendingId === l.id || (saved.canSave && saved.query.isPending)}
-                onClick={() => saved.toggle(l)}
-              >
-                {saved.pendingId === l.id ? 'Saving…' : saved.savedIds.has(l.id) ? 'Saved' : 'Save'}
-              </button>
-              <button type="button" className="btn tap" onClick={() => nav('/s-20')}>
-                Back to listings
-              </button>
-            </div>
-            {/* Defaults to a zero-DOM/zero-request result until both release gates open. */}
-            <PublicRiskLabelPanel organisationId={l.organisationId} organisationName={l.org} compact />
-          </section>
-        </div>
-        <DpdpFootnote>
-          {listingSourceLabel(l)}
-          {l.source.url && <> · <a href={l.source.url} target="_blank" rel="noreferrer">Open source</a></>}
-        </DpdpFootnote>
-        </>}
-      </div>
-    </StudentScreen>
-  );
+  return <S21DetailScreen/>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -474,7 +397,7 @@ export function InternshipSaved() {
                 </div>
                 <div className="st-actions">
                   <button type="button" className="btn tap" disabled={saved.pendingId === l.id} onClick={() => saved.toggle(l)}>{saved.pendingId === l.id ? 'Removing…' : 'Remove'}</button>
-                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}`)}>View</button>
+                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}&from=s25`)}>View</button>
                 </div>
               </li>
             ))}

@@ -15,7 +15,7 @@ export interface S20BrowseViewProps {
   onVerified: () => void; onPage: (page: number) => void; onClear: () => void;
   onRetry: () => Promise<unknown>; onRetrySaved: () => Promise<unknown>; onSave: (listing: InternshipListing) => Promise<unknown>;
 }
-function Icon({ name, size = 20 }: { name: string; size?: number }) {
+export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   // Exact frozen continuation primitives; the honest profile fallback is not
   // replaced with the prototype's synthetic AN identity.
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">

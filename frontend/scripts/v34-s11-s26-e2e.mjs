@@ -668,7 +668,7 @@ try {
     && completedMenonResponses.every((item) => item.status === 200 && item.finishedError === null));
 
   const saveMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'PUT', '/api/v1/student/internships/menon/saved'));
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Save listing', exact: true }).click();
   const completedSaveMenon = await finishResponse(await saveMenonResponse);
   await page.getByRole('status').filter({ hasText: 'Saved privately to your account.' }).waitFor({ state: 'visible' });
   record('S-21_save_identity', 'PUT saves exactly menon to the account-backed list', completedSaveMenon,

@@ -304,10 +304,10 @@ try {
     heading: await page.getByRole('heading', { level: 1 }).innerText(),
   }, new URL(page.url()).pathname === '/s-21'
       && new URL(page.url()).searchParams.get('listing') === 'menon'
-      && (await page.getByRole('heading', { level: 1 }).innerText()) === 'Judicial research assistant');
+      && (await page.getByRole('heading', { level: 1 }).innerText()) === 'Judicial research assistant.');
 
   const savePut = page.waitForResponse((response) => responseMatches(response, 'PUT', '/api/v1/student/internships/menon/saved'));
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Save listing', exact: true }).click();
   await finishedResponse(savePut);
   await page.getByText('Saved privately to your account. The organisation is not notified.').waitFor();
 

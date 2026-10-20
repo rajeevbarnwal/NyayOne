@@ -7,6 +7,8 @@ import { InternshipsApiError } from '../lib/internshipsApi';
 import type { InternshipListing, StipendFilter } from '../lib/internships';
 import { S20BrowseView, type S20BrowseViewProps, type S20FocusContinuity } from './S20BrowseView';
 import { browseInternships, readBrowseSaved, changeBrowseSaved, filterBrowsePage } from './s20Api';
+import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib/studentBrowserContext';
+import { settleS21Saved } from './s21SavedCache';
 
 export function S20BrowseScreen() {
   const auth = useAuth(); const session = useStudentSession();
@@ -31,9 +33,9 @@ function BrowseController({ focusContinuity }: Pick<S20BrowseViewProps, 'focusCo
   const saved = useQuery({ queryKey: savedKey, queryFn: ({ signal }) => readBrowseSaved(signal), enabled: canSave, retry: false, networkMode: 'always', refetchOnWindowFocus: false, refetchOnMount: 'always' });
   const mutation = useStudentMutation({
     retry: false, networkMode: 'always',
-    mutationFn: ({ item, desired }: { item: InternshipListing; desired: boolean }) => changeBrowseSaved(item.id, desired),
-    onSuccess: (confirmed, { item }) => {
-      client.setQueryData<InternshipListing[]>(savedKey, (old = []) => confirmed ? [item, ...old.filter(i => i.id !== item.id)] : old.filter(i => i.id !== item.id));
+    mutationFn: ({ item, desired }: { item: InternshipListing; desired: boolean; fence: ReturnType<typeof captureStudentContextFence> }) => changeBrowseSaved(item.id, desired),
+    onSuccess: async (confirmed, { item, fence }) => {
+      if (auth.userId) await settleS21Saved(client, auth.userId, item, confirmed, () => isStudentContextFenceCurrent(fence));
     },
   });
   let savedPhase: S20BrowseViewProps['savedPhase'] = !canSave
@@ -48,7 +50,7 @@ function BrowseController({ focusContinuity }: Pick<S20BrowseViewProps, 'focusCo
     }
     lock.current = true; setPendingId(item.id); setSaveError(null); setNotice('');
     try {
-      const confirmed = await mutation.mutateAsync({ item, desired: !(saved.data ?? []).some(i => i.id === item.id) });
+      const confirmed = await mutation.mutateAsync({ item, desired: !(saved.data ?? []).some(i => i.id === item.id), fence: captureStudentContextFence() });
       if (mounted.current) setNotice(confirmed ? 'Saved privately to your account. The organisation is not notified.' : 'Removed from your saved internships.');
     } catch (error) {
       if (mounted.current) {
