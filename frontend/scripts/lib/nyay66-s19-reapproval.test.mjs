@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {approveException,canonical,finalizeEnforcement} from './nyay66-enforcement.mjs';
 import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
+import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const options={r2:true,s18:true,s19:true,s20:true};
 const original=JSON.parse(execFileSync('git',['show','f458307c04ba81907395b0a2f29325c4f9aefde3:frontend/scripts/nyay66-policy.json'],{cwd:root})).exceptions;
@@ -27,8 +28,10 @@ const copyPins=[
 ].map(([label,previousHash,hash,commentId])=>({label,previousHash,hash,commentId,index:beforeCopy.findIndex(e=>approveException(e,null,options)===previousHash)}));
 const currentPolicy=()=>JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions;
 function expectApprovedCopyBoundary(entries){
-  expect(entries).toHaveLength(beforeCopy.length);
-  const normalized=entries.map((entry,index)=>{
+  // Validate the exact additive set before retaining the unchanged historical checks.
+  const historical=withoutS21ProposalsForTest(entries);
+  expect(historical).toHaveLength(beforeCopy.length);
+  const normalized=historical.map((entry,index)=>{
     const pin=copyPins.find(p=>p.index===index);
     if(pin)expect(approveException(entry,null,options)).toBe(pin.hash);
     else expect(JSON.stringify(entry)).toBe(JSON.stringify(beforeCopy[index]));
@@ -39,6 +42,31 @@ function expectApprovedCopyBoundary(entries){
   expectPreserved(normalized);
 }
 describe('ten exact S-20 copy replacements, not a general exception allowance',()=>{
+  it.each([false,true])('preserves all 132 historical records with exact S-21 additions: %s',withS21=>{
+    const historical=currentPolicy().filter(e=>e.screen!=='S-21');
+    const entries=[...historical,...(withS21?structuredClone(s21Proposals):[])],before=JSON.stringify(entries);
+    expect(historical).toHaveLength(132);
+    expectApprovedCopyBoundary(entries);
+    expect(JSON.stringify(entries)).toBe(before);
+  });
+  it('rejects every altered S-21 addition before comparing the historical boundary',()=>{
+    const candidate=()=>[...currentPolicy().filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    expectApprovedCopyBoundary(candidate());
+    for(let index=0;index<s21Proposals.length;index++)for(const mutate of [
+      e=>e.approvalPr=73,e=>e.screen='S-22',e=>e.viewport='mobile360',e=>e.theme='dark',
+      e=>e.referenceSha256='a'.repeat(64),e=>e.liveSha256='b'.repeat(64),e=>e.reason+=' widened',
+      e=>e.checks=['pixels'],e=>e.checks.push('accessibility'),e=>e.arbitrary=true,
+    ]){
+      const changed=candidate();mutate(changed[132+index]);
+      expect(()=>expectApprovedCopyBoundary(changed)).toThrow();
+    }
+    for(const mutate of [
+      e=>e.pop(),e=>e.push(structuredClone(e.at(-1))),e=>{e[133]=structuredClone(e[132]);},
+      e=>e.shift(),e=>{[e[0],e[1]]=[e[1],e[0]];},
+    ]){
+      const changed=candidate();mutate(changed);expect(()=>expectApprovedCopyBoundary(changed)).toThrow();
+    }
+  });
   it('accepts all ten pinned replacements while preserving the other 122 records and historical boundary',()=>{
     expect(beforeCopy).toHaveLength(132);expect(copyPins).toHaveLength(10);
     expect(new Set(copyPins.map(p=>p.index)).size).toBe(10);

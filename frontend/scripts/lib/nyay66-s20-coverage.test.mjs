@@ -6,6 +6,7 @@ import {lightRowInventory,finalizeEnforcement,approveException,digest} from './n
 import {loadContinuation,appendContinuation} from './nyay66-continuation.mjs';
 import {S20_STATES} from './nyay66-s20-reference.mjs';
 import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
+import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url)),data=await loadContinuation(root);
 const previous={r2:true,s18:true,s19:true},options={...previous,s20:true};
 const rows=()=>S20_STATES.flatMap(state=>['mobile390','desktop'].map(viewport=>({screen:'S-20',state:`S-20-${state}`,designState:state,viewport,theme:'light',executed:true,measured:true,evidenceKind:'live-route',syntheticServer:true,verdict:'PENDING-EVALUATION',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),metrics:{pass:true},regions:[],structure:[],accessibility:[],errors:[]})));
@@ -15,7 +16,9 @@ const referenceRows=JSON.parse(readFileSync(new URL(`../../test-baselines/nyay66
 const proposals=()=>referenceRows.map(row=>({screen:'S-20',viewport:row.viewport,theme:'light',referenceSha256:row.sha256,liveSha256:'a'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72}));
 function expectS20Policy(policy){
   expect(policy.enforced).not.toContain('S-20');
-  const existing=normalizeS19RasterForTest(policy.exceptions).filter(e=>e.screen!=='S-20');
+  // Validate the exact additive set before retaining the unchanged historical checks.
+  const historical=withoutS21ProposalsForTest(policy.exceptions);
+  const existing=normalizeS19RasterForTest(historical).filter(e=>e.screen!=='S-20');
   expect(existing).toHaveLength(112);
   expect(digest(JSON.stringify(existing))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
   const seen=new Set();
@@ -32,6 +35,35 @@ function expectS20Policy(policy){
   }
 }
 describe('S-20 additive product capture inventory',()=>{
+  it.each([false,true])('preserves S-20 provenance and historical settings with exact S-21 additions: %s',withS21=>{
+    const policy=readPolicy();
+    policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-21'),...(withS21?structuredClone(s21Proposals):[])];
+    const before=JSON.stringify(policy);
+    expectS20Policy(policy);
+    expect(JSON.stringify(policy)).toBe(before);
+  });
+  it('rejects every altered S-21 addition without masking S-20 rejection checks',()=>{
+    const candidate=()=>{
+      const policy=readPolicy();
+      policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+      return policy;
+    };
+    expectS20Policy(candidate());
+    for(let index=0;index<s21Proposals.length;index++)for(const mutate of [
+      e=>e.approvalPr=73,e=>e.screen='S-22',e=>e.viewport='mobile360',e=>e.theme='dark',
+      e=>e.referenceSha256='a'.repeat(64),e=>e.liveSha256='b'.repeat(64),e=>e.reason+=' widened',
+      e=>e.checks=['pixels'],e=>e.checks.push('accessibility'),e=>e.arbitrary=true,
+    ]){
+      const changed=candidate();mutate(changed.exceptions[132+index]);
+      expect(()=>expectS20Policy(changed)).toThrow();
+    }
+    for(const mutate of [
+      e=>e.pop(),e=>e.push(structuredClone(e.at(-1))),e=>{e[133]=structuredClone(e[132]);},
+      e=>e.shift(),e=>{[e[0],e[1]]=[e[1],e[0]];},
+    ]){
+      const changed=candidate();mutate(changed.exceptions);expect(()=>expectS20Policy(changed)).toThrow();
+    }
+  });
   it('allows the pinned one-row S-19 raster replacement while retaining the pre-S-20 policy contract',()=>{
     const policy=readPolicy();
     const index=policy.exceptions.findIndex(e=>e.referenceSha256===s19RasterPredecessor.referenceSha256&&e.viewport===s19RasterPredecessor.viewport);
