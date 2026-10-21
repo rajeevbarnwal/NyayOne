@@ -136,3 +136,29 @@ for (const width of [320, 390, 1440]) it(`Revision L composition, 48px controls,
   assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
   await page.screenshot({ path: `${diagnosticDir}/s25-${width}.png`, fullPage: true });
 }, { width }));
+
+for (const width of [390, 1440]) {
+  it(`S-25 italic and 18px action glyphs retain 48px controls at ${width}px`, () => using(async page => {
+    await ready(page);
+    const unstated = page.locator('.s20-meta i');
+    assert.equal(await unstated.innerText(), 'Stipend not stated');
+    assert.equal(await unstated.evaluate(el => getComputedStyle(el).fontStyle), 'italic');
+    assert.equal(await page.locator('.s25-saved .s20-action-icon svg').evaluateAll(nodes => nodes.every(n => n.getAttribute('width') === '18' && n.getAttribute('height') === '18')), true);
+    assert.equal(await page.locator('.s25-saved .s20-heading-icon svg').getAttribute('width'), '20');
+    assert.equal(await page.locator('.s25-saved .s20-save svg').first().getAttribute('width'), '20');
+  }, { width, saved: [{ ...items[0], stipend_monthly_paise: null }] }));
+  it(`S-25 empty-state primary action and Retry spacing match Revision L at ${width}px`, () => using(async (page, s) => {
+    await page.goto(origin + '/s-25');
+    const primary = page.locator('.s20-empty').getByRole('button', { name: 'Browse internships', exact: true });
+    await primary.waitFor();
+    const styles = await primary.evaluate(el => ({ background: getComputedStyle(el).backgroundColor, color: getComputedStyle(el).color, icon: getComputedStyle(el.querySelector('svg')).color, height: el.getBoundingClientRect().height }));
+    assert.deepEqual(styles, { background: 'rgb(46, 58, 140)', color: 'rgb(255, 255, 255)', icon: 'rgb(255, 255, 255)', height: 48 });
+    s.status = 503; await page.reload();
+    const retry = page.getByRole('button', { name: 'Retry', exact: true }); await retry.waitFor();
+    assert.equal(await retry.evaluate(el => getComputedStyle(el.parentElement).marginTop), '4px');
+    assert.equal(await retry.locator('svg').getAttribute('width'), '18');
+    s.status = 200; await retry.press('Enter');
+    await page.getByRole('heading', { name: 'No saved internships yet.' }).waitFor();
+    assert.equal(await page.locator('.s25-saved main').count(), 1);
+  }, { width, saved: [] }));
+}

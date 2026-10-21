@@ -66,4 +66,33 @@ describe('S-25 server-backed Revision L composition', () => {
     expect(render({ phase: 'error', statusCode: 503 })).toContain('HTTP 503');
     expect(render({ phase: 'error', statusCode: null })).not.toContain('HTTP ');
   });
+  it('uses the frozen italic treatment only for an unstated stipend', () => {
+    expect(render({ items: [{ ...item, stipendMonthlyPaise: null }] })).toContain('<i>Stipend not stated</i>');
+    expect(render()).not.toContain('<i>');
+    expect(render({ items: [{ ...item, stipendMonthlyPaise: 0 }] })).not.toContain('<i>');
+  });
+  it('makes only the empty-state Browse action primary', () => {
+    const html = render({ phase: 'empty', items: [] });
+    const buttons = html.match(/<button class="s20-btn[\s\S]*?<\/button>/g) ?? [];
+    expect(buttons).toHaveLength(3);
+    expect(buttons.filter(button => button.includes('class="s20-btn s20-primary"'))).toHaveLength(1);
+    expect(buttons[1]).toContain('class="s20-btn s20-primary"');
+    expect(buttons[1]).not.toContain('s20-indigo');
+    expect(render()).not.toContain('class="s20-btn s20-primary"');
+  });
+  it('sizes action glyphs at 18px without changing 20px state/bookmark glyphs', () => {
+    for (const overrides of [{}, { phase: 'empty', items: [] }, { phase: 'error', statusCode: 503 }, { uncertain: true, failure: 'Could not confirm removal.' }] satisfies Partial<S25SavedViewProps>[]) {
+      const html = render(overrides);
+      const icons = html.match(/<span class="s20-action-icon[^"]*"><svg[^>]*>/g) ?? [];
+      expect(icons.length).toBeGreaterThan(0);
+      for (const icon of icons) expect(icon).toContain('width="18" height="18"');
+      expect(html).toContain('<span class="s20-heading-icon"><svg width="20" height="20"');
+    }
+  });
+  it('retains the error Retry action inside the frozen action-row wrapper', () => {
+    const html = render({ phase: 'error', statusCode: 503 });
+    expect(html).toContain('<div class="s20-actions"><button class="s20-btn s20-primary"');
+    expect(html).toContain('aria-disabled="false"');
+    expect(html).toContain('>Retry</button></div>');
+  });
 });
