@@ -77,7 +77,9 @@ describe('S-21 archive import fails closed before writing',()=>{
     expect(got.provenance).toEqual({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39279617257',artifactId:'12200177444',archiveSha256:'4ae108aab062f6b3e7ded73b85e4efdcb95962fe3ca3ce54400107ce95e9de60',sourceHead:'0d381b7aee9d438712549cb62275582951536438',controlHead:'0d381b7aee9d438712549cb62275582951536438',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',referenceRows:16,manualRows:0});
     expect(policy.s21).toEqual({cache:'s21-v32108-chromium-149.0.7827.55-39279617257',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',provenanceSha256:'dae65825f99fda6e069ee91e2bb12a2981e0e961ca42d05633ca14cca96de92d'});
     const before=JSON.parse(execFileSync('git',['show','0d381b7aee9d438712549cb62275582951536438:frontend/scripts/nyay66-policy.json'],{cwd:root}));
-    const current=structuredClone(policy);delete current.s21;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(policy);delete current.s21;delete current.s25;delete current.integrityApproval;delete before.integrityApproval;
+    // S-25's exact cache/provenance is pinned by nyay66-s25-import.test.mjs;
+    // every historical setting and exception comparison below stays intact.
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     current.exceptions=withoutS21ProposalsForTest(current.exceptions);
     expect(current.exceptions).toHaveLength(132);
