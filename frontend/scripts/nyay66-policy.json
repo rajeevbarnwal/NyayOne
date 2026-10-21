@@ -9,7 +9,8 @@
   "s19": {"cache": "s19-v32108-chromium-149.0.7827.55-39029544967", "manifestSha256": "b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c", "provenanceSha256": "5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf"},
   "s20": {"cache": "s20-v32108-chromium-149.0.7827.55-39111251228", "manifestSha256": "e121bff73a920ce1a563cc77317a6bbfe7a1970f131b8442cd61a4123f6b47d9", "provenanceSha256": "a6bd9be03065ed65b81a24bf657f3bd5a654bc6251866f14288f4ed07c512f0c"},
   "s21": {"cache": "s21-v32108-chromium-149.0.7827.55-39279617257", "manifestSha256": "1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0", "provenanceSha256": "dae65825f99fda6e069ee91e2bb12a2981e0e961ca42d05633ca14cca96de92d"},
-  "integrityApproval": {"pr":77,"commentId":6309147314,"bundleSha256":"5784135cf5dd93902bc72ee24b405d4886648d144b3d73c31db87ceb53adebf6"},
+  "s25": {"cache": "s25-v32108-chromium-149.0.7827.55-39558506587", "manifestSha256": "c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67", "provenanceSha256": "16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675"},
+  "integrityApproval": {"pr":76,"commentId":6311734946,"bundleSha256":"b8d5960cabc911fd024fb76b0034ac445086779ded20947c0af7dc37b72121da"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {

@@ -1,0 +1,5286 @@
+{
+  "schema": 1,
+  "purpose": "UNIMPORTED_REFERENCE_CALIBRATION",
+  "screen": "S-25",
+  "theme": "light",
+  "approval": "NYAY-90:16011",
+  "sourceArchiveSha256": "0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964",
+  "sourceSha256": "8dcb94f89df7b434022e1c0d599e57d4348224b1ea7c5f5127e45705eb75c7f8",
+  "embeddedResources": {
+    "sourceSha256": "cd26225f6c528de9e70fb3d278ed8fdfd7bebab5bdbdeee9764cb591cb76c72a",
+    "fontFaces": [
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "7ae94aadec42e9faf01ea2d5ad9c74fb77ed4470f1d7be90bc2250a464e77ef7"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "8397b40b49a22d7db013fe11abdb3ce4746afadb80f4ea058be293086e5d0b2e"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "99137eccc6b84c6b386ca80a375bfad3c9a7c4f23cf6f88b6bb1b4747810279b"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "ed465b9cc36b74cb326952180a0cf1d54f049ec73cc1787059691414c1d1c0f0"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "59556636564c9a718b26dda2cfde435029c26593bac1fedb138161be7531262d"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "9691734199298cca3ceda3f6971824ac28a23d208b7fcb47028f41a7f52ac88f"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "8c4842e7af13ae8ea4aee9e3b680085b1148b38a03a0f7c2b6026d145e8f10a3"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "10b860d0ba0b86924faf739a92a1e2e8f85f35200737ed0122ad124bc590dde8"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "55af89610d8baf895b83c2e59e18db5f5621768da7d8d774ed5721b2188fc949"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "d9f554decce039d1f367b8eba1cc2c593989ae23318b88bb3d37885f171acb3b"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "447a903a31ea48002c6e1b5b68b0432f385764d460777fcc70bf545726aa4e1a"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "3a1a33c3f2a8d1b98f01f867a73a2085ada27df402678a4cd6d1f5016edcf670"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "24803666bf8b050f9d06af00a4d408b3ebdf3bc714aec6da9099d9fa3217508b"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "99422bba6a3397ac90e2fe1c37038b7796a7df320af2a46d22755513b41c7233"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "a28ea82d9a40e7f1d5b96935f09011581d2f92920f85e3921b02e4b9d5ca099a"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "a285ff771f79cb75675c139d5c7a2e2e6d1bd1941fc9e10b57478f75f212b4d8"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "3f8d833b64a1e7e1b8be07cd73513004cc680a466b84d6459fdcd2f1c1fcf0b3"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "9a6738241702381e65e80d1ee5f172ce12be2049dfedeb33016a5096444bc03b"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "74dc7e33abf296a6a7129a327d7b9c5bc02b11eb9ffb47447a0887997c863102"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "ccb889e04368c402021b9b73196f26fc903d6cb269028138fefb68bd56cc5c19"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "400",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "400",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "500",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "500",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "600",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "600",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      }
+    ],
+    "logoDefinitions": [
+      {
+        "name": "LOCKUP",
+        "sha256": "829f3f1a8c4b340524ccf399c5f0dbed586a559f0b1030d8640ff1d5f6b6afc4"
+      },
+      {
+        "name": "LOCKUP_REV",
+        "sha256": "f42c8b95145ad77c3782e9d5c9c706fe05bd658286f0100deec8723e56c9cd4e"
+      },
+      {
+        "name": "MARK",
+        "sha256": "236192781d6e4c1dc11cf332a42962f8bc7334ed83e1cd91c18ca180578da95e"
+      },
+      {
+        "name": "MARK_REV",
+        "sha256": "9704e9f9e56374a5c1b0ac89969c6e92b8f4566e8b0514666398c73c18585387"
+      }
+    ]
+  },
+  "producerHead": "5fd6230526badfa03cf57d301b54edfb24208c76",
+  "controlHead": "5fd6230526badfa03cf57d301b54edfb24208c76",
+  "generatedUTC": "2026-10-21T06:56:32.979Z",
+  "platform": "linux-x64",
+  "playwright": "1.61.1",
+  "fonts": {
+    "Carlito-Bold-latin.woff2": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012",
+    "Carlito-Regular-latin.woff2": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7",
+    "HankenGrotesk-Variable-latin.woff2": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+    "IBMPlexMono-Medium-latin.woff2": "a76f53ca6612e7b3828eec2311098675b7f9849ae4169a8bcef6302aec02a6c0",
+    "IBMPlexMono-Regular-latin.woff2": "c36f509c0a8f9f85f29cb44bc8701d8a9e0b14c499e77a884f789ead7093a7ac",
+    "IBMPlexMono-SemiBold-latin.woff2": "ad4580d8cb4b5f627c2d18457656732f7f7b070f7837fbc380e08054157e6f6c",
+    "Newsreader-Variable-latin.woff2": "01817351be3edfc1714fe6d60ddea6a22a169a5ebd033b50c7f9495e5d9c386a",
+    "PublicSans-latin.woff2": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d",
+    "SpaceGrotesk-latin.woff2": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557",
+    "Spectral-Light-latin.woff2": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9",
+    "Spectral-Semibold-latin.woff2": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a",
+    "SplineSansMono-latin.woff2": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+  },
+  "deferredStates": [],
+  "rows": [
+    {
+      "view": "s25-loading",
+      "viewport": "mobile390",
+      "file": "s25-loading-mobile390-0.png",
+      "sha256": "d53a7b92b96889c42a7115016ce058382329cadd1244fcff2a92d7b6889fc341",
+      "sampleHashes": [
+        "d53a7b92b96889c42a7115016ce058382329cadd1244fcff2a92d7b6889fc341",
+        "d53a7b92b96889c42a7115016ce058382329cadd1244fcff2a92d7b6889fc341",
+        "d53a7b92b96889c42a7115016ce058382329cadd1244fcff2a92d7b6889fc341"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships Loading Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-loading",
+      "viewport": "desktop",
+      "file": "s25-loading-desktop-0.png",
+      "sha256": "659cf24da3c6140ae81842f64320487be94b8801d178609655c62b4959527c78",
+      "sampleHashes": [
+        "659cf24da3c6140ae81842f64320487be94b8801d178609655c62b4959527c78",
+        "659cf24da3c6140ae81842f64320487be94b8801d178609655c62b4959527c78",
+        "659cf24da3c6140ae81842f64320487be94b8801d178609655c62b4959527c78"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. Loading BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-list",
+      "viewport": "mobile390",
+      "file": "s25-list-mobile390-0.png",
+      "sha256": "5edcabe8d8b7840cac6ec69d3ec7790b2172e47452c55af464cb578334d98ec6",
+      "sampleHashes": [
+        "5edcabe8d8b7840cac6ec69d3ec7790b2172e47452c55af464cb578334d98ec6",
+        "5edcabe8d8b7840cac6ec69d3ec7790b2172e47452c55af464cb578334d98ec6",
+        "5edcabe8d8b7840cac6ec69d3ec7790b2172e47452c55af464cb578334d98ec6"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 261.296875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 261.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 393.546875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 393.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 525.796875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 525.796875,
+              "width": 48,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-list",
+      "viewport": "desktop",
+      "file": "s25-list-desktop-0.png",
+      "sha256": "ad53dc952abd07ded34aa1ea907d09f4f5500cd44093859390cb4052d123e386",
+      "sampleHashes": [
+        "ad53dc952abd07ded34aa1ea907d09f4f5500cd44093859390cb4052d123e386",
+        "ad53dc952abd07ded34aa1ea907d09f4f5500cd44093859390cb4052d123e386",
+        "ad53dc952abd07ded34aa1ea907d09f4f5500cd44093859390cb4052d123e386"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 215.296875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 215.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 347.546875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 347.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 479.796875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 479.796875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-empty",
+      "viewport": "mobile390",
+      "file": "s25-empty-mobile390-0.png",
+      "sha256": "c29037dacf9a8634914b0476e735ff41ed7c989184b8fb3b4b09dc775897ee2f",
+      "sampleHashes": [
+        "c29037dacf9a8634914b0476e735ff41ed7c989184b8fb3b4b09dc775897ee2f",
+        "c29037dacf9a8634914b0476e735ff41ed7c989184b8fb3b4b09dc775897ee2f",
+        "c29037dacf9a8634914b0476e735ff41ed7c989184b8fb3b4b09dc775897ee2f"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 92.5,
+              "y": 361.609375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "No saved internships yet.",
+            "box": {
+              "x": 105.109375,
+              "y": 279.921875,
+              "width": 179.765625,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships No saved internships yet. Saved listings appear here with their closing dates. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-empty",
+      "viewport": "desktop",
+      "file": "s25-empty-desktop-0.png",
+      "sha256": "531023f5f36f2d7c66dede460f070d11790dc0871ce90f095e90fd0211a25435",
+      "sampleHashes": [
+        "531023f5f36f2d7c66dede460f070d11790dc0871ce90f095e90fd0211a25435",
+        "531023f5f36f2d7c66dede460f070d11790dc0871ce90f095e90fd0211a25435",
+        "531023f5f36f2d7c66dede460f070d11790dc0871ce90f095e90fd0211a25435"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 342.96875,
+              "y": 315.609375,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "No saved internships yet.",
+            "box": {
+              "x": 355.59375,
+              "y": 233.921875,
+              "width": 179.765625,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. No saved internships yet. Saved listings appear here with their closing dates. Browse internships BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-remove-pending",
+      "viewport": "mobile390",
+      "file": "s25-remove-pending-mobile390-0.png",
+      "sha256": "cf5e923beaaf08a4bafe3991a58bf6b8e1a0bcdea83dbc6e1b47cae3efc7c51b",
+      "sampleHashes": [
+        "cf5e923beaaf08a4bafe3991a58bf6b8e1a0bcdea83dbc6e1b47cae3efc7c51b",
+        "cf5e923beaaf08a4bafe3991a58bf6b8e1a0bcdea83dbc6e1b47cae3efc7c51b",
+        "cf5e923beaaf08a4bafe3991a58bf6b8e1a0bcdea83dbc6e1b47cae3efc7c51b"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 261.296875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": true,
+            "box": {
+              "x": 312,
+              "y": 261.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 393.546875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 393.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 525.796875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 525.796875,
+              "width": 48,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-remove-pending",
+      "viewport": "desktop",
+      "file": "s25-remove-pending-desktop-0.png",
+      "sha256": "d909abc93514f8662f6447b7375c36dd7839d3a690cd3d653ad30b47ba4f3237",
+      "sampleHashes": [
+        "d909abc93514f8662f6447b7375c36dd7839d3a690cd3d653ad30b47ba4f3237",
+        "d909abc93514f8662f6447b7375c36dd7839d3a690cd3d653ad30b47ba4f3237",
+        "d909abc93514f8662f6447b7375c36dd7839d3a690cd3d653ad30b47ba4f3237"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 215.296875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": true,
+            "box": {
+              "x": 794.953125,
+              "y": 215.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 347.546875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 347.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 479.796875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 479.796875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-remove-failed",
+      "viewport": "mobile390",
+      "file": "s25-remove-failed-mobile390-0.png",
+      "sha256": "58296a7711c0ae2925bfe06fe8b342973598dc711fec355eb661cb1ad6497454",
+      "sampleHashes": [
+        "58296a7711c0ae2925bfe06fe8b342973598dc711fec355eb661cb1ad6497454",
+        "58296a7711c0ae2925bfe06fe8b342973598dc711fec355eb661cb1ad6497454",
+        "58296a7711c0ae2925bfe06fe8b342973598dc711fec355eb661cb1ad6497454"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 261.296875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 261.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 415.546875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 415.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 30,
+              "y": 547.796875,
+              "width": 272,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 312,
+              "y": 547.796875,
+              "width": 48,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Could not remove. Still saved. Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-remove-failed",
+      "viewport": "desktop",
+      "file": "s25-remove-failed-desktop-0.png",
+      "sha256": "76515e848beb50f4c30b4bfb5ea553bf1ed8599c0416cf0e0a88b3d8a8d6f6da",
+      "sampleHashes": [
+        "76515e848beb50f4c30b4bfb5ea553bf1ed8599c0416cf0e0a88b3d8a8d6f6da",
+        "76515e848beb50f4c30b4bfb5ea553bf1ed8599c0416cf0e0a88b3d8a8d6f6da",
+        "76515e848beb50f4c30b4bfb5ea553bf1ed8599c0416cf0e0a88b3d8a8d6f6da"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Summer associate Kalpavriksha Legal",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 215.296875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Summer associate from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 215.296875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Policy research intern Sarvatra Policy Centre",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 369.546875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Policy research intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 369.546875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Arbitration intern Nirvikar & Co.",
+            "disabled": false,
+            "box": {
+              "x": 48,
+              "y": 501.796875,
+              "width": 736.953125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Arbitration intern from saved",
+            "disabled": false,
+            "box": {
+              "x": 794.953125,
+              "y": 501.796875,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. 3 saved Summer associate Kalpavriksha Legal Mumbai · ₹40,000 per month Apply by 25 Aug 2026 Could not remove. Still saved. Policy research intern Sarvatra Policy Centre Remote · Stipend not stated Apply by 20 Aug 2026 Arbitration intern Nirvikar & Co. Bengaluru · ₹35,000 per month Apply by 18 Aug 2026 BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-error",
+      "viewport": "mobile390",
+      "file": "s25-error-mobile390-0.png",
+      "sha256": "37139d72b63ee19e110544a30e8b4f8d193ba8882494c16dbea4dd71a4a87bd5",
+      "sampleHashes": [
+        "37139d72b63ee19e110544a30e8b4f8d193ba8882494c16dbea4dd71a4a87bd5",
+        "37139d72b63ee19e110544a30e8b4f8d193ba8882494c16dbea4dd71a4a87bd5",
+        "37139d72b63ee19e110544a30e8b4f8d193ba8882494c16dbea4dd71a4a87bd5"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 153.921875,
+              "width": 205,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Retry",
+            "disabled": false,
+            "box": {
+              "x": 141.5,
+              "y": 366.109375,
+              "width": 107,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 16,
+              "y": 81,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "Your saved list did not load.",
+            "box": {
+              "x": 94.953125,
+              "y": 279.921875,
+              "width": 200.078125,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "Saved AN Saved internships. Listings you saved that are still open. Browse internships Your saved list did not load. Nothing was removed. HTTP 500 Retry Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s25-error",
+      "viewport": "desktop",
+      "file": "s25-error-desktop-0.png",
+      "sha256": "6338bebeb808c8eb17c0628466131ba44c197620d364eb81fa1e7a6f6e5d7ac4",
+      "sampleHashes": [
+        "6338bebeb808c8eb17c0628466131ba44c197620d364eb81fa1e7a6f6e5d7ac4",
+        "6338bebeb808c8eb17c0628466131ba44c197620d364eb81fa1e7a6f6e5d7ac4",
+        "6338bebeb808c8eb17c0628466131ba44c197620d364eb81fa1e7a6f6e5d7ac4"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Retry",
+            "disabled": false,
+            "box": {
+              "x": 391.96875,
+              "y": 320.109375,
+              "width": 107,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Browse internships",
+            "disabled": false,
+            "box": {
+              "x": 893.953125,
+              "y": 158.375,
+              "width": 205,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Saved internships.",
+            "box": {
+              "x": 34,
+              "y": 91,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "Your saved list did not load.",
+            "box": {
+              "x": 345.4375,
+              "y": 233.921875,
+              "width": 200.078125,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Saved internships. Listings you saved that are still open. Your saved list did not load. Nothing was removed. HTTP 500 Retry BROWSE MORE Listings that close or are withdrawn drop out of this list automatically. Browse internships Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    }
+  ],
+  "chromium": "149.0.7827.55"
+}
