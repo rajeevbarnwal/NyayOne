@@ -3,3 +3,5 @@
 .s25-saved .s20-result{scroll-margin-top:80px}
 .s25-saved .s20-note{overflow-wrap:anywhere}
 .s25-saved .s20-empty button[aria-disabled=true]{cursor:default;opacity:.55}
+/* Revision L's outlined Browse glyph starts at the top of its 20px wrapper. */
+.s25-saved .s20-action-icon.s20-indigo{align-items:flex-start}

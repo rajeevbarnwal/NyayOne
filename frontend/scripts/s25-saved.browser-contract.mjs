@@ -138,6 +138,18 @@ for (const width of [320, 390, 1440]) it(`Revision L composition, 48px controls,
 }, { width }));
 
 for (const width of [390, 1440]) {
+  it(`S-25 outlined Browse icon follows the reference baseline without moving the filled action at ${width}px`, () => using(async page => {
+    await page.goto(origin + '/s-25');
+    await page.getByRole('heading', { name: 'No saved internships yet.' }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const positions = await page.getByRole('button', { name: 'Browse internships', exact: true }).evaluateAll(nodes => nodes.map(el => {
+      const button = el.getBoundingClientRect(), icon = el.querySelector('svg').getBoundingClientRect();
+      return { primary: el.classList.contains('s20-primary'), height: button.height, iconWidth: icon.width, iconHeight: icon.height, offset: icon.y - button.y };
+    }));
+    assert.ok(positions.some(p => p.primary), 'filled action remains a separate negative control');
+    assert.ok(positions.some(p => !p.primary), 'outlined mobile/aside action is measured');
+    for (const p of positions) assert.deepEqual(p, { primary: p.primary, height: 48, iconWidth: 18, iconHeight: 18, offset: p.primary ? 15 : 14 });
+  }, { width, saved: [] }));
   it(`S-25 italic and 18px action glyphs retain 48px controls at ${width}px`, () => using(async page => {
     await ready(page);
     const unstated = page.locator('.s20-meta i');
