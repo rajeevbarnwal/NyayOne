@@ -5,7 +5,8 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {PNG} from 'pngjs';
-import {digest} from './nyay66-enforcement.mjs';
+import {digest,approveException} from './nyay66-enforcement.mjs';
+import {s25Proposals,s25ProposalHashes,historicalS25ExceptionsSha256,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {loadS25Source,S25_STATES,S25_VIEWPORTS,S25_PINS} from './nyay66-s25-reference.mjs';
 import {verifyS25Archive,loadS25Cache} from './nyay66-s25-import.mjs';
 import {continuationRows} from './nyay66-continuation.mjs';
@@ -79,18 +80,49 @@ describe('S-25 archive import fails closed before writing',()=>{
       await expect(loadS25Cache(f.dir,config,data,fonts)).rejects.toThrow('S25_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it('pins the exact owner-dispatched cache and preserves the full historical policy',async()=>{
+  it.each(['current','s25-proposed'])('pins the exact owner-dispatched cache and preserves the full historical policy (%s exceptions)',async(mode)=>{
     const got=await loadS25Cache(root,policy.s25,data,fonts);
     expect(got).not.toBe(null);expect(got.manifest.rows).toHaveLength(12);
     expect(got.provenance).toEqual({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39558506587',artifactId:'12326656920',archiveSha256:'9472c2ef4a37772a41e74a80128e174b688184a5bf7d07af41f12c3895c88aab',sourceHead:'5fd6230526badfa03cf57d301b54edfb24208c76',controlHead:'5fd6230526badfa03cf57d301b54edfb24208c76',manifestSha256:'c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67',referenceRows:12,manualRows:0});
     expect(policy.s25).toEqual({cache:'s25-v32108-chromium-149.0.7827.55-39558506587',manifestSha256:'c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67',provenanceSha256:'16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675'});
     const before=JSON.parse(execFileSync('git',['show','5fd6230526badfa03cf57d301b54edfb24208c76:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy);delete current.s25;delete current.integrityApproval;delete before.integrityApproval;
+    if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
+    current.exceptions=withoutS25ProposalsForTest(current.exceptions);
     expect(current.exceptions).toHaveLength(148);
+    expect(digest(JSON.stringify(current.exceptions))).toBe(historicalS25ExceptionsSha256);
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(before.exceptions));
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-25');
     expect(rows).toHaveLength(12);
     expect(rows.every(r=>r.verdict==='DESIGN-GAP'&&r.executed===false&&r.measured===false)).toBe(true);
+  });
+  it('pins twelve proposals without granting runtime approval or changing the 148 historical records',()=>{
+    const options={r2:true,s18:true,s19:true,s20:true,s21:true,s25:true};
+    expect(s25Proposals.map(e=>approveException(e,null,options))).toEqual(s25ProposalHashes);
+    for(const entry of s25Proposals)expect(approveException(entry,[],options)).toBe(false);
+    const history=withoutS25ProposalsForTest(policy.exceptions);
+    expect(history).toHaveLength(148);
+    expect(digest(JSON.stringify(history))).toBe(historicalS25ExceptionsSha256);
+    const candidate=[...history,...structuredClone(s25Proposals)],original=JSON.stringify(candidate);
+    expect(JSON.stringify(withoutS25ProposalsForTest(candidate))).toBe(JSON.stringify(history));
+    expect(JSON.stringify(candidate)).toBe(original);
+  });
+  it.each([
+    ['missing row',p=>p.pop()],
+    ['duplicate row',p=>{p[1]=structuredClone(p[0]);}],
+    ['extra row',p=>p.push(structuredClone(p[0]))],
+    ['reference bytes',p=>{p[0].referenceSha256='0'.repeat(64);}],
+    ['live bytes',p=>{p[0].liveSha256='0'.repeat(64);}],
+    ['disclosure',p=>{p[0].reason+=' widened';}],
+    ['check scope',p=>{p[0].checks=['pixels'];}],
+    ['approval PR',p=>{p[0].approvalPr=77;}],
+    ['viewport',p=>{p[0].viewport='mobile360';}],
+    ['screen',p=>{p[0].screen='S-26';}],
+    ['theme',p=>{p[0].theme='dark';}],
+    ['extra field',p=>{p[0].approved=true;}],
+  ])('rejects changed S-25 %s without relaxing historical or provenance checks',(_,mutate)=>{
+    const additions=structuredClone(s25Proposals);mutate(additions);
+    expect(()=>withoutS25ProposalsForTest([...policy.exceptions.filter(e=>e.screen!=='S-25'),...additions])).toThrow();
   });
 });

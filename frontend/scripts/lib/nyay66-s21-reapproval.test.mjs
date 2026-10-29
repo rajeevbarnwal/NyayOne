@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {approveException,digest,finalizeEnforcement} from './nyay66-enforcement.mjs';
 import {s21Proposals,s21ProposalHashes,s21Round2Pins,s21Round2Proposals,s21Round2ProposalHashes,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
+import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const options={r2:true,s18:true,s19:true,s20:true,s21:true};
 const baseline=JSON.parse(execFileSync('git',['show','f9c84dce4f718eed0d5bb535a1337c0e7f16a189:frontend/scripts/nyay66-policy.json'],{cwd:root})).exceptions;
@@ -11,6 +12,7 @@ const historical=baseline.filter(e=>e.screen!=='S-21');
 const targetIndices=s21Round2Pins.map(p=>baseline.findIndex(e=>JSON.stringify(e)===JSON.stringify(s21Proposals[p.index])));
 const candidate=()=>[...structuredClone(historical),...structuredClone(s21Round2Proposals)];
 function expectBoundary(entries){
+  entries=withoutS25ProposalsForTest(entries);
   expect(entries).toHaveLength(148);
   expect(JSON.stringify(withoutS21ProposalsForTest(entries))).toBe(JSON.stringify(historical));
   for(let i=0;i<baseline.length;i++){
@@ -20,6 +22,20 @@ function expectBoundary(entries){
   }
 }
 describe('S-21 Round 2 exact ten destination-host replacements',()=>{
+  it('admits only the twelve exact S-25 additions while preserving all 148 existing records',()=>{
+    const entries=[...candidate(),...structuredClone(s25Proposals)],before=JSON.stringify(entries);
+    expectBoundary(entries);
+    expect(JSON.stringify(entries)).toBe(before);
+    expect(withoutS25ProposalsForTest(entries)).toEqual(candidate());
+    for(let i=0;i<entries.length;i++){
+      const changed=structuredClone(entries);changed[i].reason+=' widened';
+      expect(()=>expectBoundary(changed)).toThrow();
+    }
+    for(const mutate of [e=>e.pop(),e=>e.push(structuredClone(e.at(-1))),e=>e.shift(),e=>{[e[0],e[1]]=[e[1],e[0]];}]){
+      const changed=structuredClone(entries);mutate(changed);
+      expect(()=>expectBoundary(changed)).toThrow();
+    }
+  });
   it('pins only ten changed entries and preserves the other 138 bytes in order',()=>{
     expect(baseline).toHaveLength(148);expect(historical).toHaveLength(132);
     expect(s21Round2Pins).toHaveLength(10);expect(new Set(targetIndices).size).toBe(10);
@@ -47,7 +63,7 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
     const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
     const before=JSON.stringify(policy);
     const hashes=policy.exceptions.filter(e=>e.screen==='S-21').map(e=>approveException(e,null,options));
-    if(JSON.stringify(hashes)===JSON.stringify(s21ProposalHashes))expect(policy.exceptions).toEqual(baseline);
+    if(JSON.stringify(hashes)===JSON.stringify(s21ProposalHashes))expect(withoutS25ProposalsForTest(policy.exceptions)).toEqual(baseline);
     else expectBoundary(policy.exceptions);
     expect(JSON.stringify(policy)).toBe(before);
   });
@@ -98,6 +114,7 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
     for(const name of ['nyay66-enforcement.mjs','nyay66-continuation.mjs','nyay66-s19-import.mjs','nyay66-s20-import.mjs','nyay66-s21-import.mjs','nyay66-s21-live.mjs','nyay66-s21-capture.mjs']){
       const code=readFileSync(new URL(name,import.meta.url),'utf8');
       expect(code).not.toContain('nyay66-s21-exceptions.test-fixture');
+      expect(code).not.toContain('nyay66-s25-exceptions.test-fixture');
       expect(code).not.toContain('s21Round2');
     }
   });

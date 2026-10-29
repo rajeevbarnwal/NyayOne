@@ -7,6 +7,7 @@ import {loadContinuation,appendContinuation} from './nyay66-continuation.mjs';
 import {S20_STATES} from './nyay66-s20-reference.mjs';
 import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
 import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
+import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url)),data=await loadContinuation(root);
 const previous={r2:true,s18:true,s19:true},options={...previous,s20:true};
 const rows=()=>S20_STATES.flatMap(state=>['mobile390','desktop'].map(viewport=>({screen:'S-20',state:`S-20-${state}`,designState:state,viewport,theme:'light',executed:true,measured:true,evidenceKind:'live-route',syntheticServer:true,verdict:'PENDING-EVALUATION',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),metrics:{pass:true},regions:[],structure:[],accessibility:[],errors:[]})));
@@ -17,7 +18,7 @@ const proposals=()=>referenceRows.map(row=>({screen:'S-20',viewport:row.viewport
 function expectS20Policy(policy){
   expect(policy.enforced).not.toContain('S-20');
   // Validate the exact additive set before retaining the unchanged historical checks.
-  const historical=withoutS21ProposalsForTest(policy.exceptions);
+  const historical=withoutS21ProposalsForTest(withoutS25ProposalsForTest(policy.exceptions));
   const existing=normalizeS19RasterForTest(historical).filter(e=>e.screen!=='S-20');
   expect(existing).toHaveLength(112);
   expect(digest(JSON.stringify(existing))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
@@ -35,6 +36,21 @@ function expectS20Policy(policy){
   }
 }
 describe('S-20 additive product capture inventory',()=>{
+  it('admits only the twelve exact S-25 additions without altering historical policy checks',()=>{
+    const policy=readPolicy();
+    policy.exceptions=[...withoutS25ProposalsForTest(policy.exceptions),...structuredClone(s25Proposals)];
+    const before=JSON.stringify(policy);
+    expectS20Policy(policy);
+    expect(JSON.stringify(policy)).toBe(before);
+    for(let i=0;i<12;i++){
+      const changed=structuredClone(policy);changed.exceptions.at(-12+i).reason+=' widened';
+      expect(()=>expectS20Policy(changed)).toThrow();
+    }
+    for(const mutate of [e=>e.pop(),e=>e.push(structuredClone(e.at(-1))),e=>e.shift(),e=>{[e[0],e[1]]=[e[1],e[0]];}]){
+      const changed=structuredClone(policy);mutate(changed.exceptions);
+      expect(()=>expectS20Policy(changed)).toThrow();
+    }
+  });
   it.each([false,true])('preserves S-20 provenance and historical settings with exact S-21 additions: %s',withS21=>{
     const policy=readPolicy();
     policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-21'),...(withS21?structuredClone(s21Proposals):[])];
@@ -45,7 +61,7 @@ describe('S-20 additive product capture inventory',()=>{
   it('rejects every altered S-21 addition without masking S-20 rejection checks',()=>{
     const candidate=()=>{
       const policy=readPolicy();
-      policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+      policy.exceptions=[...withoutS25ProposalsForTest(policy.exceptions).filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
       return policy;
     };
     expectS20Policy(candidate());
