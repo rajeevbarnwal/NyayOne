@@ -105,7 +105,7 @@ describe('SAATHI-60 internship screens', () => {
       client.setQueryData(['internships-saved', STUDENT.userId], []);
     });
     expect(emptyHtml).toContain('No saved internships yet');
-    expect(emptyHtml).toContain('Browse listings');
+    expect(emptyHtml).toContain('Browse internships');
   });
 
   it('does not claim account state to an anonymous visitor', () => {

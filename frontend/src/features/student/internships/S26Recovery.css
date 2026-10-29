@@ -1,0 +1,4 @@
+/* S-26 only: frozen nonempty-state colour and retained, focusable retry. */
+.s26-recovery .s26-positive{color:#1e6b4a;background:#1e6b4a1f}
+.s26-recovery button[aria-disabled=true]{cursor:default;opacity:.55}
+.s26-recovery .s20-empty{overflow-wrap:anywhere}
