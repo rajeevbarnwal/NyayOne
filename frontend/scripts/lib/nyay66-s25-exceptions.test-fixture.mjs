@@ -208,4 +208,3 @@ export function withoutS25ProposalsForTest(exceptions){
   // Preserve all other records and their order, without mutating input or policy.
   return exceptions.filter(e=>e.screen!=='S-25');
 }
-
