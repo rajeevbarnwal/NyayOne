@@ -2,9 +2,10 @@ import {describe,it,expect} from 'vitest';
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {approveException,canonical,finalizeEnforcement} from './nyay66-enforcement.mjs';
+import {approveException,canonical,digest,finalizeEnforcement} from './nyay66-enforcement.mjs';
 import {s19RasterPredecessor,s19RasterReplacement,normalizeS19RasterForTest} from './nyay66-s19-reapproval.test-fixture.mjs';
 import {s21Proposals,withoutS21ProposalsForTest} from './nyay66-s21-exceptions.test-fixture.mjs';
+import {s25Proposals,s25ProposalHashes,historicalS25ExceptionsSha256,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const options={r2:true,s18:true,s19:true,s20:true};
 const original=JSON.parse(execFileSync('git',['show','f458307c04ba81907395b0a2f29325c4f9aefde3:frontend/scripts/nyay66-policy.json'],{cwd:root})).exceptions;
@@ -29,7 +30,7 @@ const copyPins=[
 const currentPolicy=()=>JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions;
 function expectApprovedCopyBoundary(entries){
   // Validate the exact additive set before retaining the unchanged historical checks.
-  const historical=withoutS21ProposalsForTest(entries);
+  const historical=withoutS21ProposalsForTest(withoutS25ProposalsForTest(entries));
   expect(historical).toHaveLength(beforeCopy.length);
   const normalized=historical.map((entry,index)=>{
     const pin=copyPins.find(p=>p.index===index);
@@ -41,16 +42,73 @@ function expectApprovedCopyBoundary(entries){
   });
   expectPreserved(normalized);
 }
+describe('S-25 additions retain the S-19/S-20 historical regression boundary',()=>{
+  const historical=()=>withoutS25ProposalsForTest(currentPolicy());
+  const candidate=()=>[...historical(),...structuredClone(s25Proposals)];
+  const s25Options={...options,s21:true,s25:true};
+  it('admits only the twelve pinned additions without mutating the 148 historical records',()=>{
+    const baseline=historical();
+    expect(baseline).toHaveLength(148);
+    expect(digest(JSON.stringify(baseline))).toBe(historicalS25ExceptionsSha256);
+    expect(s25Proposals).toHaveLength(12);
+    expect(s25Proposals.map(e=>approveException(e,null,s25Options))).toEqual(s25ProposalHashes);
+    for(const entries of [baseline,candidate(),currentPolicy()]){
+      const before=JSON.stringify(entries);
+      expectApprovedCopyBoundary(entries);
+      expect(JSON.stringify(withoutS25ProposalsForTest(entries))).toBe(JSON.stringify(baseline));
+      expect(JSON.stringify(entries)).toBe(before);
+    }
+  });
+  it('rejects altered S-25 identity, scope, hashes, checks and fields before historical comparison',()=>{
+    expectApprovedCopyBoundary(candidate());
+    for(let index=0;index<s25Proposals.length;index++)for(const mutate of [
+      e=>e.approvalPr=74,e=>e.screen='S-26',e=>e.viewport='mobile360',e=>e.theme='dark',
+      e=>e.referenceSha256='a'.repeat(64),e=>e.liveSha256='b'.repeat(64),e=>e.reason+=' widened',
+      e=>e.checks=['pixels'],e=>e.checks.push('accessibility'),e=>e.arbitrary=true,
+    ]){
+      const entries=candidate();mutate(entries[148+index]);
+      expect(()=>expectApprovedCopyBoundary(entries)).toThrow();
+    }
+  });
+  it('rejects partial or duplicate additions and changes to any historical record',()=>{
+    expectApprovedCopyBoundary(candidate());
+    for(let count=1;count<12;count++){
+      expect(()=>expectApprovedCopyBoundary([...historical(),...structuredClone(s25Proposals.slice(0,count))])).toThrow();
+    }
+    for(let index=0;index<148;index++){
+      const entries=candidate();entries[index].reason+=' widened';
+      expect(()=>expectApprovedCopyBoundary(entries)).toThrow();
+    }
+    for(const mutate of [
+      e=>e.push(structuredClone(e.at(-1))),e=>{e[149]=structuredClone(e[148]);},
+      e=>e.shift(),e=>{[e[0],e[1]]=[e[1],e[0]];},
+    ]){
+      const entries=candidate();mutate(entries);expect(()=>expectApprovedCopyBoundary(entries)).toThrow();
+    }
+  });
+  it.each(s25Proposals.map((entry,index)=>({entry,hash:s25ProposalHashes[index],index})))('requires exact owner/PR read-back for S-25 addition $index; test pins are not approval',({entry,hash})=>{
+    // Synthetic unit-test comment only, never persisted as owner evidence.
+    const comment={id:1,approvalPr:76,user:{login:'rajeevbarnwal'},body:`NYAY66-EXCEPTION ${hash}`};
+    expect(approveException(entry,[comment],s25Options)).toBe(true);
+    for(const comments of [[],[{...comment,approvalPr:74}],[{...comment,user:{login:'not-owner'}}],
+      [{...comment,id:0}],[{...comment,body:'approved generally'}],
+      [{...comment,body:`NYAY66-EXCEPTION ${'a'.repeat(64)}`}],
+    ]){
+      expect(approveException(entry,comments,s25Options)).toBe(false);
+      expect(()=>finalizeEnforcement([],{enforced:[],exceptions:[entry]},comments,s25Options)).toThrow('OWNER_EXCEPTION_APPROVAL_MISSING');
+    }
+  });
+});
 describe('ten exact S-20 copy replacements, not a general exception allowance',()=>{
   it.each([false,true])('preserves all 132 historical records with exact S-21 additions: %s',withS21=>{
-    const historical=currentPolicy().filter(e=>e.screen!=='S-21');
+    const historical=withoutS25ProposalsForTest(currentPolicy()).filter(e=>e.screen!=='S-21');
     const entries=[...historical,...(withS21?structuredClone(s21Proposals):[])],before=JSON.stringify(entries);
     expect(historical).toHaveLength(132);
     expectApprovedCopyBoundary(entries);
     expect(JSON.stringify(entries)).toBe(before);
   });
   it('rejects every altered S-21 addition before comparing the historical boundary',()=>{
-    const candidate=()=>[...currentPolicy().filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    const candidate=()=>[...withoutS25ProposalsForTest(currentPolicy()).filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     expectApprovedCopyBoundary(candidate());
     for(let index=0;index<s21Proposals.length;index++)for(const mutate of [
       e=>e.approvalPr=73,e=>e.screen='S-22',e=>e.viewport='mobile360',e=>e.theme='dark',
