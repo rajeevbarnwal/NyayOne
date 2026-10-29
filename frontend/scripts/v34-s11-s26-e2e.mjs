@@ -678,7 +678,7 @@ try {
   await leaveSettledDocument(page, () => page.goto(`${base}/s-25`));
   const completedSavedMenon = await waitForInternshipStateReady(page, [savedMenonResponse]);
   await waitForDocumentReady(page);
-  const menonSavedRow = page.getByRole('listitem').filter({ hasText: 'Judicial research assistant' });
+  const menonSavedRow = page.getByRole('article').filter({ hasText: 'Judicial research assistant' });
   record('S-25_saved_identity', 'fresh saved-list GET contains the menon identity', completedSavedMenon,
     await menonSavedRow.isVisible() && completedSavedMenon[0]?.status === 200 && completedSavedMenon[0]?.finishedError === null);
   const removeMenonResponse = page.waitForResponse((response) => isExactApiResponse(response, 'DELETE', '/api/v1/student/internships/menon/saved'));

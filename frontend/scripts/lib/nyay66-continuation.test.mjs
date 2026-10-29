@@ -1,4 +1,5 @@
 import {describe,it,expect} from 'vitest';
+import {s25Proposals,withoutS25ProposalsForTest,historicalS25ExceptionsSha256} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -37,7 +38,7 @@ const policies=()=>({
   before:JSON.parse(execFileSync('git',['show','4a2827d37f60fc651b3a6dbace0dcddfab44b9c4:frontend/scripts/nyay66-policy.json'],{cwd:root})),
 });
 function expectApprovedExceptions(policy,before){
-  policy={...policy,exceptions:normalizeS19RasterForTest(withoutS21ProposalsForTest(policy.exceptions))};
+  policy={...policy,exceptions:normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(policy.exceptions)))};
   // Preserve every original field/string/order and the exact 18 S-18 approvals.
   // Optional S-19/S-20 proposals are validated here; the hosted finalizer still
   // requires an exact owner comment for each hash (never test self-approval).
@@ -137,7 +138,7 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
   });
   it('permits future S-20 proposals only for PR72 while preserving all 112 existing exception records exactly',()=>{
     const {policy,before}=policies();
-    expect(sha(JSON.stringify(normalizeS19RasterForTest(withoutS21ProposalsForTest(policy.exceptions)).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
+    expect(sha(JSON.stringify(normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(policy.exceptions))).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
     const proposal={screen:'S-20',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72};
     policy.exceptions.push(proposal);
     expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
@@ -157,6 +158,26 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
       p=>{p.exceptions.find(e=>e.screen==='S-21').reason+=' changed';},
       p=>{p.exceptions.find(e=>e.screen==='S-21').liveSha256='0'.repeat(64);},
       p=>{p.exceptions.find(e=>e.screen!=='S-21').reason+=' changed';},
+    ]){
+      const altered=structuredClone(policy);change(altered);
+      expect(()=>expectApprovedExceptions(altered,before)).toThrow();
+    }
+  });
+  it('permits only the twelve exact S-25 proposals and retains every historical record',()=>{
+    const {policy,before}=policies();
+    const history=withoutS25ProposalsForTest(policy.exceptions);
+    expect(history).toHaveLength(148);
+    expect(sha(JSON.stringify(history))).toBe(historicalS25ExceptionsSha256);
+    policy.exceptions=[...history,...structuredClone(s25Proposals)];
+    expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
+    for(const entry of s25Proposals)expect(approveException(entry,[],{r2:true,s18:true,s19:true,s20:true,s21:true,s25:true})).toBe(false);
+    for(const change of [
+      p=>p.exceptions.pop(),
+      p=>{p.exceptions.find(e=>e.screen==='S-25').approvalPr=77;},
+      p=>{p.exceptions.find(e=>e.screen==='S-25').reason+=' changed';},
+      p=>{p.exceptions.find(e=>e.screen==='S-25').liveSha256='0'.repeat(64);},
+      p=>{p.exceptions.find(e=>e.screen!=='S-25').reason+=' changed';},
+      p=>{p.exceptions.splice(p.exceptions.findIndex(e=>e.screen!=='S-25'),1);},
     ]){
       const altered=structuredClone(policy);change(altered);
       expect(()=>expectApprovedExceptions(altered,before)).toThrow();

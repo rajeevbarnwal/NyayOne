@@ -1,4 +1,5 @@
 import {describe,it,expect} from 'vitest';
+import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {readFileSync,mkdtempSync,writeFileSync,rmSync,mkdirSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -72,19 +73,23 @@ describe('S-20 archive import fails closed before writing',()=>{
       await expect(loadS20Cache(f.dir,config,data,fonts)).rejects.toThrow('S20_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it.each(['current','proposed'])('pins the owner-dispatched cache and preserves every pre-existing policy setting (%s exceptions)',async(mode)=>{
+  it.each(['current','proposed','s25-proposed'])('pins the owner-dispatched cache and preserves every pre-existing policy setting (%s exceptions)',async(mode)=>{
     const got=await loadS20Cache(root,policy.s20,data,fonts);
     expect(got).not.toBe(null);expect(got.manifest.rows).toHaveLength(20);
     expect(got.provenance).toMatchObject({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39111251228',artifactId:'12130567685',archiveSha256:'60d568c31d8f32dc0ac6708bd5a0601ff4ea51a31006d538bdfa80c915143cdc',sourceHead:'c5879f839e78b1c5792760e2577f511fd49cec28',controlHead:'48eeac1973053eb2fd8e4080091dd345bf08db69',referenceRows:20,manualRows:0});
     expect(got.manifestSha256).toBe('e121bff73a920ce1a563cc77317a6bbfe7a1970f131b8442cd61a4123f6b47d9');
     const before=JSON.parse(execFileSync('git',['show','48eeac1973053eb2fd8e4080091dd345bf08db69:frontend/scripts/nyay66-policy.json'],{cwd:root}));
-    const current=structuredClone(policy);delete current.s20;delete current.s21;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(policy);delete current.s20;delete current.s21;delete current.s25;delete current.integrityApproval;delete before.integrityApproval;
+    // S-25's exact cache/provenance is pinned by nyay66-s25-import.test.mjs;
+    // only that additive field is excluded from this older policy snapshot.
     // Only the additive S-21 cache is checked separately by its exact-provenance
     // import test; no historical setting or exception comparison is removed.
     // S-20 additions are validated by the coverage/owner-approval contracts;
     // Pin every old byte/order after separately checking the one exact S-19
     // capture replacement; this test-only normalization never edits policy.
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
+    current.exceptions=withoutS25ProposalsForTest(current.exceptions);
     current.exceptions=normalizeS19RasterForTest(withoutS21ProposalsForTest(current.exceptions)).filter(e=>e.screen!=='S-20');
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(before.exceptions));
     expect(current).toEqual(before);

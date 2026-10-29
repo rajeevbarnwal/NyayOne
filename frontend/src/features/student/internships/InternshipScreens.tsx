@@ -6,7 +6,6 @@ import { StudentScreen, DpdpFootnote } from '../components';
 import { useAuth } from '../../../app/authContext';
 import { StatusBadge, EmptyState, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
-  stipendText,
   stepForStatus,
   statusChip,
   newApplicationRef,
@@ -29,6 +28,7 @@ import {
 } from '../lib/internshipsApi';
 import { S20BrowseScreen } from './S20BrowseScreen';
 import { S21DetailScreen } from './S21DetailScreen';
+import { S25SavedScreen } from './S25SavedScreen';
 import { settleS21Saved } from './s21SavedCache';
 import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib/studentBrowserContext';
 
@@ -367,45 +367,7 @@ export function InternshipTracker() {
 /* S-25 — Saved internships                                                    */
 /* -------------------------------------------------------------------------- */
 export function InternshipSaved() {
-  const nav = useNavigate();
-  const saved = useSavedInternships();
-  const items = saved.query.data ?? [];
-  return (
-    <StudentScreen screenId="S-25">
-      <div className="st-stack">
-        <ModuleHead eyebrow="Internships · S4" title="Saved internships" sub="Private to your account · organisations are not notified" />
-        {saved.failure && <ValidationState message={saved.failure} />}
-        {saved.message && <div className="ui-banner ui-banner--info" role="status"><span className="ui-banner__mark" aria-hidden>i</span><span>{saved.message}</span></div>}
-        <section className="st-panel">
-          <h2 className="st-panel__title">Saved</h2>
-          {!saved.canSave ? (
-            <EmptyState
-              title={saved.access?.title ?? 'Saved internships unavailable'}
-              hint={saved.access?.hint ?? 'Saved internships are unavailable for this session.'}
-              action={saved.access?.offerSignIn ? <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button> : undefined}
-            />
-          ) : saved.query.isPending ? (
-            <LoadingState label="Loading saved internships…" />
-          ) : saved.query.isError ? (
-            <ErrorState title="Could not load saved internships" detail={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} onRetry={() => void saved.query.refetch()} />
-          ) : items.length === 0 ? <EmptyState title="No saved internships yet" hint="Browse listings and save the ones you like." action={<button type="button" className="btn tap" onClick={() => nav('/s-20')}>Browse internships</button>} /> : <ul className="st-list">
-            {items.map((l) => (
-              <li className="st-item" key={l.id}>
-                <div>
-                  <div>{l.role} — {l.org}</div>
-                  <div className="st-item__meta">{l.location} · <span className="st-price">{stipendText(l)}</span></div>
-                </div>
-                <div className="st-actions">
-                  <button type="button" className="btn tap" disabled={saved.pendingId === l.id} onClick={() => saved.toggle(l)}>{saved.pendingId === l.id ? 'Removing…' : 'Remove'}</button>
-                  <button type="button" className="btn tap" onClick={() => nav(`/s-21?listing=${encodeURIComponent(l.id)}&from=s25`)}>View</button>
-                </div>
-              </li>
-            ))}
-          </ul>}
-        </section>
-      </div>
-    </StudentScreen>
-  );
+  return <S25SavedScreen/>;
 }
 
 /* -------------------------------------------------------------------------- */
