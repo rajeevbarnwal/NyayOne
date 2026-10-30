@@ -7,6 +7,7 @@ import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 import {S20_MEASURED_STATES} from './nyay66-s20-coverage.mjs';
 import {S21_MEASURED_STATES} from './nyay66-s21-coverage.mjs';
 import {S25_MEASURED_STATES} from './nyay66-s25-coverage.mjs';
+import {S26_MEASURED_STATES} from './nyay66-s26-coverage.mjs';
 export const CONTINUATION_ARCHIVE_SHA256='0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964';
 const DIRECTORY='frontend/test-baselines/nyay66/v3.2.1.08';
 const ARCHIVE=`${DIRECTORY}/NYAYONE_S01_S35_v3.2.1.08.zip`;
@@ -64,9 +65,9 @@ export function continuationRows(data){
     sourceVersion:data.version,sourceArchiveSha256:data.archiveSha256,
   }))));
 }
-export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s21=false,s25=false}={}){
+export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s21=false,s25=false,s26=false}={}){
   let rows=continuationRows(data);const ids=new Set(data.screens.map(s=>s.screen));
-  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')&&!(s20&&r.screen==='S-20')&&!(s21&&r.screen==='S-21')&&!(s25&&r.screen==='S-25')))throw Error('CONTINUATION_ALREADY_REPORTED');
+  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')&&!(s20&&r.screen==='S-20')&&!(s21&&r.screen==='S-21')&&!(s25&&r.screen==='S-25')&&!(s26&&r.screen==='S-26')))throw Error('CONTINUATION_ALREADY_REPORTED');
   let measuredLightRows=0;
   if(s18){
     const expected=new Set(rows.filter(r=>r.screen==='S-18'&&r.designState!=='option-manual').map(r=>`${r.state}:${r.viewport}`));
@@ -109,9 +110,17 @@ export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s2
     measuredLightRows+=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
     rows=rows.filter(r=>r.screen!=='S-25');
   }
+  if(s26){
+    const expected=new Set(rows.filter(r=>r.screen==='S-26'&&S26_MEASURED_STATES.includes(r.designState)).map(r=>`${r.state}:${r.viewport}`));
+    const found=report.rows.filter(r=>r.theme==='light'&&r.screen==='S-26');
+    for(const row of found)if(!expected.delete(`${row.state}:${row.viewport}`))throw Error('S26_MEASURED_COVERAGE_INCOMPLETE');
+    if(expected.size)throw Error('S26_MEASURED_COVERAGE_INCOMPLETE');
+    measuredLightRows+=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
+    rows=rows.filter(r=>r.screen!=='S-26');
+  }
   // Existing finalizer's verdict, failures, 74 required rows and blocking result
   // are preserved verbatim. These source-only rows cannot authorize promotion.
   return {...report,rows:[...report.rows,...rows],continuation:{version:data.version,archiveSha256:data.archiveSha256,
     designApproval:data.designApproval,screens:15,states:191,unmeasuredLightRows:382-measuredLightRows,pngBaselinesImported:false,
-    ...(s18||s19||s20||s21||s25?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[]),...(s20?['S-20']:[]),...(s21?['S-21']:[]),...(s25?['S-25']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0)+(s20?20:0)+(s21?16:0)+(s25?12:0),measuredLightRows}: {})}};
+    ...(s18||s19||s20||s21||s25||s26?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[]),...(s20?['S-20']:[]),...(s21?['S-21']:[]),...(s25?['S-25']:[]),...(s26?['S-26']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0)+(s20?20:0)+(s21?16:0)+(s25?12:0)+(s26?8:0),measuredLightRows}: {})}};
 }
