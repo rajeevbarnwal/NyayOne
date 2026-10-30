@@ -113,9 +113,10 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
     </select>{help && <span className="s20-help" id={`s27-${key}-help`}>{help}</span>}</div>;
   }
   const canCompare = compareMax !== undefined && tray.length >= 2 && tray.length <= compareMax;
+  function openComparison() { if (canCompare) nav(`/s-29?ids=${encodeURIComponent(tray.map(item => item.id).join(','))}&ret=${encodeURIComponent(sp.toString())}`); }
   function comparison(where: string) { return tray.length ? <>
     <div className="s27-tray" role="region" aria-label="Comparison"><span role="status">{tray.length}{compareMax !== undefined ? ` of ${compareMax}` : ''} selected</span>
-      <button className="s20-btn s20-primary" aria-disabled={!canCompare} aria-describedby={`s27-compare-help-${where}`} onClick={() => { if (canCompare) nav(`/s-29?ids=${encodeURIComponent(tray.map(item => item.id).join(','))}&ret=${encodeURIComponent(sp.toString())}`); }}><SchoolIcon compare size={18}/>Compare</button></div>
+      <button className="s20-btn s20-primary" aria-disabled={!canCompare} aria-describedby={`s27-compare-help-${where}`} onClick={openComparison}><SchoolIcon compare size={18}/>Compare</button></div>
     <details className="s20-filters"><summary><span>Selected schools</span><Icon name="back" size={18}/></summary><div className="s20-filter-body"><ul className="s27-selected">{tray.map(item => <li key={item.id}><span>{item.name}</span><button aria-label={`Remove ${item.name} from selected schools`} onClick={event => toggle(item, event.currentTarget)}><Icon name="cross" size={18}/></button></li>)}</ul>
       <p className="s20-help" id={`s27-compare-help-${where}`}>{compareMax === undefined ? 'Reload the results to confirm the comparison limit.' : tray.length < 2 ? 'Choose at least one more school.' : tray.length > compareMax ? `Remove schools to meet the current limit of ${compareMax}.` : 'Compare your selected schools.'}</p></div></details>
   </> : <p>Choose at least two schools to compare{compareMax !== undefined ? `, up to ${compareMax}` : ''}.</p>; }
@@ -133,6 +134,7 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
     <header className="s20-header"><img className="s20-mark" src="/brand/nyayone-mark.svg" alt="NyayOne" width="30" height="30"/><span className="s20-mobile-title">Law schools</span><div className="s20-lockup"><NyayOneRevLLockup/></div>
       <nav aria-label="Site"><button onClick={() => nav('/s-14')}>Home</button><span>Research</span><span>Calendar</span><span>Careers</span><button onClick={() => nav('/s-17')}>Profile</button></nav><button className="s20-avatar" aria-label="Your Profile" onClick={() => nav('/s-17')}><span><Icon name="person"/></span></button></header>
     <div className="s20-layout"><main id="main-content"><div><h1 tabIndex={-1}><span className="s20-heading-icon"><SchoolIcon/></span>Find a law school.</h1><p className="s20-sub">Search what institutions publish. Nothing here is a ranking.</p></div>
+      <nav className="s20-related" aria-label="Related">{canCompare && <button className="s20-btn s20-primary" onClick={openComparison}><SchoolIcon compare size={18}/>Compare</button>}<Link className="s20-btn" to="/s-30"><span className="s20-action-icon s20-action-color"><Icon name="bookmark" size={18}/></span>Saved and followed</Link></nav>
       <form onSubmit={event => { event.preventDefault(); const field = root.current?.querySelector<HTMLInputElement>('#s27-search'); if (field) change({ q: input }, field); }}>
         <label className="s27-search-label" htmlFor="s27-search">Search law schools</label><div className="s20-search"><Icon name="search" size={18}/><input id="s27-search" type="search" placeholder="School name" value={input} onChange={event => search(event.target.value, event.currentTarget)}/></div>
       </form>
@@ -153,7 +155,6 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
       {pager && pageCount > 1 && <nav className="s20-pager" aria-label="School list pages"><button className="s20-btn" aria-label="Previous page" aria-disabled={busy || page <= 1} onClick={event => { if (!busy && page > 1) change({ page: String(page - 1) }, event.currentTarget, true); }}>Previous</button><span>{busy ? 'Loading page…' : `Page ${page} of ${pageCount}`}</span><button className="s20-btn" aria-label="Next page" aria-disabled={busy || page >= pageCount} onClick={event => { if (!busy && page < pageCount) change({ page: String(page + 1) }, event.currentTarget, true); }}>Next</button></nav>}
       <div className="s27-mobile-comparison">{tray.length > 0 && comparison('mobile')}</div>
       <p className="s20-disclaimer">Figures come from what each institution publishes. Open a school to see each figure’s source and retrieval date.</p>
-      <Link className="s20-btn s27-mobile-saved" to="/s-30"><Icon name="bookmark" size={18}/>Saved and followed</Link>
       <span className="s20-announcement" role="status">{notice}</span>
     </main><aside aria-label="Law school context"><section className="s20-card s27-comparison"><div className="s20-eyebrow">Comparison</div>{comparison('desktop')}</section>
       <section className="s20-card"><div className="s20-eyebrow">Saved and followed</div><p>Your saved and followed schools are private to your account.</p><Link className="s20-btn" to="/s-30"><Icon name="bookmark" size={18}/>Saved and followed</Link></section></aside></div>

@@ -32,6 +32,7 @@ async function using(run, options = {}) {
 }
 const root = page => page.locator('.s27-search');
 const cards = page => root(page).locator('article');
+const compareAction = page => root(page).getByRole('region', { name: 'Comparison', exact: true }).getByRole('button', { name: 'Compare', exact: true });
 const retry = page => page.getByRole('button', { name: 'Retry', exact: true });
 async function held(s, n = 1) { const until = Date.now() + 5000; while (s.held.length < n && Date.now() < until) await delay(10); assert.equal(s.held.length, n); }
 it('Revision L public search reads only the summary endpoint, with no invented account counts or rankings', () => using(async (page, s) => {
@@ -39,6 +40,16 @@ it('Revision L public search reads only the summary endpoint, with no invented a
   assert.equal(s.reads.length, 1); assert.equal(await cards(page).count(), 5);
   assert.equal(await page.locator('main').count(), 1); assert.equal(await page.locator('.ls-shell').count(), 0);
   assert.doesNotMatch(await root(page).innerText(), /2 saved|2 following|recommended|best match|verified/i);
+}));
+it('mobile related destinations follow the heading before search, including Compare only when selection is eligible', () => using(async page => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+  const related = page.getByRole('navigation', { name: 'Related', exact: true });
+  await related.getByRole('link', { name: 'Saved and followed', exact: true }).waitFor();
+  const box = await related.boundingBox(), search = await page.getByRole('searchbox').boundingBox(), heading = await page.getByRole('heading', { level: 1 }).boundingBox();
+  assert.ok(box.y > heading.y + heading.height && box.y + box.height < search.y);
+  assert.equal(await related.getByRole('button', { name: 'Compare', exact: true }).count(), 0);
+  for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
+  assert.equal(await related.getByRole('button', { name: 'Compare', exact: true }).count(), 1);
 }));
 it('loading is not zero results; malformed success is an error, not an empty list', () => using(async (page, s) => {
   await page.goto(origin + '/s-27'); await held(s); await page.getByRole('status', { name: 'Loading law schools' }).waitFor();
@@ -89,7 +100,7 @@ it('retry is duplicate-locked, remains focused, and a later success does not ste
 it('compare is local, deduplicated, bounded by server compare_max and unavailable until two selected', () => using(async (page, s) => {
   await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
   for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
-  const compare = root(page).getByRole('button', { name: 'Compare', exact: true }); assert.equal(await compare.isEnabled(), true);
+  const compare = compareAction(page); assert.equal(await compare.isEnabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Add Synthetic Law School 3 to comparison' }).getAttribute('aria-disabled'), 'true');
   await page.getByRole('button', { name: 'Remove Synthetic Law School 1 from comparison', exact: true }).click();
   assert.equal(await compare.getAttribute('aria-disabled'), 'true'); assert.equal(s.reads.length, 1);
@@ -135,7 +146,7 @@ it('compare route carries only the chosen IDs and exact return context; detail B
   await page.goBack(); await cards(page).first().waitFor();
   for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
   const compareReply = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/law-schools/compare');
-  await root(page).getByRole('button', { name: 'Compare', exact: true }).click(); await page.waitForURL('**/s-29*'); await compareReply;
+  await compareAction(page).click(); await page.waitForURL('**/s-29*'); await compareReply;
   assert.deepEqual(compared.school_ids, ['school-1', 'school-2']);
   assert.equal(new URL(page.url()).searchParams.get('ret'), 'state=Delhi&sort=fees');
 }));
@@ -144,9 +155,9 @@ it('compare limit changes fail closed without silently deleting the existing sel
   for (let i = 1; i <= 3; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
   s.max = 2; await page.getByRole('searchbox').fill('law'); await page.getByRole('searchbox').press('Enter');
   await page.getByText('3 of 2 selected', { exact: true }).first().waitFor();
-  assert.equal(await root(page).getByRole('button', { name: 'Compare', exact: true }).getAttribute('aria-disabled'), 'true');
+  assert.equal(await compareAction(page).getAttribute('aria-disabled'), 'true');
   await page.getByRole('button', { name: 'Remove Synthetic Law School 3 from comparison', exact: true }).click();
-  assert.equal(await root(page).getByRole('button', { name: 'Compare', exact: true }).getAttribute('aria-disabled'), 'false');
+  assert.equal(await compareAction(page).getAttribute('aria-disabled'), 'false');
 }));
 it('forward and reverse keyboard navigation retain semantic search, filters, result and compare controls', () => using(async page => {
   await page.goto(origin + '/s-27'); await cards(page).first().waitFor(); const input = page.getByRole('searchbox'); await input.focus();

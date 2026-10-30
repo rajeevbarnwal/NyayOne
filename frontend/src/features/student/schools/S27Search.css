@@ -23,4 +23,4 @@
 .s27-selected button{width:48px;min-height:48px;flex:none;border:0;background:none;color:var(--s20-ink2);display:grid;place-items:center;border-radius:12px}
 .s27-search .s20-empty{overflow-wrap:anywhere}
 .s27-search .s20-primary{color:#fff}
-@media(min-width:900px){.s27-mobile-comparison,.s27-mobile-saved{display:none}}
+@media(min-width:900px){.s27-mobile-comparison{display:none}}
