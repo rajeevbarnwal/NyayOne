@@ -28,7 +28,7 @@ function assertFields(actual, expected) {
 }
 
 function markup(screenId = 'S-07', { wrongFont = false, heading = true, badIcon = false, lockup } = {}) {
-  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26'].includes(screenId);
+  const revision = ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27'].includes(screenId);
   const family = wrongFont ? 'serif' : revision ? revisionFamily : legacyFamily;
   const svg = (lockup ?? revision)
     ? '<svg class="v321-lockup" role="img" aria-label="NyayOne — Legal, on the record" width="40" height="40"><rect width="30" height="30"/></svg>'
@@ -164,16 +164,16 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact twenty-screen Revision L census and the S-22 legacy Carlito stack', async () => {
+  it('preserves the exact twenty-one-screen Revision L census and the S-22 legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
-      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-22']) {
+      for (const screenId of ['S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-22']) {
         await page.setContent(`<html data-theme="light"><body>${markup(screenId)}</body></html>`);
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 21);
+      assert.equal(rows.size, 22);
     });
   });
 

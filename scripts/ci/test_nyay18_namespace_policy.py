@@ -126,10 +126,10 @@ class NamespacePolicyTests(unittest.TestCase):
     def test_repository_shipped_surface_passes_sealed_contract(self) -> None:
         report = policy.audit(policy.ROOT, policy.load_contract())
         self.assertEqual(report.failures, ())
-        self.assertEqual(report.source_inventory_count, 195)
+        self.assertEqual(report.source_inventory_count, 198)
         self.assertEqual(
             report.source_inventory_sha256,
-            "f318de73be9a6e381d18f470845f752646cba8aadaec36cf2ad29c33df554877",
+            "66dc4ef842d309b7334ffb45b3bd1667274ff5c3599d258ca80ba0e1760ad742",
         )
         self.assertTrue(report.self_test_passed)
 
@@ -141,7 +141,7 @@ class NamespacePolicyTests(unittest.TestCase):
             "NYAY-INT-": 1,
             "NYAY-INV-": 1,
             "nyayone-frontend": 3,
-            "nyayone-mark.svg": 16,
+            "nyayone-mark.svg": 17,
             "nyayone.r2.onboarding-seen": 2,
             "nyayone-shell-": 2,
             "nyayone-shell-v1": 1,
