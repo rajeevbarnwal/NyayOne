@@ -1,11 +1,11 @@
+import { S27SearchScreen } from './S27SearchScreen';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
-import { StudentScreen, SelectField } from '../components';
+import { StudentScreen } from '../components';
 import { useTheme } from '../../../hooks/useTheme';
 import {
-  searchLawSchools,
   getLawSchoolDetail,
   compareLawSchools,
   saveLawSchool,
@@ -15,7 +15,6 @@ import {
   listSavedLawSchools,
   listFollowedLawSchools,
   addToCompareSelection,
-  compareSelectionState,
   LawSchoolsApiError,
   isRetryableLawSchoolsError,
   COMPARE_MIN,
@@ -25,24 +24,18 @@ import {
   DUPLICATE_SCHOOL,
   SCHOOL_NOT_FOUND,
   type LawSchoolDetail,
-  type LawSchoolSearchParams,
-  type LawSchoolSort,
   type LawSchoolSummary,
 } from '../lib/lawSchoolsApi';
 import {
   COMPARE_ROWS,
   FACT_LABELS,
-  REGIONS,
-  REGION_STATES,
   S28_FACT_KEY_ORDER,
   compareRowValue,
   factSourceLine,
   feesInrBand,
   feesLakhBand,
   institutionTypeLabel,
-  lakhAmount,
   monogramText,
-  regionOfState,
   shortHandle,
   verifiedText,
   referenceSourceFoot,
@@ -182,9 +175,6 @@ function useSchoolExtras(ids: string[]): SchoolExtrasResult {
 /* Shared-formatter delegates (SAATHI-118 F2): the SAME functions feed the
  * fixture contract projection and the reference generator, so INR-raw vs
  * lakh can never diverge between the developed UI and the reference frame. */
-function lakhText(n: number): string {
-  return lakhAmount(n);
-}
 
 /** INR-raw band (reference r28 fee band / r29 fees row). */
 function feesText(s: LawSchoolSummary): string {
@@ -209,59 +199,6 @@ function readCompareTray(): TrayEntry[] {
 function writeCompareTray(entries: TrayEntry[]): TrayEntry[] {
   compareTray = entries;
   return entries;
-}
-
-/* ------------------------------ URL helpers -------------------------------- */
-
-const SEARCH_KEYS = [
-  'q',
-  'region',
-  'state',
-  'institution_type',
-  'degree',
-  'accreditation',
-  'entrance_exam',
-  'fees_max',
-  'sort',
-  'page',
-  'page_size',
-] as const;
-
-/** Extract only the S-27 search/filter keys as a return-context query string. */
-function searchContext(sp: URLSearchParams): string {
-  const keep = new URLSearchParams();
-  for (const key of SEARCH_KEYS) {
-    const value = sp.get(key);
-    if (value) keep.set(key, value);
-  }
-  return keep.toString();
-}
-
-function isSort(value: string | null): value is LawSchoolSort {
-  return value === 'name' || value === 'fees' || value === 'nirf_rank';
-}
-
-function paramsFromUrl(sp: URLSearchParams): LawSchoolSearchParams {
-  const feesMaxRaw = sp.get('fees_max');
-  const feesMax = feesMaxRaw ? Number(feesMaxRaw) : NaN;
-  const pageRaw = Number(sp.get('page') ?? '1');
-  /* page_size is a supported wire param (backend-validated 1..50). The visual
-   * oracle pins the S-27 baseline to the reference pagination state
-   * (6 records/page — see scripts/lawschool_fixture_contract.json); default
-   * stays 20 for normal navigation. */
-  const pageSizeRaw = Number(sp.get('page_size') ?? '20');
-  return {
-    q: sp.get('q') ?? undefined,
-    state: sp.get('state') ?? undefined,
-    institutionType: sp.get('institution_type') ?? undefined,
-    degree: sp.get('degree') ?? undefined,
-    accreditation: sp.get('accreditation') ?? undefined,
-    entranceExam: sp.get('entrance_exam') ?? undefined,
-    feesMax: Number.isFinite(feesMax) && feesMax > 0 ? feesMax : undefined,
-    sort: isSort(sp.get('sort')) ? (sp.get('sort') as LawSchoolSort) : undefined,
-    page: Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1,
-    pageSize: Number.isInteger(pageSizeRaw) && pageSizeRaw >= 1 && pageSizeRaw <= 50 ? pageSizeRaw : 20,
-  };
 }
 
 /* --------------------- Option C+ shared structural frame ------------------- */
@@ -318,17 +255,6 @@ function Skel({ h, maxW, mt }: { h: number; maxW?: number; mt?: number }) {
   return <div className="ls-skel" style={{ height: h, maxWidth: maxW, marginTop: mt }} />;
 }
 
-/** Reference `.chp` choice chip — aria-pressed authoritative; the check glyph
- * renders only when selected and is aria-hidden (F2). */
-function Chip({ pressed, label, onClick }: { pressed: boolean; label: string; onClick: () => void }) {
-  return (
-    <button type="button" className="ls-chp" aria-pressed={pressed} onClick={onClick}>
-      {pressed && <span className="ls-ckg" aria-hidden="true">✓ </span>}
-      {label}
-    </button>
-  );
-}
-
 function LsTags({ followed }: { followed?: boolean }) {
   return (
     <div className="ls-tags">
@@ -377,466 +303,8 @@ function QueryFailure({ error, onRetry }: { error: unknown; onRetry: () => void 
 /* S-27 — Guided search & filter (reference r27 structure)                     */
 /* -------------------------------------------------------------------------- */
 
-/* Filter options emit canonical WIRE values (query params); labels are display-only.
- * institution_type wire values are frozen in backend/app/models/wave1.py INSTITUTION_TYPES. */
-const INSTITUTION_TYPES: Array<{ value: string; label: string }> = [
-  { value: 'national_law_university', label: 'National Law University' },
-  { value: 'government', label: 'Government' },
-  { value: 'private', label: 'Private' },
-  { value: 'deemed', label: 'Deemed' },
-];
-const DEGREES = [
-  { value: 'BA LLB (Hons)', label: 'BA LLB (Hons.)' },
-  'BBA LLB', 'LLB', 'LLM',
-];
-const ACCREDITATIONS = ['NAAC A++', 'NAAC A+', 'NAAC A', 'BCI approved'];
-const ENTRANCE_EXAMS = [
-  'CLAT', 'AILET',
-  { value: 'LSAT-India', label: 'LSAT—India' },
-  'MH CET Law', 'Own exam',
-];
-/* Guided budget bands (reference stephead step 2) — values are the same
- * fees_max WIRE param the free-form filter uses. */
-const FEE_BANDS: Array<[string, string]> = [
-  ['', 'No limit'],
-  ['240000', 'Up to ₹2.4 L'],
-  ['280000', 'Up to ₹2.8 L'],
-  ['330000', 'Up to ₹3.3 L'],
-];
-const SORT_LABELS: Record<LawSchoolSort, string> = {
-  name: 'A–Z',
-  fees: 'LOWEST FEES',
-  nirf_rank: 'NIRF RANK',
-};
-
 export function SchoolSearch() {
-  const nav = useNavigate();
-  const qc = useQueryClient();
-  const [sp, setSp] = useSearchParams();
-  const params = useMemo(() => paramsFromUrl(sp), [sp]);
-  const regionRaw = sp.get('region') ?? '';
-  const region = (REGIONS as readonly string[]).includes(regionRaw) ? regionRaw : '';
-  const [qInput, setQInput] = useState(params.q ?? '');
-  const [tray, setTray] = useState<TrayEntry[]>(readCompareTray);
-  const [trayMsg, setTrayMsg] = useState<string | null>(null);
-  /* Reference r27: the name search and the advanced filters are collapsed by
-   * default (s27-default state) and open in-flow from the tool row. */
-  const [showSearch, setShowSearch] = useState(Boolean(params.q));
-  const [showFilters, setShowFilters] = useState(false);
-
-  const query = useQuery({
-    queryKey: ['law-schools', searchContext(sp)],
-    queryFn: async () => {
-      if (params.state || !region) return searchLawSchools(params);
-      /* Reference r27 'Where?' chips are REGIONS. The wire API filters by a
-       * single state, so a region answer fans out one real state-filtered
-       * search per member state and merges deterministically, replicating the
-       * server sort. The explicit state wire param (deep links) still wins. */
-      const parts = await Promise.all(
-        REGION_STATES[region].map((st) => searchLawSchools({ ...params, state: st, page: 1, pageSize: 50 })),
-      );
-      const merged = parts.flatMap((part) => part.items);
-      const sortKey = params.sort ?? 'name';
-      merged.sort((a, b) => {
-        if (sortKey === 'fees') return a.feesMin - b.feesMin;
-        if (sortKey === 'nirf_rank') {
-          return (a.nirfRank ?? Number.MAX_SAFE_INTEGER) - (b.nirfRank ?? Number.MAX_SAFE_INTEGER);
-        }
-        return a.name < b.name ? -1 : 1;
-      });
-      const pageSize = params.pageSize ?? 20;
-      const page = params.page ?? 1;
-      return {
-        items: merged.slice((page - 1) * pageSize, page * pageSize),
-        total: merged.length,
-        page,
-        pageSize,
-        compareMax: parts[0]?.compareMax ?? DEFAULT_COMPARE_MAX,
-      };
-    },
-    retry: lawSchoolsRetry,
-  });
-
-  /* Reference card action hierarchy: + Compare / Save (aria-pressed) — the
-   * card Save button drives the REAL save/unsave endpoints; detail opens from
-   * the card title link. */
-  const cardSave = useMutation({
-    mutationFn: ({ id, saved }: { id: string; saved: boolean }) => (saved ? unsaveLawSchool(id) : saveLawSchool(id)),
-    onSuccess: (res, vars) => {
-      qc.setQueryData<LawSchoolDetail>(['law-school', vars.id], (d) => (d ? { ...d, saved: res.saved } : d));
-      void qc.invalidateQueries({ queryKey: ['law-schools-saved'] });
-    },
-    onError: () => setTrayMsg('Sign in to save schools — your lists are private to your account.'),
-  });
-
-  const compareMax = query.data?.compareMax ?? DEFAULT_COMPARE_MAX;
-  const trayIds = tray.map((t) => t.id);
-  const selection = compareSelectionState(trayIds, compareMax);
-  const ctx = searchContext(sp);
-
-  function setParam(key: string, value: string): void {
-    const next = new URLSearchParams(sp);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    if (key !== 'page') next.delete('page');
-    setSp(next);
-  }
-
-  /** Reference 'Where?' answer — a region chip replaces any explicit state. */
-  function setRegion(value: string): void {
-    const next = new URLSearchParams(sp);
-    if (value) next.set('region', value);
-    else next.delete('region');
-    next.delete('state');
-    next.delete('page');
-    setSp(next);
-  }
-
-  function addToTray(school: LawSchoolSummary): void {
-    const result = addToCompareSelection(trayIds, school.id, compareMax);
-    if (!result.ok) {
-      setTrayMsg(
-        result.reason === 'duplicate'
-          ? `${school.name} is already in your comparison — each school can appear once.`
-          : `You can compare up to ${result.maxAllowed} schools — remove one first. Nothing was changed.`,
-      );
-      return;
-    }
-    setTrayMsg(null);
-    setTray(writeCompareTray([...tray, { id: school.id, name: school.name }]));
-  }
-
-  function removeFromTray(id: string): void {
-    setTrayMsg(null);
-    setTray(writeCompareTray(tray.filter((t) => t.id !== id)));
-  }
-
-  const total = query.data?.total ?? 0;
-  const pageSize = query.data?.pageSize ?? 20;
-  const page = query.data?.page ?? params.page ?? 1;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-
-  const whereDone = Boolean(region) || Boolean(params.state);
-  const budgetDone = params.feesMax !== undefined;
-  const answered = whereDone || budgetDone;
-  const sortKey: LawSchoolSort = params.sort ?? 'name';
-
-  /** Evidence-led "Matches" line — built ONLY from the user's own answers. */
-  function whyMatch(s: LawSchoolSummary): string[] {
-    const why: string[] = [];
-    if (region && regionOfState(s.state) === region) why.push(`${region} region — your pick`);
-    else if (params.state && s.state === params.state) why.push(`${params.state} — your pick`);
-    if (params.feesMax !== undefined && s.feesMax <= params.feesMax) {
-      why.push(`fees within ${lakhText(params.feesMax)} (sample)`);
-    }
-    return why;
-  }
-
-  useRouteArrival('S-27');
-
-  const extrasResult = useSchoolExtras(query.data ? query.data.items.map((i) => i.id) : []);
-  const detailReadiness = query.isError
-    ? 'error'
-    : query.data
-      ? extrasResult.status
-      : 'pending';
-
-  return (
-    <StudentScreen screenId="S-27" className="st-lawschool st-lawschool--s27">
-      <LsShell active="s27" ctx={ctx}>
-        <div
-          className="ls-wrap"
-          data-qa-lawschool-ready={detailReadiness === 'ready' ? 'true' : undefined}
-          data-qa-lawschool-readiness-error={detailReadiness === 'error' ? SCHOOL_DETAIL_READINESS_FAILED : undefined}
-          data-qa-lawschool-failed-ids={extrasResult.failedIds.length > 0 ? extrasResult.failedIds.join(',') : undefined}
-        >
-          {/* Step-3 pick tray — reference #pb: in-flow sticky band, never an overlay. */}
-          <section className="ls-pickbar" aria-label="Compare tray">
-            <span className="ls-pickbar__t">Step 3 · {tray.length} of {compareMax} picked</span>
-            <span className="ls-bar" aria-hidden="true">
-              <i style={{ width: `${(tray.length / compareMax) * 100}%` }} />
-            </span>
-            {selection.canCompare ? (
-              <button
-                type="button"
-                className="btn ls-ind tap"
-                onClick={() => nav(`/s-29?ids=${trayIds.join(',')}${ctx ? `&ret=${encodeURIComponent(ctx)}` : ''}`)}
-              >
-                Compare {tray.length} →
-              </button>
-            ) : (
-              <span className="ls-metaline">PICK {selection.missingForMin} MORE TO COMPARE</span>
-            )}
-            <span className="ls-metaline">CATALOGUE {query.data ? total : '…'} · LIMIT (CONFIG) {compareMax}</span>
-          </section>
-
-          <p className="ls-metaline ls-mt14">S-27 · GUIDED SEARCH · {verifiedText().toUpperCase()} · SAMPLE DATA</p>
-          <h1 className="ls-lede">Let’s find your law school.</h1>
-          <p className="ls-stand">
-            Answer two quick questions — or skip straight to the list. Every fact shows its source,
-            and nothing here is a ranking.
-          </p>
-
-          {trayMsg && (
-            <div className="ls-banner ls-banner--warn" role="status">
-              <span className="ls-k">Compare</span><span>{trayMsg}</span>
-            </div>
-          )}
-
-          {/* Guided three-step journey header (frozen decision: S-27 only). */}
-          <div className="ls-stephead" role="group" aria-label="Guided steps" data-testid="ls-guided-steps">
-            <div className="ls-srow">
-              <div className="ls-stp" data-done={whereDone ? 1 : 0} data-cur={whereDone ? 0 : 1}>
-                <span className="ls-n" aria-hidden="true">{whereDone ? '✓' : '1'}</span>
-                <div>
-                  <div className="ls-l">Where?</div>
-                  <div className="ls-s">{region || params.state || 'Anywhere'}</div>
-                </div>
-              </div>
-              <div className="ls-stp" data-done={budgetDone ? 1 : 0} data-cur={whereDone && !budgetDone ? 1 : 0}>
-                <span className="ls-n" aria-hidden="true">{budgetDone ? '✓' : '2'}</span>
-                <div>
-                  <div className="ls-l">Budget</div>
-                  <div className="ls-s">{params.feesMax !== undefined ? `Up to ${lakhText(params.feesMax)}` : 'No limit'}</div>
-                </div>
-              </div>
-              <div className="ls-stp" data-done={tray.length >= COMPARE_MIN ? 1 : 0} data-cur={whereDone && budgetDone ? 1 : 0}>
-                <span className="ls-n" aria-hidden="true">{tray.length >= COMPARE_MIN ? '✓' : '3'}</span>
-                <div>
-                  <div className="ls-l">Pick {COMPARE_MIN}–{compareMax}</div>
-                  <div className="ls-s">{tray.length} picked</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Two guided question cards (reference .duo). */}
-          <div className="ls-duo">
-            <section className="ls-qcard">
-              <h2>Where would you like to study?</h2>
-              <p className="ls-why">We’ll show schools in that part of India first.</p>
-              <div className="ls-chips" role="group" aria-label="Region">
-                <Chip pressed={!region && !params.state} label="Anywhere" onClick={() => setRegion('')} />
-                {REGIONS.map((r) => (
-                  <Chip key={r} pressed={region === r} label={r} onClick={() => setRegion(r)} />
-                ))}
-              </div>
-            </section>
-            <section className="ls-qcard">
-              <h2>What yearly fee feels comfortable?</h2>
-              <p className="ls-why">Sample fee bands — always confirm on the school’s site.</p>
-              <div className="ls-chips" role="group" aria-label="Budget">
-                {FEE_BANDS.map(([value, label]) => (
-                  <Chip
-                    key={label}
-                    pressed={(params.feesMax !== undefined ? String(params.feesMax) : '') === value}
-                    label={label}
-                    onClick={() => setParam('fees_max', value)}
-                  />
-                ))}
-              </div>
-            </section>
-          </div>
-
-          {/* Tool row: in-flow search/filters disclosure + Order select. */}
-          <div className="ls-toolrow">
-            <button
-              type="button"
-              className="btn ls-ghost tap"
-              aria-expanded={showSearch}
-              onClick={() => setShowSearch((v) => !v)}
-            >
-              {showSearch ? 'Hide search' : 'Or search by name ⌕'}
-            </button>
-            <span className="ls-flex1" />
-            <label className="ls-lb ls-lb--inline" htmlFor="ls-sort">Order</label>
-            <select
-              id="ls-sort"
-              className="ls-in ls-in--auto"
-              value={sortKey}
-              onChange={(e) => setParam('sort', e.target.value)}
-            >
-              <option value="name">A to Z</option>
-              <option value="fees">Lowest fees first</option>
-              <option value="nirf_rank">NIRF rank</option>
-            </select>
-          </div>
-
-          {(showSearch || params.q) && (
-            <section className="ls-qcard ls-mt10">
-              <form
-                role="search"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setParam('q', qInput.trim());
-                }}
-              >
-                <label className="ls-lb" htmlFor="ls-q">Search by name, city or state</label>
-                <div className="ls-qrow">
-                  <input
-                    id="ls-q"
-                    className="ls-in ls-in--grow"
-                    type="search"
-                    value={qInput}
-                    onChange={(e) => setQInput(e.target.value)}
-                    placeholder="e.g. NLSIU or Kolkata"
-                    aria-label="Search law schools"
-                  />
-                  <button type="submit" className="btn ls-solid tap">Search</button>
-                </div>
-              </form>
-              {/* Advanced wire filters live inside the search disclosure —
-                  the reference default S-27 frame shows no filter chrome. */}
-              <button
-                type="button"
-                className="btn ls-ghost tap ls-mt12"
-                aria-expanded={showFilters}
-                onClick={() => setShowFilters((v) => !v)}
-              >
-                {showFilters ? 'Hide filters' : 'More filters'}
-              </button>
-              {showFilters && (
-                <div className="ls-filtergrid ls-mt12" role="group" aria-label="More filters">
-                  <SelectField id="f-type" label="Institution type" value={params.institutionType ?? ''} onChange={(v) => setParam('institution_type', v)} options={INSTITUTION_TYPES} />
-                  <SelectField id="f-degree" label="Degree" value={params.degree ?? ''} onChange={(v) => setParam('degree', v)} options={DEGREES} />
-                  <SelectField id="f-accr" label="Accreditation" value={params.accreditation ?? ''} onChange={(v) => setParam('accreditation', v)} options={ACCREDITATIONS} />
-                  <SelectField id="f-exam" label="Entrance exam" value={params.entranceExam ?? ''} onChange={(v) => setParam('entrance_exam', v)} options={ENTRANCE_EXAMS} />
-                  <label className="st-field" htmlFor="f-fees">
-                    <span className="st-field__label">Max fees (₹/yr)</span>
-                    <input
-                      id="f-fees"
-                      className="ls-in"
-                      type="number"
-                      min={0}
-                      value={params.feesMax ?? ''}
-                      onChange={(e) => setParam('fees_max', e.target.value)}
-                    />
-                  </label>
-                </div>
-              )}
-            </section>
-          )}
-
-          <section aria-label="Search results">
-            {query.isPending && (
-              <div className="ls-cards ls-mt16" aria-busy="true" aria-label="Loading schools">
-                {[1, 2, 3].map((k) => (
-                  <div className="ls-card" key={k}>
-                    <Skel h={22} maxW={280} />
-                    <Skel h={14} maxW={200} mt={10} />
-                    <Skel h={48} mt={12} />
-                  </div>
-                ))}
-              </div>
-            )}
-            {query.isError && <QueryFailure error={query.error} onRetry={() => void query.refetch()} />}
-            {query.data && (
-              <p className="ls-metaline ls-mt16" role="status">
-                {total} SCHOOL{total === 1 ? '' : 'S'}
-                {answered ? ' · MATCHING YOUR ANSWERS' : ''}
-                {params.q ? ` · “${params.q.toUpperCase()}”` : ''}
-                {' · ORDER: '}
-                {SORT_LABELS[sortKey]}
-              </p>
-            )}
-            {query.data && query.data.items.length === 0 && (
-              <div className="ls-panelbox">
-                <h2>No schools match</h2>
-                <p>Try clearing a filter or broadening your search.</p>
-                <button
-                  type="button"
-                  className="btn ls-solid tap"
-                  onClick={() => {
-                    setQInput('');
-                    setSp(new URLSearchParams());
-                  }}
-                >
-                  Start over
-                </button>
-              </div>
-            )}
-            {query.data && query.data.items.length > 0 && (
-              <ul className="ls-cards">
-                {query.data.items.map((s) => {
-                  const inTray = trayIds.includes(s.id);
-                  const why = whyMatch(s);
-                  const ex = extrasResult.byId[s.id];
-                  const saved = ex?.saved ?? false;
-                  return (
-                    <li className="st-item ls-card" key={s.id}>
-                      <div className="ls-hd">
-                        <span className="ls-mg" aria-hidden="true">{monogramText(s.name)}</span>
-                        <h3 className="ls-name">
-                          <Link to={`/s-28?id=${encodeURIComponent(s.id)}${ctx ? `&ret=${encodeURIComponent(ctx)}` : ''}`}>
-                            {s.name}
-                          </Link>
-                        </h3>
-                      </div>
-                      <p className="ls-metaline ls-mt2">
-                        {(ex?.cityState ?? s.state).toUpperCase()} · SINCE {ex?.established ?? '—'}
-                      </p>
-                      {why.length > 0 && (
-                        <div className="ls-match">
-                          <span aria-hidden="true">✓ </span>Matches: {why.join(' · ')}
-                        </div>
-                      )}
-                      <ul className="ls-plain">
-                        <li><span className="ls-b" aria-hidden="true" />Costs about <b>&nbsp;{feesLakhBand(s.feesMin, s.feesMax)}&nbsp;</b> (sample)</li>
-                        <li><span className="ls-b" aria-hidden="true" />{ex?.seats ?? '—'} UG seats last cycle (sample)</li>
-                        <li><span className="ls-b" aria-hidden="true" />Admission through {s.entranceExam}</li>
-                      </ul>
-                      <LsTags />
-                      <div className="ls-acts">
-                        <button
-                          type="button"
-                          className="btn ls-ghost tap ls-view"
-                          onClick={() => nav(lawSchoolDetailPath(s.id, ctx))}
-                        >
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn tap ls-cmp${inTray ? ' ls-ind' : ''}`}
-                          aria-pressed={inTray}
-                          disabled={!inTray && selection.atLimit}
-                          onClick={() => (inTray ? removeFromTray(s.id) : addToTray(s))}
-                        >
-                          {inTray ? <><span aria-hidden="true">✓ </span>Picked to compare</> : '+ Compare'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn tap ls-save"
-                          aria-pressed={saved}
-                          aria-label={saved ? 'Saved — remove' : 'Save school'}
-                          disabled={cardSave.isPending && cardSave.variables?.id === s.id}
-                          onClick={() => cardSave.mutate({ id: s.id, saved })}
-                        >
-                          {saved ? <><span aria-hidden="true">★ </span>Saved</> : 'Save'}
-                        </button>
-                      </div>
-                      <p className="ls-src">{referenceSourceFoot()}</p>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {query.data && pageCount > 1 && (
-              <nav className="ls-pager" aria-label="Pagination">
-                <button type="button" className="btn tap" disabled={page <= 1} onClick={() => setParam('page', String(page - 1))}>
-                  ‹ Back
-                </button>
-                <span className="ls-metaline" aria-live="polite">PAGE {page} OF {pageCount}</span>
-                <button type="button" className="btn tap" disabled={page >= pageCount} onClick={() => setParam('page', String(page + 1))}>
-                  More ›
-                </button>
-              </nav>
-            )}
-          </section>
-          <div className="ls-foot">{REFERENCE_RESPONSIBLE_COPY}</div>
-        </div>
-      </LsShell>
-    </StudentScreen>
-  );
+  return <S27SearchScreen readSelection={readCompareTray} writeSelection={writeCompareTray}/>;
 }
 
 /* -------------------------------------------------------------------------- */
