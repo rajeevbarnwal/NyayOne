@@ -174,3 +174,58 @@ for (const width of [390, 1440]) for (const state of ['loading', 'empty', 'error
   assert.deepEqual(audit.violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id), []);
   if (diagnosticDir) { await mkdir(diagnosticDir, { recursive: true }); await page.screenshot({ path: `${diagnosticDir}/s26-${state}-${width}.png`, fullPage: true }); }
 }, { width, holdRead: state === 'loading', saved: state === 'nonempty' ? S20_LISTINGS.slice(0, 2) : [], status: state === 'error' ? 503 : 200 }));
+
+// R2-F2: late adjacent-screen writes invalidate the mounted S-26 query.
+const lateWrites = [
+  { name: 'S-20 save', path: '/s-20', cached: 0, mutationStatus: 200 },
+  { name: 'S-21 save', path: `/s-21?listing=${S20_LISTINGS[0].id}`, cached: 0, mutationStatus: 200 },
+  { name: 'S-21 failed save', path: `/s-21?listing=${S20_LISTINGS[0].id}`, cached: 0, mutationStatus: 503 },
+  { name: 'S-25 remove', path: '/s-25', cached: 2, mutationStatus: 200 },
+  { name: 'S-25 failed remove', path: '/s-25', cached: 2, mutationStatus: 503 },
+];
+async function backgroundRefresh(page, s, scenario, ownership = 'result', readStatus = 200) {
+  const item = S20_LISTINGS[0]; let mutation;
+  await page.route(`**/api/v1/internships/${item.id}`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) }));
+  await page.route(/\/api\/v1\/student\/internships\/[^/]+\/saved$/, route => { mutation = route; });
+  await page.goto(origin + scenario.path);
+  const start = scenario.path === '/s-20' ? page.getByRole('button', { name: `Save ${item.role}`, exact: true }).first()
+    : scenario.path === '/s-25' ? page.getByRole('button', { name: `Remove ${item.role} from saved`, exact: true })
+      : page.getByRole('button', { name: 'Save listing', exact: true });
+  await start.waitFor(); await start.click();
+  const deadline = Date.now() + 5000; while (!mutation && Date.now() < deadline) await delay(10);
+  assert.ok(mutation, 'adjacent-screen mutation held before navigation');
+  await page.evaluate(() => { history.pushState({}, '', '/s-26'); dispatchEvent(new PopStateEvent('popstate')); });
+  const result = page.getByRole('button', { name: scenario.cached ? 'Open saved internships' : 'Browse internships', exact: true });
+  await result.waitFor();
+  const profile = page.getByRole('button', { name: 'Your Profile', exact: true });
+  const heading = page.getByRole('heading', { name: 'Saved internships.', exact: true });
+  if (ownership === 'header') await profile.focus();
+  else { await result.focus(); if (ownership === 'blurred') await result.evaluate(el => el.blur()); }
+  s.heldRead = null; s.holdRead = true; s.status = readStatus;
+  const id = new URL(mutation.request().url()).pathname.split('/').at(-2), put = mutation.request().method() === 'PUT';
+  if (scenario.mutationStatus === 200) s.saved = put ? [item] : s.saved.filter(x => x.id !== id);
+  await mutation.fulfill({ status: scenario.mutationStatus, contentType: 'application/json', body: JSON.stringify(scenario.mutationStatus === 200 ? { listing_id: id, saved: put } : { detail: { code: 'unavailable' } }) });
+  await held(s); await page.getByRole('status', { name: 'Loading saved internships' }).waitFor();
+  assert.equal(await page.getByRole('heading', { name: 'No saved internships yet.' }).count(), 0);
+  assert.equal(await page.getByRole('heading', { name: /^You have \d+ saved internship/ }).count(), 0);
+  if (ownership === 'header') assert.equal(await profile.evaluate(el => el === document.activeElement), true);
+  else if (ownership === 'blurred') assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
+  else assert.equal(await heading.evaluate(el => el === document.activeElement), true, 'detached result action hands focus to the stable heading during loading');
+  if (ownership === 'moved' || ownership === 'moved-blurred') await profile.focus();
+  if (ownership === 'moved-blurred') await profile.evaluate(el => el.blur());
+  if (ownership === 'anchor-blurred') await heading.evaluate(el => el.blur());
+  await s.heldRead();
+  if (readStatus !== 200) await root(page).getByRole('alert').waitFor();
+  else await page.getByRole('heading', { name: s.saved.length ? `You have ${s.saved.length} saved internship${s.saved.length === 1 ? '' : 's'}.` : 'No saved internships yet.', exact: true }).waitFor();
+  if (ownership === 'header' || ownership === 'moved') assert.equal(await profile.evaluate(el => el === document.activeElement), true, 'background completion must not steal focus');
+  else if (['blurred', 'moved-blurred', 'anchor-blurred'].includes(ownership)) assert.equal(await page.evaluate(() => document.activeElement === document.body), true, 'voluntary focus movement cancels ownership');
+  else assert.equal(await (readStatus === 200 ? heading : root(page).getByRole('alert')).evaluate(el => el === document.activeElement), true, 'completion retains meaningful owned focus');
+}
+for (const width of [390, 1440]) {
+  for (const scenario of lateWrites) it(`R2-F2 ${scenario.name} retains owned focus at ${width}px`, () => using(
+    (page, s) => backgroundRefresh(page, s, scenario), { width, saved: S20_LISTINGS.slice(0, scenario.cached) }));
+  it(`R2-F2 failed background GET focuses error at ${width}px`, () => using(
+    (page, s) => backgroundRefresh(page, s, lateWrites[1], 'result', 503), { width }));
+  for (const ownership of ['header', 'moved', 'blurred', 'moved-blurred', 'anchor-blurred']) for (const status of [200, 503]) it(`R2-F2 ${ownership} focus not stolen after HTTP ${status} at ${width}px`, () => using(
+    (page, s) => backgroundRefresh(page, s, lateWrites[1], ownership, status), { width }));
+}

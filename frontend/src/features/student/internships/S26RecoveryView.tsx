@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { Icon } from './S20BrowseView';
 import './S26Recovery.css';
@@ -14,6 +14,13 @@ export interface S26RecoveryViewProps {
 export function S26RecoveryView(p: S26RecoveryViewProps) {
   const root = useRef<HTMLDivElement>(null), action = useRef<Action | null>(null), initial = useRef(true);
   const [completed, setCompleted] = useState<Action | null>(null);
+  // React detaches this ref before removing the result button. Transfer only
+  // focus actually owned by that disappearing control; a background refresh
+  // must not acquire ownership when focus is elsewhere (or voluntarily blurred).
+  const resultAction = useCallback((node: HTMLButtonElement | null) => {
+    if (!node) return;
+    return () => { if (document.activeElement === node) p.focus.current = {}; };
+  }, [p.focus]);
   useLayoutEffect(() => {
     const host = root.current;
     return () => { if (host?.contains(document.activeElement)) p.focus.current = {}; };
@@ -43,7 +50,12 @@ export function S26RecoveryView(p: S26RecoveryViewProps) {
     try { await p.onRetry(); } finally { setCompleted(owned); }
   }
   const access = ['anonymous', 'forbidden', 'unavailable'].includes(p.phase);
-  return <div className="v321-internships s26-recovery" data-screen="S-26" data-v34-screen="S-26" ref={root}>
+  return <div className="v321-internships s26-recovery" data-screen="S-26" data-v34-screen="S-26" ref={root}
+    onBlurCapture={e => {
+      // A voluntary move (including blur to the body) relinquishes the temporary
+      // loading anchor, so a later network result cannot take focus back.
+      if (p.focus.current?.anchor === e.target) p.focus.current = null;
+    }}>
     <header className="s20-header"><img className="s20-mark" src="/brand/nyayone-mark.svg" alt="NyayOne" width="30" height="30"/><span className="s20-mobile-title">Saved</span><div className="s20-lockup"><NyayOneRevLLockup/></div>
       <nav aria-label="Site"><button onClick={() => p.onNavigate('/s-14')}>Home</button><span>Research</span><span>Calendar</span><span aria-current="page">Careers</span><button onClick={() => p.onNavigate('/s-17')}>Profile</button></nav>
       <button className="s20-avatar" aria-label="Your Profile" onClick={() => p.onNavigate('/s-17')}><span><Icon name="person"/></span></button>
@@ -65,7 +77,7 @@ export function S26RecoveryView(p: S26RecoveryViewProps) {
         <span className={`s20-state-icon ${p.phase === 'empty' ? 's20-indigo' : 's26-positive'}`}><Icon name="bookmark"/></span>
         <h2>{p.phase === 'empty' ? 'No saved internships yet.' : `You have ${p.count} saved internship${p.count === 1 ? '' : 's'}.`}</h2>
         <p>{p.phase === 'empty' ? 'Saved listings appear here with their closing dates.' : 'Your list is not empty. Open it to continue.'}</p>
-        <div className="s20-actions"><button className="s20-btn s20-primary" onClick={() => p.onNavigate(p.phase === 'empty' ? '/s-20' : '/s-25')}><span className="s20-action-icon"><Icon name={p.phase === 'empty' ? 'brief' : 'bookmark'} size={18}/></span>{p.phase === 'empty' ? 'Browse internships' : 'Open saved internships'}</button></div>
+        <div className="s20-actions"><button ref={resultAction} className="s20-btn s20-primary" onClick={() => p.onNavigate(p.phase === 'empty' ? '/s-20' : '/s-25')}><span className="s20-action-icon"><Icon name={p.phase === 'empty' ? 'brief' : 'bookmark'} size={18}/></span>{p.phase === 'empty' ? 'Browse internships' : 'Open saved internships'}</button></div>
       </section>}
     </main><aside aria-label="Saved internships recovery context"><section className="s20-card"><div className="s20-eyebrow">When this appears</div><p>Shown only when the saved query really returned nothing. Loading and failure never pretend to be empty.</p></section></aside></div>
     <footer><span>Privacy Notice</span><span>·</span><span>Terms</span><span>·</span><span>Accessibility</span></footer>
