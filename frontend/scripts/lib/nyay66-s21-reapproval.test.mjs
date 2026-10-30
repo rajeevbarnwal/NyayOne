@@ -1,3 +1,4 @@
+import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ const historical=baseline.filter(e=>e.screen!=='S-21');
 const targetIndices=s21Round2Pins.map(p=>baseline.findIndex(e=>JSON.stringify(e)===JSON.stringify(s21Proposals[p.index])));
 const candidate=()=>[...structuredClone(historical),...structuredClone(s21Round2Proposals)];
 function expectBoundary(entries){
-  entries=withoutS25ProposalsForTest(entries);
+  entries=withoutS25ProposalsForTest(withoutS26ProposalsForTest(entries));
   expect(entries).toHaveLength(148);
   expect(JSON.stringify(withoutS21ProposalsForTest(entries))).toBe(JSON.stringify(historical));
   for(let i=0;i<baseline.length;i++){
@@ -26,7 +27,7 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
     const entries=[...candidate(),...structuredClone(s25Proposals)],before=JSON.stringify(entries);
     expectBoundary(entries);
     expect(JSON.stringify(entries)).toBe(before);
-    expect(withoutS25ProposalsForTest(entries)).toEqual(candidate());
+    expect(withoutS25ProposalsForTest(withoutS26ProposalsForTest(entries))).toEqual(candidate());
     for(let i=0;i<entries.length;i++){
       const changed=structuredClone(entries);changed[i].reason+=' widened';
       expect(()=>expectBoundary(changed)).toThrow();
@@ -63,7 +64,7 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
     const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
     const before=JSON.stringify(policy);
     const hashes=policy.exceptions.filter(e=>e.screen==='S-21').map(e=>approveException(e,null,options));
-    if(JSON.stringify(hashes)===JSON.stringify(s21ProposalHashes))expect(withoutS25ProposalsForTest(policy.exceptions)).toEqual(baseline);
+    if(JSON.stringify(hashes)===JSON.stringify(s21ProposalHashes))expect(withoutS25ProposalsForTest(withoutS26ProposalsForTest(policy.exceptions))).toEqual(baseline);
     else expectBoundary(policy.exceptions);
     expect(JSON.stringify(policy)).toBe(before);
   });
@@ -118,4 +119,8 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
       expect(code).not.toContain('s21Round2');
     }
   });
+});
+
+it('validates the eight exact S-26 additions before applying historical assertions',()=>{
+  expectBoundary([...candidate(),...structuredClone(s25Proposals),...structuredClone(s26Proposals)]);
 });

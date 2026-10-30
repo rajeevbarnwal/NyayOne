@@ -1,3 +1,4 @@
+import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {readFileSync,mkdtempSync,writeFileSync,rmSync,mkdirSync,symlinkSync} from 'node:fs';
@@ -72,7 +73,7 @@ describe('S-21 archive import fails closed before writing',()=>{
       await expect(loadS21Cache(f.dir,config,data,fonts)).rejects.toThrow('S21_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it.each(['current','proposed','s25-proposed'])('pins the owner-dispatched cache and preserves every historical policy byte (%s exceptions)',async(mode)=>{
+  it.each(['current','proposed','s25-proposed','s26-proposed'])('pins the owner-dispatched cache and preserves every historical policy byte (%s exceptions)',async(mode)=>{
     const got=await loadS21Cache(root,policy.s21,data,fonts);
     expect(got).not.toBe(null);expect(got.manifest.rows).toHaveLength(16);
     expect(got.provenance).toEqual({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39279617257',artifactId:'12200177444',archiveSha256:'4ae108aab062f6b3e7ded73b85e4efdcb95962fe3ca3ce54400107ce95e9de60',sourceHead:'0d381b7aee9d438712549cb62275582951536438',controlHead:'0d381b7aee9d438712549cb62275582951536438',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',referenceRows:16,manualRows:0});
@@ -84,7 +85,8 @@ describe('S-21 archive import fails closed before writing',()=>{
     // every historical setting and exception comparison below stays intact.
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
-    current.exceptions=withoutS25ProposalsForTest(current.exceptions);
+    if(mode==='s26-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-26'),...structuredClone(s26Proposals)];
+    current.exceptions=withoutS25ProposalsForTest(withoutS26ProposalsForTest(current.exceptions));
     current.exceptions=withoutS21ProposalsForTest(current.exceptions);
     expect(current.exceptions).toHaveLength(132);
     expect(digest(JSON.stringify(current.exceptions))).toBe(historicalExceptionsSha256);
@@ -95,7 +97,7 @@ describe('S-21 archive import fails closed before writing',()=>{
     const options={r2:true,s18:true,s19:true,s20:true,s21:true};
     expect(s21Proposals.map(e=>approveException(e,null,options))).toEqual(s21ProposalHashes);
     for(const entry of s21Proposals)expect(approveException(entry,[],options)).toBe(false);
-    const before=JSON.stringify(withoutS25ProposalsForTest(policy.exceptions).filter(e=>e.screen!=='S-21'));
+    const before=JSON.stringify(withoutS25ProposalsForTest(withoutS26ProposalsForTest(policy.exceptions)).filter(e=>e.screen!=='S-21'));
     const candidate=[...JSON.parse(before),...structuredClone(s21Proposals)];
     const original=JSON.stringify(candidate);
     expect(JSON.stringify(withoutS21ProposalsForTest(candidate))).toBe(before);

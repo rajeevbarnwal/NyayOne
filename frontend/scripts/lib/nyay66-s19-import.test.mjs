@@ -1,3 +1,4 @@
+import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {readFileSync,mkdtempSync,writeFileSync,rmSync,mkdirSync,symlinkSync} from 'node:fs';
@@ -53,7 +54,7 @@ describe('S-19 archive import fails closed before writing',()=>{
     expect(await loadS19Cache(root,undefined,data,fonts)).toBe(null);
     await expect(loadS19Cache(root,{cache:'../escape'},data,fonts)).rejects.toThrow('S19_INVALID_CACHE_BINDING');
   });
-  it.each(['current','proposed','s25-proposed'])('revalidates the owner-dispatched 52-PNG cache and its exact provenance (%s exceptions)',async(mode)=>{
+  it.each(['current','proposed','s25-proposed','s26-proposed'])('revalidates the owner-dispatched 52-PNG cache and its exact provenance (%s exceptions)',async(mode)=>{
     expect(policy.s19).toEqual({cache:'s19-v32108-chromium-149.0.7827.55-39029544967',manifestSha256:'b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c',provenanceSha256:'5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf'});
     const got=await loadS19Cache(root,policy.s19,data,fonts);
     expect(got.manifest.rows).toHaveLength(52);
@@ -77,7 +78,8 @@ describe('S-19 archive import fails closed before writing',()=>{
     // exceptions present at this pre-S-19 snapshot, preserving their bytes/order.
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
-    current.exceptions=withoutS25ProposalsForTest(current.exceptions);
+    if(mode==='s26-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-26'),...structuredClone(s26Proposals)];
+    current.exceptions=withoutS25ProposalsForTest(withoutS26ProposalsForTest(current.exceptions));
     current.exceptions=withoutS21ProposalsForTest(current.exceptions).filter(e=>!['S-19','S-20'].includes(e.screen));
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(previous.exceptions));
     expect(current).toEqual(previous);
