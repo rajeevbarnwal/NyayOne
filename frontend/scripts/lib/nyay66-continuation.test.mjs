@@ -1,3 +1,4 @@
+import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {s25Proposals,withoutS25ProposalsForTest,historicalS25ExceptionsSha256} from './nyay66-s25-exceptions.test-fixture.mjs';
 import {readFileSync} from 'node:fs';
@@ -38,7 +39,7 @@ const policies=()=>({
   before:JSON.parse(execFileSync('git',['show','4a2827d37f60fc651b3a6dbace0dcddfab44b9c4:frontend/scripts/nyay66-policy.json'],{cwd:root})),
 });
 function expectApprovedExceptions(policy,before){
-  policy={...policy,exceptions:normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(policy.exceptions)))};
+  policy={...policy,exceptions:normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(withoutS26ProposalsForTest(policy.exceptions))))};
   // Preserve every original field/string/order and the exact 18 S-18 approvals.
   // Optional S-19/S-20 proposals are validated here; the hosted finalizer still
   // requires an exact owner comment for each hash (never test self-approval).
@@ -138,7 +139,7 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
   });
   it('permits future S-20 proposals only for PR72 while preserving all 112 existing exception records exactly',()=>{
     const {policy,before}=policies();
-    expect(sha(JSON.stringify(normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(policy.exceptions))).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
+    expect(sha(JSON.stringify(normalizeS19RasterForTest(withoutS21ProposalsForTest(withoutS25ProposalsForTest(withoutS26ProposalsForTest(policy.exceptions)))).filter(e=>e.screen!=='S-20')))).toBe('f01c59f4e3fa842d9b0ca2b6145b4f595e05951aeabbbae906d2e63f56ba9814');
     const proposal={screen:'S-20',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72};
     policy.exceptions.push(proposal);
     expect(()=>expectApprovedExceptions(policy,before)).not.toThrow();
@@ -165,7 +166,7 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
   });
   it('permits only the twelve exact S-25 proposals and retains every historical record',()=>{
     const {policy,before}=policies();
-    const history=withoutS25ProposalsForTest(policy.exceptions);
+    const history=withoutS25ProposalsForTest(withoutS26ProposalsForTest(policy.exceptions));
     expect(history).toHaveLength(148);
     expect(sha(JSON.stringify(history))).toBe(historicalS25ExceptionsSha256);
     policy.exceptions=[...history,...structuredClone(s25Proposals)];
@@ -200,4 +201,8 @@ describe('v3.2.1.08 source intake is unmeasured, never a product pass',()=>{
     expect(data.inventory.scope).toBe('approved-design-source-only');
     expect(data.pngBaselinesImported).toBe(false);
   });
+});
+
+it('validates the eight exact S-26 additions before applying historical assertions',()=>{
+  const {policy,before}=policies(); policy.exceptions=[...policy.exceptions.filter(e=>e.screen!=='S-26'),...structuredClone(s26Proposals)]; expectApprovedExceptions(policy,before);
 });

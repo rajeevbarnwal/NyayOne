@@ -36,7 +36,7 @@ describe('PR4 route-aware shell selection', () => {
     });
   }
 
-  it.each(['/s-03', '/s-04', '/s-05', '/s-08', '/s-09'])('%s does not add a nested main around screen-owned main', path => {
+  it.each(['/s-03', '/s-04', '/s-05', '/s-08', '/s-09', '/s-26'])('%s does not add a nested main around screen-owned main', path => {
     const html = renderShell(path.toUpperCase() + '/', <main>Screen-owned main</main>);
     expect(html.match(/<main\b/g)).toHaveLength(1);
     expect(html).toContain('<div class="ls-v34-content"><main>');

@@ -29,9 +29,9 @@ export function AppShell({
       { path, end: true, caseSensitive: false }, currentLocation.pathname,
     ))?.path ?? currentLocation.pathname,
   };
-  // S-18–S-21 and S-25 own one main and a sibling context aside. Other routes keep
+  // S-18–S-21 and S-25–S-26 own one main and a sibling context aside. Other routes keep
   // their current shell, guards and query/hash handling.
-  if (location.pathname === '/s-18' || location.pathname === '/s-19' || location.pathname === '/s-20' || location.pathname === '/s-21' || location.pathname === '/s-25') {
+  if (location.pathname === '/s-18' || location.pathname === '/s-19' || location.pathname === '/s-20' || location.pathname === '/s-21' || location.pathname === '/s-25' || location.pathname === '/s-26') {
     return <div className="ls-v34-content">{children}</div>;
   }
   // S-11 now owns its Revision L profile shell; all other continuation routes stay unchanged.

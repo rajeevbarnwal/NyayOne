@@ -1,0 +1,11 @@
+{
+  "status": "CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL",
+  "runId": "41029103233",
+  "artifactId": "12965330816",
+  "archiveSha256": "a58def51694350f9d631a3680d50dfb75477340395737af86bbd06dfc00272f8",
+  "sourceHead": "d7a9d5bb7ffba20360305bd25ad3c6adb3049a61",
+  "controlHead": "d7a9d5bb7ffba20360305bd25ad3c6adb3049a61",
+  "manifestSha256": "d03d6c01f946c5f63105f2da437560347b0f52f799af6d5d6be32a2f5a4673c8",
+  "referenceRows": 8,
+  "manualRows": 0
+}

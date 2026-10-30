@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { StudentScreen, DpdpFootnote } from '../components';
-import { useAuth } from '../../../app/authContext';
-import { StatusBadge, EmptyState, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
+import { StatusBadge, ErrorState, LoadingState, ValidationState } from '../../../components/ui/primitives';
 import {
   stepForStatus,
   statusChip,
@@ -16,21 +14,16 @@ import {
   loadLatestSubmittedApplication,
   APPLICATION_STAGES,
   SAMPLE_APPLICATIONS,
-  type InternshipListing,
   type Application,
 } from '../lib/internships';
 import {
   InternshipsApiError,
   getInternship,
-  listSavedInternships,
-  saveInternship,
-  unsaveInternship,
 } from '../lib/internshipsApi';
 import { S20BrowseScreen } from './S20BrowseScreen';
 import { S21DetailScreen } from './S21DetailScreen';
 import { S25SavedScreen } from './S25SavedScreen';
-import { settleS21Saved } from './s21SavedCache';
-import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib/studentBrowserContext';
+import { S26RecoveryScreen } from './S26RecoveryScreen';
 
 function ModuleHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -54,81 +47,6 @@ function internshipFailureCopy(
     if (error.status === 409) return 'The saved list changed elsewhere. Reload it and try again.';
   }
   return fallback;
-}
-
-function useSavedInternships() {
-  const auth = useAuth();
-  const client = useQueryClient();
-  const [failure, setFailure] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const canSave = auth.isAuthenticated && auth.roles.includes('student') && Boolean(auth.userId);
-  const access = !auth.isAuthenticated
-    ? {
-        title: 'Sign in to view saved internships',
-        hint: 'Your private saved list is tied to your student account.',
-        offerSignIn: true,
-      }
-    : !auth.roles.includes('student')
-      ? {
-          title: 'Student account required',
-          hint: 'Saved internships are available only to student accounts.',
-          offerSignIn: false,
-        }
-      : !auth.userId
-        ? {
-            title: 'Session unavailable',
-            hint: 'Your session has no account identity. Sign in again before using saved internships.',
-            offerSignIn: true,
-          }
-        : null;
-  const key = ['internships-saved', auth.userId] as const;
-  const query = useQuery({
-    queryKey: key,
-    queryFn: listSavedInternships,
-    enabled: canSave,
-    retry: false,
-  });
-  const mutation = useMutation({
-    mutationFn: ({ listing, wasSaved }: { listing: InternshipListing; wasSaved: boolean; fence: ReturnType<typeof captureStudentContextFence> }) => (
-      wasSaved ? unsaveInternship(listing.id) : saveInternship(listing.id)
-    ),
-    onSuccess: async (result, variables) => {
-      if (auth.userId) await settleS21Saved(client, auth.userId, variables.listing, result.saved, () => isStudentContextFenceCurrent(variables.fence));
-      if (!isStudentContextFenceCurrent(variables.fence)) return;
-      setFailure(null);
-      setMessage(result.saved
-        ? 'Saved privately to your account. The organisation is not notified.'
-        : 'Removed from your saved internships.');
-    },
-    onError: (error) => {
-      setMessage(null);
-      setFailure(internshipFailureCopy(
-        error,
-        'We could not update your saved internships. Nothing was changed; please retry.',
-      ));
-    },
-  });
-
-  const savedIds = new Set((query.data ?? []).map((listing) => listing.id));
-  function toggle(listing: InternshipListing): void {
-    setFailure(null);
-    setMessage(null);
-    if (!canSave) {
-      setFailure(access?.hint ?? 'Saved internships are unavailable for this session.');
-      return;
-    }
-    mutation.mutate({ listing, wasSaved: savedIds.has(listing.id), fence: captureStudentContextFence() });
-  }
-  return {
-    canSave,
-    access,
-    query,
-    savedIds,
-    toggle,
-    failure,
-    message,
-    pendingId: mutation.isPending ? mutation.variables?.listing.id ?? null : null,
-  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -374,30 +292,5 @@ export function InternshipSaved() {
 /* S-26 — Empty / no saved                                                     */
 /* -------------------------------------------------------------------------- */
 export function InternshipEmpty() {
-  const nav = useNavigate();
-  const saved = useSavedInternships();
-  return (
-    <StudentScreen screenId="S-26">
-      <div className="st-stack">
-        <ModuleHead eyebrow="Internships · S4" title="Saved internships" />
-        {!saved.canSave ? <EmptyState
-          title={saved.access?.title ?? 'Saved internships unavailable'}
-          hint={saved.access?.hint ?? 'Saved internships are unavailable for this session.'}
-          action={saved.access?.offerSignIn ? <button type="button" className="btn tap" onClick={() => nav('/s-03')}>Go to sign in</button> : undefined}
-        /> : saved.query.isPending ? <LoadingState label="Loading saved internships…" /> : saved.query.isError ? <ErrorState title="Could not load saved internships" detail={internshipFailureCopy(saved.query.error, 'We could not load your saved internships. Please retry.')} onRetry={() => void saved.query.refetch()} /> : (saved.query.data?.length ?? 0) > 0 ? <EmptyState
-          title="Your saved list is not empty"
-          hint="Open your private saved list to view or remove internships."
-          action={<button type="button" className="btn btn--primary tap" onClick={() => nav('/s-25')}>Open saved internships</button>}
-        /> : <EmptyState
-          title="No saved internships yet"
-          hint="Browse listings and save the ones you like."
-          action={
-            <button type="button" className="btn btn--primary tap" onClick={() => nav('/s-20')}>
-              Browse listings
-            </button>
-          }
-        />}
-      </div>
-    </StudentScreen>
-  );
+  return <S26RecoveryScreen/>;
 }

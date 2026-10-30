@@ -1,3 +1,4 @@
+import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
@@ -30,7 +31,7 @@ const copyPins=[
 const currentPolicy=()=>JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions;
 function expectApprovedCopyBoundary(entries){
   // Validate the exact additive set before retaining the unchanged historical checks.
-  const historical=withoutS21ProposalsForTest(withoutS25ProposalsForTest(entries));
+  const historical=withoutS21ProposalsForTest(withoutS25ProposalsForTest(withoutS26ProposalsForTest(entries)));
   expect(historical).toHaveLength(beforeCopy.length);
   const normalized=historical.map((entry,index)=>{
     const pin=copyPins.find(p=>p.index===index);
@@ -43,7 +44,7 @@ function expectApprovedCopyBoundary(entries){
   expectPreserved(normalized);
 }
 describe('S-25 additions retain the S-19/S-20 historical regression boundary',()=>{
-  const historical=()=>withoutS25ProposalsForTest(currentPolicy());
+  const historical=()=>withoutS25ProposalsForTest(withoutS26ProposalsForTest(currentPolicy()));
   const candidate=()=>[...historical(),...structuredClone(s25Proposals)];
   const s25Options={...options,s21:true,s25:true};
   it('admits only the twelve pinned additions without mutating the 148 historical records',()=>{
@@ -55,7 +56,7 @@ describe('S-25 additions retain the S-19/S-20 historical regression boundary',()
     for(const entries of [baseline,candidate(),currentPolicy()]){
       const before=JSON.stringify(entries);
       expectApprovedCopyBoundary(entries);
-      expect(JSON.stringify(withoutS25ProposalsForTest(entries))).toBe(JSON.stringify(baseline));
+      expect(JSON.stringify(withoutS25ProposalsForTest(withoutS26ProposalsForTest(entries)))).toBe(JSON.stringify(baseline));
       expect(JSON.stringify(entries)).toBe(before);
     }
   });
@@ -101,14 +102,14 @@ describe('S-25 additions retain the S-19/S-20 historical regression boundary',()
 });
 describe('ten exact S-20 copy replacements, not a general exception allowance',()=>{
   it.each([false,true])('preserves all 132 historical records with exact S-21 additions: %s',withS21=>{
-    const historical=withoutS25ProposalsForTest(currentPolicy()).filter(e=>e.screen!=='S-21');
+    const historical=withoutS25ProposalsForTest(withoutS26ProposalsForTest(currentPolicy())).filter(e=>e.screen!=='S-21');
     const entries=[...historical,...(withS21?structuredClone(s21Proposals):[])],before=JSON.stringify(entries);
     expect(historical).toHaveLength(132);
     expectApprovedCopyBoundary(entries);
     expect(JSON.stringify(entries)).toBe(before);
   });
   it('rejects every altered S-21 addition before comparing the historical boundary',()=>{
-    const candidate=()=>[...withoutS25ProposalsForTest(currentPolicy()).filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
+    const candidate=()=>[...withoutS25ProposalsForTest(withoutS26ProposalsForTest(currentPolicy())).filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     expectApprovedCopyBoundary(candidate());
     for(let index=0;index<s21Proposals.length;index++)for(const mutate of [
       e=>e.approvalPr=73,e=>e.screen='S-22',e=>e.viewport='mobile360',e=>e.theme='dark',
@@ -213,4 +214,13 @@ describe('single S-19 raster replacement regression boundary, not approval',()=>
       expect(readFileSync(new URL(name,import.meta.url),'utf8')).not.toContain('nyay66-s19-reapproval.test-fixture');
     }
   });
+});
+
+it('validates only the eight S-26 additions before preserving the historical copy boundary',()=>{
+  const entries=[...withoutS26ProposalsForTest(currentPolicy()),...structuredClone(s26Proposals)];
+  const before=JSON.stringify(entries);expectApprovedCopyBoundary(entries);expect(JSON.stringify(entries)).toBe(before);
+  for(let i=0;i<8;i++){
+    const changed=structuredClone(entries);changed.at(-8+i).reason+=' widened';
+    expect(()=>expectApprovedCopyBoundary(changed)).toThrow();
+  }
 });

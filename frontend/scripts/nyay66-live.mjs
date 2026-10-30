@@ -18,6 +18,8 @@ import {loadS21Cache} from './lib/nyay66-s21-import.mjs';
 import {captureS21Rows} from './lib/nyay66-s21-live.mjs';
 import {loadS25Cache} from './lib/nyay66-s25-import.mjs';
 import {captureS25Rows} from './lib/nyay66-s25-live.mjs';
+import {loadS26Cache} from './lib/nyay66-s26-import.mjs';
+import {captureS26Rows} from './lib/nyay66-s26-live.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
 import {classifyConsoleErrors} from './lib/nyay66-console-errors.mjs';
 import {mockApplication} from './lib/nyay66-fixtures.mjs';
@@ -38,7 +40,8 @@ const s19=await loadS19Cache(root,config.s19,continuation,manifest.fonts);
 const s20=await loadS20Cache(root,config.s20,continuation,manifest.fonts);
 const s21=await loadS21Cache(root,config.s21,continuation,manifest.fonts);
 const s25=await loadS25Cache(root,config.s25,continuation,manifest.fonts);
-const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25};
+const s26=await loadS26Cache(root,config.s26,continuation,manifest.fonts);
+const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25,s26:!!s26};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
 const repository=resolve(process.env.NYAY66_REPO||root);
@@ -168,9 +171,13 @@ try{
     report.s25Reference={cache:config.s25.cache,manifestSha256:config.s25.manifestSha256,provenance:s25.provenance};
     report.rows.push(...await captureS25Rows({browser,origin,out,reference:s25}));
   }
+  if(s26){
+    report.s26Reference={cache:config.s26.cache,manifestSha256:config.s26.manifestSha256,provenance:s26.provenance};
+    report.rows.push(...await captureS26Rows({browser,origin,out,reference:s26}));
+  }
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
   Object.assign(report,finalizeEnforcement(report.rows,config,comments,coverageOptions));
-  Object.assign(report,appendContinuation(report,continuation,{s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25}));
+  Object.assign(report,appendContinuation(report,continuation,{s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25,s26:!!s26}));
   await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');
   const links=report.rows.filter(r=>r.executed).map(r=>`<section><h2>${r.state} · ${r.viewport} · ${r.verdict}</h2><p>Reference | ${r.evidenceDescription||(r.evidenceKind==='component-visual'?(r.state==='S-18-session'?'component visual (not a stable live-route capture); genuine 401 S-18 → S-03 separately verified':'component visual (not a stable live-route capture); automatic S-01 → S-07 separately verified'):'live route')} | diff — ${head}</p><div>${['reference','live','diff'].map(kind=>`<img alt="${kind}" src="${r.state}-${r.viewport}-${kind}.png">`).join('')}</div></section>`).join('');
   await writeFile(resolve(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>NYAY-66 comparison</title><style>body{font:16px sans-serif;background:#102033;color:white}div{display:flex;gap:10px}img{width:32%;object-fit:contain;align-self:start}section{margin-bottom:40px}</style><h1>NYAY-66 exact-head comparison</h1><p>${head}; unapproved differences remain NONCONFORMANT, not waived.</p>${links}`);

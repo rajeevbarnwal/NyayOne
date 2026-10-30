@@ -80,6 +80,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-20',
   'S-21',
   'S-25',
+  'S-26',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
