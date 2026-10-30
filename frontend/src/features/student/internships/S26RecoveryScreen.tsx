@@ -31,9 +31,11 @@ function RecoveryController({ focus }: Pick<S26RecoveryViewProps, 'focus'>) {
   // Preserve the retry button while its explicit read is pending. React Query
   // clears its error on retry; that must not detach the keyboard's active node.
   const failed = query.isError || (retrying && previousError.current !== null) || offline;
+  // Cached success is not confirmation of this screen's pending read. Keep
+  // the error/retry branch above loading so an explicit Retry retains focus.
   const phase: S26RecoveryViewProps['phase'] = session.phase === 'pending' ? 'loading'
     : !enabled ? session.phase === 'unavailable' || (auth.isAuthenticated && !auth.userId) ? 'unavailable' : auth.isAuthenticated ? 'forbidden' : 'anonymous'
-      : failed ? 'error' : query.isPending ? 'loading' : query.data?.length ? 'nonempty' : 'empty';
+      : failed ? 'error' : query.isPending || query.isFetching ? 'loading' : query.data?.length ? 'nonempty' : 'empty';
   const error = query.error ?? (retrying ? previousError.current : null);
   const statusCode = error instanceof InternshipsApiError && error.status >= 400 && error.status <= 599 ? error.status : null;
   return <S26RecoveryView focus={focus} phase={phase} count={enabled ? query.data?.length ?? 0 : 0}

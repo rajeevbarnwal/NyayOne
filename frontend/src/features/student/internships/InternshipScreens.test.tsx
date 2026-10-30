@@ -93,19 +93,24 @@ describe('SAATHI-60 internship screens', () => {
     expect(html).not.toContain('Summer Associate, disputes');
   });
 
-  it('renders account-backed saved and genuine empty states', () => {
+  it('renders account-backed saved states', () => {
     const savedHtml = render('/s-25', <InternshipSaved />, (client) => {
       client.setQueryData(['internships-saved', STUDENT.userId], [MENON]);
     });
     expect(savedHtml).toContain('Private to your account · organisations are not notified');
     expect(savedHtml).toContain('Judicial research assistant');
     expect(savedHtml).not.toContain('See empty state');
+  });
 
-    const emptyHtml = render('/s-26', <InternshipEmpty />, (client) => {
-      client.setQueryData(['internships-saved', STUDENT.userId], []);
+  it.each([{ name: 'empty', cached: [] }, { name: 'nonempty', cached: [MENON] }])('F1 holds cached S-26 $name data behind its mount refresh', ({ cached }) => {
+    const html = render('/s-26', <InternshipEmpty />, client => {
+      client.setQueryData(['internships-saved', STUDENT.userId], cached);
     });
-    expect(emptyHtml).toContain('No saved internships yet');
-    expect(emptyHtml).toContain('Browse internships');
+    expect(html).toContain('Loading saved internships');
+    expect(html).not.toContain('No saved internships yet');
+    expect(html).not.toMatch(/You have [0-9]+ saved internship/);
+    expect(html).not.toContain('Browse internships');
+    expect(html).not.toContain('Open saved internships');
   });
 
   it('does not claim account state to an anonymous visitor', () => {

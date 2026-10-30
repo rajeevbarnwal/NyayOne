@@ -44,6 +44,42 @@ it('pending saved GET makes no empty claim; empty response offers browse only', 
   await page.getByRole('button', { name: 'Browse internships', exact: true }).click();
   await page.waitForURL('**/s-20');
 }, { holdRead: true }));
+// Senior QA F1: seed the real shared query through S-25, then hold S-26's
+// mount refresh. Cached success must not be presented as that read's result.
+for (const cachedCount of [0, 2]) for (const outcome of ['empty', 'nonempty', '503', 'malformed']) {
+  it(`F1 cached ${cachedCount} stays loading during refresh, then ${outcome}`, () => using(async (page, s) => {
+    await page.goto(origin + '/s-25');
+    if (cachedCount) await page.locator('.s25-saved article').first().waitFor();
+    else await page.getByRole('heading', { name: 'No saved internships yet.' }).waitFor();
+    const before = s.reads;
+    s.saved = outcome === 'nonempty' ? S20_LISTINGS.slice(0, 1) : [];
+    s.status = outcome === '503' ? 503 : 200;
+    s.malformed = outcome === 'malformed'; s.holdRead = true;
+    await page.evaluate(() => { history.pushState({}, '', '/s-26'); dispatchEvent(new PopStateEvent('popstate')); });
+    await held(s);
+    assert.equal(s.reads, before + 1);
+    assert.equal(await page.getByRole('status', { name: 'Loading saved internships' }).isVisible(), true);
+    assert.equal(await page.getByRole('heading', { name: 'No saved internships yet.' }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: /^You have \d+ saved internship/ }).count(), 0);
+    await s.heldRead();
+    if (outcome === 'empty' || outcome === 'nonempty') {
+      await page.getByRole('heading', { name: outcome === 'empty' ? 'No saved internships yet.' : 'You have 1 saved internship.' }).waitFor();
+    } else {
+      await root(page).getByRole('alert').waitFor();
+      assert.equal(await page.getByRole('heading', { name: 'No saved internships yet.' }).count(), 0);
+      assert.equal(await page.getByRole('heading', { name: /^You have \d+ saved internship/ }).count(), 0);
+      assert.equal(await root(page).getByText('HTTP 503', { exact: true }).count(), outcome === '503' ? 1 : 0);
+      if (outcome === 'malformed') assert.doesNotMatch(await root(page).innerText(), /HTTP /);
+      // A failure with cached data must still retain the explicit Retry node.
+      s.status = 200; s.malformed = false; s.saved = []; s.heldRead = null; s.holdRead = true;
+      await retry(page).press('Enter'); await held(s);
+      assert.equal(await retry(page).evaluate(el => el === document.activeElement), true);
+      assert.equal(await retry(page).getAttribute('aria-disabled'), 'true');
+      await s.heldRead(); await page.getByRole('heading', { name: 'No saved internships yet.' }).waitFor();
+      await page.waitForFunction(() => document.activeElement?.tagName === 'H1');
+    }
+  }, { saved: S20_LISTINGS.slice(0, cachedCount) }));
+}
 it('nonempty count uses server truth and opens S-25 without a mutation', () => using(async page => {
   await page.goto(origin + '/s-26'); await page.getByRole('heading', { name: 'You have 2 saved internships.' }).waitFor();
   await page.getByRole('button', { name: 'Open saved internships' }).click();
