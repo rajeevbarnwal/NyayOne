@@ -86,7 +86,8 @@ describe('S-25 archive import fails closed before writing',()=>{
     expect(got.provenance).toEqual({status:'CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL',runId:'39558506587',artifactId:'12326656920',archiveSha256:'9472c2ef4a37772a41e74a80128e174b688184a5bf7d07af41f12c3895c88aab',sourceHead:'5fd6230526badfa03cf57d301b54edfb24208c76',controlHead:'5fd6230526badfa03cf57d301b54edfb24208c76',manifestSha256:'c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67',referenceRows:12,manualRows:0});
     expect(policy.s25).toEqual({cache:'s25-v32108-chromium-149.0.7827.55-39558506587',manifestSha256:'c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67',provenanceSha256:'16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675'});
     const before=JSON.parse(execFileSync('git',['show','5fd6230526badfa03cf57d301b54edfb24208c76:frontend/scripts/nyay66-policy.json'],{cwd:root}));
-    const current=structuredClone(policy);delete current.s25;delete current.integrityApproval;delete before.integrityApproval;
+    // The additive S-26 cache is pinned by nyay66-s26-import.test.mjs.
+    const current=structuredClone(policy);delete current.s25;delete current.s26;delete current.integrityApproval;delete before.integrityApproval;
     if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
     current.exceptions=withoutS25ProposalsForTest(current.exceptions);
     expect(current.exceptions).toHaveLength(148);
