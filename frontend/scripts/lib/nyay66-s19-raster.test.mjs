@@ -6,9 +6,9 @@ import {captureS19Rows} from './nyay66-s19-live.mjs';
 import {needsS19RasterIsolation,withS19RasterBrowser} from './nyay66-s19-raster.mjs';
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 
-const isolatedRows=[['delete-reauth-rejected','mobile390'],['delete-typed','mobile390'],['delete-confirm','desktop'],['export-failed','desktop']];
+const isolatedRows=S19_MEASURED_STATES.flatMap(state=>['mobile390','desktop'].map(viewport=>[state,viewport]));
 
-it('isolates only the four approved S-19 rows; the other 46 captures retain their shared browser',async()=>{
+it("isolates all 50 measured S-19 rows; none inherit another row's raster history",async()=>{
   const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
   const cache=resolve('test-baselines/nyay66',policy.s19.cache);
   const reference={cache,manifest:JSON.parse(readFileSync(resolve(cache,'manifest.json')))};
@@ -20,11 +20,11 @@ it('isolates only the four approved S-19 rows; the other 46 captures retain thei
   try{
     const rows=await captureS19Rows({browser:shared,origin:'http://127.0.0.1:4321',out,reference});
     expect(rows).toHaveLength(50);
-    expect(launch).toHaveBeenCalledTimes(4);
-    expect(launch.mock.calls).toEqual(Array.from({length:4},()=>[{args:['--disable-partial-raster']}]));
-    expect(shared.newContext).toHaveBeenCalledTimes(46);expect(isolated.newContext).toHaveBeenCalledTimes(4);
-    expect(isolated.close).toHaveBeenCalledTimes(4);expect(shared.close).not.toHaveBeenCalled();
-    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual([['export-failed','desktop'],['delete-confirm','desktop'],['delete-reauth-rejected','mobile390'],['delete-typed','mobile390']]);
+    expect(launch).toHaveBeenCalledTimes(50);
+    expect(launch.mock.calls).toEqual(Array.from({length:50},()=>[{args:['--disable-partial-raster']}]));
+    expect(shared.newContext).not.toHaveBeenCalled();expect(isolated.newContext).toHaveBeenCalledTimes(50);
+    expect(isolated.close).toHaveBeenCalledTimes(50);expect(shared.close).not.toHaveBeenCalled();
+    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual(isolatedRows);
     expect(rows.every(r=>r.verdict==='CAPTURE-FAILED'&&r.failure==='CONTEXT_CREATION_PROBE')).toBe(true);
   }finally{rmSync(out,{recursive:true,force:true});}
 });
@@ -35,7 +35,7 @@ function browsers(version='149.0.7827.55'){
   const shared={version:()=> '149.0.7827.55',browserType:()=>({name:()=> 'chromium',launch}),close:vi.fn()};
   return {shared,isolated,launch};
 }
-it('selects by fixed fixture identity, never by image hashes; all 46 unaffected rows keep the shared browser',async()=>{
+it('selects every measured S-19 identity, never by image hashes or the preceding capture',async()=>{
   for(const state of S19_MEASURED_STATES)for(const viewport of ['mobile390','desktop']){
     const expected=isolatedRows.some(([s,v])=>state===s&&viewport===v);
     expect(needsS19RasterIsolation(state,viewport)).toBe(expected);
@@ -43,6 +43,14 @@ it('selects by fixed fixture identity, never by image hashes; all 46 unaffected 
     expect(await withS19RasterBrowser(shared,state,viewport,capture)).toBe(expected?isolated:shared);
     expect(capture).toHaveBeenCalledTimes(1);expect(launch).toHaveBeenCalledTimes(expected?1:0);
     expect(shared.close).not.toHaveBeenCalled();
+  }
+});
+it('does not expand the measured matrix to manual mode, other viewports or unrelated screens',async()=>{
+  for(const [state,viewport] of [['option-manual','mobile390'],['option-manual','desktop'],['loaded','tablet'],['S-20-loaded','desktop'],[undefined,'desktop']]){
+    const {shared,launch}=browsers(),capture=vi.fn(async browser=>browser);
+    expect(needsS19RasterIsolation(state,viewport)).toBe(false);
+    expect(await withS19RasterBrowser(shared,state,viewport,capture)).toBe(shared);
+    expect(launch).not.toHaveBeenCalled();expect(shared.close).not.toHaveBeenCalled();
   }
 });
 it.each(isolatedRows)('closes the isolated %s/%s browser after failure, without retrying or falling back',async(state,viewport)=>{

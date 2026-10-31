@@ -1,10 +1,11 @@
-// Test-only capture isolation for the four scoped S-19 rows with demonstrated
-// paint-history-dependent rounded-border rasters. Other S-19 rows and the
-// shared browser are untouched. This does not grant an exception or claim
-// that the deterministic result matches any historical approval hash.
+// Test-only isolation for every measured S-19 row. Browser contexts alone share
+// process raster caches; selecting only previously flaky states leaves the
+// remaining sequence dependent on prior paints. References, other screens and
+// the shared browser are untouched. A deterministic image still needs its own
+// exact owner approval; this helper never selects images by approval hash.
+import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 export const needsS19RasterIsolation=(state,viewport)=>
-  (['delete-reauth-rejected','delete-typed'].includes(state)&&viewport==='mobile390')||
-  (['delete-confirm','export-failed'].includes(state)&&viewport==='desktop');
+  S19_MEASURED_STATES.includes(state)&&['mobile390','desktop'].includes(viewport);
 export async function withS19RasterBrowser(shared,state,viewport,capture){
   if(!needsS19RasterIsolation(state,viewport))return capture(shared);
   const type=shared.browserType();
