@@ -12,7 +12,7 @@
   "s25": {"cache": "s25-v32108-chromium-149.0.7827.55-39558506587", "manifestSha256": "c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67", "provenanceSha256": "16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675"},
   "s26": {"cache":"s26-v32108-chromium-149.0.7827.55-41029103233","manifestSha256":"d03d6c01f946c5f63105f2da437560347b0f52f799af6d5d6be32a2f5a4673c8","provenanceSha256":"9c7a0f3ac61c0cf71639719943229eb0cc0e69df4455dee1144a20d2bfd358ba"},
   "s27": {"cache":"s27-v32108-chromium-149.0.7827.55-41104712468","manifestSha256":"fc702af18fc6ad997149669b88cae1dec2e8247beb7a4068b22c9ecccc078b44","provenanceSha256":"aee7a39dafe6fa056b0c9bfb304b0d7ccf1567ca1763ccd0b76a694bcf7b9e5f"},
-  "integrityApproval": {"pr":80,"commentId":6541496428,"bundleSha256":"9bccee20024edb400aa5f161fb97b3eb65d10db9185b3d562ff68ec4a58dbe95"},
+  "integrityApproval": {"pr":83,"commentId":6544089945,"bundleSha256":"57b8591febfc1108c44f922faa56425bb2854bad9a6affafb83ca3b6455b7c7d"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
