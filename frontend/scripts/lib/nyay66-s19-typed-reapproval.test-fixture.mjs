@@ -1,6 +1,7 @@
 // Exact test-only data for the proposed PR84 mobile delete-typed replacement.
 // Never imported by capture, evaluation or product code; pins do not grant approval.
 import {approveException,canonical} from './nyay66-enforcement.mjs';
+import {normalizeS19ExportRasterForTest} from './nyay66-s19-export-reapproval.test-fixture.mjs';
 export const s19TypedRasterPredecessor={
   "screen": "S-19",
   "viewport": "mobile390",
@@ -40,5 +41,6 @@ export function normalizeS19TypedRasterForTest(exceptions){
   if(canonical(target)!==canonical(s19TypedRasterPredecessor)&&canonical(target)!==canonical(s19TypedRasterReplacement))throw Error('S19_TYPED_REPLACEMENT_SCOPE');
   return exceptions.map(e=>structuredClone(e===target?s19TypedRasterPredecessor:e));
 }
-// Historical snapshot assertions use a clone; the real policy remains untouched.
-export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(policy.exceptions)});
+// Historical snapshot assertions use a clone; each replacement is independently
+// exact-checked. The real policy and runtime owner-approval checks are untouched.
+export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(policy.exceptions))});

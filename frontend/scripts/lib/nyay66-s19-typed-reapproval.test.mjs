@@ -27,7 +27,7 @@ describe('S-19 mobile typed-confirmation exact replacement boundary',()=>{
     const policy={schema:1,exceptions:candidate(),enforced:['S-01']},before=JSON.stringify(policy);
     expect(s19TypedPolicyForTest(policy)).toEqual({...policy,exceptions:baseline});
     expect(JSON.stringify(policy)).toBe(before);
-    expectBoundary(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions);
+    expectBoundary(s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)))).exceptions);
   });
   it.each([
     ['wrong PR',e=>e.approvalPr=83],['changed reference',e=>e.referenceSha256='a'.repeat(64)],
