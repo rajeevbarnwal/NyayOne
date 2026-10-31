@@ -4,6 +4,7 @@ import {S20_MEASURED_STATES} from './nyay66-s20-coverage.mjs';
 import {S21_MEASURED_STATES} from './nyay66-s21-coverage.mjs';
 import {S25_MEASURED_STATES} from './nyay66-s25-coverage.mjs';
 import {S26_MEASURED_STATES} from './nyay66-s26-coverage.mjs';
+import {S27_MEASURED_STATES} from './nyay66-s27-coverage.mjs';
 export const SOURCE_SHA256 = '338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252';
 export const VIEWS = ['s03', 's04', 's05', 's08', 's09', 's10a', 's10b', 's11', 's12', 's13', 's14', 's14p', 's15', 's16', 's17'];
 export const VIEWPORTS = [
@@ -11,7 +12,7 @@ export const VIEWPORTS = [
   { id: 'desktop', width: 1440, height: 1024 },
 ];
 
-export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false, s20 = false, s21 = false, s25 = false, s26 = false} = {}) {
+export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false, s20 = false, s21 = false, s25 = false, s26 = false, s27 = false} = {}) {
   const items = [...Array.from({ length: 17 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`), 'S-07-popup'].map(screen => {
     const views = screen === 'S-07-popup' ? ['s14p'] : screen === 'S-07' ? ['s14'] : screen === 'S-10' ? ['s10a', 's10b'] : VIEWS.filter(view => view === screen.toLowerCase().replace('-', ''));
     const states={'S-01':['checking','error','resolved'],'S-02':['default','focus'],'S-06':['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']};
@@ -24,6 +25,7 @@ export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false,
   if(s21&&theme==='light')items.push({screen:'S-21',source:'s21',status:'NOT-YET-MEASURED',views:S21_MEASURED_STATES.map(s=>`s21-${s}`)});
   if(s25&&theme==='light')items.push({screen:'S-25',source:'s25',status:'NOT-YET-MEASURED',views:S25_MEASURED_STATES.map(s=>`s25-${s}`)});
   if(s26&&theme==='light')items.push({screen:'S-26',source:'s26',status:'NOT-YET-MEASURED',views:S26_MEASURED_STATES.map(s=>`s26-${s}`)});
+  if(s27&&theme==='light')items.push({screen:'S-27',source:'s27',status:'NOT-YET-MEASURED',views:S27_MEASURED_STATES.map(s=>`s27-${s}`)});
   return items;
 }
 

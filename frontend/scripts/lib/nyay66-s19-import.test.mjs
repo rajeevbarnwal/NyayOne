@@ -1,3 +1,4 @@
+import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.test-fixture.mjs';
@@ -54,7 +55,7 @@ describe('S-19 archive import fails closed before writing',()=>{
     expect(await loadS19Cache(root,undefined,data,fonts)).toBe(null);
     await expect(loadS19Cache(root,{cache:'../escape'},data,fonts)).rejects.toThrow('S19_INVALID_CACHE_BINDING');
   });
-  it.each(['current','proposed','s25-proposed','s26-proposed'])('revalidates the owner-dispatched 52-PNG cache and its exact provenance (%s exceptions)',async(mode)=>{
+  it.each(['current','proposed','s25-proposed','s26-proposed','s27-proposed'])('revalidates the owner-dispatched 52-PNG cache and its exact provenance (%s exceptions)',async(mode)=>{
     expect(policy.s19).toEqual({cache:'s19-v32108-chromium-149.0.7827.55-39029544967',manifestSha256:'b3e1637089633cef983824d0fd65341e73de1497f0fa77f8ca515d6cb305f32c',provenanceSha256:'5d999acbbfae032d266047221c62ee8add9b488062412a3f878595ec01431bbf'});
     const got=await loadS19Cache(root,policy.s19,data,fonts);
     expect(got.manifest.rows).toHaveLength(52);
@@ -65,8 +66,8 @@ describe('S-19 archive import fails closed before writing',()=>{
     expect(got.manifest.controlHead).toBe('3d0e1201ea672c6f96b7a86703def2d3bffa69f5');
     const before=JSON.parse(execFileSync('git',['show','3d0e1201ea672c6f96b7a86703def2d3bffa69f5:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy),previous=structuredClone(before);
-    // The additive S-26 cache is pinned by nyay66-s26-import.test.mjs.
-    delete current.s19;delete current.s20;delete current.s21;delete current.s25;delete current.s26;delete current.integrityApproval;delete previous.integrityApproval;
+    // The additive S-26/S-27 caches are pinned by their exact-provenance import tests.
+    delete current.s19;delete current.s20;delete current.s21;delete current.s25;delete current.s26;delete current.s27;delete current.integrityApproval;delete previous.integrityApproval;
     // S-25's exact cache/provenance is pinned by nyay66-s25-import.test.mjs;
     // only that additive field is excluded from this older policy snapshot.
     // S-21's additive cache is pinned by its exact-provenance import test;
@@ -79,7 +80,8 @@ describe('S-19 archive import fails closed before writing',()=>{
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];
     if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
     if(mode==='s26-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-26'),...structuredClone(s26Proposals)];
-    current.exceptions=withoutS25ProposalsForTest(withoutS26ProposalsForTest(current.exceptions));
+    if(mode==='s27-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-27'),...structuredClone(s27Proposals)];
+    current.exceptions=withoutS25ProposalsForTest(withoutS26ProposalsForTest(withoutS27ProposalsForTest(current.exceptions)));
     current.exceptions=withoutS21ProposalsForTest(current.exceptions).filter(e=>!['S-19','S-20'].includes(e.screen));
     expect(JSON.stringify(current.exceptions)).toBe(JSON.stringify(previous.exceptions));
     expect(current).toEqual(previous);

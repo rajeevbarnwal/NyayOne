@@ -1097,10 +1097,10 @@ describe('NYAY-5 browser release-gate source contract', () => {
     expect(resume).not.toContain('34% done');
   });
 
-  it('scopes the Revision L heading and labelled-lockup census to the twenty approved screens', () => {
+  it('scopes the Revision L heading and labelled-lockup census to the twenty-one approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1195,7 +1195,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it.each(['S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26'])('rejects the legacy font on %s while retaining the S-22 legacy negative control', async screenId => {
+  it.each(['S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27'])('rejects the legacy font on %s while retaining the S-22 legacy negative control', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
@@ -1204,7 +1204,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
 
-  it.each(['S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
+  it.each(['S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: true });
