@@ -92,7 +92,7 @@ describe('S-26 archive import fails closed before writing',()=>{
     currentPolicy.exceptions=withoutS26ProposalsForTest(currentPolicy.exceptions);
     expect(currentPolicy.exceptions).toHaveLength(160);
     expect(JSON.stringify(currentPolicy.exceptions)).toBe(JSON.stringify(before.exceptions));
-    const current=structuredClone(currentPolicy);delete current.s26;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(currentPolicy);delete current.s26;delete current.s27;delete current.integrityApproval;delete before.integrityApproval;
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-26');
     expect(rows).toHaveLength(8);
