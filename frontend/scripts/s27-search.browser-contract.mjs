@@ -223,6 +223,41 @@ for (const width of [390, 1440]) {
     assert.equal(style.radius, '16px'); assert.equal(style.outline, 'solid'); assert.ok(style.width >= 2);
   }, { width, status: 500 }));
 }
+for (const width of [390, 1440]) {
+  it(`${width}px final presentation: Previous has a decorative arrow in the frozen 20px wrapper`, () => using(async page => {
+    await page.goto(origin + '/s-27?page=2'); await cards(page).first().waitFor();
+    const previous = page.getByRole('button', { name: 'Previous page', exact: true });
+    assert.equal(await previous.locator('.s20-action-icon>svg').count(), 1);
+    assert.equal(await previous.locator('svg').getAttribute('width'), '18');
+    assert.equal(await previous.locator('svg').getAttribute('aria-hidden'), 'true');
+    assert.deepEqual(await previous.locator('.s20-action-icon').evaluate(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height })), { w: 20, h: 20 });
+    assert.equal(await previous.getAttribute('aria-disabled'), 'false');
+    assert.ok((await previous.boundingBox()).height >= 48);
+  }, { width }));
+  it(`${width}px final presentation: colored Bookmark and Compare use the frozen nested wrappers`, () => using(async page => {
+    await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+    const saved = root(page).getByRole('link', { name: 'Saved and followed', exact: true }).filter({ visible: true });
+    assert.equal(await saved.locator('.s20-action-color>.s20-action-icon>svg').count(), 1);
+    assert.equal(await saved.locator('svg').evaluate(el => getComputedStyle(el).color), 'rgb(46, 58, 140)');
+    assert.deepEqual(await saved.locator('.s20-action-icon').evaluate(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height })), { w: 20, h: 20 });
+    for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
+    for (const action of await root(page).getByRole('button', { name: 'Compare', exact: true }).filter({ visible: true }).all()) {
+      assert.equal(await action.locator('.s20-action-icon>svg').count(), 1);
+      assert.deepEqual(await action.locator('.s20-action-icon').evaluate(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height })), { w: 20, h: 20 });
+      assert.equal(await action.locator('svg').getAttribute('width'), '18');
+      assert.ok((await action.boundingBox()).height >= 48);
+    }
+  }, { width }));
+}
+it('desktop final presentation: Comparison keeps the frozen 8px eyebrow gap without a second tray gap', () => using(async page => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+  for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
+  const gaps = await root(page).locator('.s27-comparison').evaluate(el => {
+    const eyebrow = el.querySelector('.s20-eyebrow').getBoundingClientRect(), tray = el.querySelector('.s27-tray').getBoundingClientRect(), details = el.querySelector('details').getBoundingClientRect();
+    return { eyebrow: tray.top - eyebrow.bottom, details: details.top - tray.bottom };
+  });
+  assert.deepEqual(gaps, { eyebrow: 8, details: 0 });
+}, { width: 1440 }));
 if (process.env.S27_DIAGNOSTIC_DIR) for (const width of [390, 1440]) it(`developer diagnostic only: ${width}px`, () => using(async page => {
   const dir = process.env.S27_DIAGNOSTIC_DIR; await mkdir(dir, { recursive: true });
   await page.goto(origin + '/s-27'); await cards(page).first().waitFor(); await page.evaluate(() => document.fonts.ready);
