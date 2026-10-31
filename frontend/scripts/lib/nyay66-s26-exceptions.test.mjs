@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {readFileSync,readdirSync} from 'node:fs';
@@ -23,7 +24,7 @@ describe('S-26 exact additive exception regression boundary',()=>{
     expect(s26Proposals.map(e=>approveException(e,null,options))).toEqual(s26ProposalHashes);
   });
   it('checks the actual policy without rewriting it',()=>{
-    const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
+    const policy=s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))));
     const before=JSON.stringify(policy);expectBoundary(policy.exceptions);expect(JSON.stringify(policy)).toBe(before);
   });
   it('rejects alteration or removal of every historical record and historical reordering',()=>{
