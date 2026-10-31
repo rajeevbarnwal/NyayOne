@@ -174,6 +174,55 @@ for (const width of [320, 390, 1440]) it(`${width}px: no overflow, 48px controls
   const result = await page.evaluate(async () => window.axe.run(document.querySelector('.s27-search')));
   assert.deepEqual(result.violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) })), []);
 }, { width }));
+// Presentation regressions from the first hosted S-27 comparison. The response
+// statuses, keyboard/focus behavior and server-query assertions above stay intact.
+for (const width of [390, 1440]) {
+  it(`${width}px Revision L correction: labels use 12px ink2 and a 5px control gap`, () => using(async page => {
+    await page.goto(origin + '/s-27'); await cards(page).first().waitFor(); await page.evaluate(() => document.fonts.ready);
+    await page.getByText('Filters', { exact: true }).click();
+    for (const selector of ['.s27-search-label', '.s27-field>label']) {
+      const labels = await root(page).locator(selector).evaluateAll(nodes => nodes.map(label => {
+        const style = getComputedStyle(label), box = label.getBoundingClientRect(), control = label.nextElementSibling.getBoundingClientRect();
+        return { fontSize: style.fontSize, color: style.color, gap: control.top - box.bottom };
+      }));
+      for (const label of labels) assert.deepEqual(label, { fontSize: '12px', color: 'rgb(62, 66, 84)', gap: 5 });
+    }
+  }, { width }));
+  it(`${width}px Revision L correction: invalid-filter notice stays compact and focused with genuine HTTP 422`, () => using(async (page, s) => {
+    await page.goto(origin + '/s-27?sort=unsupported'); const alert = root(page).getByRole('alert'); await alert.waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    const style = await alert.evaluate(el => {
+      const s = getComputedStyle(el), heading = getComputedStyle(el.querySelector('h2'));
+      return { direction: s.flexDirection, align: s.textAlign, padding: s.padding, borderStyle: s.borderStyle, left: s.borderLeftWidth, radius: s.borderRadius, font: heading.fontSize, line: heading.lineHeight };
+    });
+    assert.deepEqual(style, { direction: 'row', align: 'start', padding: '9px 12px', borderStyle: 'solid', left: '4px', radius: '12px', font: '12.5px', line: '18.75px' });
+    assert.equal(await alert.locator(':scope>svg').getAttribute('width'), '18');
+    assert.match(await alert.innerText(), /HTTP 422 · unsupported_sort/);
+    const action = alert.getByRole('button', { name: 'Reset filters', exact: true });
+    assert.equal(await action.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)');
+    assert.equal(await action.locator('svg').getAttribute('width'), '18');
+    assert.ok((await action.boundingBox()).height >= 48);
+    s.status = 200; await action.press('Enter'); await cards(page).first().waitFor();
+    assert.equal(s.reads.at(-1).sort, 'name');
+  }, { width, status: 422 }));
+  it(`${width}px Revision L correction: no-results Clear filters is filled with a decorative filter icon`, () => using(async page => {
+    await page.goto(origin + '/s-27?q=nothing'); const empty = root(page).locator('.s20-empty'); await empty.waitFor();
+    const action = empty.getByRole('button', { name: 'Clear filters', exact: true });
+    assert.equal(await action.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(46, 58, 140)');
+    assert.equal(await action.evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)');
+    assert.equal(await action.locator('svg').count(), 1);
+    assert.equal(await action.locator('svg').getAttribute('width'), '18');
+    assert.equal(await action.locator('svg').getAttribute('aria-hidden'), 'true');
+    assert.equal(await empty.locator('.s20-state-icon').evaluate(el => getComputedStyle(el).color), 'rgb(46, 58, 140)');
+    assert.ok((await action.boundingBox()).height >= 48);
+  }, { width, items: [], total: 0 }));
+  it(`${width}px Revision L correction: error focus keeps 16px corners and a visible focus ring`, () => using(async page => {
+    await page.goto(origin + '/s-27'); const alert = root(page).getByRole('alert'); await alert.waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+    const style = await alert.evaluate(el => { const s = getComputedStyle(el); return { radius: s.borderRadius, outline: s.outlineStyle, width: parseFloat(s.outlineWidth) }; });
+    assert.equal(style.radius, '16px'); assert.equal(style.outline, 'solid'); assert.ok(style.width >= 2);
+  }, { width, status: 500 }));
+}
 if (process.env.S27_DIAGNOSTIC_DIR) for (const width of [390, 1440]) it(`developer diagnostic only: ${width}px`, () => using(async page => {
   const dir = process.env.S27_DIAGNOSTIC_DIR; await mkdir(dir, { recursive: true });
   await page.goto(origin + '/s-27'); await cards(page).first().waitFor(); await page.evaluate(() => document.fonts.ready);
