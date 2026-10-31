@@ -12,7 +12,7 @@
   "s25": {"cache": "s25-v32108-chromium-149.0.7827.55-39558506587", "manifestSha256": "c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67", "provenanceSha256": "16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675"},
   "s26": {"cache":"s26-v32108-chromium-149.0.7827.55-41029103233","manifestSha256":"d03d6c01f946c5f63105f2da437560347b0f52f799af6d5d6be32a2f5a4673c8","provenanceSha256":"9c7a0f3ac61c0cf71639719943229eb0cc0e69df4455dee1144a20d2bfd358ba"},
   "s27": {"cache":"s27-v32108-chromium-149.0.7827.55-41104712468","manifestSha256":"fc702af18fc6ad997149669b88cae1dec2e8247beb7a4068b22c9ecccc078b44","provenanceSha256":"aee7a39dafe6fa056b0c9bfb304b0d7ccf1567ca1763ccd0b76a694bcf7b9e5f"},
-  "integrityApproval": {"pr":84,"commentId":6545331950,"bundleSha256":"23eef043f844b9b5b14d39a1072b81d6a12c1e345806757eabc6c4f104ed4101"},
+  "integrityApproval": {"pr":84,"commentId":6545475979,"bundleSha256":"195da9e00646a030bd5d84d38e568db640e3c299e922ed7f150b1d9801fda3c7"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -1152,15 +1152,15 @@
       "viewport": "desktop",
       "theme": "light",
       "referenceSha256": "8f725f2894a81303b1b56d9d05f77d373fe728fc08b3b0ec2d506ad8497bc99d",
-      "liveSha256": "a9dce0a2886f178afaabee4f78b559ae3111c36cf92da2581c718e22b7b35bfe",
+      "liveSha256": "a17b7b3006e79e3338de07d5770583d5d9d4579990162d5e48bf293fc0430606",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-19 export-failed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The failed request retains its real 32-character ID and offers Request again/Dismiss; ID wrapping accounts for downstream vertical movement. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Request again SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
-      "approvalPr": 70
+      "reason": "S-19 export-failed, desktop, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The failed request retains its real 32-character ID and offers Request again/Dismiss; ID wrapping accounts for downstream vertical movement. Residual icon baseline: Request a copy of my data SVG is +1px vertically relative to its own button versus the reference; Request again SVG is +1px vertically relative to its own button versus the reference; Dismiss SVG is +1px vertically relative to its own button versus the reference; Delete my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. Desktop retains Home/Profile navigation and disabled Research/Calendar/Careers as 48px buttons rather than static prototype labels, accounting for header control-inventory/geometry flags. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification. Capture-raster replacement disclosure for PR #84: the isolated single-row Chromium capture with --disable-partial-raster produces the exact new live image above. Relative to the prior approved live SHA a9dce0a2886f178afaabee4f78b559ae3111c36cf92da2581c718e22b7b35bfe, 10 rounded-border pixels (18 RGB channels) differ by at most one RGB level at x34-36/y775-780. The new bytes match the previous hosted capture before isolation; isolation also passes local varied-font-timing reproducibility checks. Measured DOM geometry, text, controls, API evidence and accessibility results are identical to the prior approved capture. The reference image and all prior functional/design-variant disclosures are retained. This approval covers only this exact desktop export-failed image pair; no other state or viewport, reference, tolerance, enforcement or accessibility rule is changed. No images were selected by hash or postprocessed.",
+      "approvalPr": 84
     },
     {
       "screen": "S-19",
