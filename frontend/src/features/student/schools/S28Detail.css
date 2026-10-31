@@ -1,0 +1,27 @@
+/* S-28-only Revision L school detail. Shared and historical screen rules unchanged. */
+.s28-detail a{color:inherit;text-decoration:none}
+.s28-detail a:focus-visible{outline:3px solid var(--s20-indigo);outline-offset:3px}
+.s28-detail button[aria-disabled=true]{opacity:.55;cursor:default}
+.s28-detail .s20-btn{width:auto}
+.s28-detail .s20-primary{color:#fff}
+.s28-detail .s28-back{color:var(--s20-indigo);align-self:flex-start;padding:0 8px;margin-left:-8px;border-color:transparent;background:transparent}
+.s28-detail .s20-chips{margin:0}
+.s28-chip-dot{width:8px;height:8px;border-radius:2px;background:var(--s20-indigo)}
+.s28-actions>.s20-btn{flex:1}
+.s28-kv>b.s28-na{color:var(--s20-mut);font-weight:600}
+.s28-accreditation{color:var(--s20-indigo);background:var(--s20-indq);border-color:var(--s20-indigo)}
+.s28-kvs{border:1.5px solid var(--s20-line);border-radius:16px;background:#fff;padding:6px 16px}
+.s28-kv{display:flex;justify-content:space-between;align-items:start;gap:12px;padding:10px 0;border-bottom:1px solid var(--s20-line);font-size:13px;line-height:normal;overflow-wrap:anywhere}
+.s28-kv:last-child{border-bottom:0}.s28-kv>span{color:var(--s20-ink)}.s28-kv>b{text-align:right;color:var(--s20-ink);font-weight:700;min-width:0;font-family:'Public Sans','NyayOne S20 Rupee',system-ui,sans-serif}
+.s28-facts{padding:16px;border:1.5px solid var(--s20-line);border-radius:16px;background:#fff;display:flex;flex-direction:column;gap:4px}
+.s28-eyebrow{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;line-height:normal;letter-spacing:.18em;text-transform:uppercase;color:var(--s20-mut);margin:0 0 4px}
+.s28-fact{border-bottom:1px solid var(--s20-line);padding:6px 0}.s28-fact:last-of-type{border-bottom:none}.s28-fact .s28-kv{padding:0;border:none}
+.s28-source{margin:2px 0 0;font-size:11.5px;color:var(--s20-mut);line-height:1.4;overflow-wrap:anywhere}
+.s28-source a{display:inline;padding:18px 0;color:var(--s20-indigo);font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.s28-checkbox{min-height:48px;display:flex;align-items:center;gap:12px;border:1.5px solid var(--s20-line2);border-radius:12px;padding:6px 12px;background:#fff;cursor:pointer}
+.s28-checkbox input{width:22px;height:22px;accent-color:var(--s20-indigo);flex:none;margin:0}
+.s28-checkbox span{display:flex;flex-direction:column;gap:1px;min-width:0}.s28-checkbox b{font-size:13.5px}.s28-checkbox small{font-size:11.5px;color:var(--s20-mut)}.s28-checkbox:focus-within{outline:3px solid var(--s20-indigo);outline-offset:3px}
+.s28-help,.s28-preference p{margin:0;font-size:11.5px;color:var(--s20-mut);line-height:1.5}
+.s28-signin{display:inline-flex;min-height:48px;align-items:center;text-decoration:underline!important}.s28-preference{display:flex;flex-direction:column;gap:8px}
+.s28-detail .s28-error{border-left-color:#9a2b21;border-radius:12px}.s28-error>svg{color:#9a2b21}.s28-error>div{min-width:0}.s28-compare{align-self:flex-start}
+.s28-gold{color:#7a5c14}.s28-green{color:#1e6b4a}.s28-detail .s20-empty{border-radius:16px}
