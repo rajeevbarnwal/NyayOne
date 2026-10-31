@@ -8,7 +8,12 @@ import {mockS19Application} from './nyay66-s19-fixtures.mjs';
 import {inspectSurface} from './nyay66-dom.mjs';
 import {withS19RasterBrowser} from './nyay66-s19-raster.mjs';
 
-for(const state of ['delete-reauth-rejected','delete-typed'])it(`mobile ${state} capture repeats exactly despite font-delivery timing, without image selection`,{timeout:120_000},async()=>{
+const rows=[
+  {state:'delete-reauth-rejected',viewport:'mobile390',width:390,height:844},
+  {state:'delete-typed',viewport:'mobile390',width:390,height:844},
+  {state:'delete-confirm',viewport:'desktop',width:1440,height:1024},
+];
+for(const {state,viewport,width,height} of rows)it(`${viewport} ${state} capture repeats exactly despite font-delivery timing, without image selection`,{timeout:120_000},async()=>{
   const server=await preview({preview:{host:'127.0.0.1',port:0,strictPort:false},logLevel:'error'});
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
   let shared,firstBytes,firstSurface,captures=0;
@@ -17,8 +22,8 @@ for(const state of ['delete-reauth-rejected','delete-typed'])it(`mobile ${state}
     // Fixed matrix. Every capture participates; no convergence retries,
     // discarded first screenshots, repaint, DOM rewrite or pixel processing.
     for(const delay of [0,50,200,500,1000,1500])for(let repeat=0;repeat<2;repeat++){
-      await withS19RasterBrowser(shared,state,'mobile390',async browser=>{
-        const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,locale:'en-IN',timezoneId:'Asia/Kolkata',colorScheme:'light',reducedMotion:'reduce',serviceWorkers:'block'});
+      await withS19RasterBrowser(shared,state,viewport,async browser=>{
+        const context=await browser.newContext({viewport:{width,height},deviceScaleFactor:1,locale:'en-IN',timezoneId:'Asia/Kolkata',colorScheme:'light',reducedMotion:'reduce',serviceWorkers:'block'});
         try{
           const page=await context.newPage();page.setDefaultTimeout(15000);
           // Test the transport race only. The product bytes remain unchanged.

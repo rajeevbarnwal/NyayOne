@@ -6,7 +6,9 @@ import {captureS19Rows} from './nyay66-s19-live.mjs';
 import {needsS19RasterIsolation,withS19RasterBrowser} from './nyay66-s19-raster.mjs';
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 
-it('isolates only the mobile rejected-recovery and typed-confirmation rows; the other 48 S-19 captures retain their shared browser',async()=>{
+const isolatedRows=[['delete-reauth-rejected','mobile390'],['delete-typed','mobile390'],['delete-confirm','desktop']];
+
+it('isolates only the three approved S-19 rows; the other 47 captures retain their shared browser',async()=>{
   const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
   const cache=resolve('test-baselines/nyay66',policy.s19.cache);
   const reference={cache,manifest:JSON.parse(readFileSync(resolve(cache,'manifest.json')))};
@@ -18,11 +20,11 @@ it('isolates only the mobile rejected-recovery and typed-confirmation rows; the 
   try{
     const rows=await captureS19Rows({browser:shared,origin:'http://127.0.0.1:4321',out,reference});
     expect(rows).toHaveLength(50);
-    expect(launch).toHaveBeenCalledTimes(2);
-    expect(launch.mock.calls).toEqual([[{args:['--disable-partial-raster']}],[{args:['--disable-partial-raster']}]]);
-    expect(shared.newContext).toHaveBeenCalledTimes(48);expect(isolated.newContext).toHaveBeenCalledTimes(2);
-    expect(isolated.close).toHaveBeenCalledTimes(2);expect(shared.close).not.toHaveBeenCalled();
-    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual([['delete-reauth-rejected','mobile390'],['delete-typed','mobile390']]);
+    expect(launch).toHaveBeenCalledTimes(3);
+    expect(launch.mock.calls).toEqual(Array.from({length:3},()=>[{args:['--disable-partial-raster']}]));
+    expect(shared.newContext).toHaveBeenCalledTimes(47);expect(isolated.newContext).toHaveBeenCalledTimes(3);
+    expect(isolated.close).toHaveBeenCalledTimes(3);expect(shared.close).not.toHaveBeenCalled();
+    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual([['delete-confirm','desktop'],['delete-reauth-rejected','mobile390'],['delete-typed','mobile390']]);
     expect(rows.every(r=>r.verdict==='CAPTURE-FAILED'&&r.failure==='CONTEXT_CREATION_PROBE')).toBe(true);
   }finally{rmSync(out,{recursive:true,force:true});}
 });
@@ -33,9 +35,9 @@ function browsers(version='149.0.7827.55'){
   const shared={version:()=> '149.0.7827.55',browserType:()=>({name:()=> 'chromium',launch}),close:vi.fn()};
   return {shared,isolated,launch};
 }
-it('selects by fixed fixture identity, never by image hashes; all 48 unaffected rows keep the shared browser',async()=>{
+it('selects by fixed fixture identity, never by image hashes; all 47 unaffected rows keep the shared browser',async()=>{
   for(const state of S19_MEASURED_STATES)for(const viewport of ['mobile390','desktop']){
-    const expected=['delete-reauth-rejected','delete-typed'].includes(state)&&viewport==='mobile390';
+    const expected=isolatedRows.some(([s,v])=>state===s&&viewport===v);
     expect(needsS19RasterIsolation(state,viewport)).toBe(expected);
     const {shared,isolated,launch}=browsers(),capture=vi.fn(async browser=>browser);
     expect(await withS19RasterBrowser(shared,state,viewport,capture)).toBe(expected?isolated:shared);
@@ -43,25 +45,25 @@ it('selects by fixed fixture identity, never by image hashes; all 48 unaffected 
     expect(shared.close).not.toHaveBeenCalled();
   }
 });
-it.each(['delete-reauth-rejected','delete-typed'])('closes the isolated %s browser after failure, without retrying or falling back',async state=>{
+it.each(isolatedRows)('closes the isolated %s/%s browser after failure, without retrying or falling back',async(state,viewport)=>{
   const {shared,isolated,launch}=browsers(),error=Error('capture failed'),capture=vi.fn(async()=>{throw error;});
-  await expect(withS19RasterBrowser(shared,state,'mobile390',capture)).rejects.toBe(error);
+  await expect(withS19RasterBrowser(shared,state,viewport,capture)).rejects.toBe(error);
   expect(launch).toHaveBeenCalledTimes(1);expect(capture).toHaveBeenCalledTimes(1);
   expect(isolated.close).toHaveBeenCalledTimes(1);expect(shared.close).not.toHaveBeenCalled();
 });
-it.each(['delete-reauth-rejected','delete-typed'])('fails closed before %s capture if the browser pin differs',async state=>{
+it.each(isolatedRows)('fails closed before %s/%s capture if the browser pin differs',async(state,viewport)=>{
   const {shared,isolated}=browsers('different'),capture=vi.fn();
-  await expect(withS19RasterBrowser(shared,state,'mobile390',capture)).rejects.toThrow('S19_RASTER_BROWSER_PIN_MISMATCH');
+  await expect(withS19RasterBrowser(shared,state,viewport,capture)).rejects.toThrow('S19_RASTER_BROWSER_PIN_MISMATCH');
   expect(capture).not.toHaveBeenCalled();expect(isolated.close).toHaveBeenCalledTimes(1);
 });
-it.each(['delete-reauth-rejected','delete-typed'])('rejects non-Chromium %s capture and never substitutes another renderer',async state=>{
+it.each(isolatedRows)('rejects non-Chromium %s/%s capture and never substitutes another renderer',async(state,viewport)=>{
   const launch=vi.fn(),capture=vi.fn();
-  await expect(withS19RasterBrowser({browserType:()=>({name:()=> 'other',launch})},state,'mobile390',capture)).rejects.toThrow('S19_RASTER_REQUIRES_CHROMIUM');
+  await expect(withS19RasterBrowser({browserType:()=>({name:()=> 'other',launch})},state,viewport,capture)).rejects.toThrow('S19_RASTER_REQUIRES_CHROMIUM');
   expect(launch).not.toHaveBeenCalled();expect(capture).not.toHaveBeenCalled();
 });
-it.each(['delete-reauth-rejected','delete-typed'])('propagates %s launch failure without touching the shared browser or capturing a fallback image',async state=>{
+it.each(isolatedRows)('propagates %s/%s launch failure without touching the shared browser or capturing a fallback image',async(state,viewport)=>{
   const {shared,launch}=browsers(),error=Error('launch failed'),capture=vi.fn();launch.mockRejectedValue(error);
-  await expect(withS19RasterBrowser(shared,state,'mobile390',capture)).rejects.toBe(error);
+  await expect(withS19RasterBrowser(shared,state,viewport,capture)).rejects.toBe(error);
   expect(launch).toHaveBeenCalledTimes(1);expect(capture).not.toHaveBeenCalled();expect(shared.close).not.toHaveBeenCalled();
 });
 it('is not applied to references, other screen captures, or product code',()=>{
