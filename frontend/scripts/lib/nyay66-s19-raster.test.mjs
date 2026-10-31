@@ -6,9 +6,9 @@ import {captureS19Rows} from './nyay66-s19-live.mjs';
 import {needsS19RasterIsolation,withS19RasterBrowser} from './nyay66-s19-raster.mjs';
 import {S19_MEASURED_STATES} from './nyay66-s19-coverage.mjs';
 
-const isolatedRows=[['delete-reauth-rejected','mobile390'],['delete-typed','mobile390'],['delete-confirm','desktop']];
+const isolatedRows=[['delete-reauth-rejected','mobile390'],['delete-typed','mobile390'],['delete-confirm','desktop'],['export-failed','desktop']];
 
-it('isolates only the three approved S-19 rows; the other 47 captures retain their shared browser',async()=>{
+it('isolates only the four approved S-19 rows; the other 46 captures retain their shared browser',async()=>{
   const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
   const cache=resolve('test-baselines/nyay66',policy.s19.cache);
   const reference={cache,manifest:JSON.parse(readFileSync(resolve(cache,'manifest.json')))};
@@ -20,11 +20,11 @@ it('isolates only the three approved S-19 rows; the other 47 captures retain the
   try{
     const rows=await captureS19Rows({browser:shared,origin:'http://127.0.0.1:4321',out,reference});
     expect(rows).toHaveLength(50);
-    expect(launch).toHaveBeenCalledTimes(3);
-    expect(launch.mock.calls).toEqual(Array.from({length:3},()=>[{args:['--disable-partial-raster']}]));
-    expect(shared.newContext).toHaveBeenCalledTimes(47);expect(isolated.newContext).toHaveBeenCalledTimes(3);
-    expect(isolated.close).toHaveBeenCalledTimes(3);expect(shared.close).not.toHaveBeenCalled();
-    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual([['delete-confirm','desktop'],['delete-reauth-rejected','mobile390'],['delete-typed','mobile390']]);
+    expect(launch).toHaveBeenCalledTimes(4);
+    expect(launch.mock.calls).toEqual(Array.from({length:4},()=>[{args:['--disable-partial-raster']}]));
+    expect(shared.newContext).toHaveBeenCalledTimes(46);expect(isolated.newContext).toHaveBeenCalledTimes(4);
+    expect(isolated.close).toHaveBeenCalledTimes(4);expect(shared.close).not.toHaveBeenCalled();
+    expect(rows.filter(r=>r.captureRaster?.browser==='isolated-single-row-chromium').map(r=>[r.designState,r.viewport])).toEqual([['export-failed','desktop'],['delete-confirm','desktop'],['delete-reauth-rejected','mobile390'],['delete-typed','mobile390']]);
     expect(rows.every(r=>r.verdict==='CAPTURE-FAILED'&&r.failure==='CONTEXT_CREATION_PROBE')).toBe(true);
   }finally{rmSync(out,{recursive:true,force:true});}
 });
@@ -35,7 +35,7 @@ function browsers(version='149.0.7827.55'){
   const shared={version:()=> '149.0.7827.55',browserType:()=>({name:()=> 'chromium',launch}),close:vi.fn()};
   return {shared,isolated,launch};
 }
-it('selects by fixed fixture identity, never by image hashes; all 47 unaffected rows keep the shared browser',async()=>{
+it('selects by fixed fixture identity, never by image hashes; all 46 unaffected rows keep the shared browser',async()=>{
   for(const state of S19_MEASURED_STATES)for(const viewport of ['mobile390','desktop']){
     const expected=isolatedRows.some(([s,v])=>state===s&&viewport===v);
     expect(needsS19RasterIsolation(state,viewport)).toBe(expected);

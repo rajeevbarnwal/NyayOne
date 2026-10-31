@@ -12,6 +12,7 @@ const rows=[
   {state:'delete-reauth-rejected',viewport:'mobile390',width:390,height:844},
   {state:'delete-typed',viewport:'mobile390',width:390,height:844},
   {state:'delete-confirm',viewport:'desktop',width:1440,height:1024},
+  {state:'export-failed',viewport:'desktop',width:1440,height:1024},
 ];
 for(const {state,viewport,width,height} of rows)it(`${viewport} ${state} capture repeats exactly despite font-delivery timing, without image selection`,{timeout:120_000},async()=>{
   const server=await preview({preview:{host:'127.0.0.1',port:0,strictPort:false},logLevel:'error'});

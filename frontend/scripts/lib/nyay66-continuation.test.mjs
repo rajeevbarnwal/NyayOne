@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
@@ -36,7 +37,7 @@ const s18ApprovalHashes=[
   '1ff4db8a47bfe7de27fd240c1412d483a743ab7a1dbf99507b1304c0040b5520',
 ];
 const policies=()=>({
-  policy:JSON.parse(readFileSync(resolve(root,'frontend/scripts/nyay66-policy.json'))),
+  policy:s19TypedPolicyForTest(JSON.parse(readFileSync(resolve(root,'frontend/scripts/nyay66-policy.json')))),
   before:JSON.parse(execFileSync('git',['show','4a2827d37f60fc651b3a6dbace0dcddfab44b9c4:frontend/scripts/nyay66-policy.json'],{cwd:root})),
 });
 function expectApprovedExceptions(policy,before){
