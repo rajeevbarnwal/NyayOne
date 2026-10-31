@@ -4,9 +4,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStudentSession } from '../../../app/authContext';
 import { NyayOneRevLLockup } from '../auth/NyayOneRevLIcon';
 import { Icon } from '../internships/S20BrowseView';
-import { LawSchoolsApiError, type LawSchoolSummary } from '../lib/lawSchoolsApi';
+import { LawSchoolsApiError } from '../lib/lawSchoolsApi';
 import { inrAmount } from './lawschoolFormat.mjs';
-import { readSchoolSearch, schoolSearchQuery } from './s27Api';
+import { readSchoolSearch, schoolSearchQuery, type S27SchoolSummary } from './s27Api';
 import './S27Search.css';
 
 export interface SchoolSelection { id: string; name: string }
@@ -17,6 +17,16 @@ const TYPES = [['national_law_university', 'National Law University'], ['governm
 const ORDERS = [['name', 'Name, A to Z'], ['fees', 'Lowest fees first'], ['nirf_rank', 'NIRF rank, ranked schools first']];
 const STATES = ['Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka', 'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'];
 const FILTERS = ['state', 'institution_type', 'degree', 'accreditation', 'entrance_exam', 'fees_max'];
+// Static catalog choices, not a server-provided facet list. Values are sent as exact filters.
+const ACCREDITATIONS = ['BCI approved', 'NAAC A++', 'NAAC A+', 'NAAC A', 'NAAC B+'];
+const EXAMS = ['CLAT', 'AILET', 'LSAT-India', 'MH CET Law', 'SLAT', 'DU LLB', 'CUET'];
+function feeText(school: S27SchoolSummary) {
+  const { feesMin: min, feesMax: max } = school;
+  if (min === null && max === null) return 'Fees not provided';
+  if (min === null) return `Up to ${inrAmount(max!)} per year · Starting fee not provided`;
+  if (max === null) return `From ${inrAmount(min)} per year · Maximum fee not provided`;
+  return `${inrAmount(min)}${min !== max ? ` to ${inrAmount(max)}` : ''} per year`;
+}
 const pairs = (values: string[]) => values.map(value => [value, value]);
 function FilterIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/></svg>;
@@ -32,6 +42,8 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
   const [input, setInput] = useState(sp.get('q') ?? ''), [tray, setTray] = useState(readSelection), [notice, setNotice] = useState('');
   const [offlineRetry, setOffline] = useState(false), [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null), lock = useRef(false), mounted = useRef(true);
+  const [showEmptyComparison, setShowEmptyComparison] = useState(false);
+  const removalFocus = useRef<{ trigger: HTMLElement; container: HTMLElement; index: number } | null>(null);
   const focus = useRef<FocusAction | null>(null), first = useRef(true), previousError = useRef<unknown>(null);
   const query = useQuery({ queryKey: ['s27-schools', requestKey], queryFn: ({ signal }) => {
     if (!navigator.onLine) throw new OfflineSchoolSearch('Search needs a connection.');
@@ -58,6 +70,14 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
   useEffect(() => { setInput(sp.get('q') ?? ''); if (timer.current) clearTimeout(timer.current); }, [sp]);
   useLayoutEffect(() => {
     const host = root.current; if (!host) return;
+    const removal = removalFocus.current;
+    if (removal) {
+      removalFocus.current = null;
+      if (document.activeElement === removal.trigger || document.activeElement === document.body) {
+        const buttons = removal.container.querySelectorAll<HTMLButtonElement>('.s27-selected button');
+        (buttons[Math.min(removal.index, buttons.length - 1)] ?? removal.container.querySelector<HTMLElement>('[data-comparison-empty]'))?.focus();
+      }
+    }
     const alert = host.querySelector<HTMLElement>('[role="alert"]');
     if (first.current && !busy && !query.isPending) {
       first.current = false;
@@ -104,8 +124,14 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
     const current = readSelection(), exists = current.some(item => item.id === school.id);
     if (!exists && (compareMax === undefined || current.length >= compareMax)) return;
     const next = exists ? current.filter(item => item.id !== school.id) : [...current, { id: school.id, name: school.name }];
+    if (exists && !trigger.matches('.s20-save') && document.activeElement === trigger) {
+      const container = trigger.closest<HTMLElement>('.s27-mobile-comparison, .s27-comparison');
+      if (container) {
+        removalFocus.current = { trigger, container, index: Array.from(container.querySelectorAll('.s27-selected button')).indexOf(trigger) };
+        if (!next.length) setShowEmptyComparison(true);
+      }
+    }
     setTray(writeSelection(next)); setNotice(`${school.name} ${exists ? 'removed from' : 'added to'} comparison.`);
-    if (exists && !trigger.matches('.s20-save')) root.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true });
   }
   function filter(key: string, label: string, options: string[][], help?: string) {
     const value = sp.get(key) ?? (key === 'sort' ? 'name' : '');
@@ -122,13 +148,13 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
       <button className="s20-btn s20-primary" aria-disabled={!canCompare} aria-describedby={`s27-compare-help-${where}`} onClick={openComparison}><span className="s20-action-icon"><SchoolIcon compare size={18}/></span>Compare</button></div>
     <details className="s20-filters"><summary><span>Selected schools</span><Icon name="back" size={18}/></summary><div className="s20-filter-body"><ul className="s27-selected">{tray.map(item => <li key={item.id}><span>{item.name}</span><button aria-label={`Remove ${item.name} from selected schools`} onClick={event => toggle(item, event.currentTarget)}><Icon name="cross" size={18}/></button></li>)}</ul>
       <p className="s20-help" id={`s27-compare-help-${where}`}>{compareMax === undefined ? 'Reload the results to confirm the comparison limit.' : tray.length < 2 ? 'Choose at least one more school.' : tray.length > compareMax ? `Remove schools to meet the current limit of ${compareMax}.` : 'Compare your selected schools.'}</p></div></details>
-  </> : <p>Choose at least two schools to compare{compareMax !== undefined ? `, up to ${compareMax}` : ''}.</p>; }
-  function card(school: LawSchoolSummary) {
+  </> : <p tabIndex={-1} data-comparison-empty>Choose at least two schools to compare{compareMax !== undefined ? `, up to ${compareMax}` : ''}.</p>; }
+  function card(school: S27SchoolSummary) {
     const selected = tray.some(item => item.id === school.id), blocked = !selected && (compareMax === undefined || tray.length >= compareMax);
     return <article className="s20-result" key={school.id}>
       <Link className="s20-title" to={`/s-28?id=${encodeURIComponent(school.id)}&ret=${encodeURIComponent(sp.toString())}`}><span>{school.name}</span><small>{TYPES.find(([value]) => value === school.institutionType)?.[1] ?? school.institutionType} · {school.state}</small></Link>
       <button className="s20-save" aria-pressed={selected} aria-disabled={blocked} aria-label={`${selected ? 'Remove' : 'Add'} ${school.name} ${selected ? 'from' : 'to'} comparison`} onClick={event => toggle(school, event.currentTarget)}><SchoolIcon compare/></button>
-      <div className="s20-meta"><p>{inrAmount(school.feesMin)}{school.feesMax !== school.feesMin ? ` to ${inrAmount(school.feesMax)}` : ''} per year · {school.entranceExam || 'Entrance exam not provided'}</p></div>
+      <div className="s20-meta"><p>{feeText(school)} · {school.entranceExam || 'Entrance exam not provided'}</p></div>
     </article>;
   }
   return <div className="v321-internships s27-search" data-screen="S-27" data-v34-screen="S-27" ref={root}
@@ -143,8 +169,8 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
       </form>
       <details className="s20-filters"><summary><span>Filters</span><small>{filterCount ? `${filterCount} active` : 'None active'} · {order}</small><Icon name="back" size={18}/></summary><div className="s20-filter-body"><div className="s27-grid">
         {filter('sort', 'Order', ORDERS)}{filter('state', 'State', pairs(STATES))}{filter('institution_type', 'Institution type', TYPES)}
-        {filter('degree', 'Degree', pairs(['BA LLB (Hons)', 'BBA LLB', 'LLB', 'LLM']))}{filter('accreditation', 'Accreditation', pairs(['BCI approved', 'NAAC A++', 'NAAC A+', 'NAAC A']))}
-        {filter('entrance_exam', 'Entrance exam', pairs(['CLAT', 'AILET', 'LSAT-India', 'MH CET Law', 'Own exam', 'State CET', 'Institution test']))}
+        {filter('degree', 'Degree', pairs(['BA LLB (Hons)', 'BBA LLB', 'LLB', 'LLM']))}{filter('accreditation', 'Accreditation', pairs(ACCREDITATIONS))}
+        {filter('entrance_exam', 'Entrance exam', pairs(EXAMS))}
         {filter('fees_max', 'Max fees (₹ per year)', [['150000', 'Up to ₹1,50,000'], ['300000', 'Up to ₹3,00,000'], ['500000', 'Up to ₹5,00,000']], 'Matches schools whose published starting fee is within this amount.')}
       </div>{filterCount > 0 && <button className="s20-btn" onClick={event => clear(event.currentTarget)}>Clear filters</button>}</div></details>
       {waiting && <div className="s20-skeletons" role="status" aria-label="Loading law schools">{[1, 2, 3].map(i => <div key={i}/>)}</div>}
@@ -158,9 +184,9 @@ export function S27SearchScreen({ readSelection, writeSelection }: SelectionStor
         {!offline && status !== null && <div className="s20-code">HTTP {status}</div>}
         <div className="s20-actions"><button className="s20-btn s20-primary" aria-disabled={busy} aria-busy={busy || undefined} onClick={event => { if (!busy) void retry(event.currentTarget); }}><span className="s20-action-icon"><Icon name="refresh" size={18}/></span>Retry</button></div></section>)}
       {data && <><p className="s20-count" id="s27-results-summary" role="status" tabIndex={-1}>{data.total} school{data.total === 1 ? '' : 's'}{pageCount > 1 ? ` · page ${data.page} of ${pageCount}` : ''} · {order.toLowerCase()}</p>
-        {data.items.length ? <div className="s20-results">{data.items.map(card)}</div> : <section className="s20-empty"><span className="s20-state-icon"><Icon name="search"/></span><h2>{data.total > 0 ? 'No schools on this page.' : 'No schools match.'}</h2><p>{data.total > 0 ? 'Go to an earlier page to see the available schools.' : 'Try a different search or clear a filter.'}</p><div className="s20-actions"><button className="s20-btn s20-primary" onClick={event => clear(event.currentTarget)}><span className="s20-action-icon"><FilterIcon/></span>Clear filters</button></div></section>}</>}
-      {pager && pageCount > 1 && <nav className="s20-pager" aria-label="School list pages"><button className="s20-btn" aria-label="Previous page" aria-disabled={busy || page <= 1} onClick={event => { if (!busy && page > 1) change({ page: String(page - 1) }, event.currentTarget, true); }}><span className="s20-action-icon"><Icon name="back" size={18}/></span>Previous</button><span>{busy ? 'Loading page…' : `Page ${page} of ${pageCount}`}</span><button className="s20-btn" aria-label="Next page" aria-disabled={busy || page >= pageCount} onClick={event => { if (!busy && page < pageCount) change({ page: String(page + 1) }, event.currentTarget, true); }}>Next</button></nav>}
-      <div className="s27-mobile-comparison">{tray.length > 0 && comparison('mobile')}</div>
+        {data.items.length ? <div className="s20-results">{data.items.map(card)}</div> : <section className="s20-empty"><span className="s20-state-icon"><Icon name="search"/></span><h2>{data.total > 0 ? 'No schools on this page.' : 'No schools match.'}</h2><p>{data.total > 0 ? 'Go to an earlier page to see the available schools.' : 'Try a different search or clear a filter.'}</p><div className="s20-actions"><button className="s20-btn s20-primary" onClick={event => data.total > 0 ? change({ page: '1' }, event.currentTarget, true) : clear(event.currentTarget)}><span className="s20-action-icon"><FilterIcon/></span>{data.total > 0 ? 'Go to first page' : 'Clear filters'}</button></div></section>}</>}
+      {pager && (pageCount > 1 || page > 1) && <nav className="s20-pager" aria-label="School list pages"><button className="s20-btn" aria-label="Previous page" aria-disabled={busy || page <= 1} onClick={event => { if (!busy && page > 1) change({ page: String(Math.min(page - 1, pageCount)) }, event.currentTarget, true); }}><span className="s20-action-icon"><Icon name="back" size={18}/></span>Previous</button><span>{busy ? 'Loading page…' : `Page ${page} of ${pageCount}`}</span><button className="s20-btn" aria-label="Next page" aria-disabled={busy || page >= pageCount} onClick={event => { if (!busy && page < pageCount) change({ page: String(page + 1) }, event.currentTarget, true); }}>Next</button></nav>}
+      <div className="s27-mobile-comparison">{(tray.length > 0 || showEmptyComparison) && comparison('mobile')}</div>
       <p className="s20-disclaimer">Figures come from what each institution publishes. Open a school to see each figure’s source and retrieval date.</p>
       <span className="s20-announcement" role="status">{notice}</span>
     </main><aside aria-label="Law school context"><section className="s20-card s27-comparison"><div className="s20-eyebrow">Comparison</div>{comparison('desktop')}</section>

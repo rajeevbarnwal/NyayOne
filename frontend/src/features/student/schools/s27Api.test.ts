@@ -26,6 +26,21 @@ describe('S-27 server search authority', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
     await expect(readSchoolSearch(new URLSearchParams())).rejects.toMatchObject({ code: 'invalid_response' });
   });
+  it.each([
+    { accreditation: null }, { entrance_exam: null }, { fees_min: null }, { fees_max: null },
+    { accreditation: null, entrance_exam: null, fees_min: null, fees_max: null, nirf_rank: null },
+    { fees_min: 0, fees_max: 0 }, { fees_min: null, fees_max: 0 }, { fees_min: 0, fees_max: null },
+  ])('QA-S27-01 accepts schema-nullable fields without dropping other schools or inventing zero: %j', async fields => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ ...page, total: 2, items: [school, { ...school, id: 'unknown-school', ...fields }] })));
+    const result = await readSchoolSearch(new URLSearchParams());
+    expect(result.items).toHaveLength(2);
+    const wire = { ...school, ...fields };
+    expect(result.items[1]).toMatchObject({ accreditation: wire.accreditation, entranceExam: wire.entrance_exam, feesMin: wire.fees_min, feesMax: wire.fees_max, nirfRank: wire.nirf_rank });
+  });
+  it.each([{ fees_min: undefined }, { fees_max: undefined }, { accreditation: undefined }, { entrance_exam: undefined }, { fees_min: '0' }, { fees_max: -1 }, { accreditation: 42 }, { entrance_exam: [] }])('QA-S27-01 still rejects missing or malformed fields: %j', async fields => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ ...page, items: [{ ...school, ...fields }] })));
+    await expect(readSchoolSearch(new URLSearchParams())).rejects.toMatchObject({ code: 'invalid_response' });
+  });
   it('allows a real empty page beyond the last page without inventing a global zero count', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ ...page, items: [], total: 1, page: 2 })));
     await expect(readSchoolSearch(new URLSearchParams('page=2'))).resolves.toMatchObject({ total: 1, page: 2, items: [] });

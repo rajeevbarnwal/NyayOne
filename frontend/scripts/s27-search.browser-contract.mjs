@@ -267,3 +267,74 @@ if (process.env.S27_DIAGNOSTIC_DIR) for (const width of [390, 1440]) it(`develop
   for (let i = 1; i <= 2; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
   await page.screenshot({ path: `${dir}/${width}-compare.png`, fullPage: true });
 }, { width, total: 5 }));
+
+// Independent-QA findings: new regression probes, added before the fixes.
+it('QA-S27-01 renders nullable fields, partial fees and explicit zero without losing the valid page', () => using(async page => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+  assert.equal(await cards(page).count(), 5);
+  const texts = await cards(page).allTextContents();
+  assert.match(texts[0], /Fees not provided · Entrance exam not provided/); assert.doesNotMatch(texts[0], /₹0/);
+  assert.match(texts[1], /₹0 per year/);
+  assert.match(texts[2], /From ₹1,50,000 per year · Maximum fee not provided/);
+  assert.match(texts[3], /Up to ₹3,00,000 per year · Starting fee not provided/);
+  assert.match(texts[4], /₹1,50,000 to ₹3,00,000 per year/);
+}, { total: 5, items: schools.map((s, i) => ({ ...s, ...(i === 0 ? { fees_min: null, fees_max: null, accreditation: null, entrance_exam: null } : i === 1 ? { fees_min: 0, fees_max: 0 } : i === 2 ? { fees_max: null } : i === 3 ? { fees_min: null } : {}) })) }));
+for (const total of [14, 45]) it(`QA-S27-02 page 99 recovers directly with ${total} results, preserving search/filter/sort/page size and focus`, () => using(async (page, s) => {
+  const query = 'page=99&q=Law&state=Delhi&institution_type=government&degree=LLB&accreditation=NAAC+A&entrance_exam=CLAT&fees_max=300000&sort=fees&page_size=20';
+  await page.goto(origin + '/s-27?' + query); await page.getByRole('heading', { name: 'No schools on this page.', exact: true }).waitFor();
+  const recovery = page.getByRole('button', { name: 'Go to first page', exact: true }); await recovery.waitFor();
+  s.items = schools; s.hold = true; await recovery.press('Enter'); await held(s);
+  assert.notEqual(await page.evaluate(() => document.activeElement?.tagName), 'BODY');
+  if (total > 20) await page.getByRole('button', { name: 'Previous page', exact: true }).evaluate(el => { el.click(); el.click(); });
+  else assert.equal(await page.getByRole('navigation', { name: 'School list pages', exact: true }).count(), 0); // No pager is needed on its only available page.
+  assert.equal(s.reads.length, 2);
+  assert.deepEqual(s.reads.at(-1), { ...s.reads[0], page: '1' });
+  await s.held[0](); await cards(page).first().waitFor();
+  await page.waitForFunction(() => document.activeElement?.id === 's27-results-summary');
+}, { items: [], total }));
+it('QA-S27-02 out-of-range Previous clamps to a real last page without clearing the query', () => using(async (page, s) => {
+  await page.goto(origin + '/s-27?page=99&q=Law&sort=fees'); await page.getByRole('heading', { name: 'No schools on this page.', exact: true }).waitFor();
+  s.items = schools; await page.getByRole('button', { name: 'Previous page', exact: true }).press('Enter'); await cards(page).first().waitFor();
+  assert.equal(s.reads.at(-1).page, '3'); assert.equal(s.reads.at(-1).q, 'Law'); assert.equal(s.reads.at(-1).sort, 'fees');
+}, { items: [], total: 45 }));
+it('QA-S27-02 recovery failure has genuine error focus and later recovery cannot steal user focus', () => using(async (page, s) => {
+  await page.goto(origin + '/s-27?page=99&q=Law'); await page.getByRole('heading', { name: 'No schools on this page.', exact: true }).waitFor();
+  s.status = 503; await page.getByRole('button', { name: 'Go to first page', exact: true }).press('Enter');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'alert');
+  s.items = schools; s.status = 200; s.hold = true; await retry(page).press('Enter'); await held(s);
+  await page.getByRole('searchbox').focus(); await s.held[0](); await cards(page).first().waitFor();
+  assert.equal(await page.getByRole('searchbox').evaluate(el => el === document.activeElement), true);
+  assert.equal(s.reads.at(-1).q, 'Law');
+}, { items: [], total: 14 }));
+it('QA-S27-03 missing catalog filters are selectable and sent to the real supported query fields', () => using(async (page, s) => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor(); await page.getByText('Filters', { exact: true }).click();
+  for (const [label, key, value] of [['Entrance exam', 'entrance_exam', 'SLAT'], ['Entrance exam', 'entrance_exam', 'DU LLB'], ['Entrance exam', 'entrance_exam', 'CUET'], ['Accreditation', 'accreditation', 'NAAC B+']]) {
+    const select = page.getByLabel(label, { exact: true });
+    assert.ok((await select.locator('option').allTextContents()).includes(value), value + ' is available before any URL injection');
+    const reply = page.waitForResponse(r => new URL(r.url()).searchParams.get(key) === value);
+    await select.selectOption(value); await reply; await cards(page).first().waitFor();
+    assert.equal(s.reads.at(-1)[key], value); assert.equal(s.reads.at(-1).page, '1');
+  }
+  assert.ok(!(await page.getByLabel('Entrance exam', { exact: true }).locator('option').allTextContents()).some(v => ['Own exam', 'State CET', 'Institution test'].includes(v)));
+}));
+for (const width of [390, 1440]) it(`QA-S27-04 ${width}px selected-list removal focuses next, previous, then a nearby empty summary`, () => using(async (page, s) => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+  for (let i = 1; i <= 3; i++) await page.getByRole('button', { name: `Add Synthetic Law School ${i} to comparison`, exact: true }).click();
+  const tray = page.locator(width < 900 ? '.s27-mobile-comparison' : '.s27-comparison');
+  await tray.getByText('Selected schools', { exact: true }).click();
+  const remove = i => tray.getByRole('button', { name: `Remove Synthetic Law School ${i} from selected schools`, exact: true });
+  await remove(2).press('Enter'); assert.equal(await remove(3).evaluate(el => el === document.activeElement), true);
+  await remove(3).press('Enter'); assert.equal(await remove(1).evaluate(el => el === document.activeElement), true);
+  await remove(1).press('Enter');
+  assert.equal(await tray.evaluate(el => el.contains(document.activeElement)), true);
+  assert.match(await page.locator(':focus').innerText(), /Choose at least two schools/);
+  assert.equal(s.reads.length, 1);
+}, { width }));
+it('QA-S27-04 programmatic removal does not steal focus from another control', () => using(async page => {
+  await page.goto(origin + '/s-27'); await cards(page).first().waitFor();
+  await page.getByRole('button', { name: 'Add Synthetic Law School 1 to comparison', exact: true }).click();
+  await page.locator('.s27-mobile-comparison').getByText('Selected schools', { exact: true }).click();
+  const input = page.getByRole('searchbox'); await input.focus();
+  await page.locator('.s27-mobile-comparison').getByRole('button', { name: 'Remove Synthetic Law School 1 from selected schools', exact: true }).evaluate(el => el.click());
+  assert.equal(await input.evaluate(el => el === document.activeElement), true);
+}));
