@@ -1,3 +1,4 @@
+import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {readFileSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
@@ -9,7 +10,7 @@ const root=fileURLToPath(new URL('../../../',import.meta.url));
 const baseline=JSON.parse(execFileSync('git',['show','51601fe9837d0156a22c198692d42284903efca9:frontend/scripts/nyay66-policy.json'],{cwd:root})).exceptions;
 const candidate=()=>[...structuredClone(baseline),...structuredClone(s26Proposals)];
 function expectBoundary(entries){
-  const history=withoutS26ProposalsForTest(entries);
+  const history=withoutS26ProposalsForTest(withoutS27ProposalsForTest(entries));
   expect(history).toHaveLength(160);
   expect(JSON.stringify(history)).toBe(JSON.stringify(baseline));
   expect(digest(JSON.stringify(history))).toBe(historicalS26ExceptionsSha256);
@@ -63,4 +64,8 @@ describe('S-26 exact additive exception regression boundary',()=>{
     for(const name of readdirSync(new URL('.',import.meta.url)).filter(n=>n.startsWith('nyay66-')&&n.endsWith('.mjs')&&!n.includes('.test')&&!n.includes('browser-contract')))
       expect(readFileSync(new URL(name,import.meta.url),'utf8')).not.toContain('nyay66-s26-exceptions.test-fixture');
   });
+});
+
+it('retains the S-26 boundary with only the exact 22 S-27 additions',()=>{
+  const entries=[...candidate(),...structuredClone(s27Proposals)],before=JSON.stringify(entries);expectBoundary(entries);expect(JSON.stringify(entries)).toBe(before);
 });
