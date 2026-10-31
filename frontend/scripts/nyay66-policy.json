@@ -12,7 +12,7 @@
   "s25": {"cache": "s25-v32108-chromium-149.0.7827.55-39558506587", "manifestSha256": "c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67", "provenanceSha256": "16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675"},
   "s26": {"cache":"s26-v32108-chromium-149.0.7827.55-41029103233","manifestSha256":"d03d6c01f946c5f63105f2da437560347b0f52f799af6d5d6be32a2f5a4673c8","provenanceSha256":"9c7a0f3ac61c0cf71639719943229eb0cc0e69df4455dee1144a20d2bfd358ba"},
   "s27": {"cache":"s27-v32108-chromium-149.0.7827.55-41104712468","manifestSha256":"fc702af18fc6ad997149669b88cae1dec2e8247beb7a4068b22c9ecccc078b44","provenanceSha256":"aee7a39dafe6fa056b0c9bfb304b0d7ccf1567ca1763ccd0b76a694bcf7b9e5f"},
-  "integrityApproval": {"pr":84,"commentId":6544582975,"bundleSha256":"a557437f1437963a07696c74d10c69016a3ee9bcf7344eb80c777dd39234a774"},
+  "integrityApproval": {"pr":84,"commentId":6545331950,"bundleSha256":"23eef043f844b9b5b14d39a1072b81d6a12c1e345806757eabc6c4f104ed4101"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -1590,14 +1590,14 @@
       "viewport": "mobile390",
       "theme": "light",
       "referenceSha256": "cf43a433557fd344be4b0b75844d15978c0e73dc2dc1c1f4b1fa32fc3e387ec7",
-      "liveSha256": "6411a35b6a365e7363684030400ecf0559205518689323a4070b0e8745f707ab",
+      "liveSha256": "e8cc4d92861229cb21a42ddd3af98d3449a7539da547611e11d308bf0b925b05",
       "checks": [
         "controls",
         "pixels",
         "text"
       ],
-      "reason": "S-19 delete-typed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The confirmed server authority permits the final focused DELETE step, while the final action remains disabled until exact uppercase input. Presentation-only alignment preserves those controls. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification.",
-      "approvalPr": 70
+      "reason": "S-19 delete-typed, mobile390, light; exact reference/live image pair only. The settings contract has no profile-name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. The confirmed server authority permits the final focused DELETE step, while the final action remains disabled until exact uppercase input. Presentation-only alignment preserves those controls. Residual icon baseline: Keep my account SVG is +1px vertically relative to its own button versus the reference. Button geometry is not relaxed for this offset. No accessibility, overflow, unexpected error, reference, tolerance, enforcement, or unrelated-screen waiver. Synthetic API evidence is not live-backend or independent QA certification. Capture-raster replacement disclosure for PR #84: the isolated single-row Chromium capture with --disable-partial-raster produces the exact new live image above. Relative to the prior approved live SHA 6411a35b6a365e7363684030400ecf0559205518689323a4070b0e8745f707ab, 21 rounded-border pixels (38 RGB channels) differ by at most one RGB level at x16-373/y567-572. Measured DOM geometry, text, controls, API evidence and accessibility results are identical. The reference image and existing server-derived disclosures, including the +1px Keep my account icon baseline, are retained. This approval covers only this exact mobile delete-typed image pair; no other state or viewport is covered, and no tolerance, reference, enforcement or accessibility rule is changed.",
+      "approvalPr": 84
     },
     {
       "screen": "S-19",
