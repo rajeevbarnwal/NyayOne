@@ -1,0 +1,21 @@
+/* S-29-only Revision L comparison; existing screen styles are unchanged. */
+.s29-comparison a{color:inherit;text-decoration:none}.s29-comparison a:focus-visible{outline:3px solid var(--s20-indigo);outline-offset:3px}
+.s29-comparison [aria-disabled=true]{opacity:.55;cursor:default}.s29-comparison .s20-btn{width:auto}.s29-comparison .s20-primary{color:#fff}
+.s29-comparison .s29-back{align-self:flex-start;color:var(--s20-indigo);padding:0 8px;margin-left:-8px;border-color:transparent;background:transparent}
+.s29-count{margin:0;font-size:12.5px;color:var(--s20-mut);line-height:1.55}
+.s29-table-wrap{border:1.5px solid var(--s20-line);border-radius:16px;background:#fff;overflow:hidden}
+.s29-table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+.s29-table th,.s29-table td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--s20-line);overflow-wrap:anywhere}
+.s29-table tbody tr:last-child th,.s29-table tbody tr:last-child td{border-bottom:0}.s29-table thead th{background:var(--s20-soft);font-weight:800}
+.s29-table tbody th{color:var(--s20-mut);font-weight:700}.s29-table td{color:var(--s20-ink);font-weight:700;font-family:'Public Sans','NyayOne S20 Rupee',system-ui,sans-serif}
+.s29-title-link{min-height:48px;display:flex;align-items:center;width:100%;font-size:13px;font-weight:800;line-height:1.3;text-decoration:underline!important;text-decoration-color:var(--s20-line2)!important;text-underline-offset:3px;border-radius:8px}
+.s29-na{color:var(--s20-mut);font-weight:600;font-synthesis:style}
+.s29-disclosure{border:1.5px solid var(--s20-line);border-radius:16px;background:#fff}.s29-disclosure>summary{list-style:none;min-height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;cursor:pointer;border-radius:16px}
+.s29-disclosure>summary::-webkit-details-marker{display:none}.s29-disclosure>summary>span:nth-child(2){font-weight:800;font-size:14px}.s29-disclosure>summary small{margin-left:auto;font-size:12.5px;color:var(--s20-mut);font-weight:600;text-align:right;min-width:0;overflow-wrap:anywhere}
+.s29-disclosure>summary>span:first-child{color:var(--s20-mut);font-size:22px}.s29-disclosure[open]>summary>span:first-child{transform:rotate(90deg)}.s29-disclosure>div{padding:0 12px 12px}
+.s29-diff{border:1.5px solid var(--s20-line);border-radius:16px;background:#fff;padding:4px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-height:66px}.s29-diff>div{flex:1;min-width:0;padding:6px 0}.s29-diff b{font-size:13.5px;font-weight:700}.s29-diff p{margin:2px 0 0;font-size:12px;color:var(--s20-mut);line-height:1.4}.s29-diff>p{flex-basis:100%}
+.s29-switch{position:relative;width:64px;min-height:48px;border:0;background:none;padding:0;display:flex;align-items:center;justify-content:center;flex:none;border-radius:8px}.s29-switch>span{width:46px;height:26px;border-radius:13px;background:var(--s20-line2);position:relative}.s29-switch>span:after{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,22,26,.25)}.s29-switch[aria-checked=true]>span{background:var(--s20-indigo)}.s29-switch[aria-checked=true]>span:after{left:23px}
+.s29-sources{padding-left:18px;margin:0;font-size:12px;line-height:1.5;color:var(--s20-ink2);overflow-wrap:anywhere}.s29-sources ul{padding-left:16px}.s29-sources a{display:inline-flex;align-items:center;min-height:48px;color:var(--s20-indigo);font-weight:700;text-decoration:underline}
+.s29-error-code,.s29-comparison-id{font-family:'Spline Sans Mono',monospace;overflow-wrap:anywhere;font-size:11px}.s29-error-code pre{white-space:pre-wrap;overflow-wrap:anywhere}.s29-add{align-self:flex-start}.s29-remove{flex-wrap:wrap;gap:9px}
+@media(max-width:899px){.s29-table thead th.s29-metric{display:none}.s29-table thead tr,.s29-table tbody tr{display:grid;grid-template-columns:repeat(var(--s29-columns),minmax(0,1fr))}.s29-table tbody tr{border-bottom:1px solid var(--s20-line)}.s29-table tbody tr:last-child{border-bottom:0}.s29-table tbody th{grid-column:1/-1;padding:9px 12px 0;border:0;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}.s29-table tbody td{border:0;padding:4px 12px 9px}}
+@media(min-width:900px){.s29-table tbody th{width:28%}}

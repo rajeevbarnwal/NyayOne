@@ -16,11 +16,11 @@ async function using(run,options={}){
  await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());const reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
   if(url.origin!==origin&&!(url.origin==='http://localhost:1131'&&url.pathname.startsWith('/api/v1/'))){s.unexpected.push(url.origin);return route.abort();}
   if(!url.pathname.startsWith('/api/v1/'))return route.continue();
-  if(url.pathname==='/api/v1/auth/student/session')return reply({authenticated:true,actor});
+  if(url.pathname==='/api/v1/auth/student/session')return reply(s.sessionUnavailable?{detail:{code:'unavailable'}}:s.signedOut?{authenticated:false}:{authenticated:true,actor},s.sessionUnavailable?503:200);
   if(url.pathname==='/api/v1/law-schools/compare'){
    assert.equal(req.method(),'POST');const ids=req.postDataJSON().school_ids;s.requests.push(ids);
    const status=s.status,body=status===200?{comparison_id:`cmp-${s.requests.length}`,compare_max:4,items:ids.map(school)}:{detail:{code:s.code,...s.extra}};
-   const done=()=>reply(s.malformed?{}:body,status);if(s.hold){s.hold=false;s.held.push(done);return;}return done();
+   const done=()=>{if(status===401)s.signedOut=true;return reply(s.malformed?{}:body,status);};if(s.hold){s.hold=false;s.held.push(done);return;}return done();
   }
   if(url.pathname.startsWith('/api/v1/law-schools/'))return reply(school(decodeURIComponent(url.pathname.split('/').pop())));
   s.unexpected.push(req.method()+' '+url.pathname);return route.abort();
@@ -33,7 +33,7 @@ async function held(s){const end=Date.now()+5000;while(!s.held.length&&Date.now(
 it('Revision L comparison renders one main, ordered server figures and truthful provenance',()=>using(async(page,s)=>{
  await page.goto(url());await ready(page);assert.equal(await page.locator('main').count(),1);assert.equal(await page.locator('.ls-shell').count(),0);
  await page.getByRole('heading',{name:'Compare schools.',exact:true}).waitFor();
- await page.getByText('Published facts',{exact:true}).click();
+ await page.locator('summary').filter({hasText:'Published facts'}).click();
  assert.deepEqual(await page.locator('tbody th').allTextContents(),['State','Institution type','Accreditation','Entrance exam','Fees','NIRF rank','Programmes','Established','Location','Intake','Hostel','Legal aid clinics','Moot teams']);
  assert.equal(s.requests.length,1);assert.match(await page.locator('main').innerText(),/Not provided/);assert.doesNotMatch(await page.locator('main').innerText(),/verified|prototype|sample data/i);
  await page.getByText('Where these figures come from',{exact:true}).click();assert.equal(await page.getByRole('link',{name:/Institution publication/}).first().getAttribute('href'),'https://example.test/facts');
@@ -70,6 +70,29 @@ it('explicit empty/duplicate URL selections stay below minimum with no fabricate
 it('server limit/error extras remain authoritative and no contradictory successful table renders',()=>using(async page=>{
  await page.goto(url('a,b,c,d,e'));await page.getByRole('alert').waitFor();const text=await page.locator('main').innerText();assert.match(text,/COMPARE_LIMIT_EXCEEDED/);assert.match(text,/max_allowed/);assert.match(text,/3/);assert.equal(await page.locator('table').count(),0);
 },{status:422,code:'COMPARE_LIMIT_EXCEEDED',extra:{max_allowed:3}}));
+it('initial malformed success is not displayed as a comparison or a fabricated HTTP failure',()=>using(async(page,s)=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();assert.match(await page.locator('main').innerText(),/response could not be verified/);assert.doesNotMatch(await page.locator('main').innerText(),/HTTP 200|cmp-/);assert.equal(await page.locator('table').count(),0);assert.equal(s.requests.length,1);
+},{malformed:true}));
+it('expired retry survives session remount with focus on the sign-in notice and no repeated POST',()=>using(async(page,s)=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();s.status=401;s.code='authentication_required';
+ await page.getByRole('button',{name:'Retry',exact:true}).press('Enter');await page.getByRole('link',{name:'Sign in',exact:true}).waitFor();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');assert.equal(s.requests.length,2);assert.equal(await page.locator('table').count(),0);
+},{status:503}));
+it('session discovery failure sends no comparison POST; explicit Retry recovers safely',()=>using(async(page,s)=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();assert.equal(s.requests.length,0);s.sessionUnavailable=false;
+ await page.getByRole('button',{name:'Retry',exact:true}).press('Enter');await ready(page);assert.notEqual(await page.evaluate(()=>document.activeElement?.tagName),'BODY');assert.equal(s.requests.length,1);
+},{sessionUnavailable:true}));
+it('offline Retry says no request was sent and recovers only after an explicit online Retry',()=>using(async(page,s)=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{get:()=>false,configurable:true}));
+ await page.getByRole('button',{name:'Retry',exact:true}).press('Enter');await page.getByText('You are offline. No request was sent. Reconnect and retry.').waitFor();assert.equal(s.requests.length,1);
+ s.status=200;await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{get:()=>true,configurable:true}));await page.getByRole('button',{name:'Retry',exact:true}).press('Enter');await ready(page);assert.equal(s.requests.length,2);assert.notEqual(await page.evaluate(()=>document.activeElement?.tagName),'BODY');
+},{status:503}));
+it('four-school server capacity, school icons and switch geometry follow the approved primitives',()=>using(async page=>{
+ await page.goto(url('a,b,c,d'));await ready(page);assert.match(await page.locator('main').innerText(),/4 of 4 schools/);assert.equal(await page.getByRole('link',{name:'Add another school',exact:true}).getAttribute('aria-disabled'),'true');
+ assert.equal(await page.getByRole('button',{name:'Remove Synthetic Law School a from comparison',exact:true}).locator('path').first().getAttribute('d'),'M6 7h12l-1 13H7z');
+ const track=await page.getByRole('switch',{name:'Differences only',exact:true}).locator('span').boundingBox();assert.equal(track.height,26);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+}));
 for(const width of [320,390,1440])it(`${width}px reflow, label-in-name, 48px actions and axe`,()=>using(async page=>{
  await page.goto(url());await ready(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  for(const action of await page.locator('.s29-comparison button:visible,.s29-comparison a:visible,.s29-comparison summary:visible').all()){const box=await action.boundingBox();assert.ok(box.height>=48,`${await action.innerText()}: ${box.height}`);}

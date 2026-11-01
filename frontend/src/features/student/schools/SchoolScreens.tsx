@@ -1,6 +1,7 @@
+import { S29ComparisonScreen } from './S29ComparisonScreen';
 import { S28DetailScreen } from './S28DetailScreen';
 import { S27SearchScreen } from './S27SearchScreen';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStudentMutation as useMutation } from '../lib/useStudentMutation';
@@ -8,32 +9,19 @@ import { StudentScreen } from '../components';
 import { useTheme } from '../../../hooks/useTheme';
 import {
   getLawSchoolDetail,
-  compareLawSchools,
   unsaveLawSchool,
   unfollowLawSchool,
   listSavedLawSchools,
   listFollowedLawSchools,
   LawSchoolsApiError,
   isRetryableLawSchoolsError,
-  COMPARE_MIN,
-  DEFAULT_COMPARE_MAX,
-  COMPARE_LIMIT_EXCEEDED,
-  COMPARE_MIN_NOT_MET,
-  DUPLICATE_SCHOOL,
-  SCHOOL_NOT_FOUND,
   type LawSchoolDetail,
   type LawSchoolSummary,
 } from '../lib/lawSchoolsApi';
 import {
-  COMPARE_ROWS,
-  compareRowValue,
   feesLakhBand,
   monogramText,
   verifiedText,
-  shortHandle,
-  referenceSourceFoot,
-  REFERENCE_RESPONSIBLE_COPY,
-  type CompareFormatInput,
 } from './lawschoolFormat.mjs';
 
 /**
@@ -298,221 +286,7 @@ export function SchoolDetail() {
 /* -------------------------------------------------------------------------- */
 
 export function SchoolCompare() {
-  const nav = useNavigate();
-  const [sp, setSp] = useSearchParams();
-  const ret = sp.get('ret') ?? '';
-  const idsParam = sp.get('ids');
-  const ids = useMemo(
-    () => (idsParam
-      ? [...new Set(idsParam.split(',').filter(Boolean))]
-      : readCompareTray().map((t) => t.id)),
-    [idsParam],
-  );
-
-  // Direct-link/refresh handling: mirror a tray-derived selection into the URL
-  // so the comparison survives refresh and can be shared.
-  useEffect(() => {
-    if (!idsParam && ids.length > 0) {
-      const next = new URLSearchParams(sp);
-      next.set('ids', ids.join(','));
-      setSp(next, { replace: true });
-    }
-  }, [idsParam, ids, sp, setSp]);
-
-  const query = useQuery({
-    queryKey: ['law-schools-compare', ids.join(',')],
-    queryFn: () => compareLawSchools(ids),
-    enabled: ids.length >= COMPARE_MIN,
-    retry: false,
-  });
-
-  const compareMax = query.data?.compareMax ?? DEFAULT_COMPARE_MAX;
-  /* "Differences only" — frozen decision: OFF by default. Pure client-side
-   * view filter over the server comparison result; never mutates the set. */
-  const [diffOnly, setDiffOnly] = useState(false);
-
-  useRouteArrival('S-29');
-
-  function removeSchool(id: string): void {
-    const nextIds = ids.filter((s) => s !== id);
-    writeCompareTray(readCompareTray().filter((t) => t.id !== id));
-    const next = new URLSearchParams(sp);
-    next.set('ids', nextIds.join(','));
-    setSp(next, { replace: true });
-  }
-
-  const back = () => nav(ret ? `/s-27?${ret}` : '/s-27');
-
-  function compareError(error: unknown) {
-    if (error instanceof LawSchoolsApiError) {
-      if (error.status === 401) return <SignInPrompt />;
-      if (error.code === COMPARE_LIMIT_EXCEEDED) {
-        const max = error.maxAllowed ?? compareMax;
-        return (
-          <div className="ls-panelbox" role="alert">
-            <h2>Comparison is limited to {max} schools</h2>
-            <p>You can compare at most {max} schools — remove {Math.max(1, ids.length - max)} and try again. Nothing was changed by this attempt.</p>
-            <button type="button" className="btn ls-solid tap" onClick={back}>Back to the list</button>
-          </div>
-        );
-      }
-      if (error.code === COMPARE_MIN_NOT_MET) {
-        return <BelowMin min={error.minRequired ?? COMPARE_MIN} max={compareMax} onBack={back} />;
-      }
-      if (error.code === DUPLICATE_SCHOOL) {
-        return (
-          <div className="ls-banner ls-banner--warn" role="alert">
-            <span className="ls-k">Already picked</span>
-            <span>The same school is selected twice — remove the duplicate.</span>
-          </div>
-        );
-      }
-      if (error.code === SCHOOL_NOT_FOUND) {
-        return (
-          <div className="ls-banner ls-banner--risk" role="alert">
-            <span className="ls-k">Not found</span>
-            <span>One of the selected schools is no longer in the directory — remove it and retry.</span>
-          </div>
-        );
-      }
-    }
-    return <QueryFailure error={error} onRetry={() => void query.refetch()} />;
-  }
-
-  function rowDiffers(row: { value: (i: LawSchoolDetailLike) => string }): boolean {
-    const items = query.data?.items ?? [];
-    return items.length >= 2 && new Set(items.map((i) => row.value(i))).size > 1;
-  }
-
-  /* APPROVED 13-row S-29 schema (SAATHI-63/118 final closure): State,
-   * Institution type, Accreditation, Entrance exam, Fees, NIRF rank,
-   * Programmes, Established, Location, Intake, Hostel, Legal aid clinics,
-   * Moot teams — order, labels and value formatting come from the SHARED
-   * formatter (lawschoolFormat.mjs) that also drives the fixture contract
-   * and the reference generator. */
-  const toFormatInput = (i: LawSchoolDetailLike): CompareFormatInput => ({
-    state: i.state,
-    institutionType: i.institutionType,
-    accreditation: i.accreditation,
-    entranceExam: i.entranceExam,
-    feesMin: i.feesMin,
-    feesMax: i.feesMax,
-    nirfRank: i.nirfRank,
-    programmes: i.programmes,
-    facts: Object.fromEntries(i.facts.map((f) => [f.key, f.value])),
-  });
-  const rows: Array<{ label: string; value: (i: LawSchoolDetailLike) => string }> = COMPARE_ROWS.map(
-    ({ key, label }) => ({ label, value: (i: LawSchoolDetailLike) => compareRowValue(key, toFormatInput(i)) }),
-  );
-
-  const visibleRows = diffOnly ? rows.filter((row) => rowDiffers(row)) : rows;
-  const items = query.data?.items ?? [];
-
-  return (
-    <StudentScreen screenId="S-29" className="st-lawschool st-lawschool--s29">
-      <LsShell active="s29" ctx={ret}>
-        <div className="ls-wrap">
-          <p className="ls-metaline ls-mt14">S-29 · COMPARE YOUR PICKS</p>
-          {ids.length < COMPARE_MIN && <BelowMin min={COMPARE_MIN} max={compareMax} onBack={back} />}
-          {ids.length >= COMPARE_MIN && query.isPending && (
-            <>
-              <h1 className="ls-lede">Getting your comparison ready…</h1>
-              <div aria-busy="true"><Skel h={280} mt={16} /></div>
-            </>
-          )}
-          {ids.length >= COMPARE_MIN && query.isError && compareError(query.error)}
-          {query.data && (
-            <>
-              <h1 className="ls-lede">Your {items.length} picks, side by side.</h1>
-              <div className="ls-pnum">
-                <span className="ls-n ls-n--on" aria-hidden="true">1</span>
-                <span className="ls-pl">Picked {items.length} of {query.data.compareMax}</span>
-                <span className="ls-n ls-n--on" aria-hidden="true">2</span>
-                <span className="ls-pl">Compare each fact below</span>
-              </div>
-              <div className="ls-cmprow">
-                {items.map((i) => (
-                  <span className="ls-chp ls-chp--on ls-chp--static" key={i.id}>
-                    <span className="ls-ckg" aria-hidden="true">✓ </span>{shortHandle(i.name)}
-                    <button
-                      type="button"
-                      className="ls-ibtn ls-x"
-                      aria-label={`Remove ${i.name} from comparison`}
-                      onClick={() => removeSchool(i.id)}
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-                <button type="button" className="btn ls-ghost tap" onClick={back}>
-                  + add (max {query.data.compareMax})
-                </button>
-                <span className="ls-flex1" />
-                <button
-                  type="button"
-                  className="ls-tgl"
-                  aria-pressed={diffOnly}
-                  onClick={() => setDiffOnly((v) => !v)}
-                >
-                  <span className="ls-sw" aria-hidden="true" />
-                  Differences only
-                </button>
-              </div>
-              <p className="ls-metaline ls-mt10">
-                {`EACH FACT CARD LISTS ALL YOUR PICKS — NOTHING SCROLLS SIDEWAYS. ${diffOnly ? `${visibleRows.length} OF ${rows.length} FACTS DIFFER · ` : ''}${verifiedText().toUpperCase()} · SAMPLE DATA`}
-              </p>
-              <div className="ls-cards" data-cmp-cards="1">
-                {visibleRows.map((row) => {
-                  const differs = rowDiffers(row);
-                  return (
-                    <div className="ls-attrcard" data-differ={differs ? 1 : 0} key={row.label}>
-                      <div className="ls-al">
-                        {row.label}
-                        {differs
-                          ? <span className="ls-dbadge">values differ</span>
-                          : <span className="ls-metaline">same for all</span>}
-                      </div>
-                      <ul className="ls-vals">
-                        {items.map((i) => (
-                          <li key={i.id}><span>{shortHandle(i.name)}</span><b>{row.value(i)}</b></li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-              {diffOnly && visibleRows.length === 0 && (
-                <p className="ls-stand ls-mt12">Every compared fact is the same for the selected schools.</p>
-              )}
-            </>
-          )}
-          <div className="ls-foot">{referenceSourceFoot()}<br />{REFERENCE_RESPONSIBLE_COPY}</div>
-        </div>
-      </LsShell>
-    </StudentScreen>
-  );
-}
-
-/** Reference below-minimum panel (r29): two-step pnum + return CTA. */
-function BelowMin({ min, max, onBack }: { min: number; max: number; onBack: () => void }) {
-  return (
-    <div className="ls-panelbox">
-      <h2>Pick one more school</h2>
-      <p>Pick at least {min} schools to compare — comparison needs a minimum of two.</p>
-      <div className="ls-pnum ls-pnum--center">
-        <span className="ls-n ls-n--on" aria-hidden="true">1</span>
-        <span className="ls-pl">Pick {min}–{max} schools</span>
-        <span className="ls-n" aria-hidden="true">2</span>
-        <span className="ls-pl">Compare</span>
-      </div>
-      <button type="button" className="btn ls-solid tap ls-mt16" onClick={onBack}>Back to the list</button>
-    </div>
-  );
-}
-
-interface LawSchoolDetailLike extends LawSchoolSummary {
-  programmes: Array<{ degree: string; durationYears: number }>;
-  facts: Array<{ key: string; value: string }>;
+  return <S29ComparisonScreen readSelection={readCompareTray} writeSelection={writeCompareTray}/>;
 }
 
 /* -------------------------------------------------------------------------- */
