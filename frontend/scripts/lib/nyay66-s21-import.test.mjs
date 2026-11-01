@@ -82,7 +82,7 @@ describe('S-21 archive import fails closed before writing',()=>{
     expect(policy.s21).toEqual({cache:'s21-v32108-chromium-149.0.7827.55-39279617257',manifestSha256:'1e13cfa4d7ab2561890e229ead844e4768240d593f3dae4ab545d1069ce0e9d0',provenanceSha256:'dae65825f99fda6e069ee91e2bb12a2981e0e961ca42d05633ca14cca96de92d'});
     const before=JSON.parse(execFileSync('git',['show','0d381b7aee9d438712549cb62275582951536438:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     // The additive S-26/S-27 caches are pinned by their exact-provenance import tests.
-    const current=structuredClone(policy);delete current.s21;delete current.s25;delete current.s26;delete current.s27;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(policy);delete current.s21;delete current.s25;delete current.s26;delete current.s27;expect(current.s29).toEqual({"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"});delete current.s29;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
     // S-25's exact cache/provenance is pinned by nyay66-s25-import.test.mjs;
     // every historical setting and exception comparison below stays intact.
     if(mode==='proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-21'),...structuredClone(s21Proposals)];

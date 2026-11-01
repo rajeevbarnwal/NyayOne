@@ -52,7 +52,7 @@ describe('exact 22-row S-19 capture-sequence replacement boundary',()=>{
     const current=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
     // The additive S-28 cache is pinned here and revalidated by its exact-provenance import test.
     expect(current.s28).toEqual({cache:'s28-v32108-chromium-149.0.7827.55-41323481198',manifestSha256:'0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513',provenanceSha256:'36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4'});
-    delete current.s28;expectBoundary(current);
+    expect(current.s29).toEqual({"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"});delete current.s29;delete current.s28;expectBoundary(current);
   });
   it.each(proposals)('rejects altered identity/scope/hash/fields for $row',p=>{
     for(const mutate of [e=>e.approvalPr=70,e=>e.screen='S-20',e=>e.viewport=e.viewport==='desktop'?'mobile390':'desktop',e=>e.theme='dark',e=>e.referenceSha256='a'.repeat(64),e=>e.liveSha256='b'.repeat(64),e=>e.reason+=' widened',e=>e.checks=['pixels'],e=>e.checks.push('accessibility'),e=>e.approved=true]){

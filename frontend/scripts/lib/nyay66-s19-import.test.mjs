@@ -68,7 +68,7 @@ describe('S-19 archive import fails closed before writing',()=>{
     const before=JSON.parse(execFileSync('git',['show','3d0e1201ea672c6f96b7a86703def2d3bffa69f5:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     const current=structuredClone(policy),previous=structuredClone(before);
     // The additive S-26/S-27 caches are pinned by their exact-provenance import tests.
-    delete current.s19;delete current.s20;delete current.s21;delete current.s25;delete current.s26;delete current.s27;delete current.s28;delete current.integrityApproval;delete previous.integrityApproval;
+    delete current.s19;delete current.s20;delete current.s21;delete current.s25;delete current.s26;delete current.s27;expect(current.s29).toEqual({"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"});delete current.s29;delete current.s28;delete current.integrityApproval;delete previous.integrityApproval;
     // S-25's exact cache/provenance is pinned by nyay66-s25-import.test.mjs;
     // only that additive field is excluded from this older policy snapshot.
     // S-21's additive cache is pinned by its exact-provenance import test;

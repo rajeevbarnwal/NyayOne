@@ -1,0 +1,5520 @@
+{
+  "schema": 1,
+  "purpose": "UNIMPORTED_REFERENCE_CALIBRATION",
+  "screen": "S-29",
+  "theme": "light",
+  "approval": "NYAY-90:16011",
+  "sourceArchiveSha256": "0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964",
+  "sourceSha256": "8dcb94f89df7b434022e1c0d599e57d4348224b1ea7c5f5127e45705eb75c7f8",
+  "embeddedResources": {
+    "sourceSha256": "cd26225f6c528de9e70fb3d278ed8fdfd7bebab5bdbdeee9764cb591cb76c72a",
+    "fontFaces": [
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "7ae94aadec42e9faf01ea2d5ad9c74fb77ed4470f1d7be90bc2250a464e77ef7"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "8397b40b49a22d7db013fe11abdb3ce4746afadb80f4ea058be293086e5d0b2e"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "99137eccc6b84c6b386ca80a375bfad3c9a7c4f23cf6f88b6bb1b4747810279b"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "ed465b9cc36b74cb326952180a0cf1d54f049ec73cc1787059691414c1d1c0f0"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "59556636564c9a718b26dda2cfde435029c26593bac1fedb138161be7531262d"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "9691734199298cca3ceda3f6971824ac28a23d208b7fcb47028f41a7f52ac88f"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "400",
+        "sha256": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "8c4842e7af13ae8ea4aee9e3b680085b1148b38a03a0f7c2b6026d145e8f10a3"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "10b860d0ba0b86924faf739a92a1e2e8f85f35200737ed0122ad124bc590dde8"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "55af89610d8baf895b83c2e59e18db5f5621768da7d8d774ed5721b2188fc949"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "d9f554decce039d1f367b8eba1cc2c593989ae23318b88bb3d37885f171acb3b"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "447a903a31ea48002c6e1b5b68b0432f385764d460777fcc70bf545726aa4e1a"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "3a1a33c3f2a8d1b98f01f867a73a2085ada27df402678a4cd6d1f5016edcf670"
+      },
+      {
+        "family": "'Carlito'",
+        "weight": "700",
+        "sha256": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "400",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "500",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "600",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "700",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8"
+      },
+      {
+        "family": "'Public Sans'",
+        "weight": "800",
+        "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "500",
+        "sha256": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "d699664b145bfeeccc66a4cce7fa55e14eb63efd7ec6b0b2ec52e25dd98f3917"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "054c266fbb441ee059365dba0885d206f67ca05b375de869b88e02ebfccc9b9d"
+      },
+      {
+        "family": "'Space Grotesk'",
+        "weight": "600",
+        "sha256": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "24803666bf8b050f9d06af00a4d408b3ebdf3bc714aec6da9099d9fa3217508b"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "99422bba6a3397ac90e2fe1c37038b7796a7df320af2a46d22755513b41c7233"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "a28ea82d9a40e7f1d5b96935f09011581d2f92920f85e3921b02e4b9d5ca099a"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "a285ff771f79cb75675c139d5c7a2e2e6d1bd1941fc9e10b57478f75f212b4d8"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "300",
+        "sha256": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "3f8d833b64a1e7e1b8be07cd73513004cc680a466b84d6459fdcd2f1c1fcf0b3"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "9a6738241702381e65e80d1ee5f172ce12be2049dfedeb33016a5096444bc03b"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "74dc7e33abf296a6a7129a327d7b9c5bc02b11eb9ffb47447a0887997c863102"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "ccb889e04368c402021b9b73196f26fc903d6cb269028138fefb68bd56cc5c19"
+      },
+      {
+        "family": "'Spectral'",
+        "weight": "600",
+        "sha256": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "400",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "400",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "500",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "500",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "600",
+        "sha256": "bde42c142265c31a450781d82cc72e1859bd42cba8e438fb96f77f1d69ebc8d6"
+      },
+      {
+        "family": "'Spline Sans Mono'",
+        "weight": "600",
+        "sha256": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+      }
+    ],
+    "logoDefinitions": [
+      {
+        "name": "LOCKUP",
+        "sha256": "829f3f1a8c4b340524ccf399c5f0dbed586a559f0b1030d8640ff1d5f6b6afc4"
+      },
+      {
+        "name": "LOCKUP_REV",
+        "sha256": "f42c8b95145ad77c3782e9d5c9c706fe05bd658286f0100deec8723e56c9cd4e"
+      },
+      {
+        "name": "MARK",
+        "sha256": "236192781d6e4c1dc11cf332a42962f8bc7334ed83e1cd91c18ca180578da95e"
+      },
+      {
+        "name": "MARK_REV",
+        "sha256": "9704e9f9e56374a5c1b0ac89969c6e92b8f4566e8b0514666398c73c18585387"
+      }
+    ]
+  },
+  "producerHead": "e0f780f9d3e1443ae3803ceb37118d4e93f72d2f",
+  "controlHead": "e0f780f9d3e1443ae3803ceb37118d4e93f72d2f",
+  "generatedUTC": "2026-11-01T21:34:12.546Z",
+  "platform": "linux-x64",
+  "playwright": "1.61.1",
+  "fonts": {
+    "Carlito-Bold-latin.woff2": "3943703a3d692300418f3958be8eff99dd1aa5e5334eac6a9ea9285b07931012",
+    "Carlito-Regular-latin.woff2": "e1bd1446e398916b97b3bb073491d4ff13fe334a0bef7c40aafc01beac2bd5f7",
+    "HankenGrotesk-Variable-latin.woff2": "1f21c6eaa0000f3329cfcfac966b43d5bebf5aa610303e33294ac31bc6f4bb59",
+    "IBMPlexMono-Medium-latin.woff2": "a76f53ca6612e7b3828eec2311098675b7f9849ae4169a8bcef6302aec02a6c0",
+    "IBMPlexMono-Regular-latin.woff2": "c36f509c0a8f9f85f29cb44bc8701d8a9e0b14c499e77a884f789ead7093a7ac",
+    "IBMPlexMono-SemiBold-latin.woff2": "ad4580d8cb4b5f627c2d18457656732f7f7b070f7837fbc380e08054157e6f6c",
+    "Newsreader-Variable-latin.woff2": "01817351be3edfc1714fe6d60ddea6a22a169a5ebd033b50c7f9495e5d9c386a",
+    "PublicSans-latin.woff2": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d",
+    "SpaceGrotesk-latin.woff2": "a0d054c4af557de20afd6ca59f47ab353bcaec49c63ff04b6c9d39d0f8910557",
+    "Spectral-Light-latin.woff2": "3a318b69ad8c6e194679e2828e6cb16ead1ae4df1f3e56c3fe96d01ab64037b9",
+    "Spectral-Semibold-latin.woff2": "1fb6ca29fc243e8bfdfce12d8d6806f322bcc62d38036986812be28fb1f41f0a",
+    "SplineSansMono-latin.woff2": "2b193a4f0fef3fc4c6a3fa756bb5dab6c10b489acd5e0718736847755077e9ec"
+  },
+  "deferredStates": [],
+  "rows": [
+    {
+      "view": "s29-loading",
+      "viewport": "mobile390",
+      "file": "s29-loading-mobile390-0.png",
+      "sha256": "104ac56feb0275b84e492ebf50b294168442ce5d3ad256b23787934c0689c26e",
+      "sampleHashes": [
+        "104ac56feb0275b84e492ebf50b294168442ce5d3ad256b23787934c0689c26e",
+        "104ac56feb0275b84e492ebf50b294168442ce5d3ad256b23787934c0689c26e",
+        "104ac56feb0275b84e492ebf50b294168442ce5d3ad256b23787934c0689c26e"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. Loading Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-loading",
+      "viewport": "desktop",
+      "file": "s29-loading-desktop-0.png",
+      "sha256": "af6bff6cf8a113049f4c7e7db2eb734d1d15b65222b050debb455d822b4cfc6c",
+      "sampleHashes": [
+        "af6bff6cf8a113049f4c7e7db2eb734d1d15b65222b050debb455d822b4cfc6c",
+        "af6bff6cf8a113049f4c7e7db2eb734d1d15b65222b050debb455d822b4cfc6c",
+        "af6bff6cf8a113049f4c7e7db2eb734d1d15b65222b050debb455d822b4cfc6c"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. Loading THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-complete",
+      "viewport": "mobile390",
+      "file": "s29-complete-mobile390-0.png",
+      "sha256": "93243657a0a1e0fe469061c185476b69f329948b0f716fcdac4818636b69c733",
+      "sampleHashes": [
+        "93243657a0a1e0fe469061c185476b69f329948b0f716fcdac4818636b69c733",
+        "93243657a0a1e0fe469061c185476b69f329948b0f716fcdac4818636b69c733",
+        "93243657a0a1e0fe469061c185476b69f329948b0f716fcdac4818636b69c733"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 295,
+              "y": 289.40625,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 381.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Sabarmati Law College",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 381.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 42,
+              "y": 905.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 905.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 972.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Sabarmati",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 972.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 1033.609375,
+              "width": 358,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 16,
+              "y": 98.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 2 of 3 schools Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Sabarmati Law College Kaveri National Law University Sabarmati Law College STATE Karnataka Gujarat INSTITUTION TYPE National Law University Private university ACCREDITATION BCI approved BCI approved ENTRANCE EXAM CLAT Institution test FEES ₹2,85,000 to ₹3,10,000 per year ₹4,10,000 to ₹4,55,000 per year NIRF RANK Not provided Not provided PROGRAMMES B.A. LL.B. (Hons.), LL.M. B.B.A. LL.B. Published facts 6 more figures Where these figures come from Remove Kaveri Remove Sabarmati Add another school Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          1140.609375
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-complete",
+      "viewport": "desktop",
+      "file": "s29-complete-desktop-0.png",
+      "sha256": "63dc49d4bb0af10d856bb6374fc16621c1b4428f087a523414fee494f4012277",
+      "sampleHashes": [
+        "63dc49d4bb0af10d856bb6374fc16621c1b4428f087a523414fee494f4012277",
+        "63dc49d4bb0af10d856bb6374fc16621c1b4428f087a523414fee494f4012277",
+        "63dc49d4bb0af10d856bb6374fc16621c1b4428f087a523414fee494f4012277"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 777.953125,
+              "y": 273.296875,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 320.640625,
+              "y": 355.296875,
+              "width": 249.640625,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Sabarmati Law College",
+            "disabled": false,
+            "box": {
+              "x": 594.28125,
+              "y": 355.296875,
+              "width": 249.671875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 324.984375,
+              "y": 723.296875,
+              "width": 240.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 589.96875,
+              "y": 723.296875,
+              "width": 240.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 790.296875,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Sabarmati",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 790.296875,
+              "width": 406.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 851.296875,
+              "width": 822.953125,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 34,
+              "y": 108.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 2 of 3 schools Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Sabarmati Law College Figure Kaveri National Law University Sabarmati Law College State Karnataka Gujarat Institution type National Law University Private university Accreditation BCI approved BCI approved Entrance exam CLAT Institution test Fees ₹2,85,000 to ₹3,10,000 per year ₹4,10,000 to ₹4,55,000 per year NIRF rank Not provided Not provided Programmes B.A. LL.B. (Hons.), LL.M. B.B.A. LL.B. Published facts 6 more figures Where these figures come from Remove Kaveri Remove Sabarmati Add another school THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-three",
+      "viewport": "mobile390",
+      "file": "s29-three-mobile390-0.png",
+      "sha256": "563e3e6140da40bd291d1f4a14ffe216d14cbef1dacba0f9998bcc71a97234c6",
+      "sampleHashes": [
+        "563e3e6140da40bd291d1f4a14ffe216d14cbef1dacba0f9998bcc71a97234c6",
+        "563e3e6140da40bd291d1f4a14ffe216d14cbef1dacba0f9998bcc71a97234c6",
+        "563e3e6140da40bd291d1f4a14ffe216d14cbef1dacba0f9998bcc71a97234c6"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "radio",
+            "name": "Kaveri and Sabarmati",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 302.21875,
+              "width": 22,
+              "height": 22
+            }
+          },
+          {
+            "role": "radio",
+            "name": "Kaveri and Vindhya",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 356.21875,
+              "width": 22,
+              "height": 22
+            }
+          },
+          {
+            "role": "radio",
+            "name": "Sabarmati and Vindhya",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 410.21875,
+              "width": 22,
+              "height": 22
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 295,
+              "y": 479.40625,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 571.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Sabarmati Law College",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 571.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 42,
+              "y": 1095.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 1095.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 1162.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Sabarmati",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 1162.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": true,
+            "box": {
+              "x": 16,
+              "y": 1223.609375,
+              "width": 358,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 16,
+              "y": 98.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 3 of 3 schools Show two of the three schools Kaveri and Sabarmati Kaveri and Vindhya Sabarmati and Vindhya Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Sabarmati Law College Kaveri National Law University Sabarmati Law College STATE Karnataka Gujarat INSTITUTION TYPE National Law University Private university ACCREDITATION BCI approved BCI approved ENTRANCE EXAM CLAT Institution test FEES ₹2,85,000 to ₹3,10,000 per year ₹4,10,000 to ₹4,55,000 per year NIRF RANK Not provided Not provided PROGRAMMES B.A. LL.B. (Hons.), LL.M. B.B.A. LL.B. Published facts 6 more figures Where these figures come from Remove Kaveri Remove Sabarmati Add another school Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          1330.609375
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-three",
+      "viewport": "desktop",
+      "file": "s29-three-desktop-0.png",
+      "sha256": "562a331c0407d56b31cec53d2a65ac2551f4a1922337d65514d7e48db90236de",
+      "sampleHashes": [
+        "562a331c0407d56b31cec53d2a65ac2551f4a1922337d65514d7e48db90236de",
+        "562a331c0407d56b31cec53d2a65ac2551f4a1922337d65514d7e48db90236de",
+        "562a331c0407d56b31cec53d2a65ac2551f4a1922337d65514d7e48db90236de"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 777.953125,
+              "y": 273.296875,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 252.234375,
+              "y": 355.296875,
+              "width": 181.234375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Sabarmati Law College",
+            "disabled": false,
+            "box": {
+              "x": 457.46875,
+              "y": 355.296875,
+              "width": 181.234375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Vindhya School of Law",
+            "disabled": false,
+            "box": {
+              "x": 662.703125,
+              "y": 355.296875,
+              "width": 181.25,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 258.734375,
+              "y": 738.296875,
+              "width": 174.734375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 457.46875,
+              "y": 738.296875,
+              "width": 174.734375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "",
+            "disabled": false,
+            "box": {
+              "x": 656.203125,
+              "y": 738.296875,
+              "width": 174.75,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 805.296875,
+              "width": 268.3125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Sabarmati",
+            "disabled": false,
+            "box": {
+              "x": 311.3125,
+              "y": 805.296875,
+              "width": 268.328125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Vindhya",
+            "disabled": false,
+            "box": {
+              "x": 588.640625,
+              "y": 805.296875,
+              "width": 268.3125,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": true,
+            "box": {
+              "x": 34,
+              "y": 866.296875,
+              "width": 822.953125,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 34,
+              "y": 108.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 3 of 3 schools Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Sabarmati Law College compared with Vindhya School of Law Figure Kaveri National Law University Sabarmati Law College Vindhya School of Law State Karnataka Gujarat Madhya Pradesh Institution type National Law University Private university Government law college Accreditation BCI approved BCI approved BCI approved Entrance exam CLAT Institution test State CET Fees ₹2,85,000 to ₹3,10,000 per year ₹4,10,000 to ₹4,55,000 per year ₹96,000 per year NIRF rank Not provided Not provided Not provided Programmes B.A. LL.B. (Hons.), LL.M. B.B.A. LL.B. B.A. LL.B. Published facts 6 more figures Where these figures come from Remove Kaveri Remove Sabarmati Remove Vindhya Add another school THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-incomplete",
+      "viewport": "mobile390",
+      "file": "s29-incomplete-mobile390-0.png",
+      "sha256": "567f5c02c37f136cc809f67c9f233f9f76cbff6e4f44207633548d14676243e8",
+      "sampleHashes": [
+        "567f5c02c37f136cc809f67c9f233f9f76cbff6e4f44207633548d14676243e8",
+        "567f5c02c37f136cc809f67c9f233f9f76cbff6e4f44207633548d14676243e8",
+        "567f5c02c37f136cc809f67c9f233f9f76cbff6e4f44207633548d14676243e8"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 295,
+              "y": 358.40625,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 29,
+              "y": 450.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Meghna Law Institute",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 450.609375,
+              "width": 154,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 42,
+              "y": 974.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Meghna Law Institute",
+            "disabled": false,
+            "box": {
+              "x": 207,
+              "y": 974.609375,
+              "width": 141,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 1433.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Meghna",
+            "disabled": false,
+            "box": {
+              "x": 199.5,
+              "y": 1433.609375,
+              "width": 174.5,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 16,
+              "y": 1494.609375,
+              "width": 358,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 16,
+              "y": 98.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 2 of 3 schools Some figures are missing. Blanks show Not provided, never zero. Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Meghna Law Institute Kaveri National Law University Meghna Law Institute STATE Karnataka Assam INSTITUTION TYPE National Law University Deemed university ACCREDITATION BCI approved BCI approved ENTRANCE EXAM CLAT CLAT FEES ₹2,85,000 to ₹3,10,000 per year ₹1,50,000 to ₹1,80,000 per year NIRF RANK Not provided 41 PROGRAMMES B.A. LL.B. (Hons.), LL.M. LL.B. Published facts 6 more figures Published facts Kaveri National Law University Meghna Law Institute ESTABLISHED 1998 2014 LOCATION Bengaluru Not provided INTAKE 120 90 HOSTEL Available on campus Not provided LEGAL AID CLINICS 3 Not provided MOOT TEAMS 12 Not provided Where these figures come from Remove Kaveri Remove Meghna Add another school Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          1601.609375
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-incomplete",
+      "viewport": "desktop",
+      "file": "s29-incomplete-desktop-0.png",
+      "sha256": "463249d20d4271d19649b8059c28721b99a581f83373ac4d7f4a54e4d12e7e8d",
+      "sampleHashes": [
+        "463249d20d4271d19649b8059c28721b99a581f83373ac4d7f4a54e4d12e7e8d",
+        "463249d20d4271d19649b8059c28721b99a581f83373ac4d7f4a54e4d12e7e8d",
+        "463249d20d4271d19649b8059c28721b99a581f83373ac4d7f4a54e4d12e7e8d"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "switch",
+            "name": "Differences onlyHides figures that are the same for every school shown. The comparison data is unchanged.",
+            "disabled": false,
+            "box": {
+              "x": 777.953125,
+              "y": 342.296875,
+              "width": 64,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 320.640625,
+              "y": 424.296875,
+              "width": 249.640625,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Meghna Law Institute",
+            "disabled": false,
+            "box": {
+              "x": 594.28125,
+              "y": 424.296875,
+              "width": 249.671875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Kaveri National Law University",
+            "disabled": false,
+            "box": {
+              "x": 324.984375,
+              "y": 792.296875,
+              "width": 240.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Meghna Law Institute",
+            "disabled": false,
+            "box": {
+              "x": 589.96875,
+              "y": 792.296875,
+              "width": 240.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Kaveri",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 1143.296875,
+              "width": 406.96875,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Remove Meghna",
+            "disabled": false,
+            "box": {
+              "x": 449.96875,
+              "y": 1143.296875,
+              "width": 406.984375,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 34,
+              "y": 1204.296875,
+              "width": 822.953125,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "Figures compared",
+            "box": {
+              "x": 34,
+              "y": 108.421875,
+              "width": 1,
+              "height": 1
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. 2 of 3 schools Some figures are missing. Blanks show Not provided, never zero. Figures compared Differences only Hides figures that are the same for every school shown. The comparison data is unchanged. Kaveri National Law University compared with Meghna Law Institute Figure Kaveri National Law University Meghna Law Institute State Karnataka Assam Institution type National Law University Deemed university Accreditation BCI approved BCI approved Entrance exam CLAT CLAT Fees ₹2,85,000 to ₹3,10,000 per year ₹1,50,000 to ₹1,80,000 per year NIRF rank Not provided 41 Programmes B.A. LL.B. (Hons.), LL.M. LL.B. Published facts 6 more figures Published facts Figure Kaveri National Law University Meghna Law Institute Established 1998 2014 Location Bengaluru Not provided Intake 120 90 Hostel Available on campus Not provided Legal aid clinics 3 Not provided Moot teams 12 Not provided Where these figures come from Remove Kaveri Remove Meghna Add another school THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1319.296875
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-too-few",
+      "viewport": "mobile390",
+      "file": "s29-too-few-mobile390-0.png",
+      "sha256": "3820775d49afccf2c713ce015d7c315c6eb23f6f00eee1ee822b35df297d67aa",
+      "sampleHashes": [
+        "3820775d49afccf2c713ce015d7c315c6eb23f6f00eee1ee822b35df297d67aa",
+        "3820775d49afccf2c713ce015d7c315c6eb23f6f00eee1ee822b35df297d67aa",
+        "3820775d49afccf2c713ce015d7c315c6eb23f6f00eee1ee822b35df297d67aa"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 59,
+              "y": 289.84375,
+              "width": 207,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. The server needs at least two schools. Code: shown here exactly as the server returns it. Add another school Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-too-few",
+      "viewport": "desktop",
+      "file": "s29-too-few-desktop-0.png",
+      "sha256": "edce877c2816c39cec83fe40a4da949ffca557bfe0d61eac918e33d9c232992d",
+      "sampleHashes": [
+        "edce877c2816c39cec83fe40a4da949ffca557bfe0d61eac918e33d9c232992d",
+        "edce877c2816c39cec83fe40a4da949ffca557bfe0d61eac918e33d9c232992d",
+        "edce877c2816c39cec83fe40a4da949ffca557bfe0d61eac918e33d9c232992d"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Add another school",
+            "disabled": false,
+            "box": {
+              "x": 77,
+              "y": 283.921875,
+              "width": 207,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. The server needs at least two schools. Code: shown here exactly as the server returns it. Add another school THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-error",
+      "viewport": "mobile390",
+      "file": "s29-error-mobile390-0.png",
+      "sha256": "e2e7192fcb0341cc39b12381eecb68680964e2dada900959c3cc9f1d443a8275",
+      "sampleHashes": [
+        "e2e7192fcb0341cc39b12381eecb68680964e2dada900959c3cc9f1d443a8275",
+        "e2e7192fcb0341cc39b12381eecb68680964e2dada900959c3cc9f1d443a8275",
+        "e2e7192fcb0341cc39b12381eecb68680964e2dada900959c3cc9f1d443a8275"
+      ],
+      "dimensions": [
+        390,
+        844
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 328,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 8,
+              "y": 81,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Retry",
+            "disabled": false,
+            "box": {
+              "x": 141.5,
+              "y": 387.03125,
+              "width": 107,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 16,
+              "y": 142,
+              "width": 358,
+              "height": 33
+            }
+          },
+          {
+            "text": "The comparison did not load.",
+            "box": {
+              "x": 88.875,
+              "y": 300.84375,
+              "width": 212.25,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "Compare AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. The comparison did not load. Your selection is kept. HTTP 500 Retry Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          390,
+          844
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    },
+    {
+      "view": "s29-error",
+      "viewport": "desktop",
+      "file": "s29-error-desktop-0.png",
+      "sha256": "7fdda1db6c8a96ed2934668acfdfeb39708ec85fa769b9e35d6d885c553b5249",
+      "sampleHashes": [
+        "7fdda1db6c8a96ed2934668acfdfeb39708ec85fa769b9e35d6d885c553b5249",
+        "7fdda1db6c8a96ed2934668acfdfeb39708ec85fa769b9e35d6d885c553b5249",
+        "7fdda1db6c8a96ed2934668acfdfeb39708ec85fa769b9e35d6d885c553b5249"
+      ],
+      "dimensions": [
+        1440,
+        1024
+      ],
+      "surface": {
+        "controls": [
+          {
+            "role": "button",
+            "name": "AN, Your profile, Aditi Nair",
+            "disabled": false,
+            "box": {
+              "x": 1378,
+              "y": 8,
+              "width": 48,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Find a law school",
+            "disabled": false,
+            "box": {
+              "x": 26,
+              "y": 91,
+              "width": 169,
+              "height": 48
+            }
+          },
+          {
+            "role": "button",
+            "name": "Retry",
+            "disabled": false,
+            "box": {
+              "x": 391.96875,
+              "y": 381.109375,
+              "width": 107,
+              "height": 48
+            }
+          }
+        ],
+        "headings": [
+          {
+            "text": "Compare schools.",
+            "box": {
+              "x": 34,
+              "y": 152,
+              "width": 822.953125,
+              "height": 38
+            }
+          },
+          {
+            "text": "The comparison did not load.",
+            "box": {
+              "x": 339.34375,
+              "y": 294.921875,
+              "width": 212.25,
+              "height": 18.6875
+            }
+          }
+        ],
+        "text": "NyayOne LEGAL, ON THE RECORD Home Research Calendar Careers Profile AN Find a law school Compare schools. Aligned figure by figure, using only what each institution has published. The comparison did not load. Your selection is kept. HTTP 500 Retry THIS COMPARISON Comparison cmp-4471, up to 3 schools. Blanks mean the institution published nothing for that item. Privacy Notice · Terms · Accessibility",
+        "masks": [],
+        "overflow": 0,
+        "dimensions": [
+          1440,
+          1024
+        ]
+      },
+      "fontStack": {
+        "viewport": "\"Public Sans\", system-ui, sans-serif",
+        "faces": [
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Carlito",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "700",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Public Sans",
+            "weight": "800",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "500",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Space Grotesk",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "300",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spectral",
+            "weight": "600",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "500",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          },
+          {
+            "family": "Spline Sans Mono",
+            "weight": "600",
+            "style": "normal",
+            "status": "unloaded"
+          }
+        ]
+      },
+      "reviewerFrame": {
+        "x": 0,
+        "y": 0,
+        "borderRadius": "0px"
+      }
+    }
+  ],
+  "chromium": "149.0.7827.55"
+}
