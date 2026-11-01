@@ -95,6 +95,7 @@ it('four-school server capacity, school icons and switch geometry follow the app
 }));
 for(const width of [320,390,1440])it(`${width}px reflow, label-in-name, 48px actions and axe`,()=>using(async page=>{
  await page.goto(url());await ready(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ if(width===1440){const table=await page.getByRole('table').first().boundingBox(),metric=await page.locator('thead .s29-metric').first().boundingBox();assert.ok(Math.abs(metric.width/table.width-.28)<.002,'desktop metric column keeps the frozen 28% allocation');}
  for(const action of await page.locator('.s29-comparison button:visible,.s29-comparison a:visible,.s29-comparison summary:visible').all()){const box=await action.boundingBox();assert.ok(box.height>=48,`${await action.innerText()}: ${box.height}`);}
  await page.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});const failures=await page.evaluate(async()=> (await window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}})).violations.filter(x=>['serious','critical'].includes(x.impact)));assert.deepEqual(failures.map(x=>({id:x.id,nodes:x.nodes.map(n=>n.target)})),[]);
  if(process.env.S29_DIAGNOSTICS){await mkdir(process.env.S29_DIAGNOSTICS,{recursive:true});await page.screenshot({path:`${process.env.S29_DIAGNOSTICS}/s29-${width}.png`,fullPage:true});}

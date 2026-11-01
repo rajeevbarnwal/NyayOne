@@ -38,4 +38,8 @@ describe('S-29 comparison authority', () => {
     expect(url.pathname).toBe('/s-28'); expect(url.searchParams.get('id')).toBe('a/b');
     expect(url.searchParams.get('from')).toBe('s29');expect(url.searchParams.get('ids')).toBe('a/b,c');
   });
+  it('uses the frozen institution labels while retaining unknown server values verbatim', async () => {
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(reply(valid())));const item=(await readComparison(['a','b'])).items[0];
+    for(const [institutionType,label] of Object.entries({national_law_university:'National Law University',government:'Government law college',private:'Private university',deemed:'Deemed university',other_type:'other_type'}))expect(comparisonValue({...item,institutionType},'institution_type')).toBe(label);
+  });
 });

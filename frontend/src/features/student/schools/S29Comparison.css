@@ -18,4 +18,4 @@
 .s29-sources{padding-left:18px;margin:0;font-size:12px;line-height:1.5;color:var(--s20-ink2);overflow-wrap:anywhere}.s29-sources ul{padding-left:16px}.s29-sources a{display:inline-flex;align-items:center;min-height:48px;color:var(--s20-indigo);font-weight:700;text-decoration:underline}
 .s29-error-code,.s29-comparison-id{font-family:'Spline Sans Mono',monospace;overflow-wrap:anywhere;font-size:11px}.s29-error-code pre{white-space:pre-wrap;overflow-wrap:anywhere}.s29-add{align-self:flex-start}.s29-remove{flex-wrap:wrap;gap:9px}
 @media(max-width:899px){.s29-table thead th.s29-metric{display:none}.s29-table thead tr,.s29-table tbody tr{display:grid;grid-template-columns:repeat(var(--s29-columns),minmax(0,1fr))}.s29-table tbody tr{border-bottom:1px solid var(--s20-line)}.s29-table tbody tr:last-child{border-bottom:0}.s29-table tbody th{grid-column:1/-1;padding:9px 12px 0;border:0;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}.s29-table tbody td{border:0;padding:4px 12px 9px}}
-@media(min-width:900px){.s29-table tbody th{width:28%}}
+@media(min-width:900px){.s29-table thead .s29-metric{width:28%}}

@@ -12,6 +12,7 @@ const text=(v:unknown):v is string=>typeof v==='string';
 const nullableText=(v:unknown):v is string|null=>v===null||text(v);
 const integer=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
 const invalid=()=>new ComparisonError(200,'invalid_response');
+const typeLabels:Record<string,string>={national_law_university:'National Law University',government:'Government law college',private:'Private university',deemed:'Deemed university'};
 export async function readComparison(ids: string[], signal?: AbortSignal): Promise<Comparison> {
   const response=await studentApiFetch('/api/v1/law-schools/compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({school_ids:ids}),signal});
   const v:unknown=await response.json().catch(()=>null);
@@ -32,7 +33,7 @@ export function comparisonValue(s:ComparisonSchool,key:string):string {
   const absent='Not provided';
   switch(key){
     case 'state':return s.state;
-    case 'institution_type':return s.institutionType;
+    case 'institution_type':return typeLabels[s.institutionType]??s.institutionType;
     case 'accreditation':return s.accreditation||absent;
     case 'entrance_exam':return s.entranceExam||absent;
     case 'nirf_rank':return s.nirfRank===null?absent:String(s.nirfRank);
