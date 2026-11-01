@@ -1,8 +1,11 @@
-"""PostgreSQL-only runtime gate for lockout concurrency and audit immutability."""
+"""PostgreSQL runtime gate: lockout, audit immutability and school consent."""
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
+import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -150,6 +153,18 @@ def main() -> None:
         or not trigger_blocked
     ):
         raise SystemExit(1)
+
+    # QA-S28-01 cannot be detected by SQLite's rowcount behavior. Run the
+    # consent/replay/concurrency/rollback regressions on this migrated target
+    # in every existing PostgreSQL CI invocation. A failed test fails the gate;
+    # the explicit URL prevents the standalone suite's no-PostgreSQL skip.
+    subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "tests/test_s28_law_school_postgres.py"],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "APP_ENV": "testing",
+             "S28_POSTGRES_TEST_URL": engine.url.render_as_string(hide_password=False)},
+        check=True,
+    )
 
 
 if __name__ == "__main__":
