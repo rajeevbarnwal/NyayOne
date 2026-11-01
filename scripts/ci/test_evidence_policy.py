@@ -524,6 +524,55 @@ class SshRemotePrivacyTests(unittest.TestCase):
         # Keep the bounded context policy; a distant label must not qualify.
         self.assertTrue(self.scan_text(b"SSH remote" + b" " * 81 + b"git@github.com").failures)
 
+    def test_ssh_identity_context_cannot_cross_a_line_break(self):
+        for label in (b"SSH remote", b"SSH remote:", b"ssh Git remote:"):
+            for horizontal in (b" ", b"\t"):
+                for quote in (b"", b"'", b'"', b"`"):
+                    for line_break in (b"\n", b"\r\n", b"\r", b"\n\n", b"\v", b"\f"):
+                        for indent in (b"", b" "):
+                            payload = label + horizontal + quote + line_break + indent + b"git@github.com"
+                            with self.subTest(label=label, horizontal=horizontal, quote=quote,
+                                              line_break=line_break, indent=indent):
+                                report = self.scan_text(payload)
+                                self.assertTrue(any("raw email address" in f for f in report.findings))
+                                self.assertEqual(report.errors, ())
+                                self.assertNotIn("git@github.com", "\n".join(report.failures))
+
+    def test_same_line_ssh_identity_stays_valid_with_document_line_endings(self):
+        for prefix in (b"", b"Previous line\n"):
+            for label in (b"SSH remote", b"SSH remote:", b"ssh Git remote:"):
+                for horizontal in (b" ", b"\t"):
+                    for quote in (b"", b"'", b'"', b"`"):
+                        for ending in (b"", b"\n", b"\r\n"):
+                            payload = prefix + label + horizontal + quote + b"git@github.com" + quote + ending
+                            with self.subTest(prefix=prefix, label=label, horizontal=horizontal,
+                                              quote=quote, ending=ending):
+                                self.assertEqual(self.scan_text(payload).failures, [])
+
+    def test_cli_rejects_cross_line_context_without_echoing_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "context.txt"
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            for payload, expected in (
+                (b"SSH remote: \ngit@github.com\n", 1),
+                (b"SSH remote:\t\ngit@github.com\n", 1),
+                (b"SSH remote: '\ngit@github.com\n", 1),
+                (b"SSH remote: \r\ngit@github.com\r\n", 1),
+                (b"SSH remote: \nperson@real-domain.invalid\n", 1),
+                (b"SSH remote: \ngit@gitlab.com\n", 1),
+                (b"SSH remote: git@github.com\n", 0),
+            ):
+                with self.subTest(payload=payload):
+                    evidence.write_bytes(payload)
+                    result = subprocess.run(command, capture_output=True, text=True, check=False)
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertEqual(evidence.read_bytes(), payload)
+                    if expected:
+                        self.assertIn("raw email address", result.stderr)
+                        for identity in ("git@github.com", "person@real-domain.invalid", "git@gitlab.com"):
+                            self.assertNotIn(identity, result.stdout + result.stderr)
+
     def test_long_remote_paths_remain_bounded_and_do_not_hide_leaks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
