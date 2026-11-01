@@ -572,6 +572,22 @@ class SshRemotePrivacyTests(unittest.TestCase):
             payload = json.dumps({"encoding": "base64", "body": base64.b64encode(body).decode()}).encode()
             self.assertTrue(self.scan_text(payload).failures)
 
+    def test_cli_accepts_remote_but_rejects_mixed_leak_without_echoing_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "remote.txt"
+            remote = b"git@github.com:sample/repo.git\n"
+            evidence.write_bytes(remote)
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            clean = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
+            self.assertIn("findings=0 errors=0", clean.stdout)
+            evidence.write_bytes(remote + b"person@real-domain.invalid")
+            denied = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(denied.returncode, 1)
+            self.assertIn("raw email address", denied.stderr)
+            self.assertNotIn("person@real-domain.invalid", denied.stdout + denied.stderr)
+
 
 class EvidenceManifestTests(unittest.TestCase):
     def setUp(self) -> None:

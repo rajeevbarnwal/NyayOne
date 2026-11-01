@@ -109,7 +109,20 @@ SYNTHETIC_EMAIL_DOMAINS = {
     b"example.test",
 }
 
-URL_TOKEN = re.compile(rb"https?://[^\s\"'<>]{1,8192}", re.I)
+URL_TOKEN = re.compile(rb"(?:https?|ssh)://[^\s\"'<>]{1,8192}", re.I)
+# Recognize a conservative, complete transport grammar, not an email/domain
+# allowlist. Unsupported/encoded/malformed remotes remain subject to detection.
+SSH_TOKEN = re.compile(rb"[^\s\"'`<>()\[\]{},]+")
+SSH_HOST = rb"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+SSH_PATH = rb"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)+"
+SSH_SCP_REMOTE = re.compile(
+    rb"(?P<identity>git@(?P<host>" + SSH_HOST + rb")):(?P<path>" + SSH_PATH + rb")"
+)
+SSH_URL_REMOTE = re.compile(
+    rb"ssh://(?P<identity>git@(?P<host>" + SSH_HOST + rb"))"
+    rb"(?::(?P<port>[1-9][0-9]{0,4}))?/(?P<path>" + SSH_PATH + rb")"
+)
+SSH_IDENTITY_CONTEXT = re.compile(rb"\bSSH(?: Git)? remote:?[ \t]+[`'\"]?$", re.I)
 
 QUERY_FIELD = re.compile(
     rb"(?:^|[?&#;\s])(?P<key>[A-Za-z0-9_.%+-]{1,384})="
@@ -318,7 +331,42 @@ def _field_finding(label: str, key: str, value: bytes) -> list[str]:
     return [f"{label}: {category}"]
 
 
-def _findings(label: str, data: bytes) -> list[str]:
+def _ssh_identity_spans(data: bytes) -> set[tuple[int, int]]:
+    """Exempt only service-identity spans; scan every other byte normally.
+
+    Bare identities are ambiguous email addresses. Only the documented GitHub
+    identity explicitly labelled an SSH remote is recognized without a path.
+    Field/path checks and all credential patterns are independent of this rule.
+    """
+    spans: set[tuple[int, int]] = set()
+    for token in SSH_TOKEN.finditer(data):
+        raw = token.group()
+        if len(raw) > 8192:
+            continue
+        if raw == b"git@github.com" and SSH_IDENTITY_CONTEXT.search(
+            data[max(0, token.start() - 80):token.start()]
+        ):
+            spans.add(token.span())
+            continue
+        remote = SSH_SCP_REMOTE.fullmatch(raw) or SSH_URL_REMOTE.fullmatch(raw)
+        if remote is None:
+            continue
+        port = remote.groupdict().get("port")
+        if port is not None and int(port) > 65535:
+            continue
+        path = remote.group("path")
+        if any(b".." in part or part.endswith(b".") for part in path.split(b"/")):
+            continue
+        # Do not hide credentials, PII or sensitive names inside the remote.
+        # Path scanning explicitly disables remote exemptions, so no recursion.
+        if _path_findings("SSH remote", (remote.group("host") + b"/" + path).decode("ascii")):
+            continue
+        start, end = remote.span("identity")
+        spans.add((token.start() + start, token.start() + end))
+    return spans
+
+
+def _findings(label: str, data: bytes, *, ssh_remotes: bool = True) -> list[str]:
     findings: list[str] = []
     for finding_label, pattern in PATTERNS.items():
         for match in pattern.finditer(data):
@@ -327,15 +375,16 @@ def _findings(label: str, data: bytes) -> list[str]:
                 continue
             findings.append(f"{label}: {finding_label}")
             break
+    ssh_identities = _ssh_identity_spans(data) if ssh_remotes else set()
     for match in EMAIL.finditer(data):
         domain = match.group(1).lower().rstrip(b".")
-        if domain not in SYNTHETIC_EMAIL_DOMAINS:
+        if domain not in SYNTHETIC_EMAIL_DOMAINS and match.span() not in ssh_identities:
             findings.append(f"{label}: raw email address")
             break
     if b'\\"' in data:
         normalized = data.replace(b'\\"', b'"')
         if normalized != data:
-            for finding in _findings(label, normalized):
+            for finding in _findings(label, normalized, ssh_remotes=ssh_remotes):
                 if finding not in findings:
                     findings.append(finding)
     return findings
@@ -380,7 +429,7 @@ def _path_findings(label: str, path_name: str) -> list[str]:
             finding = f"{label} path: control characters are forbidden"
             if finding not in findings:
                 findings.append(finding)
-        for finding in _findings(f"{label} path", data):
+        for finding in _findings(f"{label} path", data, ssh_remotes=False):
             if finding not in findings:
                 findings.append(finding)
     explicit_patterns = (
@@ -651,7 +700,7 @@ def _nested_query_findings(label: str, value: bytes) -> list[str]:
         if body in seen:
             continue
         seen.add(body)
-        findings.extend(_findings(label, body))
+        findings.extend(_findings(label, body, ssh_remotes=False))
         for match in QUERY_FIELD.finditer(body):
             if level >= MAX_PERCENT_DECODE_PASSES:
                 findings.append(f"{label}: nested URL/form fields exceed the scan limit")
@@ -764,7 +813,7 @@ def _text_semantics(
             errors.append(f"{label}: URL percent encoding exceeds the scan limit")
             continue
         for variant in variants:
-            findings.extend(_findings(label, variant))
+            findings.extend(_findings(label, variant, ssh_remotes=variant == match.group(0)))
 
     for match in QUERY_FIELD.finditer(data):
         encoded_key = match.group("key").replace(b"+", b" ")
