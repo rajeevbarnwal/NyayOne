@@ -42,8 +42,31 @@ it('Differences only is local, off by default, retains selection and does not PO
  await page.goto(url());await ready(page);const toggle=page.getByRole('switch',{name:'Differences only',exact:true});assert.equal(await toggle.getAttribute('aria-checked'),'false');
  await toggle.press('Space');assert.equal(await toggle.getAttribute('aria-checked'),'true');assert.equal(await page.locator('tbody tr:visible').count(),1);assert.equal(s.requests.length,1);assert.equal(new URL(page.url()).searchParams.get('ids'),'a,b');
 }));
+it('approved mobile three-school pairs use keyboard radios, preserve server selection, and restore desktop columns',()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c'));await ready(page);
+ const group=page.getByRole('group',{name:'Show two of the three schools',exact:true});await group.waitFor();
+ const radios=group.getByRole('radio');assert.equal(await radios.count(),3);assert.equal(await radios.nth(0).isChecked(),true);
+ assert.equal(await page.getByRole('table').first().locator('thead a').count(),2);
+ await radios.nth(0).focus();await radios.nth(0).press('ArrowRight');assert.equal(await radios.nth(1).isChecked(),true);
+ assert.deepEqual(await page.getByRole('table').first().locator('thead a').allTextContents(),['Synthetic Law School a','Synthetic Law School c']);
+ await radios.nth(1).press('ArrowRight');assert.deepEqual(await page.getByRole('table').first().locator('thead a').allTextContents(),['Synthetic Law School b','Synthetic Law School c']);
+ await page.getByRole('switch',{name:'Differences only',exact:true}).press('Space');assert.equal(await page.locator('tbody tr:visible').count(),0);
+ assert.deepEqual(s.requests,[['a','b','c']]);assert.equal(new URL(page.url()).searchParams.get('ids'),'a,b,c');
+ await page.setViewportSize({width:1440,height:1024});await page.waitForFunction(()=>document.querySelector('thead').querySelectorAll('a').length===3);
+ assert.equal(await group.count(),0);assert.equal(await page.locator('tbody tr:visible').count(),1);assert.deepEqual(s.requests,[['a','b','c']]);
+ await page.setViewportSize({width:320,height:844});await group.waitFor();assert.equal(await radios.nth(2).isChecked(),true);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ for(const label of await group.locator('label').all())assert.ok((await label.boundingBox()).height>=48);
+ await page.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});const serious=await page.evaluate(async()=>(await window.axe.run()).violations.filter(x=>['serious','critical'].includes(x.impact)).map(x=>x.id));assert.deepEqual(serious,[]);
+}));
+it('removing the selected mobile pair member resets pair view without losing the remaining server IDs',()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c'));await ready(page);await page.getByRole('radio').nth(2).check();s.hold=true;
+ await page.getByRole('button',{name:'Remove Synthetic Law School c from comparison',exact:true}).press('Enter');await held(s);await s.held.shift()();await ready(page);
+ assert.deepEqual(s.requests,[['a','b','c'],['a','b']]);assert.equal(await page.getByRole('radio').count(),0);assert.deepEqual(await page.getByRole('table').first().locator('thead a').allTextContents(),['Synthetic Law School a','Synthetic Law School b']);
+ assert.notEqual(await page.evaluate(()=>document.activeElement?.tagName),'BODY');
+}));
 it('removal sends fewer IDs once, keeps focus while pending, and shows no stale comparison',()=>using(async(page,s)=>{
- await page.goto(url('a,b,c'));await ready(page);s.hold=true;
+ await page.goto(url('a,b,c'));await ready(page);await page.getByRole('radio').nth(1).check();s.hold=true;
  const remove=page.getByRole('button',{name:'Remove Synthetic Law School c from comparison',exact:true});await remove.focus();await remove.evaluate(el=>{el.click();el.click();});await held(s);
  assert.deepEqual(s.requests,[['a','b','c'],['a','b']]);assert.notEqual(await page.evaluate(()=>document.activeElement?.tagName),'BODY');await s.held.shift()();await ready(page);
  assert.notEqual(await page.evaluate(()=>document.activeElement?.tagName),'BODY');assert.equal(await page.getByRole('link',{name:'Synthetic Law School c',exact:true}).count(),0);
