@@ -93,7 +93,7 @@ describe('S-27 archive import fails closed before writing',()=>{
     expect(JSON.stringify(withoutS27ProposalsForTest(withAdditions))).toBe(JSON.stringify(before.exceptions));
     expect(withoutS27ProposalsForTest(policy.exceptions)).toHaveLength(168);
     expect(JSON.stringify(withoutS27ProposalsForTest(policy.exceptions))).toBe(JSON.stringify(before.exceptions));
-    const current=structuredClone(policy);current.exceptions=withoutS27ProposalsForTest(current.exceptions);delete current.s27;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(policy);current.exceptions=withoutS27ProposalsForTest(current.exceptions);delete current.s27;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-27');
     expect(rows).toHaveLength(22);

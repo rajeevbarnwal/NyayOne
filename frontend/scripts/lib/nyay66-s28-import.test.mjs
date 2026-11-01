@@ -1,0 +1,99 @@
+import {describe,it,expect} from 'vitest';
+import {readFileSync,mkdtempSync,writeFileSync,rmSync,mkdirSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {PNG} from 'pngjs';
+import {digest} from './nyay66-enforcement.mjs';
+import {loadS28Source,S28_STATES,S28_VIEWPORTS,S28_PINS} from './nyay66-s28-reference.mjs';
+import {verifyS28Archive,loadS28Cache} from './nyay66-s28-import.mjs';
+import {continuationRows} from './nyay66-continuation.mjs';
+const root=fileURLToPath(new URL('../../../',import.meta.url));
+const {data}=await loadS28Source(root);
+const policy=JSON.parse(readFileSync(join(root,'frontend/scripts/nyay66-policy.json')));
+const fonts=JSON.parse(readFileSync(join(root,'frontend/test-baselines/nyay66',policy.cache,'manifest.json'))).fonts;
+const sourceHead='a'.repeat(40),controlHead='b'.repeat(40);
+const pngs=new Map(S28_VIEWPORTS.map(vp=>[vp.id,PNG.sync.write(new PNG({width:vp.width,height:vp.height}))]));
+function archiveFixture(change=()=>{}){
+  const dir=mkdtempSync(join(tmpdir(),'nyay-s28-import-test-'));
+  const files=new Map(),rows=[];
+  for(const state of S28_STATES)for(const vp of S28_VIEWPORTS){
+    const bytes=pngs.get(vp.id),sha256=digest(bytes),file=`s28-${state}-${vp.id}-0.png`;
+    files.set(file,bytes);rows.push({view:`s28-${state}`,viewport:vp.id,file,sha256,sampleHashes:Array(3).fill(sha256),dimensions:[vp.width,vp.height],
+      surface:{controls:[],headings:[],masks:[],text:'synthetic',overflow:0,dimensions:[vp.width,vp.height]},fontStack:{viewport:'Public Sans',faces:[]},reviewerFrame:{borderRadius:'0px',x:0,y:0}});
+  }
+  const manifest={schema:1,purpose:'UNIMPORTED_REFERENCE_CALIBRATION',screen:'S-28',theme:'light',approval:data.designApproval,sourceArchiveSha256:data.archiveSha256,sourceSha256:data.htmlSha256,embeddedResources:data.inventory.embeddedResources,producerHead:sourceHead,controlHead,...S28_PINS,fonts,deferredStates:[],rows};
+  const pins={purpose:'REFERENCE_GENERATION_ONLY_NOT_IMPORT_APPROVAL',sourceHead,reference:'s28-v32108',...S28_PINS,node:'v22.21.1',fonts};
+  change(manifest,files,pins);
+  files.set('manifest.json',Buffer.from(JSON.stringify(manifest)));
+  files.set('runtime-pins.json',Buffer.from(JSON.stringify(pins)));
+  files.set('SHA256SUMS',Buffer.from([...files].map(([name,bytes])=>`${digest(bytes)}  ${name}`).join('\n')+'\n'));
+  for(const [name,bytes] of files)writeFileSync(join(dir,name),bytes);
+  const path=join(dir,'calibration.zip');execFileSync('zip',['-q',path,...files.keys()],{cwd:dir});
+  return {dir,path,expected:{archiveSha256:digest(readFileSync(path)),sourceHead,controlHead},files};
+}
+describe('S-28 archive import fails closed before writing',()=>{
+  it('verifies the archive bytes, all 14 PNGs and the three-sample rehearsal inventory',async()=>{
+    const f=archiveFixture();try{const got=await verifyS28Archive(f.path,f.expected,data,fonts);expect(got.manifest.rows).toHaveLength(14);expect(got.files.size).toBe(17);expect(got.archiveSha256).toBe(f.expected.archiveSha256);}finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it('rejects a tampered archive with its formerly valid digest',async()=>{
+    const f=archiveFixture();try{writeFileSync(f.path,Buffer.concat([readFileSync(f.path),Buffer.from('tampered')]));await expect(verifyS28Archive(f.path,f.expected,data,fonts)).rejects.toThrow('S28_ARCHIVE_DIGEST_MISMATCH');}finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it('rejects a tampered PNG even with a recomputed archive and checksum list',async()=>{
+    const f=archiveFixture((_m,files)=>{const [name,bytes]=files.entries().next().value;const altered=Buffer.from(bytes);altered[30]^=1;files.set(name,altered);});
+    try{await expect(verifyS28Archive(f.path,f.expected,data,fonts)).rejects.toThrow('S28_REFERENCE_BYTES_MISMATCH');}finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it.each([
+    ['missing row',m=>m.rows.pop()],['duplicate row',m=>{m.rows[1]=structuredClone(m.rows[0]);}],
+    ['unstable sample',m=>{m.rows[0].sampleHashes[1]='c'.repeat(64);}],
+    ['source head',m=>{m.producerHead='c'.repeat(40);}],['control head',m=>{m.controlHead='c'.repeat(40);}],
+    ['browser pin',m=>{m.chromium='wrong';}],['font pin',m=>{m.fonts={};}],
+    ['runtime source',(_m,_f,p)=>{p.sourceHead='c'.repeat(40);}],
+    ['runtime reference',(_m,_f,p)=>{p.reference='s21-v32108';}],
+    ['runtime node',(_m,_f,p)=>{p.node='v0.0.0';}],
+    ['runtime purpose',(_m,_f,p)=>{p.purpose='MEASURED';}],
+  ])('rejects changed %s',async(_label,change)=>{
+    const f=archiveFixture(change);try{await expect(verifyS28Archive(f.path,f.expected,data,fonts)).rejects.toThrow();}finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it('requires an explicit safe cache binding without fabricating coverage',async()=>{
+    expect(await loadS28Cache(root,undefined,data,fonts)).toBe(null);
+    await expect(loadS28Cache(root,{cache:'../escape'},data,fonts)).rejects.toThrow('S28_INVALID_CACHE_BINDING');
+  });
+  it('rejects unexpected members and nonregular archive inputs',async()=>{
+    const extra=archiveFixture((_m,files)=>files.set('unexpected.txt',Buffer.from('not an approved member')));
+    try{await expect(verifyS28Archive(extra.path,extra.expected,data,fonts)).rejects.toThrow('S28_ARCHIVE_MEMBER_INVENTORY');}finally{rmSync(extra.dir,{recursive:true,force:true});}
+    const f=archiveFixture();try{const link=join(f.dir,'linked.zip');symlinkSync(f.path,link);await expect(verifyS28Archive(link,f.expected,data,fonts)).rejects.toThrow('S28_NONREGULAR_INPUT');}finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it('revalidates cached bytes without promoting references to product measurements',async()=>{
+    const f=archiveFixture();try{
+      const cache='synthetic-s28',dir=join(f.dir,'frontend/test-baselines/nyay66',cache);mkdirSync(dir,{recursive:true});
+      for(const [name,bytes] of f.files)writeFileSync(join(dir,name),bytes);
+      const provenance=Buffer.from(JSON.stringify({...f.expected,runId:'1',artifactId:'2',referenceRows:14,manualRows:0}));
+      writeFileSync(join(dir,'provenance.json'),provenance);
+      const config={cache,manifestSha256:digest(f.files.get('manifest.json')),provenanceSha256:digest(provenance)};
+      const got=await loadS28Cache(f.dir,config,data,fonts);
+      expect(got.manifest.rows).toHaveLength(14);
+      expect(got.manifest.rows.every(row=>row.measured===undefined&&row.executed===undefined&&row.verdict===undefined)).toBe(true);
+      writeFileSync(join(dir,got.manifest.rows.at(-1).file),Buffer.from('tampered after import'));
+      await expect(loadS28Cache(f.dir,config,data,fonts)).rejects.toThrow('S28_ARTIFACT_CHECKSUM_MISMATCH');
+    }finally{rmSync(f.dir,{recursive:true,force:true});}
+  });
+  it('pins the 14 owner-dispatched references while preserving every existing policy record',async()=>{
+    const got=await loadS28Cache(root,policy.s28,data,fonts);
+    expect(got).not.toBe(null);expect(got.manifest.rows).toHaveLength(14);
+    expect(got.provenance).toEqual({"status":"CANDIDATE_PENDING_OWNER_INTEGRITY_APPROVAL","runId":"41323481198","artifactId":"13090666603","archiveSha256":"70c7acfde6c8ad6ee4fe7af6ceff3af2a50e70f4cee03c92dfe55d3fd60a9c21","sourceHead":"d1aa7f46cff579327b95370a4293d4145221c944","controlHead":"d1aa7f46cff579327b95370a4293d4145221c944","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","referenceRows":14,"manualRows":0});
+    expect(policy.s28).toEqual({"cache":"s28-v32108-chromium-149.0.7827.55-41323481198","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","provenanceSha256":"36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4"});
+    expect(got.manifest.rows.map(({view,viewport,sha256,dimensions})=>({view,viewport,sha256,dimensions}))).toEqual([{"view":"s28-loading","viewport":"mobile390","sha256":"17f058cbdf4ae6616398df68398f998520598e21c79de582dd5924e261c352b7","dimensions":[390,844]},{"view":"s28-loading","viewport":"desktop","sha256":"38772f186315c23cb9af3f54cc7148532731b3ba0e58c77eb4cd9903bf9618ac","dimensions":[1440,1024]},{"view":"s28-complete","viewport":"mobile390","sha256":"14ab2939592415c31f9f15223413674acda2f860da3f5355b08f98c274e1c518","dimensions":[390,844]},{"view":"s28-complete","viewport":"desktop","sha256":"c3488bef5cbaddde7a3d1bc0dc66e794deb39e3f9971139739392cbdc48e75fd","dimensions":[1440,1024]},{"view":"s28-following","viewport":"mobile390","sha256":"14ab2939592415c31f9f15223413674acda2f860da3f5355b08f98c274e1c518","dimensions":[390,844]},{"view":"s28-following","viewport":"desktop","sha256":"c3488bef5cbaddde7a3d1bc0dc66e794deb39e3f9971139739392cbdc48e75fd","dimensions":[1440,1024]},{"view":"s28-save-pending","viewport":"mobile390","sha256":"a9bf72e7bbe559742e49f3e8d037f91b0b8ba96dc568d853048487c14762dc26","dimensions":[390,844]},{"view":"s28-save-pending","viewport":"desktop","sha256":"de9b0ed4f9e555a6bcb3fb32d649306cdf14a0687fb283d534daac6a8c1aeafc","dimensions":[1440,1024]},{"view":"s28-follow-error","viewport":"mobile390","sha256":"1a305acc36e92988a676b758d8e2db257840e33d89f6e423fcecc5072546a883","dimensions":[390,844]},{"view":"s28-follow-error","viewport":"desktop","sha256":"d98d0d108bd1a7e4fe85dcc02a39934848486f91c6497d73a34f2593a32e4da0","dimensions":[1440,1024]},{"view":"s28-missing","viewport":"mobile390","sha256":"da36c24064775b7476f445bc8255d52aab7b02a3b0c40580532284632002d80a","dimensions":[390,844]},{"view":"s28-missing","viewport":"desktop","sha256":"e548084c33ee6528ddbcbffed22bdd49261527c89c41fa8a9de815882a14c472","dimensions":[1440,1024]},{"view":"s28-error","viewport":"mobile390","sha256":"545eb914bcf5d26ab86a1e05ca0ac1b96691d6cc0770afc8454683a8ba53ebb5","dimensions":[390,844]},{"view":"s28-error","viewport":"desktop","sha256":"9f814429274dae526d2cd40ad634c4e7003cae006dbf3dbde43113fab45a32ef","dimensions":[1440,1024]}]);
+    const beforeBytes=execFileSync('git',['show','d1aa7f46cff579327b95370a4293d4145221c944:frontend/scripts/nyay66-policy.json'],{cwd:root,encoding:'utf8'});
+    const currentBytes=readFileSync(join(root,'frontend/scripts/nyay66-policy.json'),'utf8');
+    const before=JSON.parse(beforeBytes),current=structuredClone(policy);
+    expect(current.exceptions).toHaveLength(190);
+    expect(currentBytes.slice(currentBytes.indexOf('  "exceptions": ['))).toBe(beforeBytes.slice(beforeBytes.indexOf('  "exceptions": [')));
+    delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
+    expect(current).toEqual(before);
+    const rows=continuationRows(data).filter(r=>r.screen==='S-28');
+    expect(rows).toHaveLength(14);
+    expect(rows.every(r=>r.verdict==='DESIGN-GAP'&&r.executed===false&&r.measured===false)).toBe(true);
+  });
+});
