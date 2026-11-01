@@ -55,12 +55,12 @@ describe('exact 22-row S-19 capture-sequence replacement boundary',()=>{
       const policy=candidate();mutate(policy.exceptions[targets[proposals.indexOf(p)]]);expect(()=>expectBoundary(policy)).toThrow();
     }
   });
-  it('rejects missing, duplicate or reordered records and changes to every other current record',()=>{
-    for(let i=0;i<190;i++){
-      const removed=candidate();removed.exceptions.splice(i,1);expect(()=>expectBoundary(removed)).toThrow();
-      const duplicated=candidate();duplicated.exceptions.push(structuredClone(duplicated.exceptions[i]));expect(()=>expectBoundary(duplicated)).toThrow();
-      const changed=candidate();changed.exceptions[i].reason+=' widened';expect(()=>expectBoundary(changed)).toThrow();
-    }
+  it.each(Array.from({length:190},(_,i)=>i))('rejects missing, duplicate or changed record %i',i=>{
+    const removed=candidate();removed.exceptions.splice(i,1);expect(()=>expectBoundary(removed)).toThrow();
+    const duplicated=candidate();duplicated.exceptions.push(structuredClone(duplicated.exceptions[i]));expect(()=>expectBoundary(duplicated)).toThrow();
+    const changed=candidate();changed.exceptions[i].reason+=' widened';expect(()=>expectBoundary(changed)).toThrow();
+  });
+  it('rejects reordered records',()=>{
     const reordered=candidate();[reordered.exceptions[0],reordered.exceptions[1]]=[reordered.exceptions[1],reordered.exceptions[0]];expect(()=>expectBoundary(reordered)).toThrow();
   });
   it.each(proposals)('requires exact owner read-back for $row; predecessor or another row cannot authorize it',p=>{
