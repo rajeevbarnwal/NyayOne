@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {readFileSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {approveException,canonical,digest,finalizeEnforcement} from './nyay66-enforcement.mjs';
+import {approveException,canonical,finalizeEnforcement} from './nyay66-enforcement.mjs';
 import {s19SequenceReplacements as proposals} from './nyay66-s19-sequence-reapproval.test-fixture.mjs';
 import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
@@ -11,7 +11,7 @@ const targets=proposals.map(p=>baseline.exceptions.findIndex(e=>canonical(e)===c
 // The integrity pointer necessarily advances when this protected test changes.
 // Trusted nyay66_trust.py verifies that pointer against the exact bundle/comment;
 // this historical content snapshot must not pin its own superseded approval.
-const contentSnapshot=policy=>{const {integrityApproval,...content}=s19TypedPolicyForTest(policy);return JSON.stringify(content);};
+const contentSnapshot=policy=>JSON.stringify(Object.fromEntries(Object.entries(s19TypedPolicyForTest(policy)).filter(([key])=>key!=='integrityApproval')));
 const history=contentSnapshot(baseline);
 const candidate=(selected=proposals)=>{const policy=structuredClone(baseline);for(const p of selected)policy.exceptions[targets[proposals.indexOf(p)]]=structuredClone(p.replacement);return policy;};
 const expectBoundary=policy=>expect(contentSnapshot(policy)).toBe(history);
