@@ -331,6 +331,33 @@ def _field_finding(label: str, key: str, value: bytes) -> list[str]:
     return [f"{label}: {category}"]
 
 
+def _email_matches(data: bytes):
+    """Locate candidates linearly; the unchanged EMAIL regex decides matches.
+
+    Searching every suffix of an @-free path makes EMAIL.finditer quadratic.
+    Each @ has one contiguous possible local part. Start at its first real word
+    boundary after the previous match and use match on the original buffer:
+    no slicing, manufactured boundaries, or domain/credential exemptions.
+    """
+    local = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.!#$%&'*+/=?^_{|}~-"
+    word = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
+    end = 0
+    for marker in re.finditer(b"@", data):
+        at = marker.start()
+        start = at
+        while start > end and data[start - 1] in local:
+            start -= 1
+        while start < at:
+            before = start > 0 and data[start - 1] in word
+            if before != (data[start] in word):
+                break
+            start += 1
+        match = EMAIL.match(data, start) if start < at else None
+        if match is not None:
+            yield match
+            end = match.end()
+
+
 def _ssh_identity_spans(data: bytes) -> set[tuple[int, int]]:
     """Exempt only service-identity spans; scan every other byte normally.
 
@@ -344,7 +371,7 @@ def _ssh_identity_spans(data: bytes) -> set[tuple[int, int]]:
         if len(raw) > 8192:
             continue
         if raw == b"git@github.com" and SSH_IDENTITY_CONTEXT.search(
-            data[max(0, token.start() - 80):token.start()]
+            data, max(0, token.start() - 80), token.start()
         ):
             spans.add(token.span())
             continue
@@ -376,7 +403,7 @@ def _findings(label: str, data: bytes, *, ssh_remotes: bool = True) -> list[str]
             findings.append(f"{label}: {finding_label}")
             break
     ssh_identities = _ssh_identity_spans(data) if ssh_remotes else set()
-    for match in EMAIL.finditer(data):
+    for match in _email_matches(data):
         domain = match.group(1).lower().rstrip(b".")
         if domain not in SYNTHETIC_EMAIL_DOMAINS and match.span() not in ssh_identities:
             findings.append(f"{label}: raw email address")

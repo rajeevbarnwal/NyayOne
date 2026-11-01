@@ -43,3 +43,15 @@ exception or product code changes are part of this fix.
 Historical scan results and evidence remain immutable. A historical SSH false
 positive is not retroactively relabelled as a clean scan. Independent QA must
 compare base and head using new synthetic evidence and record its own verdict.
+
+The contextual lookup uses a bounded search on the original byte buffer, rather
+than slicing it. This preserves the word boundary before `SSH` even at the
+80-byte window edge: a prefixed word such as `XSSH` cannot become valid context
+through truncation. Distant context still does not qualify.
+
+Email candidates are located around literal `@` bytes before the unchanged
+`EMAIL` expression checks them against the original buffer. This avoids repeated
+suffix searches through long slash-separated paths without changing email
+syntax, match boundaries, synthetic-domain handling or other privacy rules.
+Regression coverage compares exact matches with the frozen expression and scans
+a megabyte of long remotes, both clean and with appended email/OTP canaries.
