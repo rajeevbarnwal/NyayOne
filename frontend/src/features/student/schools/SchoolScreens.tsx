@@ -1,3 +1,4 @@
+import { S28DetailScreen } from './S28DetailScreen';
 import { S27SearchScreen } from './S27SearchScreen';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
@@ -8,13 +9,10 @@ import { useTheme } from '../../../hooks/useTheme';
 import {
   getLawSchoolDetail,
   compareLawSchools,
-  saveLawSchool,
   unsaveLawSchool,
-  followLawSchool,
   unfollowLawSchool,
   listSavedLawSchools,
   listFollowedLawSchools,
-  addToCompareSelection,
   LawSchoolsApiError,
   isRetryableLawSchoolsError,
   COMPARE_MIN,
@@ -28,16 +26,11 @@ import {
 } from '../lib/lawSchoolsApi';
 import {
   COMPARE_ROWS,
-  FACT_LABELS,
-  S28_FACT_KEY_ORDER,
   compareRowValue,
-  factSourceLine,
-  feesInrBand,
   feesLakhBand,
-  institutionTypeLabel,
   monogramText,
-  shortHandle,
   verifiedText,
+  shortHandle,
   referenceSourceFoot,
   REFERENCE_RESPONSIBLE_COPY,
   type CompareFormatInput,
@@ -176,11 +169,6 @@ function useSchoolExtras(ids: string[]): SchoolExtrasResult {
  * fixture contract projection and the reference generator, so INR-raw vs
  * lakh can never diverge between the developed UI and the reference frame. */
 
-/** INR-raw band (reference r28 fee band / r29 fees row). */
-function feesText(s: LawSchoolSummary): string {
-  return feesInrBand(s.feesMin, s.feesMax);
-}
-
 /* ------------------------- compare tray (ids only) ------------------------- */
 /* In-memory module store (profileStore pattern) — opaque school ids + display */
 /* names only; never persisted to browser storage.                             */
@@ -255,16 +243,6 @@ function Skel({ h, maxW, mt }: { h: number; maxW?: number; mt?: number }) {
   return <div className="ls-skel" style={{ height: h, maxWidth: maxW, marginTop: mt }} />;
 }
 
-function LsTags({ followed }: { followed?: boolean }) {
-  return (
-    <div className="ls-tags">
-      <span className="ls-tag ls-tag--v"><span className="ls-gl" aria-hidden="true" />{verifiedText()}</span>
-      <span className="ls-tag ls-tag--warn"><span className="ls-gl" aria-hidden="true" />Sample data · prototype</span>
-      {followed && <span className="ls-tag ls-tag--teal"><span className="ls-gl" aria-hidden="true" />Following</span>}
-    </div>
-  );
-}
-
 const DPDP_COPY =
   'Saved and followed lists are stored against your account under the DPDP Act, 2023 — export or delete them anytime in Privacy.';
 const FOLLOW_COPY =
@@ -312,213 +290,7 @@ export function SchoolSearch() {
 /* -------------------------------------------------------------------------- */
 
 export function SchoolDetail() {
-  const nav = useNavigate();
-  const [sp] = useSearchParams();
-  const qc = useQueryClient();
-  const id = sp.get('id') ?? '';
-  const ret = sp.get('ret') ?? '';
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [tray, setTray] = useState<TrayEntry[]>(readCompareTray);
-  const trayIds = tray.map((t) => t.id);
-
-  const query = useQuery({
-    queryKey: ['law-school', id],
-    queryFn: () => getLawSchoolDetail(id),
-    enabled: id !== '',
-    retry: lawSchoolsRetry,
-  });
-
-  const saveMut = useMutation({
-    mutationFn: (saved: boolean) => (saved ? unsaveLawSchool(id) : saveLawSchool(id)),
-    onSuccess: (res) => {
-      setActionError(null);
-      qc.setQueryData<LawSchoolDetail>(['law-school', id], (d) => (d ? { ...d, saved: res.saved } : d));
-      void qc.invalidateQueries({ queryKey: ['law-schools-saved'] });
-    },
-    onError: (err) => setActionError(errText(err, 'Could not update saved state.')),
-  });
-
-  /* Follow keeps the persisted opt-in wire flag (default true) — the approved
-   * S-28 state carries no separate notification checkbox; the Follow action
-   * IS the opt-in per the corrected reference copy. */
-  const followMut = useMutation({
-    mutationFn: (followed: boolean) => (followed ? unfollowLawSchool(id) : followLawSchool(id, true)),
-    onSuccess: (res) => {
-      setActionError(null);
-      qc.setQueryData<LawSchoolDetail>(['law-school', id], (d) => (d ? { ...d, followed: res.followed } : d));
-      void qc.invalidateQueries({ queryKey: ['law-schools-followed'] });
-    },
-    onError: (err) => setActionError(errText(err, 'Could not update follow state.')),
-  });
-
-  function errText(err: unknown, fallback: string): string {
-    if (err instanceof LawSchoolsApiError && err.status === 401) return 'Sign in to save or follow schools.';
-    return fallback;
-  }
-
-  function toggleCompare(d: LawSchoolDetail): void {
-    if (trayIds.includes(d.id)) {
-      setTray(writeCompareTray(readCompareTray().filter((t) => t.id !== d.id)));
-      return;
-    }
-    const result = addToCompareSelection(trayIds, d.id, DEFAULT_COMPARE_MAX);
-    if (!result.ok) {
-      setActionError(`You can compare up to ${result.maxAllowed ?? DEFAULT_COMPARE_MAX} schools — remove one first. Nothing was changed.`);
-      return;
-    }
-    setActionError(null);
-    setTray(writeCompareTray([...readCompareTray(), { id: d.id, name: d.name }]));
-  }
-
-  const back = () => nav(ret ? `/s-27?${ret}` : '/s-27');
-
-  useRouteArrival('S-28');
-
-  const notFound = query.error instanceof LawSchoolsApiError && query.error.code === SCHOOL_NOT_FOUND;
-  const d = query.data;
-  const ex28 = extrasOf(d);
-
-  return (
-    <StudentScreen screenId="S-28" className="st-lawschool">
-      <LsShell active="s27" ctx={ret}>
-        <div className="ls-wrap">
-          <p className="ls-metaline ls-mt14">S-28 · SCHOOL PROFILE</p>
-          {!id && (
-            <div className="ls-panelbox">
-              <h2>No school in this link</h2>
-              <p>This link is incomplete — no school was specified.</p>
-              <button type="button" className="btn ls-solid tap" onClick={back}>Go to the directory</button>
-            </div>
-          )}
-          {id !== '' && query.isPending && (
-            <div aria-busy="true">
-              <Skel h={30} maxW={320} mt={12} />
-              <Skel h={180} mt={14} />
-            </div>
-          )}
-          {query.isError && (notFound ? (
-            <div className="ls-panelbox">
-              <h2>We couldn’t find that school</h2>
-              <p>It may have been removed from the directory or the link is out of date.</p>
-              <button type="button" className="btn ls-solid tap" onClick={back}>Go to the directory</button>
-            </div>
-          ) : (
-            <QueryFailure error={query.error} onRetry={() => void query.refetch()} />
-          ))}
-          {d && (
-            <>
-              <button type="button" className="btn ls-ghost ls-back tap" onClick={back}>
-                ‹ Back to schools
-              </button>
-              <div className="ls-idrow">
-                <span className="ls-mg ls-mg--lg" aria-hidden="true">{monogramText(d.name)}</span>
-                <div>
-                  <h1 className="ls-lede ls-lede--profile">{d.name}</h1>
-                  <p className="ls-stand">
-                    {ex28.cityState ?? d.state} · {institutionTypeLabel(d.institutionType)} · teaching law since {ex28.established ?? '—'}.
-                  </p>
-                </div>
-              </div>
-              <LsTags followed={d.followed} />
-              <div className="ls-acts ls-acts--profile">
-                {/* SAATHI-120 QA (TC-63-05): exact, state-specific accessible names so
-                    assistive tech and test locators can never confuse the pre/post
-                    states ("Save" is a prefix of "Saved ✓"). */}
-                <button
-                  type="button"
-                  className="btn tap ls-save"
-                  aria-pressed={d.saved}
-                  aria-label={d.saved ? 'Saved — remove' : 'Save school'}
-                  disabled={saveMut.isPending}
-                  onClick={() => saveMut.mutate(d.saved)}
-                >
-                  {d.saved ? <><span aria-hidden="true">★ </span>Saved</> : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  className="btn tap ls-follow"
-                  aria-pressed={d.followed}
-                  aria-label={d.followed ? 'Following — unfollow' : 'Follow school'}
-                  disabled={followMut.isPending}
-                  onClick={() => followMut.mutate(d.followed)}
-                >
-                  {d.followed ? <><span aria-hidden="true">✓ </span>Following</> : 'Follow'}
-                </button>
-                <button
-                  type="button"
-                  className={`btn tap ls-cmp${trayIds.includes(d.id) ? ' ls-ind' : ''}`}
-                  aria-pressed={trayIds.includes(d.id)}
-                  onClick={() => toggleCompare(d)}
-                >
-                  {trayIds.includes(d.id) ? <><span aria-hidden="true">✓ </span>In compare</> : '+ Compare'}
-                </button>
-              </div>
-              {/* Corrected Follow wording (independent review, 2026-07-27): no
-                  implied notification queue. The opt-in flag is still sent to
-                  the follow endpoint unchanged (functional behaviour kept). */}
-              <p className="ls-helper ls-followcopy">{FOLLOW_COPY}</p>
-              {actionError && <p className="ls-err" role="alert">{actionError}</p>}
-              <section className="ls-qcard ls-mt16" aria-label="The essentials">
-                <h2>The essentials</h2>
-                <p className="ls-why">Plain answers first · every value carries its source.</p>
-                {[
-                  { key: 'exam', label: 'Entrance exam', value: <>{d.entranceExam}</> },
-                  { key: 'fees', label: 'Fee band (sample)', value: <>{feesText(d)}</> },
-                  { key: 'nirf', label: 'NIRF rank (sample)', value: <>{d.nirfRank !== null ? `#${d.nirfRank}` : 'Not ranked'}</> },
-                  {
-                    key: 'progs',
-                    label: 'Programmes',
-                    value: (
-                      <>{d.programmes.length ? d.programmes.map((p) => `${p.degree} (${p.durationYears} yrs)`).join(' · ') : 'Not listed'}</>
-                    ),
-                  },
-                ].map((row) => (
-                  <div className="ls-fact" key={row.key}>
-                    <div className="ls-fact__l">{row.label}</div>
-                    <div className="ls-fact__v">{row.value}</div>
-                    <p className="ls-src">{referenceSourceFoot()}</p>
-                  </div>
-                ))}
-                {[...d.facts]
-                  .sort((a, b) => {
-                    const rank = (k: string): number => {
-                      const i = S28_FACT_KEY_ORDER.indexOf(k);
-                      return i < 0 ? S28_FACT_KEY_ORDER.length : i;
-                    };
-                    return rank(a.key) - rank(b.key);
-                  })
-                  .map((f) => (
-                    <div className="ls-fact" key={f.key}>
-                      <div className="ls-fact__l">{FACT_LABELS[f.key] ?? f.key}</div>
-                      <div className="ls-fact__v">{f.value}</div>
-                      <p className="ls-src">
-                        {/* Reference source-row density: frozen-fixture wording with the
-                            fact's REAL retrieved_at date; the provenance link stays live
-                            (target-size met via layout-neutral padding, see student.css). */}
-                        {f.sourceUrl
-                          ? <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{factSourceLine(f.retrievedAt)}</a>
-                          : factSourceLine(f.retrievedAt)}
-                      </p>
-                    </div>
-                  ))}
-                {d.facts.length === 0 && (
-                  <p className="ls-stand ls-mt10">
-                    No further verified facts are published yet — we only show facts with a source and verification date.
-                  </p>
-                )}
-                <div className="ls-helper ls-mt12">
-                  <b>What’s “NIRF band”?</b> NIRF is the government’s National Institutional Ranking
-                  Framework. We show a band only where NIRF (Law) publishes one — never our own
-                  ranking. Rank shown only where NIRF (Law) publishes it · sample rank for prototype.
-                </div>
-              </section>
-            </>
-          )}
-          <div className="ls-foot">{REFERENCE_RESPONSIBLE_COPY} {DPDP_COPY}</div>
-        </div>
-      </LsShell>
-    </StudentScreen>
-  );
+  return <S28DetailScreen readSelection={readCompareTray} writeSelection={writeCompareTray}/>;
 }
 
 /* -------------------------------------------------------------------------- */

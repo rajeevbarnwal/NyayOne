@@ -1,5 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {normalizeS19SequenceForTest} from './nyay66-s19-sequence-reapproval.test-fixture.mjs';
+import {normalizeS18InvalidForTest} from './nyay66-s18-invalid-reapproval.test-fixture.mjs';
+import {withoutS28ProposalsForTest} from './nyay66-s28-exceptions.test-fixture.mjs';
 import {readFileSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -30,7 +32,7 @@ describe('S-19 desktop export-failed exact replacement boundary',()=>{
     const policy={schema:1,exceptions:candidate(),enforced:['S-01']},before=JSON.stringify(policy);
     expect(s19TypedPolicyForTest(policy)).toEqual({...policy,exceptions:normalizeS19TypedRasterForTest(baseline)});
     expect(JSON.stringify(policy)).toBe(before);
-    expectBoundary(normalizeS19SequenceForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions));
+    expectBoundary(normalizeS19SequenceForTest(normalizeS18InvalidForTest(withoutS28ProposalsForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions))));
   });
   it.each([
     ['wrong PR',e=>e.approvalPr=83],['changed reference',e=>e.referenceSha256='a'.repeat(64)],

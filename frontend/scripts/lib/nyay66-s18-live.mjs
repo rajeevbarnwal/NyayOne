@@ -7,6 +7,7 @@ import {digest,pixelMetrics,compareStructure} from './nyay66-enforcement.mjs';
 import {inspectSurface} from './nyay66-dom.mjs';
 import {S18_STATES,S18_VIEWPORTS,verifyS18PNG} from './nyay66-s18-reference.mjs';
 import {mockS18Application,classifyS18Errors} from './nyay66-s18-fixtures.mjs';
+import {needsS18RasterIsolation,withS18RasterBrowser} from './nyay66-s18-raster.mjs';
 const require=createRequire(import.meta.url);
 const crop=(png,box)=>{
   const x=Math.max(0,Math.floor(box.x)),y=Math.max(0,Math.floor(box.y));
@@ -17,8 +18,14 @@ const crop=(png,box)=>{
 export async function captureS18Rows({browser,origin,out,reference}){
   const rows=[];
   for(const state of S18_STATES)for(const vp of S18_VIEWPORTS){
+    rows.push(await withS18RasterBrowser(browser,state,vp.id,isolated=>captureS18Row({browser:isolated,origin,out,reference,state,vp})));
+  }
+  return rows;
+}
+async function captureS18Row({browser,origin,out,reference,state,vp}){
     const view=`s18-${state}`,id=`S-18-${state}`,name=`${id}-${vp.id}`,errors=[];
     const row={screen:'S-18',state:id,designState:state,viewport:vp.id,theme:'light',source:'s18',executed:false,measured:false,errors};
+    if(needsS18RasterIsolation(state,vp.id))row.captureRaster={browser:'isolated-single-row-chromium',version:browser.version(),partialRaster:false,pixelPostprocessing:false,approvalHashSelection:false};
     let context,page;const consoleErrors=[],httpResponses=[],failed=()=>errors.push('NETWORK_ERROR');
     try{
       const ref=reference.manifest.rows.find(r=>r.view===view&&r.viewport===vp.id);
@@ -48,7 +55,5 @@ export async function captureS18Rows({browser,origin,out,reference}){
     row.consoleDiagnostics=classifyS18Errors(state,origin,consoleErrors,httpResponses,row.expectedHttpErrors||[]);
     errors.push(...row.consoleDiagnostics.errors);
     if(errors.length){row.verdict='CAPTURE-FAILED';row.measured=false;}
-    rows.push(row);
-  }
-  return rows;
+    return row;
 }
