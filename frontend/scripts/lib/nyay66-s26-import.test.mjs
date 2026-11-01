@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
@@ -13,7 +14,7 @@ import {verifyS26Archive,loadS26Cache} from './nyay66-s26-import.mjs';
 import {continuationRows} from './nyay66-continuation.mjs';
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const {data}=await loadS26Source(root);
-const policy=JSON.parse(readFileSync(join(root,'frontend/scripts/nyay66-policy.json')));
+const policy=s19TypedPolicyForTest(JSON.parse(readFileSync(join(root,'frontend/scripts/nyay66-policy.json'))));
 const fonts=JSON.parse(readFileSync(join(root,'frontend/test-baselines/nyay66',policy.cache,'manifest.json'))).fonts;
 const sourceHead='a'.repeat(40),controlHead='b'.repeat(40);
 const pngs=new Map(S26_VIEWPORTS.map(vp=>[vp.id,PNG.sync.write(new PNG({width:vp.width,height:vp.height}))]));

@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -43,7 +44,7 @@ describe('S-19 additive measured coverage',()=>{
     const entry={screen:'S-19',viewport:'mobile390',theme:'light',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),checks:['text'],reason:'test only',approvalPr:70};
     expect(approveException(entry,[],options)).toBe(false);expect(approveException(entry,null,options)).toMatch(/^[a-f0-9]{64}$/);
     expect(()=>finalizeEnforcement(rows(),{enforced:[],exceptions:[entry]},[],options)).toThrow('OWNER_EXCEPTION_APPROVAL_MISSING');
-    const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
+    const policy=s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))));
     expect(policy.enforced).not.toContain('S-19');
     for(const proposal of normalizeS19RasterForTest(policy.exceptions).filter(e=>e.screen==='S-19')){
       expect(proposal.approvalPr).toBe(70);expect(approveException(proposal,[],options)).toBe(false);

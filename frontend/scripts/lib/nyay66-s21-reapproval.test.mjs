@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
@@ -62,7 +63,7 @@ describe('S-21 Round 2 exact ten destination-host replacements',()=>{
     }
   });
   it('checks the actual policy against one complete snapshot without rewriting it',()=>{
-    const policy=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
+    const policy=s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))));
     const before=JSON.stringify(policy);
     const hashes=policy.exceptions.filter(e=>e.screen==='S-21').map(e=>approveException(e,null,options));
     if(JSON.stringify(hashes)===JSON.stringify(s21ProposalHashes))expect(withoutS25ProposalsForTest(withoutS26ProposalsForTest(withoutS27ProposalsForTest(policy.exceptions)))).toEqual(baseline);
@@ -127,5 +128,5 @@ it('validates the eight exact S-26 additions before applying historical assertio
 });
 
 it('validates exactly 22 S-27 additions while preserving the historical boundary',()=>{
-  const entries=JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions; expectBoundary([...entries.filter(e=>e.screen!=='S-27'),...structuredClone(s27Proposals)]);
+  const entries=s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)))).exceptions; expectBoundary([...entries.filter(e=>e.screen!=='S-27'),...structuredClone(s27Proposals)]);
 });

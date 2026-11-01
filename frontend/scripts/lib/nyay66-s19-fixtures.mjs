@@ -112,6 +112,10 @@ export async function mockS19Application(page,state,origin,errors){
       liveRouteBehavior:{executed:true,from:'/s-19',to:'/s-03',syntheticServer:true,sessionAnonymous,artificialDelay:false,navigationFrozen:false}};
   }
   await page.locator(`[data-screen="S-19"][data-privacy-state="${state==='loading'?'loading':'loaded'}"]`).waitFor();
+  // Begin interactions on settled resources. Clicking with fallback fonts can
+  // scroll the viewport using stale button geometry that survives font loading.
+  // This waits for real readiness; it does not rewrite scroll, focus or time.
+  await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(i=>i.decode()));await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
   if(needsPatch){
     await page.getByRole('switch',{name:'Usage analytics',exact:true}).click();
     await page.locator(`[data-privacy-state="${state}"]`).waitFor();
