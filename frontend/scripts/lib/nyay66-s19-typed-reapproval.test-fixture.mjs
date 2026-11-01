@@ -1,6 +1,7 @@
 // Exact test-only data for the proposed PR84 mobile delete-typed replacement.
 // Never imported by capture, evaluation or product code; pins do not grant approval.
 import {approveException,canonical} from './nyay66-enforcement.mjs';
+import {normalizeS19SequenceForTest} from './nyay66-s19-sequence-reapproval.test-fixture.mjs';
 import {normalizeS19ExportRasterForTest} from './nyay66-s19-export-reapproval.test-fixture.mjs';
 export const s19TypedRasterPredecessor={
   "screen": "S-19",
@@ -43,4 +44,4 @@ export function normalizeS19TypedRasterForTest(exceptions){
 }
 // Historical snapshot assertions use a clone; each replacement is independently
 // exact-checked. The real policy and runtime owner-approval checks are untouched.
-export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(policy.exceptions))});
+export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(normalizeS19SequenceForTest(policy.exceptions)))});
