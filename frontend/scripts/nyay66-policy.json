@@ -13,7 +13,7 @@
   "s26": {"cache":"s26-v32108-chromium-149.0.7827.55-41029103233","manifestSha256":"d03d6c01f946c5f63105f2da437560347b0f52f799af6d5d6be32a2f5a4673c8","provenanceSha256":"9c7a0f3ac61c0cf71639719943229eb0cc0e69df4455dee1144a20d2bfd358ba"},
   "s27": {"cache":"s27-v32108-chromium-149.0.7827.55-41104712468","manifestSha256":"fc702af18fc6ad997149669b88cae1dec2e8247beb7a4068b22c9ecccc078b44","provenanceSha256":"aee7a39dafe6fa056b0c9bfb304b0d7ccf1567ca1763ccd0b76a694bcf7b9e5f"},
   "s28": {"cache":"s28-v32108-chromium-149.0.7827.55-41323481198","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","provenanceSha256":"36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4"},
-  "integrityApproval": {"pr":82,"commentId":6561318159,"bundleSha256":"7b0e9c7937e1ac5e92d24ec4d792f23f0d9acb8bb1cefb9683287ae14da5d0b8"},
+  "integrityApproval": {"pr":82,"commentId":6561685464,"bundleSha256":"9bb6df6b9e9cc5e47fcfe60b3b91283a2cacfb6a8aad3df27f407d2d0832f706"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -155,15 +155,15 @@
       "viewport": "desktop",
       "theme": "light",
       "referenceSha256": "7471d75e1e62e9b9af8b0423520e80c6e2ba2bfdd4321abab142fe2fcbea674d",
-      "liveSha256": "f89196cfc582138e8544e684dc622e14f4785b1a16e143470e12c732dd8bb393",
+      "liveSha256": "bb8c12e85ccae1010ecee94ba68e0e5468dab6b910d53304812a75099ecf6e38",
       "checks": [
         "controls",
         "geometry",
         "pixels",
         "text"
       ],
-      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Synthetic notification-field 422 uses truthful selected-preference rollback/retry wording rather than a language-only claim; expanded Dark/Hindi annotations and error wrapping intentionally reflow the disclosure and following action. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver.",
-      "approvalPr": 68
+      "reason": "S-18 light default save-on-change; exact reference/live images only. Settings has no name projection: honest P / Your profile fallback replaces prototype AN / Aditi Nair. Notification switches use the visible label as accessible name and the help as description. Server fixture Product updates=false replaces prototype true. Hindi remains unavailable/Coming soon; Dark stores a future preference only, not a completed dark UI. Closed-disclosure descendants appear in the unchanged structural inventory; their recorded geometry reflects this capability/helper content, not displacement of visible closed-state controls. Synthetic notification-field 422 uses truthful selected-preference rollback/retry wording rather than a language-only claim; expanded Dark/Hindi annotations and error wrapping intentionally reflow the disclosure and following action. Desktop retains Home/Profile routes plus disabled Research/Calendar/Careers as 48px buttons instead of static prototype labels; their control inventory and header spacing account for the desktop structural flags. The Privacy action icon and, where present, framed retry/back icons sit 1 CSS px below the prototype nested-inline baseline (within the existing 1px geometry tolerance), with identical SVG paths, size and color. This is a disclosed baseline offset, not claimed to be antialiasing. Small raw rasterization differences on otherwise matching paths are included in these exact images. No accessibility, overflow, unknown error, tolerance or reference waiver. Capture-only replacement disclosure for PR #82: only S-18 desktop validation-error now uses version-matched isolated Chromium with --disable-partial-raster. At hosted head 6454ad0933592eb371fce848ad9d18a377ba5024 (run 41331327276), 42 rounded-border pixels differ from the prior approved live SHA f89196cfc582138e8544e684dc622e14f4785b1a16e143470e12c732dd8bb393 by at most one RGB level, within x34-856/y453-759. Live/reference DOM surfaces, text, controls, request evidence, error inventory and accessibility results are identical. The reference and original content/identity disclosures, including the 1 CSS px icon-baseline offset above, are retained. No product change, image retry, approval-hash selection or pixel postprocessing is involved. This replacement covers only this exact desktop validation-error image pair; it does not authorize another state, viewport, reference, tolerance, enforcement or accessibility change.",
+      "approvalPr": 82
     },
     {
       "screen": "S-18",
@@ -2775,6 +2775,219 @@
       ],
       "reason": "S-27 sort-nirf, desktop, light. Hosted live-route measurement with synthetic API responses at 872dc11b; not live-backend or independent Senior QA evidence. Identity/navigation disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\"/\"Aditi Nair\"; Saved and followed is a real S-30 link, not a prototype button. Search uses type=search and the truthful placeholder \"School name\" because the backend q parameter searches names, not states. Retain real 48px Home/Profile route buttons instead of static labels, a server-confirmed comparison limit (4 when loaded, not the prototype hard-coded 3), and private-account explanatory text instead of invented \"2 saved\"/\"2 following\" counts. These semantic/control inventories differ; no unrelated header geometry change is approved. Counts, visible schools, sort and page are taken from the validated server response; no client-side ranking or invented paging capability. Matched visible heading/action boxes have no residual offset. Closed filter disclosures can have different hidden control inventories/boxes due to supported choices; those are not visible layout shifts. Previous/action-icon wrapper and Comparison spacing defects were corrected in code, not waived. References, tolerances, historical approvals and all functional/accessibility requirements remain unchanged.",
       "approvalPr": 80
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "17f058cbdf4ae6616398df68398f998520598e21c79de582dd5924e261c352b7",
+      "liveSha256": "92529f531c31643871d0533ca213409d359d6bd9013f0481f2fb317f8d769ce1",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 loading, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. The genuine GET remains pending and is cancelled only at context disposal. Loading is announced through the live status accessible name rather than the prototype hidden text. No count, data or successful response is fabricated. All matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "38772f186315c23cb9af3f54cc7148532731b3ba0e58c77eb4cd9903bf9618ac",
+      "liveSha256": "623157a72783aabc5ab491cc68b17ff34e854b6102720cc8e6951e0176a9a277",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 loading, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. The genuine GET remains pending and is cancelled only at context disposal. Loading is announced through the live status accessible name rather than the prototype hidden text. No count, data or successful response is fabricated. All matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "14ab2939592415c31f9f15223413674acda2f860da3f5355b08f98c274e1c518",
+      "liveSha256": "12d923a32bee6b4f86570aa5a12ef76a20becd1b838182556b163e3535dbf3b2",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 complete, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. Content-driven geometry disclosure, live minus frozen: Add to comparison is +98.5px down because of the explicit unknown-notification choices. All other matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c3488bef5cbaddde7a3d1bc0dc66e794deb39e3f9971139739392cbdc48e75fd",
+      "liveSha256": "460c2a98a204c86e1d029630cdc7144bf6463e0d05768bca71b5086e99624ace",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 complete, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. Content-driven geometry disclosure, live minus frozen: Add to comparison is +25.25px down because of the explicit unknown-notification choices. All other matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "14ab2939592415c31f9f15223413674acda2f860da3f5355b08f98c274e1c518",
+      "liveSha256": "ead0ce102e502fde203e0d05fbaa08b94ca2e96ffb19365b834a502101facd53",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 following, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. The real PUT follow response confirms followed=true and notify_opt_in=false before the checkbox or success announcement appears. The separate notification checkbox uses its visible label as its accessible name. Interaction-state disclosure: the Following button retains visible keyboard focus after Enter activation; the reference is unfocused. The server-confirmed status announcement participates in the text inventory. All matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c3488bef5cbaddde7a3d1bc0dc66e794deb39e3f9971139739392cbdc48e75fd",
+      "liveSha256": "de1e3e629e19b4fa0e4051581571a8cf2ffe38cef69841b3bc9a501bd6aa08ca",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 following, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. The real PUT follow response confirms followed=true and notify_opt_in=false before the checkbox or success announcement appears. The separate notification checkbox uses its visible label as its accessible name. Interaction-state disclosure: the Following button retains visible keyboard focus after Enter activation; the reference is unfocused. The server-confirmed status announcement participates in the text inventory. All matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "a9bf72e7bbe559742e49f3e8d037f91b0b8ba96dc568d853048487c14762dc26",
+      "liveSha256": "f5d0f519f5f0c00f56b44fd305652182bb5c95d3fec31d526fa0401622282946",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 save-pending, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. The real PUT saved request remains pending, with no optimistic saved mark or success announcement. Server mutations remain locked during the request; the static prototype disables only Save. Interaction-state disclosure: the Saving button retains its visible keyboard focus. Content-driven geometry disclosure, live minus frozen: Add to comparison is +98.5px down because of the explicit unknown-notification choices. All other matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "de9b0ed4f9e555a6bcb3fb32d649306cdf14a0687fb283d534daac6a8c1aeafc",
+      "liveSha256": "62ae730474ec37880a61d5577af43ed8c4cd7838d954544f75644773135df174",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 save-pending, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. The real PUT saved request remains pending, with no optimistic saved mark or success announcement. Server mutations remain locked during the request; the static prototype disables only Save. Interaction-state disclosure: the Saving button retains its visible keyboard focus. Content-driven geometry disclosure, live minus frozen: Add to comparison is +25.25px down because of the explicit unknown-notification choices. All other matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "1a305acc36e92988a676b758d8e2db257840e33d89f6e423fcecc5072546a883",
+      "liveSha256": "b7efd9659fad9979498ebf5caced550ea91ea949a7e1c4833f3071cdfc990754",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 follow-error, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. Backend-error variant: genuine DELETE follow HTTP 500 cannot prove \"Nothing changed.\" Retain \"Change needs confirmation\" / truthful uncertainty copy and the \"Reload school\" action before another server mutation, rather than the prototype unconditional retry. Server mutations remain locked until the reload; the local comparison control is separate. Interaction-state disclosure: meaningful focus moves to the visible error alert. Content-driven geometry disclosure, live minus frozen: longer truthful error copy moves Published facts, all four source links and Save/Following +17.25px down; the unknown-notification controls add a further 98.5px, making Add to comparison +115.75px down. All other matched visible boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "d98d0d108bd1a7e4fe85dcc02a39934848486f91c6497d73a34f2593a32e4da0",
+      "liveSha256": "f6ee97eacb4233deeafd65e9decfaa315b225558d003ab533d329f5494850beb",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 follow-error, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Detail values and Save/Follow marks come from the validated server projection. Fact-source links retain safe destinations and include destination host / new-tab disclosure in their accessible names; prototype hidden-text/whitespace differences are reflected in the text inventory. Backend-contract variant: GET detail supplies followed but does not supply notify_opt_in. Retain truthful unavailable-preference help and explicit \"Turn notifications on\" / \"Keep notifications off\" actions instead of inventing the prototype unchecked checkbox state. These controls write only after user activation and server confirmation. Backend-error variant: genuine DELETE follow HTTP 500 cannot prove \"Nothing changed.\" Retain \"Change needs confirmation\" / truthful uncertainty copy and the \"Reload school\" action before another server mutation, rather than the prototype unconditional retry. Server mutations remain locked until the reload; the local comparison control is separate. Interaction-state disclosure: meaningful focus moves to the visible error alert. Content-driven geometry disclosure, live minus frozen: Add to comparison is +25.25px down because of the explicit unknown-notification choices. All other matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "da36c24064775b7476f445bc8255d52aab7b02a3b0c40580532284632002d80a",
+      "liveSha256": "ad8fd9fdf1863da6c57852c459f29fab1439c4a5e880004e68633b73d0260f04",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 missing, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Genuine HTTP 404 school_not_found produces the matching error state. Interaction-state disclosure: meaningful focus remains on the error alert, whose visible focus outline is absent in the static reference. The Find a law school destination is a real route link; all matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "e548084c33ee6528ddbcbffed22bdd49261527c89c41fa8a9de815882a14c472",
+      "liveSha256": "b50edad181f0134bf7c37f9adc95c83dcbaf0fb142013b380928822e732a8675",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 missing, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Genuine HTTP 404 school_not_found produces the matching error state. Interaction-state disclosure: meaningful focus remains on the error alert, whose visible focus outline is absent in the static reference. The Find a law school destination is a real route link; all matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "545eb914bcf5d26ab86a1e05ca0ac1b96691d6cc0770afc8454683a8ba53ebb5",
+      "liveSha256": "8355bb7f457a2dfdd2775b62528bfebaae1392201b66c8f6ff4ef8fe8ef94e8b",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 error, mobile390, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Genuine HTTP 500 unavailable produces the matching error state. Interaction-state disclosure: meaningful focus remains on the error alert, whose visible focus outline is absent in the static reference. The Retry action performs a real detail reload; all matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
+    },
+    {
+      "screen": "S-28",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "9f814429274dae526d2cd40ad634c4e7003cae006dbf3dbde43113fab45a32ef",
+      "liveSha256": "0abfe74b1789f03980af4c058d06ed142dd5cafbe9e0385196af79397ae401c5",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-28 error, desktop, light. Hosted live-route capture with synthetic API responses at 5676004055ccf4b70adb921e2f3e016ab152f8df (run 41332329902); not live-backend or independent Senior QA evidence. Identity/navigation: the generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Back is a real allowlisted route link, not a prototype button. Desktop retains functional 48px Home/Profile buttons where the prototype has static labels; the visible \"Reading the figures\" aside title is a semantic h2. These additional controls/headings account for index-based inventory/geometry differences without moving their visible boxes. Genuine HTTP 500 unavailable produces the matching error state. Interaction-state disclosure: meaningful focus remains on the error alert, whose visible focus outline is absent in the static reference. The Retry action performs a real detail reload; all matched visible heading/control boxes are identical. The entrance-chip gap, Save/Follow spacing, action wrappers, follow-error icon colors and frozen bell paths/opacity were corrected in code. No residual icon-baseline offset is proposed. Exact images only: no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 82
     }
   ]
 }
