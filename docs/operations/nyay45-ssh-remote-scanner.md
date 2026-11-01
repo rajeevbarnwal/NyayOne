@@ -17,7 +17,10 @@ can still produce a conservative false positive; this is not a Git URL parser.
 
 The bare text `git@github.com` is ambiguous and remains an email finding. The
 documented form `SSH remote git@github.com` (including a colon or quoted identity)
-is recognized only with that explicit SSH-remote context. This does not exempt
+is recognized only with that explicit SSH-remote context on the same line.
+Only spaces or tabs may separate the label from the optional opening quote and
+identity. A strict end anchor prevents a label on the previous line from
+qualifying; a line ending after the identity remains valid. This does not exempt
 other GitHub emails or other bare identities. Email, credential and other
 sensitive structured fields remain checked even if their value resembles a
 remote. Filesystem and ZIP member paths never receive SSH exemptions.

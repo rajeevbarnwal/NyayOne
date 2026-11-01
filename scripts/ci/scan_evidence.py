@@ -122,7 +122,7 @@ SSH_URL_REMOTE = re.compile(
     rb"ssh://(?P<identity>git@(?P<host>" + SSH_HOST + rb"))"
     rb"(?::(?P<port>[1-9][0-9]{0,4}))?/(?P<path>" + SSH_PATH + rb")"
 )
-SSH_IDENTITY_CONTEXT = re.compile(rb"\bSSH(?: Git)? remote:?[ \t]+[`'\"]?$", re.I)
+SSH_IDENTITY_CONTEXT = re.compile(rb"\bSSH(?: Git)? remote:?[ \t]+[`'\"]?\Z", re.I)
 
 QUERY_FIELD = re.compile(
     rb"(?:^|[?&#;\s])(?P<key>[A-Za-z0-9_.%+-]{1,384})="
