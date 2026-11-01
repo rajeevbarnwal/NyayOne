@@ -8,9 +8,13 @@ import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const baseline=JSON.parse(execFileSync('git',['show','3770614af04f6a0e56b006717a8a6b3475bd8b22:frontend/scripts/nyay66-policy.json'],{cwd:root}));
 const targets=proposals.map(p=>baseline.exceptions.findIndex(e=>canonical(e)===canonical(p.predecessor)));
-const history=JSON.stringify(s19TypedPolicyForTest(baseline));
+// The integrity pointer necessarily advances when this protected test changes.
+// Trusted nyay66_trust.py verifies that pointer against the exact bundle/comment;
+// this historical content snapshot must not pin its own superseded approval.
+const contentSnapshot=policy=>{const {integrityApproval,...content}=s19TypedPolicyForTest(policy);return JSON.stringify(content);};
+const history=contentSnapshot(baseline);
 const candidate=(selected=proposals)=>{const policy=structuredClone(baseline);for(const p of selected)policy.exceptions[targets[proposals.indexOf(p)]]=structuredClone(p.replacement);return policy;};
-const expectBoundary=policy=>expect(JSON.stringify(s19TypedPolicyForTest(policy))).toBe(history);
+const expectBoundary=policy=>expect(contentSnapshot(policy)).toBe(history);
 const options={s19:true};
 
 describe('exact 22-row S-19 capture-sequence replacement boundary',()=>{
@@ -23,6 +27,18 @@ describe('exact 22-row S-19 capture-sequence replacement boundary',()=>{
       expect(p.replacement.reason.startsWith(p.predecessor.reason+' Capture-sequence replacement only')).toBe(true);
       expect({...p.replacement,liveSha256:p.predecessor.liveSha256,reason:p.predecessor.reason,approvalPr:p.predecessor.approvalPr}).toEqual(p.predecessor);
     }
+  });
+  it('preserves the changing integrity pointer without normalizing it or relaxing any other policy setting',()=>{
+    const policy=candidate();
+    // Synthetic metadata only; trusted owner read-back is a separate unchanged check.
+    policy.integrityApproval={pr:84,commentId:123,bundleSha256:'a'.repeat(64)};
+    const before=JSON.stringify(policy);expectBoundary(policy);
+    expect(s19TypedPolicyForTest(policy).integrityApproval).toEqual(policy.integrityApproval);
+    expect(JSON.stringify(policy)).toBe(before);
+    for(const field of Object.keys(baseline).filter(k=>!['exceptions','integrityApproval'].includes(k))){
+      const changed=structuredClone(policy);changed[field]=null;expect(()=>expectBoundary(changed)).toThrow();
+    }
+    expect(()=>expectBoundary({...policy,unexpectedSetting:true})).toThrow();
   });
   it.each(proposals)('admits only the exact replacement for $row without mutating input',p=>{
     const policy=candidate([p]),before=JSON.stringify(policy);expectBoundary(policy);expect(JSON.stringify(policy)).toBe(before);
