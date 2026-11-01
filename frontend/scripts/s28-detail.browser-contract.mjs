@@ -2,10 +2,12 @@
 import { before, after, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { preview } from 'vite';
 import { chromium } from 'playwright';
 import { actor } from './lib/nyay66-fixtures.mjs';
+import { loadS28Source } from './lib/nyay66-s28-reference.mjs';
 let server, browser, origin;
 before(async () => { server = await preview({ preview: { host: '127.0.0.1', port: 0 }, logLevel: 'error' }); origin = `http://127.0.0.1:${server.httpServer.address().port}`; browser = await chromium.launch(); });
 after(async () => { await browser?.close(); await new Promise(done => server?.httpServer.close(done)); });
@@ -124,6 +126,23 @@ it('a delayed S-28 removal settles S-30 after navigation and rejects an older li
  assert.equal(await saved.getByRole('button',{name:'View',exact:true}).count(),0);assert.equal(s.writes.length,1);
 }, {item:{...school,saved:true}}));
 // Geometry from the frozen v3.2.1.08 S-28 primitives: no reference rewrite.
+it('S-28 presentation: Follow bell matches the verified frozen SVG before and after confirmation',()=>using(async(page,s)=>{
+ const {html}=await loadS28Source(resolve('..'));
+ const match=html.toString().match(/ICO2\.bell='([^']+)'/);assert.ok(match,'frozen bell primitive must exist');
+ await page.goto(url());await ready(page);
+ for(const name of ['Follow','Following']){
+  if(name==='Following'){await page.getByRole('button',{name:'Follow',exact:true}).press('Enter');await page.getByRole('checkbox').waitFor();}
+  const shapes=await page.getByRole('button',{name,exact:true}).evaluate((button,primitive)=>{
+   const attrs=['d','fill','opacity','stroke','stroke-width','stroke-linecap','stroke-linejoin'];
+   const describe=host=>[...host.querySelectorAll('path')].map(p=>Object.fromEntries(attrs.map(a=>[a,p.getAttribute(a)])));
+   const reference=new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg">'+primitive+'</svg>','image/svg+xml');
+   return {reference:describe(reference),live:describe(button.querySelector('svg'))};
+  },match[1]);
+  assert.deepEqual(shapes.live,shapes.reference,`${name}: frozen paths, fill opacity and stroke styles`);
+ }
+ assert.deepEqual(s.writes.map(w=>({method:w.method,body:w.body})),[{method:'PUT',body:{notify_opt_in:false}}]);
+ assert.equal(await page.getByRole('button',{name:'Following',exact:true}).evaluate(el=>el===document.activeElement),true);
+}));
 it('S-28 presentation: undecorated entrance chip retains its 7px leading gap',()=>using(async page=>{
  await page.goto(url());await ready(page);
  const gap=await page.locator('.s20-chips > :last-child').evaluate(el=>{const range=document.createRange();range.selectNodeContents(el.lastChild);return range.getBoundingClientRect().x-el.getBoundingClientRect().x-parseFloat(getComputedStyle(el).borderLeftWidth)-parseFloat(getComputedStyle(el).paddingLeft);});
