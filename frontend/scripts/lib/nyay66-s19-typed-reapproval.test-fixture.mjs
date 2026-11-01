@@ -3,6 +3,7 @@
 import {approveException,canonical} from './nyay66-enforcement.mjs';
 import {normalizeS19SequenceForTest} from './nyay66-s19-sequence-reapproval.test-fixture.mjs';
 import {normalizeS19ExportRasterForTest} from './nyay66-s19-export-reapproval.test-fixture.mjs';
+import {normalizeS18InvalidForTest} from './nyay66-s18-invalid-reapproval.test-fixture.mjs';
 export const s19TypedRasterPredecessor={
   "screen": "S-19",
   "viewport": "mobile390",
@@ -44,4 +45,4 @@ export function normalizeS19TypedRasterForTest(exceptions){
 }
 // Historical snapshot assertions use a clone; each replacement is independently
 // exact-checked. The real policy and runtime owner-approval checks are untouched.
-export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(normalizeS19SequenceForTest(policy.exceptions)))});
+export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(normalizeS19SequenceForTest(normalizeS18InvalidForTest(policy.exceptions))))});
