@@ -10,6 +10,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -506,6 +507,60 @@ class SshRemotePrivacyTests(unittest.TestCase):
                 report = self.scan_text(payload)
                 self.assertTrue(report.failures)
                 self.assertNotIn(payload.decode(), "\n".join(report.failures))
+
+    def test_context_window_never_manufactures_a_word_boundary(self):
+        for prefix in (b"XSSH", b"NOTSSH", b"MY_SSH", b"0SSH"):
+            for spaces in (69, 70, 71):
+                for identity in (b"git@github.com", b"person@real-domain.invalid"):
+                    payload = prefix + b" remote" + b" " * spaces + identity
+                    with self.subTest(prefix=prefix, spaces=spaces, identity=identity):
+                        self.assertTrue(self.scan_text(payload).failures)
+        for prefix in (b"SSH", b"(SSH", b"note: SSH"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(
+                    self.scan_text(prefix + b" remote" + b" " * 70 + b"git@github.com").failures,
+                    [],
+                )
+        # Keep the bounded context policy; a distant label must not qualify.
+        self.assertTrue(self.scan_text(b"SSH remote" + b" " * 81 + b"git@github.com").failures)
+
+    def test_long_remote_paths_remain_bounded_and_do_not_hide_leaks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = (b"git@github.com:" + b"a/" * 4080 + b"a\n") * 128
+            self.assertGreater(len(payload), 1_000_000)
+            evidence = root / "long.txt"
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            for canary, expected in (
+                (b"", 0),
+                (b"\nperson@real-domain.invalid", 1),
+                (b'\n{"otp":"429016"}', 1),
+            ):
+                with self.subTest(canary=canary):
+                    evidence.write_bytes(payload + canary)
+                    try:
+                        result = subprocess.run(
+                            command, capture_output=True, text=True, check=False, timeout=15,
+                        )
+                    except subprocess.TimeoutExpired:
+                        self.fail("1 MB synthetic remote corpus exceeded the 15-second safety budget")
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    if canary:
+                        self.assertNotIn(canary.decode().strip(), result.stdout + result.stderr)
+
+    def test_email_candidates_preserve_frozen_regex_matches_and_boundaries(self):
+        rng = random.Random(45)
+        atoms = [b"a", b"/", b"!", b"_", b".", b"-", b"+", b"@", b":", b" ", b"\n", b"\xff",
+                 b"git@github.com", b"person@real-domain.invalid", b"a@b.co", b"/c@d.io"]
+        payloads = [
+            b"a@b.co/c@d.io", b"a@b.co@d.io", b"a@b.co_c@d.io",
+            b"ssh://git@github.com/sample/repo.git", b"+++person@real-domain.invalid",
+        ] + [b"".join(rng.choices(atoms, k=20)) for _ in range(2000)]
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                expected = [(m.span(), m.group(), m.groups()) for m in self.scanner.EMAIL.finditer(payload)]
+                actual = [(m.span(), m.group(), m.groups()) for m in self.scanner._email_matches(payload)]
+                self.assertEqual(actual, expected)
 
     def test_encoded_ssh_urls_do_not_gain_a_decoded_exemption(self):
         for payload in (
