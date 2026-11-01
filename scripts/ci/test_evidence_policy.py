@@ -451,6 +451,128 @@ class EvidenceScannerTests(unittest.TestCase):
             )
 
 
+class SshRemotePrivacyTests(unittest.TestCase):
+    """NYAY-45: recognize transport syntax, never allowlist email domains."""
+
+    def setUp(self) -> None:
+        self.scanner = load("scan_evidence")
+
+    def scan_text(self, payload: bytes):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "evidence.txt").write_bytes(payload)
+            return self.scanner.scan_report(root)
+
+    def test_canonical_full_remotes_and_explicit_ssh_identity_are_not_pii(self):
+        for remote in (
+            b"git@github.com:sample/repository.git",
+            b"ssh://git@github.com/sample/repository.git",
+            b"git@gitlab.com:group/subgroup/repository.git",
+            b"ssh://git@git.example.test:2222/team/repository",
+            b"git@bitbucket.org:sample/repository.git",
+            b"SSH remote `git@github.com`",
+            b"SSH remote: git@github.com",
+        ):
+            for payload in (remote, json.dumps({"note": remote.decode()}).encode()):
+                with self.subTest(payload=payload):
+                    report = self.scan_text(payload)
+                    self.assertEqual(report.failures, [])
+                    self.assertGreater(report.bytes_scanned, 0)
+
+    def test_bare_identity_personal_email_and_lookalikes_remain_blocked(self):
+        for payload in (
+            b"git@github.com", b"Contact git@github.com",
+            b"person@github.com", b"person@real-domain.invalid",
+            b"SSH remote person@github.com",
+            b"SSH remote git@github.com.evil.invalid",
+            b"SSH remote git@github.com:missing-path",
+            b"SSH remote git@github.com.",
+            b"git@github.com:sample/repo.git?email=person@real-domain.invalid",
+            b"git@github.com:sample/repo.git#token=opaque-canary-123456",
+            b"git@github.com:sample/../repo.git",
+            b"git@github.com:sample//repo.git",
+            b"git@github.com:sample/repo%252fperson%2540real-domain.invalid",
+            b"git@github.com:sample/repo.git/",
+            b"ssh://git:password@github.com/sample/repo.git",
+            b"ssh://person@github.com/sample/repo.git",
+            b"https://git@github.com/sample/repo.git",
+            b"ssh://git@github.com:0/sample/repo.git",
+            b"ssh://git@github.com:65536/sample/repo.git",
+            b"prefix+git@github.com:sample/repo.git",
+            b"mailto:git@github.com:sample/repo.git",
+            b"\xc3\xa9git@github.com:sample/repo.git",
+        ):
+            with self.subTest(payload=payload):
+                report = self.scan_text(payload)
+                self.assertTrue(report.failures)
+                self.assertNotIn(payload.decode(), "\n".join(report.failures))
+
+    def test_encoded_ssh_urls_do_not_gain_a_decoded_exemption(self):
+        for payload in (
+            b"ssh://git%40github.com/sample/repo.git",
+            b"ssh://git%2540github.com/sample/repo.git",
+            b"ssh://git%40github.com/sample/person%40real-domain.invalid",
+            b"GET /report?remote=ssh%3A%2F%2Fgit%40github.com%2Fsample%2Frepo.git",
+        ):
+            with self.subTest(payload=payload):
+                self.assertTrue(self.scan_text(payload).failures)
+
+    def test_sensitive_fields_do_not_gain_remote_exemptions(self):
+        remote = "git@github.com:sample/repo.git"
+        for payload in (
+            json.dumps({"email": remote}).encode(),
+            json.dumps({"email": "SSH remote git@github.com"}).encode(),
+            json.dumps({"password": remote}).encode(),
+            json.dumps({"name": "email", "value": remote}).encode(),
+            f"email: {remote}".encode(),
+            f"GET /report?email={remote}".encode(),
+            f'Content-Disposition: form-data; name="email"\r\n\r\n{remote}\r\n--end'.encode(),
+        ):
+            with self.subTest(payload=payload):
+                self.assertTrue(self.scan_text(payload).failures)
+
+    def test_remote_paths_and_adjacent_privacy_canaries_still_fail(self):
+        for path in (
+            b"sample/token-opaquevalue123.git", b"sample/otp-429016.git",
+            b"sample/9876543210.git", b"sample/dob-2004-03-14.git",
+            b"sample/person@real-domain.invalid", b"sample/ghp_" + b"x" * 24,
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(self.scan_text(b"git@github.com:" + path).failures)
+        for leak in (
+            b"person@real-domain.invalid", b'{"otp":"429016"}',
+            b'{"mobile":"9876543210"}', b'{"first_name":"Canary"}',
+            b"Authorization: Bearer opaque-canary-123456",
+            b"-----BEGIN OPENSSH PRIVATE KEY-----",
+            b"TOKEN=opaque-canary-123456",
+        ):
+            with self.subTest(leak=leak):
+                report = self.scan_text(b"git@github.com:sample/repo.git\n" + leak)
+                self.assertTrue(report.failures)
+                self.assertNotIn(leak.decode(), "\n".join(report.failures))
+
+    def test_paths_archive_comments_and_encoded_bodies_remain_scanned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "SSH remote git@github.com").write_text("sanitized")
+            self.assertTrue(self.scanner.scan_report(root).failures)
+            (root / "SSH remote git@github.com").unlink()
+            archive = root / "evidence.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("remote.txt", "git@github.com:sample/repo.git")
+            self.assertEqual(self.scanner.scan_report(root).failures, [])
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.comment = b"SSH remote git@github.com; person@real-domain.invalid"
+                bundle.writestr("remote.txt", "git@github.com:sample/repo.git")
+            self.assertTrue(self.scanner.scan_report(root).failures)
+        for body in (
+            b"git@github.com:sample/repo.git\nperson@real-domain.invalid",
+            b'{"email":"git@github.com:sample/repo.git"}',
+        ):
+            payload = json.dumps({"encoding": "base64", "body": base64.b64encode(body).decode()}).encode()
+            self.assertTrue(self.scan_text(payload).failures)
+
+
 class EvidenceManifestTests(unittest.TestCase):
     def setUp(self) -> None:
         self.manifest = load("evidence_manifest")
