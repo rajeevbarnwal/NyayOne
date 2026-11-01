@@ -178,8 +178,11 @@ def _idempotent_insert(session: Session, model, values: dict) -> bool:
         from sqlalchemy.dialects.postgresql import insert as pg_insert
 
         stmt = pg_insert(model.__table__).values(**values).on_conflict_do_nothing(
-            index_elements=["user_id", "school_id"])
-        return bool(session.execute(stmt).rowcount)
+            index_elements=["user_id", "school_id"]).returning(model.__table__.c.id)
+        # psycopg can report rowcount=-1 (unknown) for both outcomes. RETURNING
+        # identifies the actual insert winner; a conflict returns no row, so
+        # existing follows update consent and replays do not duplicate audits.
+        return session.execute(stmt).scalar_one_or_none() is not None
     try:
         session.execute(insert(model).values(**values))
         return True
