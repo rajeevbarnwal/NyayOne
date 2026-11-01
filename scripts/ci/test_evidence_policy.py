@@ -10,6 +10,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -449,6 +450,247 @@ class EvidenceScannerTests(unittest.TestCase):
                 any("cannot be traversed" in error for error in report.errors),
                 report.errors,
             )
+
+
+class SshRemotePrivacyTests(unittest.TestCase):
+    """NYAY-45: recognize transport syntax, never allowlist email domains."""
+
+    def setUp(self) -> None:
+        self.scanner = load("scan_evidence")
+
+    def scan_text(self, payload: bytes):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "evidence.txt").write_bytes(payload)
+            return self.scanner.scan_report(root)
+
+    def test_canonical_full_remotes_and_explicit_ssh_identity_are_not_pii(self):
+        for remote in (
+            b"git@github.com:sample/repository.git",
+            b"ssh://git@github.com/sample/repository.git",
+            b"git@gitlab.com:group/subgroup/repository.git",
+            b"ssh://git@git.example.test:2222/team/repository",
+            b"git@bitbucket.org:sample/repository.git",
+            b"SSH remote `git@github.com`",
+            b"SSH remote: git@github.com",
+        ):
+            for payload in (remote, json.dumps({"note": remote.decode()}).encode()):
+                with self.subTest(payload=payload):
+                    report = self.scan_text(payload)
+                    self.assertEqual(report.failures, [])
+                    self.assertGreater(report.bytes_scanned, 0)
+
+    def test_bare_identity_personal_email_and_lookalikes_remain_blocked(self):
+        for payload in (
+            b"git@github.com", b"Contact git@github.com",
+            b"person@github.com", b"person@real-domain.invalid",
+            b"SSH remote person@github.com",
+            b"SSH remote git@github.com.evil.invalid",
+            b"SSH remote git@github.com:missing-path",
+            b"SSH remote git@github.com.",
+            b"git@github.com:sample/repo.git?email=person@real-domain.invalid",
+            b"git@github.com:sample/repo.git#token=opaque-canary-123456",
+            b"git@github.com:sample/../repo.git",
+            b"git@github.com:sample//repo.git",
+            b"git@github.com:sample/repo%252fperson%2540real-domain.invalid",
+            b"git@github.com:sample/repo.git/",
+            b"ssh://git:password@github.com/sample/repo.git",
+            b"ssh://person@github.com/sample/repo.git",
+            b"https://git@github.com/sample/repo.git",
+            b"ssh://git@github.com:0/sample/repo.git",
+            b"ssh://git@github.com:65536/sample/repo.git",
+            b"prefix+git@github.com:sample/repo.git",
+            b"mailto:git@github.com:sample/repo.git",
+            b"\xc3\xa9git@github.com:sample/repo.git",
+        ):
+            with self.subTest(payload=payload):
+                report = self.scan_text(payload)
+                self.assertTrue(report.failures)
+                self.assertNotIn(payload.decode(), "\n".join(report.failures))
+
+    def test_context_window_never_manufactures_a_word_boundary(self):
+        for prefix in (b"XSSH", b"NOTSSH", b"MY_SSH", b"0SSH"):
+            for spaces in (69, 70, 71):
+                for identity in (b"git@github.com", b"person@real-domain.invalid"):
+                    payload = prefix + b" remote" + b" " * spaces + identity
+                    with self.subTest(prefix=prefix, spaces=spaces, identity=identity):
+                        self.assertTrue(self.scan_text(payload).failures)
+        for prefix in (b"SSH", b"(SSH", b"note: SSH"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(
+                    self.scan_text(prefix + b" remote" + b" " * 70 + b"git@github.com").failures,
+                    [],
+                )
+        # Keep the bounded context policy; a distant label must not qualify.
+        self.assertTrue(self.scan_text(b"SSH remote" + b" " * 81 + b"git@github.com").failures)
+
+    def test_ssh_identity_context_cannot_cross_a_line_break(self):
+        for label in (b"SSH remote", b"SSH remote:", b"ssh Git remote:"):
+            for horizontal in (b" ", b"\t"):
+                for quote in (b"", b"'", b'"', b"`"):
+                    for line_break in (b"\n", b"\r\n", b"\r", b"\n\n", b"\v", b"\f"):
+                        for indent in (b"", b" "):
+                            payload = label + horizontal + quote + line_break + indent + b"git@github.com"
+                            with self.subTest(label=label, horizontal=horizontal, quote=quote,
+                                              line_break=line_break, indent=indent):
+                                report = self.scan_text(payload)
+                                self.assertTrue(any("raw email address" in f for f in report.findings))
+                                self.assertEqual(report.errors, ())
+                                self.assertNotIn("git@github.com", "\n".join(report.failures))
+
+    def test_same_line_ssh_identity_stays_valid_with_document_line_endings(self):
+        for prefix in (b"", b"Previous line\n"):
+            for label in (b"SSH remote", b"SSH remote:", b"ssh Git remote:"):
+                for horizontal in (b" ", b"\t"):
+                    for quote in (b"", b"'", b'"', b"`"):
+                        for ending in (b"", b"\n", b"\r\n"):
+                            payload = prefix + label + horizontal + quote + b"git@github.com" + quote + ending
+                            with self.subTest(prefix=prefix, label=label, horizontal=horizontal,
+                                              quote=quote, ending=ending):
+                                self.assertEqual(self.scan_text(payload).failures, [])
+
+    def test_cli_rejects_cross_line_context_without_echoing_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "context.txt"
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            for payload, expected in (
+                (b"SSH remote: \ngit@github.com\n", 1),
+                (b"SSH remote:\t\ngit@github.com\n", 1),
+                (b"SSH remote: '\ngit@github.com\n", 1),
+                (b"SSH remote: \r\ngit@github.com\r\n", 1),
+                (b"SSH remote: \nperson@real-domain.invalid\n", 1),
+                (b"SSH remote: \ngit@gitlab.com\n", 1),
+                (b"SSH remote: git@github.com\n", 0),
+            ):
+                with self.subTest(payload=payload):
+                    evidence.write_bytes(payload)
+                    result = subprocess.run(command, capture_output=True, text=True, check=False)
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertEqual(evidence.read_bytes(), payload)
+                    if expected:
+                        self.assertIn("raw email address", result.stderr)
+                        for identity in ("git@github.com", "person@real-domain.invalid", "git@gitlab.com"):
+                            self.assertNotIn(identity, result.stdout + result.stderr)
+
+    def test_long_remote_paths_remain_bounded_and_do_not_hide_leaks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = (b"git@github.com:" + b"a/" * 4080 + b"a\n") * 128
+            self.assertGreater(len(payload), 1_000_000)
+            evidence = root / "long.txt"
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            for canary, expected in (
+                (b"", 0),
+                (b"\nperson@real-domain.invalid", 1),
+                (b'\n{"otp":"429016"}', 1),
+            ):
+                with self.subTest(canary=canary):
+                    evidence.write_bytes(payload + canary)
+                    try:
+                        result = subprocess.run(
+                            command, capture_output=True, text=True, check=False, timeout=15,
+                        )
+                    except subprocess.TimeoutExpired:
+                        self.fail("1 MB synthetic remote corpus exceeded the 15-second safety budget")
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    if canary:
+                        self.assertNotIn(canary.decode().strip(), result.stdout + result.stderr)
+
+    def test_email_candidates_preserve_frozen_regex_matches_and_boundaries(self):
+        rng = random.Random(45)
+        atoms = [b"a", b"/", b"!", b"_", b".", b"-", b"+", b"@", b":", b" ", b"\n", b"\xff",
+                 b"git@github.com", b"person@real-domain.invalid", b"a@b.co", b"/c@d.io"]
+        payloads = [
+            b"a@b.co/c@d.io", b"a@b.co@d.io", b"a@b.co_c@d.io",
+            b"ssh://git@github.com/sample/repo.git", b"+++person@real-domain.invalid",
+        ] + [b"".join(rng.choices(atoms, k=20)) for _ in range(2000)]
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                expected = [(m.span(), m.group(), m.groups()) for m in self.scanner.EMAIL.finditer(payload)]
+                actual = [(m.span(), m.group(), m.groups()) for m in self.scanner._email_matches(payload)]
+                self.assertEqual(actual, expected)
+
+    def test_encoded_ssh_urls_do_not_gain_a_decoded_exemption(self):
+        for payload in (
+            b"ssh://git%40github.com/sample/repo.git",
+            b"ssh://git%2540github.com/sample/repo.git",
+            b"ssh://git%40github.com/sample/person%40real-domain.invalid",
+            b"GET /report?remote=ssh%3A%2F%2Fgit%40github.com%2Fsample%2Frepo.git",
+        ):
+            with self.subTest(payload=payload):
+                self.assertTrue(self.scan_text(payload).failures)
+
+    def test_sensitive_fields_do_not_gain_remote_exemptions(self):
+        remote = "git@github.com:sample/repo.git"
+        for payload in (
+            json.dumps({"email": remote}).encode(),
+            json.dumps({"email": "SSH remote git@github.com"}).encode(),
+            json.dumps({"password": remote}).encode(),
+            json.dumps({"name": "email", "value": remote}).encode(),
+            f"email: {remote}".encode(),
+            f"GET /report?email={remote}".encode(),
+            f'Content-Disposition: form-data; name="email"\r\n\r\n{remote}\r\n--end'.encode(),
+        ):
+            with self.subTest(payload=payload):
+                self.assertTrue(self.scan_text(payload).failures)
+
+    def test_remote_paths_and_adjacent_privacy_canaries_still_fail(self):
+        for path in (
+            b"sample/token-opaquevalue123.git", b"sample/otp-429016.git",
+            b"sample/9876543210.git", b"sample/dob-2004-03-14.git",
+            b"sample/person@real-domain.invalid", b"sample/ghp_" + b"x" * 24,
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(self.scan_text(b"git@github.com:" + path).failures)
+        for leak in (
+            b"person@real-domain.invalid", b'{"otp":"429016"}',
+            b'{"mobile":"9876543210"}', b'{"first_name":"Canary"}',
+            b"Authorization: Bearer opaque-canary-123456",
+            b"-----BEGIN OPENSSH PRIVATE KEY-----",
+            b"TOKEN=opaque-canary-123456",
+        ):
+            with self.subTest(leak=leak):
+                report = self.scan_text(b"git@github.com:sample/repo.git\n" + leak)
+                self.assertTrue(report.failures)
+                self.assertNotIn(leak.decode(), "\n".join(report.failures))
+
+    def test_paths_archive_comments_and_encoded_bodies_remain_scanned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "SSH remote git@github.com").write_text("sanitized")
+            self.assertTrue(self.scanner.scan_report(root).failures)
+            (root / "SSH remote git@github.com").unlink()
+            archive = root / "evidence.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("remote.txt", "git@github.com:sample/repo.git")
+            self.assertEqual(self.scanner.scan_report(root).failures, [])
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.comment = b"SSH remote git@github.com; person@real-domain.invalid"
+                bundle.writestr("remote.txt", "git@github.com:sample/repo.git")
+            self.assertTrue(self.scanner.scan_report(root).failures)
+        for body in (
+            b"git@github.com:sample/repo.git\nperson@real-domain.invalid",
+            b'{"email":"git@github.com:sample/repo.git"}',
+        ):
+            payload = json.dumps({"encoding": "base64", "body": base64.b64encode(body).decode()}).encode()
+            self.assertTrue(self.scan_text(payload).failures)
+
+    def test_cli_accepts_remote_but_rejects_mixed_leak_without_echoing_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "remote.txt"
+            remote = b"git@github.com:sample/repo.git\n"
+            evidence.write_bytes(remote)
+            command = [sys.executable, str(HERE / "scan_evidence.py"), str(root)]
+            clean = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
+            self.assertIn("findings=0 errors=0", clean.stdout)
+            evidence.write_bytes(remote + b"person@real-domain.invalid")
+            denied = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(denied.returncode, 1)
+            self.assertIn("raw email address", denied.stderr)
+            self.assertNotIn("person@real-domain.invalid", denied.stdout + denied.stderr)
 
 
 class EvidenceManifestTests(unittest.TestCase):
