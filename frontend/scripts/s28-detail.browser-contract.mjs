@@ -123,6 +123,34 @@ it('a delayed S-28 removal settles S-30 after navigation and rejects an older li
  await s.heldList(); await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  assert.equal(await saved.getByRole('button',{name:'View',exact:true}).count(),0);assert.equal(s.writes.length,1);
 }, {item:{...school,saved:true}}));
+// Geometry from the frozen v3.2.1.08 S-28 primitives: no reference rewrite.
+it('S-28 presentation: undecorated entrance chip retains its 7px leading gap',()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const gap=await page.locator('.s20-chips > :last-child').evaluate(el=>{const range=document.createRange();range.selectNodeContents(el.lastChild);return range.getBoundingClientRect().x-el.getBoundingClientRect().x-parseFloat(getComputedStyle(el).borderLeftWidth)-parseFloat(getComputedStyle(el).paddingLeft);});
+ assert.equal(gap,7);
+}));
+it('S-28 presentation: Save/Follow use the frozen 9px separation',()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const boxes=await page.locator('.s28-actions>button').evaluateAll(els=>els.map(el=>{const b=el.getBoundingClientRect();return {left:b.left,right:b.right};}));
+ assert.equal(boxes[1].left-boxes[0].right,9);
+}));
+for(const name of ['Save','Follow','Add to comparison'])it(`S-28 presentation: ${name} icon retains the nested-inline baseline`,()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const delta=await page.getByRole('button',{name,exact:true}).evaluate(el=>{const a=el.getBoundingClientRect(),b=el.querySelector('svg').getBoundingClientRect();return b.y+b.height/2-a.y-a.height/2;});
+ assert.equal(delta,-1);
+}));
+it('S-28 presentation: missing-state destination retains the 20px school-icon wrapper',()=>using(async page=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();
+ const result=await page.getByRole('alert').getByRole('link',{name:'Find a law school',exact:true}).evaluate(el=>{const icon=el.querySelector('svg'),b=icon.parentElement.getBoundingClientRect();return {wrapperTag:icon.parentElement.tagName,width:b.width,height:b.height,iconWidth:icon.getBoundingClientRect().width};});
+ assert.deepEqual(result,{wrapperTag:'SPAN',width:20,height:20,iconWidth:18});
+},{status:404}));
+it('S-28 presentation: follow-error retains neutral warning and indigo reload icon',()=>using(async(page,s)=>{
+ await page.goto(url());await ready(page);await page.getByRole('button',{name:'Follow',exact:true}).press('Enter');await page.getByRole('alert').waitFor();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');
+ const result=await page.getByRole('alert').evaluate(el=>({warning:getComputedStyle(el.querySelector(':scope>svg')).color,reload:getComputedStyle(el.querySelector('button svg')).color}));
+ assert.deepEqual(result,{warning:'rgb(62, 66, 84)',reload:'rgb(46, 58, 140)'});
+ assert.equal(s.writes.length,1);assert.equal(await page.getByRole('button',{name:'Follow',exact:true}).getAttribute('aria-disabled'),'true');
+},{writeStatus:503}));
 it('query/hash navigation during a held save keeps the lock and recovers on server acknowledgment', () => using(async(page,s)=>{
  await page.goto(url());await ready(page);s.hold=true;await save(page).press('Enter');await held(s);
  await page.evaluate(()=>{history.pushState({},'',location.href+'#facts');dispatchEvent(new PopStateEvent('popstate'));});
