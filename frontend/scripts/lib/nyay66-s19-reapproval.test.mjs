@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
@@ -29,7 +30,7 @@ const copyPins=[
   ['local-empty mobile390','b2f1de3e84fe970b4cab59d953e43435b91a92e5f97a1f7ef1b789418231ebba','65b8f0e3c98e6067c4325f58607f837830ea6c8d05dfa381ce1ee1bf38dafb59',6267091869],
   ['local-empty desktop','8e979e5ba453a879b4350687a60837efd129a606adeb285ad28f12bdf4273299','c1e57161fa970c6f1363063c75894db0d423b79659c04fce7edac6210fc6c2bb',6267092793],
 ].map(([label,previousHash,hash,commentId])=>({label,previousHash,hash,commentId,index:beforeCopy.findIndex(e=>approveException(e,null,options)===previousHash)}));
-const currentPolicy=()=>JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))).exceptions;
+const currentPolicy=()=>s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)))).exceptions;
 function expectApprovedCopyBoundary(entries){
   // Validate the exact additive set before retaining the unchanged historical checks.
   const historical=withoutS21ProposalsForTest(withoutS25ProposalsForTest(withoutS26ProposalsForTest(withoutS27ProposalsForTest(entries))));

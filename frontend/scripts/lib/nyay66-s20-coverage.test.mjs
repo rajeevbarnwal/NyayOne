@@ -1,3 +1,4 @@
+import {s19TypedPolicyForTest} from './nyay66-s19-typed-reapproval.test-fixture.mjs';
 import {s27Proposals,withoutS27ProposalsForTest} from './nyay66-s27-exceptions.test-fixture.mjs';
 import {s26Proposals,withoutS26ProposalsForTest} from './nyay66-s26-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
@@ -13,7 +14,7 @@ import {s25Proposals,withoutS25ProposalsForTest} from './nyay66-s25-exceptions.t
 const root=fileURLToPath(new URL('../../../',import.meta.url)),data=await loadContinuation(root);
 const previous={r2:true,s18:true,s19:true},options={...previous,s20:true};
 const rows=()=>S20_STATES.flatMap(state=>['mobile390','desktop'].map(viewport=>({screen:'S-20',state:`S-20-${state}`,designState:state,viewport,theme:'light',executed:true,measured:true,evidenceKind:'live-route',syntheticServer:true,verdict:'PENDING-EVALUATION',referenceSha256:'a'.repeat(64),liveSha256:'b'.repeat(64),metrics:{pass:true},regions:[],structure:[],accessibility:[],errors:[]})));
-const readPolicy=()=>JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url)));
+const readPolicy=()=>s19TypedPolicyForTest(JSON.parse(readFileSync(new URL('../nyay66-policy.json',import.meta.url))));
 const referenceRows=JSON.parse(readFileSync(new URL(`../../test-baselines/nyay66/${readPolicy().s20.cache}/manifest.json`,import.meta.url))).rows;
 // Test-only candidate entries, never production approvals or PR comments.
 const proposals=()=>referenceRows.map(row=>({screen:'S-20',viewport:row.viewport,theme:'light',referenceSha256:row.sha256,liveSha256:'a'.repeat(64),checks:['text'],reason:'synthetic regression fixture only',approvalPr:72}));
