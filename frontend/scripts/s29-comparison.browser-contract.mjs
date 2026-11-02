@@ -118,8 +118,52 @@ it('four-school server capacity, school icons and switch geometry follow the app
 }));
 for(const width of [320,390,1440])it(`${width}px reflow, label-in-name, 48px actions and axe`,()=>using(async page=>{
  await page.goto(url());await ready(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- if(width===1440){const table=await page.getByRole('table').first().boundingBox(),metric=await page.locator('thead .s29-metric').first().boundingBox();assert.ok(Math.abs(metric.width/table.width-.28)<.002,'desktop metric column keeps the frozen 28% allocation');}
+ if(width===1440){const table=await page.getByRole('table').first().boundingBox(),metric=await page.locator('thead .s29-metric').first().boundingBox();assert.ok(Math.abs(metric.width-table.width/3)<1,'desktop columns keep the frozen fixed-table equal allocation');}
  for(const action of await page.locator('.s29-comparison button:visible,.s29-comparison a:visible,.s29-comparison summary:visible').all()){const box=await action.boundingBox();assert.ok(box.height>=48,`${await action.innerText()}: ${box.height}`);}
  await page.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});const failures=await page.evaluate(async()=> (await window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}})).violations.filter(x=>['serious','critical'].includes(x.impact)));assert.deepEqual(failures.map(x=>({id:x.id,nodes:x.nodes.map(n=>n.target)})),[]);
  if(process.env.S29_DIAGNOSTICS){await mkdir(process.env.S29_DIAGNOSTICS,{recursive:true});await page.screenshot({path:`${process.env.S29_DIAGNOSTICS}/s29-${width}.png`,fullPage:true});}
 },{width}));
+
+// Corrective geometry measured from the frozen v3.2.1.08 DOM. These checks
+// exercise rendered layout and keyboard controls; they do not change a gate.
+for(const count of [2,3,4])it(`presentation: ${count}-school desktop columns stay equal`,()=>using(async page=>{
+ await page.goto(url(['a','b','c','d'].slice(0,count).join(',')));await ready(page);
+ for(const table of await page.locator('table').all()){
+  const widths=await table.locator('thead th').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().width));
+  assert.ok(Math.max(...widths)-Math.min(...widths)<1,JSON.stringify(widths));
+ }
+},{width:1440}));
+for(const width of [320,390,1440])it(`presentation: ${width}px actions retain equal widths, one row and full-width Add`,()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const row=page.locator('.s29-remove'),buttons=await row.locator('button').all(),boxes=await Promise.all(buttons.map(b=>b.boundingBox()));
+ assert.ok(Math.abs(boxes[0].y-boxes[1].y)<1,'Remove actions must stay on one row');
+ assert.ok(Math.abs(boxes[0].width-boxes[1].width)<1,'Remove actions must share the available width');
+ assert.ok(Math.abs((await page.getByRole('link',{name:'Add another school',exact:true}).boundingBox()).width-(await row.boundingBox()).width)<1,'Add spans the same content width');
+ for(const button of buttons){assert.ok((await button.boundingBox()).height>=48);assert.equal(await button.evaluate(e=>getComputedStyle(e).paddingLeft),'10px');}
+ const wrappers=await page.locator('.s29-remove .s20-action-icon,.s29-add .s20-action-icon').evaluateAll(nodes=>nodes.map(e=>({box:e.getBoundingClientRect().toJSON(),display:getComputedStyle(e).display,svg:e.querySelector('svg').getBoundingClientRect().toJSON()})));
+ for(const x of wrappers){assert.equal(x.box.width,20);assert.equal(x.box.height,20);assert.equal(x.svg.width,18);assert.equal(x.svg.height,18);assert.equal(x.display,'inline-flex');}
+},{width}));
+it('presentation: disclosure arrows follow the labels and preserve native keyboard opening',()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const facts=page.locator('details').first(),summary=facts.locator('summary');
+ const arrows=await page.locator('summary').evaluateAll(nodes=>nodes.map(e=>({last:e.lastElementChild?.getAttribute('aria-hidden'),svg:e.lastElementChild?.querySelector('svg')?.getAttribute('width'),first:e.firstElementChild?.textContent})));
+ assert.deepEqual(arrows,[{last:'true',svg:'18',first:'Published facts'},{last:'true',svg:'18',first:'Where these figures come from'}]);
+ assert.equal(await facts.getAttribute('open'),'');await summary.press('Enter');assert.equal(await facts.getAttribute('open'),null);
+ await summary.press('Space');assert.equal(await facts.getAttribute('open'),'');assert.equal(await summary.evaluate(e=>e===document.activeElement),true);
+}));
+it('presentation: missing figures retain frozen inherited ink, bold weight and italic',()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ const style=await page.locator('td .s29-na').first().evaluate(e=>{const s=getComputedStyle(e);return {color:s.color,weight:s.fontWeight,style:s.fontStyle};});
+ assert.deepEqual(style,{color:'rgb(20, 22, 26)',weight:'700',style:'italic'});
+}));
+it('presentation: desktop Differences only card retains the frozen 70px height and centered switch',()=>using(async page=>{
+ await page.goto(url());await ready(page);const card=await page.locator('.s29-diff').boundingBox(),button=await page.getByRole('switch',{name:'Differences only',exact:true}).boundingBox();
+ assert.equal(card.height,70);assert.ok(Math.abs(button.y+button.height/2-card.y-card.height/2)<1);
+},{width:1440}));
+it('presentation: colored action glyphs retain the frozen nested-wrapper baseline',()=>using(async page=>{
+ await page.goto(url());await ready(page);
+ for(const action of await page.locator('.s29-remove button,.s29-add').all()){
+  const box=await action.boundingBox(),glyph=await action.locator('svg').boundingBox();
+  assert.equal(glyph.y+glyph.height/2-(box.y+box.height/2),-1,'the frozen colored wrapper puts its glyph 1px above the action center');
+ }
+},{width:1440}));
