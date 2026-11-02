@@ -23,7 +23,8 @@ export function S29ComparisonScreen(props:Store){
 function ComparisonScreen({readSelection,writeSelection,continuation}:Store&{continuation:MutableRefObject<Continuation>}){
  const auth=useAuth(),session=useStudentSession(),nav=useNavigate(),location=useLocation(),[sp,setSp]=useSearchParams();
  const idsParam=sp.get('ids'),ids=useMemo(()=>comparisonIds(idsParam,readSelection()),[idsParam,readSelection]);
- const selectionKey=ids.join(','),root=useRef<HTMLDivElement>(null),first=useRef(true),lock=useRef(false),lastFailure=useRef<unknown>(null);
+ const selectionKey=ids.join(','),root=useRef<HTMLDivElement>(null),first=useRef(true),lock=useRef(false),lastFailure=useRef<{key:string;error:unknown}|null>(null);
+ const requestKey=JSON.stringify([auth.userId,selectionKey,location.key]);
  const [diffOnly,setDiffOnly]=useState(false),[attempt,setAttempt]=useState(0);
  const [mobile,setMobile]=useState(()=>window.matchMedia('(max-width: 899px)').matches);
  const [pair,setPair]=useState<{selection:string;index:number}>({selection:'',index:0});
@@ -34,10 +35,13 @@ function ComparisonScreen({readSelection,writeSelection,continuation}:Store&{con
   if(!navigator.onLine)throw new Error('offline');
   try{return await readComparison(ids,signal);}catch(e){if(e instanceof ComparisonError&&e.status===401)continuation.current.expired=true;throw e;}
  },enabled:idsParam!==null&&validIds&&!tooFew&&session.phase!=='pending'&&session.phase!=='unavailable'&&!continuation.current.expired,retry:false,networkMode:'always',staleTime:Infinity,refetchOnMount:'always',refetchOnWindowFocus:false,refetchOnReconnect:false});
- if(query.isError)lastFailure.current=query.error;
+ // Retain a notice during Retry only for the same query. A corrected selection
+ // owns a new request: showing its predecessor's error leaves stale controls
+ // focusable until they disappear, as well as misreporting the pending state.
+ if(query.isError)lastFailure.current={key:requestKey,error:query.error};
  if(query.isSuccess)lastFailure.current=null;
  const expired=continuation.current.expired,unavailable=session.phase==='unavailable';
- const error=query.error??(query.isFetching?lastFailure.current:null);
+ const error=query.error??(query.isFetching&&lastFailure.current?.key===requestKey?lastFailure.current.error:null);
  const waiting=session.phase==='pending'||(!tooFew&&validIds&&!expired&&!unavailable&&query.isPending&&!error);
  const initialFailure=expired||unavailable||!validIds||tooFew||!!error;
  const data=!initialFailure&&!waiting?query.data:undefined,items=data?.items??[];

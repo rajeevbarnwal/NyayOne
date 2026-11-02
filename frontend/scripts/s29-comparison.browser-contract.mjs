@@ -231,3 +231,66 @@ it('QA-S29-05 only differing published facts reports the actual count and keeps 
  assert.equal(await page.locator('table').count(),1);assert.match(await page.locator('summary').first().innerText(),/1 differing figure/);assert.equal(await page.locator('tbody tr').count(),1);
  await page.getByText('No core figures differ for the schools shown.',{exact:true}).waitFor();
 },{project:id=>({...school(id),state:'Delhi',facts:[{...school(id).facts[0],value:id==='a'?'Available':'Not offered'}]})}));
+
+for(const [status,code,extra,ids,removeIndex] of [
+ [404,'school_not_found',{},'a,b,c,dead',4],
+ [422,'COMPARE_LIMIT_EXCEEDED',{max_allowed:4},'a,b,c,d,e',2]
+]){
+ it(`QA-S29-07 ${status} corrected selection has its own pending state, not the preceding error`,()=>using(async(page,s)=>{
+  await page.goto(url(ids));await page.getByRole('alert').waitFor();s.status=200;s.hold=true;
+  await page.getByRole('button',{name:`Remove school ${removeIndex} from comparison`,exact:true}).press('Enter');await held(s);
+  await page.getByRole('status',{name:'Loading comparison',exact:true}).waitFor();
+  assert.equal(await page.getByRole('status',{name:'Loading comparison',exact:true}).getAttribute('aria-busy'),'true');
+  assert.equal(await page.getByRole('alert').count(),0);assert.equal(await page.locator('.s29-correction').count(),0);
+  assert.doesNotMatch(await page.locator('main').innerText(),/HTTP|school_not_found|COMPARE_LIMIT_EXCEEDED/);
+  assert.equal(await page.locator('h1').evaluate(el=>el===document.activeElement),true);
+  const remaining=ids.split(',').filter((_,i)=>i!==removeIndex-1);assert.deepEqual(s.requests,[ids.split(','),remaining]);
+  await s.held.shift()();await ready(page);assert.equal(await page.locator('h1').evaluate(el=>el===document.activeElement),true);
+ },{status,code,extra}));
+ for(const interaction of ['Tab','second click','outside focus'])it(`QA-S29-08 ${status} ${interaction} during correction preserves meaningful focus`,()=>using(async(page,s)=>{
+  await page.goto(url(ids));await page.getByRole('alert').waitFor();s.status=200;s.hold=true;
+  const button=page.getByRole('button',{name:`Remove school ${removeIndex} from comparison`,exact:true}),box=await button.boundingBox();
+  await button.click();await held(s);
+  if(interaction==='Tab')await page.keyboard.press('Tab');
+  if(interaction==='second click'){await delay(120);await page.mouse.click(box.x+box.width/2,box.y+box.height/2);}
+  const outside=page.getByRole('link',{name:'Find a law school',exact:true});if(interaction==='outside focus')await outside.focus();
+  await s.held.shift()();await ready(page);
+  await page.waitForFunction(()=>document.activeElement!==document.body);
+  if(interaction==='outside focus')assert.equal(await outside.evaluate(el=>el===document.activeElement),true,'never steal deliberate navigation focus');
+  assert.deepEqual(s.requests,[ids.split(','),ids.split(',').filter((_,i)=>i!==removeIndex-1)]);
+ },{status,code,extra}));
+}
+it('QA-S29-07 consecutive correction failures belong to the new selection and remain recoverable',()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c,dead'));await page.getByRole('alert').waitFor();s.status=422;s.code='COMPARE_LIMIT_EXCEEDED';s.extra={max_allowed:2};s.hold=true;
+ await page.getByRole('button',{name:'Remove school 4 from comparison',exact:true}).press('Enter');await held(s);
+ await page.getByRole('status',{name:'Loading comparison',exact:true}).waitFor();await s.held.shift()();
+ await page.getByText('Comparison is limited to 2 schools. Remove schools to meet the server limit.',{exact:true}).waitFor();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');
+ assert.equal(await page.getByRole('button',{name:/Remove school \d from comparison/}).count(),3);
+ assert.doesNotMatch(await page.getByRole('alert').innerText(),/404|school_not_found/);
+ s.status=200;await page.getByRole('button',{name:'Remove school 3 from comparison',exact:true}).press('Enter');await ready(page);
+ assert.deepEqual(s.requests,[['a','b','c','dead'],['a','b','c'],['a','b']]);
+},{status:404,code:'school_not_found'}));
+for(const status of [404,422])it(`QA-S29-07 ${status} pending feedback renders without an artificially held response`,()=>using(async(page,s)=>{
+ for(let repetition=0;repetition<5;repetition++){
+  s.status=status;await page.goto(url('a,b,c,dead'));await page.getByRole('alert').waitFor();
+  await page.evaluate(()=>{
+   window.s29PendingSeen=false;
+   window.s29PendingObserver=new MutationObserver(()=>{if(document.querySelector('[role="status"][aria-label="Loading comparison"][aria-busy="true"]'))window.s29PendingSeen=true;});
+   window.s29PendingObserver.observe(document.querySelector('main'),{subtree:true,childList:true,attributes:true});
+  });
+  s.status=200;await page.getByRole('button',{name:'Remove school 4 from comparison',exact:true}).press('Enter');await ready(page);
+  assert.equal(await page.evaluate(()=>{window.s29PendingObserver.disconnect();return window.s29PendingSeen;}),true);
+  assert.deepEqual(s.requests.slice(-2),[['a','b','c','dead'],['a','b','c']]);
+  assert.equal(await page.locator('h1').evaluate(el=>el===document.activeElement),true);
+ }
+ assert.equal(s.requests.length,10);
+},{status,code:status===404?'school_not_found':'COMPARE_LIMIT_EXCEEDED',extra:status===422?{max_allowed:3}:{}}));
+for(const outcome of [422,503])it(`QA-S29-08 correction HTTP ${outcome} does not steal deliberate outside focus`,()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c,dead'));await page.getByRole('alert').waitFor();s.status=outcome;s.code=outcome===422?'COMPARE_LIMIT_EXCEEDED':'unavailable';s.extra={max_allowed:2};s.hold=true;
+ await page.getByRole('button',{name:'Remove school 4 from comparison',exact:true}).press('Enter');await held(s);
+ await page.getByRole('status',{name:'Loading comparison',exact:true}).waitFor();
+ const back=page.getByRole('link',{name:'Find a law school',exact:true});await back.focus();await s.held.shift()();await page.getByRole('alert').waitFor();
+ assert.equal(await back.evaluate(el=>el===document.activeElement),true);assert.equal(s.requests.length,2);
+ assert.match(await page.getByRole('alert').innerText(),new RegExp(`HTTP ${outcome}`));
+},{status:404,code:'school_not_found'}));
