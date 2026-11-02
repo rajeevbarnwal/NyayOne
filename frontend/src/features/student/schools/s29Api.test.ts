@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readComparison, comparisonIds, comparisonValue, comparisonDetailPath } from './s29Api';
+import { schoolReturn } from './s28Api';
 const school = (id: string) => ({ id, name: `School ${id}`, slug: id, state: 'Delhi', institution_type: 'government', accreditation: null, entrance_exam: null, fees_min: null, fees_max: null, nirf_rank: null, programmes: [], facts: [] });
-const valid = () => ({ comparison_id: 'cmp-server-1', compare_max: 4, items: [school('a'), school('b')] });
+const valid = () => ({ comparison_id: '00000000-0000-4000-8000-000000000001', compare_max: 4, items: [school('a'), school('b')] });
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 afterEach(() => vi.unstubAllGlobals());
 describe('S-29 comparison authority', () => {
@@ -9,7 +10,7 @@ describe('S-29 comparison authority', () => {
     const fetch = vi.fn().mockResolvedValue(reply(valid())); vi.stubGlobal('fetch', fetch);
     const signal = new AbortController().signal;
     const result = await readComparison(['a','b'], signal);
-    expect(result).toMatchObject({ comparisonId: 'cmp-server-1', compareMax: 4, items: [{ id: 'a', feesMin: null }, { id: 'b' }] });
+    expect(result).toMatchObject({ comparisonId: valid().comparison_id, compareMax: 4, items: [{ id: 'a', feesMin: null }, { id: 'b' }] });
     expect(new URL(fetch.mock.calls[0][0]).pathname).toBe('/api/v1/law-schools/compare');
     expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST', signal });
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ school_ids: ['a','b'] });
@@ -41,5 +42,19 @@ describe('S-29 comparison authority', () => {
   it('uses the frozen institution labels while retaining unknown server values verbatim', async () => {
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(reply(valid())));const item=(await readComparison(['a','b'])).items[0];
     for(const [institutionType,label] of Object.entries({national_law_university:'National Law University',government:'Government law college',private:'Private university',deemed:'Deemed university',other_type:'other_type'}))expect(comparisonValue({...item,institutionType},'institution_type')).toBe(label);
+  });
+  it.each(['fabricated-identity', '00000000000040008000000000000001', '00000000-0000-4000-8000-000000000001\n', ' 00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000z'])('QA-S29-04 rejects non-contract comparison identity %j', async comparison_id => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply({...valid(), comparison_id})));
+    await expect(readComparison(['a','b'])).rejects.toMatchObject({code:'invalid_response',status:200});
+  });
+  it('QA-S29-01 keeps only safe search context through the complete S-29/S-28 round trip', () => {
+    const ret='state=Karnataka&sort=name&page=2&q=Law&redirect=https://evil.test&ret=bad';
+    const detail=new URL(comparisonDetailPath('a',['a','b'],ret),'https://example.test');
+    const comparison=new URL(schoolReturn(detail.searchParams).path,'https://example.test');
+    expect(comparison.pathname).toBe('/s-29');
+    expect(comparison.searchParams.get('ids')).toBe('a,b');
+    expect(schoolReturn(comparison.searchParams).path).toBe('/s-27?q=Law&state=Karnataka&sort=name&page=2');
+    expect(detail.searchParams.get('ret')).not.toContain('evil');
+    expect(comparisonDetailPath('a',['a','b'],'https://evil.test')).toBe(comparisonDetailPath('a',['a','b']));
   });
 });

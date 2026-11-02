@@ -43,7 +43,12 @@ export function safeSource(value:string|null): {url:string;host:string}|null {
 export function schoolReturn(sp:URLSearchParams): {label:string;path:string} {
  const from = sp.get('from');
  if(from === 's30') return {label:'Saved and followed',path:'/s-30'};
- if(from === 's29') { const ids = sp.get('ids'); return {label:'Comparison',path:'/s-29'+(ids ? `?${new URLSearchParams({ids})}`:'')}; }
+ if(from === 's29') {
+  const query=new URLSearchParams(),ids=sp.get('ids');if(ids)query.set('ids',ids);
+  const ret=schoolReturn(new URLSearchParams({ret:sp.get('ret')??''})).path.split('?')[1];
+  if(ret)query.set('ret',ret);
+  return {label:'Comparison',path:'/s-29'+(query.size?`?${query}`:'')};
+ }
  const input = new URLSearchParams(sp.get('ret') ?? ''), query = new URLSearchParams();
  for(const key of ['q','state','institution_type','degree','accreditation','entrance_exam','fees_max','sort','page','page_size']) if(input.has(key))query.set(key,input.get(key)!);
  return {label:'Find a law school',path:'/s-27'+(query.size ? `?${query}`:'')};

@@ -19,7 +19,8 @@ async function using(run,options={}){
   if(url.pathname==='/api/v1/auth/student/session')return reply(s.sessionUnavailable?{detail:{code:'unavailable'}}:s.signedOut?{authenticated:false}:{authenticated:true,actor},s.sessionUnavailable?503:200);
   if(url.pathname==='/api/v1/law-schools/compare'){
    assert.equal(req.method(),'POST');const ids=req.postDataJSON().school_ids;s.requests.push(ids);
-   const status=s.status,body=status===200?{comparison_id:`cmp-${s.requests.length}`,compare_max:4,items:ids.map(school)}:{detail:{code:s.code,...s.extra}};
+   const status=s.status,body=status===200?{comparison_id:`00000000-0000-4000-8000-${String(s.requests.length).padStart(12,'0')}`,compare_max:4,items:ids.map(s.project??school)}:{detail:{code:s.code,...s.extra}};
+   if(status===200&&s.comparisonId)body.comparison_id=s.comparisonId;
    const done=()=>{if(status===401)s.signedOut=true;return reply(s.malformed?{}:body,status);};if(s.hold){s.hold=false;s.held.push(done);return;}return done();
   }
   if(url.pathname.startsWith('/api/v1/law-schools/'))return reply(school(decodeURIComponent(url.pathname.split('/').pop())));
@@ -167,3 +168,66 @@ it('presentation: colored action glyphs retain the frozen nested-wrapper baselin
   assert.equal(glyph.y+glyph.height/2-(box.y+box.height/2),-1,'the frozen colored wrapper puts its glyph 1px above the action center');
  }
 },{width:1440}));
+
+
+it('QA-S29-01 preserves search query through detail and comparison return links',()=>using(async page=>{
+ const ret='state=Karnataka&sort=name&page=2';await page.goto(url()+'&ret='+encodeURIComponent(ret));await ready(page);
+ await page.getByRole('link',{name:'Synthetic Law School a',exact:true}).first().click();
+ await page.getByRole('link',{name:'Comparison',exact:true}).click();await ready(page);
+ for(const name of ['Find a law school','Add another school'])assert.equal(await page.getByRole('link',{name,exact:true}).getAttribute('href'),'/s-27?'+ret);
+}));
+for(const [status,code,extra,copy] of [
+ [404,'school_not_found',{},/school could not be found/i],
+ [422,'COMPARE_LIMIT_EXCEEDED',{max_allowed:3},/limited to 3 schools/i],
+ [422,'validation_error',{},/selection could not be accepted/i],
+ [422,'COMPARE_MIN_NOT_MET',{min_required:3},/at least 3 schools/i]
+])it(`QA-S29-02 ${code} gives actionable correction after direct-link/reload`,()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c,d'));await page.getByRole('alert').waitFor();
+ assert.match(await page.getByRole('alert').innerText(),copy);assert.equal(await page.getByRole('button',{name:'Retry',exact:true}).count(),0);
+ assert.equal(await page.getByRole('link',{name:'Change schools',exact:true}).getAttribute('href'),'/s-27');
+ // The URL selection can be corrected even though an initial deep link has no tray.
+ const remove=page.getByRole('button',{name:'Remove school 4 from comparison',exact:true});await remove.waitFor();s.status=200;s.hold=true;
+ await remove.press('Enter');await held(s);assert.deepEqual(s.requests,[['a','b','c','d'],['a','b','c']]);
+ assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'BODY');await s.held.shift()();await ready(page);
+ assert.equal(new URL(page.url()).searchParams.get('ids'),'a,b,c');assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'BODY');
+},{status,code,extra}));
+it('QA-S29-02 does not invent missing server min/max values',()=>using(async page=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();const text=await page.getByRole('alert').innerText();assert.match(text,/server comparison limit/i);assert.doesNotMatch(text,/limited to [0-9]+/);
+},{status:422,code:'COMPARE_LIMIT_EXCEEDED'}));
+for(const width of [320,360,390])it(`QA-S29-03 ${width}px four-school values and controls are readable and keyboard reachable`,()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c,d'));await ready(page);
+ const pairs=page.getByRole('group',{name:'Show two of the 4 schools',exact:true}),radios=pairs.getByRole('radio');assert.equal(await radios.count(),6);
+ const seen=new Set();
+ for(let i=0;i<6;i++){
+  if(i===0)await radios.nth(0).focus();else await radios.nth(i-1).press('ArrowRight');
+  assert.equal(await radios.nth(i).isChecked(),true);
+  for(const name of await page.getByRole('table').first().locator('thead a').allTextContents())seen.add(name);
+  for(const button of await page.locator('.s29-remove button').all()){
+   const box=await button.boundingBox();assert.ok(box.height>=48);
+   const layout=await button.evaluate(e=>({scroll:e.scrollWidth,width:e.clientWidth}));assert.ok(layout.scroll<=layout.width+1,JSON.stringify(layout));
+  }
+  const fees=await page.getByRole('table').first().locator('tbody tr').filter({has:page.getByRole('rowheader',{name:'Fees',exact:true})}).locator('td').evaluateAll(cells=>cells.map(cell=>{
+   const node=[...cell.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);const range=document.createRange();range.setStart(node,0);range.setEnd(node,'₹2,85,000'.length);return [...range.getClientRects()].length;
+  }));assert.deepEqual(fees,[1,1],'a rupee amount must not split mid-number');
+ }
+ assert.equal(seen.size,4);assert.equal(s.requests.length,1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.setViewportSize({width:1440,height:1024});await page.waitForFunction(()=>document.querySelector('thead').querySelectorAll('a').length===4);
+ assert.equal(await pairs.count(),0);assert.equal(s.requests.length,1);
+},{width,project:id=>({...school(id),name:`National Law School ${id}`,fees_min:285000,fees_max:285000})}));
+it('QA-S29-04 rejects a fabricated non-UUID comparison identity in the rendered page',()=>using(async page=>{
+ await page.goto(url());await page.getByRole('alert').waitFor();assert.equal(await page.locator('table').count(),0);assert.match(await page.getByRole('alert').innerText(),/response could not be verified/);assert.doesNotMatch(await page.locator('aside').innerText(),/fabricated-identity/);
+},{comparisonId:'fabricated-identity'}));
+it('QA-S29-05 no differences reports the shown pair and no empty tables or invented fact count',()=>using(async(page,s)=>{
+ await page.goto(url('a,b,c'));await ready(page);await page.getByRole('switch',{name:'Differences only',exact:true}).press('Space');
+ await page.getByText('Every compared figure is the same for the schools shown.',{exact:true}).waitFor();
+ assert.equal(await page.locator('table').count(),0);assert.match(await page.locator('summary').first().innerText(),/0 differing figures/);assert.doesNotMatch(await page.locator('main').innerText(),/6 more figures/);
+ await page.getByText('No published facts differ for the schools shown.',{exact:true}).waitFor();
+ await page.getByRole('radio').nth(1).check();await page.getByRole('table').first().waitFor();assert.equal(await page.locator('tbody tr:visible').count(),1);
+ assert.equal(await page.getByText('Every compared figure is the same for the schools shown.',{exact:true}).count(),0);assert.equal(s.requests.length,1);
+ await page.getByRole('switch',{name:'Differences only',exact:true}).press('Space');assert.match(await page.locator('summary').first().innerText(),/6 more figures/);
+},{project:id=>({...school(id),state:id==='c'?'Kerala':'Delhi'})}));
+it('QA-S29-05 only differing published facts reports the actual count and keeps nonempty table',()=>using(async page=>{
+ await page.goto(url());await ready(page);await page.getByRole('switch',{name:'Differences only',exact:true}).press('Space');
+ assert.equal(await page.locator('table').count(),1);assert.match(await page.locator('summary').first().innerText(),/1 differing figure/);assert.equal(await page.locator('tbody tr').count(),1);
+ await page.getByText('No core figures differ for the schools shown.',{exact:true}).waitFor();
+},{project:id=>({...school(id),state:'Delhi',facts:[{...school(id).facts[0],value:id==='a'?'Available':'Not offered'}]})}));

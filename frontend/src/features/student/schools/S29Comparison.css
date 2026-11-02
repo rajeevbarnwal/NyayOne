@@ -21,3 +21,6 @@
 
 .s29-pairs{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-width:0}.s29-pairs legend{font-size:12.5px;font-weight:700;color:var(--s20-ink2);margin-bottom:6px;padding:0}
 .s29-pair{min-height:48px;display:flex;align-items:center;gap:12px;border:1.5px solid var(--s20-line2);border-radius:12px;padding:6px 12px;background:#fff;cursor:pointer}.s29-pair.is-selected{border-color:var(--s20-indigo);background:var(--s20-soft)}.s29-pair input{width:22px;height:22px;accent-color:var(--s20-indigo);flex:none;margin:0}.s29-pair span{display:flex;flex-direction:column;gap:1px;min-width:0;overflow-wrap:anywhere}.s29-pair b{font-size:13.5px}.s29-pair:focus-within{outline:3px solid var(--s20-indigo);outline-offset:2px}
+
+/* Additional server-capacity/error cases; frozen two/three-school views unchanged. */
+.s29-correction{list-style:none;padding:0;margin:16px 0 0;text-align:left;display:grid;gap:10px;width:100%}.s29-correction li{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.s29-correction li>span{flex:1;min-width:0;overflow-wrap:anywhere}.s29-correction button{min-height:48px;white-space:normal}.s29-many-remove>.s20-btn{white-space:normal;overflow-wrap:anywhere;padding:8px 10px}.s29-many-remove>.s20-btn>span{flex:none}
