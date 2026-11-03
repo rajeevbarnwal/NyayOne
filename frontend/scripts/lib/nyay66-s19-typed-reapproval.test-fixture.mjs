@@ -1,3 +1,4 @@
+import {withoutS29ProposalsForTest} from './nyay66-s29-exceptions.test-fixture.mjs';
 import {withoutS28ProposalsForTest} from './nyay66-s28-exceptions.test-fixture.mjs';
 // Exact test-only data for the proposed PR84 mobile delete-typed replacement.
 // Never imported by capture, evaluation or product code; pins do not grant approval.
@@ -46,4 +47,4 @@ export function normalizeS19TypedRasterForTest(exceptions){
 }
 // Historical snapshot assertions use a clone; each replacement is independently
 // exact-checked. The real policy and runtime owner-approval checks are untouched.
-export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(normalizeS19SequenceForTest(normalizeS18InvalidForTest(withoutS28ProposalsForTest(policy.exceptions)))))});
+export const s19TypedPolicyForTest=policy=>({...policy,exceptions:normalizeS19TypedRasterForTest(normalizeS19ExportRasterForTest(normalizeS19SequenceForTest(normalizeS18InvalidForTest(withoutS28ProposalsForTest(withoutS29ProposalsForTest(policy.exceptions))))))});

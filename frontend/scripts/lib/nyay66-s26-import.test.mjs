@@ -95,7 +95,7 @@ describe('S-26 archive import fails closed before writing',()=>{
     currentPolicy.exceptions=withoutS26ProposalsForTest(withoutS27ProposalsForTest(currentPolicy.exceptions));
     expect(currentPolicy.exceptions).toHaveLength(160);
     expect(JSON.stringify(currentPolicy.exceptions)).toBe(JSON.stringify(before.exceptions));
-    const current=structuredClone(currentPolicy);delete current.s26;delete current.s27;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(currentPolicy);delete current.s26;delete current.s27;expect(current.s29).toEqual({"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"});delete current.s29;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-26');
     expect(rows).toHaveLength(8);

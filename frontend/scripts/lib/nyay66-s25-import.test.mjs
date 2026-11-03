@@ -90,7 +90,7 @@ describe('S-25 archive import fails closed before writing',()=>{
     expect(policy.s25).toEqual({cache:'s25-v32108-chromium-149.0.7827.55-39558506587',manifestSha256:'c2725e568cecf64f464cd687774ec331f3bbf563c9534d137ade298f0f40eb67',provenanceSha256:'16567edebd066feb41cbaf3b9754f5cc62f19d50e1fed2404aea7d884ab86675'});
     const before=JSON.parse(execFileSync('git',['show','5fd6230526badfa03cf57d301b54edfb24208c76:frontend/scripts/nyay66-policy.json'],{cwd:root}));
     // The additive S-26/S-27 caches are pinned by their exact-provenance import tests.
-    const current=structuredClone(policy);delete current.s25;delete current.s26;delete current.s27;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
+    const current=structuredClone(policy);delete current.s25;delete current.s26;delete current.s27;expect(current.s29).toEqual({"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"});delete current.s29;delete current.s28;delete current.integrityApproval;delete before.integrityApproval;
     if(mode==='s25-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-25'),...structuredClone(s25Proposals)];
     if(mode==='s26-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-26'),...structuredClone(s26Proposals)];
     if(mode==='s27-proposed')current.exceptions=[...current.exceptions.filter(e=>e.screen!=='S-27'),...structuredClone(s27Proposals)];
