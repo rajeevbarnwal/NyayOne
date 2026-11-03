@@ -3,6 +3,7 @@ import { studentApiFetch } from '../lib/studentApiClient';
 import { LawSchoolsApiError } from '../lib/lawSchoolsApi';
 import { writeSchoolSaved, writeSchoolFollow } from './s28Api';
 import type { S27SchoolSummary } from './s27Api';
+import { synchronizeSchoolRemoval } from './schoolMembershipCache';
 export type SchoolListKind = 'saved' | 'followed';
 export type PrivateSchool = S27SchoolSummary & { notifyOptIn: boolean | null };
 const object = (v:unknown):v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
@@ -33,6 +34,6 @@ export async function reconcileSchoolRemoval(client:QueryClient,actor:string,kin
  const key=[`law-schools-${kind}`,actor],filters=[{queryKey:key},{queryKey:['law-school',id]},{queryKey:['s28-detail',actor,id]}];
  for(const filter of filters)await client.cancelQueries(filter);
  if(!current())return;
- if(confirmed)client.setQueryData<PrivateSchool[]>(key,items=>items?.filter(s=>s.id!==id));
+ if(confirmed)synchronizeSchoolRemoval(client,actor,kind,id);
  for(const filter of filters)void client.invalidateQueries({...filter,refetchType:'none'});
 }

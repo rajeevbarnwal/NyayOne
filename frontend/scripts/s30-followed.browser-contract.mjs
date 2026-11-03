@@ -17,15 +17,15 @@ async function using(run,options={}){
   if(u.origin!==origin&&!(u.origin==='http://localhost:1131'&&u.pathname.startsWith('/api/v1/'))){s.unexpected.push(u.origin);return route.abort();}if(!u.pathname.startsWith('/api/v1/'))return route.continue();
   if(u.pathname==='/api/v1/auth/student/session')return reply(s.signedOut?{authenticated:false,actor:null}:{authenticated:true,actor});
   if(/\/student\/law-schools\/(saved|followed)$/.test(u.pathname)){
-   const kind=u.pathname.split('/').pop();s.reads.push(kind);const status=kind==='saved'?s.status:200;const body=status===200?{items:s[kind].map(school)}:{detail:{code:'unavailable'}};
-   const done=()=>reply(body,status);if(s.hold){s.hold=false;s.held.push(done);return;}return done();
+   const kind=u.pathname.split('/').pop();s.reads.push(kind);const status=kind==='saved'?s.status:(s.followStatus??200);const body=status===200?{items:s[kind].map(school)}:{detail:{code:'unavailable'}};
+   const done=()=>reply(body,status);if(s.hold||s.holdList===kind){s.hold=false;s.holdList=null;s.held.push(done);return;}return done();
   }
   if(r.method()==='DELETE'){
    const parts=u.pathname.split('/'),kind=parts.at(-1)==='saved'?'saved':'followed',id=decodeURIComponent(parts.at(-2));s.writes.push({kind,id});
    const done=()=>{if(s.writeStatus===401)s.signedOut=true;if(s.writeStatus!==200)return reply({detail:{code:s.writeStatus===401?'authentication_required':'unavailable'}},s.writeStatus);s[kind]=s[kind].filter(x=>x!==id);return reply(s.malformed?{}:kind==='saved'?{saved:false}:{followed:false,notify_opt_in:false});};
    if(s.hold){s.hold=false;s.held.push(done);return;}return done();
   }
-  if(/^\/api\/v1\/law-schools\/[^/]+$/.test(u.pathname))return reply({...school(u.pathname.split('/').pop()),saved:s.saved.includes(u.pathname.split('/').pop()),followed:s.followed.includes(u.pathname.split('/').pop())});
+  if(/^\/api\/v1\/law-schools\/[^/]+$/.test(u.pathname)){const id=u.pathname.split('/').pop(),body={...school(id),saved:s.saved.includes(id),followed:s.followed.includes(id)},done=()=>reply(body);if(s.holdDetail){s.holdDetail=false;s.held.push(done);return;}return done();}
   s.unexpected.push(r.method()+' '+u.pathname);return route.abort();
  });try{await run(page,s);assert.deepEqual(s.unexpected,[]);}catch(error){console.error({url:page.url(),text:(await page.locator('body').innerText()).slice(0,1400),writes:s.writes,unexpected:s.unexpected});throw error;}finally{await context.close();}
 }
@@ -79,3 +79,57 @@ it('Find schools uses the frozen separate outline and round-capped building stro
  assert.equal(await icon.locator('path').nth(2).getAttribute('stroke-linecap'),'round');
  assert.equal(await icon.locator('path').nth(2).getAttribute('d'),'M6.5 11.5v4.5c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.5M21 9.5v5');
 },{saved:[]}));
+
+// Independent-QA regression boundaries: real product routes, synthetic backend.
+for(const kind of ['saved','followed'])it(`F1 ${kind}: offline Retry replaces stale HTTP text and recovers online without stealing focus`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');
+ if(kind==='followed'){await ready(p);await p.getByRole('tab',{name:'Following (…)',exact:true}).click();}
+ await p.getByRole('alert').waitFor();assert.match(await p.getByRole('alert').innerText(),/HTTP 503/);
+ const reads=s.reads.length;await p.context().setOffline(true);
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('You are offline. No request was sent.'));
+ assert.equal(s.reads.length,reads);assert.doesNotMatch(await p.getByRole('alert').innerText(),/HTTP 503/);
+ assert.equal(await p.getByRole('alert').evaluate(el=>el===document.activeElement),true);
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');assert.equal(s.reads.length,reads);
+ await p.context().setOffline(false);s.status=200;s.followStatus=200;s.holdList=kind;
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await held(s);
+ const other=p.getByRole('tab').filter({hasText:kind==='saved'?'Following':'Saved'});await other.focus();
+ await s.held.shift()();await p.getByRole('button',{name:kind==='saved'?'Remove Synthetic School a from saved':'Unfollow Synthetic School a',exact:true}).waitFor();
+ assert.equal(await p.getByRole('alert').count(),0);assert.equal(await other.evaluate(el=>el===document.activeElement),true);
+},{status:kind==='saved'?503:200,followStatus:kind==='followed'?503:200}));
+for(const kind of ['saved','followed'])it(`F2 S-28 → S-30: confirmed ${kind} removal is synchronized before a held refetch`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await ready(p);await p.getByRole('link',{name:'Synthetic School a',exact:true}).click();
+ const button=p.getByRole('button',{name:kind==='saved'?'Saved':'Following',exact:true});await button.waitFor();
+ s.hold=true;await button.press('Enter');await held(s);
+ assert.equal(s[kind].includes('a'),true,'no optimistic removal before server confirmation');await s.held.shift()();
+ await p.getByRole('button',{name:kind==='saved'?'Save':'Follow',exact:true}).waitFor();
+ s.holdList=kind;await p.getByRole('link',{name:'Saved and followed',exact:true}).click();await held(s);
+ if(kind==='followed')await p.getByRole('tab').filter({hasText:'Following'}).click();
+ assert.equal(await p.getByRole('link',{name:'Synthetic School a',exact:true}).count(),0,'confirmed removal must not reappear during reconciliation');
+ assert.doesNotMatch(await p.getByRole('tab').filter({hasText:kind==='saved'?'Saved':'Following'}).innerText(),kind==='saved'?/Saved \(2\)/:/Following \(1\)/);
+ await s.held.shift()();await p.getByRole('tab',{name:kind==='saved'?'Saved (1)':'Following (0)',exact:true}).waitFor();
+ assert.equal(s[kind].includes('a'),false);assert.equal(s[kind==='saved'?'followed':'saved'].includes('a'),true);
+}));
+for(const kind of ['saved','followed'])it(`F2 S-30 → S-28: confirmed ${kind} removal updates cached detail while GET is held`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-28?id=a&from=s30');await p.getByRole('button',{name:'Saved',exact:true}).waitFor();
+ await p.getByRole('link',{name:'Saved and followed',exact:true}).click();await ready(p);
+ if(kind==='followed')await p.getByRole('tab',{name:'Following (1)',exact:true}).click();
+ await p.getByRole('button',{name:kind==='saved'?'Remove Synthetic School a from saved':'Unfollow Synthetic School a',exact:true}).click();
+ await p.getByRole('tab',{name:kind==='saved'?'Saved (1)':'Following (0)',exact:true}).waitFor();
+ await p.getByRole('tab').filter({hasText:kind==='saved'?'Following':'Saved'}).click();s.holdDetail=true;
+ await p.getByRole('link',{name:'Synthetic School a',exact:true}).click();await held(s);
+ const changed=p.getByRole('button',{name:kind==='saved'?'Save':'Follow',exact:true});
+ assert.equal(await changed.count(),1,'cached detail must reflect server-confirmed removal before its GET completes');
+ assert.equal(await changed.getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:kind==='saved'?'Following':'Saved',exact:true}).getAttribute('aria-pressed'),'true');
+ await s.held.shift()();assert.equal(s[kind].includes('a'),false);
+}));
+for(const count of [1,5])it(`F3 mobile Compare explains disabled state for ${count} schools, including accessible description`,()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('tab',{name:`Saved (${count})`,exact:true}).waitFor();
+ const compare=p.getByRole('button',{name:'Compare saved schools',exact:true});assert.equal(await compare.isDisabled(),true);
+ const id=await compare.getAttribute('aria-describedby');assert.ok(id,'disabled control must point to the visible reason');
+ const reason=p.locator(`#${id}`);assert.equal(await reason.isVisible(),true);
+ assert.match(await reason.innerText(),count===1?/at least 2/i:/up to 4/i);
+ await p.setViewportSize({width:320,height:844});assert.equal(await reason.isVisible(),true);
+ assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+},{saved:Array.from({length:count},(_,i)=>String.fromCharCode(97+i))}));

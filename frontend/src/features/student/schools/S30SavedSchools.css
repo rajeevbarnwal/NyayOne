@@ -6,3 +6,5 @@
 .s30-remove[aria-pressed=true]{background:#f6edda;border-color:#c89a3a;color:#7a5c14}
 
 @media(max-width:899px){.s30-schools[data-saved-empty=true] .s20-related{display:none}}
+
+.s30-schools .s30-compare-help{flex-basis:100%;margin:0;font-size:12.5px;line-height:1.4;color:var(--s20-mut)}

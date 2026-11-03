@@ -28,3 +28,27 @@ describe('S-30 private list authority',()=>{
   c.setQueryData(key,[{id:'a'}]);await reconcileSchoolRemoval(c,'actor','saved','a',true,()=>false);expect(c.getQueryData(key)).toEqual([{id:'a'}]);expect(c.getQueryState(key)?.isInvalidated).toBe(false);
  });
 });
+
+describe('F2 confirmed removal cache truth',()=>{
+ it.each(['saved','followed'] as const)('updates only the confirmed %s detail membership and actor',async kind=>{
+  const c=new QueryClient(),key=['s28-detail','actor','a'],other=['s28-detail','other','a'];
+  const detail={id:'a',saved:true,followed:true,notifyOptIn:true,name:'Synthetic'};
+  c.setQueryData(key,detail);c.setQueryData(other,detail);
+  await reconcileSchoolRemoval(c,'actor',kind,'a',true,()=>true);
+  expect(c.getQueryData(key)).toEqual({...detail,...(kind==='saved'?{saved:false}:{followed:false,notifyOptIn:false})});
+  expect(c.getQueryData(other)).toEqual(detail);
+  expect(c.getQueryState(key)?.isInvalidated).toBe(true);
+ });
+ it('does not change detail membership for uncertain writes or a departed actor',async()=>{
+  const c=new QueryClient(),key=['s28-detail','actor','a'],detail={saved:true,followed:true,notifyOptIn:true};c.setQueryData(key,detail);
+  await reconcileSchoolRemoval(c,'actor','saved','a',false,()=>true);expect(c.getQueryData(key)).toEqual(detail);
+  await reconcileSchoolRemoval(c,'actor','followed','a',true,()=>false);expect(c.getQueryData(key)).toEqual(detail);
+ });
+ it('cancels an older detail read so it cannot resurrect confirmed membership',async()=>{
+  const c=new QueryClient(),key=['s28-detail','actor','a'],old={id:'a',saved:true,followed:true,notifyOptIn:true};c.setQueryData(key,old);
+  let release!:(v:typeof old)=>void;let signal:AbortSignal|undefined;
+  const read=c.fetchQuery({queryKey:key,queryFn:({signal:s})=>{signal=s;return new Promise<typeof old>(r=>{release=r;});}}).catch(()=>undefined);
+  await reconcileSchoolRemoval(c,'actor','saved','a',true,()=>true);expect(signal?.aborted).toBe(true);release(old);await read;
+  expect(c.getQueryData(key)).toEqual({...old,saved:false});
+ });
+});

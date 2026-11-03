@@ -10,6 +10,7 @@ import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib
 import { inrAmount, institutionTypeLabel, FACT_LABELS, S28_FACT_KEY_ORDER } from './lawschoolFormat.mjs';
 import { readSchoolDetail, writeSchoolSaved, writeSchoolFollow, safeSource, schoolReturn, type S28Detail } from './s28Api';
 import type { SchoolSelection } from './S27SearchScreen';
+import { synchronizeSchoolRemoval } from './schoolMembershipCache';
 import './S28Detail.css';
 type Store = { readSelection: () => SchoolSelection[]; writeSelection: (items: SchoolSelection[]) => SchoolSelection[] };
 type Action = { trigger: HTMLElement; anchor?: HTMLElement; done: boolean };
@@ -49,7 +50,9 @@ function Detail({readSelection,writeSelection,continuation}: Store & {continuati
  }
  const mutation=useStudentMutation({mutationKey:['s28-write',auth.userId,id],retry:false,networkMode:'always',
   mutationFn:async(v:Write)=>{try{return v.kind==='saved'?await writeSchoolSaved(id,v.desired):await writeSchoolFollow(id,v.desired,v.notify);}catch(e){if(e instanceof LawSchoolsApiError&&e.status===401)continuation.current.expired=true;throw e;}},
-  onSuccess:async(result,v)=>{await invalidatePrivate(v.fence);if(!isStudentContextFenceCurrent(v.fence))return;client.setQueryData<S28Detail>(key,d=>d?{...d,...result}:d);
+  onSuccess:async(result,v)=>{await invalidatePrivate(v.fence);if(!isStudentContextFenceCurrent(v.fence))return;
+   if(!v.desired)synchronizeSchoolRemoval(client,auth.userId!,v.kind==='saved'?'saved':'followed',id);
+   client.setQueryData<S28Detail>(key,d=>d?{...d,...result}:d);
    for(const prefix of [['law-schools-saved'],['law-schools-followed'],['law-school',id]])void client.invalidateQueries({queryKey:prefix});},
   onError:async(_e,v)=>{await invalidatePrivate(v.fence);},
  });
