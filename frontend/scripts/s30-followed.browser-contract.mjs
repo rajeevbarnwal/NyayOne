@@ -133,3 +133,42 @@ for(const count of [1,5])it(`F3 mobile Compare explains disabled state for ${cou
  await p.setViewportSize({width:320,height:844});assert.equal(await reason.isVisible(),true);
  assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
 },{saved:Array.from({length:count},(_,i)=>String.fromCharCode(97+i))}));
+
+// Round 2 independent QA R2-N1: an automatic read supersedes an offline Retry.
+for(const kind of ['saved','followed'])for(const outcome of [200,503])it(`R2-N1 ${kind}: automatic refetch ${outcome} replaces offline feedback without stealing focus`,()=>using(async(p,s)=>{
+ const label=kind==='saved'?'Saved':'Following',otherLabel=kind==='saved'?'Following':'Saved';
+ await p.goto(origin+'/s-30');
+ if(kind==='followed')await p.getByRole('tab').filter({hasText:label}).click();
+ await p.getByRole('alert').waitFor();assert.match(await p.getByRole('alert').innerText(),/HTTP 503/);
+ await p.context().setOffline(true);const before=s.reads.filter(k=>k===kind).length;
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('No request was sent'));
+ assert.equal(s.reads.filter(k=>k===kind).length,before,'offline Retry must not send a request');
+ await p.context().setOffline(false);
+ if(kind==='saved')s.status=outcome;else s.followStatus=outcome;
+ s.holdList=kind;
+ await p.getByRole('tab').filter({hasText:otherLabel}).click();
+ await p.getByRole('button',{name:kind==='saved'?'Unfollow Synthetic School a':'Remove Synthetic School a from saved',exact:true}).press('Enter');
+ await held(s);assert.equal(s.reads.filter(k=>k===kind).length,before+1,'the other-list removal must cause a real automatic read');
+ const target=p.getByRole('tab').filter({hasText:label});await target.click();await target.focus();
+ assert.doesNotMatch(await p.getByRole('tabpanel').innerText(),/You are offline|No request was sent/,'actual online fetch must supersede the no-request claim while pending');
+ await s.held.shift()();
+ if(outcome===200){await p.getByRole('link',{name:'Synthetic School a',exact:true}).waitFor();assert.equal(await p.getByRole('alert').count(),0,'successful automatic read must remove stale offline alert');}
+ else{await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('HTTP 503'));assert.doesNotMatch(await p.getByRole('alert').innerText(),/No request was sent|You are offline/);}
+ assert.equal(await target.evaluate(el=>el===document.activeElement),true,'background settlement must not steal focus');
+ assert.equal(s.reads.filter(k=>k===kind).length,before+1);assert.equal(s.writes.length,1);
+ assert.equal(s[kind].includes('a'),true,'reading one list must not change its membership');
+},{status:kind==='saved'?503:200,followStatus:kind==='followed'?503:200}));
+
+it('R2-N1 read-feedback cleanup preserves an uncertain-removal lock until successful reconciliation',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await ready(p);await remove(p).press('Enter');await p.getByRole('alert').waitFor();
+ assert.equal(await remove(p).getAttribute('aria-disabled'),'true');
+ await p.context().setOffline(true);await p.getByRole('button',{name:'Reload saved list',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('No request was sent'));
+ await p.context().setOffline(false);s.status=503;
+ await p.getByRole('button',{name:'Reload saved list',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('HTTP 503'));
+ assert.equal(s.writes.length,1);assert.equal(await p.getByRole('tab').filter({hasText:'Saved'}).innerText(),'Saved (…)');
+ s.status=200;await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await ready(p);
+ assert.equal(await p.getByRole('alert').count(),0);assert.equal(await remove(p).getAttribute('aria-disabled'),'false');assert.equal(s.writes.length,1);
+},{writeStatus:503}));

@@ -32,7 +32,14 @@ function SavedSchools({continuation,writeSelection}:{continuation:MutableRefObje
  const activeWrites=useIsMutating({mutationKey:['s30-write',auth.userId]});
  const authorized=session.phase==='authenticated'&&auth.isAuthenticated&&auth.roles.includes('student')&&!!auth.userId;
  function options(kind:SchoolListKind){return {queryKey:[`law-schools-${kind}`,auth.userId],queryFn:async({signal}:{signal:AbortSignal})=>{
-  if(!navigator.onLine)throw new OfflineList();try{return await readPrivateSchools(kind,signal);}catch(e){if(e instanceof LawSchoolsApiError&&e.status===401)continuation.current.expired=true;throw e;}
+  if(!navigator.onLine)throw new OfflineList();
+  // Any actual read, including a mutation-triggered refetch, supersedes earlier
+  // no-request feedback. Keep uncertain writes gated until a successful reload.
+  if(mounted.current&&!signal.aborted){
+   setOfflineRetries(old=>old[kind]?{...old,[kind]:false}:old);
+   setFailures(old=>old[kind]&&!old[kind].uncertain?{...old,[kind]:undefined}:old);
+  }
+  try{return await readPrivateSchools(kind,signal);}catch(e){if(e instanceof LawSchoolsApiError&&e.status===401)continuation.current.expired=true;throw e;}
  },enabled:authorized&&!continuation.current.expired&&activeWrites===0&&!failures[kind]?.uncertain,retry:false,networkMode:'always' as const,staleTime:Infinity,refetchOnMount:'always' as const,refetchOnWindowFocus:false,refetchOnReconnect:false};}
  const saved=useQuery(options('saved')),followed=useQuery(options('followed')),queries={saved,followed},query=queries[tab];
  const mutation=useStudentMutation({mutationKey:['s30-write',auth.userId],retry:false,networkMode:'always',mutationFn:async(v:Write)=>{
