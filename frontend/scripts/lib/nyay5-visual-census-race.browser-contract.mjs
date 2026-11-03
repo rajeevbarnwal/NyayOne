@@ -164,7 +164,7 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
     });
   });
 
-  it('preserves the exact twenty-three-screen Revision L census and the S-22 legacy Carlito stack', async () => {
+  it('preserves the exact twenty-four-screen Revision L census and the S-22 legacy Carlito stack', async () => {
     await withPage(async (page) => {
       const rows = new Map();
       const actual = compileCensus(waitForVisualCensusSettled, rows);
@@ -173,7 +173,7 @@ describe('NYAY-5 real Chromium atomic visual census', () => {
         await actual(page, screenId);
         assertFields(rows.get(screenId), { headingCount: 1, typographyExact: true, iconsExact: true, legacyBrandVisible: false });
       }
-      assert.equal(rows.size, 24);
+      assert.equal(rows.size, 25);
     });
   });
 
