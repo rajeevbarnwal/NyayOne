@@ -48,3 +48,34 @@ it('offline removal sends no request and keeps the confirmed membership',()=>usi
 it('comparison needs two confirmed schools and never silently truncates an over-limit saved list',()=>using(async(p)=>{await p.goto(origin+'/s-30');await p.getByRole('tab',{name:'Saved (5)',exact:true}).waitFor();assert.equal(await p.getByRole('button',{name:'Compare saved schools',exact:true}).isDisabled(),true);assert.equal(await p.getByRole('link',{name:/Synthetic School/}).count(),5);},{saved:['a','b','c','d','e']}));
 it('mobile compare action precedes the tabs and saved controls use the frozen bookmark token',()=>using(async(p)=>{await p.goto(origin+'/s-30');await ready(p);const compare=p.getByRole('button',{name:'Compare saved schools',exact:true}),tabs=p.getByRole('tablist');assert.ok((await compare.boundingBox()).y<(await tabs.boundingBox()).y,'the mobile comparison route belongs before the tabs');}));
 it('saved control uses the frozen filled bookmark and selected circle',()=>using(async(p)=>{await p.goto(origin+'/s-30');await ready(p);const style=await remove(p).evaluate(el=>({radius:getComputedStyle(el).borderRadius,bg:getComputedStyle(el).backgroundColor,fill:el.querySelector('path')?.getAttribute('fill'),path:el.querySelector('path')?.getAttribute('d')}));assert.deepEqual(style,{radius:'50%',bg:'rgb(246, 237, 218)',fill:'currentColor',path:'M7 4h10v17l-5-3.5L7 21z'});}));
+
+it('confirmed empty Saved omits only the mobile Compare row and preserves desktop recovery',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('heading',{name:'No saved schools.',exact:true}).waitFor();
+ const mobile=p.locator('main .s20-related'),desktop=p.locator('aside').getByRole('button',{name:'Compare saved schools',exact:true});
+ assert.equal(await mobile.isVisible(),false,'a confirmed empty Saved list must not add the 61px mobile Compare row');
+ const tab=await p.getByRole('tablist').boundingBox();assert.equal(tab.y,174.84375,'tabs retain the frozen empty-state fold placement');
+ await p.setViewportSize({width:1440,height:1024});assert.equal(await desktop.isVisible(),true);assert.equal(await desktop.isDisabled(),true);
+ assert.deepEqual(s.reads.sort(),['followed','saved']);assert.equal(s.writes.length,0);
+},{saved:[]}));
+it('unconfirmed or failed Saved reads retain the disabled mobile Compare control',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await held(s);
+ const compare=p.locator('main .s20-related').getByRole('button',{name:'Compare saved schools',exact:true});
+ assert.equal(await compare.isVisible(),true);assert.equal(await compare.isDisabled(),true);
+ await s.held.shift()();await p.getByRole('alert').waitFor();assert.equal(await compare.isVisible(),true);assert.equal(await compare.isDisabled(),true);
+},{saved:[],hold:true,status:503}));
+it('Compare icon uses the frozen 18px glyph baseline at both viewports',()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await ready(p);
+ for(const viewport of [{width:390,height:844},{width:1440,height:1024}]){
+  await p.setViewportSize(viewport);const button=p.getByRole('button',{name:'Compare saved schools',exact:true});
+  const box=await button.boundingBox(),icon=await button.locator('svg').boundingBox();
+  assert.equal(icon.width,18);assert.equal(icon.height,18);assert.equal(icon.y-box.y,14,'frozen nested icon wrapper sits one pixel above the flex-centred baseline');
+ }
+}));
+it('Find schools uses the frozen separate outline and round-capped building strokes',()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('heading',{name:'No saved schools.',exact:true}).waitFor();
+ const icon=p.getByRole('link',{name:'Find schools',exact:true}).locator('svg');
+ assert.equal(await icon.locator('path').count(),3);
+ assert.equal(await icon.locator('path').nth(1).getAttribute('stroke-linejoin'),'round');
+ assert.equal(await icon.locator('path').nth(2).getAttribute('stroke-linecap'),'round');
+ assert.equal(await icon.locator('path').nth(2).getAttribute('d'),'M6.5 11.5v4.5c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.5M21 9.5v5');
+},{saved:[]}));
