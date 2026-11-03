@@ -1,9 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { studentApiFetch } from '../lib/studentApiClient';
 import { LawSchoolsApiError } from '../lib/lawSchoolsApi';
-import { writeSchoolSaved, writeSchoolFollow } from './s28Api';
+import { writeSchoolSaved, writeSchoolFollow, type S28Detail } from './s28Api';
 import type { S27SchoolSummary } from './s27Api';
-import { synchronizeSchoolRemoval } from './schoolMembershipCache';
 export type SchoolListKind = 'saved' | 'followed';
 export type PrivateSchool = S27SchoolSummary & { notifyOptIn: boolean | null };
 const object = (v:unknown):v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
@@ -36,4 +35,14 @@ export async function reconcileSchoolRemoval(client:QueryClient,actor:string,kin
  if(!current())return;
  if(confirmed)synchronizeSchoolRemoval(client,actor,kind,id);
  for(const filter of filters)void client.invalidateQueries({...filter,refetchType:'none'});
+}
+
+/** Apply only a validated server-confirmed removal, after cancelling older reads.
+ * Keep the other membership intact; never create a missing list or detail cache. */
+export function synchronizeSchoolRemoval(client: QueryClient, actor: string, kind: 'saved' | 'followed', id: string): void {
+  client.setQueryData<{ id: string }[]>([`law-schools-${kind}`, actor], items => items?.filter(item => item.id !== id));
+  client.setQueryData<S28Detail>(['s28-detail', actor, id], detail => detail ? {
+    ...detail,
+    ...(kind === 'saved' ? { saved: false } : { followed: false, notifyOptIn: false }),
+  } : detail);
 }

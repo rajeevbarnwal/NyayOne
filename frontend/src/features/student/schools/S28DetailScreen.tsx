@@ -10,7 +10,7 @@ import { captureStudentContextFence, isStudentContextFenceCurrent } from '../lib
 import { inrAmount, institutionTypeLabel, FACT_LABELS, S28_FACT_KEY_ORDER } from './lawschoolFormat.mjs';
 import { readSchoolDetail, writeSchoolSaved, writeSchoolFollow, safeSource, schoolReturn, type S28Detail } from './s28Api';
 import type { SchoolSelection } from './S27SearchScreen';
-import { synchronizeSchoolRemoval } from './schoolMembershipCache';
+import { synchronizeSchoolRemoval } from './s30Api';
 import './S28Detail.css';
 type Store = { readSelection: () => SchoolSelection[]; writeSelection: (items: SchoolSelection[]) => SchoolSelection[] };
 type Action = { trigger: HTMLElement; anchor?: HTMLElement; done: boolean };
