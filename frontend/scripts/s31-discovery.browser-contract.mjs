@@ -106,6 +106,17 @@ it('frozen compact My sessions action, card link typography and offline icon are
 
 // Frozen v3.2.1.08 presentation contract; existing behavior probes remain above.
 for (const width of [390, 1440]) {
+ it(`S-31 ${width}: My sessions uses the frozen nested icon baseline`,()=>using(async p=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);
+  const link=p.locator(width>=900?'aside':'.s20-related').getByRole('link',{name:'My sessions',exact:true});
+  assert.equal((await link.locator('svg').boundingBox()).y-(await link.boundingBox()).y,14);assert.equal(await link.getAttribute('href'),'/s-35');
+ }));
+ it(`S-31 ${width}: mentor name typography has no inherited internship underline`,()=>using(async p=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);
+  const link=cards(p).first().getByRole('link');assert.equal(await link.locator('span').evaluate(e=>getComputedStyle(e).textDecorationLine),'none');
+  assert.equal(await link.getAttribute('href'),'/s-32?tutor=a');await link.focus();assert.equal(await link.evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
+ }));
+
  it(`S-31 ${width}: expanded filter fields start immediately below the summary`,()=>using(async p=>{
   await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();
   const summary=await p.locator('.s20-filters summary').boundingBox(),field=await p.locator('.s20-filter-body .s20-field').first().boundingBox();
@@ -134,6 +145,6 @@ for (const width of [390, 1440]) {
   assert.equal(heading.y-box.y,10,'notice starts at 9px padding plus border');
   assert.equal(await h.evaluate(e=>getComputedStyle(e).fontSize),'12.5px');assert.equal(await h.evaluate(e=>getComputedStyle(e).lineHeight),'18.75px');
   assert.equal(await retry.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');assert.equal(await retry.locator('svg').evaluate(e=>getComputedStyle(e).color),'rgb(46, 58, 140)');
-  assert.ok((await retry.boundingBox()).height>=48);assert.match(await alert.innerText(),/HTTP 429.*rate_limit_exceeded/);assert.equal(await alert.getAttribute('tabindex'),'-1');
+  assert.equal((await retry.locator('svg').boundingBox()).y-(await retry.boundingBox()).y,14,'frozen nested icon wrapper preserves its baseline');assert.ok((await retry.boundingBox()).height>=48);assert.match(await alert.innerText(),/HTTP 429.*rate_limit_exceeded/);assert.equal(await alert.getAttribute('tabindex'),'-1');
  },{status:429}));
 }
