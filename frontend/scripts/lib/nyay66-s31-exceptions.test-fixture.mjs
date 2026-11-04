@@ -1,5 +1,6 @@
 // Test-only exact proposals. These pins never authorize runtime exceptions.
 import {approveException} from './nyay66-enforcement.mjs';
+import {normalizeS31Page2ForTest,normalizeS31Page2PolicyBytesForTest} from './nyay66-s31-page2-reapproval.test-fixture.mjs';
 export const s31Proposals=[
   {
     "screen": "S-31",
@@ -275,7 +276,7 @@ export function withoutS31ProposalsForTest(exceptions){
  if(additions.length){
   const keys=Object.keys(s31Proposals[0]).sort().join(',');
   if(additions.length!==16||additions.some(e=>Object.keys(e).sort().join(',')!==keys))throw Error('S31_PROPOSAL_INVENTORY_CHANGED');
-  if(JSON.stringify(additions.map(e=>approveException(e,null,{s31:true})))!==JSON.stringify(s31ProposalHashes))throw Error('S31_PROPOSAL_CONTENT_CHANGED');
+  if(JSON.stringify(normalizeS31Page2ForTest(additions).map(e=>approveException(e,null,{s31:true})))!==JSON.stringify(s31ProposalHashes))throw Error('S31_PROPOSAL_CONTENT_CHANGED');
   if(exceptions.slice(-16).some((e,i)=>e!==additions[i]))throw Error('S31_PROPOSAL_APPEND_ORDER_CHANGED');
  }
  // Only this exact appended set is removed from historical test snapshots.
@@ -284,6 +285,7 @@ export function withoutS31ProposalsForTest(exceptions){
 export function withoutS31PolicyBytesForTest(bytes){
  const policy=JSON.parse(bytes);withoutS31ProposalsForTest(policy.exceptions);
  if(!policy.exceptions.some(e=>e.screen==='S-31'))return bytes;
+ bytes=normalizeS31Page2PolicyBytesForTest(bytes);
  const record=e=>JSON.stringify(e,null,2).replace(/^/gm,'    ');
  const suffix=',\n'+s31Proposals.map(record).join(',\n');
  if(bytes.split(suffix).length!==2||!bytes.endsWith(suffix+'\n  ]\n}\n'))throw Error('S31_PROPOSAL_BYTES_CHANGED');
