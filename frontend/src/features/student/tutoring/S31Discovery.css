@@ -8,7 +8,8 @@
 .s31-check{display:flex;gap:10px;align-items:center;min-height:48px;cursor:pointer;font-size:13px;line-height:1.4}
 .s31-check input{width:22px;min-width:22px;margin:0;accent-color:var(--s20-indigo)}
 .s31-check b,.s31-check small{display:block}.s31-check small{font-size:11.5px;color:var(--s20-mut)}
-.s31-discovery .s20-related .s20-btn{width:100%}
+.s31-discovery .s20-related{justify-items:start}.s31-discovery .s20-related .s20-btn{width:auto}
+.s31-discovery a.s20-btn,.s31-discovery a.s20-title{text-decoration:none}
 .s31-tutor{grid-template-columns:1fr}.s31-identity{display:flex;gap:12px;align-items:center;min-width:0}.s31-portrait{width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--s20-indq);color:var(--s20-indigo);font-weight:800;font-size:13px}
 .s31-discovery a:focus-visible,.s31-discovery select:focus-visible,.s31-discovery input:focus-visible{outline:3px solid var(--s20-indigo);outline-offset:3px}
 .s31-discovery [aria-disabled=true]{cursor:default;opacity:.65}.s31-discovery .s20-filters summary small{overflow-wrap:anywhere}

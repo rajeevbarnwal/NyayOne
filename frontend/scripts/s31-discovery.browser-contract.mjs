@@ -85,3 +85,10 @@ it('desktop case/slash route preserves one main, sessions link and keyboard-sear
  await p.setViewportSize({width:1440,height:1024});await p.goto(origin+'/S-31/?sort=name_asc#results');await ready(p);assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.s20-related').isVisible(),false);assert.equal(await p.locator('aside').getByRole('link',{name:'My sessions',exact:true}).getAttribute('href'),'/s-35');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await p.getByRole('searchbox',{name:'Search mentors',exact:true}).press('Tab');assert.equal(await p.getByRole('button',{name:'Search mentors',exact:true}).evaluate(e=>e===document.activeElement),true);
 }));
+it('frozen compact My sessions action, card link typography and offline icon are preserved',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await ready(p);
+ const sessions=p.locator('.s20-related').getByRole('link',{name:'My sessions',exact:true});assert.ok((await sessions.boundingBox()).width<200,'mobile related action must remain intrinsic width');
+ assert.equal(await sessions.evaluate(e=>getComputedStyle(e).textDecorationLine),'none');assert.equal(await cards(p).first().locator('.s20-title').evaluate(e=>getComputedStyle(e).textDecorationLine),'none');
+ s.status=503;await p.reload();await p.getByRole('alert').waitFor();await p.context().setOffline(true);await p.getByRole('button',{name:'Retry',exact:true}).click();
+ assert.equal(await p.locator('.s20-state-icon path[d="M4 4l16 16"]').count(),1,'offline uses frozen offline primitive');
+}));
