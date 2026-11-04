@@ -82,7 +82,7 @@ it('zero results and out-of-range pages preserve server total and recovery',()=>
 it('401 retains the shared session-expiry redirect, no private results',()=>using(async(p,s)=>{await p.goto(origin+'/s-31');await p.waitForURL(/\/s-03/);assert.equal(await cards(p).count(),0);assert.equal(s.reads.length,1);},{status:401}));
 it('320px reflow, 48px controls, no serious/critical axe, long Unicode names',()=>using(async(p)=>{
  await p.setViewportSize({width:320,height:844});await p.goto(origin+'/s-31');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- for(const e of await p.locator('.s31-discovery button:visible, .s31-discovery input:visible, .s31-discovery select:visible, .s31-discovery summary:visible, .s31-discovery a:visible').all()){assert.ok((await e.boundingBox()).height>=48,await e.getAttribute('id'));}
+ for(const e of await p.locator('.s31-discovery button:visible, .s31-discovery input:visible, .s31-discovery select:visible, .s31-discovery summary:visible, .s31-discovery a:visible').all()){const target=await e.evaluate(el=>{const hit=el.matches('input[type=checkbox]')?el.closest('label'):el;return hit.getBoundingClientRect().height;});assert.ok(target>=48,await e.getAttribute('id'));}
  await p.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});assert.deepEqual(await p.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);
 },{items:[{...tutor(),display_name:'अदिति 名 Mentor WithAReallyLongUnbrokenNameWithoutSpaces',headline:null,rating_avg:null,rating_count:0}]}));
 it('a superseded slow search cannot replace the latest response or steal moved focus',()=>using(async(p,s)=>{
@@ -103,3 +103,37 @@ it('frozen compact My sessions action, card link typography and offline icon are
  s.status=503;await p.reload();await p.getByRole('alert').waitFor();await p.context().setOffline(true);await p.getByRole('button',{name:'Retry',exact:true}).click();
  assert.equal(await p.locator('.s20-state-icon path[d="M4 4l16 16"]').count(),1,'offline uses frozen offline primitive');
 }));
+
+// Frozen v3.2.1.08 presentation contract; existing behavior probes remain above.
+for (const width of [390, 1440]) {
+ it(`S-31 ${width}: expanded filter fields start immediately below the summary`,()=>using(async p=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();
+  const summary=await p.locator('.s20-filters summary').boundingBox(),field=await p.locator('.s20-filter-body .s20-field').first().boundingBox();
+  assert.equal(field.y,summary.y+summary.height,'frozen filter body has no extra 4px top inset');
+ }));
+ it(`S-31 ${width}: verified checkbox has a compact bordered 48px label target`,()=>using(async(p,s)=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();
+  const row=p.locator('.s31-check'),box=await row.boundingBox(),input=p.getByRole('checkbox',{name:'Verified mentors only'});
+  assert.equal(await row.evaluate(e=>getComputedStyle(e).borderTopStyle),'solid');
+  assert.equal(await row.evaluate(e=>getComputedStyle(e).borderRadius),'12px');
+  assert.equal(await row.locator('b').evaluate(e=>getComputedStyle(e).fontSize),'13.5px');
+  const glyph=await input.boundingBox();assert.equal(glyph.width,22);assert.equal(glyph.height,22);assert.ok(box.height>=48);
+  assert.equal(glyph.x-box.x,13);assert.equal(await row.evaluate(e=>getComputedStyle(e).gap),'12px');
+  await row.click({position:{x:box.width-6,y:box.height/2}});assert.equal(await input.isChecked(),true,'entire label is an active touch target');
+  await input.press('Space');assert.equal(await input.isChecked(),false,'native keyboard behavior is retained');assert.equal(s.reads.length,1,'checkbox only edits a draft');
+ }));
+ it(`S-31 ${width}: empty Clear filters retains the frozen 18px icon and 48px action`,()=>using(async p=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');const clear=p.getByRole('button',{name:'Clear filters',exact:true});await clear.waitFor();
+  assert.equal(await clear.locator('svg path[d="M4 6h16M7 12h10M10 18h4"]').count(),1);assert.equal((await clear.locator('svg').boundingBox()).width,18);assert.ok((await clear.boundingBox()).height>=48);
+ },{items:[],total:0}));
+ it(`S-31 ${width}: real HTTP 429 uses a compact clock notice and outlined retry`,()=>using(async p=>{
+  await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');const alert=p.getByRole('alert');await alert.waitFor();
+  const clock=alert.locator('svg').first(),h=alert.getByRole('heading'),retry=alert.getByRole('button',{name:'Try again'}),box=await alert.boundingBox(),heading=await h.boundingBox();
+  assert.equal(await clock.locator('circle[cx="12"][cy="12"][r="8.5"]').count(),2);assert.equal((await clock.boundingBox()).width,18);
+  assert.equal(heading.x-box.x,43,'4px warning border + 12px padding + 18px clock + 9px gap');
+  assert.equal(heading.y-box.y,10,'notice starts at 9px padding plus border');
+  assert.equal(await h.evaluate(e=>getComputedStyle(e).fontSize),'12.5px');assert.equal(await h.evaluate(e=>getComputedStyle(e).lineHeight),'18.75px');
+  assert.equal(await retry.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');assert.equal(await retry.locator('svg').evaluate(e=>getComputedStyle(e).color),'rgb(46, 58, 140)');
+  assert.ok((await retry.boundingBox()).height>=48);assert.match(await alert.innerText(),/HTTP 429.*rate_limit_exceeded/);assert.equal(await alert.getAttribute('tabindex'),'-1');
+ },{status:429}));
+}
