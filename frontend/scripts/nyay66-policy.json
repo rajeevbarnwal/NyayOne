@@ -15,6 +15,11 @@
   "s28": {"cache":"s28-v32108-chromium-149.0.7827.55-41323481198","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","provenanceSha256":"36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4"},
   "s29": {"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"},
   "s30": {"cache":"s30-v32108-chromium-149.0.7827.55-41593102467","manifestSha256":"f0d18bfc11a72774c2f4ddb923ed98a8f3d24c8e0beaeebbb8a12cc604079aa2","provenanceSha256":"62f4b3ce31ad66bab4d4d79c980a64929264b0f9f6a572d5deba62c23b82d9e6"},
+  "s31": {
+    "cache": "s31-v32108-chromium-149.0.7827.55-41795771621",
+    "manifestSha256": "d16430a6a405418f506085111e4486741ba0d46aa25e7ad32fcc937d3f1778d9",
+    "provenanceSha256": "cef8aedce696d134f8cdbff97a024bdd7d412a5a5441e14c809f31533326ae07"
+  },
   "integrityApproval": {"pr":91,"commentId":6623799312,"bundleSha256":"3f2fd7c1422674d609c6aa3ff5bbefff6bdba8f64f8bea0ed01f3a1d9ea0bb68"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
