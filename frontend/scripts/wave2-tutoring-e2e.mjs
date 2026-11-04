@@ -1308,12 +1308,12 @@ async function waitForCode(page, code, timeout = 12000) {
 }
 
 async function cardNames(page) {
-  return page.$$eval('article.tt-tut .tt-tut__nm', (els) => els.map((e) => e.textContent.trim()));
+  return page.$$eval('article.s31-tutor .s20-title > span', (els) => els.map((e) => e.textContent.trim()));
 }
 
 async function countLine(page) {
-  return page.$$eval('p.tt-p.tt-muted', (els) => {
-    const hit = els.find((e) => /Showing \d+ of \d+ mentors?/.test(e.textContent));
+  return page.$$eval('#s31-results-summary', (els) => {
+    const hit = els.find((e) => /\d+ mentors? · page \d+ of \d+/.test(e.textContent));
     return hit ? hit.textContent.trim() : null;
   });
 }
@@ -1603,7 +1603,7 @@ async function completionControls(page) {
 async function searchAfter(page, action, urlPredicate) {
   const r = await withApi(page, { method: 'GET', route: '/api/v1/tutors', maxStatus: 400 }, action);
   if (urlPredicate) await page.waitForFunction(urlPredicate, undefined, { timeout: 15000 });
-  await page.waitForSelector('article.tt-tut, .tt-banner', { timeout: 20000 });
+  await page.waitForSelector('.s31-discovery article.s31-tutor, .s31-discovery [role=alert]', { timeout: 20000 });
   await settled(page);
   return r;
 }
@@ -1621,7 +1621,7 @@ async function stageA(page) {
     'the count line is rendered on every list state',
   ]);
   const arts = [];
-  await go(page, `${WEB}/s-31`, 'article.tt-tut');
+  await go(page, `${WEB}/s-31`, 'article.s31-tutor');
   arts.push(await shot(page, 'a1_s31_discovery_default'));
   const page1 = await cardNames(page);
   const line1 = await countLine(page);
@@ -1629,11 +1629,11 @@ async function stageA(page) {
 
   await searchAfter(
     page,
-    () => page.locator('div.tt-rails[aria-label="Sort results"] button.tt-rail', { hasText: 'Most experienced' }).click(),
+    async () => { await page.locator('details.s20-filters summary').click(); await page.getByLabel('Sort by').selectOption('experience_desc'); await page.getByRole('button', { name: 'Show mentors' }).click(); },
     () => location.search.includes('sort=experience_desc'),
   );
   arts.push(await shot(page, 'a2_s31_sort_experience_desc'));
-  const sorted = await page.$$eval('article.tt-tut span.tt-hero', (els) => els.map((e) => parseInt(e.textContent, 10)));
+  const sorted = await page.$$eval('article.s31-tutor [data-experience-years]', (els) => els.map((e) => Number(e.dataset.experienceYears)));
   chk.ok(
     'sort=experience_desc is monotonically non-increasing',
     'each card\'s experience >= the next card\'s',
@@ -1641,15 +1641,14 @@ async function stageA(page) {
     (v) => v.length > 1 && v.every((x, i) => i === 0 || v[i - 1] >= x),
   );
 
-  await page.locator('details.tt-dis summary', { hasText: /^Refine/ }).click();
   await searchAfter(
     page,
-    async () => { await page.fill('#tt-subject', 'Legal Research'); await page.locator('#tt-subject').blur(); },
+    async () => { await page.getByLabel('Subject', { exact: true }).fill('Legal Research'); await page.getByRole('button', { name: 'Show mentors' }).click(); },
     () => location.search.includes('subject=Legal'),
   );
   await searchAfter(
     page,
-    () => page.selectOption('#tt-minexp', '5'),
+    async () => { await page.getByLabel('Minimum experience').selectOption('5'); await page.getByRole('button', { name: 'Show mentors' }).click(); },
     () => location.search.includes('min_experience'),
   );
   arts.push(await shot(page, 'a3_s31_filter_subject_experience'));
@@ -1664,8 +1663,8 @@ async function stageA(page) {
 
   await searchAfter(
     page,
-    () => page.locator('button.tt-btn', { hasText: /verified mentors only/ }).click(),
-    () => location.search.includes('verified_only=1'),
+    async () => { await page.getByRole('checkbox', { name: 'Verified mentors only' }).check(); await page.getByRole('button', { name: 'Show mentors' }).click(); },
+    () => location.search.includes('verified_only=true'),
   );
   arts.push(await shot(page, 'a4_s31_filter_verified_only'));
   const lineV = await countLine(page);
@@ -1673,15 +1672,15 @@ async function stageA(page) {
     'verified-only filter narrows the result set',
     'a rendered count line whose total is <= the filtered total',
     lineV,
-    (v) => /Showing \d+ of \d+ mentors?/.test(v),
+    (v) => /\d+ mentors? · page \d+ of \d+/.test(v),
   );
 
-  await go(page, `${WEB}/s-31`, 'article.tt-tut');
-  const prevDisabled = await page.locator('button:has-text("Previous page")').isDisabled();
+  await go(page, `${WEB}/s-31`, 'article.s31-tutor');
+  const prevDisabled = await page.getByRole('button', { name: 'Previous page', exact: true }).getAttribute('aria-disabled') === 'true';
   const p1 = await cardNames(page);
   await searchAfter(
     page,
-    () => page.locator('button:has-text("Next page")').click(),
+    () => page.getByRole('button', { name: 'Next page', exact: true }).click(),
     () => location.search.includes('offset=10'),
   );
   arts.push(await shot(page, 'a5_s31_pagination_page2'));
@@ -1695,9 +1694,9 @@ async function stageA(page) {
   chk.eq('"Previous page" is disabled at offset 0', true, prevDisabled);
   chk.ok(
     'the count line is rendered on every list state',
-    'a "Showing N of M mentors" line on default, filtered, verified and page-2 states',
+    'a server-total/page-count line on default, filtered, verified and page-2 states',
     [line1, lineF, lineV, line2],
-    (v) => v.every((x) => typeof x === 'string' && /Showing \d+ of \d+ mentors?/.test(x)),
+    (v) => v.every((x) => typeof x === 'string' && /\d+ mentors? · page \d+ of \d+/.test(x)),
   );
 
   recordChecks(chk, {
@@ -4207,13 +4206,15 @@ async function stageNeg4(page) {
       [{ kind: 'http', method: 'GET', route: '/api/v1/tutors', status: 429, times: 1 }],
       async () => {
         await page.goto(`${WEB}/s-31?q=rate-limited`, { waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('.tt-banner, article.tt-tut', { timeout: 20000 });
+        await page.waitForSelector('.s31-discovery [role=alert], article.s31-tutor', { timeout: 20000 });
         await settled(page);
       },
     );
     arts.push(await shot(page, 'n6_s31_rate_limited'));
-    const b = await banners(page);
-    const banner = b.find((x) => x.code === 'rate_limit_exceeded');
+    const banner = await page.locator('.s31-discovery [role=alert]').evaluate(el => {
+      const code = el.querySelector('.s20-code')?.textContent || '';
+      return /HTTP 429 · rate_limit_exceeded/.test(code) ? { code: 'rate_limit_exceeded', title: el.querySelector('h2')?.textContent } : null;
+    });
     findings.searchRateLimit = { configuredLimit: limit, lastAcceptAt, firstRejectAt, studentRequestsToExhaustion: studentSpend, banner, scope: seen.specs };
     neg('N43', {
       expected: `with RATE_LIMIT_TUTOR_SEARCH_PER_MIN=${limit}, measured on an actor with a fresh budget: request ${limit} succeeds, request ${limit + 1} is 429; and the browser renders a rate_limit_exceeded banner once the browsing student's own budget is spent`,
