@@ -49,6 +49,29 @@ export function classifyS31Errors(state,origin,consoleErrors,httpResponses,faile
   if(!expected&&expectedHttpErrors.length)errors.push('UNEXPECTED_HTTP_DECLARATION');
   return {consoleErrors,httpResponses,failedRequests,expectedHttpErrors,expectedHttpErrorCount:httpOK?1:0,errors};
 }
+// Hosted page-2 proofs have recorded both scrollY 0 and the short page's lower
+// scroll limit. The previous fixture left that interaction history unbounded.
+// Frame page-2 at the document origin only AFTER real pagination and focus proof.
+// This is a disclosed test-only camera position: no product focus repair,
+// DOM/CSS rewrite, response delay, image edit, retry or approval-hash selection.
+export async function frameS31Page2Viewport(page){
+  return page.evaluate(async()=>{
+    if(location.pathname!=='/s-31'||!document.querySelector('.s31-discovery'))throw Error('S31_PAGE2_FRAME_SCOPE');
+    const focused=document.activeElement;
+    if(focused?.id!=='s31-results-summary'||new URLSearchParams(location.search).get('offset')!=='3')throw Error('S31_PAGE2_FRAME_FOCUS');
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(image=>image.decode()));
+    await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));
+    if(document.activeElement!==focused)throw Error('S31_PAGE2_FRAME_FOCUS_CHANGED');
+    const before=[scrollX,scrollY];
+    window.scrollTo({left:0,top:0,behavior:'instant'});
+    await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));
+    const after=[scrollX,scrollY];
+    if(document.activeElement!==focused)throw Error('S31_PAGE2_FRAME_FOCUS_CHANGED');
+    if(after[0]!==0||after[1]!==0)throw Error('S31_PAGE2_FRAME_UNSTABLE');
+    return {testOnly:true,origin:'document-top-after-real-pagination',before,after,focusId:focused.id,focusPreserved:true,domModified:false,pixelPostprocessing:false};
+  });
+}
 export async function mockS31Application(page,state,origin,errors){
   scope(state);const apiRequests=[],expectedHttpErrors=[],pendingResponses=[];let finishSession,cachedLogo;
   const sessionPending=new Promise(resolve=>{finishSession=resolve;});
@@ -107,6 +130,7 @@ export async function mockS31Application(page,state,origin,errors){
     else await page.locator('.s31-discovery article').first().waitFor();
   }
   await page.evaluate(async()=>{await document.fonts.ready;await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));});
+  const viewportFraming=state==='page-2'?await frameS31Page2Viewport(page):null;
   if(!verifyS31Requests(state,apiRequests)||page.url()!==origin+'/s-31'+routeQuery(state))throw Error(`S31_REQUEST_SEQUENCE_MISMATCH:${JSON.stringify(apiRequests)}`);
   const snapshot=await page.locator('.s31-discovery').evaluate(host=>({
     heading:host.querySelector('h1')?.textContent,loading:!!host.querySelector('[aria-label="Loading mentors"]'),
@@ -134,6 +158,7 @@ export async function mockS31Application(page,state,origin,errors){
   if(!serverConfirmationVerified||!searchPaginationVerified)throw Error(`S31_DISCOVERY_PROOF_MISSING:${JSON.stringify(snapshot)}`);
   return {evidenceKind:'live-route',evidenceDescription:'Live authenticated S-31 route with synthetic backend replies, server-supported queries, actual Next/disclosure actions, real browser offline with a test-only cache of the unchanged logo and HTTP 429/500; not live-backend or independent QA evidence',syntheticServer:true,artificialDelay:false,navigationFrozen:false,
     apiRequests,expectedHttpErrors,pendingResponses,routeProof:{path:'/s-31',state,requestSequenceVerified:true,serverConfirmationVerified,searchPaginationVerified},discoveryProof:snapshot,
+    ...(viewportFraming?{viewportFraming}:{}),
     ...(state==='offline'?{browserOffline:true,fontsPrimedBeforeOffline:true,sessionResponseReleasedAfterDisconnect:true,directoryRequestSent:false,staticAssetCache:{path:'/brand/nyayone-mark.svg',sha256:cachedLogo.sha256,replays:cachedLogo.replays,testOnly:true}}:{}),
     ...(state==='rate-limited'?{serverRetryAfterSeconds:1,cooldownObservedWithoutClockOverride:true}:{}),
   };
